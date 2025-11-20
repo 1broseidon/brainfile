@@ -1,0 +1,45 @@
+{
+  "name": "@brainfile/core",
+  "version": "0.1.0",
+  "description": "Core library for the Brainfile task management protocol",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --maxWorkers=2",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "brainfile",
+    "task-management",
+    "kanban",
+    "markdown",
+    "yaml",
+    "protocol"
+  ],
+  "author": "Brainfile Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brainfile/core",
+    "directory": "."
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.x",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}
