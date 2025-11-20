@@ -1,0 +1,51 @@
+{
+  "name": "@brainfile/cli",
+  "version": "0.1.0",
+  "description": "Command-line interface for Brainfile task management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "brainfile": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "brainfile",
+    "task-management",
+    "cli",
+    "productivity"
+  ],
+  "author": "Brainfile Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/brainfile/cli"
+  },
+  "dependencies": {
+    "@brainfile/core": "file:../brainfile-core",
+    "commander": "^12.1.0",
+    "chalk": "^4.1.2"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.0"
+  },
+  "pkg": {
+    "scripts": "dist/**/*.js",
+    "targets": [
+      "node18-linux-x64",
+      "node18-macos-x64",
+      "node18-win-x64"
+    ],
+    "outputPath": "../../build"
+  }
+}
