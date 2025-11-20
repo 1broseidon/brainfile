@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/brainfile/cli/main/logo.png" alt="Brainfile Logo" width="128" height="128">
+</p>
+
 # @brainfile/cli
 
 Command-line interface for Brainfile task management. Manage your tasks from the terminal with ease.
