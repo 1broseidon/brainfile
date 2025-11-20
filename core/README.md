@@ -208,8 +208,8 @@ if (!validation.valid) {
 
 This core library is used by:
 
-- **@brainfile/cli** - Command-line interface
-- **brainfile-vscode** - VSCode extension
+- **[@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)** - Command-line interface
+- **brainfile-vscode** - VSCode extension (coming soon)
 - Future: Zed, JetBrains, and other IDE integrations
 
 ## License
@@ -222,6 +222,7 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for details.
 
 ## Links
 
-- [GitHub Repository](https://github.com/brainfile/core)
-- [Protocol Documentation](https://github.com/brainfile/protocol)
-- [VSCode Extension](https://github.com/brainfile/vscode)
+- **npm**: https://www.npmjs.com/package/@brainfile/core
+- **GitHub**: https://github.com/brainfile/brainfile
+- **Protocol**: https://brainfile.md
+- **CLI**: [@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)
