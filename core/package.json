@@ -30,8 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/brainfile/brainfile",
-    "directory": "core"
+    "url": "https://github.com/brainfile/core"
   },
   "publishConfig": {
     "access": "public"

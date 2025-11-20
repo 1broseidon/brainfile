@@ -223,6 +223,6 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for details.
 ## Links
 
 - **npm**: https://www.npmjs.com/package/@brainfile/core
-- **GitHub**: https://github.com/brainfile/brainfile
+- **GitHub**: https://github.com/brainfile/core
 - **Protocol**: https://brainfile.md
 - **CLI**: [@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)
