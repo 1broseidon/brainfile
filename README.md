@@ -60,3 +60,7 @@ Migrating from the old monorepo? See [MIGRATION.md](./MIGRATION.md).
 ## License
 
 MIT License - see [LICENSE](./LICENSE)
+## Quick Links
+
+- **Live Schema**: https://brainfile.md/v1 (coming soon)
+- **GitHub.io**: https://brainfile.github.io/protocol/
