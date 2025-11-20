@@ -1,0 +1,125 @@
+---
+title: Introduction
+description: A protocol-first task management system for the AI era
+template: splash
+hero:
+  title: Brainfile
+  tagline: A protocol-first task management system designed for AI-assisted development
+  actions:
+    - text: Get Started
+      link: /getting-started/quick-start/
+      icon: right-arrow
+      variant: primary
+    - text: View Protocol
+      link: /protocol/specification/
+      icon: document
+      variant: minimal
+---
+
+## What is Brainfile?
+
+Brainfile is a **protocol-first task management system** that uses a simple YAML-based format in `brainfile.md` files. It's designed for AI-assisted development, enabling both humans and AI agents to understand and modify project tasks seamlessly.
+
+## Core Philosophy
+
+**Protocol First**: The schema is the product. Tools and integrations are built around a single, well-defined protocol.
+
+**AI Native**: Built from day one for AI agents. Explicit instructions, structured data, and clear semantics ensure consistent behavior across different AI systems.
+
+**File Based**: Tasks live in markdown files with YAML frontmatter. Version control friendly. No databases. No lock-in.
+
+## Key Features
+
+- **Simple Format** - YAML frontmatter + Markdown content
+- **AI Compatible** - Explicit agent instructions and schema validation
+- **Visual Tools** - VSCode extension with kanban board UI
+- **CLI Interface** - Powerful command-line tools for automation
+- **Template System** - Built-in templates for bugs, features, and refactoring
+- **Version Control** - Text-based format works perfectly with Git
+
+## Schema URL
+
+Use this in your `brainfile.md` files:
+
+```yaml
+schema: https://brainfile.md/v1
+```
+
+## Quick Example
+
+```yaml
+---
+schema: https://brainfile.md/v1
+title: My Project
+agent:
+  instructions:
+    - Modify only the YAML frontmatter
+    - Preserve all IDs
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+      - id: task-1
+        title: Implement user authentication
+        priority: high
+        tags: [backend, security]
+---
+
+# My Project Tasks
+
+This is the task board for my project.
+```
+
+## Ecosystem
+
+<div class="grid-layout">
+
+### Protocol
+The canonical specification and JSON schema  
+[View Specification →](/protocol/specification/)
+
+### Core Library
+TypeScript/JavaScript library for parsing and validation  
+[Explore API →](/core/overview/)
+
+### CLI Tool
+Command-line interface for task management  
+[Install CLI →](/cli/installation/)
+
+### VSCode Extension
+Visual kanban board integrated into your editor  
+[Get Extension →](/vscode/extension/)
+
+</div>
+
+## Why Brainfile?
+
+**For Developers**: Keep tasks alongside your code. No context switching between tools.
+
+**For AI Agents**: Structured format with explicit instructions ensures consistent, predictable behavior.
+
+**For Teams**: Version controlled tasks mean full history, easy collaboration, and no vendor lock-in.
+
+**For Projects**: Start simple with a single file. Scale to complex workflows with templates and automation.
+
+## Getting Started
+
+1. [Quick Start Guide](/getting-started/quick-start/) - Get up and running in 5 minutes
+2. [Protocol Specification](/protocol/specification/) - Understand the file format
+3. [Install Tools](/cli/installation/) - Set up CLI and VSCode extension
+
+## Open Source
+
+Brainfile is open source and protocol-first. All repositories are available on GitHub:
+
+- [Protocol](https://github.com/brainfile/protocol) - Specification and schema
+- [Core](https://github.com/brainfile/core) - TypeScript library
+- [CLI](https://github.com/brainfile/cli) - Command-line tool
+- [VSCode](https://github.com/brainfile/vscode) - Editor extension
+
+## Community
+
+Join the community:
+- [GitHub Discussions](https://github.com/brainfile/protocol/discussions)
+- [GitHub Issues](https://github.com/brainfile/protocol/issues)
+- [Contributing Guide](https://github.com/brainfile/protocol/blob/main/CONTRIBUTING.md)

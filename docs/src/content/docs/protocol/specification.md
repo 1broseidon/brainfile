@@ -1,4 +1,7 @@
-# Brainfile Protocol Specification
+---
+title: Protocol Specification
+description: Complete specification of the Brainfile task management protocol
+---
 
 ## Overview
 
@@ -65,7 +68,7 @@ The protocol schema is hosted in the **[brainfile/protocol](https://github.com/b
 
 1. **Remote URL** (recommended for consistency):
    ```yaml
-   schema: https://raw.githubusercontent.com/1broseidon/brainfile/refs/heads/main/brainfile.schema.json
+   schema: https://brainfile.md/v1
    ```
 
 2. **Local file** (for offline or custom schemas):
@@ -206,7 +209,7 @@ Tools implementing the protocol should:
 
 ## Validation
 
-Use the JSON Schema ([brainfile.schema.json](../brainfile.schema.json)) to validate YAML structure.
+Use the JSON Schema at `https://brainfile.md/v1.json` to validate YAML structure.
 
 ## Example
 
@@ -243,3 +246,4 @@ columns:
             completed: false
 ---
 ```
+

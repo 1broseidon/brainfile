@@ -1,4 +1,7 @@
-# Brainfile AI Agent Integration Guide
+---
+title: AI Agent Integration
+description: Guide for integrating AI agents with Brainfile task management
+---
 
 ## Overview
 
@@ -250,3 +253,4 @@ AI agents must:
 - Not assume fixed schema
 - Check for schema updates
 - Gracefully handle extensions
+

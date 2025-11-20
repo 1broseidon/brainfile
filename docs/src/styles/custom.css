@@ -1,0 +1,240 @@
+/* True Black Dark Mode Theme - Following Frontend UI Patterns */
+
+:root {
+  /* Backgrounds - True black only */
+  --sl-color-bg: #000000;
+  --sl-color-bg-nav: #0a0a0a;
+  --sl-color-bg-sidebar: #0a0a0a;
+  --sl-color-bg-inline-code: #111722;
+  --sl-color-gray-5: #111722;
+  --sl-color-gray-6: #0a0a0a;
+
+  /* Text - High contrast */
+  --sl-color-white: rgba(255, 255, 255, 0.95);
+  --sl-color-gray-1: rgba(255, 255, 255, 0.95);
+  --sl-color-gray-2: rgba(255, 255, 255, 0.7);
+  --sl-color-gray-3: rgba(255, 255, 255, 0.5);
+  --sl-color-gray-4: rgba(255, 255, 255, 0.3);
+
+  /* Accent color */
+  --sl-color-accent-low: rgba(102, 126, 234, 0.15);
+  --sl-color-accent: #667eea;
+  --sl-color-accent-high: #5568d3;
+
+  /* Borders */
+  --sl-color-hairline-light: rgba(255, 255, 255, 0.03);
+  --sl-color-hairline: rgba(255, 255, 255, 0.05);
+  --sl-color-hairline-shade: rgba(255, 255, 255, 0.08);
+
+  /* Semantic colors */
+  --sl-color-green: #48c78e;
+  --sl-color-green-high: #48c78e;
+  --sl-color-orange: #ffdd57;
+  --sl-color-orange-high: #ffdd57;
+  --sl-color-red: #f14668;
+  --sl-color-red-high: #f14668;
+  --sl-color-blue: #667eea;
+  --sl-color-blue-high: #667eea;
+}
+
+/* Typography - Inter with OpenType features */
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.01em;
+  background: #000000;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* Headings */
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* Only use three font weights */
+.sl-markdown-content {
+  font-weight: 400;
+}
+
+.sl-markdown-content strong,
+.sl-markdown-content b {
+  font-weight: 500;
+}
+
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3 {
+  font-weight: 600;
+}
+
+/* Code blocks - JetBrains Mono */
+code, pre, .sl-markdown-content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-weight: 500;
+}
+
+/* 16px grid spacing */
+.sl-markdown-content > * + * {
+  margin-top: 1.5rem; /* 24px */
+}
+
+.sl-markdown-content > h2 {
+  margin-top: 3rem; /* 48px */
+}
+
+.sl-markdown-content > h3 {
+  margin-top: 2rem; /* 32px */
+}
+
+/* Cards and containers */
+.sl-markdown-content pre {
+  background: #111722 !important;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 1.5rem; /* 24px */
+}
+
+/* Links */
+a {
+  color: #667eea;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+a:hover {
+  color: #5568d3;
+}
+
+/* Sidebar */
+.sidebar-content {
+  background: #0a0a0a;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Navigation */
+nav a {
+  color: rgba(255, 255, 255, 0.7);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+nav a:hover,
+nav a[aria-current="page"] {
+  color: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+/* Tables */
+table {
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+th {
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem; /* 12px */
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 1rem 1.5rem;
+}
+
+td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 1rem 1.5rem;
+}
+
+tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Buttons */
+button,
+.sl-link-button {
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0.75rem 1.5rem; /* 12px 24px */
+}
+
+/* Search */
+.search-input {
+  background: #111722;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+/* Remove default Starlight gradients and colored backgrounds */
+.hero {
+  background: #000000 !important;
+}
+
+.sl-banner {
+  background: #111722 !important;
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Ensure proper contrast everywhere */
+.sl-markdown-content p,
+.sl-markdown-content li,
+.sl-markdown-content td {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* Override any purple gradients or default colors */
+:root[data-theme="dark"] {
+  --sl-color-purple: #667eea;
+  --sl-color-purple-high: #5568d3;
+}
+
+/* Page content background */
+main {
+  background: #000000;
+}
+
+article {
+  background: #000000;
+}
+
+/* Ensure true black everywhere */
+.page {
+  background: #000000;
+}
+
+.content-panel {
+  background: #000000;
+}
+
+/* Make logo white */
+.site-title img,
+.logo img {
+  filter: brightness(0) invert(1);
+}
+
+/* Fix button text visibility */
+.sl-link-button,
+.action.primary a,
+.hero .action a {
+  color: rgba(255, 255, 255, 0.95) !important;
+  background: #667eea !important;
+}
+
+.sl-link-button:hover,
+.action.primary a:hover,
+.hero .action a:hover {
+  background: #5568d3 !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+}
+
