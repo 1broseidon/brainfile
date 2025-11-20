@@ -15,8 +15,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "prepublishOnly": "npm run build",
-    "prepack": "npm run build",
-    "version": "npm run build && git add -A dist"
+    "prepack": "npm run build"
   },
   "keywords": [
     "brainfile",
