@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/brainfile/protocol/main/logo.png" alt="Brainfile Logo" width="128" height="128">
+</p>
+
 # Brainfile Protocol
 
 The canonical specification and JSON Schema for the Brainfile task management protocol.
@@ -27,40 +31,39 @@ title: My Project
 
 ## Documentation
 
-See the [`docs/`](./docs/) directory for:
-- [`protocol.md`](./docs/protocol.md) - Full protocol specification
-- [`agents.md`](./docs/agents.md) - AI agent integration guide
+Complete documentation is available at **[brainfile.md](https://brainfile.md)**
+
+The site includes:
+- Protocol specification
+- AI agent integration guide
+- Core library API reference
+- CLI tool documentation
+- VSCode extension guide
+
+## Deployment
+
+This repository is deployed to `brainfile.md` via GitHub Pages. The documentation is built using Astro Starlight from the `docs/` directory.
+
+**Schema Endpoints**:
+- `https://brainfile.md/v1.json` - JSON Schema
+- `https://brainfile.md/v1/` - Schema directory
 
 ## Examples
 
 Example brainfile.md files are in the [`example/`](./example/) directory.
 
-## Related Repositories
+## Ecosystem
 
-- **[@brainfile/core](https://github.com/brainfile/core)** - TypeScript/JavaScript library
-- **[@brainfile/cli](https://github.com/brainfile/cli)** - Command-line tool
-- **[brainfile/vscode](https://github.com/brainfile/vscode)** - VSCode extension
+The Brainfile ecosystem consists of multiple repositories:
 
-## Schema Versions
-
-| Version | URL | Status |
-|---------|-----|--------|
-| v1 | `https://brainfile.md/v1` | Current |
-
-Future versions will be available at `v2`, `v3`, etc.
+- **[@brainfile/core](https://github.com/brainfile/core)** - TypeScript/JavaScript library for parsing and manipulating brainfiles
+- **[@brainfile/cli](https://github.com/brainfile/cli)** - Command-line tool for task management
+- **[brainfile/vscode](https://github.com/brainfile/vscode)** - VSCode extension with kanban board UI
 
 ## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution guidelines.
 
-## Migration
-
-Migrating from the old monorepo? See [MIGRATION.md](./MIGRATION.md).
-
 ## License
 
 MIT License - see [LICENSE](./LICENSE)
-## Quick Links
-
-- **Live Schema**: https://brainfile.md/v1 (coming soon)
-- **GitHub.io**: https://brainfile.github.io/protocol/
