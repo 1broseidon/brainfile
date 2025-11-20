@@ -28,7 +28,7 @@
     "url": "https://github.com/brainfile/cli"
   },
   "dependencies": {
-    "@brainfile/core": "file:../brainfile-core",
+    "@brainfile/core": "^0.1.0",
     "commander": "^12.1.0",
     "chalk": "^4.1.2"
   },
