@@ -288,7 +288,7 @@ Task IDs are automatically generated with a timestamp and random string to ensur
 
 - **Package**: `@brainfile/cli`
 - **npm**: https://www.npmjs.com/package/@brainfile/cli
-- **Repository**: https://github.com/brainfile/brainfile
+- **Repository**: https://github.com/brainfile/cli
 - **Core Library**: Built on [@brainfile/core](https://www.npmjs.com/package/@brainfile/core)
 
 ## Development
@@ -297,8 +297,8 @@ Task IDs are automatically generated with a timestamp and random string to ensur
 
 ```bash
 # Clone the repository
-git clone https://github.com/brainfile/brainfile.git
-cd brainfile/cli
+git clone https://github.com/brainfile/cli.git
+cd cli
 
 # Install dependencies
 npm install
