@@ -91,7 +91,7 @@ The Brainfile project is split into multiple focused repositories under the `git
 ### 5. **brainfile/brainfile.md** (Optional)
 **Purpose**: Landing page, documentation site, and blog  
 **URL**: `https://github.com/brainfile/brainfile.md`  
-**Deployed to**: `https://www.brainfile.md` or `https://brainfile.dev`
+**Deployed to**: `https://brainfile.md`
 
 **Contents**:
 - Marketing site
