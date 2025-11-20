@@ -9,11 +9,14 @@
   },
   "scripts": {
     "build": "tsc",
+    "clean": "rm -rf dist",
     "dev": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepack": "npm run build",
+    "version": "npm run build && git add -A dist"
   },
   "keywords": [
     "brainfile",
@@ -25,15 +28,21 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/brainfile/cli"
+    "url": "https://github.com/brainfile/brainfile",
+    "directory": "cli"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@brainfile/core": "^0.1.0",
+    "chalk": "^4.1.2",
     "commander": "^12.1.0",
-    "chalk": "^4.1.2"
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.0.0",
     "jest": "^29.5.0",
     "ts-jest": "^29.1.0",

@@ -4,18 +4,67 @@ Command-line interface for Brainfile task management. Manage your tasks from the
 
 ## Installation
 
+### Install Globally (Recommended)
+
+Install the CLI globally to use the `brainfile` command anywhere:
+
 ```bash
 npm install -g @brainfile/cli
 ```
 
-Or use directly from the repo:
+After installation, verify it works:
 
 ```bash
-cd packages/brainfile-cli
-npm install
-npm run build
-node dist/cli.js --help
+brainfile --version
+brainfile --help
 ```
+
+### Install as Project Dependency
+
+For project-specific usage:
+
+```bash
+npm install --save-dev @brainfile/cli
+```
+
+Then use via npm scripts or npx:
+
+```bash
+npx brainfile list
+```
+
+### Using npx (No Installation)
+
+Run commands without installing:
+
+```bash
+npx @brainfile/cli list
+npx @brainfile/cli add --title "New task"
+```
+
+## Quick Start
+
+1. **Install the CLI:**
+   ```bash
+   npm install -g @brainfile/cli
+   ```
+
+2. **Create a brainfile.md** in your project (or use an existing one)
+
+3. **List your tasks:**
+   ```bash
+   brainfile list
+   ```
+
+4. **Add a new task:**
+   ```bash
+   brainfile add --title "My first task" --priority high
+   ```
+
+5. **Move a task:**
+   ```bash
+   brainfile move --task task-123 --column done
+   ```
 
 ## Usage
 
@@ -108,6 +157,50 @@ brainfile move --task task-123 --column done
 brainfile move --task task-456 --column review
 ```
 
+### Lint and Auto-fix
+
+Validate your brainfile.md syntax and automatically fix common issues:
+
+```bash
+brainfile lint
+```
+
+**Options:**
+- `-f, --file <path>` - Path to brainfile.md file (default: `brainfile.md`)
+- `--fix` - Automatically fix issues when possible
+- `--check` - Exit with error code if issues found (useful for CI/CD)
+
+**What it checks:**
+- YAML syntax errors
+- Unquoted strings containing colons
+- Duplicate column IDs
+- Board structure validation
+- Missing required fields
+
+**Examples:**
+
+```bash
+# Check for issues
+brainfile lint
+
+# Check and automatically fix issues
+brainfile lint --fix
+
+# Use in CI/CD (exits with error code if issues found)
+brainfile lint --check
+
+# Check a specific file
+brainfile lint --file ./project/brainfile.md --fix
+```
+
+**Auto-fixable issues:**
+- Unquoted strings with colons (adds quotes automatically)
+
+**Detection-only issues:**
+- Duplicate column IDs
+- Structural validation errors
+- YAML syntax errors
+
 ### Template Management
 
 List available templates and create tasks from templates:
@@ -179,6 +272,7 @@ Task IDs are automatically generated with a timestamp and random string to ensur
 - `brainfile add` - Create new tasks
 - `brainfile move` - Move tasks between columns
 - `brainfile template` - Template management
+- `brainfile lint` - Validate and auto-fix syntax
 - Colored output and pretty-printing
 - Binary compilation for distribution
 
@@ -190,41 +284,49 @@ Task IDs are automatically generated with a timestamp and random string to ensur
 - Task completion tracking
 - Subtask management
 
+## Package Information
+
+- **Package**: `@brainfile/cli`
+- **npm**: https://www.npmjs.com/package/@brainfile/cli
+- **Repository**: https://github.com/brainfile/brainfile
+- **Core Library**: Built on [@brainfile/core](https://www.npmjs.com/package/@brainfile/core)
+
 ## Development
 
-### Using Make (Recommended)
-
-From the project root:
+### Setup
 
 ```bash
-# Build the CLI (includes core library)
-make build-cli
+# Clone the repository
+git clone https://github.com/brainfile/brainfile.git
+cd brainfile/cli
 
-# Run the CLI with automatic build (fast dev shortcut)
-make cli ARGS="list --file brainfile.md"
-make cli ARGS="add --title 'New task' --priority high"
-make cli ARGS="--help"
-
-# Create standalone binaries for distribution
-make build-cli-bin
-
-# Clean all build artifacts
-make clean
-```
-
-### Using npm directly
-
-From the `packages/brainfile-cli` directory:
-
-```bash
 # Install dependencies
 npm install
 
 # Build
 npm run build
 
-# Watch mode
+# Run tests
+npm test
+
+# Watch mode for development
 npm run dev
+```
+
+### Testing Locally
+
+```bash
+# Build the CLI
+npm run build
+
+# Link globally for local testing
+npm link
+
+# Now you can use it anywhere
+brainfile --help
+
+# Unlink when done
+npm unlink -g @brainfile/cli
 ```
 
 ## License

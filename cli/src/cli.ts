@@ -5,6 +5,7 @@ import { listCommand } from './commands/list';
 import { addCommand } from './commands/add';
 import { moveCommand } from './commands/move';
 import { templateCommand } from './commands/template';
+import { lintCommand } from './commands/lint';
 
 const program = new Command();
 
@@ -51,5 +52,13 @@ program
   .option('--description <text>', 'Task description (for template usage)')
   .option('-c, --column <name>', 'Column to add task to', 'todo')
   .action(templateCommand);
+
+program
+  .command('lint')
+  .description('Validate and auto-fix brainfile.md syntax')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .option('--fix', 'Automatically fix issues when possible')
+  .option('--check', 'Exit with error code if issues found (for CI/CD)')
+  .action(lintCommand);
 
 program.parse();

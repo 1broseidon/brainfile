@@ -112,10 +112,11 @@ export function templateCommand(options: TemplateOptions) {
       const newTaskId = generateTaskId();
 
       // Create complete task - ensure title is set
+      // Spread partialTask first, then override with explicit values
       const newTask: any = {
-        id: newTaskId,
-        title: partialTask.title || options.title,
         ...partialTask,
+        id: newTaskId,
+        title: options.title, // Always use the provided title
       };
 
       // Add task to column

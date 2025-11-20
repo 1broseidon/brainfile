@@ -1,0 +1,21 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Tests
+**/__tests__/
+**/*.test.ts
+**/*.test.js
+jest.config.js
+
+# Build artifacts
+*.log
+*.tsbuildinfo
+tsconfig.json
+node_modules/
+
+# Git
+.git/
+.gitignore
+
