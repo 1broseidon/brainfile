@@ -1,6 +1,6 @@
 {
   "name": "@brainfile/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Core library for the Brainfile task management protocol",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,8 +16,7 @@
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci --coverage --maxWorkers=2",
     "prepublishOnly": "npm run build",
-    "prepack": "npm run build",
-    "version": "npm run build && git add -A dist"
+    "prepack": "npm run build"
   },
   "keywords": [
     "brainfile",
