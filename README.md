@@ -29,6 +29,21 @@ title: My Project
 ---
 ```
 
+## AI Agent Integration
+
+Add these instructions to your agent configuration file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.):
+
+```markdown
+# Task Management Rules
+
+- review and follow rules in @brainfile.md
+- update task status in @brainfile.md as you work (todo → in-progress → done)
+- reference `schema` in the file for how to create tasks
+- your existing tools do not modify this file, you need to edit it directly
+```
+
+**Recommended**: Keep only these minimal instructions in your agent config file, and use `brainfile.md` for project-specific rules and context. This keeps agent instructions clean and portable across projects.
+
 ## Documentation
 
 Complete documentation is available at **[brainfile.md](https://brainfile.md)**

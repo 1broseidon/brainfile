@@ -7,6 +7,27 @@ description: Guide for integrating AI agents with Brainfile task management
 
 Brainfile is designed from the ground up for AI agent compatibility. This guide explains how AI agents should interact with Brainfile boards and best practices for integration.
 
+## Agent Configuration Method (Recommended)
+
+For the simplest integration, add these instructions to your agent configuration file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.):
+
+```markdown
+# Task Management Rules
+
+- review and follow rules in @brainfile.md
+- update task status in @brainfile.md as you work (todo → in-progress → done)
+- reference `schema` in the file for how to create tasks
+- your existing tools do not modify this file, you need to edit it directly
+```
+
+**Benefits**:
+- Minimal, portable agent instructions
+- Works across any AI agent (Claude, Cursor, GitHub Copilot, etc.)
+- Project-specific rules stay in `brainfile.md`
+- Clean separation of concerns
+
+**Recommended**: Keep only these minimal instructions in your agent config file, and use `brainfile.md` for project-specific rules and context.
+
 ## Quick Start for AI Agents
 
 1. **Look for the load tag** in README files:
