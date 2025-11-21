@@ -135,6 +135,11 @@
           "description": "Display title for the column",
           "minLength": 1
         },
+        "order": {
+          "type": "integer",
+          "description": "Display order for the column. Lower numbers appear first. Columns without order appear last.",
+          "minimum": 0
+        },
         "tasks": {
           "type": "array",
           "description": "Tasks in this column",
