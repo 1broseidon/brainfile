@@ -7,12 +7,12 @@ import logo from '../assets/logo.png';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Brainfile - A task file format for developers working with AI agents</title>
+  <title>Brainfile - The protocol AI agents can parse</title>
   <meta name="description" content="YAML structure + Markdown content. Git-friendly. AI agents can read and modify it.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     * {
       margin: 0;
@@ -25,25 +25,32 @@ import logo from '../assets/logo.png';
       --bg: #000000;
       --text: #FFFFFF;
       --text-muted: rgba(255, 255, 255, 0.6);
+      --text-dim: rgba(255, 255, 255, 0.4);
       --accent: #FFFFFF;
+      --accent-green: #00FF00;
       --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.12);
       --code-bg: #0A0A0A;
+      --panel-bg: #0D0D0D;
       --space-xs: 8px;
       --space-sm: 16px;
       --space-md: 24px;
       --space-lg: 32px;
       --space-xl: 48px;
       --space-2xl: 64px;
-      --space-3xl: 80px;
     }
 
     html[data-theme="light"] {
       --bg: #FFFFFF;
       --text: #000000;
       --text-muted: rgba(0, 0, 0, 0.6);
+      --text-dim: rgba(0, 0, 0, 0.4);
       --accent: #000000;
+      --accent-green: #00AA00;
       --border: rgba(0, 0, 0, 0.08);
-      --code-bg: #FAFAFA;
+      --border-strong: rgba(0, 0, 0, 0.12);
+      --code-bg: #F5F5F5;
+      --panel-bg: #FAFAFA;
     }
 
     body {
@@ -54,7 +61,6 @@ import logo from '../assets/logo.png';
       letter-spacing: -0.01em;
       font-size: 15px;
       overflow-x: hidden;
-      max-width: 100vw;
     }
 
     ::selection {
@@ -65,63 +71,30 @@ import logo from '../assets/logo.png';
       background: rgba(0, 0, 0, 0.1);
     }
 
-    /* Navigation */
+    /* Mobile-first Navigation */
     nav {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      z-index: 100;
-      background: rgba(0, 0, 0, 0.8);
-      backdrop-filter: blur(10px);
-      border-bottom: 1px solid var(--border);
-      height: 56px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--space-lg);
-    }
-
-    html[data-theme="light"] nav {
-      background: rgba(255, 255, 255, 0.9);
-    }
-
-    /* Hide nav on mobile */
-    @media (max-width: 900px) {
-      nav {
-        display: none;
-      }
-    }
-
-    /* Floating theme toggle for mobile */
-    .mobile-theme-toggle {
       display: none;
     }
 
-    @media (max-width: 900px) {
-      .mobile-theme-toggle {
+    @media (min-width: 768px) {
+      nav {
         display: flex;
         position: fixed;
-        bottom: var(--space-lg);
-        right: var(--space-lg);
+        top: 0;
+        left: 0;
+        right: 0;
         z-index: 100;
-        background: var(--code-bg);
-        border: 1px solid var(--border);
-        color: var(--text);
-        padding: var(--space-sm);
-        cursor: pointer;
+        background: rgba(0, 0, 0, 0.9);
+        backdrop-filter: blur(10px);
+        border-bottom: 1px solid var(--border);
+        height: 56px;
         align-items: center;
-        justify-content: center;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        justify-content: space-between;
+        padding: 0 var(--space-lg);
       }
 
-      .mobile-theme-toggle:hover {
-        border-color: var(--accent);
-      }
-
-      .mobile-theme-toggle svg {
-        width: 20px;
-        height: 20px;
+      html[data-theme="light"] nav {
+        background: rgba(255, 255, 255, 0.95);
       }
     }
 
@@ -134,20 +107,14 @@ import logo from '../assets/logo.png';
     }
 
     .logo img {
-      width: 32px;
-      height: 32px;
-    }
-
-    /* Hide logo on mobile */
-    @media (max-width: 640px) {
-      .logo img {
-        display: none;
-      }
+      width: 28px;
+      height: 28px;
     }
 
     .logo-text {
+      font-family: 'JetBrains Mono', monospace;
       font-weight: 600;
-      font-size: 1.25rem;
+      font-size: 1rem;
       letter-spacing: -0.02em;
     }
 
@@ -160,10 +127,11 @@ import logo from '../assets/logo.png';
     .nav-links a {
       color: var(--text-muted);
       text-decoration: none;
-      font-size: 0.9375rem;
+      font-size: 0.875rem;
       transition: all 0.2s;
       padding: var(--space-xs) var(--space-sm);
       border: 1px solid transparent;
+      font-family: 'JetBrains Mono', monospace;
     }
 
     .nav-links a:hover {
@@ -180,6 +148,7 @@ import logo from '../assets/logo.png';
       transition: all 0.2s;
       display: flex;
       align-items: center;
+      font-size: 0;
     }
 
     .theme-toggle:hover {
@@ -187,360 +156,392 @@ import logo from '../assets/logo.png';
     }
 
     .theme-toggle svg {
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
+    }
+
+    /* Floating Theme Toggle (Mobile) */
+    .mobile-theme-toggle {
+      position: fixed;
+      bottom: var(--space-md);
+      right: var(--space-md);
+      z-index: 100;
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: var(--space-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .mobile-theme-toggle:active {
+      transform: scale(0.95);
+    }
+
+    @media (min-width: 768px) {
+      .mobile-theme-toggle {
+        display: none;
+      }
+    }
+
+    .mobile-theme-toggle svg {
+      width: 20px;
+      height: 20px;
     }
 
     /* Main Content */
     main {
       max-width: 1200px;
       margin: 0 auto;
-      padding: calc(56px + var(--space-3xl)) var(--space-lg) var(--space-3xl);
+      padding: var(--space-xl) var(--space-md) var(--space-2xl);
     }
 
-    @media (max-width: 900px) {
+    @media (min-width: 768px) {
       main {
-        padding: var(--space-xl) var(--space-md) var(--space-2xl);
+        padding: calc(56px + var(--space-2xl)) var(--space-lg) var(--space-2xl);
       }
     }
 
-    h1 {
-      font-size: 2.5rem;
-      font-weight: 700;
-      letter-spacing: -0.04em;
-      line-height: 1.2;
+    /* Hero */
+    .hero {
+      margin-bottom: var(--space-xl);
+    }
+
+    .hero-headline {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 600;
+      font-size: 1.5rem;
+      letter-spacing: -0.03em;
+      line-height: 1.3;
       margin-bottom: var(--space-sm);
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    @media (min-width: 480px) {
+      .hero-headline {
+        font-size: 2rem;
+        word-break: normal;
+      }
+    }
+
+    @media (min-width: 768px) {
+      .hero-headline {
+        font-size: 2.5rem;
+      }
     }
 
     .tagline {
-      font-size: 1.125rem;
+      font-size: 1rem;
       color: var(--text-muted);
-      margin-bottom: var(--space-md);
+      margin-bottom: var(--space-sm);
       line-height: 1.6;
     }
 
-    @media (min-width: 900px) {
+    @media (min-width: 768px) {
       .tagline {
-        margin-bottom: var(--space-3xl);
+        font-size: 1.125rem;
+        margin-bottom: var(--space-md);
       }
     }
 
-    /* Mobile CTAs */
-    .mobile-cta {
-      display: none;
-      flex-direction: column;
-      gap: var(--space-sm);
-      margin-bottom: var(--space-xl);
+    .subtagline {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
+      color: var(--text-dim);
+      margin-bottom: var(--space-lg);
     }
 
-    @media (max-width: 900px) {
-      .mobile-cta {
-        display: flex;
-      }
-    }
-
-    .mobile-cta a {
-      display: block;
-      text-align: center;
-      padding: var(--space-sm) var(--space-md);
-      border: 1px solid var(--border);
-      text-decoration: none;
-      color: var(--text);
-      transition: all 0.2s;
-    }
-
-    .mobile-cta a:hover {
-      border-color: var(--accent);
-    }
-
-    .mobile-cta a:first-child {
-      background: var(--code-bg);
-      border-color: var(--accent);
-    }
-
-    /* Hero Grid: Code + Tools */
-    .hero-grid {
+    /* Split View */
+    .split-view {
       display: grid;
-      grid-template-columns: 1fr;
-      gap: var(--space-lg);
+      gap: var(--space-md);
       margin-bottom: var(--space-xl);
-      max-width: 100%;
-      overflow: hidden;
     }
 
     @media (min-width: 900px) {
-      .hero-grid {
-        grid-template-columns: 1.5fr 1fr;
+      .split-view {
+        grid-template-columns: 1.2fr 1fr;
+        gap: var(--space-lg);
       }
     }
 
     /* Code Block */
-    .code-block {
+    .code-panel {
       background: var(--code-bg);
       border: 1px solid var(--border);
-      padding: 0;
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 0.875rem;
-      line-height: 1.7;
-      height: fit-content;
-      position: relative;
-      width: 100%;
-      max-width: 100%;
+      overflow: hidden;
     }
 
     .code-header {
-      padding: var(--space-md);
-      padding-bottom: var(--space-sm);
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
-    .code-scroll-wrapper {
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 2px var(--space-xs);
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6875rem;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    .copy-btn:active {
+      background: var(--border);
+    }
+
+    .code-content {
+      padding: var(--space-md);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      line-height: 1.7;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
-      max-width: 100%;
     }
 
-    .code-content {
-      padding: 0 var(--space-md) var(--space-md) var(--space-md);
+    @media (min-width: 480px) {
+      .code-content {
+        font-size: 0.8125rem;
+      }
+    }
+
+    .code-content pre {
       white-space: pre;
       margin: 0;
-      overflow: visible;
-    }
-
-    @media (max-width: 640px) {
-      .code-block {
-        font-size: 0.75rem;
-      }
-
-      .code-header {
-        padding: var(--space-sm);
-        padding-bottom: 4px;
-      }
-
-      .code-content {
-        padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
-      }
-    }
-
-    /* Code expansion on mobile */
-    @media (max-width: 900px) {
-      .code-scroll-wrapper {
-        max-height: 240px;
-        overflow-y: hidden;
-        position: relative;
-      }
-
-      .code-scroll-wrapper.expanded {
-        max-height: none;
-        overflow-y: auto;
-      }
-
-      .code-scroll-wrapper:not(.expanded)::after {
-        content: '';
-        position: absolute;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        height: 60px;
-        background: linear-gradient(transparent, var(--code-bg));
-        pointer-events: none;
-      }
-
-      .expand-btn {
-        display: block;
-        width: 100%;
-        padding: var(--space-sm);
-        background: transparent;
-        border: none;
-        border-top: 1px solid var(--border);
-        color: var(--text-muted);
-        cursor: pointer;
-        font-size: 0.875rem;
-      }
-
-      .expand-btn:hover {
-        color: var(--text);
-      }
-    }
-
-    @media (min-width: 901px) {
-      .expand-btn {
-        display: none;
-      }
-    }
-
-    .code-header {
-      color: var(--text-muted);
-      font-size: 0.8125rem;
-    }
-
-    .code-content {
       color: var(--text);
     }
 
     .code-comment {
+      color: var(--text-dim);
+    }
+
+    .code-key {
+      color: var(--text);
+    }
+
+    .code-string {
+      color: var(--accent-green);
+    }
+
+    /* Agent View Panel */
+    .agent-panel {
+      background: var(--panel-bg);
+      border: 1px solid var(--border);
+    }
+
+    .agent-header {
+      padding: var(--space-sm) var(--space-md);
+      border-bottom: 1px solid var(--border);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
       color: var(--text-muted);
     }
 
-    /* Tool Cards */
-    .tools-label {
-      display: none;
+    .agent-content {
+      padding: var(--space-md);
     }
 
-    @media (max-width: 900px) {
-      .tools-label {
-        display: block;
-        margin-bottom: var(--space-sm);
+    .agent-item {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-md);
+      font-size: 0.875rem;
+    }
+
+    .agent-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .check-icon {
+      color: var(--accent-green);
+      font-family: 'JetBrains Mono', monospace;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .agent-label {
+      color: var(--text-muted);
+    }
+
+    .agent-detail {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    /* Stats Bar */
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin-bottom: var(--space-xl);
+    }
+
+    @media (min-width: 640px) {
+      .stats {
+        grid-template-columns: repeat(3, 1fr);
       }
     }
 
-    .tool-cards {
-      display: flex;
-      flex-direction: column;
+    .stat-item {
+      background: var(--bg);
+      padding: var(--space-md);
+      text-align: center;
+    }
+
+    .stat-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.6875rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      color: var(--text);
+    }
+
+    /* Sections */
+    section {
+      margin-bottom: var(--space-xl);
+    }
+
+    @media (min-width: 768px) {
+      section {
+        margin-bottom: var(--space-2xl);
+      }
+    }
+
+    h2 {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: var(--space-md);
+    }
+
+    .section-description {
+      color: var(--text-muted);
+      margin-bottom: var(--space-md);
+      line-height: 1.7;
+      font-size: 0.9375rem;
+    }
+
+    /* AI Integration Section */
+    .integration-grid {
+      display: grid;
+      gap: var(--space-md);
+    }
+
+    @media (min-width: 768px) {
+      .integration-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .integration-card {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      padding: var(--space-md);
+    }
+
+    .integration-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.875rem;
+      color: var(--text);
+      margin-bottom: var(--space-sm);
+    }
+
+    .integration-snippet {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      line-height: 1.7;
+      color: var(--text-muted);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Tools Section */
+    .tools-grid {
+      display: grid;
       gap: var(--space-sm);
     }
 
-    /* Horizontal scroll on mobile */
-    @media (max-width: 900px) {
-      .tool-cards {
-        flex-direction: row;
-        overflow-x: auto;
-        gap: var(--space-sm);
-        padding-bottom: var(--space-xs);
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: thin;
-      }
-
-      .tool-card {
-        min-width: 280px;
-        flex-shrink: 0;
+    @media (min-width: 640px) {
+      .tools-grid {
+        grid-template-columns: repeat(3, 1fr);
       }
     }
 
     .tool-card {
       border: 1px solid var(--border);
       padding: var(--space-md);
-      transition: all 0.2s;
       text-decoration: none;
       color: var(--text);
       display: block;
-      background: transparent;
+      transition: all 0.2s;
     }
 
     .tool-card:hover {
-      border-color: var(--accent);
+      border-color: var(--border-strong);
       transform: translateX(2px);
     }
 
-    .tool-card-title {
-      font-weight: 600;
-      font-size: 1rem;
-      margin-bottom: var(--space-xs);
-      letter-spacing: -0.02em;
-    }
-
-    .tool-card-package {
+    .tool-title {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8125rem;
-      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-bottom: var(--space-xs);
+      color: var(--text);
+    }
+
+    .tool-package {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--text-dim);
       margin-bottom: var(--space-xs);
     }
 
-    .tool-card-description {
-      font-size: 0.875rem;
+    .tool-description {
+      font-size: 0.8125rem;
       color: var(--text-muted);
       line-height: 1.5;
     }
 
-    /* Feature List */
-    .feature-list {
-      list-style: none;
-      padding: 0;
-      margin-bottom: var(--space-3xl);
-      display: grid;
-      gap: var(--space-xs);
-    }
-
-    .feature-list li {
-      padding-left: var(--space-md);
-      position: relative;
-      color: var(--text-muted);
-    }
-
-    .feature-list li:before {
-      content: '─';
-      position: absolute;
-      left: 0;
-      color: var(--text);
-    }
-
-    /* Section */
-    section {
-      margin-bottom: var(--space-3xl);
-    }
-
-    h2 {
-      font-size: 1.5rem;
-      font-weight: 600;
-      letter-spacing: -0.03em;
-      margin-bottom: var(--space-md);
-      text-transform: uppercase;
-      font-size: 0.875rem;
-      color: var(--text-muted);
-      font-weight: 500;
-    }
-
-    p {
-      color: var(--text-muted);
-      margin-bottom: var(--space-md);
-      line-height: 1.7;
-    }
-
-    /* Problem/Solution Grid */
-    .two-col {
-      display: grid;
-      gap: var(--space-lg);
-      margin-bottom: var(--space-3xl);
-    }
-
-    @media (min-width: 768px) {
-      .two-col {
-        grid-template-columns: 1fr 1fr;
-      }
-    }
-
-    .col-header {
-      font-weight: 600;
-      margin-bottom: var(--space-sm);
-      color: var(--text);
-    }
-
-    ul {
-      list-style: none;
-      padding: 0;
-    }
-
-    ul li {
-      padding-left: var(--space-md);
-      position: relative;
-      margin-bottom: var(--space-xs);
-      color: var(--text-muted);
-    }
-
-    ul li:before {
-      content: '·';
-      position: absolute;
-      left: 0;
-      color: var(--text);
-    }
-
-    /* Footer Statement */
+    /* Footer */
     .footer-statement {
       text-align: center;
-      padding: var(--space-xl) 0;
-      color: var(--text-muted);
-      font-size: 0.875rem;
+      padding: var(--space-lg) 0;
+      color: var(--text-dim);
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8125rem;
       border-top: 1px solid var(--border);
-      margin-top: var(--space-3xl);
+      margin-top: var(--space-xl);
     }
 
     /* Links */
@@ -553,28 +554,27 @@ import logo from '../assets/logo.png';
     }
 
     a:not(.logo):not(.tool-card):not(.nav-links a):hover {
-      text-decoration-thickness: 2px;
+      text-decoration-color: var(--text);
     }
 
-    /* Mobile Responsive */
-    @media (max-width: 900px) {
-      h1 {
-        font-size: 2rem;
-      }
+    /* Utility */
+    .mobile-only {
+      display: block;
+    }
 
-      .hero-grid {
-        grid-template-columns: 1fr;
-        gap: var(--space-md);
+    @media (min-width: 768px) {
+      .mobile-only {
+        display: none;
       }
     }
 
-    @media (max-width: 640px) {
-      nav {
-        padding: 0 var(--space-md);
-      }
+    .desktop-only {
+      display: none;
+    }
 
-      .nav-links {
-        gap: var(--space-sm);
+    @media (min-width: 768px) {
+      .desktop-only {
+        display: block;
       }
     }
   </style>
@@ -583,18 +583,14 @@ import logo from '../assets/logo.png';
   <nav>
     <a href="/" class="logo">
       <img src={logo.src} alt="Brainfile">
-      <span class="logo-text">Brainfile</span>
+      <span class="logo-text">brainfile</span>
     </a>
     <div class="nav-links">
-      <a href="/getting-started/quick-start">Docs</a>
-      <a href="/protocol/specification">Spec</a>
-      <a href="https://github.com/brainfile" target="_blank" title="GitHub">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
-        </svg>
-      </a>
+      <a href="/getting-started/quick-start">docs</a>
+      <a href="/protocol/specification">spec</a>
+      <a href="https://github.com/brainfile" target="_blank">github</a>
       <button class="theme-toggle" id="themeToggle" title="Toggle theme">
-        <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="5"/>
           <line x1="12" y1="1" x2="12" y2="3"/>
           <line x1="12" y1="21" x2="12" y2="23"/>
@@ -605,7 +601,7 @@ import logo from '../assets/logo.png';
           <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
           <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
         </svg>
-        <svg class="moon-icon" style="display: none;" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg class="moon-icon" style="display: none;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
       </button>
@@ -613,98 +609,156 @@ import logo from '../assets/logo.png';
   </nav>
 
   <main>
-    <h1>Brainfile</h1>
-    <p class="tagline">A task file format for developers working with AI agents.</p>
-
-    <div class="mobile-cta">
-      <a href="/getting-started/quick-start">→ Read Docs</a>
-      <a href="#example">→ View Example</a>
+    <!-- Hero -->
+    <div class="hero">
+      <h1 class="hero-headline">schema: https://brainfile.md/v1</h1>
+      <p class="tagline">The protocol AI agents can parse. The format humans can read.</p>
+      <p class="subtagline">// No databases. No lock-in. Just text.</p>
     </div>
 
-    <div class="hero-grid" id="example">
-      <div class="code-block">
-        <div class="code-header">brainfile.md</div>
-        <div class="code-scroll-wrapper">
-          <pre class="code-content" id="codeContent"><span class="code-comment"># YAML structure</span>
+    <!-- Split View: Human vs Machine -->
+    <div class="split-view">
+      <!-- Human View -->
+      <div class="code-panel">
+        <div class="code-header">
+          <span>brainfile.md</span>
+          <button class="copy-btn" data-copy="brainfile">[copy]</button>
+        </div>
+        <div class="code-content">
+          <pre><span class="code-comment"># YAML frontmatter</span>
 ---
-schema: https://brainfile.md/v1
-columns:
-  - id: in-progress
-    tasks:
-      - id: auth-1
-        title: Implement OAuth 2.0 authentication
-        description: Add Google and GitHub OAuth providers
-        priority: high
-        tags: [backend, security]
-        subtasks:
-          - id: auth-1-1
-            title: Set up OAuth credentials
-            completed: true
-          - id: auth-1-2
-            title: Implement callback handlers
-            completed: false
+<span class="code-key">schema</span>: <span class="code-string">https://brainfile.md/v1</span>
+<span class="code-key">columns</span>:
+  - <span class="code-key">id</span>: in-progress
+    <span class="code-key">tasks</span>:
+      - <span class="code-key">id</span>: auth-1
+        <span class="code-key">title</span>: Implement OAuth 2.0
+        <span class="code-key">priority</span>: high
+        <span class="code-key">tags</span>: [backend, security]
+        <span class="code-key">subtasks</span>:
+          - <span class="code-key">id</span>: auth-1-1
+            <span class="code-key">title</span>: Set up credentials
+            <span class="code-key">completed</span>: true
 ---
 
 <span class="code-comment"># Markdown content</span>
-# Project Tasks
-
 Additional context for AI agents.</pre>
         </div>
-        <button class="expand-btn" id="expandBtn">Expand full example ↓</button>
       </div>
 
-      <div>
-        <h2 class="tools-label">TOOLS</h2>
-        <div class="tool-cards">
-          <a href="/core/overview" class="tool-card">
-          <div class="tool-card-title">Core Library</div>
-          <div class="tool-card-package">@brainfile/core</div>
-          <div class="tool-card-description">Parse and validate brainfile format</div>
-        </a>
-
-        <a href="/cli/installation" class="tool-card">
-          <div class="tool-card-title">CLI Tool</div>
-          <div class="tool-card-package">npm i -g @brainfile/cli</div>
-          <div class="tool-card-description">Command-line interface for automation</div>
-        </a>
-
-        <a href="/vscode/extension" class="tool-card">
-          <div class="tool-card-title">VSCode Extension</div>
-          <div class="tool-card-package">Visual kanban board</div>
-          <div class="tool-card-description">Integrated into your editor</div>
-        </a>
+      <!-- Agent View -->
+      <div class="agent-panel">
+        <div class="agent-header">What AI sees</div>
+        <div class="agent-content">
+          <div class="agent-item">
+            <span class="check-icon">✓</span>
+            <div>
+              <div class="agent-label">Schema validated</div>
+              <div class="agent-detail">v1 spec enforced</div>
+            </div>
+          </div>
+          <div class="agent-item">
+            <span class="check-icon">✓</span>
+            <div>
+              <div class="agent-label">Tasks parsed</div>
+              <div class="agent-detail">IDs preserved, structure intact</div>
+            </div>
+          </div>
+          <div class="agent-item">
+            <span class="check-icon">✓</span>
+            <div>
+              <div class="agent-label">Rules extracted</div>
+              <div class="agent-detail">Agent instructions ready</div>
+            </div>
+          </div>
+          <div class="agent-item">
+            <span class="check-icon">✓</span>
+            <div>
+              <div class="agent-label">Context loaded</div>
+              <div class="agent-detail">Markdown content available</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <ul class="feature-list">
-      <li>YAML structure + Markdown content</li>
-      <li>Git-friendly text format</li>
-      <li>AI agents can read and modify it</li>
-    </ul>
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-item">
+        <div class="stat-label">Format</div>
+        <div class="stat-value">YAML + Markdown</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Storage</div>
+        <div class="stat-value">Git-tracked text</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Agents</div>
+        <div class="stat-value">Read & modify</div>
+      </div>
+    </div>
 
+    <!-- AI Integration Patterns -->
+    <section>
+      <h2>How agents use this</h2>
+      <p class="section-description">
+        Drop brainfile.md in your repo. AI agents can read it, understand the structure, and follow your rules.
+      </p>
+      <div class="integration-grid">
+        <div class="integration-card">
+          <div class="integration-title">Claude / Cursor</div>
+          <div class="integration-snippet">"Read brainfile.md and move
+task-5 to done. Update the
+completed timestamp."</div>
+        </div>
+        <div class="integration-card">
+          <div class="integration-title">GitHub Copilot</div>
+          <div class="integration-snippet">"Add a high priority task for
+fixing the login bug to the
+todo column."</div>
+        </div>
+        <div class="integration-card">
+          <div class="integration-title">Any LLM</div>
+          <div class="integration-snippet">"Parse the YAML, validate
+against schema, extract all
+tasks with priority=high."</div>
+        </div>
+        <div class="integration-card">
+          <div class="integration-title">Your scripts</div>
+          <div class="integration-snippet">cat brainfile.md | grep
+'priority: high' | wc -l</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Why This Exists -->
     <section>
       <h2>Why this exists</h2>
-      
-      <div class="two-col">
-        <div>
-          <div class="col-header">Working with AI agents on tasks is messy</div>
-          <ul>
-            <li>Paste task lists into prompts</li>
-            <li>Lose track of what changed</li>
-            <li>No version history</li>
-            <li>Context spread across tools</li>
-          </ul>
-        </div>
-        <div>
-          <div class="col-header">Brainfile is a file you commit</div>
-          <ul>
-            <li>Tasks live in your repo</li>
-            <li>Agents follow explicit rules</li>
-            <li>Full git history</li>
-            <li>Tools read the same format</li>
-          </ul>
-        </div>
+      <p class="section-description">
+        Working with AI agents on tasks is messy. Context is spread across tools. Changes aren't tracked.
+        Brainfile is a file you commit. Tasks live in your repo. Agents follow explicit rules. Full git history.
+      </p>
+    </section>
+
+    <!-- Tools -->
+    <section>
+      <h2>Official tools (optional)</h2>
+      <div class="tools-grid">
+        <a href="/core/overview" class="tool-card">
+          <div class="tool-title">@brainfile/core</div>
+          <div class="tool-package">npm install</div>
+          <div class="tool-description">Parse, validate, and serialize</div>
+        </a>
+        <a href="/cli/installation" class="tool-card">
+          <div class="tool-title">@brainfile/cli</div>
+          <div class="tool-package">npm i -g</div>
+          <div class="tool-description">Command-line interface</div>
+        </a>
+        <a href="/vscode/extension" class="tool-card">
+          <div class="tool-title">VSCode Extension</div>
+          <div class="tool-package">marketplace</div>
+          <div class="tool-description">Visual kanban board</div>
+        </a>
       </div>
     </section>
 
@@ -736,31 +790,22 @@ Additional context for AI agents.</pre>
     const mobileThemeToggle = document.getElementById('mobileThemeToggle');
     const html = document.documentElement;
 
-    function updateThemeIcon(theme) {
-      // Desktop nav
-      const sunIcon = themeToggle?.querySelector('.sun-icon');
-      const moonIcon = themeToggle?.querySelector('.moon-icon');
-      if (sunIcon && moonIcon) {
-        if (theme === 'dark') {
-          sunIcon.style.display = 'block';
-          moonIcon.style.display = 'none';
-        } else {
-          sunIcon.style.display = 'none';
-          moonIcon.style.display = 'block';
-        }
-      }
+    function updateThemeIcon(theme: string) {
+      const sunIcon = themeToggle?.querySelector('.sun-icon') as HTMLElement | null;
+      const moonIcon = themeToggle?.querySelector('.moon-icon') as HTMLElement | null;
+      const mobileSunIcon = mobileThemeToggle?.querySelector('.mobile-sun-icon') as HTMLElement | null;
+      const mobileMoonIcon = mobileThemeToggle?.querySelector('.mobile-moon-icon') as HTMLElement | null;
 
-      // Mobile floating button
-      const mobileSunIcon = mobileThemeToggle?.querySelector('.mobile-sun-icon');
-      const mobileMoonIcon = mobileThemeToggle?.querySelector('.mobile-moon-icon');
-      if (mobileSunIcon && mobileMoonIcon) {
-        if (theme === 'dark') {
-          mobileSunIcon.style.display = 'block';
-          mobileMoonIcon.style.display = 'none';
-        } else {
-          mobileSunIcon.style.display = 'none';
-          mobileMoonIcon.style.display = 'block';
-        }
+      if (theme === 'dark') {
+        if (sunIcon) sunIcon.style.display = 'block';
+        if (moonIcon) moonIcon.style.display = 'none';
+        if (mobileSunIcon) mobileSunIcon.style.display = 'block';
+        if (mobileMoonIcon) mobileMoonIcon.style.display = 'none';
+      } else {
+        if (sunIcon) sunIcon.style.display = 'none';
+        if (moonIcon) moonIcon.style.display = 'block';
+        if (mobileSunIcon) mobileSunIcon.style.display = 'none';
+        if (mobileMoonIcon) mobileMoonIcon.style.display = 'block';
       }
     }
 
@@ -779,19 +824,37 @@ Additional context for AI agents.</pre>
     html.setAttribute('data-theme', savedTheme);
     updateThemeIcon(savedTheme);
 
-    // Code expansion (mobile only)
-    const expandBtn = document.getElementById('expandBtn');
-    const codeWrapper = document.querySelector('.code-scroll-wrapper');
-    
-    expandBtn?.addEventListener('click', () => {
-      const isExpanded = codeWrapper?.classList.contains('expanded');
-      if (isExpanded) {
-        codeWrapper?.classList.remove('expanded');
-        expandBtn.textContent = 'Expand full example ↓';
-      } else {
-        codeWrapper?.classList.add('expanded');
-        expandBtn.textContent = 'Collapse ↑';
-      }
+    // Copy functionality
+    const brainfileContent = `---
+schema: https://brainfile.md/v1
+columns:
+  - id: in-progress
+    tasks:
+      - id: auth-1
+        title: Implement OAuth 2.0
+        priority: high
+        tags: [backend, security]
+        subtasks:
+          - id: auth-1-1
+            title: Set up credentials
+            completed: true
+---
+
+# Additional context for AI agents`;
+
+    document.querySelectorAll('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(brainfileContent);
+          const originalText = btn.textContent;
+          btn.textContent = '[copied]';
+          setTimeout(() => {
+            btn.textContent = originalText;
+          }, 2000);
+        } catch (err) {
+          console.error('Copy failed:', err);
+        }
+      });
     });
   </script>
 </body>
