@@ -53,6 +53,8 @@ import logo from '../assets/logo.png';
       line-height: 1.6;
       letter-spacing: -0.01em;
       font-size: 15px;
+      overflow-x: hidden;
+      max-width: 100vw;
     }
 
     ::selection {
@@ -262,6 +264,8 @@ import logo from '../assets/logo.png';
       grid-template-columns: 1fr;
       gap: var(--space-lg);
       margin-bottom: var(--space-xl);
+      max-width: 100%;
+      overflow: hidden;
     }
 
     @media (min-width: 900px) {
@@ -274,28 +278,63 @@ import logo from '../assets/logo.png';
     .code-block {
       background: var(--code-bg);
       border: 1px solid var(--border);
-      padding: var(--space-md);
+      padding: 0;
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.875rem;
       line-height: 1.7;
-      overflow-x: auto;
       height: fit-content;
       position: relative;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .code-header {
+      padding: var(--space-md);
+      padding-bottom: var(--space-sm);
+    }
+
+    .code-scroll-wrapper {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      max-width: 100%;
+    }
+
+    .code-content {
+      padding: 0 var(--space-md) var(--space-md) var(--space-md);
+      white-space: pre;
+      margin: 0;
+      overflow: visible;
+    }
+
+    @media (max-width: 640px) {
+      .code-block {
+        font-size: 0.75rem;
+      }
+
+      .code-header {
+        padding: var(--space-sm);
+        padding-bottom: 4px;
+      }
+
+      .code-content {
+        padding: 0 var(--space-sm) var(--space-sm) var(--space-sm);
+      }
     }
 
     /* Code expansion on mobile */
     @media (max-width: 900px) {
-      .code-content {
+      .code-scroll-wrapper {
         max-height: 240px;
-        overflow: hidden;
+        overflow-y: hidden;
         position: relative;
       }
 
-      .code-content.expanded {
+      .code-scroll-wrapper.expanded {
         max-height: none;
+        overflow-y: auto;
       }
 
-      .code-content:not(.expanded)::after {
+      .code-scroll-wrapper:not(.expanded)::after {
         content: '';
         position: absolute;
         bottom: 0;
@@ -316,7 +355,6 @@ import logo from '../assets/logo.png';
         color: var(--text-muted);
         cursor: pointer;
         font-size: 0.875rem;
-        margin-top: var(--space-sm);
       }
 
       .expand-btn:hover {
@@ -332,7 +370,6 @@ import logo from '../assets/logo.png';
 
     .code-header {
       color: var(--text-muted);
-      margin-bottom: var(--space-sm);
       font-size: 0.8125rem;
     }
 
@@ -587,7 +624,8 @@ import logo from '../assets/logo.png';
     <div class="hero-grid" id="example">
       <div class="code-block">
         <div class="code-header">brainfile.md</div>
-        <pre class="code-content" id="codeContent"><span class="code-comment"># YAML structure</span>
+        <div class="code-scroll-wrapper">
+          <pre class="code-content" id="codeContent"><span class="code-comment"># YAML structure</span>
 ---
 schema: https://brainfile.md/v1
 columns:
@@ -611,6 +649,7 @@ columns:
 # Project Tasks
 
 Additional context for AI agents.</pre>
+        </div>
         <button class="expand-btn" id="expandBtn">Expand full example ↓</button>
       </div>
 
@@ -742,15 +781,15 @@ Additional context for AI agents.</pre>
 
     // Code expansion (mobile only)
     const expandBtn = document.getElementById('expandBtn');
-    const codeContent = document.getElementById('codeContent');
+    const codeWrapper = document.querySelector('.code-scroll-wrapper');
     
     expandBtn?.addEventListener('click', () => {
-      const isExpanded = codeContent?.classList.contains('expanded');
+      const isExpanded = codeWrapper?.classList.contains('expanded');
       if (isExpanded) {
-        codeContent?.classList.remove('expanded');
+        codeWrapper?.classList.remove('expanded');
         expandBtn.textContent = 'Expand full example ↓';
       } else {
-        codeContent?.classList.add('expanded');
+        codeWrapper?.classList.add('expanded');
         expandBtn.textContent = 'Collapse ↑';
       }
     });
