@@ -19,6 +19,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.4.3] - 2025-11-21
+
+### Fixed
+- **Cline Hooks Hanging Issue** - Fixed hook scripts hanging on startup
+  - Added 2-second timeout to stdin read using `read -t 2`
+  - Hooks now gracefully handle missing stdin data by using empty JSON object
+  - Prevents indefinite blocking when Cline doesn't provide stdin properly
+  - All three hooks (PostToolUse, UserPromptSubmit, TaskStart) updated
+
+## [0.4.2] - 2025-11-21
+
+### Added
+- **Cline Hooks Support** - Added support for Cline VS Code extension
+  - `brainfile hooks install cline` - Install hooks for Cline
+  - `brainfile hooks uninstall cline` - Remove Cline hooks
+  - `brainfile hooks list cline` - View Cline hook status
+  - Creates executable hook scripts: PostToolUse, UserPromptSubmit, TaskStart
+  - Hooks return JSON with `cancel` and `contextModification` fields
+  - User scope: `~/Documents/Cline/Rules/Hooks/`
+  - Project scope: `.clinerules/hooks/`
+  - Full test coverage for Cline integration
+
 ## [0.4.0] - 2025-11-21
 
 ### Added

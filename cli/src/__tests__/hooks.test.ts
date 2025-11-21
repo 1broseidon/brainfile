@@ -89,6 +89,22 @@ describe('hooks commands', () => {
       consoleSpy.mockRestore();
     });
 
+    it('should install hooks for Cline', () => {
+      const consoleSpy = jest.spyOn(console, 'log');
+
+      installCommand({ tool: 'cline', scope: 'project' });
+
+      const settings = readToolSettings('cline', 'project');
+
+      expect(settings.hooks).toBeDefined();
+      expect(settings.hooks.PostToolUse).toBe(true);
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Brainfile hooks installed')
+      );
+
+      consoleSpy.mockRestore();
+    });
+
     it('should exit with error for unknown tool', () => {
       const exitSpy = jest.spyOn(process, 'exit').mockImplementation((code?: any) => {
         throw new Error(`process.exit: ${code}`);
@@ -181,6 +197,9 @@ describe('hooks commands', () => {
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Cursor')
       );
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Cline')
+      );
 
       consoleSpy.mockRestore();
     });
@@ -192,6 +211,18 @@ describe('hooks commands', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining('Claude Code')
+      );
+
+      consoleSpy.mockRestore();
+    });
+
+    it('should list Cline when specified', () => {
+      const consoleSpy = jest.spyOn(console, 'log');
+
+      listCommand({ tool: 'cline' });
+
+      expect(consoleSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Cline')
       );
 
       consoleSpy.mockRestore();

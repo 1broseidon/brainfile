@@ -70,6 +70,74 @@ describe('hook-parser', () => {
       expect(result.tool).toBe('cursor');
     });
 
+    it('should parse Cline PostToolUse format', () => {
+      const input = {
+        clineVersion: '3.0.0',
+        hookName: 'PostToolUse',
+        timestamp: '2024-01-01T00:00:00Z',
+        taskId: 'task-123',
+        workspaceRoots: ['/path/to/workspace'],
+        userId: 'user-123',
+        postToolUse: {
+          toolName: 'write_to_file',
+          parameters: {
+            target_file: 'src/main.ts',
+            content: 'console.log("hello");'
+          },
+          result: 'success',
+          success: true,
+          executionTimeMs: 100
+        }
+      };
+
+      const result = parseHookInput(input);
+
+      expect(result.filePath).toBe('src/main.ts');
+      expect(result.tool).toBe('cline');
+    });
+
+    it('should parse Cline UserPromptSubmit format', () => {
+      const input = {
+        clineVersion: '3.0.0',
+        hookName: 'UserPromptSubmit',
+        timestamp: '2024-01-01T00:00:00Z',
+        taskId: 'task-123',
+        workspaceRoots: ['/path/to/workspace'],
+        userId: 'user-123',
+        userPromptSubmit: {
+          prompt: 'Fix the bug in main.ts',
+          attachments: ['file1.ts']
+        }
+      };
+
+      const result = parseHookInput(input);
+
+      expect(result.prompt).toBe('Fix the bug in main.ts');
+      expect(result.tool).toBe('cline');
+    });
+
+    it('should parse Cline TaskStart format', () => {
+      const input = {
+        clineVersion: '3.0.0',
+        hookName: 'TaskStart',
+        timestamp: '2024-01-01T00:00:00Z',
+        taskId: 'task-123',
+        workspaceRoots: ['/path/to/workspace'],
+        userId: 'user-123',
+        taskStart: {
+          taskMetadata: {
+            taskId: 'task-123',
+            ulid: 'ulid-123',
+            initialTask: 'Start new feature'
+          }
+        }
+      };
+
+      const result = parseHookInput(input);
+
+      expect(result.tool).toBe('cline');
+    });
+
     it('should handle malformed JSON', () => {
       const input = {};
 
@@ -94,6 +162,17 @@ describe('hook-parser', () => {
       const input = {
         prompt: 'test',
         hook_event_name: 'beforeSubmitPrompt'
+      };
+
+      expect(shouldOutputJSON(input)).toBe(true);
+    });
+
+    it('should return true for Cline hooks', () => {
+      const input = {
+        clineVersion: '3.0.0',
+        hookName: 'PostToolUse',
+        timestamp: '2024-01-01T00:00:00Z',
+        taskId: 'task-123'
       };
 
       expect(shouldOutputJSON(input)).toBe(true);

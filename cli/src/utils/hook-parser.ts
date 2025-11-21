@@ -6,12 +6,30 @@ export function parseHookInput(input: any): {
   filePath?: string;
   command?: string;
   prompt?: string;
-  tool?: 'claude-code' | 'cursor' | 'unknown';
+  tool?: 'claude-code' | 'cursor' | 'cline' | 'unknown';
 } {
   // Handle null or undefined input
   if (!input) {
     return {
       tool: 'unknown'
+    };
+  }
+
+  // Cline format - check for clineVersion and hookName
+  if (input.clineVersion && input.hookName) {
+    // Extract file path from postToolUse parameters if available
+    let filePath: string | undefined;
+    
+    if (input.postToolUse?.parameters?.target_file) {
+      filePath = input.postToolUse.parameters.target_file;
+    } else if (input.postToolUse?.parameters?.file_path) {
+      filePath = input.postToolUse.parameters.file_path;
+    }
+
+    return {
+      filePath,
+      prompt: input.userPromptSubmit?.prompt,
+      tool: 'cline'
     };
   }
 
@@ -46,8 +64,14 @@ export function parseHookInput(input: any): {
 }
 
 /**
- * Determine if we should output JSON for Cursor's beforeSubmitPrompt
+ * Determine if we should output JSON for Cursor's beforeSubmitPrompt or Cline hooks
  */
 export function shouldOutputJSON(input: any): boolean {
+  // Cline always expects JSON output
+  if (input && input.clineVersion && input.hookName) {
+    return true;
+  }
+  
+  // Cursor's beforeSubmitPrompt expects JSON
   return input.hook_event_name === 'beforeSubmitPrompt';
 }

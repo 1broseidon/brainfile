@@ -253,7 +253,7 @@ brainfile template --use refactor \
 
 ### AI Agent Hooks
 
-Integrate Brainfile with AI coding assistants (Claude Code, Cursor) to get automatic reminders to update task status during development:
+Integrate Brainfile with AI coding assistants (Claude Code, Cursor, Cline) to get automatic reminders to update task status during development:
 
 ```bash
 # Install hooks for Claude Code (user scope)
@@ -261,6 +261,9 @@ brainfile hooks install claude-code
 
 # Install hooks for Cursor (project scope)
 brainfile hooks install cursor --scope project
+
+# Install hooks for Cline (user scope)
+brainfile hooks install cline --scope user
 
 # List installed hooks
 brainfile hooks list
@@ -272,6 +275,7 @@ brainfile hooks uninstall claude-code --scope all
 **Supported AI Assistants:**
 - **Claude Code** - Anthropic's official CLI
 - **Cursor** - AI-powered code editor
+- **Cline** - VS Code extension for autonomous coding
 
 **How it Works:**
 
@@ -299,9 +303,13 @@ brainfile hooks install claude-code --scope user
 # Project scope (applies to current project only)
 brainfile hooks install cursor --scope project
 
-# Install for both tools
+# Install for Cline (user scope recommended)
+brainfile hooks install cline --scope user
+
+# Install for all tools
 brainfile hooks install claude-code
 brainfile hooks install cursor
+brainfile hooks install cline
 ```
 
 **Settings Locations:**
@@ -314,25 +322,33 @@ Cursor:
 - User: `~/.cursor/hooks.json`
 - Project: `.cursor/hooks.json`
 
+Cline:
+- User: `~/Documents/Cline/Rules/Hooks/`
+- Project: `.clinerules/hooks/`
+
 **Hook Events:**
 
 | Event | Trigger | Behavior |
 |-------|---------|----------|
-| PostToolUse / afterFileEdit | After editing files | Gentle reminder to update brainfile |
-| UserPromptSubmit / beforeSubmitPrompt | Before processing new prompts | Smart staleness check |
-| SessionStart / stop | When session starts/ends | Welcome message if brainfile detected |
+| PostToolUse / afterFileEdit / PostToolUse | After editing files | Gentle reminder to update brainfile |
+| UserPromptSubmit / beforeSubmitPrompt / UserPromptSubmit | Before processing new prompts | Smart staleness check |
+| SessionStart / stop / TaskStart | When session starts/ends | Welcome message if brainfile detected |
+
+*Note: Hook names are shown as: Claude Code / Cursor / Cline*
 
 **Managing Hooks:**
 
 ```bash
 # List hooks for specific tool
 brainfile hooks list claude-code
+brainfile hooks list cline
 
 # List all hooks
 brainfile hooks list
 
 # Uninstall from user scope
 brainfile hooks uninstall claude-code --scope user
+brainfile hooks uninstall cline --scope user
 
 # Uninstall from all scopes
 brainfile hooks uninstall cursor --scope all
@@ -350,10 +366,10 @@ brainfile hooks uninstall cursor --scope all
 **Example Workflow:**
 
 ```bash
-# 1. Install hooks
-brainfile hooks install claude-code
+# 1. Install hooks (choose your preferred AI assistant)
+brainfile hooks install claude-code  # or cursor, or cline
 
-# 2. Start coding with Claude Code
+# 2. Start coding with your AI assistant
 # - Edit a file → "💡 Consider updating @brainfile.md"
 # - Update brainfile → Edit another file → Continue working
 # - 6+ minutes pass → New prompt → "⚠️ Files modified but @brainfile.md hasn't been updated"
@@ -389,7 +405,7 @@ Task IDs are automatically generated with a timestamp and random string to ensur
 - `brainfile move` - Move tasks between columns
 - `brainfile template` - Template management
 - `brainfile lint` - Validate and auto-fix syntax
-- `brainfile hooks` - AI agent hooks integration (Claude Code, Cursor)
+- `brainfile hooks` - AI agent hooks integration (Claude Code, Cursor, Cline)
 - Colored output and pretty-printing
 - Binary compilation for distribution
 
