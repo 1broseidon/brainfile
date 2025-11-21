@@ -19,6 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.4.0] - 2025-11-21
+
+### Added
+- **AI Agent Hooks Integration** - Native support for AI coding assistant hooks
+  - `brainfile hooks install <tool>` - Install hooks for Claude Code or Cursor
+  - `brainfile hooks uninstall <tool>` - Remove hooks with `--scope` option (user/project/all)
+  - `brainfile hooks list [tool]` - View installed hooks status
+  - `brainfile hooks after-edit` - Internal hook handler for post-edit events
+  - `brainfile hooks before-prompt` - Internal hook handler for pre-prompt events with staleness detection
+  - `brainfile hooks session-start` - Internal hook handler for session start
+  - Generic hook handlers work with multiple AI assistants (Claude Code and Cursor)
+  - Automatic task status reminders during AI-assisted development
+  - Smart staleness detection (warns if brainfile >5 minutes old with uncommitted changes)
+  - Git integration to detect uncommitted changes
+  - Gentle reminders (80%) + smart checkpoints (20%) approach
+  - Non-blocking hooks that fail gracefully
+  - Preserves existing hooks in settings files
+  - Works with both user and project scope installations
+
 ## [0.3.0] - 2025-11-20
 
 ### Added

@@ -251,6 +251,118 @@ brainfile template --use refactor \
   --column in-progress
 ```
 
+### AI Agent Hooks
+
+Integrate Brainfile with AI coding assistants (Claude Code, Cursor) to get automatic reminders to update task status during development:
+
+```bash
+# Install hooks for Claude Code (user scope)
+brainfile hooks install claude-code
+
+# Install hooks for Cursor (project scope)
+brainfile hooks install cursor --scope project
+
+# List installed hooks
+brainfile hooks list
+
+# Uninstall hooks
+brainfile hooks uninstall claude-code --scope all
+```
+
+**Supported AI Assistants:**
+- **Claude Code** - Anthropic's official CLI
+- **Cursor** - AI-powered code editor
+
+**How it Works:**
+
+The hooks integration provides intelligent reminders during your AI-assisted development workflow:
+
+1. **Gentle Reminders (80% of interactions)**
+   - After editing files: "💡 Consider updating @brainfile.md"
+   - Non-blocking, shown once per edit
+
+2. **Smart Checkpoints (20% of interactions)**
+   - Before new prompts: Checks if brainfile is stale (>5 minutes old)
+   - Only warns if you have uncommitted changes (excluding brainfile itself)
+   - Message: "⚠️ Files modified but @brainfile.md hasn't been updated."
+
+3. **Session Start**
+   - Detects brainfile in project: "✅ Brainfile detected: @brainfile.md"
+   - Reminds you to track progress: "Remember to update task status as you work."
+
+**Installation Options:**
+
+```bash
+# User scope (applies to all projects)
+brainfile hooks install claude-code --scope user
+
+# Project scope (applies to current project only)
+brainfile hooks install cursor --scope project
+
+# Install for both tools
+brainfile hooks install claude-code
+brainfile hooks install cursor
+```
+
+**Settings Locations:**
+
+Claude Code:
+- User: `~/.claude/settings.json`
+- Project: `.claude/settings.json`
+
+Cursor:
+- User: `~/.cursor/hooks.json`
+- Project: `.cursor/hooks.json`
+
+**Hook Events:**
+
+| Event | Trigger | Behavior |
+|-------|---------|----------|
+| PostToolUse / afterFileEdit | After editing files | Gentle reminder to update brainfile |
+| UserPromptSubmit / beforeSubmitPrompt | Before processing new prompts | Smart staleness check |
+| SessionStart / stop | When session starts/ends | Welcome message if brainfile detected |
+
+**Managing Hooks:**
+
+```bash
+# List hooks for specific tool
+brainfile hooks list claude-code
+
+# List all hooks
+brainfile hooks list
+
+# Uninstall from user scope
+brainfile hooks uninstall claude-code --scope user
+
+# Uninstall from all scopes
+brainfile hooks uninstall cursor --scope all
+```
+
+**Benefits:**
+
+- Never forget to update task status during long coding sessions
+- Automatic detection of stale brainfiles
+- Git-aware (only warns about uncommitted changes)
+- Non-intrusive design (fails silently if brainfile doesn't exist)
+- Works alongside other hooks (preserves existing configuration)
+- Compatible with multiple AI tools
+
+**Example Workflow:**
+
+```bash
+# 1. Install hooks
+brainfile hooks install claude-code
+
+# 2. Start coding with Claude Code
+# - Edit a file → "💡 Consider updating @brainfile.md"
+# - Update brainfile → Edit another file → Continue working
+# - 6+ minutes pass → New prompt → "⚠️ Files modified but @brainfile.md hasn't been updated"
+# - Update brainfile → Continue working smoothly
+
+# 3. Check installation
+brainfile hooks list
+```
+
 ## Features
 
 ### Colored Output
@@ -277,13 +389,14 @@ Task IDs are automatically generated with a timestamp and random string to ensur
 - `brainfile move` - Move tasks between columns
 - `brainfile template` - Template management
 - `brainfile lint` - Validate and auto-fix syntax
+- `brainfile hooks` - AI agent hooks integration (Claude Code, Cursor)
 - Colored output and pretty-printing
 - Binary compilation for distribution
 
 ### Future Enhancements
 - `brainfile update` - Update existing tasks
 - `brainfile delete` - Remove tasks
-- Interactive mode for task creation
+- Interactive mode for task creation (see `task-5` in brainfile.md)
 - Advanced filtering and search
 - Task completion tracking
 - Subtask management

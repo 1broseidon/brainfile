@@ -9,6 +9,14 @@ import { moveCommand } from './commands/move';
 import { templateCommand } from './commands/template';
 import { lintCommand } from './commands/lint';
 import { initCommand } from './commands/init';
+import {
+  afterEditCommand,
+  beforePromptCommand,
+  sessionStartCommand,
+  installCommand,
+  uninstallCommand,
+  listCommand as hooksListCommand
+} from './commands/hooks';
 
 // Read version from package.json
 const packageJson = JSON.parse(
@@ -75,5 +83,42 @@ program
   .option('--fix', 'Automatically fix issues when possible')
   .option('--check', 'Exit with error code if issues found (for CI/CD)')
   .action(lintCommand);
+
+// Add hooks command group
+const hooksCommand = program
+  .command('hooks')
+  .description('Manage AI agent hooks integration');
+
+hooksCommand
+  .command('after-edit')
+  .description('Handle post-edit hook event (internal use by AI assistants)')
+  .action(afterEditCommand);
+
+hooksCommand
+  .command('before-prompt')
+  .description('Handle pre-prompt hook event (internal use by AI assistants)')
+  .action(beforePromptCommand);
+
+hooksCommand
+  .command('session-start')
+  .description('Handle session-start hook event (internal use by AI assistants)')
+  .action(sessionStartCommand);
+
+hooksCommand
+  .command('install <tool>')
+  .description('Install brainfile hooks for an AI coding assistant')
+  .option('--scope <scope>', 'Installation scope: user or project', 'user')
+  .action((tool, options) => installCommand({ tool, scope: options.scope }));
+
+hooksCommand
+  .command('uninstall <tool>')
+  .description('Uninstall brainfile hooks for an AI coding assistant')
+  .option('--scope <scope>', 'Scope to uninstall from: user, project, or all', 'user')
+  .action((tool, options) => uninstallCommand({ tool, scope: options.scope }));
+
+hooksCommand
+  .command('list [tool]')
+  .description('List installed brainfile hooks')
+  .action((tool) => hooksListCommand({ tool }));
 
 program.parse();
