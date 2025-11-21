@@ -148,6 +148,13 @@ import logo from '../assets/logo.png';
       }
     }
 
+    /* Nav Right Container */
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-sm);
+    }
+
     .nav-links {
       position: fixed;
       top: 56px;
@@ -159,6 +166,7 @@ import logo from '../assets/logo.png';
       flex-direction: column;
       gap: 0;
       padding: 0;
+      z-index: 99;
     }
 
     .nav-links.open {
@@ -178,6 +186,7 @@ import logo from '../assets/logo.png';
         background: transparent;
         border: none;
         padding: 0;
+        z-index: auto;
       }
     }
 
@@ -633,7 +642,12 @@ import logo from '../assets/logo.png';
       <img src={logo.src} alt="Brainfile">
       <span class="logo-text">brainfile</span>
     </a>
-    <div style="display: flex; align-items: center; gap: var(--space-sm);">
+    <div class="nav-right">
+      <div class="nav-links" id="navLinks">
+        <a href="/getting-started/quick-start">docs</a>
+        <a href="/protocol/specification">spec</a>
+        <a href="https://github.com/brainfile" target="_blank">github</a>
+      </div>
       <button class="theme-toggle" id="themeToggle" title="Toggle theme">
         <svg class="sun-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="5"/>
@@ -657,12 +671,6 @@ import logo from '../assets/logo.png';
       </button>
     </div>
   </nav>
-
-  <div class="nav-links" id="navLinks">
-    <a href="/getting-started/quick-start">docs</a>
-    <a href="/protocol/specification">spec</a>
-    <a href="https://github.com/brainfile" target="_blank">github</a>
-  </div>
 
   <main>
     <!-- Hero -->
