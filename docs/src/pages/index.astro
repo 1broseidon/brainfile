@@ -84,6 +84,45 @@ import logo from '../assets/logo.png';
       background: rgba(255, 255, 255, 0.9);
     }
 
+    /* Hide nav on mobile */
+    @media (max-width: 900px) {
+      nav {
+        display: none;
+      }
+    }
+
+    /* Floating theme toggle for mobile */
+    .mobile-theme-toggle {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .mobile-theme-toggle {
+        display: flex;
+        position: fixed;
+        bottom: var(--space-lg);
+        right: var(--space-lg);
+        z-index: 100;
+        background: var(--code-bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: var(--space-sm);
+        cursor: pointer;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      }
+
+      .mobile-theme-toggle:hover {
+        border-color: var(--accent);
+      }
+
+      .mobile-theme-toggle svg {
+        width: 20px;
+        height: 20px;
+      }
+    }
+
     .logo {
       display: flex;
       align-items: center;
@@ -95,6 +134,13 @@ import logo from '../assets/logo.png';
     .logo img {
       width: 32px;
       height: 32px;
+    }
+
+    /* Hide logo on mobile */
+    @media (max-width: 640px) {
+      .logo img {
+        display: none;
+      }
     }
 
     .logo-text {
@@ -150,6 +196,12 @@ import logo from '../assets/logo.png';
       padding: calc(56px + var(--space-3xl)) var(--space-lg) var(--space-3xl);
     }
 
+    @media (max-width: 900px) {
+      main {
+        padding: var(--space-xl) var(--space-md) var(--space-2xl);
+      }
+    }
+
     h1 {
       font-size: 2.5rem;
       font-weight: 700;
@@ -161,8 +213,47 @@ import logo from '../assets/logo.png';
     .tagline {
       font-size: 1.125rem;
       color: var(--text-muted);
-      margin-bottom: var(--space-3xl);
+      margin-bottom: var(--space-md);
       line-height: 1.6;
+    }
+
+    @media (min-width: 900px) {
+      .tagline {
+        margin-bottom: var(--space-3xl);
+      }
+    }
+
+    /* Mobile CTAs */
+    .mobile-cta {
+      display: none;
+      flex-direction: column;
+      gap: var(--space-sm);
+      margin-bottom: var(--space-xl);
+    }
+
+    @media (max-width: 900px) {
+      .mobile-cta {
+        display: flex;
+      }
+    }
+
+    .mobile-cta a {
+      display: block;
+      text-align: center;
+      padding: var(--space-sm) var(--space-md);
+      border: 1px solid var(--border);
+      text-decoration: none;
+      color: var(--text);
+      transition: all 0.2s;
+    }
+
+    .mobile-cta a:hover {
+      border-color: var(--accent);
+    }
+
+    .mobile-cta a:first-child {
+      background: var(--code-bg);
+      border-color: var(--accent);
     }
 
     /* Hero Grid: Code + Tools */
@@ -189,6 +280,54 @@ import logo from '../assets/logo.png';
       line-height: 1.7;
       overflow-x: auto;
       height: fit-content;
+      position: relative;
+    }
+
+    /* Code expansion on mobile */
+    @media (max-width: 900px) {
+      .code-content {
+        max-height: 240px;
+        overflow: hidden;
+        position: relative;
+      }
+
+      .code-content.expanded {
+        max-height: none;
+      }
+
+      .code-content:not(.expanded)::after {
+        content: '';
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 60px;
+        background: linear-gradient(transparent, var(--code-bg));
+        pointer-events: none;
+      }
+
+      .expand-btn {
+        display: block;
+        width: 100%;
+        padding: var(--space-sm);
+        background: transparent;
+        border: none;
+        border-top: 1px solid var(--border);
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 0.875rem;
+        margin-top: var(--space-sm);
+      }
+
+      .expand-btn:hover {
+        color: var(--text);
+      }
+    }
+
+    @media (min-width: 901px) {
+      .expand-btn {
+        display: none;
+      }
     }
 
     .code-header {
@@ -206,10 +345,38 @@ import logo from '../assets/logo.png';
     }
 
     /* Tool Cards */
+    .tools-label {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .tools-label {
+        display: block;
+        margin-bottom: var(--space-sm);
+      }
+    }
+
     .tool-cards {
       display: flex;
       flex-direction: column;
       gap: var(--space-sm);
+    }
+
+    /* Horizontal scroll on mobile */
+    @media (max-width: 900px) {
+      .tool-cards {
+        flex-direction: row;
+        overflow-x: auto;
+        gap: var(--space-sm);
+        padding-bottom: var(--space-xs);
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: thin;
+      }
+
+      .tool-card {
+        min-width: 280px;
+        flex-shrink: 0;
+      }
     }
 
     .tool-card {
@@ -358,20 +525,9 @@ import logo from '../assets/logo.png';
         font-size: 2rem;
       }
 
-      main {
-        padding: calc(56px + var(--space-2xl)) var(--space-md) var(--space-2xl);
-      }
-
-      .nav-links a span {
-        display: none;
-      }
-
       .hero-grid {
         grid-template-columns: 1fr;
-      }
-
-      .tool-cards {
-        order: -1; /* Show tools above code on mobile */
+        gap: var(--space-md);
       }
     }
 
@@ -393,9 +549,13 @@ import logo from '../assets/logo.png';
       <span class="logo-text">Brainfile</span>
     </a>
     <div class="nav-links">
-      <a href="/getting-started/quick-start"><span>Docs</span></a>
-      <a href="/protocol/specification"><span>Spec</span></a>
-      <a href="https://github.com/brainfile" target="_blank"><span>GitHub</span></a>
+      <a href="/getting-started/quick-start">Docs</a>
+      <a href="/protocol/specification">Spec</a>
+      <a href="https://github.com/brainfile" target="_blank" title="GitHub">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+        </svg>
+      </a>
       <button class="theme-toggle" id="themeToggle" title="Toggle theme">
         <svg class="sun-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="5"/>
@@ -419,10 +579,15 @@ import logo from '../assets/logo.png';
     <h1>Brainfile</h1>
     <p class="tagline">A task file format for developers working with AI agents.</p>
 
-    <div class="hero-grid">
+    <div class="mobile-cta">
+      <a href="/getting-started/quick-start">→ Read Docs</a>
+      <a href="#example">→ View Example</a>
+    </div>
+
+    <div class="hero-grid" id="example">
       <div class="code-block">
         <div class="code-header">brainfile.md</div>
-        <pre class="code-content"><span class="code-comment"># YAML structure</span>
+        <pre class="code-content" id="codeContent"><span class="code-comment"># YAML structure</span>
 ---
 schema: https://brainfile.md/v1
 columns:
@@ -446,10 +611,13 @@ columns:
 # Project Tasks
 
 Additional context for AI agents.</pre>
+        <button class="expand-btn" id="expandBtn">Expand full example ↓</button>
       </div>
 
-      <div class="tool-cards">
-        <a href="/core/overview" class="tool-card">
+      <div>
+        <h2 class="tools-label">TOOLS</h2>
+        <div class="tool-cards">
+          <a href="/core/overview" class="tool-card">
           <div class="tool-card-title">Core Library</div>
           <div class="tool-card-package">@brainfile/core</div>
           <div class="tool-card-description">Parse and validate brainfile format</div>
@@ -466,6 +634,7 @@ Additional context for AI agents.</pre>
           <div class="tool-card-package">Visual kanban board</div>
           <div class="tool-card-description">Integrated into your editor</div>
         </a>
+        </div>
       </div>
     </div>
 
@@ -505,33 +674,86 @@ Additional context for AI agents.</pre>
     </div>
   </main>
 
+  <button class="mobile-theme-toggle" id="mobileThemeToggle" title="Toggle theme">
+    <svg class="mobile-sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="5"/>
+      <line x1="12" y1="1" x2="12" y2="3"/>
+      <line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/>
+      <line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+    <svg class="mobile-moon-icon" style="display: none;" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  </button>
+
   <script>
+    // Theme toggle
     const themeToggle = document.getElementById('themeToggle');
+    const mobileThemeToggle = document.getElementById('mobileThemeToggle');
     const html = document.documentElement;
 
     function updateThemeIcon(theme) {
+      // Desktop nav
       const sunIcon = themeToggle?.querySelector('.sun-icon');
       const moonIcon = themeToggle?.querySelector('.moon-icon');
-      if (theme === 'dark') {
-        sunIcon.style.display = 'block';
-        moonIcon.style.display = 'none';
-      } else {
-        sunIcon.style.display = 'none';
-        moonIcon.style.display = 'block';
+      if (sunIcon && moonIcon) {
+        if (theme === 'dark') {
+          sunIcon.style.display = 'block';
+          moonIcon.style.display = 'none';
+        } else {
+          sunIcon.style.display = 'none';
+          moonIcon.style.display = 'block';
+        }
+      }
+
+      // Mobile floating button
+      const mobileSunIcon = mobileThemeToggle?.querySelector('.mobile-sun-icon');
+      const mobileMoonIcon = mobileThemeToggle?.querySelector('.mobile-moon-icon');
+      if (mobileSunIcon && mobileMoonIcon) {
+        if (theme === 'dark') {
+          mobileSunIcon.style.display = 'block';
+          mobileMoonIcon.style.display = 'none';
+        } else {
+          mobileSunIcon.style.display = 'none';
+          mobileMoonIcon.style.display = 'block';
+        }
       }
     }
 
-    themeToggle?.addEventListener('click', () => {
+    function toggleTheme() {
       const currentTheme = html.getAttribute('data-theme');
       const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
       html.setAttribute('data-theme', newTheme);
       localStorage.setItem('theme', newTheme);
       updateThemeIcon(newTheme);
-    });
+    }
+
+    themeToggle?.addEventListener('click', toggleTheme);
+    mobileThemeToggle?.addEventListener('click', toggleTheme);
 
     const savedTheme = localStorage.getItem('theme') || 'dark';
     html.setAttribute('data-theme', savedTheme);
     updateThemeIcon(savedTheme);
+
+    // Code expansion (mobile only)
+    const expandBtn = document.getElementById('expandBtn');
+    const codeContent = document.getElementById('codeContent');
+    
+    expandBtn?.addEventListener('click', () => {
+      const isExpanded = codeContent?.classList.contains('expanded');
+      if (isExpanded) {
+        codeContent?.classList.remove('expanded');
+        expandBtn.textContent = 'Expand full example ↓';
+      } else {
+        codeContent?.classList.add('expanded');
+        expandBtn.textContent = 'Collapse ↑';
+      }
+    });
   </script>
 </body>
 </html>
