@@ -1,0 +1,240 @@
+# Brainfile Protocol
+
+> Protocol-first task management designed for AI-assisted development
+
+## Quick Facts
+
+- **Format**: YAML frontmatter + Markdown
+- **Schema**: https://brainfile.md/v1
+- **File**: brainfile.md (or .brainfile.md)
+- **Philosophy**: Protocol-first. No database, no backend. Tools are optional.
+
+## Quick Start for AI Agents
+
+### Step 1: Add to Agent Config
+
+Add these instructions to your `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`:
+
+```markdown
+# Task Management Rules
+
+- review and follow rules in @brainfile.md
+- update task status in @brainfile.md as you work (todo → in-progress → done)
+- reference `schema` in the file for how to create tasks
+- your existing tools do not modify this file, you need to edit it directly
+```
+
+### Step 2: Look for brainfile.md
+
+Check for these files in order:
+1. `brainfile.md` (preferred)
+2. `.brainfile.md` (legacy)
+
+### Step 3: Look for README Tag
+
+If README contains `<!-- load:brainfile.md -->`, automatically load the file.
+
+## Essential Structure
+
+Minimal valid brainfile:
+
+```yaml
+---
+schema: https://brainfile.md/v1
+title: My Project
+agent:
+  instructions:
+    - Modify only the YAML frontmatter
+    - Preserve all IDs
+    - Keep ordering
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+      - id: task-1
+        title: Implement feature
+        priority: high
+  - id: in-progress
+    title: In Progress
+    tasks: []
+  - id: done
+    title: Done
+    tasks: []
+---
+```
+
+## Core Fields
+
+### Board Level
+- `schema` (required): https://brainfile.md/v1
+- `title`: Project name
+- `agent`: AI agent instructions and notes
+- `rules`: Project rules (always, never, prefer, context)
+- `columns` (required): Array of column objects
+
+### Column Level
+- `id` (required): Unique identifier
+- `title` (required): Display name
+- `tasks`: Array of task objects
+
+### Task Level
+- `id` (required): Unique identifier (e.g., "task-1")
+- `title` (required): Task name
+- `description`: Detailed description
+- `priority`: low, medium, high, critical
+- `status`: todo, in-progress, done, blocked
+- `tags`: Array of strings
+- `assignee`: Person assigned
+- `subtasks`: Array of subtask objects
+- `relatedFiles`: Array of file paths
+
+### Subtask Level
+- `id` (required): Unique identifier (e.g., "task-1-1")
+- `title` (required): Subtask name
+- `completed`: Boolean
+
+## Agent Best Practices
+
+### DO:
+- ✅ Modify only the YAML frontmatter
+- ✅ Preserve all task IDs (never regenerate)
+- ✅ Keep task ordering consistent
+- ✅ Move entire task objects between columns
+- ✅ Validate against the schema
+- ✅ Make minimal, atomic changes
+
+### DON'T:
+- ❌ Modify content after the `---` delimiter
+- ❌ Change or regenerate existing IDs
+- ❌ Remove fields you don't understand
+- ❌ Reorder tasks without reason
+
+## Common Operations
+
+### Creating a Task
+
+Generate a unique ID and add to a column:
+
+```yaml
+columns:
+  - id: todo
+    tasks:
+      - id: task-2
+        title: New task
+        priority: medium
+        tags:
+          - feature
+```
+
+### Moving a Task
+
+Move entire task object to different column:
+
+```yaml
+# Find task in source column, remove it
+# Add same task object to target column
+# Preserve all fields including ID
+```
+
+### Updating Task Status
+
+Mark subtasks as completed:
+
+```yaml
+subtasks:
+  - id: task-1-1
+    title: Write tests
+    completed: true
+  - id: task-1-2
+    title: Update docs
+    completed: false
+```
+
+## Rules System
+
+Projects can define rules in the agent block:
+
+```yaml
+rules:
+  always:
+    - id: 1
+      rule: write tests for all new features
+  never:
+    - id: 1
+      rule: commit directly to main branch
+  prefer:
+    - id: 1
+      rule: functional components over class components
+  context:
+    - id: 1
+      rule: this is a TypeScript monorepo
+```
+
+## Optional Tools
+
+These tools work with the protocol but aren't required:
+
+### CLI
+```bash
+npm install -g @brainfile/cli
+brainfile init          # Create new brainfile
+brainfile list          # List tasks
+brainfile add           # Add task
+brainfile move          # Move task
+brainfile lint          # Validate
+```
+
+### VSCode Extension
+- Visual kanban board UI
+- Drag-and-drop task management
+- Real-time file watching
+
+### Core Library (TypeScript/JavaScript)
+```bash
+npm install @brainfile/core
+```
+
+```typescript
+import { Brainfile } from '@brainfile/core';
+
+const board = Brainfile.parse(content);
+const output = Brainfile.serialize(board);
+```
+
+## Full Documentation
+
+For complete documentation, see:
+
+- **Full LLM Reference**: https://brainfile.md/llms-full.txt
+- **Website**: https://brainfile.md
+- **Protocol Spec**: https://brainfile.md/protocol/specification
+- **Agent Integration**: https://brainfile.md/agents/integration
+- **Schema**: https://brainfile.md/v1
+
+## Example Projects
+
+Download a fully-featured example:
+
+```bash
+curl -o brainfile.md https://raw.githubusercontent.com/brainfile/protocol/main/example/brainfile.md
+```
+
+Or initialize with CLI:
+
+```bash
+brainfile init
+```
+
+## Key Principles
+
+1. **Protocol-First**: The file format is the product, tools are conveniences
+2. **No Lock-In**: Plain text, version-controlled, portable
+3. **AI-Native**: Designed for seamless AI agent collaboration
+4. **Human-Readable**: Easy to edit with any text editor
+5. **Minimal**: Only what you need, nothing more
+
+## Support
+
+- GitHub: https://github.com/brainfile
+- Issues: https://github.com/brainfile/protocol/issues
+- Discussions: https://github.com/brainfile/protocol/discussions
