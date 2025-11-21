@@ -4,14 +4,50 @@
  */
 
 import * as yaml from "js-yaml";
-import { Board } from "./types";
+import { Board, Column } from "./types";
 
 export interface ParseResult {
   board: Board | null;
   error?: string;
+  warnings?: string[];
 }
 
 export class BrainfileParser {
+  /**
+   * Consolidate duplicate columns by merging their tasks
+   * @param columns - Array of columns that may contain duplicates
+   * @returns Deduplicated array of columns with merged tasks
+   */
+  private static consolidateDuplicateColumns(columns: Column[]): {
+    columns: Column[];
+    warnings: string[];
+  } {
+    const warnings: string[] = [];
+    const columnMap = new Map<string, Column>();
+
+    for (const column of columns) {
+      const existingColumn = columnMap.get(column.id);
+
+      if (existingColumn) {
+        // Duplicate found - merge tasks
+        warnings.push(
+          `Duplicate column detected: "${column.id}" (title: "${column.title}"). Merging ${column.tasks.length} task(s) into existing column.`
+        );
+        
+        // Merge tasks from duplicate column into existing column
+        existingColumn.tasks.push(...column.tasks);
+      } else {
+        // First occurrence of this column ID
+        columnMap.set(column.id, column);
+      }
+    }
+
+    return {
+      columns: Array.from(columnMap.values()),
+      warnings
+    };
+  }
+
   /**
    * Parse a brainfile.md file content into a Board object
    * @param content - The markdown content with YAML frontmatter
@@ -46,6 +82,19 @@ export class BrainfileParser {
       // Parse YAML
       const board = yaml.load(yamlContent) as Board;
 
+      // Consolidate duplicate columns
+      if (board && board.columns) {
+        const { columns, warnings } = this.consolidateDuplicateColumns(board.columns);
+        
+        // Log warnings to console
+        if (warnings.length > 0) {
+          console.warn('[Brainfile Parser] Duplicate columns detected:');
+          warnings.forEach(warning => console.warn(`  - ${warning}`));
+        }
+        
+        board.columns = columns;
+      }
+
       return board;
     } catch (error) {
       console.error("Error parsing brainfile.md:", error);
@@ -54,24 +103,49 @@ export class BrainfileParser {
   }
 
   /**
-   * Parse with detailed error reporting
+   * Parse with detailed error reporting and warnings
    * @param content - The markdown content with YAML frontmatter
-   * @returns ParseResult with board or error message
+   * @returns ParseResult with board, error message, and any warnings
    */
   static parseWithErrors(content: string): ParseResult {
+    const warnings: string[] = [];
+    
+    // Temporarily capture console.warn calls
+    const originalWarn = console.warn;
+    console.warn = (...args: any[]) => {
+      const message = args.map(arg => String(arg)).join(' ');
+      // Capture all warnings from the parser (both header and detail lines)
+      if (message.includes('[Brainfile Parser]') || message.trim().startsWith('- Duplicate column')) {
+        warnings.push(message);
+      }
+      originalWarn(...args);
+    };
+
     try {
       const board = this.parse(content);
+      
+      // Restore console.warn
+      console.warn = originalWarn;
+      
       if (!board) {
         return {
           board: null,
-          error: "Failed to parse YAML frontmatter"
+          error: "Failed to parse YAML frontmatter",
+          warnings: warnings.length > 0 ? warnings : undefined
         };
       }
-      return { board };
+      return { 
+        board,
+        warnings: warnings.length > 0 ? warnings : undefined
+      };
     } catch (error) {
+      // Restore console.warn
+      console.warn = originalWarn;
+      
       return {
         board: null,
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
+        warnings: warnings.length > 0 ? warnings : undefined
       };
     }
   }

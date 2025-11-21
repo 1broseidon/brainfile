@@ -19,6 +19,9 @@ export { BrainfileSerializer, SerializeOptions } from './serializer';
 // Export validator
 export { BrainfileValidator, ValidationError, ValidationResult } from './validator';
 
+// Export linter
+export { BrainfileLinter, LintIssue, LintResult, LintOptions } from './linter';
+
 // Export templates
 export {
   BUILT_IN_TEMPLATES,
@@ -84,6 +87,16 @@ export class Brainfile {
   }
 
   /**
+   * Lint a brainfile.md content string
+   * @param content - The markdown content with YAML frontmatter
+   * @param options - Linting options
+   * @returns LintResult with issues and optionally fixed content
+   */
+  static lint(content: string, options?: LintOptions) {
+    return BrainfileLinter.lint(content, options);
+  }
+
+  /**
    * Get all built-in templates
    * @returns Array of built-in templates
    */
@@ -145,4 +158,5 @@ import { Board, SerializeOptions } from './index';
 import { BrainfileParser } from './parser';
 import { BrainfileSerializer } from './serializer';
 import { BrainfileValidator } from './validator';
+import { BrainfileLinter, LintOptions } from './linter';
 import { BUILT_IN_TEMPLATES, getTemplateById, processTemplate } from './templates';
