@@ -1,240 +1,544 @@
-/* True Black Dark Mode Theme - Following Frontend UI Patterns */
+/* ========================================
+   BRAINFILE PROTOCOL THEME - RFC MINIMAL
+   Sharp edges, high contrast, technical
+   ======================================== */
 
+/* Font Import */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300..700&display=swap');
+
+/* Base Variables - 8px Grid System */
 :root {
-  /* Backgrounds - True black only */
-  --sl-color-bg: #000000;
-  --sl-color-bg-nav: #0a0a0a;
-  --sl-color-bg-sidebar: #0a0a0a;
-  --sl-color-bg-inline-code: #111722;
-  --sl-color-gray-5: #111722;
-  --sl-color-gray-6: #0a0a0a;
-
-  /* Text - High contrast */
-  --sl-color-white: rgba(255, 255, 255, 0.95);
-  --sl-color-gray-1: rgba(255, 255, 255, 0.95);
-  --sl-color-gray-2: rgba(255, 255, 255, 0.7);
-  --sl-color-gray-3: rgba(255, 255, 255, 0.5);
-  --sl-color-gray-4: rgba(255, 255, 255, 0.3);
-
-  /* Accent color */
-  --sl-color-accent-low: rgba(102, 126, 234, 0.15);
-  --sl-color-accent: #667eea;
-  --sl-color-accent-high: #5568d3;
-
-  /* Borders */
-  --sl-color-hairline-light: rgba(255, 255, 255, 0.03);
-  --sl-color-hairline: rgba(255, 255, 255, 0.05);
-  --sl-color-hairline-shade: rgba(255, 255, 255, 0.08);
-
-  /* Semantic colors */
-  --sl-color-green: #48c78e;
-  --sl-color-green-high: #48c78e;
-  --sl-color-orange: #ffdd57;
-  --sl-color-orange-high: #ffdd57;
-  --sl-color-red: #f14668;
-  --sl-color-red-high: #f14668;
-  --sl-color-blue: #667eea;
-  --sl-color-blue-high: #667eea;
+  /* Spacing System - 8px Grid */
+  --space-xs: 8px;
+  --space-sm: 16px;
+  --space-md: 24px;
+  --space-lg: 32px;
+  --space-xl: 48px;
+  --space-2xl: 64px;
+  --space-3xl: 80px;
+  
+  /* Typography Scale */
+  --text-xs: 0.875rem;   /* 14px */
+  --text-sm: 1rem;       /* 16px */
+  --text-md: 1.25rem;    /* 20px */
+  --text-lg: 1.75rem;    /* 28px */
+  --text-xl: 2.5rem;     /* 40px */
+  
+  /* Base Typography */
+  --font-base: 15px;
+  --line-height-body: 1.7;
+  --line-height-heading: 1.3;
+  
+  /* Letter Spacing */
+  --letter-spacing-h1: -0.04em;
+  --letter-spacing-h2: -0.03em;
+  --letter-spacing-h3: -0.02em;
+  --letter-spacing-body: -0.01em;
+  
+  /* Timing */
+  --transition-fast: 200ms ease-out;
+  --transition-slow: 300ms ease-out;
 }
 
-/* Typography - Inter with OpenType features */
+/* Light Mode - Pure Minimal */
+:root {
+  --color-bg: #FFFFFF;
+  --color-bg-code: #FAFAFA;
+  --color-text: #000000;
+  --color-text-muted: rgba(0, 0, 0, 0.6);
+  --color-accent: #000000;
+  --color-accent-secondary: rgba(0, 0, 0, 0.8);
+  --color-accent-glow: rgba(0, 0, 0, 0.1);
+  --color-border: rgba(0, 0, 0, 0.08);
+  --color-selection: rgba(0, 0, 0, 0.1);
+  
+  /* Starlight Variables */
+  --sl-color-bg: var(--color-bg);
+  --sl-color-bg-nav: transparent;
+  --sl-color-bg-sidebar: transparent;
+  --sl-color-bg-inline-code: var(--color-bg-code);
+  --sl-color-bg-code: var(--color-bg-code);
+  --sl-color-text: var(--color-text);
+  --sl-color-text-accent: var(--color-accent);
+  --sl-color-accent: var(--color-accent);
+  --sl-color-accent-high: var(--color-accent);
+  --sl-color-gray-5: var(--color-border);
+  --sl-color-gray-6: var(--color-border);
+  
+  /* Typography */
+  --sl-font: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --sl-font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+  --sl-text-base: var(--font-base);
+  --sl-line-height: var(--line-height-body);
+}
+
+/* Dark Mode - True Black */
+:root[data-theme="dark"] {
+  --color-bg: #000000;
+  --color-bg-code: #0A0A0A;
+  --color-text: #FFFFFF;
+  --color-text-muted: rgba(255, 255, 255, 0.6);
+  --color-accent: #FFFFFF;
+  --color-accent-secondary: rgba(255, 255, 255, 0.8);
+  --color-accent-glow: rgba(255, 255, 255, 0.1);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-selection: rgba(255, 255, 255, 0.1);
+  
+  /* Starlight Variables */
+  --sl-color-bg: var(--color-bg);
+  --sl-color-bg-nav: rgba(0, 0, 0, 0.8);
+  --sl-color-bg-sidebar: transparent;
+  --sl-color-bg-inline-code: var(--color-bg-code);
+  --sl-color-bg-code: var(--color-bg-code);
+  --sl-color-text: var(--color-text);
+  --sl-color-text-accent: var(--color-accent);
+  --sl-color-accent: var(--color-accent);
+  --sl-color-accent-high: var(--color-accent);
+  --sl-color-gray-5: var(--color-border);
+  --sl-color-gray-6: var(--color-border);
+}
+
+/* ========================================
+   ZERO BORDER RADIUS - SHARP EDGES
+   ======================================== */
+
+* {
+  --sl-border-radius: 0 !important;
+  border-radius: 0 !important;
+}
+
+/* ========================================
+   GLOBAL RESETS & BASE STYLES
+   ======================================== */
+
+html {
+  font-size: var(--font-base);
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  letter-spacing: -0.01em;
-  background: #000000;
-  color: rgba(255, 255, 255, 0.95);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--letter-spacing-body);
 }
 
-/* Headings */
-h1, h2, h3, h4, h5, h6 {
-  letter-spacing: -0.02em;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.95);
+/* Selection Colors */
+::selection {
+  background: var(--color-selection);
+  color: var(--color-text);
 }
 
-/* Only use three font weights */
-.sl-markdown-content {
-  font-weight: 400;
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
 }
 
-.sl-markdown-content strong,
-.sl-markdown-content b {
-  font-weight: 500;
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.sl-markdown-content h1,
-.sl-markdown-content h2,
-.sl-markdown-content h3 {
-  font-weight: 600;
+::-webkit-scrollbar-thumb {
+  background: var(--color-text);
+  opacity: 0.2;
+  transition: opacity var(--transition-fast);
 }
 
-/* Code blocks - JetBrains Mono */
-code, pre, .sl-markdown-content code {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-weight: 500;
+::-webkit-scrollbar-thumb:hover {
+  opacity: 0.4;
 }
 
-/* 16px grid spacing */
-.sl-markdown-content > * + * {
-  margin-top: 1.5rem; /* 24px */
+/* Firefox scrollbar */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
 }
 
-.sl-markdown-content > h2 {
-  margin-top: 3rem; /* 48px */
+:root[data-theme="dark"] html {
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
-.sl-markdown-content > h3 {
-  margin-top: 2rem; /* 32px */
+/* ========================================
+   LAYOUT & STRUCTURE
+   ======================================== */
+
+/* Navigation Bar */
+.sl-nav-bar {
+  height: 56px !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(10px);
+  background: var(--sl-color-bg-nav) !important;
+  transition: opacity var(--transition-fast);
+  border-bottom: 1px solid var(--color-border) !important;
 }
 
-/* Cards and containers */
-.sl-markdown-content pre {
-  background: #111722 !important;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  padding: 1.5rem; /* 24px */
+:root[data-theme="light"] .sl-nav-bar {
+  background: rgba(255, 255, 255, 0.9) !important;
 }
 
-/* Links */
-a {
-  color: #667eea;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+.site-title {
+  font-weight: 600 !important;
+  letter-spacing: var(--letter-spacing-h3);
+  font-size: var(--text-md) !important;
+  gap: 6px !important;
+  color: var(--color-text) !important;
 }
 
-a:hover {
-  color: #5568d3;
+/* Logo spacing override for Starlight */
+.site-title a {
+  gap: 6px !important;
+  color: var(--color-text) !important;
 }
 
-/* Sidebar */
-.sidebar-content {
-  background: #0a0a0a;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
+/* Make logo pure white/black - no filter needed with monochrome design */
+.site-title img,
+.logo img {
+  filter: brightness(0) invert(1);
 }
 
-/* Navigation */
-nav a {
-  color: rgba(255, 255, 255, 0.7);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+:root[data-theme="light"] .site-title img,
+:root[data-theme="light"] .logo img {
+  filter: brightness(0) invert(0);
 }
 
-nav a:hover,
-nav a[aria-current="page"] {
-  color: rgba(255, 255, 255, 0.95);
-  background: rgba(255, 255, 255, 0.03);
+/* Sidebar - Left Border Style */
+.sl-sidebar {
+  background: transparent !important;
+  border: none !important;
+  padding: var(--space-lg) 0 !important;
+  width: 280px !important;
+}
+
+.sl-sidebar nav {
+  padding: 0 !important;
+}
+
+.sl-sidebar a {
+  padding: var(--space-xs) var(--space-sm) !important;
+  margin: 0 var(--space-sm) !important;
+  font-weight: 400 !important;
+  color: var(--color-text-muted) !important;
+  transition: all var(--transition-fast);
+  border-left: 2px solid transparent;
+  background: transparent !important;
+}
+
+.sl-sidebar a:hover {
+  color: var(--color-text) !important;
+  opacity: 1;
+  transform: translateX(2px);
+  background: transparent !important;
+}
+
+.sl-sidebar a[aria-current="page"] {
+  background: transparent !important;
+  color: var(--color-text) !important;
+  font-weight: 600 !important;
+  border-left: 2px solid var(--color-accent) !important;
+}
+
+/* Content Area */
+.sl-main-content {
+  max-width: 720px !important;
+  padding: var(--space-3xl) var(--space-lg) !important;
+}
+
+/* ========================================
+   TYPOGRAPHY
+   ======================================== */
+
+.content h1,
+.sl-content h1 {
+  font-size: var(--text-xl) !important;
+  font-weight: 700 !important;
+  letter-spacing: var(--letter-spacing-h1) !important;
+  line-height: var(--line-height-heading) !important;
+  margin-bottom: var(--space-xl) !important;
+  margin-top: 0 !important;
+}
+
+.content h2,
+.sl-content h2 {
+  font-size: var(--text-lg) !important;
+  font-weight: 600 !important;
+  letter-spacing: var(--letter-spacing-h2) !important;
+  line-height: var(--line-height-heading) !important;
+  margin-top: var(--space-3xl) !important;
+  margin-bottom: var(--space-md) !important;
+}
+
+.content h3,
+.sl-content h3 {
+  font-size: var(--text-md) !important;
+  font-weight: 600 !important;
+  letter-spacing: var(--letter-spacing-h3) !important;
+  line-height: var(--line-height-heading) !important;
+  margin-top: var(--space-xl) !important;
+  margin-bottom: var(--space-sm) !important;
+}
+
+.content p,
+.sl-content p {
+  margin-bottom: var(--space-md) !important;
+  line-height: var(--line-height-body) !important;
+}
+
+.content ul,
+.content ol,
+.sl-content ul,
+.sl-content ol {
+  margin-bottom: var(--space-md) !important;
+  padding-left: var(--space-md) !important;
+}
+
+.content li,
+.sl-content li {
+  margin-bottom: var(--space-xs) !important;
+  line-height: var(--line-height-body) !important;
+}
+
+/* Links - Underline Style */
+.content a,
+.sl-content a {
+  color: var(--color-text) !important;
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  transition: all var(--transition-fast);
+}
+
+.content a:hover,
+.sl-content a:hover {
+  text-decoration-thickness: 2px;
+  transform: translateY(-1px);
+}
+
+/* ========================================
+   CODE STYLING
+   ======================================== */
+
+/* Inline Code - Border Style */
+.content code:not(pre code),
+.sl-content code:not(pre code) {
+  background: transparent !important;
+  border: 1px solid var(--color-border) !important;
+  padding: 2px 6px !important;
+  font-size: 0.9em !important;
+  color: var(--color-text) !important;
+}
+
+/* Code Blocks */
+.content pre,
+.sl-content pre {
+  background: var(--color-bg-code) !important;
+  border: 1px solid var(--color-border) !important;
+  padding: var(--space-md) !important;
+  margin: var(--space-md) 0 !important;
+  overflow-x: auto;
+}
+
+.content pre code,
+.sl-content pre code {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  font-size: 0.9em !important;
+  line-height: 1.6 !important;
+}
+
+/* ========================================
+   INTERACTIVE ELEMENTS
+   ======================================== */
+
+/* Focus States - Enhanced */
+*:focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px !important;
+}
+
+:root[data-theme="dark"] *:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-accent), 0 0 8px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Buttons and Interactive Elements */
+button,
+.sl-button,
+.sl-link-button,
+.action.primary a,
+.hero .action a {
+  transition: all var(--transition-fast) !important;
+  background: transparent !important;
+  border: 1px solid var(--color-border) !important;
+  color: var(--color-text) !important;
+}
+
+button:hover,
+.sl-button:hover,
+.sl-link-button:hover,
+.action.primary a:hover,
+.hero .action a:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-accent) !important;
+  background: transparent !important;
+  color: var(--color-text) !important;
+}
+
+/* ========================================
+   COMPONENT OVERRIDES
+   ======================================== */
+
+/* Hide Breadcrumbs */
+nav[aria-label="Breadcrumb"],
+.sl-breadcrumbs {
+  display: none !important;
+}
+
+/* Aside/Callout Boxes */
+.starlight-aside,
+.sl-aside {
+  background: var(--color-bg-code) !important;
+  border: 1px solid var(--color-border) !important;
+  margin: var(--space-md) 0 !important;
+  padding: var(--space-md) !important;
 }
 
 /* Tables */
-table {
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  overflow: hidden;
+.content table,
+.sl-content table {
+  border-collapse: collapse;
+  margin: var(--space-md) 0 !important;
+  width: 100%;
+  border: 1px solid var(--color-border) !important;
 }
 
-th {
-  background: rgba(255, 255, 255, 0.02);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-weight: 600;
-  text-transform: uppercase;
-  font-size: 0.75rem; /* 12px */
-  letter-spacing: 0.05em;
-  color: rgba(255, 255, 255, 0.5);
-  padding: 1rem 1.5rem;
+.content th,
+.content td,
+.sl-content th,
+.sl-content td {
+  border: 1px solid var(--color-border) !important;
+  padding: var(--space-xs) var(--space-sm) !important;
+  text-align: left;
 }
 
-td {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-  padding: 1rem 1.5rem;
-}
-
-tr:hover {
-  background: rgba(255, 255, 255, 0.02);
-}
-
-/* Buttons */
-button,
-.sl-link-button {
-  border-radius: 8px;
-  font-weight: 500;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  padding: 0.75rem 1.5rem; /* 12px 24px */
+.content th,
+.sl-content th {
+  background: var(--color-bg-code) !important;
+  font-weight: 600 !important;
 }
 
 /* Search */
-.search-input {
-  background: #111722;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.95);
+.sl-search input {
+  border: 1px solid var(--color-border) !important;
+  background: var(--color-bg) !important;
+  transition: all var(--transition-fast) !important;
 }
 
-.search-input:focus {
-  outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+.sl-search input:focus {
+  border-color: var(--color-accent) !important;
 }
 
-/* Remove default Starlight gradients and colored backgrounds */
+/* ========================================
+   HERO / LANDING PAGE ELEMENTS
+   ======================================== */
+
 .hero {
-  background: #000000 !important;
+  background: var(--color-bg) !important;
 }
 
 .sl-banner {
-  background: #111722 !important;
-  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  background: var(--color-bg-code) !important;
+  border: 1px solid var(--color-border) !important;
 }
 
 /* Ensure proper contrast everywhere */
 .sl-markdown-content p,
 .sl-markdown-content li,
 .sl-markdown-content td {
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* Override any purple gradients or default colors */
-:root[data-theme="dark"] {
-  --sl-color-purple: #667eea;
-  --sl-color-purple-high: #5568d3;
+  color: var(--color-text-muted);
 }
 
 /* Page content background */
 main {
-  background: #000000;
+  background: var(--color-bg);
 }
 
 article {
-  background: #000000;
+  background: var(--color-bg);
 }
 
-/* Ensure true black everywhere */
 .page {
-  background: #000000;
+  background: var(--color-bg);
 }
 
 .content-panel {
-  background: #000000;
+  background: var(--color-bg);
 }
 
-/* Make logo white */
-.site-title img,
-.logo img {
-  filter: brightness(0) invert(1);
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
+
+@media (max-width: 768px) {
+  .sl-main-content {
+    padding: var(--space-lg) var(--space-sm) !important;
+  }
+  
+  .content h1,
+  .sl-content h1 {
+    font-size: var(--text-lg) !important;
+  }
+  
+  .content h2,
+  .sl-content h2 {
+    font-size: var(--text-md) !important;
+  }
 }
 
-/* Fix button text visibility */
-.sl-link-button,
-.action.primary a,
-.hero .action a {
-  color: rgba(255, 255, 255, 0.95) !important;
-  background: #667eea !important;
-}
+/* ========================================
+   PRINT STYLES
+   ======================================== */
 
-.sl-link-button:hover,
-.action.primary a:hover,
-.hero .action a:hover {
-  background: #5568d3 !important;
-  color: rgba(255, 255, 255, 0.95) !important;
+@media print {
+  .sl-nav-bar,
+  .sl-sidebar,
+  .sl-toc {
+    display: none !important;
+  }
+  
+  .sl-main-content {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  
+  .content,
+  .sl-content {
+    font-size: 12pt !important;
+    line-height: 1.4 !important;
+  }
+  
+  .content h1,
+  .content h2,
+  .content h3,
+  .sl-content h1,
+  .sl-content h2,
+  .sl-content h3 {
+    page-break-after: avoid;
+  }
+  
+  .content pre,
+  .sl-content pre {
+    page-break-inside: avoid;
+  }
 }
-
