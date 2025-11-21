@@ -307,11 +307,11 @@ jobs:
 
 ## Next Steps
 
-- [Protocol Specification](/protocol/specification/) - Learn the complete file format
-- [AI Agent Integration](/agents/integration/) - Configure AI agent behavior
-- [CLI Commands](/cli/commands/) - Explore all CLI features
-- [VSCode Extension](/vscode/extension/) - Master the visual interface
-- [Core API Reference](/core/api-reference/) - Build custom integrations
+- [Protocol Specification](/protocol/specification) - Learn the complete file format
+- [AI Agent Integration](/agents/integration) - Configure AI agent behavior
+- [CLI Commands](/cli/commands) - Explore all CLI features
+- [VSCode Extension](/vscode/extension) - Master the visual interface
+- [Core API Reference](/core/api-reference) - Build custom integrations
 
 ## Examples
 

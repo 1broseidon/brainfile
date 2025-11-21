@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DOCS_DIR = path.join(__dirname, '../src/content/docs');
+const DOCS_DIR = path.join(__dirname, '..');
 const OUTPUT_FILE = path.join(__dirname, '../public/llms-full.txt');
 const EXAMPLE_FILE = path.join(__dirname, '../../example/brainfile.md');
 
