@@ -5,13 +5,18 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
+    "prebuild": "tsx scripts/generate-llms-full.ts",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "generate-llms": "tsx scripts/generate-llms-full.ts"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.36.2",
     "astro": "^5.6.1",
     "sharp": "^0.34.2"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2"
   }
 }

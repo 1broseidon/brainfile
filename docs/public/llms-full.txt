@@ -1,346 +1,651 @@
 # Brainfile Protocol - Complete Reference for AI Agents
 
 > Comprehensive documentation for AI agents integrating with Brainfile
+> Auto-generated from markdown documentation
 
 Version: 1.0
 Schema: https://brainfile.md/v1
-Last Updated: 2025-11-20
+Last Updated: 2025-11-21
 
 ---
 
 ## Table of Contents
 
-1. Overview
+1. Quick Start Guide
 2. Protocol Specification
-3. Complete Field Reference
-4. AI Agent Integration Guide
-5. File Discovery & Loading
-6. Common Operations & Patterns
-7. Rules System
-8. Templates
-9. CLI Commands Reference
-10. Core Library API
-11. Complete Examples
-12. Best Practices
-13. Error Handling
-14. Troubleshooting
-15. Schema Validation
+3. AI Agent Integration
+4. CLI Installation
+5. CLI Commands Reference
+6. CLI Examples
+7. Core Library Overview
+8. Core Library API Reference
+9. Templates
+10. VSCode Extension
+11. Complete Example
 
 ---
 
-## 1. Overview
+## 1. Quick Start Guide
 
-### What is Brainfile?
+Installation
 
-Brainfile is a protocol-first task management system designed specifically for AI-assisted development. It uses a simple YAML-based format in `brainfile.md` files that both humans and AI agents can read, write, and understand.
+Choose your preferred method:
 
-### Core Principles
+VSCode Extension (Recommended for Visual UI)
+  Open VSCode
+  Install the Brainfile extension from the marketplace
+  Create a brainfile.md file in your project root
+  The visual kanban board appears automatically
 
-1. **Protocol-First**: The file format IS the product. Tools are conveniences, not requirements.
-2. **No Lock-In**: Plain text, version-controlled, portable across any system.
-3. **AI-Native**: Designed from day one for seamless AI agent collaboration.
-4. **Human-Readable**: Easy to edit with any text editor.
-5. **Minimal**: Only what you need, nothing more.
+CLI Tool (Recommended for Terminal Users)
 
-### Key Facts
+``
+npm install -g @brainfile/cli
+`
 
-- **Format**: YAML frontmatter + optional Markdown body
-- **Schema**: https://brainfile.md/v1 (JSON Schema)
-- **File Names**: `brainfile.md` (preferred) or `.brainfile.md` (legacy)
-- **Storage**: Local filesystem, version-controlled with Git
-- **No Backend**: Completely serverless, no database required
+Core Library (For Developers)
+
+`
+npm install @brainfile/core
+`
+
+Create Your First Brainfile
+
+Option 1: Copy the Example (Recommended for AI Integration)
+
+Download the fully-featured example from the repository:
+
+`
+curl -o brainfile.md https://raw.githubusercontent.com/brainfile/protocol/main/example/brainfile.md
+`
+
+This example includes:
+  - Multiple columns (todo, in-progress, review, done)
+  - Tasks with various metadata (priority, tags, assignee, description)
+  - Project rules (always, never, prefer)
+  - AI agent instructions
+  - Custom stats configuration
+
+Option 2: Use the CLI
+
+Initialize a new brainfile in your project:
+
+`
+npm install -g @brainfile/cli
+brainfile init
+`
+
+This creates a minimal brainfile.md with basic structure.
+
+Option 3: Create Manually
+
+Create a file named brainfile.md in your project root:
+
+`
+---
+schema: https://brainfile.md/v1
+title: My First Project
+agent:
+  instructions:
+  - Modify only the YAML frontmatter
+  - Preserve all IDs
+  - Keep ordering
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+  - id: task-1
+        title: Setup project structure
+        priority: high
+  - id: task-2
+        title: Write documentation
+        priority: medium
+  - id: in-progress
+    title: In Progress
+    tasks: []
+  - id: done
+    title: Done
+    tasks: []
+---
+
+My First Project
+
+Welcome to your Brainfile task board!
+`
+
+Using the CLI
+
+List Tasks
+
+`
+brainfile list
+`
+
+Output:
+`
+📋 My First Project
+
+To Do:
+  task-1: Setup project structure [high]
+  task-2: Write documentation [medium]
+`
+
+Add a Task
+
+`
+brainfile add --title "Implement authentication" --priority high
+`
+
+Move a Task
+
+`
+brainfile move --task task-1 --column in-progress
+`
+
+Create from Template
+
+`
+brainfile template --list
+brainfile template --use bug-report --title "Login fails on mobile"
+`
+
+Using the VSCode Extension
+  Open your project with brainfile.md in VSCode
+  View the board in the Brainfile sidebar
+  Drag and drop tasks between columns
+  Create tasks using the "+" button or templates
+  Edit tasks by clicking on them
+
+Using the Core Library
+
+`
+import { Brainfile } from '@brainfile/core';
+import fs from 'fs';
+
+// Read and parse
+const markdown = fs.readFileSync('brainfile.md', 'utf-8');
+const board = Brainfile.parse(markdown);
+
+console.log(Project: ${board.title});
+console.log(Tasks: ${board.columns.flatMap(c => c.tasks).length});
+
+// Add a task
+const todoColumn = board.columns.find(c => c.id === 'todo');
+todoColumn?.tasks.push({
+  id: 'task-3',
+  title: 'New task',
+  priority: 'medium'
+});
+
+// Serialize back
+const output = Brainfile.serialize(board);
+fs.writeFileSync('brainfile.md', output);
+`
+
+Working with AI Agents
+
+Step 1: Add Agent Configuration
+
+Add these instructions to your agent configuration file (AGENTS.md, CLAUDE.md, .cursorrules, etc.):
+
+`
+
+Task Management Rules
+  - review and follow rules in @brainfile.md
+  - update task status in @brainfile.md as you work (todo → in-progress → done)
+  - reference schema in the file for how to create tasks
+  - your existing tools do not modify this file, you need to edit it directly
+`
+
+Recommended: Keep only these minimal instructions in your agent config file, and use brainfile.md for project-specific rules and context.
+
+Step 2: Optional README Integration
+
+Add this comment to your README to auto-load the board for AI assistants:
+
+`
+
+`
+
+Now when AI agents read your README, they automatically understand your project's task context.
+
+AI agents that support Brainfile will:
+  - Automatically detect and load your board
+  - Follow the instructions in both your agent config and the brainfile.md agent block
+  - Update task status as they work
+  - Validate changes against the schema
+  - Preserve your task structure
+
+Adding Project Rules
+
+Define project-specific rules:
+
+`
+rules:
+  always:
+  - id: 1
+      rule: write tests for all new features
+  - id: 2
+      rule: update documentation when adding features
+  never:
+  - id: 1
+      rule: commit directly to main branch
+  - id: 2
+      rule: skip code review
+  prefer:
+  - id: 1
+      rule: functional programming patterns
+  - id: 2
+      rule: small, atomic commits
+  context:
+  - id: 1
+      rule: this is a TypeScript monorepo
+  - id: 2
+      rule: we use Jest for testing
+`
+
+Using Subtasks
+
+Break down complex tasks:
+
+`
+tasks:
+  - id: task-1
+    title: Implement user authentication
+    priority: high
+    subtasks:
+  - id: task-1-1
+        title: Setup OAuth provider
+        completed: true
+  - id: task-1-2
+        title: Create login UI
+        completed: false
+  - id: task-1-3
+        title: Add session management
+        completed: false
+`
+
+Task Templates
+
+Use built-in templates for common scenarios:
+
+Bug Report
+
+`
+brainfile template --use bug-report \
+  --title "Memory leak in data processing" \
+  --description "Application crashes after 1000+ items"
+`
+
+Feature Request
+
+`
+brainfile template --use feature-request \
+  --title "Add dark mode" \
+  --description "Users want theme customization"
+`
+
+Refactor
+
+`
+brainfile template --use refactor \
+  --title "Refactor authentication module"
+`
+
+Version Control
+
+Brainfile works perfectly with Git:
+
+`
+
+Add to version control
+
+git add brainfile.md
+git commit -m "Add task board"
+
+See task changes in diffs
+
+git diff brainfile.md
+
+Merge conflicts are just YAML
+
+Resolve like any other file
+
+`
+
+CI/CD Integration
+
+Validate your brainfile in CI:
+
+`
+
+.github/workflows/validate.yml
+
+name: Validate Brainfile
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+  - uses: actions/checkout@v3
+  - uses: actions/setup-node@v3
+  - name: Validate
+        run: npx @brainfile/cli lint --check
+``
+
+Next Steps
+  - Protocol Specification - Learn the complete file format
+  - AI Agent Integration - Configure AI agent behavior
+  - CLI Commands - Explore all CLI features
+  - VSCode Extension - Master the visual interface
+  - Core API Reference - Build custom integrations
+
+Examples
+
+See a fully-featured example:
+  - Example Project Board - Complete board with rules, multiple columns, and various task metadata
+
+Need Help?
+  - GitHub Discussions
+  - Issue Tracker
+  - Contributing Guide
 
 ---
 
 ## 2. Protocol Specification
 
-### File Structure
+Overview
 
-```yaml
+Brainfile is a protocol for task management designed specifically for AI-assisted software development. It defines a structured format for project tasks that both humans and AI agents can understand and modify.
+
+File Format
+
+Primary File: brainfile.md
+
+The protocol uses a Markdown file with YAML frontmatter. The default filename is brainfile.md (non-hidden), though .brainfile.md (hidden) is supported for backward compatibility.
+
+Priority Order (when multiple files exist):
+  brainfile.md (preferred)
+  .brainfile.md (backward compatibility)
+  .bb.md (shorthand, deprecated)
+
+Archive File: brainfile-archive.md
+
+Completed tasks can be archived to brainfile-archive.md (or .brainfile-archive.md for hidden variant).
+
+YAML Structure
+
+Required Fields
+
+``
 ---
-# YAML frontmatter (required)
-schema: https://brainfile.md/v1
-title: Project Name
-agent:
-  instructions: []
-rules:
-  always: []
-  never: []
-  prefer: []
-  context: []
-columns: []
+title: string # Project or board title
+columns: [] # Array of task columns
 ---
+`
 
-# Optional Markdown content
-Project description and notes go here.
-```
+Optional Fields
 
-### File Discovery Algorithm
-
-When looking for a brainfile, check in this priority order:
-
-1. `brainfile.md` (preferred, non-hidden)
-2. `.brainfile.md` (legacy, backward compatibility)
-3. `.bb.md` (legacy shorthand)
-
-Always prefer non-hidden format for new projects.
-
-### README Integration
-
-If a project's README.md contains:
-
-```html
-<!-- load:brainfile.md -->
-```
-
-AI agents should automatically load and parse the referenced file.
-
-### YAML Format Requirements
-
-- Use 2-space indentation (not tabs)
-- Quote strings containing special characters
-- Use `|` or `|-` for multiline strings
-- Arrays can be inline `[a, b, c]` or multi-line with `-`
-- Comments start with `#`
-
+`
 ---
+protocolVersion: string # Version of protocol (e.g., "0.4.0")
+schema: string # Reference to schema for validation (URL or local file path)
+agent: # AI agent instructions (recommended)
+  instructions: [] # Array of instruction strings
+  llmNotes: string # Free-form notes about AI work preferences
+rules: # Project rules and guidelines
+  always: [] # Rules that must always be followed
+  never: [] # Rules that must never be violated
+  prefer: [] # Preferred approaches
+  context: [] # Contextual information
+archive: [] # Archived tasks (usually in separate file)
+---
+`
 
-## 3. Complete Field Reference
+Schema Reference
 
-### Board-Level Fields
+The schema field provides a reference to the Brainfile schema for validation and structure enforcement. This helps ensure AI agents and tools respect the exact protocol structure.
 
-#### `schema` (required)
-- Type: String (URL)
-- Value: `https://brainfile.md/v1`
-- Purpose: JSON Schema reference for validation
+`
+schema: string # URL or local file path
+`
 
-#### `title` (optional)
-- Type: String
-- Purpose: Project or board name
-- Example: `"My Project Tasks"`
+Official Schema Location: https://brainfile.md/v1
 
-#### `agent` (optional)
-- Type: Object
-- Purpose: Instructions and context for AI agents
-- Fields:
-  - `instructions`: Array of strings
-  - `llmNotes`: String with additional context
+The protocol schema is hosted in the brainfile/protocol repository and served via GitHub Pages at brainfile.md.
 
-Example:
-```yaml
+Schema Formats
+  Remote URL (recommended for consistency):
+   `
+   schema: https://brainfile.md/v1
+   `
+  Local file (for offline or custom schemas):
+   `
+   # File in project root
+   schema: brainfile.schema.json
+
+   # Relative path
+   schema: ./schemas/brainfile.schema.json
+
+   # Absolute path
+   schema: /usr/local/share/brainfile/schema.json
+   `
+
+When present, AI agents and tools should fetch and validate against this schema to ensure proper structure and prevent taking liberties with the format.
+
+Agent Instructions Block
+
+The agent block provides explicit guidance to AI agents interacting with the board:
+
+`
 agent:
   instructions:
-    - Modify only the YAML frontmatter
-    - Preserve all IDs
-    - Keep ordering
-    - Make minimal changes
+  - Modify only the YAML frontmatter
+  - Preserve all IDs
+  - Keep ordering
+  - Make minimal changes
+  - Preserve unknown fields
+`
+
+This ensures consistent behavior across different AI agents and prevents destructive changes.
+
+Column Structure
+
+Each column represents a workflow state:
+
+`
+columns:
+  - id: string # Unique identifier (kebab-case)
+    title: string # Display title
+    tasks: [] # Array of tasks
+`
+
+Standard Column IDs
+
+While customizable, these IDs are conventional:
+  - todo - Tasks to be started
+  - in-progress - Tasks being worked on
+  - review - Tasks pending review
+  - done - Completed tasks
+
+Task Structure
+
+Required Task Fields
+
+`
+  - id: string # Unique identifier (pattern: task-N)
+  title: string # Task title
+`
+
+Optional Task Fields
+
+`
+description: string # Detailed description (markdown supported)
+assignee: string # Person responsible
+priority: string # low|medium|high|critical
+effort: string # trivial|small|medium|large|xlarge
+blockedBy: [] # Array of task IDs (e.g., ["task-1", "task-5"])
+dueDate: string # ISO 8601 date
+tags: [] # Array of tag strings
+relatedFiles: [] # Array of file paths
+subtasks: [] # Array of subtasks
+template: string # bug|feature|refactor
+`
+
+Subtask Structure
+
+Subtasks track granular progress within a task:
+
+`
+subtasks:
+  - id: string # Pattern: task-N-M
+    title: string # Subtask title
+    completed: boolean # Completion status
+`
+
+Rule Structure
+
+Rules guide project behavior:
+
+`
+rules:
+  always:
+  - id: number
+      rule: string # Rule description
+`
+
+Version Compatibility
+
+v0.4.0 (Latest)
+  - Added protocolVersion field for explicit versioning
+  - Added AI-friendly task fields: effort, blockedBy
+  - Added llmNotes field to agent block
+  - Task IDs now enforce task-N pattern
+
+v0.3.0
+  - Default to non-hidden files (brainfile.md)
+  - Added agent instruction block
+  - Maintains backward compatibility with hidden files
+  - Added subtasks support
+
+Migration Path
+  Projects can use either hidden or non-hidden files
+  Tools should check for both variants
+  Non-hidden files take priority when both exist
+
+Best Practices
+  Use non-hidden files for better visibility and AI compatibility
+  Include agent instructions to ensure consistent AI behavior
+  Preserve IDs when moving tasks between columns
+  Use semantic IDs (task-1, task-2) for easy reference
+  Keep descriptions concise but informative
+  Archive completed tasks to maintain board performance
+
+File Discovery
+
+Tools implementing the protocol should:
+  Check for brainfile.md first
+  Fall back to .brainfile.md if not found
+  Create brainfile.md for new projects
+  Support both formats for existing projects
+
+Validation
+
+Use the JSON Schema at https://brainfile.md/v1.json to validate YAML structure.
+
+Example
+
+`
+---
+title: My Project
+protocolVersion: "0.4.0"
+agent:
+  instructions:
+  - Modify only the YAML frontmatter
+  - Preserve all IDs
+  - Keep ordering
   llmNotes: "Prefer functional patterns and comprehensive tests"
-```
-
-#### `rules` (optional)
-- Type: Object
-- Purpose: Project-specific development rules
-- Fields:
-  - `always`: Array of rule objects (must follow)
-  - `never`: Array of rule objects (must avoid)
-  - `prefer`: Array of rule objects (preferences)
-  - `context`: Array of rule objects (project context)
-
-Rule object structure:
-```yaml
-- id: 1
-  rule: "Description of the rule"
-```
-
-#### `statsConfig` (optional)
-- Type: Object
-- Purpose: Configure which columns appear in statistics
-- Fields:
-  - `columns`: Array of column IDs (max 4)
-
-Example:
-```yaml
-statsConfig:
-  columns: [todo, in-progress, review, done]
-```
-
-#### `columns` (required)
-- Type: Array of column objects
-- Purpose: Defines the board's workflow columns
-- Minimum: 1 column required
+rules:
+  always:
+  - id: 1
+      rule: update task status as you work
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+  - id: task-1
+        title: Implement user authentication
+        description: Add OAuth2 support
+        priority: high
+        effort: large
+        blockedBy: []
+        subtasks:
+  - id: task-1-1
+            title: Setup OAuth provider
+            completed: false
+  - id: task-1-2
+            title: Create login UI
+            completed: false
+---
+``
 
 ---
 
-### Column-Level Fields
+## 3. AI Agent Integration
 
-#### `id` (required)
-- Type: String
-- Purpose: Unique identifier for the column
-- Format: lowercase, hyphenated (e.g., "in-progress")
-- Must be unique within the board
+Overview
 
-#### `title` (required)
-- Type: String
-- Purpose: Display name for the column
-- Example: "In Progress"
+Brainfile is designed from the ground up for AI agent compatibility. This guide explains how AI agents should interact with Brainfile boards and best practices for integration.
 
-#### `tasks` (required)
-- Type: Array of task objects
-- Purpose: Contains all tasks in this column
-- Can be empty: `tasks: []`
+Agent Configuration Method (Recommended)
 
----
+For the simplest integration, add these instructions to your agent configuration file (AGENTS.md, CLAUDE.md, .cursorrules, etc.):
 
-### Task-Level Fields
+``
 
-#### `id` (required)
-- Type: String
-- Purpose: Unique identifier for the task
-- Format: "task-N" where N is a number
-- **CRITICAL**: Never regenerate or change existing IDs
-- Generate new IDs sequentially (task-1, task-2, etc.)
+Task Management Rules
+  - review and follow rules in @brainfile.md
+  - update task status in @brainfile.md as you work (todo → in-progress → done)
+  - reference schema in the file for how to create tasks
+  - your existing tools do not modify this file, you need to edit it directly
+`
 
-#### `title` (required)
-- Type: String
-- Purpose: Task name/summary
-- Example: "Implement user authentication"
+Benefits:
+  - Minimal, portable agent instructions
+  - Works across any AI agent (Claude, Cursor, GitHub Copilot, etc.)
+  - Project-specific rules stay in brainfile.md
+  - Clean separation of concerns
 
-#### `description` (optional)
-- Type: String (can be multiline)
-- Purpose: Detailed task description
-- Use `|` or `|-` for multiline:
-```yaml
-description: |-
-  * Define requirements
-  * Implement feature
-  * Add tests
-```
+Recommended: Keep only these minimal instructions in your agent config file, and use brainfile.md for project-specific rules and context.
 
-#### `priority` (optional)
-- Type: String (enum)
-- Values: `low`, `medium`, `high`, `critical`
-- Purpose: Task priority level
+Quick Start for AI Agents
+  Look for the load tag in README files:
+   `
+   
+   `
+   This tag indicates the project uses Brainfile. Load the referenced file automatically.
+  Check for board files in this order:
+  - brainfile.md (preferred)
+  - .brainfile.md (backward compatibility)
+  Follow agent instructions in the YAML:
+   `
+   agent:
+     instructions:
+  - Modify only the YAML frontmatter
+  - Preserve all IDs
+  - Keep ordering
+   `
 
-#### `status` (optional)
-- Type: String (enum)
-- Values: `todo`, `in-progress`, `done`, `blocked`
-- Purpose: Explicit task status
-- Note: Usually inferred from column, but can override
+File Discovery Algorithm
 
-#### `tags` (optional)
-- Type: Array of strings
-- Purpose: Categorize and filter tasks
-- Example: `[frontend, ui, urgent]`
-
-#### `assignee` (optional)
-- Type: String
-- Purpose: Person assigned to the task
-- Example: "alice"
-
-#### `template` (optional)
-- Type: String
-- Purpose: Indicates which template created this task
-- Values: `bug-report`, `feature-request`, `refactor`, custom
-- Used for tracking and templating
-
-#### `subtasks` (optional)
-- Type: Array of subtask objects
-- Purpose: Break down tasks into smaller steps
-- See Subtask Fields below
-
-#### `relatedFiles` (optional)
-- Type: Array of strings
-- Purpose: File paths related to this task
-- Example: `["src/auth.ts", "tests/auth.test.ts"]`
-
-#### `metadata` (optional)
-- Type: Object
-- Purpose: Custom fields for project-specific needs
-- Can contain any additional fields not in spec
-
----
-
-### Subtask-Level Fields
-
-#### `id` (required)
-- Type: String
-- Format: "task-N-M" (parent-child numbering)
-- Example: "task-1-1", "task-1-2"
-- **CRITICAL**: Never regenerate or change existing IDs
-
-#### `title` (required)
-- Type: String
-- Purpose: Subtask name
-
-#### `completed` (required)
-- Type: Boolean
-- Purpose: Track subtask completion
-- Values: `true` or `false`
-
----
-
-## 4. AI Agent Integration Guide
-
-### Method 1: Agent Configuration (Recommended)
-
-Add these instructions to your agent configuration file:
-
-**File names**: `AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.
-
-```markdown
-# Task Management Rules
-
-- review and follow rules in @brainfile.md
-- update task status in @brainfile.md as you work (todo → in-progress → done)
-- reference `schema` in the file for how to create tasks
-- your existing tools do not modify this file, you need to edit it directly
-```
-
-**Benefits**:
-- Minimal, portable agent instructions
-- Works across any AI agent (Claude, Cursor, GitHub Copilot)
-- Project-specific rules stay in `brainfile.md`
-- Clean separation of concerns
-
-### Method 2: README Integration
-
-Add to project README.md:
-
-```markdown
-<!-- load:brainfile.md -->
-```
-
-When AI agents read the README, they automatically load the brainfile.
-
-### Agent Behavior Guidelines
-
-#### MUST DO:
-1. **Modify only YAML frontmatter**: Never touch content after `---`
-2. **Preserve all IDs**: Never regenerate or change task/subtask IDs
-3. **Keep ordering**: Maintain task order within columns
-4. **Make minimal changes**: Only modify what's necessary
-5. **Preserve unknown fields**: Future-proof for schema extensions
-6. **Move entire task objects**: When moving between columns, preserve all fields
-
-#### MUST NOT DO:
-1. **Don't modify markdown content**: Everything after `---` is read-only for agents
-2. **Don't create hidden files**: Use `brainfile.md`, not `.brainfile.md` for new projects
-3. **Don't remove unknown fields**: Schema may extend in future
-4. **Don't assume fixed schema**: Check for updates
-5. **Don't batch unrelated changes**: Make atomic commits
-
----
-
-## 5. File Discovery & Loading
-
-### Discovery Process
-
-```python
-def find_brainfile(project_root):
+`
+def find_brainfile_file(project_root):
+    # Priority order
     candidates = [
-        'brainfile.md',      # Preferred
-        '.brainfile.md',     # Legacy
-        '.bb.md'             # Legacy shorthand
+        'brainfile.md',        # New default (non-hidden)
+        '.brainfile.md',       # Backward compatibility
+        '.bb.md'              # Legacy shorthand
     ]
 
     for filename in candidates:
@@ -348,915 +653,2228 @@ def find_brainfile(project_root):
         if os.path.exists(path):
             return path
 
-    return None  # No brainfile found
-```
+    # Create new file using non-hidden format
+    return create_default_board('brainfile.md')
+`
 
-### Loading & Parsing
+Understanding the Agent Block
 
-1. Read file contents as UTF-8
-2. Split on `---` delimiter
-3. Parse YAML frontmatter
-4. Validate against schema
-5. Parse optional Markdown body
-6. Handle errors gracefully
+The agent block provides explicit instructions for AI behavior:
 
-### Validation
+`
+agent:
+  instructions:
+  - Modify only the YAML frontmatter
+  - Preserve all IDs
+  - Keep ordering
+  - Make minimal changes
+  - Preserve unknown fields
+`
 
-Always validate against the schema at https://brainfile.md/v1
+Why These Instructions Matter
+  Modify only the YAML frontmatter: The content after --- should never be modified
+  Preserve all IDs: Changing IDs breaks references and history
+  Keep ordering: Maintains visual consistency in UIs
+  Make minimal changes: Reduces merge conflicts and preserves user intent
+  Preserve unknown fields: Future-proofs against schema extensions
 
-Common validation errors:
-- Missing required fields (`schema`, `columns`)
-- Invalid YAML syntax
-- Duplicate column IDs
-- Duplicate task IDs
-- Invalid enum values (priority, status)
+Common AI Agent Operations
 
----
+Moving a Task Between Columns
 
-## 6. Common Operations & Patterns
+`
 
-### Creating a New Task
+BEFORE
 
-1. Generate next sequential ID:
-```python
-def generate_task_id(board):
-    # Find max existing ID
-    max_id = 0
-    for column in board['columns']:
-        for task in column['tasks']:
-            task_num = int(task['id'].split('-')[1])
-            max_id = max(max_id, task_num)
-
-    return f"task-{max_id + 1}"
-```
-
-2. Create task object:
-```yaml
-- id: task-6
-  title: New feature implementation
-  description: Detailed description here
-  priority: high
-  tags:
-    - feature
-    - backend
-```
-
-3. Add to target column's tasks array
-
-### Moving a Task Between Columns
-
-```yaml
-# BEFORE
 columns:
   - id: todo
     tasks:
-      - id: task-1
-        title: Fix bug
-        priority: high
-        tags: [bugfix]
+  - id: task-1
+        title: Fix login bug
   - id: in-progress
     tasks: []
 
-# AFTER
+AFTER (correct)
+
 columns:
   - id: todo
     tasks: []
   - id: in-progress
     tasks:
-      - id: task-1        # Same ID
-        title: Fix bug     # All fields preserved
-        priority: high
-        tags: [bugfix]
-```
+  - id: task-1  # ID preserved
+        title: Fix login bug
+`
 
-**Key**: Move the entire task object, preserving all fields.
+Adding a New Task
 
-### Adding Subtasks
+`
 
-```yaml
+Generate next ID by finding max existing ID
+
+columns:
+  - id: todo
+    tasks:
+  - id: task-5  # Existing max ID
+        title: Existing task
+  - id: task-6  # New task with next ID
+        title: New task
+`
+
+Updating Task Status with Subtasks
+
+`
 tasks:
   - id: task-1
-    title: Implement authentication
-    priority: critical
+    title: Implement feature
     subtasks:
-      - id: task-1-1
-        title: Setup OAuth provider
-        completed: true
-      - id: task-1-2
-        title: Create login UI
-        completed: false
-      - id: task-1-3
-        title: Add session management
-        completed: false
-```
-
-### Marking Subtasks Complete
-
-```yaml
-# Find the subtask and update completed field
-subtasks:
   - id: task-1-1
-    title: Setup OAuth provider
-    completed: true  # Changed from false
-```
+        title: Write tests
+        completed: true  # Mark complete
+  - id: task-1-2
+        title: Update docs
+        completed: false
+`
 
-### Updating Task Priority
+Best Practices for AI Agents
 
-```yaml
-# Find task and update priority field
-- id: task-5
-  title: Bug fix
-  priority: critical  # Changed from high
-```
+DO:
+  - ✅ Load brainfile.md automatically when referenced
+  - ✅ Respect the agent instructions block
+  - ✅ Preserve all IDs and unknown fields
+  - ✅ Validate changes against the schema
+  - ✅ Provide clear feedback about changes made
+  - ✅ Move entire task objects (with all fields) between columns
 
-### Adding Tags
+DON'T:
+  - ❌ Modify content outside YAML frontmatter
+  - ❌ Change or regenerate task IDs
+  - ❌ Remove fields you don't understand
+  - ❌ Create hidden files for new projects
+  - ❌ Ignore the priority order when multiple files exist
 
-```yaml
-# Find task and update tags array
-- id: task-3
-  title: Refactor module
-  tags:
-    - refactor
-    - backend
-    - urgent  # New tag added
-```
+Integration with VSCode Extension
 
----
+The VSCode extension watches for file changes in real-time. AI agents should:
+  Write atomic changes: Complete all modifications before saving
+  Preserve formatting: Maintain YAML indentation (2 spaces)
+  Handle conflicts: Check for concurrent modifications
+  Validate before saving: Ensure YAML is valid
 
-## 7. Rules System
+Error Handling
 
-### Rules Structure
+Common Issues and Solutions
+  Invalid YAML
+  - Validate before writing
+  - Preserve original on error
+  - Report specific line numbers
+  ID Conflicts
+  - Always check existing IDs
+  - Use sequential numbering
+  - Never reuse deleted IDs
+  Schema Violations
+  - Validate against brainfile.schema.json
+  - Preserve backward compatibility
+  - Report unknown fields as warnings, not errors
 
-```yaml
-rules:
-  always:
-    - id: 1
-      rule: "write tests for all new features"
-    - id: 2
-      rule: "update documentation when changing APIs"
+Compliance Checking
 
-  never:
-    - id: 1
-      rule: "deploy without running tests"
-    - id: 2
-      rule: "commit directly to main branch"
+AI agents should self-verify compliance:
 
-  prefer:
-    - id: 1
-      rule: "functional components over class components"
-    - id: 2
-      rule: "TypeScript over JavaScript for new files"
+`
+def check_compliance(board):
+    # Check agent instructions exist
+    if 'agent' in board and 'instructions' in board['agent']:
+        follow_instructions(board['agent']['instructions'])
 
-  context:
-    - id: 1
-      rule: "this is a TypeScript monorepo"
-    - id: 2
-      rule: "we use Jest for testing"
-    - id: 3
-      rule: "API uses REST with JWT auth"
-```
+    # Verify ID uniqueness
+    all_ids = set()
+    for column in board['columns']:
+        for task in column['tasks']:
+            if task['id'] in all_ids:
+                raise ValueError(f"Duplicate ID: {task['id']}")
+            all_ids.add(task['id'])
 
-### Rule Categories
+    # Validate against schema
+    validate_against_schema(board, 'brainfile.schema.json')
+`
 
-#### `always`
-- Rules that MUST be followed
-- Non-negotiable requirements
-- Examples: "write tests", "update docs"
+README Integration
 
-#### `never`
-- Rules that MUST be avoided
-- Forbidden practices
-- Examples: "skip tests", "commit to main"
+The load tag pattern enables automatic context:
 
-#### `prefer`
-- Preferences when multiple options exist
-- Soft requirements
-- Examples: "functional over class", "TypeScript over JavaScript"
+`
 
-#### `context`
-- Project context and information
-- Helps AI understand the codebase
-- Examples: "uses React 18", "MongoDB database"
+My Project
 
-### Using Rules as an AI Agent
+This comment tells AI agents to automatically load the board file.
+`
 
-1. Always read the rules block first
-2. Follow `always` rules strictly
-3. Avoid anything in `never` rules
-4. Prefer options listed in `prefer` rules
-5. Use `context` to understand project setup
+Benefits:
+  - No manual prompting needed
+  - Consistent context across sessions
+  - Works with any AI agent that parses HTML comments
 
----
+Migration Support
 
-## 8. Templates
+When encountering legacy hidden files:
+  Suggest migration to non-hidden format
+  Support both formats during transition
+  Never force migration without user consent
+  Preserve exact structure when migrating
 
-### Built-in Templates
+Example Agent Interaction
 
-#### Bug Report
-```yaml
-template: bug-report
-priority: high
-tags:
-  - bug
-  - needs-investigation
-subtasks:
-  - id: ${taskId}-1
-    title: Reproduce the issue
-    completed: false
-  - id: ${taskId}-2
-    title: Identify root cause
-    completed: false
-  - id: ${taskId}-3
-    title: Implement fix
-    completed: false
-  - id: ${taskId}-4
-    title: Add regression test
-    completed: false
-  - id: ${taskId}-5
-    title: Update documentation
-    completed: false
-```
+`
+User: "Move the authentication task to in-progress"
 
-#### Feature Request
-```yaml
-template: feature-request
-priority: medium
-tags:
-  - feature
-  - enhancement
-subtasks:
-  - id: ${taskId}-1
-    title: Design feature specification
-    completed: false
-  - id: ${taskId}-2
-    title: Implement core functionality
-    completed: false
-  - id: ${taskId}-3
-    title: Write tests
-    completed: false
-  - id: ${taskId}-4
-    title: Update documentation
-    completed: false
-```
+AI Agent:
+  Loads brainfile.md (found via README tag)
+  Reads agent instructions
+  Finds task with "authentication" in title
+  Preserves entire task object
+  Moves task to in-progress column
+  Saves file with minimal changes
+  Reports: "Moved task-3 'Implement authentication' to In Progress"
+``
 
-#### Refactor
-```yaml
-template: refactor
-priority: low
-tags:
-  - refactor
-  - technical-debt
-subtasks:
-  - id: ${taskId}-1
-    title: Analyze current implementation
-    completed: false
-  - id: ${taskId}-2
-    title: Plan refactoring approach
-    completed: false
-  - id: ${taskId}-3
-    title: Implement changes
-    completed: false
-  - id: ${taskId}-4
-    title: Ensure tests pass
-    completed: false
-```
+Testing Your Integration
+
+Verify your AI agent correctly:
+  Handles both file formats (hidden and non-hidden)
+  Respects priority order when multiple files exist
+  Follows agent instructions exactly
+  Preserves unknown fields for future compatibility
+  Generates valid YAML that passes schema validation
+
+Future Compatibility
+
+The protocol may extend with:
+  - Additional task fields
+  - New column types
+  - Extended agent instructions
+  - Custom metadata
+
+AI agents must:
+  - Preserve unknown fields
+  - Not assume fixed schema
+  - Check for schema updates
+  - Gracefully handle extensions
 
 ---
 
-## 9. CLI Commands Reference
+## 4. CLI Installation
 
-### Installation
+@brainfile/cli
 
-```bash
+Command-line interface for Brainfile task management. Manage your tasks from the terminal with ease.
+
+Installation Methods
+
+Install Globally (Recommended)
+
+Install the CLI globally to use the brainfile command anywhere:
+
+``
 npm install -g @brainfile/cli
-```
+`
 
-### `brainfile init`
+After installation, verify it works:
 
-Initialize a new brainfile.md:
+`
+brainfile --version
+brainfile --help
+`
 
-```bash
-brainfile init                    # Create brainfile.md
-brainfile init --force            # Overwrite existing
-brainfile init --file custom.md   # Custom filename
-```
+Install as Project Dependency
 
-Creates minimal structure with:
-- 3 columns (todo, in-progress, done)
-- Default agent instructions
-- Empty task arrays
+For project-specific usage:
 
-### `brainfile list`
+`
+npm install --save-dev @brainfile/cli
+`
 
-List all tasks:
+Then use via npm scripts or npx:
 
-```bash
-brainfile list                    # All tasks
-brainfile list --column todo      # Filter by column
-brainfile list --tag urgent       # Filter by tag
-brainfile list --file custom.md   # Custom file
-```
+`
+npx brainfile list
+`
 
-### `brainfile add`
+Using npx (No Installation)
 
-Add a new task:
+Run commands without installing:
 
-```bash
-brainfile add --title "Task name"                          # Basic task
-brainfile add --title "Task" --priority high               # With priority
-brainfile add --title "Task" --tags "bug,urgent"           # With tags
-brainfile add --title "Task" --column in-progress          # To specific column
-brainfile add --title "Task" --description "Details here"  # With description
-```
+`
+npx @brainfile/cli list
+npx @brainfile/cli add --title "New task"
+`
 
-### `brainfile move`
+Quick Start
+  Install the CLI:
+   `
+   npm install -g @brainfile/cli
+   `
+  Create a brainfile.md in your project (or use an existing one)
+  List your tasks:
+   `
+   brainfile list
+   `
+  Add a new task:
+   `
+   brainfile add --title "My first task" --priority high
+   `
+  Move a task:
+   `
+   brainfile move --task task-123 --column done
+   `
 
-Move task between columns:
+Features
 
-```bash
-brainfile move --task task-1 --column in-progress
-brainfile move --task task-5 --column done
-```
+Colored Output
 
-### `brainfile template`
+The CLI provides colorful, easy-to-read output:
+  - Task IDs - Gray
+  - Titles - White
+  - High Priority - Red
+  - Medium Priority - Yellow
+  - Low Priority - Blue
+  - Tags - Cyan
+  - Templates - Magenta
+  - Subtask Progress - Green (complete) or Yellow (incomplete)
 
-Work with templates:
+Smart Task IDs
 
-```bash
-brainfile template --list                                          # List templates
-brainfile template --use bug-report --title "Fix login bug"        # Use template
-brainfile template --use feature-request --title "Add dark mode"   # Use template
-```
+Task IDs are automatically generated with a timestamp and random string to ensure uniqueness.
 
-### `brainfile lint`
+Verification
 
-Validate and fix:
+After installation, verify the CLI is working correctly:
 
-```bash
-brainfile lint                    # Check for issues
-brainfile lint --fix              # Auto-fix issues
-brainfile lint --check            # CI/CD mode (exit 1 on errors)
-```
+`
+
+Check version
+
+brainfile --version
+
+View help
+
+brainfile --help
+
+List available commands
+
+brainfile
+`
+
+Troubleshooting
+
+Command not found
+
+If you get "command not found" after global installation:
+  Check your npm global path:
+   `
+   npm config get prefix
+   `
+  Ensure that path is in your $PATH environment variable
+  Try reinstalling:
+   `
+   npm uninstall -g @brainfile/cli
+   npm install -g @brainfile/cli
+   `
+
+Permission errors
+
+If you get permission errors during global installation:
+
+`
+
+Use sudo (not recommended)
+
+sudo npm install -g @brainfile/cli
+
+Or configure npm to use a different directory (recommended)
+
+mkdir ~/.npm-global
+npm config set prefix '~/.npm-global'
+export PATH=~/.npm-global/bin:$PATH
+``
+
+Next Steps
+  - Learn about available CLI commands
+  - See usage examples
+  - Read about task templates
+
+Links
+  - npm: https://www.npmjs.com/package/@brainfile/cli
+  - GitHub: https://github.com/brainfile/cli
+  - Core Library: @brainfile/core
 
 ---
 
-## 10. Core Library API
+## 5. CLI Commands Reference
 
-### Installation
+Command Overview
 
-```bash
+The Brainfile CLI provides five main commands for managing your tasks:
+  - list - Display tasks from your board
+  - add - Create new tasks
+  - move - Move tasks between columns
+  - lint - Validate and auto-fix syntax issues
+  - template - Manage task templates
+
+list
+
+Display all tasks from your brainfile.md file with colored output.
+
+Usage
+
+``
+brainfile list [options]
+`
+
+Options
+  - -f, --file <path> - Path to brainfile.md file (default: brainfile.md)
+  - -c, --column <name> - Filter by column (e.g., todo, in-progress, done)
+  - -t, --tag <name> - Filter by tag
+
+Examples
+
+`
+
+List all tasks
+
+brainfile list
+
+List tasks from a specific file
+
+brainfile list --file ./project/brainfile.md
+
+List only tasks in the "in-progress" column
+
+brainfile list --column in-progress
+
+List tasks with a specific tag
+
+brainfile list --tag bug
+`
+
+add
+
+Create a new task and add it to a column.
+
+Usage
+
+`
+brainfile add --title <text> [options]
+`
+
+Options
+  - -f, --file <path> - Path to brainfile.md file (default: brainfile.md)
+  - -c, --column <name> - Column to add task to (default: todo)
+  - -t, --title <text> - Task title (required)
+  - -d, --description <text> - Task description
+  - -p, --priority <level> - Priority level (low, medium, high)
+  - --tags <tags> - Comma-separated tags
+
+Examples
+
+`
+
+Add a simple task
+
+brainfile add --title "Fix login bug"
+
+Add a task with full details
+
+brainfile add \
+  --title "Implement user authentication" \
+  --description "Add JWT-based auth to the API" \
+  --priority high \
+  --tags "backend,security" \
+  --column in-progress
+
+Add to a specific column
+
+brainfile add --title "Review PR #123" --column review
+`
+
+move
+
+Move a task from one column to another.
+
+Usage
+
+`
+brainfile move --task <task-id> --column <target-column>
+`
+
+Options
+  - -f, --file <path> - Path to brainfile.md file (default: brainfile.md)
+  - -t, --task <id> - Task ID to move (required)
+  - -c, --column <name> - Target column name or ID (required)
+
+Examples
+
+`
+
+Move task to in-progress
+
+brainfile move --task task-4 --column in-progress
+
+Move task to done
+
+brainfile move --task task-123 --column done
+
+Move using column ID
+
+brainfile move --task task-456 --column review
+`
+
+lint
+
+Validate your brainfile.md syntax and automatically fix common issues.
+
+Usage
+
+`
+brainfile lint [options]
+`
+
+Options
+  - -f, --file <path> - Path to brainfile.md file (default: brainfile.md)
+  - --fix - Automatically fix issues when possible
+  - --check - Exit with error code if issues found (useful for CI/CD)
+
+What it checks
+  - YAML syntax errors
+  - Unquoted strings containing colons
+  - Duplicate column IDs
+  - Board structure validation
+  - Missing required fields
+
+Auto-fixable issues
+  - Unquoted strings with colons (adds quotes automatically)
+
+Detection-only issues
+  - Duplicate column IDs
+  - Structural validation errors
+  - YAML syntax errors
+
+Examples
+
+`
+
+Check for issues
+
+brainfile lint
+
+Check and automatically fix issues
+
+brainfile lint --fix
+
+Use in CI/CD (exits with error code if issues found)
+
+brainfile lint --check
+
+Check a specific file
+
+brainfile lint --file ./project/brainfile.md --fix
+`
+
+template
+
+List available templates and create tasks from templates.
+
+Usage
+
+`
+brainfile template [options]
+`
+
+Options
+  - -f, --file <path> - Path to brainfile.md file (default: brainfile.md)
+  - -l, --list - List all available templates
+  - -u, --use <template-id> - Create task from template
+  - --title <text> - Task title (required when using template)
+  - --description <text> - Task description (optional)
+  - -c, --column <name> - Column to add task to (default: todo)
+
+Built-in Templates
+  - bug-report - Bug tracking with steps to reproduce, environment details
+  - feature-request - Feature proposals with requirements and acceptance criteria
+  - refactor - Code refactoring tasks with analysis and testing steps
+
+Examples
+
+`
+
+List all templates
+
+brainfile template --list
+
+Create a bug report
+
+brainfile template --use bug-report --title "Login timeout on mobile"
+
+Create a feature request
+
+brainfile template --use feature-request \
+  --title "Add dark mode support" \
+  --description "Users want dark mode" \
+  --column todo
+
+Create a refactor task
+
+brainfile template --use refactor \
+  --title "Refactor authentication module" \
+  --column in-progress
+`
+
+Global Options
+
+These options work with all commands:
+  - --help - Display help for a command
+  - --version - Display CLI version
+
+Examples
+
+`
+
+Get help for a specific command
+
+brainfile add --help
+
+Check CLI version
+
+brainfile --version
+`
+
+Exit Codes
+
+The CLI uses standard exit codes:
+  - 0 - Success
+  - 1 - Error (invalid arguments, file not found, etc.)
+  - 2 - Validation error (when using lint --check)
+
+This makes the CLI suitable for use in scripts and CI/CD pipelines.
+
+Examples in Scripts
+
+npm scripts
+
+`
+{
+  "scripts": {
+    "tasks": "brainfile list",
+    "task:add": "brainfile add",
+    "task:lint": "brainfile lint --check"
+  }
+}
+`
+
+CI/CD
+
+`
+
+GitHub Actions example
+  - name: Validate brainfile
+  run: npx @brainfile/cli lint --check
+``
+
+See Also
+  - Installation guide
+  - Usage examples
+  - Task templates
+
+---
+
+## 6. CLI Examples
+
+Common Workflows
+
+Starting a New Project
+
+``
+
+Create a basic brainfile.md (manually or use template)
+
+echo "---
+title: My Project
+columns:
+  - id: todo
+    title: To Do
+    tasks: []
+  - id: in-progress
+    title: In Progress
+    tasks: []
+  - id: done
+    title: Done
+    tasks: []
+---" > brainfile.md
+
+Add your first task
+
+brainfile add --title "Setup project structure" --priority high
+
+List tasks to verify
+
+brainfile list
+`
+
+Daily Development Workflow
+
+`
+
+Check what needs to be done
+
+brainfile list --column todo
+
+Start working on a task
+
+brainfile move --task task-5 --column in-progress
+
+Add a quick bug fix
+
+brainfile add \
+  --title "Fix navbar overflow" \
+  --tags "bug,ui" \
+  --priority high \
+  --column in-progress
+
+Complete a task
+
+brainfile move --task task-5 --column done
+
+Check progress
+
+brainfile list
+`
+
+Bug Tracking
+
+`
+
+Create a bug report from template
+
+brainfile template --use bug-report \
+  --title "Memory leak in data processing" \
+  --description "Application crashes after processing 1000+ items"
+
+Add additional context
+
+brainfile add \
+  --title "Investigate memory usage" \
+  --tags "bug,performance,investigation" \
+  --priority critical \
+  --column in-progress
+
+List all bugs
+
+brainfile list --tag bug
+`
+
+Feature Development
+
+`
+
+Create feature from template
+
+brainfile template --use feature-request \
+  --title "Add user preferences panel" \
+  --description "Users need customizable settings for notifications"
+
+Break down into subtasks (manually edit brainfile.md)
+
+Or add individual tasks
+
+brainfile add \
+  --title "Design preferences UI" \
+  --tags "feature,ui,design" \
+  --priority medium
+
+brainfile add \
+  --title "Implement preferences backend" \
+  --tags "feature,backend,api" \
+  --priority medium
+
+brainfile add \
+  --title "Add preferences persistence" \
+  --tags "feature,database" \
+  --priority medium
+`
+
+Code Review Workflow
+
+`
+
+Move completed work to review
+
+brainfile move --task task-12 --column review
+
+List everything in review
+
+brainfile list --column review
+
+After approval, move to done
+
+brainfile move --task task-12 --column done
+`
+
+Project Planning
+
+`
+
+Add multiple planned features
+
+brainfile add --title "Implement OAuth login" --priority high --tags "auth,feature"
+brainfile add --title "Add email notifications" --priority medium --tags "notifications,feature"
+brainfile add --title "Create admin dashboard" --priority low --tags "admin,feature"
+
+Use refactor template for technical debt
+
+brainfile template --use refactor \
+  --title "Refactor API error handling" \
+  --description "Standardize error responses across all endpoints"
+
+View roadmap
+
+brainfile list --column todo
+`
+
+CI/CD Integration
+
+Pre-commit Hook
+
+`
+#!/bin/bash
+
+.git/hooks/pre-commit
+
+Validate brainfile.md before commit
+
+if [ -f "brainfile.md" ]; then
+  npx @brainfile/cli lint --check
+  if [ $? -ne 0 ]; then
+    echo "❌ brainfile.md has validation errors"
+    echo "Run 'brainfile lint --fix' to auto-fix"
+    exit 1
+  fi
+fi
+`
+
+GitHub Actions
+
+`
+name: Validate Brainfile
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+  - uses: actions/checkout@v3
+  - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+  - name: Validate brainfile
+        run: npx @brainfile/cli lint --check
+`
+
+npm Scripts
+
+`
+{
+  "scripts": {
+    "tasks": "brainfile list",
+    "task:todo": "brainfile list --column todo",
+    "task:progress": "brainfile list --column in-progress",
+    "task:add": "brainfile add",
+    "task:lint": "brainfile lint --fix",
+    "precommit": "brainfile lint --check"
+  }
+}
+`
+
+Filtering and Organization
+
+`
+
+View high priority items
+
+brainfile list --tag high
+
+View backend-related tasks
+
+brainfile list --tag backend
+
+View bugs
+
+brainfile list --tag bug
+
+View specific project file
+
+brainfile list --file ./projects/api/brainfile.md
+`
+
+Batch Operations
+
+`
+
+Add multiple related tasks
+
+brainfile add --title "Write unit tests" --tags "testing" --priority high
+brainfile add --title "Write integration tests" --tags "testing" --priority high
+brainfile add --title "Update test documentation" --tags "testing,docs" --priority medium
+
+Move multiple tasks (in a loop)
+
+for task in task-1 task-2 task-3; do
+  brainfile move --task $task --column done
+done
+`
+
+Multi-Project Management
+
+`
+
+Project A tasks
+
+brainfile list --file ./project-a/brainfile.md --column todo
+
+Project B tasks
+
+brainfile list --file ./project-b/brainfile.md --column in-progress
+
+Add task to specific project
+
+brainfile add \
+  --file ./project-a/brainfile.md \
+  --title "Deploy to staging" \
+  --priority high
+`
+
+Maintenance and Cleanup
+
+`
+
+Validate and fix formatting issues
+
+brainfile lint --fix
+
+Check for problems
+
+brainfile lint
+
+Archive completed tasks (manually move to archive section)
+
+Then clear done column by editing brainfile.md
+
+`
+
+Advanced Patterns
+
+Task Templates with Variables
+
+`
+
+Bug report with detailed context
+
+brainfile template --use bug-report \
+  --title "API returns 500 on /users endpoint" \
+  --description "Steps to reproduce:
+  Make GET request to /api/users
+  Include auth token
+  Server returns 500
+
+Expected: 200 with user list
+Actual: 500 Internal Server Error
+
+Environment: Production
+Browser: Chrome 120
+User: test@example.com"
+`
+
+Automated Task Creation
+
+`
+#!/bin/bash
+
+create-sprint-tasks.sh
+
+SPRINT="Sprint 23"
+
+brainfile add --title "[$SPRINT] Planning meeting" --priority high
+brainfile add --title "[$SPRINT] Sprint review" --priority medium
+brainfile add --title "[$SPRINT] Sprint retrospective" --priority medium
+brainfile add --title "[$SPRINT] Update documentation" --priority low
+
+echo "✅ Created sprint tasks"
+`
+
+Status Reports
+
+`
+#!/bin/bash
+
+generate-status.sh
+
+echo "📊 Project Status Report"
+echo "======================="
+echo ""
+echo "📝 To Do:"
+brainfile list --column todo | grep -c "task-"
+echo ""
+echo "🚧 In Progress:"
+brainfile list --column in-progress | grep -c "task-"
+echo ""
+echo "✅ Done:"
+brainfile list --column done | grep -c "task-"
+`
+
+Tips and Tricks
+
+Aliases
+
+Add to your .bashrc or .zshrc:
+
+`
+alias bf="brainfile"
+alias bfl="brainfile list"
+alias bfa="brainfile add"
+alias bfm="brainfile move"
+alias bft="brainfile template"
+`
+
+Then use short commands:
+
+`
+bf list
+bfa --title "New task"
+bfm --task task-5 --column done
+`
+
+Watch Mode
+
+Monitor tasks in real-time:
+
+`
+watch -n 2 brainfile list
+`
+
+Colored Output in Scripts
+
+The CLI automatically disables colors in non-TTY environments. To force colors:
+
+`
+FORCE_COLOR=1 brainfile list
+`
+
+JSON Export (Custom)
+
+While not built-in, you can parse the markdown for custom exports:
+
+`
+
+Extract YAML frontmatter
+
+sed -n '/^---$/,/^---$/p' brainfile.md
+``
+
+See Also
+  - CLI Commands Reference
+  - Installation Guide
+  - Task Templates
+
+---
+
+## 7. Core Library Overview
+
+@brainfile/core
+
+Core library for the Brainfile task management protocol. This package provides parsing, serialization, validation, and template management for Brainfile markdown files with YAML frontmatter.
+
+Installation
+
+``
 npm install @brainfile/core
-```
+`
 
-### Parsing
+Features
+  - Parse Brainfile markdown files into structured Board objects
+  - Serialize Board objects back to Brainfile markdown format
+  - Validate Board objects against the Brainfile schema
+  - Templates Built-in task templates (Bug Report, Feature Request, Refactor)
+  - Location Finding Find tasks and rules in source files for IDE integration
 
-```typescript
+Quick Start
+
+`
 import { Brainfile } from '@brainfile/core';
-import fs from 'fs';
 
-// Simple parse
-const content = fs.readFileSync('brainfile.md', 'utf-8');
-const board = Brainfile.parse(content);
+// Parse a brainfile.md file
+const markdown = ---
+title: My Project
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+  - id: task-1
+        title: My First Task
+---
+;
+
+const board = Brainfile.parse(markdown);
+console.log(board.title); // "My Project"
+
+// Validate the board
+const validation = Brainfile.validate(board);
+if (!validation.valid) {
+  console.error('Validation errors:', validation.errors);
+}
+
+// Serialize back to markdown
+const output = Brainfile.serialize(board);
+console.log(output);
+`
+
+Using Templates
+
+`
+import { Brainfile } from '@brainfile/core';
+
+// Get all built-in templates
+const templates = Brainfile.getBuiltInTemplates();
+console.log(templates.map(t => t.name)); // ['Bug Report', 'Feature Request', 'Code Refactor']
+
+// Create a task from a template
+const bugTask = Brainfile.createFromTemplate('bug-report', {
+  title: 'Login button not working',
+  description: 'Users cannot log in to the application'
+});
+
+console.log(bugTask);
+// {
+//   title: 'Login button not working',
+//   description: '## Bug Description\nUsers cannot log in...',
+//   template: 'bug',
+//   priority: 'high',
+//   tags: ['bug', 'needs-triage'],
+//   subtasks: [...]
+// }
+`
+
+Advanced Usage
+
+`
+import {
+  BrainfileParser,
+  BrainfileSerializer,
+  BrainfileValidator,
+  Board
+} from '@brainfile/core';
 
 // Parse with error details
-const result = Brainfile.parseWithErrors(content);
+const parseResult = BrainfileParser.parseWithErrors(markdown);
+if (!parseResult.board) {
+  console.error('Parse error:', parseResult.error);
+}
+
+// Serialize with custom options
+const output = BrainfileSerializer.serialize(board, {
+  indent: 4,
+  lineWidth: 80,
+  trailingNewline: true
+});
+
+// Validate with detailed errors
+const validation = BrainfileValidator.validate(board);
+validation.errors.forEach(error => {
+  console.log(${error.path}: ${error.message});
+});
+
+// Find task location in source file
+const location = BrainfileParser.findTaskLocation(markdown, 'task-1');
+console.log(Task found at line ${location.line});
+`
+
+Testing
+  - Test files live in src/__tests__ with shared fixtures under src/__tests__/fixtures.
+  - Run npm test to execute the Jest suite with coverage, or npm run test:watch while developing.
+  - Coverage focuses on critical modules (parser, serializer, validator) and currently exceeds 80% line coverage.
+  - npm run test:coverage generates an lcov report in coverage/ for deeper review.
+
+Error Handling
+
+The library provides detailed error messages for parsing and validation:
+
+`
+const result = Brainfile.parseWithErrors(invalidMarkdown);
+if (!result.board) {
+  console.error('Parse error:', result.error);
+}
+
+const validation = Brainfile.validate(board);
+if (!validation.valid) {
+  validation.errors.forEach(err => {
+    console.log(${err.path}: ${err.message});
+  });
+}
+``
+
+Integration with Other Tools
+
+This core library is used by:
+  - @brainfile/cli - Command-line interface
+  - brainfile-vscode - VSCode extension
+  - Future: Zed, JetBrains, and other IDE integrations
+
+Links
+  - npm: https://www.npmjs.com/package/@brainfile/core
+  - GitHub: https://github.com/brainfile/core
+  - Protocol: https://brainfile.md
+  - CLI: @brainfile/cli
+
+---
+
+## 8. Core Library API Reference
+
+Brainfile (Main Class)
+
+The main class provides static methods for parsing, serializing, validating, and working with brainfile documents.
+
+Static Methods
+
+parse(content: string): Board | null
+
+Parse markdown content into a Board object.
+
+``
+const board = Brainfile.parse(markdownString);
+if (board) {
+  console.log(board.title);
+}
+`
+
+parseWithErrors(content: string): ParseResult
+
+Parse with detailed error information.
+
+`
+const result = Brainfile.parseWithErrors(markdownString);
 if (result.board) {
-  console.log('Parsed successfully:', result.board);
+  console.log('Parsed successfully');
 } else {
   console.error('Parse error:', result.error);
 }
-```
+`
 
-### Serialization
+serialize(board: Board, options?: SerializeOptions): string
 
-```typescript
+Serialize a Board object back to markdown format.
+
+`
+const markdown = Brainfile.serialize(board, {
+  indent: 2,
+  lineWidth: 80,
+  trailingNewline: true
+});
+`
+
+validate(board: Board): ValidationResult
+
+Validate a board object against the schema.
+
+`
+const validation = Brainfile.validate(board);
+if (!validation.valid) {
+  validation.errors.forEach(err => {
+    console.log(${err.path}: ${err.message});
+  });
+}
+`
+
+getBuiltInTemplates(): TaskTemplate[]
+
+Get all built-in task templates.
+
+`
+const templates = Brainfile.getBuiltInTemplates();
+templates.forEach(template => {
+  console.log(${template.id}: ${template.name});
+});
+`
+
+getTemplate(id: string): TaskTemplate | undefined
+
+Get a specific template by ID.
+
+`
+const bugTemplate = Brainfile.getTemplate('bug-report');
+if (bugTemplate) {
+  console.log(bugTemplate.name);
+}
+`
+
+createFromTemplate(templateId: string, values: Record<string, string>): Partial<Task>
+
+Create a task from a template with variable substitution.
+
+`
+const task = Brainfile.createFromTemplate('bug-report', {
+  title: 'Login fails on mobile',
+  description: 'Users cannot log in on iOS devices'
+});
+`
+
+findTaskLocation(content: string, taskId: string): Location
+
+Find the line number and position of a task in the source file.
+
+`
+const location = Brainfile.findTaskLocation(markdown, 'task-1');
+console.log(Task at line ${location.line});
+`
+
+findRuleLocation(content: string, ruleId: number, ruleType: RuleType): Location
+
+Find the location of a rule in the source file.
+
+`
+const location = Brainfile.findRuleLocation(markdown, 1, 'always');
+console.log(Rule at line ${location.line});
+`
+
+Types
+
+Board
+
+`
+interface Board {
+  title: string;
+  protocolVersion?: string;
+  schema?: string;
+  agent?: AgentInstructions;
+  rules?: Rules;
+  statsConfig?: StatsConfig;
+  columns: Column[];
+  archive?: Task[];
+}
+`
+
+Column
+
+`
+interface Column {
+  id: string;
+  title: string;
+  tasks: Task[];
+}
+`
+
+Task
+
+`
+interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  relatedFiles?: string[];
+  assignee?: string;
+  tags?: string[];
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  effort?: 'trivial' | 'small' | 'medium' | 'large' | 'xlarge';
+  blockedBy?: string[];
+  dueDate?: string;
+  subtasks?: Subtask[];
+  template?: 'bug' | 'feature' | 'refactor';
+}
+`
+
+Subtask
+
+`
+interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+`
+
+AgentInstructions
+
+`
+interface AgentInstructions {
+  instructions?: string[];
+  llmNotes?: string;
+}
+`
+
+Rules
+
+`
+interface Rules {
+  always?: Rule[];
+  never?: Rule[];
+  prefer?: Rule[];
+  context?: Rule[];
+}
+
+interface Rule {
+  id: number;
+  rule: string;
+}
+`
+
+StatsConfig
+
+`
+interface StatsConfig {
+  columns?: string[];
+}
+`
+
+SerializeOptions
+
+`
+interface SerializeOptions {
+  indent?: number;           // Number of spaces for indentation (default: 2)
+  lineWidth?: number;        // Maximum line width (default: 80)
+  trailingNewline?: boolean; // Add trailing newline (default: true)
+}
+`
+
+ValidationResult
+
+`
+interface ValidationResult {
+  valid: boolean;
+  errors: ValidationError[];
+}
+
+interface ValidationError {
+  path: string;
+  message: string;
+}
+`
+
+ParseResult
+
+`
+interface ParseResult {
+  board: Board | null;
+  error?: string;
+}
+`
+
+TaskTemplate
+
+`
+interface TaskTemplate {
+  id: string;
+  name: string;
+  description: string;
+  variables: string[];
+  task: Partial<Task>;
+}
+`
+
+Low-Level Classes
+
+For advanced usage, you can import and use the low-level classes directly:
+
+BrainfileParser
+
+`
+import { BrainfileParser } from '@brainfile/core';
+
+const board = BrainfileParser.parse(markdown);
+const result = BrainfileParser.parseWithErrors(markdown);
+const location = BrainfileParser.findTaskLocation(markdown, 'task-1');
+`
+
+BrainfileSerializer
+
+`
+import { BrainfileSerializer } from '@brainfile/core';
+
+const markdown = BrainfileSerializer.serialize(board, options);
+`
+
+BrainfileValidator
+
+`
+import { BrainfileValidator } from '@brainfile/core';
+
+const validation = BrainfileValidator.validate(board);
+`
+
+Constants
+
+RuleType
+
+`
+type RuleType = 'always' | 'never' | 'prefer' | 'context';
+`
+
+Priority
+
+`
+type Priority = 'low' | 'medium' | 'high' | 'critical';
+`
+
+Effort
+
+`
+type Effort = 'trivial' | 'small' | 'medium' | 'large' | 'xlarge';
+`
+
+Template
+
+`
+type Template = 'bug' | 'feature' | 'refactor';
+``
+
+---
+
+## 9. Templates
+
+Overview
+
+The Core library includes three built-in task templates for common development scenarios. These templates provide pre-configured tasks with appropriate priority levels, tags, descriptions, and subtasks.
+
+Available Templates
+
+Bug Report
+
+Template ID: bug-report
+
+Pre-configured for tracking and fixing bugs with structured reproduction steps and environment details.
+
+Properties:
+  - Priority: high
+  - Tags: ['bug', 'needs-triage']
+  - Template Type: bug
+
+Variables:
+  - title - Short description of the bug
+  - description - Detailed bug description
+
+Subtasks:
+  Reproduce the issue
+  Identify root cause
+  Implement fix
+  Test the fix
+  Verify in production
+
+Example Usage:
+
+``
 import { Brainfile } from '@brainfile/core';
 
-const output = Brainfile.serialize(board);
-fs.writeFileSync('brainfile.md', output, 'utf-8');
-```
-
-### Templates
-
-```typescript
-import { Brainfile, BUILT_IN_TEMPLATES } from '@brainfile/core';
-
-// List available templates
-console.log(BUILT_IN_TEMPLATES);
-
-// Create from template
-const partialTask = Brainfile.createFromTemplate('bug-report', {
-  title: 'Fix login issue',
-  description: 'Users cannot log in on mobile'
+const bugTask = Brainfile.createFromTemplate('bug-report', {
+  title: 'Login timeout on mobile',
+  description: 'Users experience timeout after 30 seconds on iOS devices'
 });
 
-// Add ID and add to board
-const task = {
-  ...partialTask,
-  id: 'task-10'
-};
-```
+// Result:
+// {
+//   title: 'Login timeout on mobile',
+//   description: '## Bug Description\nUsers experience timeout...',
+//   priority: 'high',
+//   tags: ['bug', 'needs-triage'],
+//   template: 'bug',
+//   subtasks: [
+//     { id: 'task-1-1', title: 'Reproduce the issue', completed: false },
+//     { id: 'task-1-2', title: 'Identify root cause', completed: false },
+//     ...
+//   ]
+// }
+`
 
-### Validation (Linting)
+Feature Request
 
-```typescript
-import { BrainfileLinter } from '@brainfile/core';
+Template ID: feature-request
 
-const result = BrainfileLinter.lint(content, { autoFix: true });
+Structured template for proposing and implementing new features with clear requirements and acceptance criteria.
 
-// Check for issues
-if (result.issues.length > 0) {
-  console.log('Issues found:', result.issues);
+Properties:
+  - Priority: medium
+  - Tags: ['feature', 'enhancement']
+  - Template Type: feature
+
+Variables:
+  - title - Feature name
+  - description - Feature description and use case
+
+Subtasks:
+  Design specification
+  Implement core functionality
+  Write unit tests
+  Write integration tests
+  Update documentation
+  Code review
+
+Example Usage:
+
+`
+const featureTask = Brainfile.createFromTemplate('feature-request', {
+  title: 'Add dark mode support',
+  description: 'Users want ability to toggle between light and dark themes'
+});
+`
+
+Code Refactor
+
+Template ID: refactor
+
+Template for code refactoring tasks with emphasis on analysis, testing, and performance validation.
+
+Properties:
+  - Priority: low
+  - Tags: ['refactor', 'technical-debt']
+  - Template Type: refactor
+
+Variables:
+  - area - Code area to refactor (e.g., "authentication module")
+  - description - Motivation and scope of refactoring
+
+Subtasks:
+  Analyze current code
+  Design new structure
+  Implement refactoring
+  Update tests
+  Update documentation
+  Verify performance
+
+Example Usage:
+
+`
+const refactorTask = Brainfile.createFromTemplate('refactor', {
+  area: 'authentication module',
+  description: 'Simplify auth flow and improve testability'
+});
+`
+
+Using Templates Programmatically
+
+List All Templates
+
+`
+import { Brainfile } from '@brainfile/core';
+
+const templates = Brainfile.getBuiltInTemplates();
+
+templates.forEach(template => {
+  console.log(${template.id}: ${template.name});
+  console.log(  Description: ${template.description});
+  console.log(  Variables: ${template.variables.join(', ')});
+});
+`
+
+Get Specific Template
+
+`
+const bugTemplate = Brainfile.getTemplate('bug-report');
+
+if (bugTemplate) {
+  console.log(bugTemplate.name);        // "Bug Report"
+  console.log(bugTemplate.variables);   // ['title', 'description']
+}
+`
+
+Create Task from Template
+
+`
+// With all variables
+const task = Brainfile.createFromTemplate('bug-report', {
+  title: 'Login fails',
+  description: 'Users cannot log in'
+});
+
+// Minimal (only required variables)
+const task = Brainfile.createFromTemplate('feature-request', {
+  title: 'New feature'
+});
+`
+
+Add Template Task to Board
+
+`
+// Parse existing board
+const board = Brainfile.parse(markdownContent);
+
+// Create task from template
+const newTask = Brainfile.createFromTemplate('bug-report', {
+  title: 'Critical bug',
+  description: 'System crash on startup'
+});
+
+// Generate unique ID
+const maxId = Math.max(
+  ...board.columns
+    .flatMap(col => col.tasks)
+    .map(task => parseInt(task.id.replace('task-', '')) || 0)
+);
+newTask.id = task-${maxId + 1};
+
+// Add to appropriate column
+const todoColumn = board.columns.find(col => col.id === 'todo');
+if (todoColumn) {
+  todoColumn.tasks.push(newTask as Task);
 }
 
-// Apply fixes if available
-if (result.fixedContent) {
-  fs.writeFileSync('brainfile.md', result.fixedContent);
+// Serialize back
+const updatedMarkdown = Brainfile.serialize(board);
+`
+
+Template Structure
+
+Each template follows this structure:
+
+`
+interface TaskTemplate {
+  id: string;                // Unique template identifier
+  name: string;              // Display name
+  description: string;       // Template description
+  variables: string[];       // Required variable names
+  task: Partial<Task>;       // Pre-configured task properties
+}
+`
+
+The task object contains:
+  - Pre-set priority level
+  - Default tags
+  - Template type marker
+  - Pre-configured subtasks
+  - Description structure with placeholders
+
+Custom Templates
+
+While the library includes three built-in templates, you can create custom templates by constructing task objects manually:
+
+`
+function createCustomTask(title: string, description: string): Partial<Task> {
+  return {
+    title,
+    description: ## Overview\n${description}\n\n## Tasks\n- [ ] Step 1\n- [ ] Step 2,
+    priority: 'medium',
+    tags: ['custom'],
+    subtasks: [
+      { id: '', title: 'Step 1', completed: false },
+      { id: '', title: 'Step 2', completed: false }
+    ]
+  };
 }
 
-// Group by severity
-const grouped = BrainfileLinter.groupIssues(result);
-console.log('Errors:', grouped.errors);
-console.log('Warnings:', grouped.warnings);
-console.log('Fixable:', grouped.fixable);
-```
+const customTask = createCustomTask('My Task', 'Task description');
+`
 
-### Utility Functions
+CLI Integration
 
-```typescript
-import { generateTaskId } from '@brainfile/core';
+The templates are also available through the @brainfile/cli tool:
 
-// Generate unique task ID
-const newId = generateTaskId();  // Returns: "task-1704..."
-```
+`
+
+List available templates
+
+brainfile template --list
+
+Create task from template
+
+brainfile template --use bug-report --title "Login fails"
+``
+
+VSCode Integration
+
+The VSCode extension provides a UI for creating tasks from templates through:
+  - Command Palette: "Brainfile: Create Task from Template"
+  - UI button in the sidebar: "New from Template"
+
+See the VSCode Extension documentation for details.
 
 ---
 
-## 11. Complete Examples
+## 10. VSCode Extension
 
-### Example 1: Minimal Valid Brainfile
+Overview
 
-```yaml
+The Brainfile VSCode extension provides a visual kanban board interface for managing tasks directly within your editor. View, create, and organize tasks without leaving your development environment.
+
+Built on @brainfile/core - the official Brainfile parser and serializer.
+
+Features
+  - Visual Kanban Board - View tasks in customizable columns
+  - Drag and Drop - Move tasks between columns with drag and drop
+  - Live Updates - Changes sync automatically when editing markdown
+  - Task Templates - Create tasks from built-in templates
+  - Project Rules - Define rules (always, never, prefer, context)
+  - Progress Tracking - Track completion with subtasks
+  - Collapsible Sections - Organize tasks efficiently
+
+Installation
+  Open VSCode
+  Go to Extensions (Ctrl+Shift+X / Cmd+Shift+X)
+  Search for "Brainfile"
+  Click Install
+
+Alternatively, install from the command line:
+
+``
+code --install-extension brainfile.brainfile
+`
+
+Usage
+
+Getting Started
+  Create a brainfile.md file in your project root
+  Open the folder in VSCode
+  The Brainfile sidebar appears automatically
+  View and manage your tasks in the visual board
+
+File Format
+
+Tasks are defined in YAML frontmatter:
+
+`
 ---
-schema: https://brainfile.md/v1
-title: Simple Project
-columns:
-  - id: todo
-    title: To Do
-    tasks: []
-  - id: done
-    title: Done
-    tasks: []
----
-```
-
-### Example 2: Standard Project
-
-```yaml
----
-schema: https://brainfile.md/v1
-title: Web Application
-agent:
-  instructions:
-    - Modify only the YAML frontmatter
-    - Preserve all IDs
-    - Keep ordering
+title: My Project
 rules:
   always:
-    - id: 1
-      rule: write tests for new features
+  - id: 1
+      rule: write tests for all new features
   never:
-    - id: 1
-      rule: commit to main without PR
+  - id: 1
+      rule: commit directly to main branch
 columns:
   - id: todo
     title: To Do
     tasks:
-      - id: task-1
-        title: Implement authentication
-        priority: critical
-        tags:
-          - backend
-          - security
-  - id: in-progress
-    title: In Progress
-    tasks:
-      - id: task-2
-        title: Design dashboard UI
+  - id: task-1
+        title: Task Title
+        description: Task description
         priority: high
-        assignee: alice
-        tags:
-          - frontend
-          - ui
-  - id: done
-    title: Done
-    tasks:
-      - id: task-3
-        title: Setup CI/CD pipeline
-        priority: medium
-        tags:
-          - devops
+        tags: [feature, backend]
 ---
+`
 
-# Web Application
+Creating Tasks from Templates
 
-Backend: Node.js + Express
-Frontend: React + TypeScript
-Database: PostgreSQL
-```
+Brainfile includes built-in task templates to help you quickly create structured tasks:
 
-### Example 3: Complex Task with Subtasks
+Using the Command Palette
+  Open Command Palette (Ctrl+Shift+P / Cmd+Shift+P)
+  Search for "Brainfile: Create Task from Template"
+  Select a template:
+  - Bug Report - For tracking bugs with reproduction steps
+  - Feature Request - For proposing new features
+  - Code Refactor - For refactoring tasks
+  Fill in the required variables
+  Select the column for the new task
 
-```yaml
----
-schema: https://brainfile.md/v1
-title: Feature Development
-columns:
-  - id: in-progress
-    title: In Progress
-    tasks:
-      - id: task-1
-        title: Implement user authentication
-        description: |-
-          Complete OAuth 2.0 integration with support for:
-          * Google
-          * GitHub
-          * Email/Password
-        priority: critical
-        assignee: bob
-        tags:
-          - backend
-          - security
-          - oauth
-        relatedFiles:
-          - src/auth/oauth.ts
-          - src/auth/strategies.ts
-          - tests/auth.test.ts
-        subtasks:
-          - id: task-1-1
-            title: Setup OAuth providers
-            completed: true
-          - id: task-1-2
-            title: Implement callback handlers
-            completed: true
-          - id: task-1-3
-            title: Add session management
-            completed: false
-          - id: task-1-4
-            title: Write integration tests
-            completed: false
-          - id: task-1-5
-            title: Update API documentation
-            completed: false
----
-```
+Using the UI Button
+  Click the "New from Template" button in the Brainfile sidebar
+  Follow the prompts to create a task
 
-### Example 4: Team Project
+Available Templates
 
-```yaml
----
-schema: https://brainfile.md/v1
-title: Q1 Product Roadmap
-agent:
-  instructions:
-    - Update task status as features progress
-    - Assign tasks to team members
-    - Track blockers in task descriptions
-  llmNotes: "Focus on user-facing features and performance"
+Bug Report
+
+Pre-configured for tracking and fixing bugs:
+  - Priority: High
+  - Tags: bug, needs-triage
+  - Subtasks: Reproduce, identify, fix, test, verify
+
+Example:
+`
+  - id: task-1
+  title: Login timeout on mobile
+  description: |
+    ## Bug Description
+    Users experience timeout after 30 seconds on iOS devices
+    
+    ## Steps to Reproduce
+  Open app on iOS
+  Navigate to login
+  Wait 30 seconds
+  priority: high
+  tags: [bug, needs-triage]
+  template: bug
+  subtasks:
+  - id: task-1-1
+      title: Reproduce the issue
+      completed: false
+`
+
+Feature Request
+
+Structured template for new features:
+  - Priority: Medium
+  - Tags: feature, enhancement
+  - Subtasks: Design, implement, test, document, review
+
+Example:
+`
+  - id: task-2
+  title: Add dark mode support
+  description: |
+    ## Feature Description
+    Users want ability to toggle between light and dark themes
+    
+    ## Use Cases
+  - Users working late at night
+  - Users with visual sensitivity
+  priority: medium
+  tags: [feature, enhancement]
+  template: feature
+`
+
+Code Refactor
+
+Template for refactoring tasks:
+  - Priority: Low
+  - Tags: refactor, technical-debt
+  - Subtasks: Analyze, design, implement, test, document, verify performance
+
+Task Management
+
+Moving Tasks
+
+Drag and Drop:
+  - Click and drag a task card
+  - Drop it in the target column
+  - Changes save automatically
+
+Via Markdown:
+  - Edit brainfile.md directly
+  - Move task objects between column arrays
+  - Save the file - UI updates automatically
+
+Editing Tasks
+
+Via UI:
+  - Click on a task to view details
+  - Edit fields in the detail panel
+  - Changes save to markdown automatically
+
+Via Markdown:
+  - Edit the YAML frontmatter directly
+  - Save the file
+  - UI reflects changes immediately
+
+Project Rules
+
+Define project-specific rules that appear in the UI:
+
+`
 rules:
   always:
-    - id: 1
-      rule: all features require design approval
-    - id: 2
-      rule: performance tests for new features
+  - id: 1
+      rule: update task status as you work
+  - id: 2
+      rule: write tests for all features
+  never:
+  - id: 1
+      rule: commit directly to main
+  - id: 2
+      rule: skip code review
   prefer:
-    - id: 1
-      rule: small, incremental changes
-    - id: 2
-      rule: reusable components
+  - id: 1
+      rule: functional programming patterns
   context:
-    - id: 1
-      rule: React 18 with TypeScript
-    - id: 2
-      rule: Tailwind CSS for styling
-    - id: 3
-      rule: Supabase for backend
-statsConfig:
-  columns: [backlog, in-progress, review, done]
-columns:
-  - id: backlog
-    title: Backlog
-    tasks:
-      - id: task-1
-        title: Dark mode support
-        priority: medium
-        tags: [feature, ui]
-      - id: task-2
-        title: Mobile responsive design
-        priority: high
-        tags: [feature, mobile, ui]
+  - id: 1
+      rule: this is a TypeScript monorepo
+`
 
-  - id: in-progress
-    title: In Progress
-    tasks:
-      - id: task-3
-        title: User dashboard
-        description: Main dashboard with widgets
-        priority: critical
-        assignee: alice
-        tags: [feature, ui, dashboard]
-      - id: task-4
-        title: Real-time notifications
-        priority: high
-        assignee: bob
-        tags: [feature, websockets]
+Subtasks
 
-  - id: review
-    title: Code Review
-    tasks:
-      - id: task-5
-        title: Payment integration
-        priority: critical
-        assignee: charlie
-        tags: [feature, payments, stripe]
+Track granular progress within tasks:
 
-  - id: done
-    title: Done
-    tasks:
-      - id: task-6
-        title: User authentication
-        priority: critical
-        assignee: alice
-        tags: [feature, auth, security]
----
-```
+`
+tasks:
+  - id: task-1
+    title: Implement authentication
+    subtasks:
+  - id: task-1-1
+        title: Setup OAuth provider
+        completed: true
+  - id: task-1-2
+        title: Create login UI
+        completed: false
+  - id: task-1-3
+        title: Add session management
+        completed: false
+`
 
----
+The UI shows progress: 2/3 subtasks completed
 
-## 12. Best Practices
+Keyboard Shortcuts
+  - Ctrl+Shift+P / Cmd+Shift+P - Command Palette
+  - Search "Brainfile" to see all commands
 
-### For AI Agents
+Settings
 
-#### ID Management
-- **NEVER** regenerate or change existing IDs
-- Use sequential numbering (task-1, task-2, task-3...)
-- For subtasks, use parent-child format (task-1-1, task-1-2...)
-- Check existing IDs before generating new ones
+Configure the extension in VSCode settings:
 
-#### Task Movement
-- Always move the entire task object
-- Preserve all fields (priority, tags, assignee, etc.)
-- Update task status if moving to done/blocked columns
-- Don't modify other tasks while moving one
-
-#### Modifications
-- Make atomic changes (one task at a time)
-- Only modify the YAML frontmatter
-- Keep changes minimal and focused
-- Validate after each modification
-
-#### Error Recovery
-- If parse fails, report specific line numbers
-- Suggest fixes for common errors
-- Never leave file in invalid state
-- Keep backup before major changes
-
-### For Humans
-
-#### File Management
-- Commit brainfile.md to version control
-- Review diffs before committing
-- Use meaningful commit messages
-- Don't commit personal notes in task descriptions
-
-#### Organization
-- Keep columns focused and minimal (3-5 columns)
-- Use tags for categorization, not extra columns
-- Archive completed tasks periodically
-- Use subtasks for task breakdown, not separate tasks
-
-#### Collaboration
-- Agree on tag taxonomy with team
-- Use assignee field consistently
-- Document column definitions in project README
-- Establish priority level guidelines
-
----
-
-## 13. Error Handling
-
-### Common Parse Errors
-
-#### Invalid YAML Syntax
-```
-Error: YAML parse error at line 12
-  - Expected ':' after key
-  - Got unexpected token '['
-```
-
-**Fix**: Check YAML syntax, ensure proper indentation
-
-#### Missing Required Fields
-```
-Error: Missing required field 'schema'
-Error: Missing required field 'columns'
-```
-
-**Fix**: Add required fields to YAML frontmatter
-
-#### Duplicate IDs
-```
-Error: Duplicate column ID 'todo' found
-Error: Duplicate task ID 'task-1' found
-```
-
-**Fix**: Ensure all IDs are unique within their scope
-
-#### Invalid Enum Values
-```
-Error: Invalid priority 'urgent' (must be: low, medium, high, critical)
-Error: Invalid status 'pending' (must be: todo, in-progress, done, blocked)
-```
-
-**Fix**: Use valid enum values as specified in schema
-
-### Handling Validation Errors
-
-```typescript
-const result = Brainfile.parseWithErrors(content);
-
-if (!result.board) {
-  console.error('Validation failed:', result.error);
-
-  if (result.error.includes('line')) {
-    // Parse error - fix YAML syntax
-  } else if (result.error.includes('required')) {
-    // Missing field - add required field
-  } else if (result.error.includes('duplicate')) {
-    // Duplicate ID - make unique
-  }
+`
+{
+  "brainfile.autoRefresh": true,
+  "brainfile.showRules": true
 }
-```
+`
+
+Live Sync
+
+The extension watches brainfile.md for changes:
+  Edit in VSCode - Changes appear in UI immediately
+  Edit via CLI - UI updates automatically
+  Edit via Git - Pull changes, UI refreshes
+  Concurrent edits - Last write wins (use version control)
+
+Integration with Other Tools
+
+CLI Tool
+
+Use @brainfile/cli alongside the extension:
+
+`
+
+Add task from terminal
+
+brainfile add --title "Fix bug" --priority high
+
+View in VSCode - UI updates automatically
+
+`
+
+AI Agents
+
+The extension respects agent instructions in the YAML:
+
+`
+agent:
+  instructions:
+  - Modify only the YAML frontmatter
+  - Preserve all IDs
+  - Keep ordering
+`
+
+See AI Agent Integration for details.
+
+Troubleshooting
+
+Sidebar not appearing
+  Check that brainfile.md exists in project root
+  Try reloading VSCode window
+  Check for YAML syntax errors
+
+Changes not syncing
+  Verify file saves successfully
+  Check for YAML syntax errors
+  View VSCode output panel for errors
+
+Template button not working
+  Ensure you have a valid brainfile.md
+  Check that columns exist in your board
+  Try using Command Palette instead
+
+Development
+
+Want to contribute? See the GitHub repository.
+
+`
+
+Clone the repository
+
+git clone https://github.com/brainfile/vscode.git
+cd vscode
+
+Install dependencies
+
+npm install
+
+Run in development mode
+
+npm run dev
+``
+
+Links
+  - Marketplace: https://marketplace.visualstudio.com/items?itemName=brainfile.brainfile
+  - GitHub: https://github.com/brainfile/vscode
+  - Core Library: @brainfile/core
+  - CLI Tool: @brainfile/cli
+
+Related Tools
+  - CLI Tool - Command-line interface
+  - Core Library - JavaScript/TypeScript API
+  - Protocol Specification - File format details
 
 ---
 
-## 14. Troubleshooting
+## 11. Complete Example
 
-### File Not Found
-
-**Problem**: brainfile.md doesn't exist
-
-**Solution**:
-```bash
-brainfile init
-```
-
-Or download example:
-```bash
-curl -o brainfile.md https://raw.githubusercontent.com/brainfile/protocol/main/example/brainfile.md
-```
-
-### Invalid YAML
-
-**Problem**: YAML syntax errors
-
-**Solution**:
-```bash
-brainfile lint --fix
-```
-
-Manual fixes:
-- Check indentation (must be 2 spaces)
-- Quote strings with special characters
-- Use proper array syntax
-- Ensure keys have colons
-
-### Task Not Moving
-
-**Problem**: Task appears in multiple columns or wrong column
-
-**Solution**:
-- Verify task was removed from source column
-- Verify task was added to target column
-- Check for duplicate IDs
-- Validate entire board structure
-
-### Schema Validation Fails
-
-**Problem**: Board doesn't validate against schema
-
-**Solution**:
-```bash
-brainfile lint --check
-```
-
-Check for:
-- Missing required fields
-- Invalid field types
-- Unknown enum values
-- Malformed IDs
-
----
-
-## 15. Schema Validation
-
-### JSON Schema Location
-
-https://brainfile.md/v1
-
-### Validation Process
-
-1. Parse YAML frontmatter
-2. Load JSON Schema from URL
-3. Validate parsed object against schema
-4. Report any validation errors
-5. Return validated board object
-
-### Required Fields Checklist
-
-**Board Level**:
-- [x] `schema`: Must be "https://brainfile.md/v1"
-- [x] `columns`: Must be non-empty array
-
-**Column Level** (for each column):
-- [x] `id`: Must be unique string
-- [x] `title`: Must be non-empty string
-- [x] `tasks`: Must be array (can be empty)
-
-**Task Level** (for each task):
-- [x] `id`: Must be unique string
-- [x] `title`: Must be non-empty string
-
-**Subtask Level** (for each subtask):
-- [x] `id`: Must be unique string
-- [x] `title`: Must be non-empty string
-- [x] `completed`: Must be boolean
-
-### Optional Fields Validation
-
-All optional fields must match their type when present:
-
-- `priority`: enum (low, medium, high, critical)
-- `status`: enum (todo, in-progress, done, blocked)
-- `tags`: array of strings
-- `assignee`: string
-- `description`: string
-- `template`: string
-- `subtasks`: array of subtask objects
-- `relatedFiles`: array of strings
-- `metadata`: object
-
----
-
-## Appendix A: Complete Minimal Example
+Full example from protocol/example/brainfile.md:
 
 ```yaml
 ---
+title: Example Project Board
 schema: https://brainfile.md/v1
+agent:
+    instructions:
+        - This is an example board demonstrating Brainfile features
+        - Shows various task metadata fields (priority, assignee, tags)
+        - Demonstrates multi-column workflow
+statsConfig:
+    columns: [todo, in-progress, review, done]  # Custom stat cards (up to 4)
+rules:
+    always:
+        -
+            id: 1
+            rule: write tests for all new features
+        -
+            id: 2
+            rule: update documentation when changing APIs
+        -
+            id: 3
+            rule: run linter before committing code
+    never:
+        -
+            id: 1
+            rule: deploy without running tests
+        -
+            id: 2
+            rule: commit directly to main branch
+    prefer:
+        -
+            id: 1
+            rule: functional components over class components
+        -
+            id: 2
+            rule: TypeScript over JavaScript for new files
+        -
+            id: 3
+            rule: descriptive variable names over comments
 columns:
-  - id: todo
-    tasks: []
+    -
+        id: todo
+        title: To Do
+        tasks:
+            -
+                id: task-2
+                title: Design dashboard UI
+                description: Create responsive dashboard layout with charts and widgets
+                priority: high
+                assignee: bob
+                tags:
+                    - frontend
+                    - ui
+                    - design
+            -
+                id: task-3
+                title: Write API documentation
+                description: Document all REST endpoints with examples
+                priority: medium
+                assignee: charlie
+                tags:
+                    - docs
+                    - api
+            -
+                id: task-1
+                title: Implement user authentication
+                description: Add JWT-based authentication system with refresh tokens
+                priority: critical
+                assignee: alice
+                tags:
+                    - backend
+                    - security
+                    - auth
+    -
+        id: in-progress
+        title: In Progress
+        tasks:
+            -
+                id: task-4
+                title: Database Schema Design
+                description: |-
+                    * Define tables and relationships
+                    * Document constraints
+                    * Create migration scripts
+                priority: high
+                assignee: david
+                tags:
+                    - backend
+                    - database
+            -
+                id: task-5
+                title: Optimize image loading
+                description: Implement lazy loading for gallery images
+                priority: medium
+                assignee: bob
+                tags:
+                    - frontend
+                    - performance
+                    - optimization
+    -
+        id: review
+        title: Review
+        tasks:
+            -
+                id: task-6
+                title: Refactor user service
+                description: Clean up user service code and improve error handling
+                priority: low
+                assignee: alice
+                tags:
+                    - backend
+                    - refactoring
+            -
+                id: task-7
+                title: Update dependencies
+                description: Upgrade all npm packages to latest stable versions
+                priority: low
+                assignee: charlie
+                tags:
+                    - maintenance
+                    - dependencies
+    -
+        id: done
+        title: Done
+        tasks:
+            -
+                id: task-8
+                title: Project Setup
+                description: Initialize repository and configure development environment
+                priority: high
+                tags:
+                    - setup
+                    - devops
+            -
+                id: task-9
+                title: CI Pipeline
+                description: Set up continuous integration workflow with GitHub Actions
+                priority: high
+                assignee: david
+                tags:
+                    - devops
+                    - ci-cd
+                    - automation
+            -
+                id: task-10
+                title: Implement dark mode
+                description: Add dark theme support with system preference detection
+                priority: medium
+                assignee: bob
+                tags:
+                    - frontend
+                    - ui
+                    - theme
 ---
+
 ```
-
-This is the absolute minimum valid brainfile.
-
----
-
-## Appendix B: Complete Maximal Example
-
-See Example 4 in section 11 for a comprehensive example with all features.
-
----
-
-## Appendix C: Quick Reference Card
-
-**File Format**: YAML + Markdown
-**Schema**: https://brainfile.md/v1
-**Required**: schema, columns (with id, title, tasks)
-**Task Required**: id, title
-
-**Priority**: low | medium | high | critical
-**Status**: todo | in-progress | done | blocked
-
-**CLI Commands**:
-- `brainfile init` - Create new
-- `brainfile list` - View tasks
-- `brainfile add` - Add task
-- `brainfile move` - Move task
-- `brainfile lint` - Validate
-
-**Agent Rules**:
-1. Modify only YAML frontmatter
-2. Preserve all IDs
-3. Keep ordering
-4. Make minimal changes
 
 ---
 
 ## Support & Resources
 
 - **Website**: https://brainfile.md
+- **Quick Reference**: https://brainfile.md/llms.txt
 - **Schema**: https://brainfile.md/v1
 - **GitHub**: https://github.com/brainfile
 - **Issues**: https://github.com/brainfile/protocol/issues
@@ -1265,5 +2883,4 @@ See Example 4 in section 11 for a comprehensive example with all features.
 ---
 
 End of Complete Reference
-
-For a shorter quick start guide, see: https://brainfile.md/llms.txt
+Auto-generated from markdown documentation
