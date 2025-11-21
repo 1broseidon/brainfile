@@ -150,7 +150,7 @@ describe('lint command', () => {
 
       const output = consoleOutput.join('\n');
       expect(output).toContain('Warning');
-      expect(output).toContain('Duplicate column ID');
+      expect(output).toContain('Duplicate column detected');
       expect(output).toContain('todo');
       mockExit.mockRestore();
     });
@@ -207,5 +207,6 @@ describe('lint command', () => {
     });
   });
 });
+
 
 

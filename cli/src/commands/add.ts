@@ -27,6 +27,9 @@ export function addCommand(options: AddOptions) {
     // Check if file exists
     if (!fs.existsSync(filePath)) {
       console.error(chalk.red(`Error: File not found: ${filePath}`));
+      console.log('');
+      console.log(chalk.gray('To create a new brainfile, run:'));
+      console.log(chalk.cyan('  brainfile init'));
       process.exit(1);
     }
 

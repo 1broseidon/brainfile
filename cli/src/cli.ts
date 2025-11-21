@@ -1,20 +1,35 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { listCommand } from './commands/list';
 import { addCommand } from './commands/add';
 import { moveCommand } from './commands/move';
 import { templateCommand } from './commands/template';
 import { lintCommand } from './commands/lint';
+import { initCommand } from './commands/init';
+
+// Read version from package.json
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, '..', 'package.json'), 'utf8')
+);
 
 const program = new Command();
 
 program
   .name('brainfile')
   .description('Command-line interface for Brainfile task management')
-  .version('0.1.0');
+  .version(packageJson.version);
 
 // Register commands
+program
+  .command('init')
+  .description('Initialize a new brainfile.md in the current directory')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .option('--force', 'Overwrite existing file')
+  .action(initCommand);
+
 program
   .command('list')
   .description('List all tasks from brainfile.md')
