@@ -44,6 +44,35 @@ Add these instructions to your agent configuration file (`AGENTS.md`, `CLAUDE.md
 
 **Recommended**: Keep only these minimal instructions in your agent config file, and use `brainfile.md` for project-specific rules and context. This keeps agent instructions clean and portable across projects.
 
+## Quick Start
+
+### Step 1: Copy the Example
+
+Download the fully-featured example:
+
+```bash
+curl -o brainfile.md https://raw.githubusercontent.com/brainfile/protocol/main/example/brainfile.md
+```
+
+This includes multiple columns, tasks with metadata, project rules, and AI agent instructions.
+
+**Alternative**: Use the [CLI tool](https://github.com/brainfile/cli) to initialize a minimal brainfile:
+
+```bash
+npm install -g @brainfile/cli
+brainfile init
+```
+
+### Step 2: Integrate with Your AI Agent
+
+Add the instructions above to your `AGENTS.md`, `CLAUDE.md`, or `.cursorrules` file. That's it.
+
+Optional: Add this comment to your README to auto-load the board:
+
+```markdown
+<!-- load:brainfile.md -->
+```
+
 ## Documentation
 
 Complete documentation is available at **[brainfile.md](https://brainfile.md)**

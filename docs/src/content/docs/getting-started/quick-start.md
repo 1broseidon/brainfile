@@ -28,6 +28,34 @@ npm install @brainfile/core
 
 ## Create Your First Brainfile
 
+### Option 1: Copy the Example (Recommended for AI Integration)
+
+Download the fully-featured example from the repository:
+
+```bash
+curl -o brainfile.md https://raw.githubusercontent.com/brainfile/protocol/main/example/brainfile.md
+```
+
+This example includes:
+- Multiple columns (todo, in-progress, review, done)
+- Tasks with various metadata (priority, tags, assignee, description)
+- Project rules (always, never, prefer)
+- AI agent instructions
+- Custom stats configuration
+
+### Option 2: Use the CLI
+
+Initialize a new brainfile in your project:
+
+```bash
+npm install -g @brainfile/cli
+brainfile init
+```
+
+This creates a minimal `brainfile.md` with basic structure.
+
+### Option 3: Create Manually
+
 Create a file named `brainfile.md` in your project root:
 
 ```yaml
@@ -134,29 +162,35 @@ fs.writeFileSync('brainfile.md', output);
 
 ## Working with AI Agents
 
-Add explicit instructions for AI agents:
+### Step 1: Add Agent Configuration
 
-```yaml
----
-schema: https://brainfile.md/v1
-title: My Project
-agent:
-  instructions:
-    - Modify only the YAML frontmatter
-    - Preserve all IDs
-    - Keep ordering
-    - Make minimal changes
-  llmNotes: "Prefer functional patterns and comprehensive tests"
-columns:
-  - id: todo
-    title: To Do
-    tasks: []
----
+Add these instructions to your agent configuration file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.):
+
+```markdown
+# Task Management Rules
+
+- review and follow rules in @brainfile.md
+- update task status in @brainfile.md as you work (todo → in-progress → done)
+- reference `schema` in the file for how to create tasks
+- your existing tools do not modify this file, you need to edit it directly
 ```
+
+**Recommended**: Keep only these minimal instructions in your agent config file, and use `brainfile.md` for project-specific rules and context.
+
+### Step 2: Optional README Integration
+
+Add this comment to your README to auto-load the board for AI assistants:
+
+```markdown
+<!-- load:brainfile.md -->
+```
+
+Now when AI agents read your README, they automatically understand your project's task context.
 
 AI agents that support Brainfile will:
 - Automatically detect and load your board
-- Follow the specified instructions
+- Follow the instructions in both your agent config and the `brainfile.md` agent block
+- Update task status as they work
 - Validate changes against the schema
 - Preserve your task structure
 
@@ -281,9 +315,8 @@ jobs:
 
 ## Examples
 
-See real-world examples:
-- [Simple Project](https://github.com/brainfile/protocol/blob/main/example/brainfile.md)
-- [Complex Board](https://github.com/brainfile/protocol/blob/main/example/bangbang.md)
+See a fully-featured example:
+- [Example Project Board](https://github.com/brainfile/protocol/blob/main/example/brainfile.md) - Complete board with rules, multiple columns, and various task metadata
 
 ## Need Help?
 
