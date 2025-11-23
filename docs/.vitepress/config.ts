@@ -24,7 +24,7 @@ export default defineConfig({
       {
         name: 'serve-v1-json',
         configureServer(server) {
-          server.middlewares.use('/v1', (req, res) => {
+          server.middlewares.use('/v1', (_req, res) => {
             const jsonPath = path.resolve(__dirname, '../../v1.json')
             const content = fs.readFileSync(jsonPath, 'utf-8')
             res.setHeader('Content-Type', 'application/json')
@@ -36,7 +36,7 @@ export default defineConfig({
           const content = fs.readFileSync(jsonPath, 'utf-8')
           this.emitFile({
             type: 'asset',
-            fileName: 'v1',
+            fileName: 'v1.json',
             source: content,
           })
         },
