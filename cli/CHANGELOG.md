@@ -19,6 +19,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.5.0] - 2025-11-22
+
+### Added
+- **Terminal UI (TUI)** - Interactive split-terminal friendly task board
+  - `brainfile` or `brainfile tui` launches the TUI
+  - `brainfile <file>` opens TUI with a specific brainfile
+  - Real-time file watching with auto-refresh on changes
+  - Column navigation with TAB key
+  - Task navigation with j/k or arrow keys
+  - Expand/collapse task details with Enter
+  - Search/filter with `/` key
+  - Help overlay with `?` key
+  - Progress bar showing completion percentage
+  - Column ordering by `order` property (matches VSCode extension)
+  - True black dark mode color scheme
+  - Inverse selection highlighting for clarity
+  - Responsive layout that adapts to terminal size
+
+### Changed
+- Updated @brainfile/core to ^0.4.1 for column ordering support
+
+### Dependencies
+- Added ink ^3.2.0 for React-based terminal UI
+- Added chokidar ^4.0.3 for file watching
+- Added react ^17.0.2 for ink compatibility
+
 ## [0.4.3] - 2025-11-21
 
 ### Fixed

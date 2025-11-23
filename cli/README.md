@@ -55,22 +55,51 @@ npx @brainfile/cli add --title "New task"
 
 2. **Create a brainfile.md** in your project (or use an existing one)
 
-3. **List your tasks:**
+3. **Launch the TUI:**
    ```bash
-   brainfile list
+   brainfile
    ```
 
-4. **Add a new task:**
+4. **Or use CLI commands:**
    ```bash
-   brainfile add --title "My first task" --priority high
-   ```
-
-5. **Move a task:**
-   ```bash
-   brainfile move --task task-123 --column done
+   brainfile list                              # List tasks
+   brainfile add --title "My first task"      # Add a task
+   brainfile move --task task-123 --column done  # Move a task
    ```
 
 ## Usage
+
+### Terminal UI (TUI)
+
+Launch an interactive task board in your terminal:
+
+```bash
+# Open TUI with default brainfile.md
+brainfile
+
+# Open TUI with a specific file
+brainfile ./project/brainfile.md
+
+# Or use the explicit command
+brainfile tui --file brainfile.md
+```
+
+**Keyboard Controls:**
+- `TAB` / `Shift+TAB` - Navigate between columns
+- `j` / `k` or `↑` / `↓` - Navigate tasks
+- `Enter` - Expand/collapse task details
+- `/` - Search/filter tasks
+- `?` - Show help overlay
+- `r` - Refresh from file
+- `q` or `Ctrl+C` - Exit
+
+**Features:**
+- Real-time file watching with auto-refresh
+- Progress bar showing completion percentage
+- Column ordering by `order` property
+- Subtask progress indicators
+- Related files display
+- True black dark mode color scheme
 
 ### List Tasks
 
@@ -400,6 +429,7 @@ Task IDs are automatically generated with a timestamp and random string to ensur
 ## Roadmap
 
 ### Completed ✓
+- `brainfile` / `brainfile tui` - Interactive terminal UI
 - `brainfile list` - List and filter tasks
 - `brainfile add` - Create new tasks
 - `brainfile move` - Move tasks between columns
@@ -412,7 +442,7 @@ Task IDs are automatically generated with a timestamp and random string to ensur
 ### Future Enhancements
 - `brainfile update` - Update existing tasks
 - `brainfile delete` - Remove tasks
-- Interactive mode for task creation (see `task-5` in brainfile.md)
+- TUI write mode (edit tasks directly in TUI)
 - Advanced filtering and search
 - Task completion tracking
 - Subtask management

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { listCommand } from './commands/list';
 import { addCommand } from './commands/add';
@@ -9,6 +9,7 @@ import { moveCommand } from './commands/move';
 import { templateCommand } from './commands/template';
 import { lintCommand } from './commands/lint';
 import { initCommand } from './commands/init';
+import { tuiCommand } from './commands/tui';
 import {
   afterEditCommand,
   beforePromptCommand,
@@ -23,11 +24,53 @@ const packageJson = JSON.parse(
   readFileSync(join(__dirname, '..', 'package.json'), 'utf8')
 );
 
+// Known subcommands to distinguish from file paths
+const SUBCOMMANDS = ['init', 'list', 'add', 'move', 'template', 'lint', 'tui', 'hooks', 'help'];
+
+// Check if first arg looks like a file path (not a subcommand or flag)
+function shouldLaunchTUI(): { launch: boolean; file: string } {
+  const args = process.argv.slice(2);
+
+  // No args → TUI with default file
+  if (args.length === 0) {
+    return { launch: true, file: 'brainfile.md' };
+  }
+
+  const firstArg = args[0];
+
+  // If first arg is a flag, let commander handle it
+  if (firstArg.startsWith('-')) {
+    // Handle -f/--file flag for TUI
+    if (args.length >= 2 && (firstArg === '-f' || firstArg === '--file')) {
+      return { launch: true, file: args[1] };
+    }
+    return { launch: false, file: '' };
+  }
+
+  // If first arg is a known subcommand, don't launch TUI
+  if (SUBCOMMANDS.includes(firstArg)) {
+    return { launch: false, file: '' };
+  }
+
+  // If first arg looks like a file path (contains . or / or exists), launch TUI with it
+  if (firstArg.includes('.') || firstArg.includes('/') || existsSync(firstArg)) {
+    return { launch: true, file: firstArg };
+  }
+
+  // Otherwise let commander handle it (will show help for unknown command)
+  return { launch: false, file: '' };
+}
+
+const tuiCheck = shouldLaunchTUI();
+if (tuiCheck.launch) {
+  tuiCommand({ file: tuiCheck.file });
+} else {
+
 const program = new Command();
 
 program
   .name('brainfile')
-  .description('Command-line interface for Brainfile task management')
+  .description('Command-line interface for Brainfile task management\n\nUsage:\n  brainfile [file]        Open TUI (default: brainfile.md)\n  brainfile <command>     Run CLI command')
   .version(packageJson.version);
 
 // Register commands
@@ -84,6 +127,12 @@ program
   .option('--check', 'Exit with error code if issues found (for CI/CD)')
   .action(lintCommand);
 
+program
+  .command('tui')
+  .description('Launch interactive Terminal UI for task management')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .action(tuiCommand);
+
 // Add hooks command group
 const hooksCommand = program
   .command('hooks')
@@ -122,3 +171,5 @@ hooksCommand
   .action((tool) => hooksListCommand({ tool }));
 
 program.parse();
+
+} // end else block for CLI commands
