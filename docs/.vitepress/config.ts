@@ -1,4 +1,6 @@
 import { defineConfig } from 'vitepress'
+import fs from 'fs'
+import path from 'path'
 
 export default defineConfig({
   title: 'Brainfile',
@@ -18,6 +20,28 @@ export default defineConfig({
         interval: 1000,
       },
     },
+    plugins: [
+      {
+        name: 'serve-v1-json',
+        configureServer(server) {
+          server.middlewares.use('/v1', (req, res) => {
+            const jsonPath = path.resolve(__dirname, '../../v1.json')
+            const content = fs.readFileSync(jsonPath, 'utf-8')
+            res.setHeader('Content-Type', 'application/json')
+            res.end(content)
+          })
+        },
+        generateBundle() {
+          const jsonPath = path.resolve(__dirname, '../../v1.json')
+          const content = fs.readFileSync(jsonPath, 'utf-8')
+          this.emitFile({
+            type: 'asset',
+            fileName: 'v1',
+            source: content,
+          })
+        },
+      },
+    ],
   },
 
   themeConfig: {
