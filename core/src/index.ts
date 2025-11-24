@@ -48,6 +48,50 @@ export {
   getAllTemplateIds
 } from './templates';
 
+// Export board operations
+export {
+  type BoardOperationResult,
+  moveTask,
+  addTask,
+  updateTask,
+  deleteTask,
+  toggleSubtask,
+  updateBoardTitle,
+  updateStatsConfig,
+  archiveTask,
+  restoreTask
+} from './operations';
+
+// Export query functions
+export {
+  findColumnById,
+  findColumnByName,
+  findTaskById,
+  taskIdExists,
+  getAllTasks,
+  getTasksByTag,
+  getTasksByPriority,
+  getTasksByAssignee,
+  searchTasks,
+  getColumnTaskCount,
+  getTotalTaskCount,
+  columnExists,
+  getTasksWithIncompleteSubtasks,
+  getOverdueTasks
+} from './query';
+
+// Export ID generation utilities
+export {
+  extractTaskIdNumber,
+  getMaxTaskIdNumber,
+  generateNextTaskId,
+  generateSubtaskId as generateSubtaskIdFromIndex,
+  generateNextSubtaskId,
+  isValidTaskId,
+  isValidSubtaskId,
+  getParentTaskId
+} from './idGen';
+
 // Re-export commonly used interfaces for convenience
 export type {
   Board,
