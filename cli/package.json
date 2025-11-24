@@ -1,6 +1,6 @@
 {
   "name": "@brainfile/cli",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Command-line interface for Brainfile task management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
