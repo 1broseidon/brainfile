@@ -72,27 +72,31 @@ describe('inferRenderer', () => {
     expect(inferRenderer('board', data, schemaHints)).toBe(RendererType.TIMELINE);
   });
 
-  it('should map official board type to kanban renderer', () => {
+  it('should infer kanban from columns structure (official board type)', () => {
     const data = { columns: [] };
     expect(inferRenderer(BrainfileType.BOARD, data)).toBe(RendererType.KANBAN);
   });
 
-  it('should map official journal type to timeline renderer', () => {
-    const data = { entries: [] };
+  it('should infer timeline from entries with timestamps (official journal type)', () => {
+    const data = {
+      entries: [{ id: '1', createdAt: '2024-01-01T00:00:00Z' }]
+    };
     expect(inferRenderer(BrainfileType.JOURNAL, data)).toBe(RendererType.TIMELINE);
   });
 
-  it('should map official collection type to grouped-list renderer', () => {
+  it('should infer grouped-list from categories structure (official collection type)', () => {
     const data = { categories: [] };
     expect(inferRenderer(BrainfileType.COLLECTION, data)).toBe(RendererType.GROUPED_LIST);
   });
 
-  it('should map official checklist type to checklist renderer', () => {
-    const data = { items: [] };
+  it('should infer checklist from items with completed (official checklist type)', () => {
+    const data = {
+      items: [{ id: '1', completed: false }]
+    };
     expect(inferRenderer(BrainfileType.CHECKLIST, data)).toBe(RendererType.CHECKLIST);
   });
 
-  it('should map official document type to document renderer', () => {
+  it('should infer document from sections structure (official document type)', () => {
     const data = { sections: [] };
     expect(inferRenderer(BrainfileType.DOCUMENT, data)).toBe(RendererType.DOCUMENT);
   });
@@ -119,6 +123,20 @@ describe('inferRenderer', () => {
   it('should default to tree view for unknown types', () => {
     const data = { customField: 'value' };
     expect(inferRenderer('unknown-type', data)).toBe(RendererType.TREE);
+  });
+
+  it('should treat custom types identically to official types with same structure', () => {
+    // Custom "sprint-board" with columns → kanban (same as official "board")
+    const sprintBoard = { columns: [] };
+    expect(inferRenderer('sprint-board', sprintBoard)).toBe(RendererType.KANBAN);
+    expect(inferRenderer(BrainfileType.BOARD, sprintBoard)).toBe(RendererType.KANBAN);
+
+    // Custom "dev-log" with entries → timeline (same as official "journal")
+    const devLog = { entries: [{ id: '1', createdAt: '2024-01-01' }] };
+    expect(inferRenderer('dev-log', devLog)).toBe(RendererType.TIMELINE);
+    expect(inferRenderer(BrainfileType.JOURNAL, devLog)).toBe(RendererType.TIMELINE);
+
+    // Type name is informational only - structure determines renderer
   });
 });
 

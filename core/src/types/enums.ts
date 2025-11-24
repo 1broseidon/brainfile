@@ -4,9 +4,16 @@
  */
 
 /**
- * Official brainfile types
- * Note: The type system is OPEN - any string value is valid for custom types.
- * This enum only defines the official types hosted at brainfile.md/v1/*.json
+ * Example brainfile type names
+ *
+ * IMPORTANT: The type system is OPEN - any string value is valid.
+ * These are just reference examples from official schemas at brainfile.md/v1/*.json
+ *
+ * Custom types work identically:
+ * - 'sprint-board' with columns[] → kanban renderer (same as 'board')
+ * - 'dev-log' with entries[] → timeline renderer (same as 'journal')
+ *
+ * Type names are metadata only. Structure determines behavior.
  */
 export enum BrainfileType {
   BOARD = 'board',
@@ -18,7 +25,13 @@ export enum BrainfileType {
 
 /**
  * Renderer types for displaying brainfiles
- * Tools use structural inference + schema hints to select the appropriate renderer
+ *
+ * Renderers are selected by:
+ * 1. Schema hints (x-brainfile-renderer) - explicit override
+ * 2. Structural patterns - detect from data shape
+ * 3. Fallback to tree view
+ *
+ * No special treatment for official types - everyone uses structural inference.
  */
 export enum RendererType {
   /** Kanban board with columns and draggable cards */
@@ -34,14 +47,3 @@ export enum RendererType {
   /** Generic tree view (fallback for unknown types) */
   TREE = 'tree'
 }
-
-/**
- * Mapping of official types to their default renderers
- */
-export const TYPE_TO_RENDERER: Record<BrainfileType, RendererType> = {
-  [BrainfileType.BOARD]: RendererType.KANBAN,
-  [BrainfileType.JOURNAL]: RendererType.TIMELINE,
-  [BrainfileType.COLLECTION]: RendererType.GROUPED_LIST,
-  [BrainfileType.CHECKLIST]: RendererType.CHECKLIST,
-  [BrainfileType.DOCUMENT]: RendererType.DOCUMENT
-};

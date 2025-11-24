@@ -3,7 +3,7 @@
  * @packageDocumentation
  */
 
-import { BrainfileType, RendererType, TYPE_TO_RENDERER } from './types/enums';
+import { BrainfileType, RendererType } from './types/enums';
 import { Board } from './types/board';
 import { Journal } from './types/journal';
 
@@ -97,13 +97,15 @@ function detectTypeFromStructure(data: any): string | null {
 /**
  * Infer renderer type from brainfile data and schema hints
  *
- * Priority order:
- * 1. Schema hint (x-brainfile-renderer in loaded schema)
- * 2. Type mapping (official types → default renderers)
- * 3. Structural pattern matching
- * 4. Fallback to tree view
+ * Pure structural inference - no special treatment for official types.
+ * Custom types with identical structure render identically.
  *
- * @param type - The brainfile type (from inferType)
+ * Priority order:
+ * 1. Schema hint (x-brainfile-renderer in loaded schema) - explicit override
+ * 2. Structural pattern matching - detect from data shape
+ * 3. Fallback to tree view
+ *
+ * @param type - The brainfile type (informational only, not used for inference)
  * @param data - Parsed frontmatter data for structural analysis
  * @param schemaHints - Optional schema hints from loaded schema
  * @returns The inferred renderer type
@@ -113,31 +115,19 @@ export function inferRenderer(
   data: any,
   schemaHints?: SchemaHints
 ): RendererType {
-  // 1. Schema hint
+  // 1. Schema hint (explicit override)
   if (schemaHints?.renderer) {
     return schemaHints.renderer as RendererType;
   }
 
-  // 2. Type mapping for official types
-  if (isOfficialType(type)) {
-    return TYPE_TO_RENDERER[type as BrainfileType];
-  }
-
-  // 3. Structural pattern matching
+  // 2. Structural pattern matching (universal code path)
   const rendererFromStructure = detectRendererFromStructure(data);
   if (rendererFromStructure) {
     return rendererFromStructure;
   }
 
-  // 4. Fallback
+  // 3. Fallback
   return RendererType.TREE;
-}
-
-/**
- * Check if a type string is an official brainfile type
- */
-function isOfficialType(type: string): type is BrainfileType {
-  return Object.values(BrainfileType).includes(type as BrainfileType);
 }
 
 /**
