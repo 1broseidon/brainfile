@@ -3,129 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brainfile v1 Schema Directory</title>
+    <title>v1 Schema Directory | Brainfile</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --c-bg: #ffffff;
+            --c-bg-soft: #f6f6f7;
+            --c-text: #213547;
+            --c-text-2: #476582;
+            --c-text-3: #90a4ae;
+            --c-divider: rgba(60, 60, 67, 0.12);
+            --c-brand: #646cff;
+            --c-green: #10b981;
+            --c-yellow: #d97706;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --c-bg: #1a1a1a;
+                --c-bg-soft: #242424;
+                --c-text: rgba(255, 255, 255, 0.87);
+                --c-text-2: rgba(255, 255, 255, 0.6);
+                --c-text-3: rgba(255, 255, 255, 0.38);
+                --c-divider: rgba(84, 84, 84, 0.48);
+            }
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 900px;
-            margin: 40px auto;
-            padding: 0 20px;
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--c-bg);
+            color: var(--c-text);
             line-height: 1.6;
-            color: #333;
         }
-        h1 { border-bottom: 2px solid #333; padding-bottom: 10px; }
-        h2 { margin-top: 30px; color: #555; }
-        .schema-card {
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 15px;
-            margin: 15px 0;
-            background: #f9f9f9;
+        .container {
+            max-width: 688px;
+            margin: 0 auto;
+            padding: 64px 24px;
         }
-        .schema-card h3 { margin-top: 0; color: #0066cc; }
-        .schema-card code {
-            background: #fff;
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-size: 0.9em;
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: var(--c-text-2);
+            margin-bottom: 48px;
+        }
+        .subtitle a { color: var(--c-brand); text-decoration: none; }
+        .subtitle a:hover { text-decoration: underline; }
+        h2 {
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--c-text-3);
+            margin: 48px 0 16px;
+        }
+        .list { display: flex; flex-direction: column; gap: 1px; background: var(--c-divider); border-radius: 8px; overflow: hidden; }
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: var(--c-bg-soft);
+        }
+        .item-main { flex: 1; }
+        .item-title {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .item-desc {
+            font-size: 14px;
+            color: var(--c-text-2);
+            margin-top: 2px;
         }
         .badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 0.8em;
-            font-weight: 600;
-            margin-left: 8px;
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
         }
-        .badge-stable { background: #28a745; color: white; }
-        .badge-planned { background: #ffc107; color: #333; }
-        a { color: #0066cc; text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        .note {
-            background: #e7f3ff;
-            border-left: 4px solid #0066cc;
-            padding: 12px;
-            margin: 20px 0;
+        .badge-stable { background: rgba(16, 185, 129, 0.15); color: var(--c-green); }
+        .badge-planned { background: rgba(217, 119, 6, 0.15); color: var(--c-yellow); }
+        code {
+            font-family: ui-monospace, monospace;
+            font-size: 13px;
+            background: var(--c-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
         }
+        .meta { font-size: 13px; color: var(--c-text-3); margin-top: 4px; }
+        .meta a { color: var(--c-brand); text-decoration: none; }
+        .meta a:hover { text-decoration: underline; }
+        .links { display: flex; flex-direction: column; gap: 8px; }
+        .links a {
+            color: var(--c-text-2);
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .links a:hover { color: var(--c-brand); }
+        .tip {
+            font-size: 14px;
+            color: var(--c-text-2);
+            padding: 12px 16px;
+            background: var(--c-bg-soft);
+            border-radius: 6px;
+            margin-bottom: 32px;
+        }
+        .tip a { color: var(--c-brand); text-decoration: none; }
     </style>
 </head>
 <body>
-    <h1>📋 Brainfile v1 Schema Directory</h1>
+    <div class="container">
+        <h1>v1 Schema Directory</h1>
+        <p class="subtitle">Official schemas for <a href="https://brainfile.md">Brainfile</a></p>
 
-    <p>Official schemas for the <a href="https://brainfile.md">Brainfile protocol</a> - a markdown-based task description language with AI agent support.</p>
+        <div class="tip">
+            Programmatic access: <a href="/v1/index.json"><code>GET /v1/index.json</code></a>
+        </div>
 
-    <div class="note">
-        <strong>For programmatic access:</strong> <a href="index.json">GET /v1/index.json</a> returns structured metadata.
+        <h2>Schemas</h2>
+        <div class="list">
+            <div class="item">
+                <div class="item-main">
+                    <div class="item-title">base.json <span class="badge badge-stable">stable</span></div>
+                    <div class="item-desc">Shared fields for all types</div>
+                    <div class="meta"><code>https://brainfile.md/v1/base.json</code></div>
+                </div>
+            </div>
+            <div class="item">
+                <div class="item-main">
+                    <div class="item-title">board.json <span class="badge badge-stable">stable</span></div>
+                    <div class="item-desc">Kanban boards with columns and tasks</div>
+                    <div class="meta"><code>https://brainfile.md/v1/board.json</code> &middot; <a href="/example/board.md">example</a></div>
+                </div>
+            </div>
+            <div class="item">
+                <div class="item-main">
+                    <div class="item-title">journal.json <span class="badge badge-stable">stable</span></div>
+                    <div class="item-desc">Time-ordered entries with timestamps</div>
+                    <div class="meta"><code>https://brainfile.md/v1/journal.json</code> &middot; <a href="/example/journal.md">example</a></div>
+                </div>
+            </div>
+            <div class="item">
+                <div class="item-main">
+                    <div class="item-title">collection.json <span class="badge badge-planned">planned</span></div>
+                    <div class="item-desc">Curated resources with categories</div>
+                </div>
+            </div>
+            <div class="item">
+                <div class="item-main">
+                    <div class="item-title">checklist.json <span class="badge badge-planned">planned</span></div>
+                    <div class="item-desc">Ordered lists with completion tracking</div>
+                </div>
+            </div>
+            <div class="item">
+                <div class="item-main">
+                    <div class="item-title">document.json <span class="badge badge-planned">planned</span></div>
+                    <div class="item-desc">Structured documents with sections</div>
+                </div>
+            </div>
+        </div>
+
+        <h2>Links</h2>
+        <div class="links">
+            <a href="https://brainfile.md/protocol/specification">Documentation</a>
+            <a href="https://github.com/brainfile/protocol">GitHub</a>
+            <a href="https://www.npmjs.com/package/@brainfile/core">npm</a>
+        </div>
     </div>
-
-    <h2>Official Types</h2>
-
-    <div class="schema-card">
-        <h3>📦 Base Schema <span class="badge badge-stable">STABLE</span></h3>
-        <p>Shared fields across all brainfile types (type, schema, agent, rules, timestamps)</p>
-        <p><strong>URL:</strong> <code>https://brainfile.md/v1/base.json</code></p>
-        <p><strong>Required:</strong> <code>title</code></p>
-    </div>
-
-    <div class="schema-card">
-        <h3>📋 Board Schema <span class="badge badge-stable">STABLE</span></h3>
-        <p>Kanban-style task boards with columns and tasks. Uses <code>kanban</code> renderer.</p>
-        <p><strong>URL:</strong> <code>https://brainfile.md/v1/board.json</code></p>
-        <p><strong>Required:</strong> <code>columns[]</code></p>
-        <p><strong>Example:</strong> <a href="../example/board.md">board.md</a></p>
-    </div>
-
-    <div class="schema-card">
-        <h3>📓 Journal Schema <span class="badge badge-stable">STABLE</span></h3>
-        <p>Time-ordered journal entries with timestamps. Uses <code>timeline</code> renderer.</p>
-        <p><strong>URL:</strong> <code>https://brainfile.md/v1/journal.json</code></p>
-        <p><strong>Required:</strong> <code>entries[]</code></p>
-        <p><strong>Example:</strong> <a href="../example/journal.md">journal.md</a></p>
-    </div>
-
-    <div class="schema-card">
-        <h3>📚 Collection Schema <span class="badge badge-planned">PLANNED</span></h3>
-        <p>Curated collections of resources with categories. Uses <code>grouped-list</code> renderer.</p>
-        <p><strong>URL:</strong> <code>https://brainfile.md/v1/collection.json</code></p>
-        <p><strong>Required:</strong> <code>categories[]</code></p>
-    </div>
-
-    <div class="schema-card">
-        <h3>✅ Checklist Schema <span class="badge badge-planned">PLANNED</span></h3>
-        <p>Flat, ordered checklists with completion tracking. Uses <code>checklist</code> renderer.</p>
-        <p><strong>URL:</strong> <code>https://brainfile.md/v1/checklist.json</code></p>
-        <p><strong>Required:</strong> <code>items[]</code> with <code>completed</code> boolean</p>
-    </div>
-
-    <div class="schema-card">
-        <h3>📄 Document Schema <span class="badge badge-planned">PLANNED</span></h3>
-        <p>Structured documents with sections (RFCs, specs). Uses <code>document</code> renderer.</p>
-        <p><strong>URL:</strong> <code>https://brainfile.md/v1/document.json</code></p>
-        <p><strong>Required:</strong> <code>sections[]</code></p>
-    </div>
-
-    <h2>Custom Types</h2>
-    <p>Community types are fully supported! Just extend <code>base.json</code> and provide a schema URL:</p>
-    <pre><code>---
-type: sprint-board
-schema: https://mycompany.com/schemas/sprint-board.json
-title: Q1 Sprint Planning
----</code></pre>
-
-    <h2>Renderer Inference</h2>
-    <p>Tools automatically detect how to render data using:</p>
-    <ul>
-        <li><strong>Schema hints</strong> - <code>x-brainfile-renderer</code> in schema</li>
-        <li><strong>Structural patterns</strong> - Detect <code>columns[]</code>, <code>entries[]</code>, etc.</li>
-        <li><strong>Fallback</strong> - Generic tree view for unknown types</li>
-    </ul>
-
-    <h2>Links</h2>
-    <ul>
-        <li><a href="https://brainfile.md/protocol/">Documentation</a></li>
-        <li><a href="https://github.com/brainfile/protocol">GitHub Repository</a></li>
-        <li><a href="https://www.npmjs.com/package/@brainfile/core">@brainfile/core (npm)</a></li>
-        <li><a href="README.md">Technical README</a></li>
-    </ul>
 </body>
 </html>
