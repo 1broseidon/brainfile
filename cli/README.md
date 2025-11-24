@@ -408,6 +408,36 @@ brainfile hooks install claude-code  # or cursor, or cline
 brainfile hooks list
 ```
 
+## Technical Details
+
+### Realtime Sync (powered by @brainfile/core)
+
+The TUI uses shared utilities from `@brainfile/core` for efficient real-time updates:
+
+```typescript
+import { hashBoardContent, diffBoards, BoardDiff } from "@brainfile/core";
+
+// Skip redundant refreshes when file is saved but content unchanged
+const newHash = hashBoardContent(content);
+if (newHash === lastKnownHash) {
+  return; // No changes, skip re-render
+}
+lastKnownHash = newHash;
+
+// Compute structural diffs for smarter updates
+const diff: BoardDiff = diffBoards(previousBoard, nextBoard);
+if (diff.tasksMoved.length > 0) {
+  console.log("Tasks moved:", diff.tasksMoved);
+}
+```
+
+**Benefits:**
+- Collision-resistant SHA-256 hashing for change detection
+- Structural diffing to identify exactly what changed (tasks added/removed/moved)
+- Consistent behavior with VSCode extension and other Brainfile clients
+
+These utilities are available in `@brainfile/core@0.4.0+`. See the [API Reference](https://brainfile.md/core/api-reference#realtime-sync-utilities) for full documentation.
+
 ## Features
 
 ### Colored Output

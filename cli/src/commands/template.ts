@@ -38,7 +38,7 @@ export function templateCommand(options: TemplateOptions) {
         console.log('');
       });
 
-      console.log(chalk.gray('Usage: bangbang template --use <template-id> --title "Task title"'));
+      console.log(chalk.gray('Usage: brainfile template --use <template-id> --title "Task title"'));
       return;
     }
 

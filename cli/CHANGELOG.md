@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.5.1] - 2025-11-23
+
+### Changed
+- **TUI: Optimized file watching with hash-based deduplication**
+  - Uses `hashBoardContent` from `@brainfile/core` to skip redundant refreshes
+  - File watcher now only re-renders when content actually changes
+  - Reduces unnecessary re-renders when file is saved without changes
+  - Consistent behavior with VSCode extension's realtime sync
+- Added documentation for realtime sync utilities in README
+
 ## [0.5.0] - 2025-11-22
 
 ### Added
