@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Brainfile, Task, generateTaskId } from '@brainfile/core';
+import { Brainfile, findColumnById, findColumnByName, addTask } from '@brainfile/core';
 import chalk from 'chalk';
 
 interface AddOptions {
@@ -45,12 +45,13 @@ export function addCommand(options: AddOptions) {
       process.exit(1);
     }
 
-    const board = result.board;
+    let board = result.board;
 
-    // Find the target column
-    const targetColumn = board.columns.find(
-      col => col.id === options.column || col.title.toLowerCase() === options.column.toLowerCase()
-    );
+    // Find the target column by ID or name
+    let targetColumn = findColumnById(board, options.column);
+    if (!targetColumn) {
+      targetColumn = findColumnByName(board, options.column);
+    }
 
     if (!targetColumn) {
       console.error(chalk.red(`Error: Column not found: ${options.column}`));
@@ -61,30 +62,52 @@ export function addCommand(options: AddOptions) {
       process.exit(1);
     }
 
-    // Generate new task ID
-    const newTaskId = generateTaskId();
+    // Add task using core operation (immutable)
+    const addResult = addTask(
+      board,
+      targetColumn.id,
+      options.title,
+      options.description || ''
+    );
 
-    // Create new task
-    const newTask: Task = {
-      id: newTaskId,
-      title: options.title,
-    };
-
-    // Add optional fields
-    if (options.description) {
-      newTask.description = options.description;
+    if (!addResult.success) {
+      console.error(chalk.red(`Error: ${addResult.error}`));
+      process.exit(1);
     }
 
-    if (options.priority) {
-      newTask.priority = options.priority;
+    board = addResult.board!;
+
+    // Update optional fields if provided (need to modify the new task)
+    if (options.priority || options.tags) {
+      const newTaskId = board.columns
+        .find(col => col.id === targetColumn!.id)!
+        .tasks[board.columns.find(col => col.id === targetColumn!.id)!.tasks.length - 1]
+        .id;
+
+      // Find and update the new task with optional fields
+      board = {
+        ...board,
+        columns: board.columns.map(col => {
+          if (col.id !== targetColumn!.id) return col;
+          return {
+            ...col,
+            tasks: col.tasks.map(task => {
+              if (task.id !== newTaskId) return task;
+              return {
+                ...task,
+                ...(options.priority && { priority: options.priority }),
+                ...(options.tags && { tags: options.tags.split(',').map(t => t.trim()) })
+              };
+            })
+          };
+        })
+      };
     }
 
-    if (options.tags) {
-      newTask.tags = options.tags.split(',').map(t => t.trim());
-    }
-
-    // Add task to column
-    targetColumn.tasks.push(newTask);
+    // Get the new task for display
+    const newTask = board.columns
+      .find(col => col.id === targetColumn!.id)!
+      .tasks[board.columns.find(col => col.id === targetColumn!.id)!.tasks.length - 1];
 
     // Serialize and write back
     const updatedContent = Brainfile.serialize(board);
@@ -93,7 +116,7 @@ export function addCommand(options: AddOptions) {
     // Success message
     console.log(chalk.green('✓ Task added successfully!'));
     console.log('');
-    console.log(chalk.gray(`  ID:      ${newTaskId}`));
+    console.log(chalk.gray(`  ID:      ${newTask.id}`));
     console.log(chalk.gray(`  Title:   ${options.title}`));
     console.log(chalk.gray(`  Column:  ${targetColumn.title}`));
     if (options.priority) {

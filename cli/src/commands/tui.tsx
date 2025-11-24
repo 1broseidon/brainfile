@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { render, Box, Text, useInput, useApp, useStdout } from 'ink';
-import { Brainfile, Board, Task } from '@brainfile/core';
+import { Brainfile, Board, Task, hashBoardContent } from '@brainfile/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as chokidar from 'chokidar';
@@ -63,6 +63,9 @@ interface AppState {
   // UI
   expandedTaskIds: Set<string>;
   reloadFlash: boolean;
+
+  // Realtime sync
+  lastContentHash: string | null;
 }
 
 const HEADER_ROWS = 7; // title(1) + progress(3: padTop+content+padBottom) + tabs(2: marginTop+content) + separator(1)
@@ -84,13 +87,21 @@ function BrainfileTUI({ filePath }: TUIProps) {
     searchQuery: '',
     expandedTaskIds: new Set(),
     reloadFlash: false,
+    lastContentHash: null,
   });
 
   const viewportHeight = Math.max(termHeight - HEADER_ROWS - FOOTER_ROWS, 5);
 
-  const loadBrainfile = useCallback(() => {
+  const loadBrainfile = useCallback((forceRefresh = false) => {
     try {
       const content = fs.readFileSync(filePath, 'utf-8');
+
+      // Skip redundant refreshes using content hash (like VSCode extension)
+      const contentHash = hashBoardContent(content);
+      if (!forceRefresh && state.lastContentHash === contentHash) {
+        return; // Content unchanged, skip re-render
+      }
+
       const result = Brainfile.parseWithErrors(content);
 
       if (result.board) {
@@ -114,6 +125,7 @@ function BrainfileTUI({ filePath }: TUIProps) {
             lastUpdated: new Date(),
             selectedTaskIndex: newSelectedIndex,
             reloadFlash: true,
+            lastContentHash: contentHash,
           };
         });
 
@@ -122,9 +134,24 @@ function BrainfileTUI({ filePath }: TUIProps) {
           setState(prev => ({ ...prev, reloadFlash: false }));
         }, 1000);
       } else {
+        // Distinguish between different error cases
+        let errorMessage: string;
+
+        if (result.data && result.type) {
+          // Valid brainfile but not a board type
+          errorMessage = `This is a '${result.type}' brainfile. The TUI currently only supports 'board' type files.`;
+        } else if (result.error) {
+          // Parse error with specific message
+          errorMessage = result.error;
+        } else {
+          // Unknown failure
+          errorMessage = 'Not a valid brainfile';
+        }
+
         setState(prev => ({
           ...prev,
-          error: result.error || 'Failed to parse brainfile',
+          error: errorMessage,
+          lastContentHash: contentHash,
         }));
       }
     } catch (err) {
@@ -133,7 +160,7 @@ function BrainfileTUI({ filePath }: TUIProps) {
         error: err instanceof Error ? err.message : String(err),
       }));
     }
-  }, [filePath]);
+  }, [filePath, state.lastContentHash]);
 
   useEffect(() => {
     loadBrainfile();
@@ -263,9 +290,9 @@ function BrainfileTUI({ filePath }: TUIProps) {
       return;
     }
 
-    // Refresh
+    // Refresh (force refresh bypasses hash check)
     if (input === 'r') {
-      loadBrainfile();
+      loadBrainfile(true);
       return;
     }
 
