@@ -13,6 +13,12 @@ export * from './types';
 // Export parser
 export { BrainfileParser, ParseResult } from './parser';
 
+// Export inference functions
+export { inferType, inferRenderer, SchemaHints } from './inference';
+
+// Export schema hints parser
+export { parseSchemaHints, loadSchemaHints } from './schemaHints';
+
 // Export serializer
 export { BrainfileSerializer, SerializeOptions } from './serializer';
 
@@ -21,6 +27,16 @@ export { BrainfileValidator, ValidationError, ValidationResult } from './validat
 
 // Export linter
 export { BrainfileLinter, LintIssue, LintResult, LintOptions } from './linter';
+
+// Export realtime helpers
+export {
+  diffBoards,
+  hashBoard,
+  hashBoardContent,
+  type BoardDiff,
+  type ColumnDiff,
+  type TaskDiff
+} from './realtime';
 
 // Export templates
 export {

@@ -19,13 +19,14 @@ npm install @brainfile/core
 - **Validate** Board objects against the Brainfile schema
 - **Templates** Built-in task templates (Bug Report, Feature Request, Refactor)
 - **Location Finding** Find tasks and rules in source files for IDE integration
+- **Realtime Sync** Shared hashing + diff utilities for live board updates
 
 ## Usage
 
 ### Quick Start
 
 ```typescript
-import { Brainfile } from '@brainfile/core';
+import { Brainfile } from "@brainfile/core";
 
 // Parse a brainfile.md file
 const markdown = `---
@@ -45,7 +46,7 @@ console.log(board.title); // "My Project"
 // Validate the board
 const validation = Brainfile.validate(board);
 if (!validation.valid) {
-  console.error('Validation errors:', validation.errors);
+  console.error("Validation errors:", validation.errors);
 }
 
 // Serialize back to markdown
@@ -56,16 +57,16 @@ console.log(output);
 ### Using Templates
 
 ```typescript
-import { Brainfile } from '@brainfile/core';
+import { Brainfile } from "@brainfile/core";
 
 // Get all built-in templates
 const templates = Brainfile.getBuiltInTemplates();
-console.log(templates.map(t => t.name)); // ['Bug Report', 'Feature Request', 'Code Refactor']
+console.log(templates.map((t) => t.name)); // ['Bug Report', 'Feature Request', 'Code Refactor']
 
 // Create a task from a template
-const bugTask = Brainfile.createFromTemplate('bug-report', {
-  title: 'Login button not working',
-  description: 'Users cannot log in to the application'
+const bugTask = Brainfile.createFromTemplate("bug-report", {
+  title: "Login button not working",
+  description: "Users cannot log in to the application",
 });
 
 console.log(bugTask);
@@ -86,32 +87,75 @@ import {
   BrainfileParser,
   BrainfileSerializer,
   BrainfileValidator,
-  Board
-} from '@brainfile/core';
+  Board,
+} from "@brainfile/core";
 
 // Parse with error details
 const parseResult = BrainfileParser.parseWithErrors(markdown);
 if (!parseResult.board) {
-  console.error('Parse error:', parseResult.error);
+  console.error("Parse error:", parseResult.error);
 }
 
 // Serialize with custom options
 const output = BrainfileSerializer.serialize(board, {
   indent: 4,
   lineWidth: 80,
-  trailingNewline: true
+  trailingNewline: true,
 });
 
 // Validate with detailed errors
 const validation = BrainfileValidator.validate(board);
-validation.errors.forEach(error => {
+validation.errors.forEach((error) => {
   console.log(`${error.path}: ${error.message}`);
 });
 
 // Find task location in source file
-const location = BrainfileParser.findTaskLocation(markdown, 'task-1');
+const location = BrainfileParser.findTaskLocation(markdown, "task-1");
 console.log(`Task found at line ${location.line}`);
 ```
+
+### Realtime Sync Utilities
+
+```typescript
+import {
+  hashBoardContent,
+  hashBoard,
+  diffBoards,
+  type BoardDiff,
+} from "@brainfile/core";
+
+// 1. Guard file watchers / save loops with a stable content hash
+const currentHash = hashBoardContent(markdownString);
+if (currentHash === lastKnownHash) {
+  return; // skip redundant refreshes
+}
+lastKnownHash = currentHash;
+
+// 2. Share board state across processes by hashing serialized structures
+const boardHash = hashBoard(boardObject); // uses BrainfileSerializer internally
+
+// 3. Compute structural diffs for incremental UI updates
+const diff: BoardDiff = diffBoards(previousBoard, nextBoard);
+if (diff.tasksMoved.length > 0) {
+  console.log("Tasks moved:", diff.tasksMoved);
+}
+```
+
+The realtime helpers were built for the VS Code extension but live in `@brainfile/core`
+so every client (CLI, Zed, JetBrains, custom bots) can:
+
+- Detect external edits with collision-resistant hashes (`hashBoardContent`)
+- Generate consistent board fingerprints across threads/workers (`hashBoard`)
+- Drive fine-grained UI updates or telemetry with `diffBoards`
+
+**Migration tips**
+
+- Replace ad-hoc `crypto` usage with `hashBoardContent` to ensure identical digests
+  across Node/electron environments.
+- Use `diffBoards` instead of manual `JSON.stringify` comparisons to avoid
+  false positives when metadata changes but tasks stay untouched.
+- Wrap realtime error handling so malformed boards fall back to last-known-good
+  state before broadcasting diffs (the helper types make this easy to model).
 
 ## API Reference
 
@@ -150,10 +194,10 @@ interface Task {
   relatedFiles?: string[];
   assignee?: string;
   tags?: string[];
-  priority?: 'low' | 'medium' | 'high' | 'critical';
+  priority?: "low" | "medium" | "high" | "critical";
   dueDate?: string;
   subtasks?: Subtask[];
-  template?: 'bug' | 'feature' | 'refactor';
+  template?: "bug" | "feature" | "refactor";
 }
 
 interface Column {
@@ -166,18 +210,21 @@ interface Column {
 ## Built-in Templates
 
 ### Bug Report
+
 - Priority: `high`
 - Tags: `['bug', 'needs-triage']`
 - Variables: `title`, `description`
 - Subtasks: 5 (reproduce, identify, fix, test, verify)
 
 ### Feature Request
+
 - Priority: `medium`
 - Tags: `['feature', 'enhancement']`
 - Variables: `title`, `description`
 - Subtasks: 6 (design, implement, unit test, integration test, docs, review)
 
 ### Code Refactor
+
 - Priority: `low`
 - Tags: `['refactor', 'technical-debt']`
 - Variables: `area`, `description`
@@ -197,12 +244,12 @@ The library provides detailed error messages for parsing and validation:
 ```typescript
 const result = Brainfile.parseWithErrors(invalidMarkdown);
 if (!result.board) {
-  console.error('Parse error:', result.error);
+  console.error("Parse error:", result.error);
 }
 
 const validation = Brainfile.validate(board);
 if (!validation.valid) {
-  validation.errors.forEach(err => {
+  validation.errors.forEach((err) => {
     console.log(`${err.path}: ${err.message}`);
   });
 }
@@ -213,7 +260,7 @@ if (!validation.valid) {
 The core library includes a comprehensive linter that can detect and fix common issues in brainfile.md files:
 
 ```typescript
-import { Brainfile, BrainfileLinter } from '@brainfile/core';
+import { Brainfile, BrainfileLinter } from "@brainfile/core";
 
 const content = `---
 title: My Board
@@ -229,9 +276,9 @@ columns:
 const result = Brainfile.lint(content);
 
 console.log(result.valid); // false
-console.log(result.issues); 
-// [{ 
-//   type: "warning", 
+console.log(result.issues);
+// [{
+//   type: "warning",
 //   message: "Unquoted string with colon: ...",
 //   line: 8,
 //   fixable: true,
@@ -254,6 +301,7 @@ console.log(grouped.fixable); // Array of fixable issues
 ```
 
 **What the linter detects:**
+
 - ✅ Missing or malformed YAML frontmatter
 - ✅ YAML syntax errors (with line numbers)
 - ✅ Unquoted strings containing colons (auto-fixable)
@@ -263,6 +311,7 @@ console.log(grouped.fixable); // Array of fixable issues
 - ✅ Structural validation errors
 
 **Error codes:**
+
 - `MISSING_FRONTMATTER_START` - Missing opening `---`
 - `MISSING_FRONTMATTER_END` - Missing closing `---`
 - `YAML_SYNTAX_ERROR` - Invalid YAML syntax
@@ -311,6 +360,7 @@ if (result.warnings) {
 ```
 
 This feature is particularly useful when:
+
 - LLMs accidentally create duplicate columns
 - Merging brainfile.md files from different sources
 - Recovering from manual editing mistakes

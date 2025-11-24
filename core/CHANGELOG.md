@@ -19,6 +19,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [0.4.1] - 2025-11-21
+
+### Added
+- Realtime helpers: `hashBoardContent`, `hashBoard`, and `diffBoards` for consistent change tokens and structured board deltas across clients.
+
+### Changed
+- Exported new realtime types (`BoardDiff`, `ColumnDiff`, `TaskDiff`) via the public API.
+
 ## [0.3.0] - 2025-11-20
 
 ### Added
@@ -59,4 +67,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Core parsing and serialization functionality
 - Full test coverage
 - TypeScript definitions
-

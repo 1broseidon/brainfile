@@ -1,9 +1,10 @@
 /**
- * Validator for Brainfile Board objects
+ * Validator for Brainfile objects (all types)
  * @packageDocumentation
  */
 
-import { Board, Task, Column, Rule, Subtask } from './types';
+import { Board, Task, Column, Rule, Subtask, Journal, JournalEntry, Brainfile, BrainfileType } from './types';
+import { inferType } from './inference';
 
 export interface ValidationError {
   path: string;
@@ -13,6 +14,7 @@ export interface ValidationError {
 export interface ValidationResult {
   valid: boolean;
   errors: ValidationError[];
+  type?: string;
 }
 
 export class BrainfileValidator {
@@ -272,6 +274,134 @@ export class BrainfileValidator {
     // Validate rule
     if (typeof rule.rule !== 'string' || rule.rule.trim() === '') {
       errors.push({ path: `${path}.rule`, message: 'Rule rule must be a non-empty string' });
+    }
+
+    return errors;
+  }
+
+  /**
+   * Validate any brainfile object with type detection
+   * @param data - The brainfile data to validate
+   * @param filename - Optional filename for type inference
+   * @returns ValidationResult with type and any errors found
+   */
+  static validateBrainfile(data: any, filename?: string): ValidationResult {
+    if (!data) {
+      return {
+        valid: false,
+        errors: [{ path: '', message: 'Data is null or undefined' }]
+      };
+    }
+
+    // Infer type
+    const type = inferType(data, filename);
+
+    // Validate base fields (common to all types)
+    const errors: ValidationError[] = [];
+
+    if (typeof data.title !== 'string' || data.title.trim() === '') {
+      errors.push({ path: 'title', message: 'Title must be a non-empty string' });
+    }
+
+    // Type-specific validation
+    if (type === BrainfileType.BOARD || (!type && data.columns)) {
+      errors.push(...this.validate(data as Board).errors);
+    } else if (type === BrainfileType.JOURNAL || data.entries) {
+      errors.push(...this.validateJournal(data as Journal).errors);
+    }
+    // Add more type-specific validators as types are implemented
+    // else if (type === BrainfileType.COLLECTION) { ... }
+    // else if (type === BrainfileType.CHECKLIST) { ... }
+    // else if (type === BrainfileType.DOCUMENT) { ... }
+
+    return {
+      valid: errors.length === 0,
+      errors,
+      type
+    };
+  }
+
+  /**
+   * Validate a Journal object
+   * @param journal - The journal to validate
+   * @returns ValidationResult with any errors found
+   */
+  static validateJournal(journal: any): ValidationResult {
+    const errors: ValidationError[] = [];
+
+    if (!journal) {
+      errors.push({ path: '', message: 'Journal is null or undefined' });
+      return { valid: false, errors };
+    }
+
+    // Validate title
+    if (typeof journal.title !== 'string' || journal.title.trim() === '') {
+      errors.push({ path: 'title', message: 'Journal title must be a non-empty string' });
+    }
+
+    // Validate entries
+    if (!Array.isArray(journal.entries)) {
+      errors.push({ path: 'entries', message: 'Entries must be an array' });
+    } else {
+      journal.entries.forEach((entry: any, index: number) => {
+        const entryErrors = this.validateJournalEntry(entry, `entries[${index}]`);
+        errors.push(...entryErrors);
+      });
+    }
+
+    // Validate rules (optional)
+    if (journal.rules !== undefined) {
+      const rulesErrors = this.validateRules(journal.rules, 'rules');
+      errors.push(...rulesErrors);
+    }
+
+    return { valid: errors.length === 0, errors };
+  }
+
+  /**
+   * Validate a JournalEntry object
+   * @param entry - The entry to validate
+   * @param path - The path for error reporting
+   * @returns Array of validation errors
+   */
+  static validateJournalEntry(entry: any, path: string): ValidationError[] {
+    const errors: ValidationError[] = [];
+
+    if (!entry) {
+      errors.push({ path, message: 'Entry is null or undefined' });
+      return errors;
+    }
+
+    // Validate id
+    if (typeof entry.id !== 'string' || entry.id.trim() === '') {
+      errors.push({ path: `${path}.id`, message: 'Entry id must be a non-empty string' });
+    }
+
+    // Validate title
+    if (typeof entry.title !== 'string' || entry.title.trim() === '') {
+      errors.push({ path: `${path}.title`, message: 'Entry title must be a non-empty string' });
+    }
+
+    // Validate createdAt (required for journal entries)
+    if (typeof entry.createdAt !== 'string' || entry.createdAt.trim() === '') {
+      errors.push({ path: `${path}.createdAt`, message: 'Entry createdAt must be an ISO 8601 timestamp string' });
+    }
+
+    // Validate optional fields
+    if (entry.content !== undefined && typeof entry.content !== 'string') {
+      errors.push({ path: `${path}.content`, message: 'Entry content must be a string' });
+    }
+
+    if (entry.summary !== undefined && typeof entry.summary !== 'string') {
+      errors.push({ path: `${path}.summary`, message: 'Entry summary must be a string' });
+    }
+
+    if (entry.mood !== undefined && typeof entry.mood !== 'string') {
+      errors.push({ path: `${path}.mood`, message: 'Entry mood must be a string' });
+    }
+
+    if (entry.tags !== undefined && !Array.isArray(entry.tags)) {
+      errors.push({ path: `${path}.tags`, message: 'Entry tags must be an array' });
     }
 
     return errors;

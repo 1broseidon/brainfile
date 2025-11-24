@@ -1,6 +1,6 @@
 {
   "name": "@brainfile/core",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Core library for the Brainfile task management protocol",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/brainfile/core"
+    "url": "git+https://github.com/brainfile/core.git"
   },
   "publishConfig": {
     "access": "public"

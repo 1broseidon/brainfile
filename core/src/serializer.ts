@@ -1,10 +1,10 @@
 /**
- * Serializer for converting Board objects to Brainfile markdown format
+ * Serializer for converting Brainfile objects (all types) to markdown format
  * @packageDocumentation
  */
 
 import * as yaml from "js-yaml";
-import { Board } from "./types";
+import { Board, Brainfile } from "./types";
 
 export interface SerializeOptions {
   /** YAML indentation (default: 2) */
@@ -17,19 +17,20 @@ export interface SerializeOptions {
 
 export class BrainfileSerializer {
   /**
-   * Serialize a Board object back to brainfile.md format
-   * @param board - The Board object to serialize
+   * Serialize any Brainfile object (board, journal, etc.) to markdown format
+   * The type field is automatically preserved if present in the data
+   * @param data - The Brainfile object to serialize (Board, Journal, etc.)
    * @param options - Serialization options
    * @returns Markdown string with YAML frontmatter
    */
-  static serialize(board: Board, options: SerializeOptions = {}): string {
+  static serialize(data: Brainfile | Board, options: SerializeOptions = {}): string {
     const {
       indent = 2,
       lineWidth = -1,
       trailingNewline = true
     } = options;
 
-    const yamlContent = yaml.dump(board, {
+    const yamlContent = yaml.dump(data, {
       indent,
       lineWidth,
       noRefs: true,
@@ -43,18 +44,18 @@ export class BrainfileSerializer {
   }
 
   /**
-   * Serialize a Board object to YAML only (without markdown wrapper)
-   * @param board - The Board object to serialize
+   * Serialize any Brainfile object to YAML only (without markdown wrapper)
+   * @param data - The Brainfile object to serialize
    * @param options - Serialization options
    * @returns YAML string
    */
-  static serializeYamlOnly(board: Board, options: SerializeOptions = {}): string {
+  static serializeYamlOnly(data: Brainfile | Board, options: SerializeOptions = {}): string {
     const {
       indent = 2,
       lineWidth = -1
     } = options;
 
-    return yaml.dump(board, {
+    return yaml.dump(data, {
       indent,
       lineWidth,
       noRefs: true,
@@ -63,11 +64,11 @@ export class BrainfileSerializer {
   }
 
   /**
-   * Pretty print a Board object for debugging
-   * @param board - The Board object to print
+   * Pretty print any Brainfile object for debugging
+   * @param data - The Brainfile object to print
    * @returns Pretty-printed JSON string
    */
-  static prettyPrint(board: Board): string {
-    return JSON.stringify(board, null, 2);
+  static prettyPrint(data: Brainfile | Board): string {
+    return JSON.stringify(data, null, 2);
   }
 }

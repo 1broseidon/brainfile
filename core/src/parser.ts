@@ -4,11 +4,21 @@
  */
 
 import * as yaml from "js-yaml";
-import { Board, Column } from "./types";
+import { Board, Column, Brainfile, BrainfileType, RendererType } from "./types";
+import { inferType, inferRenderer, SchemaHints } from "./inference";
 
 export interface ParseResult {
-  board: Board | null;
+  /** Parsed brainfile data (type depends on detected type) */
+  data: Brainfile | null;
+  /** Detected brainfile type */
+  type?: string;
+  /** Inferred renderer type */
+  renderer?: RendererType;
+  /** Legacy board accessor (deprecated, use data instead) */
+  board?: Board | null;
+  /** Error message if parsing failed */
   error?: string;
+  /** Warning messages from parser */
   warnings?: string[];
 }
 
@@ -49,11 +59,12 @@ export class BrainfileParser {
   }
 
   /**
-   * Parse a brainfile.md file content into a Board object
+   * Parse a brainfile.md file content
    * @param content - The markdown content with YAML frontmatter
-   * @returns Parsed Board object or null if parsing fails
+   * @returns Parsed brainfile data or null if parsing fails
+   * @deprecated Use parseWithErrors() for type detection and error details
    */
-  static parse(content: string): Board | null {
+  static parse(content: string): any | null {
     try {
       // Extract YAML frontmatter
       const lines = content.split("\n");
@@ -80,22 +91,22 @@ export class BrainfileParser {
       const yamlContent = lines.slice(1, endIndex).join("\n");
 
       // Parse YAML
-      const board = yaml.load(yamlContent) as Board;
+      const data = yaml.load(yamlContent) as any;
 
-      // Consolidate duplicate columns
-      if (board && board.columns) {
-        const { columns, warnings } = this.consolidateDuplicateColumns(board.columns);
-        
+      // Consolidate duplicate columns (for board type compatibility)
+      if (data && data.columns) {
+        const { columns, warnings } = this.consolidateDuplicateColumns(data.columns);
+
         // Log warnings to console
         if (warnings.length > 0) {
           console.warn('[Brainfile Parser] Duplicate columns detected:');
           warnings.forEach(warning => console.warn(`  - ${warning}`));
         }
-        
-        board.columns = columns;
+
+        data.columns = columns;
       }
 
-      return board;
+      return data;
     } catch (error) {
       console.error("Error parsing brainfile.md:", error);
       return null;
@@ -103,13 +114,15 @@ export class BrainfileParser {
   }
 
   /**
-   * Parse with detailed error reporting and warnings
+   * Parse with detailed error reporting, warnings, and type detection
    * @param content - The markdown content with YAML frontmatter
-   * @returns ParseResult with board, error message, and any warnings
+   * @param filename - Optional filename for type inference
+   * @param schemaHints - Optional schema hints for renderer inference
+   * @returns ParseResult with data, type, renderer, error message, and any warnings
    */
-  static parseWithErrors(content: string): ParseResult {
+  static parseWithErrors(content: string, filename?: string, schemaHints?: SchemaHints): ParseResult {
     const warnings: string[] = [];
-    
+
     // Temporarily capture console.warn calls
     const originalWarn = console.warn;
     console.warn = (...args: any[]) => {
@@ -122,27 +135,37 @@ export class BrainfileParser {
     };
 
     try {
-      const board = this.parse(content);
-      
+      const data = this.parse(content);
+
       // Restore console.warn
       console.warn = originalWarn;
-      
-      if (!board) {
+
+      if (!data) {
         return {
+          data: null,
           board: null,
           error: "Failed to parse YAML frontmatter",
           warnings: warnings.length > 0 ? warnings : undefined
         };
       }
-      return { 
-        board,
+
+      // Infer type and renderer
+      const detectedType = inferType(data, filename);
+      const renderer = inferRenderer(detectedType, data, schemaHints);
+
+      return {
+        data,
+        type: detectedType,
+        renderer,
+        board: detectedType === BrainfileType.BOARD || !data.type ? (data as Board) : null,
         warnings: warnings.length > 0 ? warnings : undefined
       };
     } catch (error) {
       // Restore console.warn
       console.warn = originalWarn;
-      
+
       return {
+        data: null,
         board: null,
         error: error instanceof Error ? error.message : String(error),
         warnings: warnings.length > 0 ? warnings : undefined
