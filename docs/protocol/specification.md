@@ -38,6 +38,7 @@ columns: [] # Array of task columns
 
 ```yaml
 ---
+type: string # Document type: board|journal|collection|checklist|document
 protocolVersion: string # Version of protocol (e.g., "0.4.0")
 schema: string # Reference to schema for validation (URL or local file path)
 agent: # AI agent instructions (recommended)
@@ -60,30 +61,63 @@ The `schema` field provides a reference to the Brainfile schema for validation a
 schema: string # URL or local file path
 ```
 
-**Official Schema Location**: `https://brainfile.md/v1`
+### Official Schemas
 
-The protocol schema is hosted in the **[brainfile/protocol](https://github.com/brainfile/protocol)** repository and served via GitHub Pages at `brainfile.md`.
+The protocol schemas are hosted at `brainfile.md/v1/`:
+
+| Schema | URL | Description |
+|--------|-----|-------------|
+| Base | `https://brainfile.md/v1/base.json` | Shared fields for all types |
+| Board | `https://brainfile.md/v1/board.json` | Kanban boards (default) |
+| Journal | `https://brainfile.md/v1/journal.json` | Time-ordered entries |
+
+Browse all schemas: [brainfile.md/v1/](https://brainfile.md/v1/)
+
+Programmatic access: `GET /v1/index.json`
+
+### Schema Types
+
+Brainfile supports multiple document types via the `type` field:
+
+```yaml
+---
+type: board    # or: journal, collection, checklist, document
+schema: https://brainfile.md/v1/board.json
+title: My Project
+---
+```
+
+When `type` is omitted, tools infer the type from:
+1. Schema URL pattern (`/v1/journal.json` → journal)
+2. File name suffix (`*.journal.md` → journal)
+3. Structural analysis (`columns[]` → board, `entries[]` → journal)
+4. Default: `board`
 
 ### Schema Formats
 
-1. **Remote URL** (recommended for consistency):
+1. **Type-specific URL** (recommended):
+   ```yaml
+   schema: https://brainfile.md/v1/board.json
+   ```
+
+2. **Generic URL** (backward compatible):
    ```yaml
    schema: https://brainfile.md/v1
    ```
 
-2. **Local file** (for offline or custom schemas):
+3. **Local file** (for offline or custom schemas):
    ```yaml
-   # File in project root
-   schema: brainfile.schema.json
-
-   # Relative path
    schema: ./schemas/brainfile.schema.json
-
-   # Absolute path
-   schema: /usr/local/share/brainfile/schema.json
    ```
 
 When present, AI agents and tools should fetch and validate against this schema to ensure proper structure and prevent taking liberties with the format.
+
+### Examples
+
+Example files for each type are available at [brainfile.md/example/](https://brainfile.md/example/):
+
+- [board.md](https://brainfile.md/example/board.md) - Kanban board with columns and tasks
+- [journal.md](https://brainfile.md/example/journal.md) - Developer journal with entries
 
 ## Agent Instructions Block
 
@@ -209,14 +243,19 @@ Tools implementing the protocol should:
 
 ## Validation
 
-Use the JSON Schema at `https://brainfile.md/v1.json` to validate YAML structure.
+Use the JSON schemas at `https://brainfile.md/v1/` to validate YAML structure:
+
+- **Board**: `https://brainfile.md/v1/board.json`
+- **Journal**: `https://brainfile.md/v1/journal.json`
+- **Generic**: `https://brainfile.md/v1.json` (backward compatible)
 
 ## Example
 
 ```yaml
 ---
 title: My Project
-protocolVersion: "0.4.0"
+type: board
+schema: https://brainfile.md/v1/board.json
 agent:
   instructions:
     - Modify only the YAML frontmatter
