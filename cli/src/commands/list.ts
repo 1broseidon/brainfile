@@ -28,7 +28,7 @@ export function listCommand(options: ListOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse bangbang.md'));
+      console.error(chalk.red('Error: Failed to parse brainfile'));
       if (result.error) {
         console.error(chalk.red(result.error));
       }

@@ -46,7 +46,7 @@ export function templateCommand(options: TemplateOptions) {
     if (options.use) {
       if (!options.title) {
         console.error(chalk.red('Error: --title is required when using a template'));
-        console.log(chalk.gray('Usage: bangbang template --use <template-id> --title "Task title"'));
+        console.log(chalk.gray('Usage: brainfile template --use <template-id> --title "Task title"'));
         process.exit(1);
       }
 
@@ -67,7 +67,7 @@ export function templateCommand(options: TemplateOptions) {
       const result = Brainfile.parseWithErrors(content);
 
       if (!result.board) {
-        console.error(chalk.red('Error: Failed to parse bangbang.md'));
+        console.error(chalk.red('Error: Failed to parse brainfile'));
         if (result.error) {
           console.error(chalk.red(result.error));
         }
@@ -158,8 +158,8 @@ export function templateCommand(options: TemplateOptions) {
     console.log(chalk.gray('  --use <id>       Create task from template'));
     console.log('');
     console.log(chalk.gray('Examples:'));
-    console.log(chalk.gray('  bangbang template --list'));
-    console.log(chalk.gray('  bangbang template --use bug-report --title "Fix login issue"'));
+    console.log(chalk.gray('  brainfile template --list'));
+    console.log(chalk.gray('  brainfile template --use bug-report --title "Fix login issue"'));
 
   } catch (error) {
     console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));

@@ -14,13 +14,13 @@ export function moveCommand(options: MoveOptions) {
     // Validate required options
     if (!options.task) {
       console.error(chalk.red('Error: --task is required'));
-      console.log(chalk.gray('Usage: bangbang move --task <task-id> --column <column-name>'));
+      console.log(chalk.gray('Usage: brainfile move --task <task-id> --column <column-name>'));
       process.exit(1);
     }
 
     if (!options.column) {
       console.error(chalk.red('Error: --column is required'));
-      console.log(chalk.gray('Usage: bangbang move --task <task-id> --column <column-name>'));
+      console.log(chalk.gray('Usage: brainfile move --task <task-id> --column <column-name>'));
       process.exit(1);
     }
 
@@ -41,7 +41,7 @@ export function moveCommand(options: MoveOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse bangbang.md'));
+      console.error(chalk.red('Error: Failed to parse brainfile'));
       if (result.error) {
         console.error(chalk.red(result.error));
       }

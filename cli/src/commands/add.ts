@@ -17,7 +17,7 @@ export function addCommand(options: AddOptions) {
     // Validate required options
     if (!options.title) {
       console.error(chalk.red('Error: --title is required'));
-      console.log(chalk.gray('Usage: bangbang add --title "Task title" [options]'));
+      console.log(chalk.gray('Usage: brainfile add --title "Task title" [options]'));
       process.exit(1);
     }
 
@@ -38,7 +38,7 @@ export function addCommand(options: AddOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse bangbang.md'));
+      console.error(chalk.red('Error: Failed to parse brainfile'));
       if (result.error) {
         console.error(chalk.red(result.error));
       }
