@@ -2,10 +2,130 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=../v1.json">
-    <title>Brainfile Schema v1</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brainfile v1 Schema Directory</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { border-bottom: 2px solid #333; padding-bottom: 10px; }
+        h2 { margin-top: 30px; color: #555; }
+        .schema-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            background: #f9f9f9;
+        }
+        .schema-card h3 { margin-top: 0; color: #0066cc; }
+        .schema-card code {
+            background: #fff;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .badge-stable { background: #28a745; color: white; }
+        .badge-planned { background: #ffc107; color: #333; }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .note {
+            background: #e7f3ff;
+            border-left: 4px solid #0066cc;
+            padding: 12px;
+            margin: 20px 0;
+        }
+    </style>
 </head>
 <body>
-    <p>Redirecting to <a href="../v1.json">Brainfile Schema v1</a>...</p>
+    <h1>📋 Brainfile v1 Schema Directory</h1>
+
+    <p>Official schemas for the <a href="https://brainfile.md">Brainfile protocol</a> - a markdown-based task description language with AI agent support.</p>
+
+    <div class="note">
+        <strong>For programmatic access:</strong> <a href="index.json">GET /v1/index.json</a> returns structured metadata.
+    </div>
+
+    <h2>Official Types</h2>
+
+    <div class="schema-card">
+        <h3>📦 Base Schema <span class="badge badge-stable">STABLE</span></h3>
+        <p>Shared fields across all brainfile types (type, schema, agent, rules, timestamps)</p>
+        <p><strong>URL:</strong> <code>https://brainfile.md/v1/base.json</code></p>
+        <p><strong>Required:</strong> <code>title</code></p>
+    </div>
+
+    <div class="schema-card">
+        <h3>📋 Board Schema <span class="badge badge-stable">STABLE</span></h3>
+        <p>Kanban-style task boards with columns and tasks. Uses <code>kanban</code> renderer.</p>
+        <p><strong>URL:</strong> <code>https://brainfile.md/v1/board.json</code></p>
+        <p><strong>Required:</strong> <code>columns[]</code></p>
+        <p><strong>Example:</strong> <a href="../example/board.md">board.md</a></p>
+    </div>
+
+    <div class="schema-card">
+        <h3>📓 Journal Schema <span class="badge badge-stable">STABLE</span></h3>
+        <p>Time-ordered journal entries with timestamps. Uses <code>timeline</code> renderer.</p>
+        <p><strong>URL:</strong> <code>https://brainfile.md/v1/journal.json</code></p>
+        <p><strong>Required:</strong> <code>entries[]</code></p>
+        <p><strong>Example:</strong> <a href="../example/journal.md">journal.md</a></p>
+    </div>
+
+    <div class="schema-card">
+        <h3>📚 Collection Schema <span class="badge badge-planned">PLANNED</span></h3>
+        <p>Curated collections of resources with categories. Uses <code>grouped-list</code> renderer.</p>
+        <p><strong>URL:</strong> <code>https://brainfile.md/v1/collection.json</code></p>
+        <p><strong>Required:</strong> <code>categories[]</code></p>
+    </div>
+
+    <div class="schema-card">
+        <h3>✅ Checklist Schema <span class="badge badge-planned">PLANNED</span></h3>
+        <p>Flat, ordered checklists with completion tracking. Uses <code>checklist</code> renderer.</p>
+        <p><strong>URL:</strong> <code>https://brainfile.md/v1/checklist.json</code></p>
+        <p><strong>Required:</strong> <code>items[]</code> with <code>completed</code> boolean</p>
+    </div>
+
+    <div class="schema-card">
+        <h3>📄 Document Schema <span class="badge badge-planned">PLANNED</span></h3>
+        <p>Structured documents with sections (RFCs, specs). Uses <code>document</code> renderer.</p>
+        <p><strong>URL:</strong> <code>https://brainfile.md/v1/document.json</code></p>
+        <p><strong>Required:</strong> <code>sections[]</code></p>
+    </div>
+
+    <h2>Custom Types</h2>
+    <p>Community types are fully supported! Just extend <code>base.json</code> and provide a schema URL:</p>
+    <pre><code>---
+type: sprint-board
+schema: https://mycompany.com/schemas/sprint-board.json
+title: Q1 Sprint Planning
+---</code></pre>
+
+    <h2>Renderer Inference</h2>
+    <p>Tools automatically detect how to render data using:</p>
+    <ul>
+        <li><strong>Schema hints</strong> - <code>x-brainfile-renderer</code> in schema</li>
+        <li><strong>Structural patterns</strong> - Detect <code>columns[]</code>, <code>entries[]</code>, etc.</li>
+        <li><strong>Fallback</strong> - Generic tree view for unknown types</li>
+    </ul>
+
+    <h2>Links</h2>
+    <ul>
+        <li><a href="https://brainfile.md/protocol/">Documentation</a></li>
+        <li><a href="https://github.com/brainfile/protocol">GitHub Repository</a></li>
+        <li><a href="https://www.npmjs.com/package/@brainfile/core">@brainfile/core (npm)</a></li>
+        <li><a href="README.md">Technical README</a></li>
+    </ul>
 </body>
 </html>

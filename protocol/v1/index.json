@@ -1,0 +1,152 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Brainfile v1 Schema Directory",
+  "description": "Official schemas hosted at brainfile.md/v1/",
+  "version": "1.0.0",
+  "baseUrl": "https://brainfile.md/v1",
+  "schemas": {
+    "base": {
+      "id": "base",
+      "title": "Base Schema",
+      "description": "Shared fields across all brainfile types",
+      "url": "https://brainfile.md/v1/base.json",
+      "status": "stable",
+      "extends": null,
+      "requiredFields": ["title"],
+      "optionalFields": ["type", "schema", "protocolVersion", "agent", "rules"]
+    },
+    "board": {
+      "id": "board",
+      "title": "Board Schema",
+      "description": "Kanban-style task boards with columns and tasks",
+      "url": "https://brainfile.md/v1/board.json",
+      "status": "stable",
+      "extends": "base",
+      "renderer": "kanban",
+      "requiredFields": ["columns"],
+      "structuralPattern": "columns[]",
+      "examples": [
+        "https://brainfile.md/example/board.md"
+      ]
+    },
+    "journal": {
+      "id": "journal",
+      "title": "Journal Schema",
+      "description": "Time-ordered journal entries with timestamps",
+      "url": "https://brainfile.md/v1/journal.json",
+      "status": "stable",
+      "extends": "base",
+      "renderer": "timeline",
+      "requiredFields": ["entries"],
+      "structuralPattern": "entries[]",
+      "examples": [
+        "https://brainfile.md/example/journal.md"
+      ]
+    },
+    "collection": {
+      "id": "collection",
+      "title": "Collection Schema",
+      "description": "Curated collections of resources with categories",
+      "url": "https://brainfile.md/v1/collection.json",
+      "status": "planned",
+      "extends": "base",
+      "renderer": "grouped-list",
+      "requiredFields": ["categories"],
+      "structuralPattern": "categories[]",
+      "examples": [
+        "https://brainfile.md/example/collection.md"
+      ]
+    },
+    "checklist": {
+      "id": "checklist",
+      "title": "Checklist Schema",
+      "description": "Flat, ordered checklists with completion tracking",
+      "url": "https://brainfile.md/v1/checklist.json",
+      "status": "planned",
+      "extends": "base",
+      "renderer": "checklist",
+      "requiredFields": ["items"],
+      "structuralPattern": "items[] with completed boolean",
+      "examples": [
+        "https://brainfile.md/example/checklist.md"
+      ]
+    },
+    "document": {
+      "id": "document",
+      "title": "Document Schema",
+      "description": "Structured documents with sections (RFCs, specs)",
+      "url": "https://brainfile.md/v1/document.json",
+      "status": "planned",
+      "extends": "base",
+      "renderer": "document",
+      "requiredFields": ["sections"],
+      "structuralPattern": "sections[]",
+      "examples": [
+        "https://brainfile.md/example/document.md"
+      ]
+    }
+  },
+  "customTypes": {
+    "description": "Community types are supported via custom schema URLs",
+    "requirements": [
+      "Must extend base.json",
+      "Must provide schema URL in frontmatter",
+      "Can use x-brainfile-* renderer hints for optimal display"
+    ],
+    "examples": [
+      {
+        "type": "sprint-board",
+        "schema": "https://mycompany.com/schemas/sprint-board.json",
+        "description": "Custom type extending board for sprint planning"
+      }
+    ]
+  },
+  "renderers": {
+    "kanban": {
+      "description": "Columns with draggable cards",
+      "structuralPattern": "columns[] with nested items",
+      "hints": ["x-brainfile-columns-path", "x-brainfile-items-path"]
+    },
+    "timeline": {
+      "description": "Chronological entries with timestamps",
+      "structuralPattern": "entries[] with timestamps",
+      "hints": ["x-brainfile-items-path", "x-brainfile-timestamp-field"]
+    },
+    "checklist": {
+      "description": "Flat list with checkboxes",
+      "structuralPattern": "items[] with completed boolean",
+      "hints": ["x-brainfile-items-path"]
+    },
+    "grouped-list": {
+      "description": "Categories with nested items",
+      "structuralPattern": "categories[] with items[]",
+      "hints": ["x-brainfile-items-path"]
+    },
+    "document": {
+      "description": "Sections with markdown content",
+      "structuralPattern": "sections[]",
+      "hints": ["x-brainfile-items-path"]
+    },
+    "tree": {
+      "description": "Generic tree view (fallback for unknown types)",
+      "structuralPattern": "any",
+      "hints": []
+    }
+  },
+  "inference": {
+    "description": "How types are inferred when type field is missing",
+    "priority": [
+      "1. Explicit type field in frontmatter",
+      "2. Schema URL pattern (e.g., /v1/journal.json → journal)",
+      "3. Filename suffix (e.g., brainfile.journal.md → journal)",
+      "4. Structural analysis (detect required fields)",
+      "5. Default to 'board'"
+    ]
+  },
+  "links": {
+    "documentation": "https://brainfile.md/protocol/",
+    "repository": "https://github.com/brainfile/protocol",
+    "npm": "https://www.npmjs.com/package/@brainfile/core",
+    "vscode": "https://marketplace.visualstudio.com/items?itemName=brainfile.brainfile"
+  }
+}
