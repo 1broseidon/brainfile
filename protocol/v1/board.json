@@ -1,131 +1,58 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://brainfile.md/v1",
-  "title": "Brainfile Task Description Language (TDL)",
-  "description": "Schema for brainfile.md YAML frontmatter - a protocol for project task management",
-  "type": "object",
-  "required": ["title", "columns"],
-  "properties": {
-    "protocolVersion": {
-      "type": "string",
-      "description": "Version of the Brainfile protocol this file uses",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-      "default": "0.4.0"
+  "$id": "https://brainfile.md/v1/board.json",
+  "title": "Brainfile Board Schema",
+  "description": "Schema for Kanban-style task boards with columns and tasks",
+  "x-brainfile-renderer": "kanban",
+  "x-brainfile-columns-path": "$.columns",
+  "x-brainfile-items-path": "$.columns[*].tasks",
+  "x-brainfile-title-field": "title",
+  "x-brainfile-status-field": "priority",
+  "allOf": [
+    {
+      "$ref": "https://brainfile.md/v1/base.json"
     },
-    "schema": {
-      "type": "string",
-      "description": "Reference to the Brainfile schema for validation. Can be a remote URI (https://) or local file path (relative or absolute)",
-      "oneOf": [
-        {
-          "pattern": "^https?://",
-          "description": "Remote schema URL"
-        },
-        {
-          "pattern": "^[^:]+$",
-          "description": "Local file path (relative or absolute)"
-        }
-      ],
-      "examples": [
-        "https://brainfile.md/v1",
-        "https://raw.githubusercontent.com/brainfile/protocol/refs/heads/main/brainfile.schema.json",
-        "brainfile.schema.json",
-        "./schemas/brainfile.schema.json",
-        "/usr/local/share/brainfile/schema.json"
-      ]
-    },
-    "type": {
-      "type": "string",
-      "description": "Type discriminator for the brainfile. Optional for backward compatibility - if missing, structural inference will detect type (typically 'board' for files with columns). Community types allowed - any string value accepted.",
-      "minLength": 1,
-      "examples": ["board", "journal", "collection", "checklist", "document", "sprint-board", "standup-notes"]
-    },
-    "title": {
-      "type": "string",
-      "description": "Project or board title",
-      "minLength": 1
-    },
-    "agent": {
+    {
       "type": "object",
-      "description": "Instructions for AI agents interacting with the board",
+      "required": ["columns"],
       "properties": {
-        "instructions": {
+        "type": {
+          "const": "board"
+        },
+        "columns": {
           "type": "array",
-          "description": "List of instructions for agents",
+          "description": "Task columns (e.g., To Do, In Progress, Done)",
+          "minItems": 1,
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/definitions/column"
           }
         },
-        "llmNotes": {
-          "type": "string",
-          "description": "Free-form notes about how this project prefers AI work to be structured"
-        }
-      },
-      "additionalProperties": true
-    },
-    "rules": {
-      "type": "object",
-      "description": "Project rules organized by category",
-      "properties": {
-        "always": {
-          "type": "array",
-          "description": "Rules that must always be followed",
-          "items": {
-            "$ref": "#/definitions/rule"
-          }
+        "statsConfig": {
+          "type": "object",
+          "description": "Configuration for statistics calculation",
+          "properties": {
+            "columns": {
+              "type": "array",
+              "description": "Column IDs to include in progress statistics",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
         },
-        "never": {
+        "archive": {
           "type": "array",
-          "description": "Rules that must never be violated",
+          "description": "Archived tasks removed from active columns",
           "items": {
-            "$ref": "#/definitions/rule"
-          }
-        },
-        "prefer": {
-          "type": "array",
-          "description": "Preferred approaches or patterns",
-          "items": {
-            "$ref": "#/definitions/rule"
-          }
-        },
-        "context": {
-          "type": "array",
-          "description": "Contextual information and constraints",
-          "items": {
-            "$ref": "#/definitions/rule"
+            "$ref": "#/definitions/task"
           }
         }
       },
       "additionalProperties": true
-    },
-    "columns": {
-      "type": "array",
-      "description": "Task columns (e.g., To Do, In Progress, Done)",
-      "minItems": 1,
-      "items": {
-        "$ref": "#/definitions/column"
-      }
     }
-  },
-  "additionalProperties": true,
+  ],
   "definitions": {
-    "rule": {
-      "type": "object",
-      "required": ["id", "rule"],
-      "properties": {
-        "id": {
-          "type": "integer",
-          "description": "Unique identifier within the rule category",
-          "minimum": 1
-        },
-        "rule": {
-          "type": "string",
-          "description": "The rule text",
-          "minLength": 1
-        }
-      },
-      "additionalProperties": true
-    },
     "column": {
       "type": "object",
       "required": ["id", "title", "tasks"],
@@ -209,14 +136,12 @@
           "format": "date"
         },
         "createdAt": {
-          "type": "string",
-          "description": "When the task was created (ISO 8601 timestamp)",
-          "format": "date-time"
+          "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+          "description": "When the task was created"
         },
         "updatedAt": {
-          "type": "string",
-          "description": "When the task was last updated (ISO 8601 timestamp)",
-          "format": "date-time"
+          "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+          "description": "When the task was last updated"
         },
         "relatedFiles": {
           "type": "array",

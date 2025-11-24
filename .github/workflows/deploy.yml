@@ -38,6 +38,7 @@ jobs:
         run: |
           cp v1.json docs/.vitepress/dist/
           cp brainfile.schema.json docs/.vitepress/dist/
+          cp -r v1 docs/.vitepress/dist/
           cp -r example docs/.vitepress/dist/
           cp CNAME docs/.vitepress/dist/
 

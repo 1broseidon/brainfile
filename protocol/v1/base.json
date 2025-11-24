@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v1/base.json",
+  "title": "Brainfile Base Schema",
+  "description": "Base schema that all brainfile types extend. Defines shared fields across all types. Community types can extend this schema with custom fields.",
+  "type": "object",
+  "required": ["title"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "description": "Type identifier. Official types: board, journal, collection, checklist, document. Community types: any string with a matching schema URL for validation.",
+      "minLength": 1,
+      "examples": ["board", "journal", "sprint-board", "standup-notes"]
+    },
+    "schema": {
+      "type": "string",
+      "description": "Schema URL for validation. Official types default to brainfile.md/v1/{type}.json. Community types MUST provide a schema URL for validation. Can be a remote URI (https://) or local file path.",
+      "examples": [
+        "https://brainfile.md/v1/board.json",
+        "https://brainfile.md/v1/journal.json",
+        "https://mycompany.com/schemas/sprint-board.json",
+        "./schemas/custom-type.json"
+      ]
+    },
+    "title": {
+      "type": "string",
+      "description": "Title of the brainfile",
+      "minLength": 1,
+      "examples": ["My Project", "Dev Log 2025", "Reading List"]
+    },
+    "protocolVersion": {
+      "type": "string",
+      "description": "Version of the Brainfile protocol this file uses",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "default": "0.5.0"
+    },
+    "agent": {
+      "type": "object",
+      "description": "Instructions for AI agents interacting with the brainfile",
+      "properties": {
+        "instructions": {
+          "type": "array",
+          "description": "List of instructions for AI agents",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            ["Modify only the YAML frontmatter", "Preserve all IDs", "Use ISO dates for entries"]
+          ]
+        },
+        "llmNotes": {
+          "type": "string",
+          "description": "Free-form notes about how this project prefers AI work to be structured"
+        }
+      },
+      "additionalProperties": true
+    },
+    "rules": {
+      "type": "object",
+      "description": "Project rules organized by category",
+      "properties": {
+        "always": {
+          "type": "array",
+          "description": "Rules that must always be followed",
+          "items": {
+            "$ref": "#/definitions/rule"
+          }
+        },
+        "never": {
+          "type": "array",
+          "description": "Rules that must never be violated",
+          "items": {
+            "$ref": "#/definitions/rule"
+          }
+        },
+        "prefer": {
+          "type": "array",
+          "description": "Preferred approaches or patterns",
+          "items": {
+            "$ref": "#/definitions/rule"
+          }
+        },
+        "context": {
+          "type": "array",
+          "description": "Contextual information and constraints",
+          "items": {
+            "$ref": "#/definitions/rule"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "rule": {
+      "type": "object",
+      "required": ["id", "rule"],
+      "properties": {
+        "id": {
+          "type": ["integer", "string"],
+          "description": "Unique identifier within the rule category"
+        },
+        "rule": {
+          "type": "string",
+          "description": "The rule text",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "timestamp": {
+      "type": "string",
+      "description": "ISO 8601 timestamp",
+      "format": "date-time",
+      "examples": ["2025-11-24T10:30:00Z", "2025-11-24T14:22:00-08:00"]
+    }
+  }
+}

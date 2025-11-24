@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v1/journal.json",
+  "title": "Brainfile Journal Schema",
+  "description": "Schema for journal-style entries with timestamps, such as dev logs, daily notes, or standup records",
+  "x-brainfile-renderer": "timeline",
+  "x-brainfile-items-path": "$.entries",
+  "x-brainfile-title-field": "title",
+  "x-brainfile-timestamp-field": "createdAt",
+  "allOf": [
+    {
+      "$ref": "https://brainfile.md/v1/base.json"
+    },
+    {
+      "type": "object",
+      "required": ["entries"],
+      "properties": {
+        "type": {
+          "const": "journal"
+        },
+        "entries": {
+          "type": "array",
+          "description": "Journal entries in chronological order (newest first recommended)",
+          "items": {
+            "$ref": "#/definitions/entry"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  ],
+  "definitions": {
+    "entry": {
+      "type": "object",
+      "required": ["id", "title"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique entry identifier, typically ISO date format (YYYY-MM-DD)",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "examples": ["2025-11-24", "2025-12-01"]
+        },
+        "title": {
+          "type": "string",
+          "description": "Entry title (often the date or a summary)",
+          "minLength": 1,
+          "examples": ["2025-11-24", "Schema Evolution Planning"]
+        },
+        "createdAt": {
+          "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+          "description": "When the entry was created"
+        },
+        "updatedAt": {
+          "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+          "description": "When the entry was last updated"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Optional tags for categorization",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            ["work", "planning"],
+            ["bug-fix", "frontend"]
+          ]
+        },
+        "mood": {
+          "type": "string",
+          "description": "Optional mood indicator for reflection",
+          "enum": ["productive", "neutral", "frustrated", "energized", "blocked"],
+          "examples": ["productive", "energized"]
+        },
+        "summary": {
+          "type": "string",
+          "description": "One-line summary of the entry (TL;DR)",
+          "minLength": 1,
+          "examples": [
+            "Explored brainfile schema for journal use",
+            "Fixed cross-column drag bug in VSCode extension"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "description": "Long-form markdown content of the entry",
+          "examples": [
+            "## What I worked on\n- Schema design\n- Roadmap planning\n\n## Blockers\nNone\n\n## Tomorrow\n- Begin implementation"
+          ]
+        },
+        "relatedTasks": {
+          "type": "array",
+          "description": "Optional references to related tasks in board files",
+          "items": {
+            "type": "string"
+          },
+          "examples": [
+            ["task-31", "task-32"],
+            ["brainfile.md#task-10"]
+          ]
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
