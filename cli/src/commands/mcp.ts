@@ -66,7 +66,7 @@ export async function mcpCommand(options: McpOptions) {
 
   const server = new McpServer({
     name: 'brainfile',
-    version: '0.7.0'
+    version: '0.7.1'
   });
 
   // List tasks tool
@@ -116,6 +116,133 @@ export async function mcpCommand(options: McpOptions) {
       }
 
       const output = { tasks, count: tasks.length };
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
+      };
+    }
+  );
+
+  // Get task tool
+  server.registerTool(
+    'get_task',
+    {
+      title: 'Get Task',
+      description: 'Get detailed information about a specific task by ID',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Task ID to retrieve')
+      }
+    },
+    async ({ file, task }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      const { board } = result;
+      const taskInfo = findTaskById(board, task);
+
+      if (!taskInfo) {
+        return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+      }
+
+      const output = {
+        ...taskInfo.task,
+        column: taskInfo.column.title,
+        columnId: taskInfo.column.id
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
+      };
+    }
+  );
+
+  // Search tasks tool
+  server.registerTool(
+    'search_tasks',
+    {
+      title: 'Search Tasks',
+      description: 'Search tasks by title, description, or other fields',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        query: z.string().describe('Search query (matches title, description, tags)'),
+        column: z.string().optional().describe('Filter by column ID or name'),
+        priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Filter by priority'),
+        assignee: z.string().optional().describe('Filter by assignee')
+      }
+    },
+    async ({ file, query, column, priority, assignee }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      const { board } = result;
+      const queryLower = query.toLowerCase();
+      let matches: Array<{ id: string; title: string; column: string; priority?: string; tags?: string[]; assignee?: string; score: number }> = [];
+
+      for (const col of board.columns) {
+        // Filter by column if specified
+        if (column) {
+          const matchesId = col.id === column;
+          const matchesName = col.title.toLowerCase() === column.toLowerCase();
+          if (!matchesId && !matchesName) continue;
+        }
+
+        for (const task of col.tasks) {
+          // Filter by priority if specified
+          if (priority && task.priority !== priority) continue;
+
+          // Filter by assignee if specified
+          if (assignee && task.assignee !== assignee) continue;
+
+          // Calculate search score
+          let score = 0;
+
+          // Title match (highest weight)
+          if (task.title.toLowerCase().includes(queryLower)) {
+            score += 10;
+            if (task.title.toLowerCase().startsWith(queryLower)) score += 5;
+          }
+
+          // Description match
+          if (task.description?.toLowerCase().includes(queryLower)) {
+            score += 5;
+          }
+
+          // Tag match
+          if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) {
+            score += 3;
+          }
+
+          // ID exact match
+          if (task.id.toLowerCase() === queryLower) {
+            score += 20;
+          }
+
+          if (score > 0) {
+            matches.push({
+              id: task.id,
+              title: task.title,
+              column: col.title,
+              priority: task.priority,
+              tags: task.tags,
+              assignee: task.assignee,
+              score
+            });
+          }
+        }
+      }
+
+      // Sort by score descending
+      matches.sort((a, b) => b.score - a.score);
+
+      const output = { results: matches, count: matches.length };
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
       };

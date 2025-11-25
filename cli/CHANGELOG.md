@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2025-11-25
+
+### Added
+- **get_task MCP tool** - Get detailed information about a specific task by ID
+- **search_tasks MCP tool** - Search tasks by title, description, or tags with relevance scoring
+  - Supports filtering by column, priority, and assignee
+  - Results sorted by relevance score
+
 ## [0.7.0] - 2025-11-25
 
 ### Added
