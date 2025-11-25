@@ -64,18 +64,40 @@ The MCP server exposes your tasks as tools. AI assistants don't read a file — 
 
 ---
 
-## When to Use Brainfile
+## Who It's For
 
-**Great for:**
-- Solo developers who want AI-assisted task management
-- Small teams that already use git for everything
-- Projects where tasks should live with the code
-- Developers who work offline or on planes
-- Anyone tired of context-switching between tools
+### Developers Using AI Tools
 
-**Maybe not for:**
-- Large organizations with complex approval workflows
-- Teams that need extensive reporting and analytics
+You're already using Claude Code, Cursor, or Cline. You want your AI assistant to actually know what you're working on — not just your code, but your tasks. MCP integration means your assistant can list, create, and update tasks without you copy-pasting anything.
+
+### Solo Devs Who Want Simplicity
+
+You don't need Jira. You don't want to pay for Linear. You just want a task list that lives in your project, works offline, and doesn't require another account. Open your terminal, run `brainfile`, and you have a kanban board.
+
+### Developers Tired of Freemium Tools
+
+Every project management tool starts free, then slowly gates features behind pricing tiers. Brainfile is a file format — it's yours. No subscription. No "upgrade to unlock." No "your trial has ended."
+
+### Builders Who Want a Foundation
+
+The `@brainfile/core` library gives you parsing, serialization, validation, and operations. Build a custom CLI. Create a web dashboard. Integrate with your existing tools. The protocol is stable; build whatever you want on top.
+
+### Anyone Who Wants Local-First Tasks
+
+Maybe you're not a developer. Maybe you just want a personal task list that:
+- Lives on your machine, not in the cloud
+- Works without internet
+- Can be backed up by copying a file
+- Doesn't require creating yet another account
+
+The TUI works great for personal task management too.
+
+---
+
+## Maybe Not For
+
+- Large orgs with complex approval workflows
+- Teams needing enterprise reporting and analytics
 - Projects where non-technical stakeholders manage tasks
 - Situations requiring audit trails beyond git history
 
