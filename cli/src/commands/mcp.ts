@@ -20,6 +20,11 @@ import {
   toggleSubtask,
   setSubtasksCompleted,
   setAllSubtasksCompleted,
+  // Bulk operations
+  moveTasks,
+  patchTasks,
+  deleteTasks,
+  archiveTasks,
   type TaskInput,
   type TaskPatch,
   type Board
@@ -61,7 +66,7 @@ export async function mcpCommand(options: McpOptions) {
 
   const server = new McpServer({
     name: 'brainfile',
-    version: '0.6.6'
+    version: '0.7.0'
   });
 
   // List tasks tool
@@ -654,6 +659,196 @@ export async function mcpCommand(options: McpOptions) {
       const status = markCompleted ? 'completed' : 'incomplete';
       return {
         content: [{ type: 'text' as const, text: `All ${count} subtasks in ${task} marked as ${status}` }]
+      };
+    }
+  );
+
+  // ==========================================================================
+  // BULK OPERATIONS
+  // ==========================================================================
+
+  // Bulk move tasks tool
+  server.registerTool(
+    'bulk_move_tasks',
+    {
+      title: 'Bulk Move Tasks',
+      description: 'Move multiple tasks to a target column in a single operation',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        tasks: z.array(z.string()).describe('Array of task IDs to move'),
+        column: z.string().describe('Target column ID or name')
+      }
+    },
+    async ({ file, tasks, column }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+
+      // Find target column
+      let targetColumn = findColumnById(board, column);
+      if (!targetColumn) {
+        targetColumn = findColumnByName(board, column);
+      }
+
+      if (!targetColumn) {
+        return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
+      }
+
+      const bulkResult = moveTasks(board, tasks, targetColumn.id);
+
+      if (bulkResult.board) {
+        writeBoard(filePath, bulkResult.board);
+      }
+
+      const output = {
+        success: bulkResult.success,
+        successCount: bulkResult.successCount,
+        failureCount: bulkResult.failureCount,
+        results: bulkResult.results
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        isError: !bulkResult.success
+      };
+    }
+  );
+
+  // Bulk patch tasks tool
+  server.registerTool(
+    'bulk_patch_tasks',
+    {
+      title: 'Bulk Patch Tasks',
+      description: 'Apply the same patch to multiple tasks in a single operation',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        tasks: z.array(z.string()).describe('Array of task IDs to patch'),
+        priority: z.enum(['low', 'medium', 'high', 'critical']).nullable().optional().describe('New priority (null to remove)'),
+        tags: z.array(z.string()).nullable().optional().describe('New tags (null to remove)'),
+        assignee: z.string().nullable().optional().describe('New assignee (null to remove)')
+      }
+    },
+    async ({ file, tasks, priority, tags, assignee }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+
+      // Helper to check for null or "null" string
+      const isNull = (v: unknown) => v === null || v === 'null';
+
+      const patch: TaskPatch = {};
+      if (priority !== undefined) patch.priority = isNull(priority) ? undefined : priority;
+      if (tags !== undefined) patch.tags = isNull(tags) ? undefined : tags;
+      if (assignee !== undefined) patch.assignee = isNull(assignee) ? undefined : assignee;
+
+      const bulkResult = patchTasks(board, tasks, patch);
+
+      if (bulkResult.board) {
+        writeBoard(filePath, bulkResult.board);
+      }
+
+      const output = {
+        success: bulkResult.success,
+        successCount: bulkResult.successCount,
+        failureCount: bulkResult.failureCount,
+        results: bulkResult.results
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        isError: !bulkResult.success
+      };
+    }
+  );
+
+  // Bulk delete tasks tool
+  server.registerTool(
+    'bulk_delete_tasks',
+    {
+      title: 'Bulk Delete Tasks',
+      description: 'Permanently delete multiple tasks in a single operation',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        tasks: z.array(z.string()).describe('Array of task IDs to delete')
+      }
+    },
+    async ({ file, tasks }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+
+      const bulkResult = deleteTasks(board, tasks);
+
+      if (bulkResult.board) {
+        writeBoard(filePath, bulkResult.board);
+      }
+
+      const output = {
+        success: bulkResult.success,
+        successCount: bulkResult.successCount,
+        failureCount: bulkResult.failureCount,
+        results: bulkResult.results
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        isError: !bulkResult.success
+      };
+    }
+  );
+
+  // Bulk archive tasks tool
+  server.registerTool(
+    'bulk_archive_tasks',
+    {
+      title: 'Bulk Archive Tasks',
+      description: 'Archive multiple tasks in a single operation',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        tasks: z.array(z.string()).describe('Array of task IDs to archive')
+      }
+    },
+    async ({ file, tasks }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+
+      const bulkResult = archiveTasks(board, tasks);
+
+      if (bulkResult.board) {
+        writeBoard(filePath, bulkResult.board);
+      }
+
+      const output = {
+        success: bulkResult.success,
+        successCount: bulkResult.successCount,
+        failureCount: bulkResult.failureCount,
+        results: bulkResult.results
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        isError: !bulkResult.success
       };
     }
   );
