@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-11-25
+
+### Added
+- **Bulk task operations** - Process multiple tasks in a single operation with partial success handling
+  - `moveTasks(board, taskIds, toColumnId)` - Move multiple tasks to a target column
+  - `patchTasks(board, taskIds, patch)` - Apply the same patch to multiple tasks
+  - `deleteTasks(board, taskIds)` - Delete multiple tasks from any column
+  - `archiveTasks(board, taskIds)` - Archive multiple tasks
+- **New types for bulk operations**
+  - `BulkItemResult` - Per-item result with id, success flag, and optional error
+  - `BulkOperationResult` - Aggregate result with board, results array, and success/failure counts
+
+### Changed
+- All bulk operations support partial success - successfully processed items are applied even if some fail
+- Bulk operations are immutable and return new board instances
+
 ## [0.5.1] - 2025-11-24
 
 ### Added
