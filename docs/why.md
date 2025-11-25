@@ -23,6 +23,118 @@ Offline? Can't access tasks. Team changes? Export headaches. Service goes down? 
 
 ## The Brainfile Approach
 
+### Anatomy of a Brainfile
+
+<div class="anatomy-diagram">
+  <div class="anatomy-row">
+    <div class="anatomy-card">
+      <div class="anatomy-title">Metadata</div>
+      <div class="anatomy-content">title, schema, version</div>
+    </div>
+    <div class="anatomy-card">
+      <div class="anatomy-title">Agent</div>
+      <div class="anatomy-content">instructions, tools</div>
+    </div>
+    <div class="anatomy-card">
+      <div class="anatomy-title">Rules</div>
+      <div class="anatomy-content">always, never, prefer</div>
+    </div>
+  </div>
+  <div class="anatomy-connector">
+    <div class="connector-line"></div>
+    <div class="connector-arrow">▼</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-card anatomy-wide">
+      <div class="anatomy-title">Columns & Tasks</div>
+      <div class="anatomy-content">Your kanban board — todo, in-progress, done</div>
+    </div>
+  </div>
+  <div class="anatomy-connector">
+    <div class="connector-line"></div>
+    <div class="connector-arrow">▼</div>
+  </div>
+  <div class="anatomy-row">
+    <div class="anatomy-card anatomy-result">
+      <div class="anatomy-title">brainfile.md</div>
+      <div class="anatomy-content">One file. Human + machine readable.</div>
+    </div>
+  </div>
+</div>
+
+<style>
+.anatomy-diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  margin: 2rem 0;
+}
+.anatomy-row {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.anatomy-card {
+  background: var(--vp-c-bg-soft);
+  border: 1px solid var(--vp-c-border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  min-width: 140px;
+  text-align: center;
+}
+.anatomy-card.anatomy-wide {
+  min-width: 300px;
+}
+.anatomy-card.anatomy-result {
+  background: var(--vp-c-brand-soft);
+  border-color: var(--vp-c-brand-2);
+  min-width: 280px;
+}
+.anatomy-title {
+  font-weight: 600;
+  color: var(--vp-c-text-1);
+  margin-bottom: 0.25rem;
+}
+.anatomy-content {
+  font-size: 0.85rem;
+  color: var(--vp-c-text-2);
+}
+.anatomy-connector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 2rem;
+}
+.connector-line {
+  width: 2px;
+  height: 1rem;
+  background: var(--vp-c-border);
+}
+.connector-arrow {
+  color: var(--vp-c-text-3);
+  font-size: 0.75rem;
+  line-height: 1;
+}
+@media (max-width: 640px) {
+  .anatomy-row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .anatomy-card {
+    min-width: 200px;
+    width: 100%;
+    max-width: 280px;
+  }
+  .anatomy-card.anatomy-wide,
+  .anatomy-card.anatomy-result {
+    min-width: 200px;
+    max-width: 280px;
+  }
+}
+</style>
+
 **Tasks as code.**
 
 A `brainfile.md` file in your repo. Structured YAML frontmatter that tools can parse. Human-readable markdown you can edit directly. It's data and documentation in one file.
