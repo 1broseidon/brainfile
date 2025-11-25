@@ -4,7 +4,11 @@
 
 # @brainfile/cli
 
-Command-line interface for Brainfile task management. Manage your tasks from the terminal, integrate with AI assistants via MCP, or use the interactive TUI.
+**Task management for your terminal.** A full kanban board that lives in a markdown file.
+
+- Interactive TUI with vim-style navigation
+- CLI commands for scripting and automation
+- MCP server for AI assistant integration (Claude Code, Cursor, etc.)
 
 ## Installation
 
