@@ -4,7 +4,9 @@
 
 # @brainfile/core
 
-Core library for the Brainfile task management protocol. This package provides parsing, serialization, validation, and template management for Brainfile markdown files with YAML frontmatter.
+**TypeScript library for Brainfile.** Parse, serialize, validate, and manipulate brainfile.md files.
+
+Build your own task management tools, IDE integrations, or automation scripts on top of the Brainfile protocol.
 
 ## Installation
 
@@ -14,12 +16,13 @@ npm install @brainfile/core
 
 ## Features
 
-- **Parse** Brainfile markdown files into structured Board objects
-- **Serialize** Board objects back to Brainfile markdown format
-- **Validate** Board objects against the Brainfile schema
-- **Templates** Built-in task templates (Bug Report, Feature Request, Refactor)
-- **Location Finding** Find tasks and rules in source files for IDE integration
-- **Realtime Sync** Shared hashing + diff utilities for live board updates
+- **Parse & Serialize** — Convert between markdown and typed Board objects
+- **Validate** — Schema validation with detailed error messages
+- **Immutable Operations** — Add, patch, move, delete, archive tasks without mutation
+- **Subtask Management** — Full subtask CRUD with auto-generated IDs
+- **Templates** — Bug report, feature request, and refactor templates
+- **Linting** — Detect and auto-fix common issues
+- **Realtime Sync** — Hashing and diffing utilities for live updates
 
 ## Usage
 
