@@ -5,6 +5,7 @@ import path from 'path'
 export default defineConfig({
   title: 'Brainfile',
   description: 'A protocol-first task management system for the AI era',
+  cleanUrls: true,
   ignoreDeadLinks: true,
 
   head: [

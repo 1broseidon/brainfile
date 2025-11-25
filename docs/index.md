@@ -16,14 +16,11 @@ hero:
       link: /why
 
 features:
-  - icon: 🤖
-    title: AI Native
+  - title: AI Native
     details: Built-in MCP server lets Claude Code, Cursor, and Cline manage your tasks directly. No copy-paste. No context switching.
-  - icon: 📁
-    title: Lives in Your Repo
+  - title: Lives in Your Repo
     details: A single brainfile.md file. Version control friendly. Branch it, merge it, diff it. No external database.
-  - icon: ⌨️
-    title: Multiple Interfaces
+  - title: Multiple Interfaces
     details: Interactive terminal TUI, full CLI, VSCode kanban sidebar. Use what fits your workflow.
 ---
 
