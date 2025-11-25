@@ -5,7 +5,7 @@ description: TypeScript/JavaScript library for parsing and manipulating brainfil
 
 ## @brainfile/core
 
-Core library for the Brainfile task management protocol. This package provides parsing, serialization, validation, and template management for Brainfile markdown files with YAML frontmatter.
+Core library for the Brainfile task management protocol. Provides parsing, serialization, validation, immutable board operations, and template management.
 
 ## Installation
 
@@ -15,18 +15,21 @@ npm install @brainfile/core
 
 ## Features
 
-- **Parse** Brainfile markdown files into structured Board objects
-- **Serialize** Board objects back to Brainfile markdown format
-- **Validate** Board objects against the Brainfile schema
-- **Templates** Built-in task templates (Bug Report, Feature Request, Refactor)
-- **Location Finding** Find tasks and rules in source files for IDE integration
+- **Parse** - Convert markdown files into structured Board objects
+- **Serialize** - Convert Board objects back to markdown
+- **Validate** - Validate against the Brainfile schema
+- **Board Operations** - Immutable operations for tasks (add, patch, move, delete, archive, restore)
+- **Subtask Operations** - Manage subtasks (add, delete, toggle, update)
+- **Templates** - Built-in task templates (Bug Report, Feature Request, Refactor)
+- **Realtime Sync** - Hash-based change detection and structural diffing
+- **Linting** - Syntax validation with auto-fix
 
 ## Quick Start
 
 ```typescript
 import { Brainfile } from '@brainfile/core';
 
-// Parse a brainfile.md file
+// Parse a brainfile
 const markdown = `---
 title: My Project
 columns:
@@ -41,93 +44,121 @@ columns:
 const board = Brainfile.parse(markdown);
 console.log(board.title); // "My Project"
 
-// Validate the board
-const validation = Brainfile.validate(board);
-if (!validation.valid) {
-  console.error('Validation errors:', validation.errors);
-}
-
 // Serialize back to markdown
 const output = Brainfile.serialize(board);
-console.log(output);
 ```
 
-## Using Templates
+## Board Operations
+
+All operations are immutable and return a `BoardOperationResult`:
+
+```typescript
+import { addTask, patchTask, moveTask, deleteTask, archiveTask, restoreTask } from '@brainfile/core';
+
+// Add a task with all fields
+const result = addTask(board, 'todo', {
+  title: 'Implement auth',
+  description: 'Add OAuth2 support',
+  priority: 'high',
+  tags: ['security', 'feature'],
+  assignee: 'john',
+  dueDate: '2025-02-01',
+  subtasks: ['Research providers', 'Implement flow', 'Add tests']
+});
+
+if (result.success) {
+  board = result.board!;
+}
+
+// Update specific fields (null removes the field)
+const patchResult = patchTask(board, 'task-1', {
+  priority: 'critical',
+  assignee: null  // Removes assignee
+});
+
+// Move task between columns
+const moveResult = moveTask(board, 'task-1', 'todo', 'in-progress', 0);
+
+// Archive and restore
+const archiveResult = archiveTask(board, 'done', 'task-5');
+const restoreResult = restoreTask(board, 'task-5', 'todo');
+
+// Delete permanently
+const deleteResult = deleteTask(board, 'todo', 'task-1');
+```
+
+## Subtask Operations
+
+```typescript
+import { addSubtask, deleteSubtask, toggleSubtask, updateSubtask } from '@brainfile/core';
+
+// Add a subtask (ID auto-generated)
+const addResult = addSubtask(board, 'task-1', 'New subtask');
+
+// Toggle completion
+const toggleResult = toggleSubtask(board, 'task-1', 'task-1-1');
+
+// Update title
+const updateResult = updateSubtask(board, 'task-1', 'task-1-1', 'Updated title');
+
+// Delete
+const deleteResult = deleteSubtask(board, 'task-1', 'task-1-2');
+```
+
+## Templates
 
 ```typescript
 import { Brainfile } from '@brainfile/core';
 
-// Get all built-in templates
+// List templates
 const templates = Brainfile.getBuiltInTemplates();
-console.log(templates.map(t => t.name)); // ['Bug Report', 'Feature Request', 'Code Refactor']
+// ['Bug Report', 'Feature Request', 'Code Refactor']
 
-// Create a task from a template
+// Create task from template
 const bugTask = Brainfile.createFromTemplate('bug-report', {
   title: 'Login button not working',
-  description: 'Users cannot log in to the application'
+  description: 'Users cannot log in'
 });
-
-console.log(bugTask);
-// {
-//   title: 'Login button not working',
-//   description: '## Bug Description\nUsers cannot log in...',
-//   template: 'bug',
-//   priority: 'high',
-//   tags: ['bug', 'needs-triage'],
-//   subtasks: [...]
-// }
 ```
 
-## Advanced Usage
+## Realtime Sync
+
+Utilities for coordinating live updates across editors and tools:
 
 ```typescript
-import {
-  BrainfileParser,
-  BrainfileSerializer,
-  BrainfileValidator,
-  Board
-} from '@brainfile/core';
+import { hashBoardContent, hashBoard, diffBoards } from '@brainfile/core';
 
-// Parse with error details
-const parseResult = BrainfileParser.parseWithErrors(markdown);
-if (!parseResult.board) {
-  console.error('Parse error:', parseResult.error);
+// Skip redundant refreshes in file watchers
+const newHash = hashBoardContent(content);
+if (newHash !== lastKnownHash) {
+  lastKnownHash = newHash;
+  refreshBoard();
 }
 
-// Serialize with custom options
-const output = BrainfileSerializer.serialize(board, {
-  indent: 4,
-  lineWidth: 80,
-  trailingNewline: true
-});
-
-// Validate with detailed errors
-const validation = BrainfileValidator.validate(board);
-validation.errors.forEach(error => {
-  console.log(`${error.path}: ${error.message}`);
-});
-
-// Find task location in source file
-const location = BrainfileParser.findTaskLocation(markdown, 'task-1');
-console.log(`Task found at line ${location.line}`);
+// Compute structural differences
+const diff = diffBoards(previousBoard, nextBoard);
+if (diff.tasksMoved.length > 0) {
+  // Only update moved tasks, not entire board
+}
 ```
 
-## Testing
-
-- Test files live in `src/__tests__` with shared fixtures under `src/__tests__/fixtures`.
-- Run `npm test` to execute the Jest suite with coverage, or `npm run test:watch` while developing.
-- Coverage focuses on critical modules (parser, serializer, validator) and currently exceeds 80% line coverage.
-- `npm run test:coverage` generates an lcov report in `coverage/` for deeper review.
-
-## Error Handling
-
-The library provides detailed error messages for parsing and validation:
+## Linting
 
 ```typescript
-const result = Brainfile.parseWithErrors(invalidMarkdown);
-if (!result.board) {
-  console.error('Parse error:', result.error);
-}
+import { Brainfile } from '@brainfile/core';
+
+const result = Brainfile.lint(content);
+console.log(result.getSummary());
+// { errors: 2, warnings: 1, fixable: 1 }
+
+// Auto-fix issues
+const fixed = Brainfile.lint(content, { fix: true });
+```
+
+## Validation
+
+```typescript
+import { Brainfile } from '@brainfile/core';
 
 const validation = Brainfile.validate(board);
 if (!validation.valid) {
@@ -137,18 +168,22 @@ if (!validation.valid) {
 }
 ```
 
-## Integration with Other Tools
+## Error Handling
 
-This core library is used by:
+```typescript
+const result = Brainfile.parseWithErrors(markdown);
+if (!result.board) {
+  console.error('Parse error:', result.error);
+}
+```
 
-- **[@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)** - Command-line interface
-- **brainfile-vscode** - VSCode extension
-- Future: Zed, JetBrains, and other IDE integrations
+## Used By
+
+- **[@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)** - CLI with TUI and MCP server
+- **[brainfile-vscode](https://github.com/brainfile/vscode)** - VSCode extension
 
 ## Links
 
 - **npm**: https://www.npmjs.com/package/@brainfile/core
 - **GitHub**: https://github.com/brainfile/core
-- **Protocol**: https://brainfile.md
-- **CLI**: [@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)
-
+- **API Reference**: [/core/api-reference](/core/api-reference)

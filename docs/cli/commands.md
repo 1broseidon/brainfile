@@ -5,260 +5,363 @@ description: Complete reference of all Brainfile CLI commands
 
 ## Command Overview
 
-The Brainfile CLI provides five main commands for managing your tasks:
+```bash
+brainfile [file]        # Open TUI (default: brainfile.md)
+brainfile <command>     # Run CLI command
+brainfile mcp           # Start MCP server for AI assistants
+```
 
-- `list` - Display tasks from your board
-- `add` - Create new tasks
-- `move` - Move tasks between columns
-- `lint` - Validate and auto-fix syntax issues
-- `template` - Manage task templates
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
+
+## init
+
+Create a new brainfile in your project.
+
+```bash
+brainfile init
+brainfile init --file ./tasks.md
+brainfile init --force  # Overwrite existing
+```
+
+**Options:**
+- `-f, --file <path>` - Output path (default: `brainfile.md`)
+- `--force` - Overwrite if file exists
+
+---
 
 ## list
 
-Display all tasks from your brainfile.md file with colored output.
-
-### Usage
+Display all tasks with optional filtering.
 
 ```bash
-brainfile list [options]
-```
-
-### Options
-
-- `-f, --file <path>` - Path to brainfile.md file (default: `brainfile.md`)
-- `-c, --column <name>` - Filter by column (e.g., `todo`, `in-progress`, `done`)
-- `-t, --tag <name>` - Filter by tag
-
-### Examples
-
-```bash
-# List all tasks
 brainfile list
-
-# List tasks from a specific file
-brainfile list --file ./project/brainfile.md
-
-# List only tasks in the "in-progress" column
-brainfile list --column in-progress
-
-# List tasks with a specific tag
+brainfile list --column "In Progress"
 brainfile list --tag bug
 ```
 
+**Options:**
+- `-f, --file <path>` - Path to brainfile (default: `brainfile.md`)
+- `-c, --column <name>` - Filter by column
+- `-t, --tag <name>` - Filter by tag
+
+---
+
 ## add
 
-Create a new task and add it to a column.
-
-### Usage
+Create a new task with all available fields.
 
 ```bash
-brainfile add --title <text> [options]
+brainfile add --title "Implement auth"
+brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
+brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
 ```
 
-### Options
-
-- `-f, --file <path>` - Path to brainfile.md file (default: `brainfile.md`)
-- `-c, --column <name>` - Column to add task to (default: `todo`)
+**Options:**
 - `-t, --title <text>` - Task title (required)
+- `-c, --column <name>` - Target column (default: `todo`)
 - `-d, --description <text>` - Task description
-- `-p, --priority <level>` - Priority level (`low`, `medium`, `high`)
-- `--tags <tags>` - Comma-separated tags
+- `-p, --priority <level>` - `low`, `medium`, `high`, or `critical`
+- `--tags <list>` - Comma-separated tags
+- `--assignee <name>` - Assignee name
+- `--due-date <date>` - Due date (YYYY-MM-DD)
+- `--subtasks <list>` - Comma-separated subtask titles
 
-### Examples
-
-```bash
-# Add a simple task
-brainfile add --title "Fix login bug"
-
-# Add a task with full details
-brainfile add \
-  --title "Implement user authentication" \
-  --description "Add JWT-based auth to the API" \
-  --priority high \
-  --tags "backend,security" \
-  --column in-progress
-
-# Add to a specific column
-brainfile add --title "Review PR #123" --column review
-```
+---
 
 ## move
 
-Move a task from one column to another.
-
-### Usage
+Move a task to a different column.
 
 ```bash
-brainfile move --task <task-id> --column <target-column>
+brainfile move --task task-1 --column "In Progress"
+brainfile move --task task-5 --column done
 ```
 
-### Options
+**Options:**
+- `-t, --task <id>` - Task ID (required)
+- `-c, --column <name>` - Target column (required)
 
-- `-f, --file <path>` - Path to brainfile.md file (default: `brainfile.md`)
-- `-t, --task <id>` - Task ID to move (required)
-- `-c, --column <name>` - Target column name or ID (required)
+---
 
-### Examples
+## patch
+
+Update specific fields of a task. Use `--clear-*` options to remove fields.
 
 ```bash
-# Move task to in-progress
-brainfile move --task task-4 --column in-progress
-
-# Move task to done
-brainfile move --task task-123 --column done
-
-# Move using column ID
-brainfile move --task task-456 --column review
+brainfile patch --task task-1 --priority critical
+brainfile patch --task task-1 --title "Updated" --tags "new,tags"
+brainfile patch --task task-1 --clear-assignee
 ```
+
+**Options:**
+- `-t, --task <id>` - Task ID (required)
+- `--title <text>` - New title
+- `--description <text>` - New description
+- `--priority <level>` - New priority
+- `--tags <list>` - New tags (comma-separated)
+- `--assignee <name>` - New assignee
+- `--due-date <date>` - New due date
+- `--clear-description` - Remove description
+- `--clear-priority` - Remove priority
+- `--clear-tags` - Remove tags
+- `--clear-assignee` - Remove assignee
+- `--clear-due-date` - Remove due date
+
+---
+
+## delete
+
+Permanently delete a task. Requires confirmation.
+
+```bash
+brainfile delete --task task-1 --force
+```
+
+**Options:**
+- `-t, --task <id>` - Task ID (required)
+- `--force` - Confirm deletion (required)
+
+---
+
+## archive
+
+Move a task to the archive section.
+
+```bash
+brainfile archive --task task-1
+```
+
+**Options:**
+- `-t, --task <id>` - Task ID (required)
+
+---
+
+## restore
+
+Restore an archived task to a column.
+
+```bash
+brainfile restore --task task-1 --column todo
+```
+
+**Options:**
+- `-t, --task <id>` - Task ID (required)
+- `-c, --column <name>` - Target column (required)
+
+---
+
+## subtask
+
+Manage subtasks within a task.
+
+```bash
+brainfile subtask --task task-1 --add "New subtask"
+brainfile subtask --task task-1 --toggle task-1-1
+brainfile subtask --task task-1 --update task-1-1 --title "Updated"
+brainfile subtask --task task-1 --delete task-1-2
+```
+
+**Options:**
+- `-t, --task <id>` - Parent task ID (required)
+- `--add <title>` - Add a new subtask
+- `--toggle <id>` - Toggle subtask completion
+- `--update <id>` - Update subtask (use with `--title`)
+- `--delete <id>` - Delete a subtask
+- `--title <text>` - New title (for `--update`)
+
+---
 
 ## lint
 
-Validate your brainfile.md syntax and automatically fix common issues.
-
-### Usage
+Validate brainfile syntax and auto-fix issues.
 
 ```bash
-brainfile lint [options]
+brainfile lint              # Check for issues
+brainfile lint --fix        # Auto-fix issues
+brainfile lint --check      # Exit with error (for CI)
 ```
 
-### Options
+**Options:**
+- `-f, --file <path>` - Path to brainfile (default: `brainfile.md`)
+- `--fix` - Automatically fix issues
+- `--check` - Exit with error code if issues found
 
-- `-f, --file <path>` - Path to brainfile.md file (default: `brainfile.md`)
-- `--fix` - Automatically fix issues when possible
-- `--check` - Exit with error code if issues found (useful for CI/CD)
-
-### What it checks
-
+**What it checks:**
 - YAML syntax errors
-- Unquoted strings containing colons
+- Unquoted strings with colons (auto-fixable)
 - Duplicate column IDs
-- Board structure validation
 - Missing required fields
 
-### Auto-fixable issues
-
-- Unquoted strings with colons (adds quotes automatically)
-
-### Detection-only issues
-
-- Duplicate column IDs
-- Structural validation errors
-- YAML syntax errors
-
-### Examples
-
-```bash
-# Check for issues
-brainfile lint
-
-# Check and automatically fix issues
-brainfile lint --fix
-
-# Use in CI/CD (exits with error code if issues found)
-brainfile lint --check
-
-# Check a specific file
-brainfile lint --file ./project/brainfile.md --fix
-```
+---
 
 ## template
 
-List available templates and create tasks from templates.
-
-### Usage
+Create tasks from built-in templates.
 
 ```bash
-brainfile template [options]
-```
-
-### Options
-
-- `-f, --file <path>` - Path to brainfile.md file (default: `brainfile.md`)
-- `-l, --list` - List all available templates
-- `-u, --use <template-id>` - Create task from template
-- `--title <text>` - Task title (required when using template)
-- `--description <text>` - Task description (optional)
-- `-c, --column <name>` - Column to add task to (default: `todo`)
-
-### Built-in Templates
-
-- `bug-report` - Bug tracking with steps to reproduce, environment details
-- `feature-request` - Feature proposals with requirements and acceptance criteria
-- `refactor` - Code refactoring tasks with analysis and testing steps
-
-### Examples
-
-```bash
-# List all templates
 brainfile template --list
-
-# Create a bug report
-brainfile template --use bug-report --title "Login timeout on mobile"
-
-# Create a feature request
-brainfile template --use feature-request \
-  --title "Add dark mode support" \
-  --description "Users want dark mode" \
-  --column todo
-
-# Create a refactor task
-brainfile template --use refactor \
-  --title "Refactor authentication module" \
-  --column in-progress
+brainfile template --use bug-report --title "Login fails"
+brainfile template --use feature-request --title "Dark mode"
 ```
+
+**Options:**
+- `-l, --list` - List available templates
+- `-u, --use <id>` - Create from template
+- `--title <text>` - Task title (required with `--use`)
+- `--description <text>` - Task description
+- `-c, --column <name>` - Target column (default: `todo`)
+
+**Built-in Templates:**
+- `bug-report` - Bug tracking with triage steps
+- `feature-request` - Feature proposals
+- `refactor` - Code refactoring tasks
+
+---
+
+## tui
+
+Launch interactive terminal UI. This is the default when running `brainfile` without arguments.
+
+```bash
+brainfile              # Opens TUI with brainfile.md
+brainfile ./tasks.md   # Opens TUI with specific file
+brainfile tui          # Explicit TUI command
+```
+
+**Keyboard Controls:**
+
+| Key | Action |
+|-----|--------|
+| `TAB` / `Shift+TAB` | Navigate columns |
+| `j`/`k` or `↑`/`↓` | Navigate tasks |
+| `Enter` | Expand/collapse task |
+| `/` | Search tasks |
+| `?` | Show help |
+| `r` | Refresh |
+| `q` | Quit |
+
+**Features:**
+- Real-time file watching with auto-refresh
+- Progress bar showing completion percentage
+- Subtask progress indicators
+- True black dark mode color scheme
+
+---
+
+## hooks
+
+Install integration hooks for AI coding assistants. Hooks provide automatic reminders to update task status during AI-assisted development.
+
+```bash
+brainfile hooks install claude-code
+brainfile hooks install cursor --scope project
+brainfile hooks install cline
+brainfile hooks list
+brainfile hooks uninstall claude-code --scope all
+```
+
+**Supported Assistants:**
+- Claude Code
+- Cursor
+- Cline
+
+**Options:**
+- `--scope <scope>` - `user` (default), `project`, or `all`
+
+**How Hooks Work:**
+
+1. **After edits** - Gentle reminder: "Consider updating brainfile.md"
+2. **Before prompts** - Smart check: Warns if brainfile is stale (>5 minutes)
+3. **Session start** - Detects brainfile and reminds about task tracking
+
+See [AI Agent Integration](/agents/integration) for detailed configuration.
+
+---
+
+## mcp
+
+Start an MCP (Model Context Protocol) server for direct AI assistant integration.
+
+```bash
+brainfile mcp
+brainfile mcp --file ./project/brainfile.md
+```
+
+**Options:**
+- `-f, --file <path>` - Path to brainfile (default: `brainfile.md`)
+
+**Available MCP Tools:**
+
+| Tool | Description |
+|------|-------------|
+| `list_tasks` | List tasks with optional filtering |
+| `add_task` | Create a new task |
+| `move_task` | Move task between columns |
+| `patch_task` | Update task fields |
+| `delete_task` | Permanently delete a task |
+| `archive_task` | Archive a task |
+| `restore_task` | Restore from archive |
+| `add_subtask` | Add a subtask |
+| `delete_subtask` | Delete a subtask |
+| `toggle_subtask` | Toggle subtask completion |
+| `update_subtask` | Update subtask title |
+
+**Configuration for Claude Code:**
+
+Add to `.mcp.json` in your project:
+
+```json
+{
+  "mcpServers": {
+    "brainfile": {
+      "command": "npx",
+      "args": ["@brainfile/cli", "mcp"]
+    }
+  }
+}
+```
+
+---
 
 ## Global Options
 
-These options work with all commands:
+Available with all commands:
 
-- `--help` - Display help for a command
-- `--version` - Display CLI version
-
-### Examples
+- `--help` - Display help
+- `--version` - Display version
 
 ```bash
-# Get help for a specific command
 brainfile add --help
-
-# Check CLI version
 brainfile --version
 ```
 
 ## Exit Codes
 
-The CLI uses standard exit codes:
-
 - `0` - Success
-- `1` - Error (invalid arguments, file not found, etc.)
-- `2` - Validation error (when using `lint --check`)
-
-This makes the CLI suitable for use in scripts and CI/CD pipelines.
-
-## Examples in Scripts
-
-### npm scripts
-
-```json
-{
-  "scripts": {
-    "tasks": "brainfile list",
-    "task:add": "brainfile add",
-    "task:lint": "brainfile lint --check"
-  }
-}
-```
-
-### CI/CD
-
-```yaml
-# GitHub Actions example
-- name: Validate brainfile
-  run: npx @brainfile/cli lint --check
-```
+- `1` - Error (invalid arguments, file not found)
+- `2` - Validation error (with `lint --check`)
 
 ## See Also
 
-- [Installation guide](/cli/installation)
-- [Usage examples](/cli/examples)
-- [Task templates](/core/templates)
-
+- [Installation](/cli/installation)
+- [Examples](/cli/examples)
+- [AI Agent Integration](/agents/integration)

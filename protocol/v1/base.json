@@ -52,6 +52,48 @@
         "llmNotes": {
           "type": "string",
           "description": "Free-form notes about how this project prefers AI work to be structured"
+        },
+        "tools": {
+          "type": "object",
+          "description": "CLI tools and commands available for agents to use. Reduces token usage vs manual file editing.",
+          "additionalProperties": {
+            "type": "object",
+            "description": "Tool configuration",
+            "properties": {
+              "description": {
+                "type": "string",
+                "description": "What this tool is for"
+              },
+              "alias": {
+                "type": "string",
+                "description": "Command alias if different from tool name"
+              },
+              "prefer": {
+                "type": ["boolean", "string"],
+                "description": "Whether to prefer this tool, or a note about when to prefer it"
+              },
+              "commands": {
+                "type": "array",
+                "description": "Available commands with their syntax",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": true
+          },
+          "examples": [
+            {
+              "brainfile": {
+                "prefer": true,
+                "commands": ["move --task <id> --column <id>", "add --title \"...\" --column <id>", "list"]
+              },
+              "ripgrep": {
+                "alias": "rg",
+                "prefer": "use for all file content searches"
+              }
+            }
+          ]
         }
       },
       "additionalProperties": true

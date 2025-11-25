@@ -5,11 +5,116 @@ description: Guide for integrating AI agents with Brainfile task management
 
 ## Overview
 
-Brainfile is designed from the ground up for AI agent compatibility. This guide explains how AI agents should interact with Brainfile boards and best practices for integration.
+Brainfile is designed for AI agent compatibility. There are three ways to integrate:
 
-## Agent Configuration Method (Recommended)
+1. **MCP Server** - Direct tool access for AI assistants (recommended)
+2. **Agent Hooks** - Automatic reminders during AI-assisted development
+3. **Manual Instructions** - Simple rules in agent config files
 
-For the simplest integration, add these instructions to your agent configuration file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.):
+## MCP Server (Recommended)
+
+The CLI includes a built-in MCP (Model Context Protocol) server that exposes all Brainfile operations as tools. This is the most powerful integration method.
+
+### Setup
+
+Add to `.mcp.json` in your project:
+
+```json
+{
+  "mcpServers": {
+    "brainfile": {
+      "command": "npx",
+      "args": ["@brainfile/cli", "mcp"]
+    }
+  }
+}
+```
+
+Or for a specific file:
+
+```json
+{
+  "mcpServers": {
+    "brainfile": {
+      "command": "npx",
+      "args": ["@brainfile/cli", "mcp", "-f", "path/to/brainfile.md"]
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Tool | Description |
+|------|-------------|
+| `list_tasks` | List tasks with column/tag filtering |
+| `add_task` | Create tasks with all fields |
+| `move_task` | Move between columns |
+| `patch_task` | Update specific fields |
+| `delete_task` | Permanently delete |
+| `archive_task` | Move to archive |
+| `restore_task` | Restore from archive |
+| `add_subtask` | Add subtask |
+| `delete_subtask` | Delete subtask |
+| `toggle_subtask` | Toggle completion |
+| `update_subtask` | Update subtask title |
+
+### Benefits
+
+- AI assistants can manage tasks directly without file editing
+- Type-safe operations with error handling
+- No risk of YAML corruption
+- Works with Claude Code, Cursor, and other MCP-compatible tools
+
+---
+
+## Agent Hooks
+
+Hooks provide automatic reminders to update task status during AI-assisted development.
+
+### Installation
+
+```bash
+# Claude Code
+brainfile hooks install claude-code
+
+# Cursor
+brainfile hooks install cursor --scope project
+
+# Cline
+brainfile hooks install cline
+```
+
+### How Hooks Work
+
+1. **After file edits** (80% of interactions)
+   - Shows: "Consider updating @brainfile.md"
+   - Non-blocking, shown once per edit
+
+2. **Before new prompts** (20% of interactions)
+   - Checks if brainfile is stale (>5 minutes old)
+   - Only warns if there are uncommitted changes
+   - Shows: "Files modified but @brainfile.md hasn't been updated"
+
+3. **Session start**
+   - Detects brainfile in project
+   - Shows: "Brainfile detected. Remember to update task status."
+
+### Managing Hooks
+
+```bash
+# List installed hooks
+brainfile hooks list
+
+# Uninstall
+brainfile hooks uninstall claude-code --scope all
+```
+
+---
+
+## Manual Instructions
+
+For simple integration without MCP or hooks, add to your agent config file (`CLAUDE.md`, `.cursorrules`, etc.):
 
 ```markdown
 # Task Management Rules
@@ -20,58 +125,11 @@ For the simplest integration, add these instructions to your agent configuration
 - your existing tools do not modify this file, you need to edit it directly
 ```
 
-**Benefits**:
-- Minimal, portable agent instructions
-- Works across any AI agent (Claude, Cursor, GitHub Copilot, etc.)
-- Project-specific rules stay in `brainfile.md`
-- Clean separation of concerns
+---
 
-**Recommended**: Keep only these minimal instructions in your agent config file, and use `brainfile.md` for project-specific rules and context.
+## Agent Instructions Block
 
-## Quick Start for AI Agents
-
-1. **Look for the load tag** in README files:
-   ```html
-   <!-- load:brainfile.md -->
-   ```
-   This tag indicates the project uses Brainfile. Load the referenced file automatically.
-
-2. **Check for board files** in this order:
-   - `brainfile.md` (preferred)
-   - `.brainfile.md` (backward compatibility)
-
-3. **Follow agent instructions** in the YAML:
-   ```yaml
-   agent:
-     instructions:
-       - Modify only the YAML frontmatter
-       - Preserve all IDs
-       - Keep ordering
-   ```
-
-## File Discovery Algorithm
-
-```python
-def find_brainfile_file(project_root):
-    # Priority order
-    candidates = [
-        'brainfile.md',        # New default (non-hidden)
-        '.brainfile.md',       # Backward compatibility
-        '.bb.md'              # Legacy shorthand
-    ]
-
-    for filename in candidates:
-        path = os.path.join(project_root, filename)
-        if os.path.exists(path):
-            return path
-
-    # Create new file using non-hidden format
-    return create_default_board('brainfile.md')
-```
-
-## Understanding the Agent Block
-
-The `agent` block provides explicit instructions for AI behavior:
+The `agent` block in `brainfile.md` provides explicit instructions:
 
 ```yaml
 agent:
@@ -81,19 +139,56 @@ agent:
     - Keep ordering
     - Make minimal changes
     - Preserve unknown fields
+  llmNotes: "Prefer functional patterns and comprehensive tests"
 ```
 
 ### Why These Instructions Matter
 
-1. **Modify only the YAML frontmatter**: The content after `---` should never be modified
-2. **Preserve all IDs**: Changing IDs breaks references and history
-3. **Keep ordering**: Maintains visual consistency in UIs
-4. **Make minimal changes**: Reduces merge conflicts and preserves user intent
-5. **Preserve unknown fields**: Future-proofs against schema extensions
+| Instruction | Reason |
+|-------------|--------|
+| Modify only YAML frontmatter | Content after `---` is user documentation |
+| Preserve all IDs | Changing IDs breaks references and history |
+| Keep ordering | Maintains visual consistency in UIs |
+| Make minimal changes | Reduces merge conflicts |
+| Preserve unknown fields | Future-proofs against schema extensions |
 
-## Common AI Agent Operations
+---
 
-### Moving a Task Between Columns
+## Best Practices
+
+### DO:
+- Use MCP server when available for reliable operations
+- Preserve all IDs and unknown fields
+- Validate changes before saving
+- Report changes clearly to users
+- Move entire task objects (with all fields)
+
+### DON'T:
+- Modify content outside YAML frontmatter
+- Change or regenerate task IDs
+- Remove fields you don't understand
+- Create hidden files (use `brainfile.md`, not `.brainfile.md`)
+
+---
+
+## File Discovery
+
+AI agents should check for board files in this order:
+
+1. `brainfile.md` (preferred)
+2. `.brainfile.md` (backward compatibility)
+
+Or look for the load tag in README files:
+
+```html
+<!-- load:brainfile.md -->
+```
+
+---
+
+## Common Operations
+
+### Moving a Task
 
 ```yaml
 # BEFORE
@@ -105,7 +200,7 @@ columns:
   - id: in-progress
     tasks: []
 
-# AFTER (correct)
+# AFTER
 columns:
   - id: todo
     tasks: []
@@ -115,20 +210,19 @@ columns:
         title: Fix login bug
 ```
 
-### Adding a New Task
+### Adding a Task
 
 ```yaml
-# Generate next ID by finding max existing ID
 columns:
   - id: todo
     tasks:
-      - id: task-5  # Existing max ID
+      - id: task-5  # Existing
         title: Existing task
-      - id: task-6  # New task with next ID
+      - id: task-6  # New - sequential ID
         title: New task
 ```
 
-### Updating Task Status with Subtasks
+### Updating Subtasks
 
 ```yaml
 tasks:
@@ -143,135 +237,47 @@ tasks:
         completed: false
 ```
 
-## Best Practices for AI Agents
-
-### DO:
-- ✅ Load `brainfile.md` automatically when referenced
-- ✅ Respect the agent instructions block
-- ✅ Preserve all IDs and unknown fields
-- ✅ Validate changes against the schema
-- ✅ Provide clear feedback about changes made
-- ✅ Move entire task objects (with all fields) between columns
-
-### DON'T:
-- ❌ Modify content outside YAML frontmatter
-- ❌ Change or regenerate task IDs
-- ❌ Remove fields you don't understand
-- ❌ Create hidden files for new projects
-- ❌ Ignore the priority order when multiple files exist
-
-## Integration with VSCode Extension
-
-The VSCode extension watches for file changes in real-time. AI agents should:
-
-1. **Write atomic changes**: Complete all modifications before saving
-2. **Preserve formatting**: Maintain YAML indentation (2 spaces)
-3. **Handle conflicts**: Check for concurrent modifications
-4. **Validate before saving**: Ensure YAML is valid
+---
 
 ## Error Handling
 
-### Common Issues and Solutions
+### Invalid YAML
+- Validate before writing
+- Preserve original on error
+- Report specific line numbers
 
-1. **Invalid YAML**
-   - Validate before writing
-   - Preserve original on error
-   - Report specific line numbers
+### ID Conflicts
+- Check existing IDs before adding
+- Use sequential numbering
+- Never reuse deleted IDs
 
-2. **ID Conflicts**
-   - Always check existing IDs
-   - Use sequential numbering
-   - Never reuse deleted IDs
+### Schema Violations
+- Validate against schema
+- Report unknown fields as warnings, not errors
 
-3. **Schema Violations**
-   - Validate against `brainfile.schema.json`
-   - Preserve backward compatibility
-   - Report unknown fields as warnings, not errors
+---
 
-## Compliance Checking
+## Integration with Tools
 
-AI agents should self-verify compliance:
+### VSCode Extension
 
-```python
-def check_compliance(board):
-    # Check agent instructions exist
-    if 'agent' in board and 'instructions' in board['agent']:
-        follow_instructions(board['agent']['instructions'])
+The extension watches for file changes. AI agents should:
+- Write atomic changes (complete all modifications before saving)
+- Preserve YAML indentation (2 spaces)
+- Validate before saving
 
-    # Verify ID uniqueness
-    all_ids = set()
-    for column in board['columns']:
-        for task in column['tasks']:
-            if task['id'] in all_ids:
-                raise ValueError(f"Duplicate ID: {task['id']}")
-            all_ids.add(task['id'])
+### CLI
 
-    # Validate against schema
-    validate_against_schema(board, 'brainfile.schema.json')
+Use the CLI for validation:
+
+```bash
+brainfile lint --check
 ```
 
-## README Integration
+---
 
-The load tag pattern enables automatic context:
+## See Also
 
-```markdown
-# My Project
-
-<!-- load:brainfile.md -->
-
-This comment tells AI agents to automatically load the board file.
-```
-
-Benefits:
-- No manual prompting needed
-- Consistent context across sessions
-- Works with any AI agent that parses HTML comments
-
-## Migration Support
-
-When encountering legacy hidden files:
-
-1. **Suggest migration** to non-hidden format
-2. **Support both formats** during transition
-3. **Never force migration** without user consent
-4. **Preserve exact structure** when migrating
-
-## Example Agent Interaction
-
-```
-User: "Move the authentication task to in-progress"
-
-AI Agent:
-1. Loads brainfile.md (found via README tag)
-2. Reads agent instructions
-3. Finds task with "authentication" in title
-4. Preserves entire task object
-5. Moves task to in-progress column
-6. Saves file with minimal changes
-7. Reports: "Moved task-3 'Implement authentication' to In Progress"
-```
-
-## Testing Your Integration
-
-Verify your AI agent correctly:
-
-1. **Handles both file formats** (hidden and non-hidden)
-2. **Respects priority order** when multiple files exist
-3. **Follows agent instructions** exactly
-4. **Preserves unknown fields** for future compatibility
-5. **Generates valid YAML** that passes schema validation
-
-## Future Compatibility
-
-The protocol may extend with:
-- Additional task fields
-- New column types
-- Extended agent instructions
-- Custom metadata
-
-AI agents must:
-- Preserve unknown fields
-- Not assume fixed schema
-- Check for schema updates
-- Gracefully handle extensions
-
+- [CLI Commands](/cli/commands) - Full command reference including MCP
+- [Protocol Specification](/protocol/specification) - File format details
+- [Core Library](/core/overview) - Programmatic operations

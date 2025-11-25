@@ -3,70 +3,65 @@ title: CLI Examples
 description: Real-world examples and workflows using the Brainfile CLI
 ---
 
-## Common Workflows
+## Getting Started
 
-### Starting a New Project
+### New Project Setup
 
 ```bash
-# Create a basic brainfile.md (manually or use template)
-echo "---
-title: My Project
-columns:
-  - id: todo
-    title: To Do
-    tasks: []
-  - id: in-progress
-    title: In Progress
-    tasks: []
-  - id: done
-    title: Done
-    tasks: []
----" > brainfile.md
+# Initialize brainfile
+brainfile init
 
-# Add your first task
+# Add first tasks
 brainfile add --title "Setup project structure" --priority high
+brainfile add --title "Configure CI/CD" --priority medium
 
-# List tasks to verify
-brainfile list
+# Open interactive TUI
+brainfile
 ```
 
-### Daily Development Workflow
+### Using the TUI
 
 ```bash
-# Check what needs to be done
+# Open default brainfile.md
+brainfile
+
+# Open specific file
+brainfile ./projects/api/brainfile.md
+```
+
+The TUI provides:
+- Column navigation with `TAB`
+- Task navigation with `j`/`k` or arrows
+- Search with `/`
+- Real-time file sync
+
+---
+
+## Daily Workflows
+
+### Development Workflow
+
+```bash
+# Check pending tasks
 brainfile list --column todo
 
-# Start working on a task
-brainfile move --task task-5 --column in-progress
+# Start working
+brainfile move --task task-1 --column in-progress
 
-# Add a quick bug fix
-brainfile add \
-  --title "Fix navbar overflow" \
-  --tags "bug,ui" \
-  --priority high \
-  --column in-progress
+# Update task priority
+brainfile patch --task task-1 --priority critical
 
-# Complete a task
-brainfile move --task task-5 --column done
-
-# Check progress
-brainfile list
+# Complete task
+brainfile move --task task-1 --column done
 ```
 
 ### Bug Tracking
 
 ```bash
-# Create a bug report from template
+# Create from template
 brainfile template --use bug-report \
   --title "Memory leak in data processing" \
-  --description "Application crashes after processing 1000+ items"
-
-# Add additional context
-brainfile add \
-  --title "Investigate memory usage" \
-  --tags "bug,performance,investigation" \
-  --priority critical \
-  --column in-progress
+  --description "Crashes after 1000+ items"
 
 # List all bugs
 brainfile list --tag bug
@@ -75,79 +70,120 @@ brainfile list --tag bug
 ### Feature Development
 
 ```bash
-# Create feature from template
-brainfile template --use feature-request \
-  --title "Add user preferences panel" \
-  --description "Users need customizable settings for notifications"
+# Create feature with subtasks
+brainfile add --title "User preferences" \
+  --priority high \
+  --subtasks "Design UI,Implement backend,Add persistence,Write tests"
 
-# Break down into subtasks (manually edit brainfile.md)
-# Or add individual tasks
-brainfile add \
-  --title "Design preferences UI" \
-  --tags "feature,ui,design" \
-  --priority medium
+# Toggle subtask completion
+brainfile subtask --task task-1 --toggle task-1-1
 
-brainfile add \
-  --title "Implement preferences backend" \
-  --tags "feature,backend,api" \
-  --priority medium
-
-brainfile add \
-  --title "Add preferences persistence" \
-  --tags "feature,database" \
-  --priority medium
+# Add more subtasks
+brainfile subtask --task task-1 --add "Deploy to staging"
 ```
 
-### Code Review Workflow
+---
+
+## Task Management
+
+### Updating Tasks
 
 ```bash
-# Move completed work to review
-brainfile move --task task-12 --column review
+# Update multiple fields
+brainfile patch --task task-1 \
+  --title "Updated title" \
+  --priority critical \
+  --tags "urgent,bug"
 
-# List everything in review
-brainfile list --column review
+# Assign task
+brainfile patch --task task-1 --assignee john
 
-# After approval, move to done
-brainfile move --task task-12 --column done
+# Set due date
+brainfile patch --task task-1 --due-date 2025-02-01
+
+# Remove fields
+brainfile patch --task task-1 --clear-assignee --clear-due-date
 ```
 
-### Project Planning
+### Subtask Operations
 
 ```bash
-# Add multiple planned features
-brainfile add --title "Implement OAuth login" --priority high --tags "auth,feature"
-brainfile add --title "Add email notifications" --priority medium --tags "notifications,feature"
-brainfile add --title "Create admin dashboard" --priority low --tags "admin,feature"
+# Add subtask
+brainfile subtask --task task-1 --add "New subtask"
 
-# Use refactor template for technical debt
-brainfile template --use refactor \
-  --title "Refactor API error handling" \
-  --description "Standardize error responses across all endpoints"
+# Toggle completion
+brainfile subtask --task task-1 --toggle task-1-1
 
-# View roadmap
-brainfile list --column todo
+# Update title
+brainfile subtask --task task-1 --update task-1-1 --title "Updated title"
+
+# Delete subtask
+brainfile subtask --task task-1 --delete task-1-2
 ```
 
-### CI/CD Integration
-
-#### Pre-commit Hook
+### Archive and Restore
 
 ```bash
-#!/bin/bash
-# .git/hooks/pre-commit
+# Archive completed task
+brainfile archive --task task-5
 
-# Validate brainfile.md before commit
-if [ -f "brainfile.md" ]; then
-  npx @brainfile/cli lint --check
-  if [ $? -ne 0 ]; then
-    echo "❌ brainfile.md has validation errors"
-    echo "Run 'brainfile lint --fix' to auto-fix"
-    exit 1
-  fi
-fi
+# Restore to different column
+brainfile restore --task task-5 --column todo
+
+# Delete permanently
+brainfile delete --task task-99 --force
 ```
 
-#### GitHub Actions
+---
+
+## AI Integration
+
+### MCP Server
+
+Add to `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "brainfile": {
+      "command": "npx",
+      "args": ["@brainfile/cli", "mcp"]
+    }
+  }
+}
+```
+
+Start manually for testing:
+
+```bash
+brainfile mcp
+brainfile mcp --file ./project/brainfile.md
+```
+
+### Agent Hooks
+
+```bash
+# Install for Claude Code
+brainfile hooks install claude-code
+
+# Install for Cursor (project scope)
+brainfile hooks install cursor --scope project
+
+# Install for Cline
+brainfile hooks install cline
+
+# Check status
+brainfile hooks list
+
+# Uninstall
+brainfile hooks uninstall claude-code --scope all
+```
+
+---
+
+## CI/CD Integration
+
+### GitHub Actions
 
 ```yaml
 name: Validate Brainfile
@@ -158,193 +194,140 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - name: Validate brainfile
+      - name: Validate
         run: npx @brainfile/cli lint --check
 ```
 
-#### npm Scripts
+### Pre-commit Hook
+
+```bash
+#!/bin/bash
+# .git/hooks/pre-commit
+
+if [ -f "brainfile.md" ]; then
+  npx @brainfile/cli lint --check
+  if [ $? -ne 0 ]; then
+    echo "brainfile.md has validation errors"
+    echo "Run 'brainfile lint --fix' to auto-fix"
+    exit 1
+  fi
+fi
+```
+
+### npm Scripts
 
 ```json
 {
   "scripts": {
     "tasks": "brainfile list",
-    "task:todo": "brainfile list --column todo",
-    "task:progress": "brainfile list --column in-progress",
-    "task:add": "brainfile add",
-    "task:lint": "brainfile lint --fix",
+    "tasks:todo": "brainfile list --column todo",
+    "tasks:lint": "brainfile lint --fix",
     "precommit": "brainfile lint --check"
   }
 }
 ```
 
-### Filtering and Organization
+---
+
+## Filtering
 
 ```bash
-# View high priority items
-brainfile list --tag high
+# By column
+brainfile list --column in-progress
 
-# View backend-related tasks
-brainfile list --tag backend
-
-# View bugs
+# By tag
 brainfile list --tag bug
+brainfile list --tag feature
 
-# View specific project file
-brainfile list --file ./projects/api/brainfile.md
+# Specific file
+brainfile list --file ./project-a/brainfile.md
 ```
 
-### Batch Operations
+---
+
+## Batch Operations
 
 ```bash
-# Add multiple related tasks
-brainfile add --title "Write unit tests" --tags "testing" --priority high
-brainfile add --title "Write integration tests" --tags "testing" --priority high
-brainfile add --title "Update test documentation" --tags "testing,docs" --priority medium
+# Add multiple tasks
+for task in "Setup database" "Configure auth" "Add API routes"; do
+  brainfile add --title "$task" --tags "backend"
+done
 
-# Move multiple tasks (in a loop)
-for task in task-1 task-2 task-3; do
-  brainfile move --task $task --column done
+# Move multiple tasks
+for id in task-1 task-2 task-3; do
+  brainfile move --task $id --column done
 done
 ```
 
-### Multi-Project Management
+---
+
+## Templates
 
 ```bash
-# Project A tasks
-brainfile list --file ./project-a/brainfile.md --column todo
+# List available templates
+brainfile template --list
 
-# Project B tasks
-brainfile list --file ./project-b/brainfile.md --column in-progress
+# Bug report
+brainfile template --use bug-report \
+  --title "Login fails on mobile" \
+  --description "Users cannot log in on iOS"
 
-# Add task to specific project
-brainfile add \
-  --file ./project-a/brainfile.md \
-  --title "Deploy to staging" \
-  --priority high
+# Feature request
+brainfile template --use feature-request \
+  --title "Dark mode" \
+  --column todo
+
+# Refactoring task
+brainfile template --use refactor \
+  --title "Refactor auth module"
 ```
 
-### Maintenance and Cleanup
+---
+
+## Linting
 
 ```bash
-# Validate and fix formatting issues
-brainfile lint --fix
-
-# Check for problems
+# Check for issues
 brainfile lint
 
-# Archive completed tasks (manually move to archive section)
-# Then clear done column by editing brainfile.md
+# Auto-fix issues
+brainfile lint --fix
+
+# CI mode (exits with error)
+brainfile lint --check
 ```
 
-## Advanced Patterns
+---
 
-### Task Templates with Variables
+## Tips
 
-```bash
-# Bug report with detailed context
-brainfile template --use bug-report \
-  --title "API returns 500 on /users endpoint" \
-  --description "Steps to reproduce:
-1. Make GET request to /api/users
-2. Include auth token
-3. Server returns 500
-
-Expected: 200 with user list
-Actual: 500 Internal Server Error
-
-Environment: Production
-Browser: Chrome 120
-User: test@example.com"
-```
-
-### Automated Task Creation
+### Shell Aliases
 
 ```bash
-#!/bin/bash
-# create-sprint-tasks.sh
-
-SPRINT="Sprint 23"
-
-brainfile add --title "[$SPRINT] Planning meeting" --priority high
-brainfile add --title "[$SPRINT] Sprint review" --priority medium
-brainfile add --title "[$SPRINT] Sprint retrospective" --priority medium
-brainfile add --title "[$SPRINT] Update documentation" --priority low
-
-echo "✅ Created sprint tasks"
-```
-
-### Status Reports
-
-```bash
-#!/bin/bash
-# generate-status.sh
-
-echo "📊 Project Status Report"
-echo "======================="
-echo ""
-echo "📝 To Do:"
-brainfile list --column todo | grep -c "task-"
-echo ""
-echo "🚧 In Progress:"
-brainfile list --column in-progress | grep -c "task-"
-echo ""
-echo "✅ Done:"
-brainfile list --column done | grep -c "task-"
-```
-
-## Tips and Tricks
-
-### Aliases
-
-Add to your `.bashrc` or `.zshrc`:
-
-```bash
+# Add to .bashrc or .zshrc
 alias bf="brainfile"
 alias bfl="brainfile list"
 alias bfa="brainfile add"
 alias bfm="brainfile move"
-alias bft="brainfile template"
+alias bfp="brainfile patch"
+
+# Usage
+bf                          # TUI
+bfl                         # list
+bfa --title "New task"      # add
+bfm --task task-1 --column done  # move
 ```
 
-Then use short commands:
-
-```bash
-bf list
-bfa --title "New task"
-bfm --task task-5 --column done
-```
-
-### Watch Mode
-
-Monitor tasks in real-time:
+### Watch Tasks
 
 ```bash
 watch -n 2 brainfile list
 ```
 
-### Colored Output in Scripts
-
-The CLI automatically disables colors in non-TTY environments. To force colors:
-
-```bash
-FORCE_COLOR=1 brainfile list
-```
-
-### JSON Export (Custom)
-
-While not built-in, you can parse the markdown for custom exports:
-
-```bash
-# Extract YAML frontmatter
-sed -n '/^---$/,/^---$/p' brainfile.md
-```
+---
 
 ## See Also
 
-- [CLI Commands Reference](/cli/commands)
-- [Installation Guide](/cli/installation)
-- [Task Templates](/core/templates)
-
+- [CLI Commands](/cli/commands) - Full reference
+- [AI Agent Integration](/agents/integration) - MCP and hooks
+- [Templates](/core/templates) - Template details
