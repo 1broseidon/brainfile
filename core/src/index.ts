@@ -51,6 +51,8 @@ export {
 // Export board operations
 export {
   type BoardOperationResult,
+  type BulkOperationResult,
+  type BulkItemResult,
   type TaskInput,
   type TaskPatch,
   moveTask,
@@ -67,7 +69,12 @@ export {
   deleteSubtask,
   updateSubtask,
   setSubtasksCompleted,
-  setAllSubtasksCompleted
+  setAllSubtasksCompleted,
+  // Bulk operations
+  moveTasks,
+  patchTasks,
+  deleteTasks,
+  archiveTasks,
 } from './operations';
 
 // Export query functions

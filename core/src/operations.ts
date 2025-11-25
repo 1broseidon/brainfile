@@ -48,6 +48,28 @@ export interface BoardOperationResult {
 }
 
 /**
+ * Result of a single item in a bulk operation
+ */
+export interface BulkItemResult {
+  id: string;
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Result of a bulk operation
+ */
+export interface BulkOperationResult {
+  success: boolean;
+  board?: Board;
+  results: BulkItemResult[];
+  /** Number of successfully processed items */
+  successCount: number;
+  /** Number of failed items */
+  failureCount: number;
+}
+
+/**
  * Move a task from one column to another at a specific index
  */
 export function moveTask(
@@ -700,4 +722,190 @@ export function setAllSubtasksCompleted(
   };
 
   return { success: true, board: newBoard };
+}
+
+// =============================================================================
+// BULK OPERATIONS
+// =============================================================================
+
+/**
+ * Move multiple tasks to a target column
+ * Operations are applied sequentially - partial success is possible
+ * @param board - Board to modify
+ * @param taskIds - Array of task IDs to move
+ * @param toColumnId - Target column ID
+ */
+export function moveTasks(
+  board: Board,
+  taskIds: string[],
+  toColumnId: string
+): BulkOperationResult {
+  const results: BulkItemResult[] = [];
+  let currentBoard = board;
+
+  // Validate target column exists first
+  const toColumn = findColumnById(board, toColumnId);
+  if (!toColumn) {
+    return {
+      success: false,
+      results: taskIds.map((id) => ({ id, success: false, error: `Target column ${toColumnId} not found` })),
+      successCount: 0,
+      failureCount: taskIds.length,
+    };
+  }
+
+  for (const taskId of taskIds) {
+    const taskInfo = findTaskById(currentBoard, taskId);
+    if (!taskInfo) {
+      results.push({ id: taskId, success: false, error: `Task ${taskId} not found` });
+      continue;
+    }
+
+    // Skip if already in target column
+    if (taskInfo.column.id === toColumnId) {
+      results.push({ id: taskId, success: true });
+      continue;
+    }
+
+    const targetColumn = findColumnById(currentBoard, toColumnId);
+    const toIndex = targetColumn ? targetColumn.tasks.length : 0;
+
+    const result = moveTask(currentBoard, taskId, taskInfo.column.id, toColumnId, toIndex);
+    if (result.success && result.board) {
+      currentBoard = result.board;
+      results.push({ id: taskId, success: true });
+    } else {
+      results.push({ id: taskId, success: false, error: result.error });
+    }
+  }
+
+  const successCount = results.filter((r) => r.success).length;
+  const failureCount = results.filter((r) => !r.success).length;
+
+  return {
+    success: failureCount === 0,
+    board: currentBoard,
+    results,
+    successCount,
+    failureCount,
+  };
+}
+
+/**
+ * Apply a patch to multiple tasks
+ * Operations are applied sequentially - partial success is possible
+ * @param board - Board to modify
+ * @param taskIds - Array of task IDs to patch
+ * @param patch - Patch to apply to all tasks
+ */
+export function patchTasks(
+  board: Board,
+  taskIds: string[],
+  patch: TaskPatch
+): BulkOperationResult {
+  const results: BulkItemResult[] = [];
+  let currentBoard = board;
+
+  for (const taskId of taskIds) {
+    const result = patchTask(currentBoard, taskId, patch);
+    if (result.success && result.board) {
+      currentBoard = result.board;
+      results.push({ id: taskId, success: true });
+    } else {
+      results.push({ id: taskId, success: false, error: result.error });
+    }
+  }
+
+  const successCount = results.filter((r) => r.success).length;
+  const failureCount = results.filter((r) => !r.success).length;
+
+  return {
+    success: failureCount === 0,
+    board: currentBoard,
+    results,
+    successCount,
+    failureCount,
+  };
+}
+
+/**
+ * Delete multiple tasks
+ * Operations are applied sequentially - partial success is possible
+ * @param board - Board to modify
+ * @param taskIds - Array of task IDs to delete (searches all columns)
+ */
+export function deleteTasks(
+  board: Board,
+  taskIds: string[]
+): BulkOperationResult {
+  const results: BulkItemResult[] = [];
+  let currentBoard = board;
+
+  for (const taskId of taskIds) {
+    const taskInfo = findTaskById(currentBoard, taskId);
+    if (!taskInfo) {
+      results.push({ id: taskId, success: false, error: `Task ${taskId} not found` });
+      continue;
+    }
+
+    const result = deleteTask(currentBoard, taskInfo.column.id, taskId);
+    if (result.success && result.board) {
+      currentBoard = result.board;
+      results.push({ id: taskId, success: true });
+    } else {
+      results.push({ id: taskId, success: false, error: result.error });
+    }
+  }
+
+  const successCount = results.filter((r) => r.success).length;
+  const failureCount = results.filter((r) => !r.success).length;
+
+  return {
+    success: failureCount === 0,
+    board: currentBoard,
+    results,
+    successCount,
+    failureCount,
+  };
+}
+
+/**
+ * Archive multiple tasks
+ * Operations are applied sequentially - partial success is possible
+ * @param board - Board to modify
+ * @param taskIds - Array of task IDs to archive (searches all columns)
+ */
+export function archiveTasks(
+  board: Board,
+  taskIds: string[]
+): BulkOperationResult {
+  const results: BulkItemResult[] = [];
+  let currentBoard = board;
+
+  for (const taskId of taskIds) {
+    const taskInfo = findTaskById(currentBoard, taskId);
+    if (!taskInfo) {
+      results.push({ id: taskId, success: false, error: `Task ${taskId} not found` });
+      continue;
+    }
+
+    const result = archiveTask(currentBoard, taskInfo.column.id, taskId);
+    if (result.success && result.board) {
+      currentBoard = result.board;
+      results.push({ id: taskId, success: true });
+    } else {
+      results.push({ id: taskId, success: false, error: result.error });
+    }
+  }
+
+  const successCount = results.filter((r) => r.success).length;
+  const failureCount = results.filter((r) => !r.success).length;
+
+  return {
+    success: failureCount === 0,
+    board: currentBoard,
+    results,
+    successCount,
+    failureCount,
+  };
 }

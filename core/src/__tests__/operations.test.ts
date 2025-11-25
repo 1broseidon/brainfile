@@ -14,7 +14,12 @@ import {
   updateSubtask,
   setSubtasksCompleted,
   setAllSubtasksCompleted,
+  moveTasks,
+  patchTasks,
+  deleteTasks,
+  archiveTasks,
   type BoardOperationResult,
+  type BulkOperationResult,
   type TaskInput
 } from '../operations';
 import type { Board, Column, Task } from '../types';
@@ -705,6 +710,183 @@ describe('Board Operations', () => {
 
       const currentStatuses = mockBoard.columns[0].tasks[0].subtasks!.map(st => st.completed);
       expect(currentStatuses).toEqual(originalStatuses);
+    });
+  });
+
+  // ==========================================================================
+  // BULK OPERATIONS
+  // ==========================================================================
+
+  describe('moveTasks', () => {
+    it('should move multiple tasks to target column', () => {
+      const result = moveTasks(mockBoard, ['task-1', 'task-2'], 'col2');
+
+      expect(result.success).toBe(true);
+      expect(result.successCount).toBe(2);
+      expect(result.failureCount).toBe(0);
+      expect(result.board!.columns[0].tasks).toHaveLength(0);
+      expect(result.board!.columns[1].tasks).toHaveLength(3);
+    });
+
+    it('should handle partial failures', () => {
+      const result = moveTasks(mockBoard, ['task-1', 'task-99'], 'col2');
+
+      expect(result.success).toBe(false);
+      expect(result.successCount).toBe(1);
+      expect(result.failureCount).toBe(1);
+      expect(result.results[0].success).toBe(true);
+      expect(result.results[1].success).toBe(false);
+      expect(result.results[1].error).toBe('Task task-99 not found');
+      // task-1 should still have moved
+      expect(result.board!.columns[0].tasks).toHaveLength(1);
+      expect(result.board!.columns[1].tasks).toHaveLength(2);
+    });
+
+    it('should skip tasks already in target column', () => {
+      const result = moveTasks(mockBoard, ['task-3'], 'col2');
+
+      expect(result.success).toBe(true);
+      expect(result.successCount).toBe(1);
+      expect(result.results[0].success).toBe(true);
+      // Task should still be there (no change needed)
+      expect(result.board!.columns[1].tasks).toHaveLength(1);
+    });
+
+    it('should fail all if target column not found', () => {
+      const result = moveTasks(mockBoard, ['task-1', 'task-2'], 'col99');
+
+      expect(result.success).toBe(false);
+      expect(result.successCount).toBe(0);
+      expect(result.failureCount).toBe(2);
+      expect(result.results.every(r => r.error?.includes('col99'))).toBe(true);
+    });
+
+    it('should not mutate original board', () => {
+      const originalCol1Count = mockBoard.columns[0].tasks.length;
+      moveTasks(mockBoard, ['task-1', 'task-2'], 'col2');
+
+      expect(mockBoard.columns[0].tasks.length).toBe(originalCol1Count);
+    });
+  });
+
+  describe('patchTasks', () => {
+    it('should apply patch to multiple tasks', () => {
+      const result = patchTasks(mockBoard, ['task-1', 'task-2'], { priority: 'high', tags: ['urgent'] });
+
+      expect(result.success).toBe(true);
+      expect(result.successCount).toBe(2);
+      expect(result.failureCount).toBe(0);
+      expect(result.board!.columns[0].tasks[0].priority).toBe('high');
+      expect(result.board!.columns[0].tasks[0].tags).toEqual(['urgent']);
+      expect(result.board!.columns[0].tasks[1].priority).toBe('high');
+      expect(result.board!.columns[0].tasks[1].tags).toEqual(['urgent']);
+    });
+
+    it('should handle partial failures', () => {
+      const result = patchTasks(mockBoard, ['task-1', 'task-99'], { priority: 'high' });
+
+      expect(result.success).toBe(false);
+      expect(result.successCount).toBe(1);
+      expect(result.failureCount).toBe(1);
+      expect(result.results[0].success).toBe(true);
+      expect(result.results[1].success).toBe(false);
+      expect(result.results[1].error).toBe('Task task-99 not found');
+    });
+
+    it('should not mutate original board', () => {
+      const originalPriority = mockBoard.columns[0].tasks[0].priority;
+      patchTasks(mockBoard, ['task-1'], { priority: 'critical' });
+
+      expect(mockBoard.columns[0].tasks[0].priority).toBe(originalPriority);
+    });
+  });
+
+  describe('deleteTasks', () => {
+    it('should delete multiple tasks', () => {
+      const result = deleteTasks(mockBoard, ['task-1', 'task-2']);
+
+      expect(result.success).toBe(true);
+      expect(result.successCount).toBe(2);
+      expect(result.failureCount).toBe(0);
+      expect(result.board!.columns[0].tasks).toHaveLength(0);
+    });
+
+    it('should delete tasks from different columns', () => {
+      const result = deleteTasks(mockBoard, ['task-1', 'task-3']);
+
+      expect(result.success).toBe(true);
+      expect(result.successCount).toBe(2);
+      expect(result.board!.columns[0].tasks).toHaveLength(1);
+      expect(result.board!.columns[1].tasks).toHaveLength(0);
+    });
+
+    it('should handle partial failures', () => {
+      const result = deleteTasks(mockBoard, ['task-1', 'task-99']);
+
+      expect(result.success).toBe(false);
+      expect(result.successCount).toBe(1);
+      expect(result.failureCount).toBe(1);
+      expect(result.results[0].success).toBe(true);
+      expect(result.results[1].success).toBe(false);
+      expect(result.results[1].error).toBe('Task task-99 not found');
+    });
+
+    it('should not mutate original board', () => {
+      const originalCount = mockBoard.columns[0].tasks.length;
+      deleteTasks(mockBoard, ['task-1', 'task-2']);
+
+      expect(mockBoard.columns[0].tasks.length).toBe(originalCount);
+    });
+  });
+
+  describe('archiveTasks', () => {
+    it('should archive multiple tasks', () => {
+      const result = archiveTasks(mockBoard, ['task-1', 'task-2']);
+
+      expect(result.success).toBe(true);
+      expect(result.successCount).toBe(2);
+      expect(result.failureCount).toBe(0);
+      expect(result.board!.columns[0].tasks).toHaveLength(0);
+      expect(result.board!.archive).toHaveLength(2);
+    });
+
+    it('should archive tasks from different columns', () => {
+      const result = archiveTasks(mockBoard, ['task-1', 'task-3']);
+
+      expect(result.success).toBe(true);
+      expect(result.successCount).toBe(2);
+      expect(result.board!.columns[0].tasks).toHaveLength(1);
+      expect(result.board!.columns[1].tasks).toHaveLength(0);
+      expect(result.board!.archive).toHaveLength(2);
+    });
+
+    it('should handle partial failures', () => {
+      const result = archiveTasks(mockBoard, ['task-1', 'task-99']);
+
+      expect(result.success).toBe(false);
+      expect(result.successCount).toBe(1);
+      expect(result.failureCount).toBe(1);
+      expect(result.results[0].success).toBe(true);
+      expect(result.results[1].success).toBe(false);
+      expect(result.results[1].error).toBe('Task task-99 not found');
+      // task-1 should still have been archived
+      expect(result.board!.archive).toHaveLength(1);
+    });
+
+    it('should append to existing archive', () => {
+      mockBoard.archive = [{ id: 'task-99', title: 'Archived', description: '' }];
+      const result = archiveTasks(mockBoard, ['task-1', 'task-2']);
+
+      expect(result.success).toBe(true);
+      expect(result.board!.archive).toHaveLength(3);
+    });
+
+    it('should not mutate original board', () => {
+      const originalCount = mockBoard.columns[0].tasks.length;
+      archiveTasks(mockBoard, ['task-1', 'task-2']);
+
+      expect(mockBoard.columns[0].tasks.length).toBe(originalCount);
+      expect(mockBoard.archive).toBeUndefined();
     });
   });
 });
