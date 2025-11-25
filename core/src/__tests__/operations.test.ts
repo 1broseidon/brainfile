@@ -12,6 +12,8 @@ import {
   addSubtask,
   deleteSubtask,
   updateSubtask,
+  setSubtasksCompleted,
+  setAllSubtasksCompleted,
   type BoardOperationResult,
   type TaskInput
 } from '../operations';
@@ -451,6 +453,18 @@ describe('Board Operations', () => {
 
       expect(mockBoard.columns[0].tasks[0].priority).toBe(originalPriority);
     });
+
+    it('should add and remove relatedFiles', () => {
+      // Add relatedFiles
+      let result = patchTask(mockBoard, 'task-1', { relatedFiles: ['src/auth.ts', 'src/login.tsx'] });
+      expect(result.success).toBe(true);
+      expect(result.board!.columns[0].tasks[0].relatedFiles).toEqual(['src/auth.ts', 'src/login.tsx']);
+
+      // Remove relatedFiles with null
+      result = patchTask(result.board!, 'task-1', { relatedFiles: null });
+      expect(result.success).toBe(true);
+      expect(result.board!.columns[0].tasks[0].relatedFiles).toBeUndefined();
+    });
   });
 
   describe('addSubtask', () => {
@@ -583,6 +597,114 @@ describe('Board Operations', () => {
       updateSubtask(mockBoard, 'task-1', 'task-1-1', 'New Title');
 
       expect(mockBoard.columns[0].tasks[0].subtasks![0].title).toBe(originalTitle);
+    });
+  });
+
+  describe('setSubtasksCompleted', () => {
+    beforeEach(() => {
+      mockBoard.columns[0].tasks[0].subtasks = [
+        { id: 'task-1-1', title: 'Subtask 1', completed: false },
+        { id: 'task-1-2', title: 'Subtask 2', completed: false },
+        { id: 'task-1-3', title: 'Subtask 3', completed: true }
+      ];
+    });
+
+    it('should mark multiple subtasks as completed', () => {
+      const result = setSubtasksCompleted(mockBoard, 'task-1', ['task-1-1', 'task-1-2'], true);
+
+      expect(result.success).toBe(true);
+      const subtasks = result.board!.columns[0].tasks[0].subtasks!;
+      expect(subtasks[0].completed).toBe(true);
+      expect(subtasks[1].completed).toBe(true);
+      expect(subtasks[2].completed).toBe(true); // unchanged
+    });
+
+    it('should mark multiple subtasks as incomplete', () => {
+      const result = setSubtasksCompleted(mockBoard, 'task-1', ['task-1-3'], false);
+
+      expect(result.success).toBe(true);
+      const subtasks = result.board!.columns[0].tasks[0].subtasks!;
+      expect(subtasks[0].completed).toBe(false); // unchanged
+      expect(subtasks[1].completed).toBe(false); // unchanged
+      expect(subtasks[2].completed).toBe(false);
+    });
+
+    it('should fail atomically if any subtask not found', () => {
+      const result = setSubtasksCompleted(mockBoard, 'task-1', ['task-1-1', 'task-1-99'], true);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Subtask task-1-99 not found');
+      // Original board unchanged
+      expect(mockBoard.columns[0].tasks[0].subtasks![0].completed).toBe(false);
+    });
+
+    it('should return error for non-existent task', () => {
+      const result = setSubtasksCompleted(mockBoard, 'task-99', ['task-1-1'], true);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-99 not found');
+    });
+
+    it('should return error for task without subtasks', () => {
+      const result = setSubtasksCompleted(mockBoard, 'task-2', ['task-2-1'], true);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-2 has no subtasks');
+    });
+
+    it('should not mutate original board', () => {
+      const originalStatus = mockBoard.columns[0].tasks[0].subtasks![0].completed;
+      setSubtasksCompleted(mockBoard, 'task-1', ['task-1-1'], true);
+
+      expect(mockBoard.columns[0].tasks[0].subtasks![0].completed).toBe(originalStatus);
+    });
+  });
+
+  describe('setAllSubtasksCompleted', () => {
+    beforeEach(() => {
+      mockBoard.columns[0].tasks[0].subtasks = [
+        { id: 'task-1-1', title: 'Subtask 1', completed: false },
+        { id: 'task-1-2', title: 'Subtask 2', completed: false },
+        { id: 'task-1-3', title: 'Subtask 3', completed: true }
+      ];
+    });
+
+    it('should mark all subtasks as completed', () => {
+      const result = setAllSubtasksCompleted(mockBoard, 'task-1', true);
+
+      expect(result.success).toBe(true);
+      const subtasks = result.board!.columns[0].tasks[0].subtasks!;
+      expect(subtasks.every(st => st.completed)).toBe(true);
+    });
+
+    it('should mark all subtasks as incomplete', () => {
+      const result = setAllSubtasksCompleted(mockBoard, 'task-1', false);
+
+      expect(result.success).toBe(true);
+      const subtasks = result.board!.columns[0].tasks[0].subtasks!;
+      expect(subtasks.every(st => !st.completed)).toBe(true);
+    });
+
+    it('should return error for non-existent task', () => {
+      const result = setAllSubtasksCompleted(mockBoard, 'task-99', true);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-99 not found');
+    });
+
+    it('should return error for task without subtasks', () => {
+      const result = setAllSubtasksCompleted(mockBoard, 'task-2', true);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-2 has no subtasks');
+    });
+
+    it('should not mutate original board', () => {
+      const originalStatuses = mockBoard.columns[0].tasks[0].subtasks!.map(st => st.completed);
+      setAllSubtasksCompleted(mockBoard, 'task-1', true);
+
+      const currentStatuses = mockBoard.columns[0].tasks[0].subtasks!.map(st => st.completed);
+      expect(currentStatuses).toEqual(originalStatuses);
     });
   });
 });

@@ -65,7 +65,9 @@ export {
   patchTask,
   addSubtask,
   deleteSubtask,
-  updateSubtask
+  updateSubtask,
+  setSubtasksCompleted,
+  setAllSubtasksCompleted
 } from './operations';
 
 // Export query functions
@@ -97,6 +99,21 @@ export {
   isValidSubtaskId,
   getParentTaskId
 } from './idGen';
+
+// Export discovery utilities
+export {
+  discover,
+  findPrimaryBrainfile,
+  watchBrainfiles,
+  isBrainfileName,
+  extractBrainfileSuffix,
+  BRAINFILE_PATTERNS,
+  BRAINFILE_GLOBS,
+  EXCLUDE_DIRS,
+  type DiscoveredFile,
+  type DiscoveryOptions,
+  type DiscoveryResult,
+} from './discovery';
 
 // Re-export commonly used interfaces for convenience
 export type {

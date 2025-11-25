@@ -604,3 +604,100 @@ export function updateSubtask(
 
   return { success: true, board: newBoard };
 }
+
+/**
+ * Set multiple subtasks to completed or incomplete
+ * @param board - Board to modify
+ * @param taskId - Parent task ID
+ * @param subtaskIds - Array of subtask IDs to update
+ * @param completed - Whether to mark as completed (true) or incomplete (false)
+ */
+export function setSubtasksCompleted(
+  board: Board,
+  taskId: string,
+  subtaskIds: string[],
+  completed: boolean
+): BoardOperationResult {
+  const taskInfo = findTaskById(board, taskId);
+  if (!taskInfo) {
+    return { success: false, error: `Task ${taskId} not found` };
+  }
+
+  const { task, column } = taskInfo;
+  if (!task.subtasks || task.subtasks.length === 0) {
+    return { success: false, error: `Task ${taskId} has no subtasks` };
+  }
+
+  // Validate all subtask IDs exist before making changes (atomic)
+  for (const subtaskId of subtaskIds) {
+    const exists = task.subtasks.some((st) => st.id === subtaskId);
+    if (!exists) {
+      return { success: false, error: `Subtask ${subtaskId} not found` };
+    }
+  }
+
+  const subtaskIdSet = new Set(subtaskIds);
+
+  const newBoard: Board = {
+    ...board,
+    columns: board.columns.map((col) => {
+      if (col.id !== column.id) return col;
+      return {
+        ...col,
+        tasks: col.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            subtasks: t.subtasks!.map((st) => {
+              if (!subtaskIdSet.has(st.id)) return st;
+              return { ...st, completed };
+            }),
+          };
+        }),
+      };
+    }),
+  };
+
+  return { success: true, board: newBoard };
+}
+
+/**
+ * Set all subtasks in a task to completed or incomplete
+ * @param board - Board to modify
+ * @param taskId - Parent task ID
+ * @param completed - Whether to mark as completed (true) or incomplete (false)
+ */
+export function setAllSubtasksCompleted(
+  board: Board,
+  taskId: string,
+  completed: boolean
+): BoardOperationResult {
+  const taskInfo = findTaskById(board, taskId);
+  if (!taskInfo) {
+    return { success: false, error: `Task ${taskId} not found` };
+  }
+
+  const { task, column } = taskInfo;
+  if (!task.subtasks || task.subtasks.length === 0) {
+    return { success: false, error: `Task ${taskId} has no subtasks` };
+  }
+
+  const newBoard: Board = {
+    ...board,
+    columns: board.columns.map((col) => {
+      if (col.id !== column.id) return col;
+      return {
+        ...col,
+        tasks: col.tasks.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            subtasks: t.subtasks!.map((st) => ({ ...st, completed })),
+          };
+        }),
+      };
+    }),
+  };
+
+  return { success: true, board: newBoard };
+}
