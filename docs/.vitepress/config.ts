@@ -79,16 +79,7 @@ export default defineConfig({
           })
         },
         generateBundle() {
-          // Copy v1.json for backward compat
-          const v1JsonPath = path.resolve(__dirname, '../../v1.json')
-          const v1JsonContent = fs.readFileSync(v1JsonPath, 'utf-8')
-          this.emitFile({
-            type: 'asset',
-            fileName: 'v1.json',
-            source: v1JsonContent,
-          })
-
-          // Copy v1 directory files
+          // Copy v1 directory files (schemas are now at /v1/*.json)
           const v1Dir = path.resolve(__dirname, '../../v1')
           const v1Files = fs.readdirSync(v1Dir)
           for (const file of v1Files) {
