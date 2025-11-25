@@ -51,6 +51,8 @@ export {
 // Export board operations
 export {
   type BoardOperationResult,
+  type TaskInput,
+  type TaskPatch,
   moveTask,
   addTask,
   updateTask,
@@ -59,7 +61,11 @@ export {
   updateBoardTitle,
   updateStatsConfig,
   archiveTask,
-  restoreTask
+  restoreTask,
+  patchTask,
+  addSubtask,
+  deleteSubtask,
+  updateSubtask
 } from './operations';
 
 // Export query functions

@@ -114,6 +114,78 @@ const location = BrainfileParser.findTaskLocation(markdown, "task-1");
 console.log(`Task found at line ${location.line}`);
 ```
 
+### Board Operations
+
+The library provides immutable board operations that return a new board without mutating the original:
+
+```typescript
+import {
+  addTask,
+  patchTask,
+  deleteTask,
+  moveTask,
+  archiveTask,
+  restoreTask,
+  addSubtask,
+  deleteSubtask,
+  updateSubtask,
+  toggleSubtask,
+  type TaskInput,
+  type TaskPatch,
+  type BoardOperationResult,
+} from "@brainfile/core";
+
+// Add a task with all fields
+const result = addTask(board, "todo", {
+  title: "Implement auth",
+  description: "Add OAuth2 support",
+  priority: "high",
+  tags: ["security", "feature"],
+  assignee: "john",
+  dueDate: "2025-02-01",
+  subtasks: ["Research providers", "Implement flow", "Add tests"],
+});
+
+if (result.success) {
+  board = result.board!;
+}
+
+// Patch a task (partial update)
+const patchResult = patchTask(board, "task-1", {
+  priority: "critical",
+  tags: ["urgent", "bug"],
+});
+
+// Remove a field by setting to null
+const removeResult = patchTask(board, "task-1", {
+  assignee: null, // removes assignee
+  dueDate: null,  // removes dueDate
+});
+
+// Move a task between columns
+const moveResult = moveTask(board, "task-1", "todo", "in-progress", 0);
+
+// Subtask operations
+const addSubResult = addSubtask(board, "task-1", "New subtask");
+const deleteSubResult = deleteSubtask(board, "task-1", "task-1-2");
+const updateSubResult = updateSubtask(board, "task-1", "task-1-1", "Updated title");
+const toggleResult = toggleSubtask(board, "task-1", "task-1-1");
+
+// Archive and restore
+const archiveResult = archiveTask(board, "done", "task-5");
+const restoreResult = restoreTask(board, "task-5", "todo");
+```
+
+All operations return a `BoardOperationResult`:
+
+```typescript
+interface BoardOperationResult {
+  success: boolean;
+  board?: Board;  // New board if success
+  error?: string; // Error message if failed
+}
+```
+
 ### Realtime Sync Utilities
 
 ```typescript
@@ -204,6 +276,31 @@ interface Column {
   id: string;
   title: string;
   tasks: Task[];
+}
+
+// For creating tasks with addTask()
+interface TaskInput {
+  title: string;
+  description?: string;
+  priority?: "low" | "medium" | "high" | "critical";
+  tags?: string[];
+  assignee?: string;
+  dueDate?: string;
+  relatedFiles?: string[];
+  template?: "bug" | "feature" | "refactor";
+  subtasks?: string[]; // Just titles - IDs auto-generated
+}
+
+// For partial updates with patchTask()
+interface TaskPatch {
+  title?: string;
+  description?: string;
+  priority?: "low" | "medium" | "high" | "critical" | null;
+  tags?: string[] | null;
+  assignee?: string | null;
+  dueDate?: string | null;
+  relatedFiles?: string[] | null;
+  template?: "bug" | "feature" | "refactor" | null;
 }
 ```
 

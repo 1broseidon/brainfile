@@ -8,7 +8,12 @@ import {
   updateStatsConfig,
   archiveTask,
   restoreTask,
-  type BoardOperationResult
+  patchTask,
+  addSubtask,
+  deleteSubtask,
+  updateSubtask,
+  type BoardOperationResult,
+  type TaskInput
 } from '../operations';
 import type { Board, Column, Task } from '../types';
 
@@ -46,7 +51,7 @@ describe('Board Operations', () => {
 
   describe('addTask', () => {
     it('should add a new task to a column', () => {
-      const result = addTask(mockBoard, 'col1', 'New Task', 'New Description');
+      const result = addTask(mockBoard, 'col1', { title: 'New Task', description: 'New Description' });
 
       expect(result.success).toBe(true);
       expect(result.board).toBeDefined();
@@ -56,16 +61,45 @@ describe('Board Operations', () => {
       expect(result.board!.columns[0].tasks[2].id).toBe('task-4');
     });
 
+    it('should add task with all optional fields', () => {
+      const input: TaskInput = {
+        title: 'Full Task',
+        description: 'Full description',
+        priority: 'high',
+        tags: ['urgent', 'feature'],
+        assignee: 'john',
+        dueDate: '2025-01-15',
+        relatedFiles: ['src/index.ts'],
+        template: 'feature',
+        subtasks: ['Subtask 1', 'Subtask 2']
+      };
+      const result = addTask(mockBoard, 'col1', input);
+
+      expect(result.success).toBe(true);
+      const task = result.board!.columns[0].tasks[2];
+      expect(task.title).toBe('Full Task');
+      expect(task.priority).toBe('high');
+      expect(task.tags).toEqual(['urgent', 'feature']);
+      expect(task.assignee).toBe('john');
+      expect(task.dueDate).toBe('2025-01-15');
+      expect(task.relatedFiles).toEqual(['src/index.ts']);
+      expect(task.template).toBe('feature');
+      expect(task.subtasks).toHaveLength(2);
+      expect(task.subtasks![0].title).toBe('Subtask 1');
+      expect(task.subtasks![0].id).toBe('task-4-1');
+      expect(task.subtasks![1].id).toBe('task-4-2');
+    });
+
     it('should generate sequential task IDs', () => {
-      let result = addTask(mockBoard, 'col1', 'Task A');
+      let result = addTask(mockBoard, 'col1', { title: 'Task A' });
       expect(result.board!.columns[0].tasks[2].id).toBe('task-4');
 
-      result = addTask(result.board!, 'col1', 'Task B');
+      result = addTask(result.board!, 'col1', { title: 'Task B' });
       expect(result.board!.columns[0].tasks[3].id).toBe('task-5');
     });
 
     it('should return error for non-existent column', () => {
-      const result = addTask(mockBoard, 'col99', 'New Task');
+      const result = addTask(mockBoard, 'col99', { title: 'New Task' });
 
       expect(result.success).toBe(false);
       expect(result.error).toBe('Column col99 not found');
@@ -74,7 +108,7 @@ describe('Board Operations', () => {
 
     it('should not mutate original board', () => {
       const originalTaskCount = mockBoard.columns[0].tasks.length;
-      addTask(mockBoard, 'col1', 'New Task');
+      addTask(mockBoard, 'col1', { title: 'New Task' });
 
       expect(mockBoard.columns[0].tasks.length).toBe(originalTaskCount);
     });
@@ -376,6 +410,179 @@ describe('Board Operations', () => {
 
       expect(mockBoard.archive!.length).toBe(originalArchiveCount);
       expect(mockBoard.columns[0].tasks.length).toBe(originalCol1Count);
+    });
+  });
+
+  describe('patchTask', () => {
+    it('should update only specified fields', () => {
+      const result = patchTask(mockBoard, 'task-1', { priority: 'high', tags: ['urgent'] });
+
+      expect(result.success).toBe(true);
+      const task = result.board!.columns[0].tasks[0];
+      expect(task.title).toBe('Task 1'); // unchanged
+      expect(task.description).toBe('Description 1'); // unchanged
+      expect(task.priority).toBe('high');
+      expect(task.tags).toEqual(['urgent']);
+    });
+
+    it('should remove fields when set to null', () => {
+      // First add some fields
+      let result = patchTask(mockBoard, 'task-1', { priority: 'high', assignee: 'john' });
+      expect(result.board!.columns[0].tasks[0].priority).toBe('high');
+      expect(result.board!.columns[0].tasks[0].assignee).toBe('john');
+
+      // Now remove them with null
+      result = patchTask(result.board!, 'task-1', { priority: null, assignee: null });
+      expect(result.success).toBe(true);
+      expect(result.board!.columns[0].tasks[0].priority).toBeUndefined();
+      expect(result.board!.columns[0].tasks[0].assignee).toBeUndefined();
+    });
+
+    it('should return error for non-existent task', () => {
+      const result = patchTask(mockBoard, 'task-99', { priority: 'high' });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-99 not found');
+    });
+
+    it('should not mutate original board', () => {
+      const originalPriority = mockBoard.columns[0].tasks[0].priority;
+      patchTask(mockBoard, 'task-1', { priority: 'critical' });
+
+      expect(mockBoard.columns[0].tasks[0].priority).toBe(originalPriority);
+    });
+  });
+
+  describe('addSubtask', () => {
+    it('should add subtask to task without existing subtasks', () => {
+      const result = addSubtask(mockBoard, 'task-1', 'New Subtask');
+
+      expect(result.success).toBe(true);
+      const task = result.board!.columns[0].tasks[0];
+      expect(task.subtasks).toHaveLength(1);
+      expect(task.subtasks![0].title).toBe('New Subtask');
+      expect(task.subtasks![0].id).toBe('task-1-1');
+      expect(task.subtasks![0].completed).toBe(false);
+    });
+
+    it('should append subtask to task with existing subtasks', () => {
+      mockBoard.columns[0].tasks[0].subtasks = [
+        { id: 'task-1-1', title: 'Existing Subtask', completed: false }
+      ];
+      const result = addSubtask(mockBoard, 'task-1', 'New Subtask');
+
+      expect(result.success).toBe(true);
+      const task = result.board!.columns[0].tasks[0];
+      expect(task.subtasks).toHaveLength(2);
+      expect(task.subtasks![1].title).toBe('New Subtask');
+      expect(task.subtasks![1].id).toBe('task-1-2');
+    });
+
+    it('should return error for non-existent task', () => {
+      const result = addSubtask(mockBoard, 'task-99', 'New Subtask');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-99 not found');
+    });
+
+    it('should not mutate original board', () => {
+      addSubtask(mockBoard, 'task-1', 'New Subtask');
+
+      expect(mockBoard.columns[0].tasks[0].subtasks).toBeUndefined();
+    });
+  });
+
+  describe('deleteSubtask', () => {
+    beforeEach(() => {
+      mockBoard.columns[0].tasks[0].subtasks = [
+        { id: 'task-1-1', title: 'Subtask 1', completed: false },
+        { id: 'task-1-2', title: 'Subtask 2', completed: true }
+      ];
+    });
+
+    it('should delete a subtask', () => {
+      const result = deleteSubtask(mockBoard, 'task-1', 'task-1-1');
+
+      expect(result.success).toBe(true);
+      const task = result.board!.columns[0].tasks[0];
+      expect(task.subtasks).toHaveLength(1);
+      expect(task.subtasks![0].id).toBe('task-1-2');
+    });
+
+    it('should return error for non-existent task', () => {
+      const result = deleteSubtask(mockBoard, 'task-99', 'task-1-1');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-99 not found');
+    });
+
+    it('should return error for task without subtasks', () => {
+      mockBoard.columns[0].tasks[0].subtasks = undefined;
+      const result = deleteSubtask(mockBoard, 'task-1', 'task-1-1');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-1 has no subtasks');
+    });
+
+    it('should return error for non-existent subtask', () => {
+      const result = deleteSubtask(mockBoard, 'task-1', 'task-1-99');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Subtask task-1-99 not found');
+    });
+
+    it('should not mutate original board', () => {
+      const originalCount = mockBoard.columns[0].tasks[0].subtasks!.length;
+      deleteSubtask(mockBoard, 'task-1', 'task-1-1');
+
+      expect(mockBoard.columns[0].tasks[0].subtasks!.length).toBe(originalCount);
+    });
+  });
+
+  describe('updateSubtask', () => {
+    beforeEach(() => {
+      mockBoard.columns[0].tasks[0].subtasks = [
+        { id: 'task-1-1', title: 'Subtask 1', completed: false },
+        { id: 'task-1-2', title: 'Subtask 2', completed: true }
+      ];
+    });
+
+    it('should update subtask title', () => {
+      const result = updateSubtask(mockBoard, 'task-1', 'task-1-1', 'Updated Subtask');
+
+      expect(result.success).toBe(true);
+      const task = result.board!.columns[0].tasks[0];
+      expect(task.subtasks![0].title).toBe('Updated Subtask');
+      expect(task.subtasks![0].completed).toBe(false); // unchanged
+    });
+
+    it('should return error for non-existent task', () => {
+      const result = updateSubtask(mockBoard, 'task-99', 'task-1-1', 'New Title');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-99 not found');
+    });
+
+    it('should return error for task without subtasks', () => {
+      mockBoard.columns[0].tasks[0].subtasks = undefined;
+      const result = updateSubtask(mockBoard, 'task-1', 'task-1-1', 'New Title');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-1 has no subtasks');
+    });
+
+    it('should return error for non-existent subtask', () => {
+      const result = updateSubtask(mockBoard, 'task-1', 'task-1-99', 'New Title');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Subtask task-1-99 not found');
+    });
+
+    it('should not mutate original board', () => {
+      const originalTitle = mockBoard.columns[0].tasks[0].subtasks![0].title;
+      updateSubtask(mockBoard, 'task-1', 'task-1-1', 'New Title');
+
+      expect(mockBoard.columns[0].tasks[0].subtasks![0].title).toBe(originalTitle);
     });
   });
 });

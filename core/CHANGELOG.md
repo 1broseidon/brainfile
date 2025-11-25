@@ -7,17 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2025-11-24
+
 ### Added
+- **Subtask operations** - Full subtask management via immutable operations
+  - `addSubtask(board, taskId, title)` - Add a subtask with auto-generated ID
+  - `deleteSubtask(board, taskId, subtaskId)` - Remove a subtask
+  - `updateSubtask(board, taskId, subtaskId, title)` - Update subtask title
+  - `toggleSubtask(board, taskId, subtaskId)` - Toggle subtask completion
 
 ### Changed
+- All subtask operations return `BoardOperationResult` for consistent error handling
 
-### Deprecated
+## [0.5.0] - 2025-11-24
 
-### Removed
+### Added
+- **Board operations** - Immutable operations for board manipulation
+  - `addTask(board, columnId, taskInput)` - Create tasks with full field support
+  - `patchTask(board, taskId, patch)` - Partial task updates (set null to remove fields)
+  - `deleteTask(board, columnId, taskId)` - Permanently delete a task
+  - `archiveTask(board, columnId, taskId)` - Move task to archive
+  - `restoreTask(board, taskId, columnId)` - Restore task from archive
+  - `moveTask(board, taskId, fromColumn, toColumn, index)` - Move task between columns
+- **New types**
+  - `TaskInput` - Input type for creating tasks with all fields
+  - `TaskPatch` - Partial update type (null removes fields)
+  - `BoardOperationResult` - Standardized result type with success/error
 
-### Fixed
-
-### Security
+### Changed
+- All operations are immutable and return new board instances
+- Consistent error handling across all operations
 
 ## [0.4.1] - 2025-11-21
 
