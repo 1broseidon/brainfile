@@ -41,7 +41,7 @@ columns:
 ```yaml
 ---
 title: string              # Required: Project title
-type: board                # Optional: board|journal|collection|checklist|document
+type: board                # Optional: defaults to board
 schema: string             # Optional: URL or path to JSON schema
 protocolVersion: string    # Optional: e.g., "0.4.0"
 
@@ -204,17 +204,15 @@ rules:
 |------|-----|
 | Base | `https://brainfile.md/v1/base.json` |
 | Board | `https://brainfile.md/v1/board.json` |
-| Journal | `https://brainfile.md/v1/journal.json` |
 
 Browse all: [brainfile.md/v1/](https://brainfile.md/v1/)
 
 ### Type Inference
 
-When `type` is omitted, tools infer from:
-1. Schema URL pattern (`/v1/journal.json` → journal)
-2. Filename suffix (`*.journal.md` → journal)
-3. Structural analysis (`columns[]` → board)
-4. Default: `board`
+When `type` is omitted, tools detect by:
+1. Schema URL pattern (`/v1/board.json` → board)
+2. Structural analysis (`columns[]` → board)
+3. Default: `board`
 
 ---
 

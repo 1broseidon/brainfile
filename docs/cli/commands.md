@@ -73,6 +73,7 @@ Create a new task with all available fields.
 brainfile add --title "Implement auth"
 brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
 brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
+brainfile add --title "Fix auth bug" --files "src/auth.ts,src/login.tsx"
 ```
 
 **Options:**
@@ -84,6 +85,7 @@ brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
 - `--assignee <name>` - Assignee name
 - `--due-date <date>` - Due date (YYYY-MM-DD)
 - `--subtasks <list>` - Comma-separated subtask titles
+- `--files <list>` - Comma-separated related file paths
 
 ---
 
@@ -324,6 +326,8 @@ brainfile mcp --file ./project/brainfile.md
 | `delete_subtask` | Delete a subtask |
 | `toggle_subtask` | Toggle subtask completion |
 | `update_subtask` | Update subtask title |
+| `bulk_set_subtasks` | Set multiple subtasks to completed/incomplete (atomic) |
+| `complete_all_subtasks` | Mark all subtasks in a task as completed/incomplete |
 
 **Configuration for Claude Code:**
 

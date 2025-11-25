@@ -579,6 +579,4 @@ tasks:
 ## See Also
 
 - [Base Schema](./base.md)
-- [Journal Schema](./journal.md)
-- [Type Inference](../type-inference.md)
 - [Example Board](../../example/board.md)

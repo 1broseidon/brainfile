@@ -17,7 +17,6 @@
             --c-divider: rgba(60, 60, 67, 0.12);
             --c-brand: #646cff;
             --c-green: #10b981;
-            --c-yellow: #d97706;
         }
         @media (prefers-color-scheme: dark) {
             :root {
@@ -88,7 +87,6 @@
             text-transform: uppercase;
         }
         .badge-stable { background: rgba(16, 185, 129, 0.15); color: var(--c-green); }
-        .badge-planned { background: rgba(217, 119, 6, 0.15); color: var(--c-yellow); }
         code {
             font-family: ui-monospace, monospace;
             font-size: 13px;
@@ -120,7 +118,7 @@
 <body>
     <div class="container">
         <h1>v1 Schema Directory</h1>
-        <p class="subtitle">Official schemas for <a href="https://brainfile.md">Brainfile</a></p>
+        <p class="subtitle">Official schemas for <a href="https://brainfile.md">Brainfile</a> task management</p>
 
         <div class="tip">
             Programmatic access: <a href="/v1/index.json"><code>GET /v1/index.json</code></a>
@@ -131,7 +129,7 @@
             <div class="item">
                 <div class="item-main">
                     <div class="item-title">base.json <span class="badge badge-stable">stable</span></div>
-                    <div class="item-desc">Shared fields for all types</div>
+                    <div class="item-desc">Shared fields for all brainfiles</div>
                     <div class="meta"><code>https://brainfile.md/v1/base.json</code></div>
                 </div>
             </div>
@@ -142,36 +140,11 @@
                     <div class="meta"><code>https://brainfile.md/v1/board.json</code> &middot; <a href="/example/board.md">example</a></div>
                 </div>
             </div>
-            <div class="item">
-                <div class="item-main">
-                    <div class="item-title">journal.json <span class="badge badge-stable">stable</span></div>
-                    <div class="item-desc">Time-ordered entries with timestamps</div>
-                    <div class="meta"><code>https://brainfile.md/v1/journal.json</code> &middot; <a href="/example/journal.md">example</a></div>
-                </div>
-            </div>
-            <div class="item">
-                <div class="item-main">
-                    <div class="item-title">collection.json <span class="badge badge-planned">planned</span></div>
-                    <div class="item-desc">Curated resources with categories</div>
-                </div>
-            </div>
-            <div class="item">
-                <div class="item-main">
-                    <div class="item-title">checklist.json <span class="badge badge-planned">planned</span></div>
-                    <div class="item-desc">Ordered lists with completion tracking</div>
-                </div>
-            </div>
-            <div class="item">
-                <div class="item-main">
-                    <div class="item-title">document.json <span class="badge badge-planned">planned</span></div>
-                    <div class="item-desc">Structured documents with sections</div>
-                </div>
-            </div>
         </div>
 
         <h2>Links</h2>
         <div class="links">
-            <a href="https://brainfile.md/protocol/specification">Documentation</a>
+            <a href="https://brainfile.md/reference/protocol">Documentation</a>
             <a href="https://github.com/brainfile/protocol">GitHub</a>
             <a href="https://www.npmjs.com/package/@brainfile/core">npm</a>
         </div>

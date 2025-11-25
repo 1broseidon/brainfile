@@ -38,7 +38,7 @@ columns: [] # Array of task columns
 
 ```yaml
 ---
-type: string # Document type: board|journal|collection|checklist|document
+type: string # Document type (default: board)
 protocolVersion: string # Version of protocol (e.g., "0.4.0")
 schema: string # Reference to schema for validation (URL or local file path)
 agent: # AI agent instructions (recommended)
@@ -67,31 +67,19 @@ The protocol schemas are hosted at `brainfile.md/v1/`:
 
 | Schema | URL | Description |
 |--------|-----|-------------|
-| Base | `https://brainfile.md/v1/base.json` | Shared fields for all types |
+| Base | `https://brainfile.md/v1/base.json` | Shared fields for all brainfiles |
 | Board | `https://brainfile.md/v1/board.json` | Kanban boards (default) |
-| Journal | `https://brainfile.md/v1/journal.json` | Time-ordered entries |
 
 Browse all schemas: [brainfile.md/v1/](https://brainfile.md/v1/)
 
 Programmatic access: `GET /v1/index.json`
 
-### Schema Types
+### Type Inference
 
-Brainfile supports multiple document types via the `type` field:
-
-```yaml
----
-type: board    # or: journal, collection, checklist, document
-schema: https://brainfile.md/v1/board.json
-title: My Project
----
-```
-
-When `type` is omitted, tools infer the type from:
-1. Schema URL pattern (`/v1/journal.json` → journal)
-2. File name suffix (`*.journal.md` → journal)
-3. Structural analysis (`columns[]` → board, `entries[]` → journal)
-4. Default: `board`
+When `type` is omitted, tools detect from:
+1. Schema URL pattern (`/v1/board.json` → board)
+2. Structural analysis (`columns[]` → board)
+3. Default: `board`
 
 ### Schema Formats
 
@@ -114,10 +102,9 @@ When present, AI agents and tools should fetch and validate against this schema 
 
 ### Examples
 
-Example files for each type are available at [brainfile.md/example/](https://brainfile.md/example/):
+Example files are available at [brainfile.md/example/](https://brainfile.md/example/):
 
 - [board.md](https://brainfile.md/example/board.md) - Kanban board with columns and tasks
-- [journal.md](https://brainfile.md/example/journal.md) - Developer journal with entries
 
 ## Agent Instructions Block
 
@@ -246,7 +233,6 @@ Tools implementing the protocol should:
 Use the JSON schemas at `https://brainfile.md/v1/` to validate YAML structure:
 
 - **Board**: `https://brainfile.md/v1/board.json`
-- **Journal**: `https://brainfile.md/v1/journal.json`
 - **Generic**: `https://brainfile.md/v1.json` (backward compatible)
 
 ## Example

@@ -8,18 +8,15 @@
   "properties": {
     "type": {
       "type": "string",
-      "description": "Type identifier. Official types: board, journal, collection, checklist, document. Community types: any string with a matching schema URL for validation.",
+      "description": "Type identifier. Default: board.",
       "minLength": 1,
-      "examples": ["board", "journal", "sprint-board", "standup-notes"]
+      "examples": ["board"]
     },
     "schema": {
       "type": "string",
       "description": "Schema URL for validation. Official types default to brainfile.md/v1/{type}.json. Community types MUST provide a schema URL for validation. Can be a remote URI (https://) or local file path.",
       "examples": [
-        "https://brainfile.md/v1/board.json",
-        "https://brainfile.md/v1/journal.json",
-        "https://mycompany.com/schemas/sprint-board.json",
-        "./schemas/custom-type.json"
+        "https://brainfile.md/v1/board.json"
       ]
     },
     "title": {
