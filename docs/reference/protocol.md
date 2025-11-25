@@ -311,3 +311,11 @@ columns:
 Project documentation can go here. This content is preserved
 but not parsed by tools.
 ```
+
+---
+
+## Next Steps
+
+- [API Reference](/reference/api) — Library method documentation
+- [CLI Commands](/reference/commands) — Full command reference
+- [Schema Types](/reference/types) — Document type schemas

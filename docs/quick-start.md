@@ -67,15 +67,7 @@ Your assistant can now list tasks, create new ones, move them between columns, u
 
 ## Next Steps
 
-<div class="next-steps">
-
-**Learn more:**
 - [Why Brainfile?](/why) — The full story
 - [CLI Commands](/tools/cli) — All available commands
-- [AI Integration](/tools/mcp) — Deep dive on MCP
-
-**Reference:**
+- [MCP Integration](/tools/mcp) — AI assistant setup
 - [Protocol Specification](/reference/protocol) — File format details
-- [API Reference](/reference/api) — Core library docs
-
-</div>

@@ -403,3 +403,11 @@ fi
   }
 }
 ```
+
+---
+
+## Next Steps
+
+- [CLI & TUI Guide](/tools/cli) — Getting started with the CLI
+- [MCP Server](/tools/mcp) — AI assistant integration
+- [Protocol Specification](/reference/protocol) — File format details

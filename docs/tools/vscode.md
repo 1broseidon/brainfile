@@ -32,12 +32,9 @@ The extension adds a Brainfile panel to your sidebar. Open any project with a `b
 
 ### Real-time Sync
 
-The extension watches your `brainfile.md` for changes:
-- Edit the file manually → board updates
-- AI assistant updates via MCP → board updates
-- CLI makes changes → board updates
-
-No refresh needed. Everything stays in sync.
+::: info All tools stay in sync
+The extension watches your `brainfile.md` for changes. Edits from the CLI, AI assistants, or direct file changes appear instantly. No refresh needed.
+:::
 
 ### Task Details
 
@@ -107,13 +104,9 @@ The extension uses file watching. If changes aren't appearing:
 
 ### Invalid YAML errors
 
-The extension shows an error page with details when parsing fails. Run:
-
-```bash
-brainfile lint --fix
-```
-
-to auto-fix common issues like unquoted strings with colons.
+::: tip Quick fix
+Run `brainfile lint --fix` to auto-fix common issues like unquoted strings with colons.
+:::
 
 ---
 

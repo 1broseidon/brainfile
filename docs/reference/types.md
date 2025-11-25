@@ -162,3 +162,11 @@ Schemas can include `x-brainfile-*` hints for optimal display:
 ```
 
 This helps generic tools render unknown types appropriately.
+
+---
+
+## Next Steps
+
+- [Protocol Specification](/reference/protocol) — File format details
+- [API Reference](/reference/api) — Library documentation
+- [Core Library](/tools/core) — Build custom tools

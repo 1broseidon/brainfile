@@ -51,7 +51,9 @@ fs.writeFileSync('brainfile.md', output);
 
 ### Immutable Operations
 
-All board operations are immutable. They return a new board object rather than modifying the original:
+::: info Key concept
+All operations are immutable — they return a new board object rather than modifying the original.
+:::
 
 ```typescript
 const result = addTask(board, 'todo', { title: 'Task' });
@@ -108,7 +110,9 @@ const result = addTask(board, 'todo', input);
 
 ### Patch Task
 
-Update specific fields. Set to `null` to remove:
+::: tip Removing fields
+Set a field to `null` to remove it from the task.
+:::
 
 ```typescript
 import { patchTask, TaskPatch } from '@brainfile/core';

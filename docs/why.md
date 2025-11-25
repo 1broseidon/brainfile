@@ -116,12 +116,8 @@ This means:
 
 ---
 
-## Ready?
+## Next Steps
 
-<div class="cta-buttons">
-
-[Get Started →](/quick-start)
-
-[See the CLI →](/tools/cli)
-
-</div>
+- [Quick Start](/quick-start) — Get running in 60 seconds
+- [CLI Commands](/tools/cli) — Terminal interface
+- [MCP Integration](/tools/mcp) — AI assistant setup

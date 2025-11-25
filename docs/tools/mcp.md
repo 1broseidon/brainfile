@@ -52,7 +52,9 @@ For a specific brainfile path:
 }
 ```
 
-Restart your AI assistant to load the new server.
+::: warning
+Restart your AI assistant after adding or changing MCP configuration.
+:::
 
 ---
 
@@ -170,7 +172,9 @@ The server communicates via stdio — you'll see JSON-RPC messages if tools are 
 
 ## Alternative: Agent Hooks
 
+::: tip No MCP support?
 If your assistant doesn't support MCP, you can install hooks that remind you to update tasks:
+:::
 
 ```bash
 brainfile hooks install claude-code

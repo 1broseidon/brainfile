@@ -45,7 +45,9 @@ brainfile ./path/to/brainfile.md
 | `r` | Refresh |
 | `q` | Quit |
 
-The TUI watches your file for changes — edits from VSCode or AI assistants appear in real-time.
+::: info Real-time sync
+The TUI watches your file for changes — edits from VSCode or AI assistants appear instantly.
+:::
 
 ---
 
@@ -134,7 +136,9 @@ Available templates:
 
 ## Shell Aliases
 
+::: tip Speed up your workflow
 Add these to your `.bashrc` or `.zshrc`:
+:::
 
 ```bash
 alias bf="brainfile"
