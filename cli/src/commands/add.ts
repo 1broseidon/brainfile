@@ -13,6 +13,7 @@ interface AddOptions {
   assignee?: string;
   dueDate?: string;
   subtasks?: string;
+  files?: string;
 }
 
 export function addCommand(options: AddOptions) {
@@ -74,6 +75,7 @@ export function addCommand(options: AddOptions) {
       ...(options.assignee && { assignee: options.assignee }),
       ...(options.dueDate && { dueDate: options.dueDate }),
       ...(options.subtasks && { subtasks: options.subtasks.split(',').map(t => t.trim()) }),
+      ...(options.files && { relatedFiles: options.files.split(',').map(f => f.trim()) }),
     };
 
     // Add task using core operation (immutable)
@@ -118,6 +120,9 @@ export function addCommand(options: AddOptions) {
     }
     if (options.subtasks) {
       console.log(chalk.gray(`  Subtasks: ${options.subtasks.split(',').length} added`));
+    }
+    if (options.files) {
+      console.log(chalk.gray(`  Files:    ${options.files.split(',').length} linked`));
     }
 
   } catch (error) {

@@ -107,6 +107,7 @@ program
   .option('--assignee <name>', 'Assignee name')
   .option('--due-date <date>', 'Due date (YYYY-MM-DD)')
   .option('--subtasks <titles>', 'Comma-separated subtask titles')
+  .option('--files <paths>', 'Comma-separated related file paths')
   .action(addCommand);
 
 program

@@ -18,6 +18,8 @@ import {
   deleteSubtask,
   updateSubtask,
   toggleSubtask,
+  setSubtasksCompleted,
+  setAllSubtasksCompleted,
   type TaskInput,
   type TaskPatch,
   type Board
@@ -59,7 +61,7 @@ export async function mcpCommand(options: McpOptions) {
 
   const server = new McpServer({
     name: 'brainfile',
-    version: '0.6.5'
+    version: '0.6.6'
   });
 
   // List tasks tool
@@ -130,10 +132,11 @@ export async function mcpCommand(options: McpOptions) {
         tags: z.array(z.string()).optional().describe('Task tags'),
         assignee: z.string().optional().describe('Task assignee'),
         dueDate: z.string().optional().describe('Due date (YYYY-MM-DD)'),
-        subtasks: z.array(z.string()).optional().describe('Subtask titles (IDs auto-generated)')
+        subtasks: z.array(z.string()).optional().describe('Subtask titles (IDs auto-generated)'),
+        relatedFiles: z.array(z.string()).optional().describe('Related file paths')
       }
     },
-    async ({ file, column, title, description, priority, tags, assignee, dueDate, subtasks }) => {
+    async ({ file, column, title, description, priority, tags, assignee, dueDate, subtasks, relatedFiles }) => {
       const filePath = file || defaultFile;
       const result = readBoard(filePath);
 
@@ -161,7 +164,8 @@ export async function mcpCommand(options: McpOptions) {
         ...(tags && tags.length > 0 && { tags }),
         ...(assignee && { assignee }),
         ...(dueDate && { dueDate }),
-        ...(subtasks && subtasks.length > 0 && { subtasks })
+        ...(subtasks && subtasks.length > 0 && { subtasks }),
+        ...(relatedFiles && relatedFiles.length > 0 && { relatedFiles })
       };
 
       const addResult = addTask(board, targetColumn.id, taskInput);
@@ -249,10 +253,11 @@ export async function mcpCommand(options: McpOptions) {
         priority: z.enum(['low', 'medium', 'high', 'critical']).nullable().optional().describe('New priority (null to remove)'),
         tags: z.array(z.string()).nullable().optional().describe('New tags (null to remove)'),
         assignee: z.string().nullable().optional().describe('New assignee (null to remove)'),
-        dueDate: z.string().nullable().optional().describe('New due date (null to remove)')
+        dueDate: z.string().nullable().optional().describe('New due date (null to remove)'),
+        relatedFiles: z.array(z.string()).nullable().optional().describe('Related file paths (null to remove)')
       }
     },
-    async ({ file, task, title, description, priority, tags, assignee, dueDate }) => {
+    async ({ file, task, title, description, priority, tags, assignee, dueDate, relatedFiles }) => {
       const filePath = file || defaultFile;
       const result = readBoard(filePath);
 
@@ -272,6 +277,7 @@ export async function mcpCommand(options: McpOptions) {
       if (tags !== undefined) patch.tags = isNull(tags) ? undefined : tags;
       if (assignee !== undefined) patch.assignee = isNull(assignee) ? undefined : assignee;
       if (dueDate !== undefined) patch.dueDate = isNull(dueDate) ? undefined : dueDate;
+      if (relatedFiles !== undefined) patch.relatedFiles = isNull(relatedFiles) ? undefined : relatedFiles;
 
       const patchResult = patchTask(board, task, patch);
 
@@ -566,6 +572,88 @@ export async function mcpCommand(options: McpOptions) {
 
       return {
         content: [{ type: 'text' as const, text: `Subtask ${subtask} updated to "${title}"` }]
+      };
+    }
+  );
+
+  // Bulk set subtasks completed tool
+  server.registerTool(
+    'bulk_set_subtasks',
+    {
+      title: 'Bulk Set Subtasks',
+      description: 'Set multiple subtasks to completed or incomplete in a single atomic operation',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Parent task ID'),
+        subtasks: z.array(z.string()).describe('Array of subtask IDs to update'),
+        completed: z.boolean().describe('Whether to mark as completed (true) or incomplete (false)')
+      }
+    },
+    async ({ file, task, subtasks, completed }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+
+      const bulkResult = setSubtasksCompleted(board, task, subtasks, completed);
+
+      if (!bulkResult.success) {
+        return { content: [{ type: 'text' as const, text: `Error: ${bulkResult.error}` }], isError: true };
+      }
+
+      writeBoard(filePath, bulkResult.board!);
+
+      const status = completed ? 'completed' : 'incomplete';
+      return {
+        content: [{ type: 'text' as const, text: `${subtasks.length} subtasks marked as ${status}` }]
+      };
+    }
+  );
+
+  // Complete all subtasks tool
+  server.registerTool(
+    'complete_all_subtasks',
+    {
+      title: 'Complete All Subtasks',
+      description: 'Mark all subtasks in a task as completed or incomplete',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Parent task ID'),
+        completed: z.boolean().optional().default(true).describe('Whether to mark as completed (default: true) or incomplete (false)')
+      }
+    },
+    async ({ file, task, completed }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+
+      // Default to true if not specified
+      const markCompleted = completed ?? true;
+
+      const bulkResult = setAllSubtasksCompleted(board, task, markCompleted);
+
+      if (!bulkResult.success) {
+        return { content: [{ type: 'text' as const, text: `Error: ${bulkResult.error}` }], isError: true };
+      }
+
+      writeBoard(filePath, bulkResult.board!);
+
+      // Count subtasks for the message
+      const taskInfo = findTaskById(bulkResult.board!, task);
+      const count = taskInfo?.task.subtasks?.length || 0;
+
+      const status = markCompleted ? 'completed' : 'incomplete';
+      return {
+        content: [{ type: 'text' as const, text: `All ${count} subtasks in ${task} marked as ${status}` }]
       };
     }
   );
