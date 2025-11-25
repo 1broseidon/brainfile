@@ -7,17 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-### Changed
-
-### Deprecated
-
-### Removed
+## [0.6.5] - 2025-11-25
 
 ### Fixed
+- **MCP patch_task null handling** - Fixed field removal when passing `"null"` string from MCP clients
 
-### Security
+### Changed
+- Updated help menu to show MCP command in usage section
+
+## [0.6.4] - 2025-11-25
+
+### Added
+- **MCP Server** - Model Context Protocol server for AI assistant integration
+  - `brainfile mcp` starts an MCP server via stdio
+  - 11 tools available: list_tasks, add_task, move_task, patch_task, delete_task, archive_task, restore_task, add_subtask, delete_subtask, toggle_subtask, update_subtask
+  - Works with Claude Code, Cursor, and other MCP-compatible clients
+  - Configure via `.mcp.json` for project-specific integration
+
+## [0.6.3] - 2025-11-24
+
+### Added
+- **patch command** - Update specific task fields with partial updates
+  - Set new values for title, description, priority, tags, assignee, due date
+  - Remove fields with `--clear-*` options (e.g., `--clear-assignee`)
+- **delete command** - Permanently delete tasks (requires `--force` flag)
+- **archive command** - Move tasks to the archive section
+- **restore command** - Restore archived tasks to a column
+- **subtask command** - Full subtask management
+  - `--add` - Create new subtasks
+  - `--toggle` - Toggle completion status
+  - `--update` - Update subtask title
+  - `--delete` - Remove subtasks
+
+### Changed
+- Updated add command to support `--assignee`, `--due-date`, and `--subtasks` options
+- Upgraded to @brainfile/core@^0.5.1 with new operation APIs
 
 ## [0.5.1] - 2025-11-23
 

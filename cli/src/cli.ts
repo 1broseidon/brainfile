@@ -10,6 +10,12 @@ import { templateCommand } from './commands/template';
 import { lintCommand } from './commands/lint';
 import { initCommand } from './commands/init';
 import { tuiCommand } from './commands/tui';
+import { patchCommand } from './commands/patch';
+import { deleteCommand } from './commands/delete';
+import { archiveCommand } from './commands/archive';
+import { restoreCommand } from './commands/restore';
+import { subtaskCommand } from './commands/subtask';
+import { mcpCommand } from './commands/mcp';
 import {
   afterEditCommand,
   beforePromptCommand,
@@ -25,7 +31,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'list', 'add', 'move', 'template', 'lint', 'tui', 'hooks', 'help'];
+const SUBCOMMANDS = ['init', 'list', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -70,7 +76,7 @@ const program = new Command();
 
 program
   .name('brainfile')
-  .description('Command-line interface for Brainfile task management\n\nUsage:\n  brainfile [file]        Open TUI (default: brainfile.md)\n  brainfile <command>     Run CLI command')
+  .description('Command-line interface for Brainfile task management\n\nUsage:\n  brainfile [file]        Open TUI (default: brainfile.md)\n  brainfile <command>     Run CLI command\n  brainfile mcp           Start MCP server for AI assistants')
   .version(packageJson.version);
 
 // Register commands
@@ -96,9 +102,64 @@ program
   .option('-c, --column <name>', 'Column to add task to', 'todo')
   .option('-t, --title <text>', 'Task title (required)')
   .option('-d, --description <text>', 'Task description')
-  .option('-p, --priority <level>', 'Priority level (low, medium, high)')
+  .option('-p, --priority <level>', 'Priority level (low, medium, high, critical)')
   .option('--tags <tags>', 'Comma-separated tags')
+  .option('--assignee <name>', 'Assignee name')
+  .option('--due-date <date>', 'Due date (YYYY-MM-DD)')
+  .option('--subtasks <titles>', 'Comma-separated subtask titles')
   .action(addCommand);
+
+program
+  .command('patch')
+  .description('Update task fields (partial update)')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .option('-t, --task <id>', 'Task ID to update (required)')
+  .option('--title <text>', 'New task title')
+  .option('-d, --description <text>', 'New task description')
+  .option('-p, --priority <level>', 'Priority (low, medium, high, critical, or "none" to remove)')
+  .option('--tags <tags>', 'Comma-separated tags (replaces existing)')
+  .option('--assignee <name>', 'Assignee name')
+  .option('--due-date <date>', 'Due date (YYYY-MM-DD)')
+  .option('--clear-tags', 'Remove all tags')
+  .option('--clear-assignee', 'Remove assignee')
+  .option('--clear-due-date', 'Remove due date')
+  .option('--clear-priority', 'Remove priority')
+  .action(patchCommand);
+
+program
+  .command('delete')
+  .description('Delete a task permanently')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .option('-t, --task <id>', 'Task ID to delete (required)')
+  .option('--force', 'Confirm deletion (required)')
+  .action(deleteCommand);
+
+program
+  .command('archive')
+  .description('Move a task to the archive')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .option('-t, --task <id>', 'Task ID to archive (required)')
+  .action(archiveCommand);
+
+program
+  .command('restore')
+  .description('Restore a task from the archive')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .option('-t, --task <id>', 'Task ID to restore (required)')
+  .option('-c, --column <name>', 'Target column name or ID (required)')
+  .action(restoreCommand);
+
+program
+  .command('subtask')
+  .description('Manage subtasks (add, delete, update, toggle)')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .option('-t, --task <id>', 'Parent task ID (required)')
+  .option('--add <title>', 'Add a new subtask')
+  .option('--delete <subtask-id>', 'Delete a subtask')
+  .option('--update <subtask-id>', 'Update a subtask (requires --title)')
+  .option('--toggle <subtask-id>', 'Toggle subtask completion')
+  .option('--title <text>', 'New title (for --update)')
+  .action(subtaskCommand);
 
 program
   .command('move')
@@ -169,6 +230,12 @@ hooksCommand
   .command('list [tool]')
   .description('List installed brainfile hooks')
   .action((tool) => hooksListCommand({ tool }));
+
+program
+  .command('mcp')
+  .description('Start MCP server for AI assistant integration')
+  .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+  .action(mcpCommand);
 
 program.parse();
 
