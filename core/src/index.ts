@@ -111,6 +111,7 @@ export {
 export {
   discover,
   findPrimaryBrainfile,
+  findNearestBrainfile,
   watchBrainfiles,
   isBrainfileName,
   extractBrainfileSuffix,

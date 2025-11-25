@@ -383,6 +383,53 @@ export function findPrimaryBrainfile(rootDir: string): DiscoveredFile | null {
 }
 
 /**
+ * Find the nearest brainfile by walking up the directory tree from a starting point.
+ * Similar to how git finds .git by walking up from cwd.
+ *
+ * @param startDir - The directory to start searching from (default: process.cwd())
+ * @returns The nearest brainfile or null if none found up to filesystem root
+ *
+ * @example
+ * ```typescript
+ * // From /home/user/projects/myapp/src
+ * // Will find /home/user/projects/myapp/brainfile.md if it exists
+ * const brainfile = findNearestBrainfile();
+ * if (brainfile) {
+ *   console.log(`Found: ${brainfile.absolutePath}`);
+ * }
+ * ```
+ */
+export function findNearestBrainfile(startDir?: string): DiscoveredFile | null {
+  let currentDir = path.resolve(startDir || process.cwd());
+  const root = path.parse(currentDir).root;
+
+  while (currentDir !== root) {
+    const found = findPrimaryBrainfile(currentDir);
+    if (found) {
+      return found;
+    }
+
+    // Move up to parent directory
+    const parentDir = path.dirname(currentDir);
+
+    // Safety check: if we can't go up anymore, stop
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
+  }
+
+  // Check root directory as well
+  const foundInRoot = findPrimaryBrainfile(root);
+  if (foundInRoot) {
+    return foundInRoot;
+  }
+
+  return null;
+}
+
+/**
  * Watch a directory for brainfile changes
  * Note: This is a simple implementation. VSCode/CLI may use their own watchers.
  *
