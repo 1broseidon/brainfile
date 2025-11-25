@@ -8,7 +8,7 @@ interface InitOptions {
 }
 
 const DEFAULT_BRAINFILE = `---
-schema: https://brainfile.md/v1
+schema: https://brainfile.md/v1/board.json
 title: My Project
 agent:
   instructions:

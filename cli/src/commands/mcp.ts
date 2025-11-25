@@ -25,6 +25,8 @@ import {
   patchTasks,
   deleteTasks,
   archiveTasks,
+  // Discovery
+  findNearestBrainfile,
   type TaskInput,
   type TaskPatch,
   type Board
@@ -61,8 +63,91 @@ function writeBoard(filePath: string, board: Board): void {
   fs.writeFileSync(resolvedPath, content, 'utf-8');
 }
 
+/**
+ * Find git repository root by walking up directory tree
+ */
+function findGitRoot(startDir: string): string | null {
+  let currentDir = path.resolve(startDir);
+  const root = path.parse(currentDir).root;
+
+  while (currentDir !== root) {
+    const gitPath = path.join(currentDir, '.git');
+    if (fs.existsSync(gitPath)) {
+      return currentDir;
+    }
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) break;
+    currentDir = parentDir;
+  }
+
+  return null;
+}
+
 export async function mcpCommand(options: McpOptions) {
-  const defaultFile = options.file;
+  // Auto-discover brainfile if not specified
+  let defaultFile = options.file;
+
+  if (defaultFile === 'brainfile.md') {
+    // Default value - try auto-discovery strategies
+
+    // Strategy 1: Check WORKSPACE_FOLDER_PATHS env var (set by Cursor)
+    const workspacePaths = process.env.WORKSPACE_FOLDER_PATHS;
+    if (workspacePaths) {
+      // Can be colon-separated list of paths
+      const paths = workspacePaths.split(':').filter(Boolean);
+      for (const wsPath of paths) {
+        const wsBrainfile = path.join(wsPath, 'brainfile.md');
+        if (fs.existsSync(wsBrainfile)) {
+          defaultFile = wsBrainfile;
+          console.error(`[brainfile-mcp] Found in workspace: ${defaultFile}`);
+          break;
+        }
+        // Also try discovery from workspace root
+        const discovered = findNearestBrainfile(wsPath);
+        if (discovered) {
+          defaultFile = discovered.absolutePath;
+          console.error(`[brainfile-mcp] Discovered in workspace: ${defaultFile}`);
+          break;
+        }
+      }
+    }
+
+    // Strategy 2: Check for git repo root and look for brainfile there
+    if (defaultFile === 'brainfile.md') {
+      const gitRoot = findGitRoot(process.cwd());
+      if (gitRoot) {
+        const gitRootBrainfile = path.join(gitRoot, 'brainfile.md');
+        if (fs.existsSync(gitRootBrainfile)) {
+          defaultFile = gitRootBrainfile;
+          console.error(`[brainfile-mcp] Found in git root: ${defaultFile}`);
+        } else {
+          // Try discovery from git root
+          const discovered = findNearestBrainfile(gitRoot);
+          if (discovered) {
+            defaultFile = discovered.absolutePath;
+            console.error(`[brainfile-mcp] Discovered from git root: ${defaultFile}`);
+          }
+        }
+      }
+    }
+
+    // Strategy 3: If still default, try discovery from cwd
+    if (defaultFile === 'brainfile.md') {
+      const discovered = findNearestBrainfile();
+      if (discovered) {
+        defaultFile = discovered.absolutePath;
+        console.error(`[brainfile-mcp] Auto-discovered: ${defaultFile}`);
+      } else {
+        // Fall back to relative path in cwd
+        defaultFile = path.resolve('brainfile.md');
+        console.error(`[brainfile-mcp] No brainfile found, using: ${defaultFile}`);
+      }
+    }
+  } else {
+    // User specified a file - resolve it
+    defaultFile = path.resolve(defaultFile);
+    console.error(`[brainfile-mcp] Using specified file: ${defaultFile}`);
+  }
 
   const server = new McpServer({
     name: 'brainfile',

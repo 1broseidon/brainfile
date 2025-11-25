@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2025-11-25
+
+### Added
+- **MCP server auto-discovery** - Automatically finds workspace brainfile without hardcoded paths
+  - Checks `WORKSPACE_FOLDER_PATHS` env var (set by Cursor IDE)
+  - Falls back to git repository root detection
+  - Falls back to walking up directory tree from cwd
+  - Logs discovered path to stderr for debugging
+
+### Fixed
+- **`brainfile init` schema URL** - Changed from `https://brainfile.md/v1` to `https://brainfile.md/v1/board.json` per protocol spec
+
+### Changed
+- Upgraded to @brainfile/core@^0.8.0 with `findNearestBrainfile()` support
+
 ## [0.7.1] - 2025-11-25
 
 ### Added
