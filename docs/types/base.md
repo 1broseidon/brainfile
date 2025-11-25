@@ -54,11 +54,11 @@ schema: https://brainfile.md/v1/board.json
 
 **Type**: `string` (semver pattern)
 **Pattern**: `^[0-9]+\.[0-9]+\.[0-9]+$`
-**Default**: `0.5.0`
+**Default**: `1.0.0`
 **Description**: Version of the Brainfile protocol
 
 ```yaml
-protocolVersion: 0.5.0
+protocolVersion: 1.0.0
 ```
 
 ### `agent`
@@ -156,7 +156,7 @@ Used by type-specific schemas for `createdAt` and `updatedAt` fields.
 type: board
 schema: https://brainfile.md/v1/board.json
 title: Production Project
-protocolVersion: 0.5.0
+protocolVersion: 1.0.0
 agent:
   instructions:
     - Modify only YAML frontmatter

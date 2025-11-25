@@ -103,5 +103,6 @@ See the [../example/](../example/) directory:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.0.0 | 2025-11-25 | Stable release: board-only task management |
 | 0.5.0 | 2025-11-24 | Added base schema, agent tools support |
 | 0.4.0 | 2025-11-21 | Initial board schema |

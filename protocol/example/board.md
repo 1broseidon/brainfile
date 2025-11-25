@@ -2,7 +2,7 @@
 type: board
 schema: https://brainfile.md/v1/board.json
 title: Product Development Board
-protocolVersion: 0.5.0
+protocolVersion: 1.0.0
 agent:
   instructions:
     - Modify only the YAML frontmatter

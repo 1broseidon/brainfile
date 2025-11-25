@@ -375,7 +375,7 @@ completed: false
 type: board
 schema: https://brainfile.md/v1/board.json
 title: Product Development
-protocolVersion: 0.5.0
+protocolVersion: 1.0.0
 agent:
   instructions:
     - Modify only the YAML frontmatter

@@ -43,7 +43,7 @@ columns:
 title: string              # Required: Project title
 type: board                # Optional: defaults to board
 schema: string             # Optional: URL or path to JSON schema
-protocolVersion: string    # Optional: e.g., "0.4.0"
+protocolVersion: string    # Optional: e.g., "1.0.0"
 
 agent:                     # Optional: AI agent instructions
   instructions:
@@ -242,12 +242,22 @@ subtasks:
 
 ## Version History
 
-### v0.4.0 (Current)
+### v1.0.0 (Current)
+
+- Stable release: board-only task management
+- Simplified protocol focus
+- Full MCP tool support
+
+### v0.5.0
+
+- Added base schema with inheritance
+- Added `agent.tools` for CLI tool configuration
+
+### v0.4.0
 
 - Added `protocolVersion` field
 - Added `effort` and `blockedBy` task fields
 - Added `llmNotes` to agent block
-- Enforced `task-N` ID pattern
 
 ### v0.3.0
 

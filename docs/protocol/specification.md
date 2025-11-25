@@ -39,7 +39,7 @@ columns: [] # Array of task columns
 ```yaml
 ---
 type: string # Document type (default: board)
-protocolVersion: string # Version of protocol (e.g., "0.4.0")
+protocolVersion: string # Version of protocol (e.g., "1.0.0")
 schema: string # Reference to schema for validation (URL or local file path)
 agent: # AI agent instructions (recommended)
   instructions: [] # Array of instruction strings
@@ -190,18 +190,27 @@ rules:
 
 ## Version Compatibility
 
-### v0.4.0 (Latest)
+### v1.0.0 (Current)
+
+- Stable release: board-only task management
+- Simplified protocol focus
+- Full MCP tool support
+
+### v0.5.0
+
+- Added base schema with inheritance
+- Added `agent.tools` for CLI tool configuration
+
+### v0.4.0
 
 - Added `protocolVersion` field for explicit versioning
 - Added AI-friendly task fields: `effort`, `blockedBy`
 - Added `llmNotes` field to agent block
-- Task IDs now enforce `task-N` pattern
 
 ### v0.3.0
 
 - Default to non-hidden files (`brainfile.md`)
 - Added `agent` instruction block
-- Maintains backward compatibility with hidden files
 - Added subtasks support
 
 ### Migration Path
