@@ -16,18 +16,18 @@ interface DocSection {
   title: string;
 }
 
-// Define sections in order
+// Define sections in order - using new IA structure
 const sections: DocSection[] = [
-  { file: 'getting-started/quick-start.md', title: 'Quick Start Guide' },
-  { file: 'protocol/specification.md', title: 'Protocol Specification' },
-  { file: 'agents/integration.md', title: 'AI Agent Integration' },
-  { file: 'cli/installation.md', title: 'CLI Installation' },
-  { file: 'cli/commands.md', title: 'CLI Commands Reference' },
-  { file: 'cli/examples.md', title: 'CLI Examples' },
-  { file: 'core/overview.md', title: 'Core Library Overview' },
-  { file: 'core/api-reference.md', title: 'Core Library API Reference' },
-  { file: 'core/templates.md', title: 'Templates' },
-  { file: 'vscode/extension.md', title: 'VSCode Extension' },
+  { file: 'quick-start.md', title: 'Quick Start Guide' },
+  { file: 'why.md', title: 'Why Brainfile?' },
+  { file: 'tools/cli.md', title: 'CLI & Terminal UI' },
+  { file: 'tools/mcp.md', title: 'MCP Server Integration' },
+  { file: 'tools/vscode.md', title: 'VSCode Extension' },
+  { file: 'tools/core.md', title: 'Core Library' },
+  { file: 'reference/protocol.md', title: 'Protocol Specification' },
+  { file: 'reference/api.md', title: 'API Reference' },
+  { file: 'reference/commands.md', title: 'CLI Commands Reference' },
+  { file: 'reference/types.md', title: 'Schema Types' },
 ];
 
 function stripMarkdown(markdown: string): string {

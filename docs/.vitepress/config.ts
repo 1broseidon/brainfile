@@ -115,52 +115,44 @@ export default defineConfig({
 
   themeConfig: {
     nav: [
-      { text: 'Guide', link: '/getting-started/quick-start' },
-      { text: 'Protocol', link: '/protocol/specification' },
-      { text: 'API', link: '/core/api-reference' },
+      { text: 'Quick Start', link: '/quick-start' },
+      { text: 'Tools', link: '/tools/cli' },
+      { text: 'Reference', link: '/reference/protocol' },
+      { text: 'GitHub', link: 'https://github.com/brainfile' },
     ],
 
     sidebar: [
       {
-        text: 'Getting Started',
+        text: 'Start Here',
         items: [
-          { text: 'Introduction', link: '/' },
-          { text: 'Quick Start', link: '/getting-started/quick-start' },
+          { text: 'Home', link: '/' },
+          { text: 'Quick Start', link: '/quick-start' },
+          { text: 'Why Brainfile?', link: '/why' },
         ],
       },
       {
-        text: 'Protocol',
+        text: 'Tools',
         items: [
-          { text: 'Specification', link: '/protocol/specification' },
-          { text: 'AI Agent Integration', link: '/agents/integration' },
+          { text: 'CLI & TUI', link: '/tools/cli' },
+          { text: 'MCP Server', link: '/tools/mcp' },
+          { text: 'VSCode Extension', link: '/tools/vscode' },
+          { text: 'Core Library', link: '/tools/core' },
         ],
       },
       {
-        text: 'Core Library',
+        text: 'Reference',
         items: [
-          { text: 'Overview', link: '/core/overview' },
-          { text: 'API Reference', link: '/core/api-reference' },
-          { text: 'Templates', link: '/core/templates' },
-        ],
-      },
-      {
-        text: 'CLI Tool',
-        items: [
-          { text: 'Installation', link: '/cli/installation' },
-          { text: 'Commands', link: '/cli/commands' },
-          { text: 'Examples', link: '/cli/examples' },
-        ],
-      },
-      {
-        text: 'VSCode Extension',
-        items: [
-          { text: 'Overview', link: '/vscode/extension' },
+          { text: 'Protocol Specification', link: '/reference/protocol' },
+          { text: 'API Reference', link: '/reference/api' },
+          { text: 'CLI Commands', link: '/reference/commands' },
+          { text: 'Schema Types', link: '/reference/types' },
         ],
       },
     ],
 
     socialLinks: [
       { icon: 'github', link: 'https://github.com/brainfile' },
+      { icon: 'npm', link: 'https://www.npmjs.com/package/@brainfile/cli' },
     ],
 
     search: {
@@ -169,7 +161,7 @@ export default defineConfig({
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2024 Brainfile',
+      copyright: 'Copyright © 2025 Brainfile',
     },
   },
 })

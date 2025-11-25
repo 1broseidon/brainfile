@@ -1,80 +1,167 @@
 ---
 layout: home
 title: Brainfile
-titleTemplate: Protocol-first task management for AI
+titleTemplate: Task management for the AI era
 
 hero:
   name: Brainfile
-  text: Protocol-first task management
-  tagline: A structured format for project tasks that both humans and AI agents can understand and modify
+  text: Task management in your repo
+  tagline: One markdown file. Full kanban board. AI assistants can read and update it directly.
   actions:
     - theme: brand
       text: Get Started
-      link: /getting-started/quick-start
+      link: /quick-start
     - theme: alt
-      text: View Protocol
-      link: /protocol/specification
+      text: Why Brainfile?
+      link: /why
 
 features:
-  - title: Protocol First
-    details: The schema is the product. Tools and integrations are built around a single, well-defined protocol.
-  - title: AI Native
-    details: Built for AI agents. MCP server integration, hooks for Claude Code/Cursor/Cline, and structured instructions.
-  - title: File Based
-    details: Tasks live in markdown files with YAML frontmatter. Version control friendly. No databases. No lock-in.
-  - title: MCP Integration
-    details: Built-in MCP server lets AI assistants manage tasks directly via the Model Context Protocol.
-  - title: Visual Tools
-    details: VSCode extension with kanban UI. Interactive terminal TUI. Full CLI for automation.
-  - title: Immutable Operations
-    details: Core library provides type-safe operations for adding, updating, moving, archiving, and restoring tasks.
+  - icon: 🤖
+    title: AI Native
+    details: Built-in MCP server lets Claude Code, Cursor, and Cline manage your tasks directly. No copy-paste. No context switching.
+  - icon: 📁
+    title: Lives in Your Repo
+    details: A single brainfile.md file. Version control friendly. Branch it, merge it, diff it. No external database.
+  - icon: ⌨️
+    title: Multiple Interfaces
+    details: Interactive terminal TUI, full CLI, VSCode kanban sidebar. Use what fits your workflow.
 ---
 
-## Quick Start
+<style>
+.problem-section {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+.problem-section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: var(--vp-c-text-1);
+}
+.problem-section p {
+  color: var(--vp-c-text-2);
+  line-height: 1.7;
+  margin-bottom: 1rem;
+}
+.install-block {
+  background: var(--vp-c-bg-soft);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 2rem auto;
+  max-width: 600px;
+  text-align: center;
+}
+.install-block code {
+  font-size: 1.1rem;
+  background: var(--vp-c-bg-alt);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  display: inline-block;
+}
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  max-width: 900px;
+  margin: 2rem auto;
+  padding: 0 1.5rem;
+}
+.tool-card {
+  background: var(--vp-c-bg-soft);
+  border-radius: 8px;
+  padding: 1.25rem;
+  text-align: center;
+}
+.tool-card h4 {
+  margin: 0 0 0.5rem 0;
+  color: var(--vp-c-text-1);
+}
+.tool-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--vp-c-text-2);
+}
+.example-section {
+  max-width: 900px;
+  margin: 3rem auto;
+  padding: 0 1.5rem;
+}
+.example-section h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+</style>
 
-```bash
-npm install -g @brainfile/cli
-brainfile init
-brainfile            # Opens interactive TUI
-```
+<div class="install-block">
+  <code>npm install -g @brainfile/cli && brainfile init</code>
+</div>
 
-## Quick Example
+<div class="problem-section">
+
+## The Problem
+
+Your tasks live in Linear, Jira, or Notion. Your code lives in git. Your AI assistant can see your code but has no idea what you're working on. You're constantly context-switching, copy-pasting task descriptions, and manually updating status.
+
+## The Solution
+
+**Brainfile** puts your task board in a `brainfile.md` file right in your repo. It's structured YAML that tools can parse, but it's also just markdown you can read and edit. AI assistants update it directly via MCP — no manual syncing.
+
+</div>
+
+<div class="example-section">
+
+## What It Looks Like
 
 ```yaml
 ---
-schema: https://brainfile.md/v1
+schema: https://brainfile.md/v1/board.json
 title: My Project
-agent:
-  instructions:
-    - Modify only the YAML frontmatter
-    - Preserve all IDs
 columns:
   - id: todo
     title: To Do
     tasks:
       - id: task-1
-        title: Implement user authentication
+        title: Add user authentication
         priority: high
         tags: [backend, security]
+  - id: in-progress
+    title: In Progress
+    tasks:
+      - id: task-2
+        title: Fix mobile navigation
+        priority: medium
+  - id: done
+    title: Done
+    tasks: []
 ---
-
-# My Project Tasks
-
-This is the task board for my project.
 ```
 
-## Ecosystem
+</div>
 
-| Package | Description |
-|---------|-------------|
-| [Protocol](/protocol/specification) | The canonical specification and JSON schema |
-| [Core Library](/core/overview) | TypeScript/JavaScript library with immutable operations |
-| [CLI Tool](/cli/installation) | Terminal UI, commands, hooks, and MCP server |
-| [VSCode Extension](/vscode/extension) | Visual kanban board in your editor |
+<div class="tools-grid">
+  <div class="tool-card">
+    <h4>Terminal TUI</h4>
+    <p>Interactive kanban in your terminal. Navigate with keyboard.</p>
+  </div>
+  <div class="tool-card">
+    <h4>CLI Commands</h4>
+    <p>Add, move, update tasks from the command line.</p>
+  </div>
+  <div class="tool-card">
+    <h4>VSCode Extension</h4>
+    <p>Visual kanban board in the sidebar. Drag and drop.</p>
+  </div>
+  <div class="tool-card">
+    <h4>MCP Server</h4>
+    <p>AI assistants manage tasks directly. Zero friction.</p>
+  </div>
+</div>
 
-## AI Integration
+<div class="problem-section">
 
-**MCP Server** - Direct integration with AI assistants:
+## AI Integration in 30 Seconds
+
+Add this to your project's `.mcp.json`:
 
 ```json
 {
@@ -87,17 +174,19 @@ This is the task board for my project.
 }
 ```
 
-**Agent Hooks** - Automatic reminders during AI-assisted development:
+Now Claude Code, Cursor, or any MCP-compatible assistant can:
+- List and search your tasks
+- Create new tasks with full metadata
+- Move tasks between columns
+- Update priorities, assignees, due dates
+- Manage subtasks
 
-```bash
-brainfile hooks install claude-code
-```
+No copy-paste. No "update the task board" reminders. It just works.
 
 ## Open Source
 
-All repositories are available on GitHub:
+- [GitHub](https://github.com/brainfile) — All repositories
+- [npm](https://www.npmjs.com/package/@brainfile/cli) — CLI package
+- [Protocol](/reference/protocol) — Specification
 
-- [Protocol](https://github.com/brainfile/protocol) - Specification and schema
-- [Core](https://github.com/brainfile/core) - TypeScript library
-- [CLI](https://github.com/brainfile/cli) - Command-line tool with MCP
-- [VSCode](https://github.com/brainfile/vscode) - Editor extension
+</div>
