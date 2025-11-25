@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2025-11-25
+
+### Added
+- **Bulk MCP tools** - Process multiple tasks in a single operation
+  - `bulk_move_tasks` - Move multiple tasks to a target column
+  - `bulk_patch_tasks` - Apply the same patch (priority, tags, assignee) to multiple tasks
+  - `bulk_delete_tasks` - Delete multiple tasks permanently
+  - `bulk_archive_tasks` - Archive multiple tasks
+- All bulk tools return detailed results with per-item success/failure status
+
+### Changed
+- Upgraded to @brainfile/core@^0.7.0 with bulk operation support
+
 ## [0.6.5] - 2025-11-25
 
 ### Fixed
