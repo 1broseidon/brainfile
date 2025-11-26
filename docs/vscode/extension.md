@@ -15,9 +15,12 @@ Built on [@brainfile/core](https://www.npmjs.com/package/@brainfile/core) - the 
 - **Drag and Drop** - Move tasks between columns with drag and drop
 - **Live Updates** - Changes sync automatically when editing markdown
 - **Task Templates** - Create tasks from built-in templates
-- **Project Rules** - Define rules (always, never, prefer, context)
+- **Project Rules** - Define rules (always, never, prefer, context) with inline editing
 - **Progress Tracking** - Track completion with subtasks
 - **Collapsible Sections** - Organize tasks efficiently
+- **Archive Management** - Search, restore, or permanently delete archived tasks
+- **Bulk Operations** - Multi-select tasks for batch move, archive, delete, or priority changes
+- **Send to Agent** - Dispatch tasks to AI coding assistants (GitHub Copilot, Claude Code)
 
 ## Installation
 
@@ -218,6 +221,49 @@ tasks:
 ```
 
 The UI shows progress: `2/3 subtasks completed`
+
+### Archive Management
+
+Tasks can be archived for later reference or permanent deletion:
+
+**Archiving Tasks**:
+- Click the archive icon on any task card
+- Task moves to the Archive tab
+- Archived tasks are stored in a separate `brainfile-archive.md` file
+
+**Restoring Tasks**:
+- Navigate to the Archive tab
+- Search archived tasks by title, description, or ID
+- Click the restore icon
+- Select which column to restore the task to
+
+**Permanent Deletion**:
+- From the Archive tab, click the delete icon
+- Confirm the deletion - this cannot be undone
+
+### Bulk Operations
+
+Select multiple tasks for batch operations:
+
+1. Click **"Select"** button in the header to enter selection mode
+2. Click checkboxes on tasks to select them
+3. Use the bulk action toolbar:
+   - **Move to** - Move all selected tasks to a column
+   - **Set Priority** - Change priority on all selected tasks
+   - **Archive** - Archive all selected tasks
+   - **Delete** - Delete all selected tasks
+4. Click **"Clear"** or exit selection mode when done
+
+### Send to Agent
+
+Dispatch tasks directly to AI coding assistants:
+
+1. Click the play icon (▶) on any task card
+2. Select your preferred agent:
+   - **GitHub Copilot** - Opens in Copilot Chat
+   - **Claude Code** - Opens in Claude Code extension
+   - **Copy to Clipboard** - Fallback for any agent
+3. The task context is formatted for the agent automatically
 
 ## Keyboard Shortcuts
 
