@@ -41,20 +41,27 @@ function PriorityBadge({ priority }: { priority?: string }) {
   );
 }
 
-// Tag pills
-function TagPills({ tags, maxTags = 3 }: { tags?: string[]; maxTags?: number }) {
+// Tag pills with optional truncation
+function TagPills({ tags, maxTags = 3, maxWidth }: { tags?: string[]; maxTags?: number; maxWidth?: number }) {
   if (!tags || tags.length === 0) return null;
+
+  const visibleTags = tags.slice(0, maxTags);
+  const remaining = tags.length - maxTags;
+
+  // Join tags with spaces for consistent rendering
+  let tagString = visibleTags.map(t => `#${t}`).join(' ');
+  if (remaining > 0) {
+    tagString += ` +${remaining}`;
+  }
+
+  // Truncate if maxWidth provided
+  if (maxWidth && tagString.length > maxWidth) {
+    tagString = tagString.slice(0, maxWidth - 1) + '…';
+  }
 
   return (
     <Box marginLeft={1}>
-      {tags.slice(0, maxTags).map((tag, idx) => (
-        <Box key={tag} marginRight={idx < Math.min(tags.length, maxTags) - 1 ? 1 : 0}>
-          <Text color={PALETTE.textSecondary}>#{tag}</Text>
-        </Box>
-      ))}
-      {tags.length > maxTags && (
-        <Text color={PALETTE.textSecondary}> +{tags.length - maxTags}</Text>
-      )}
+      <Text color={PALETTE.textSecondary}>{tagString}</Text>
     </Box>
   );
 }
@@ -114,6 +121,7 @@ export function TaskCard({ task, isSelected, isExpanded, width }: TaskCardProps)
       borderColor={borderColor}
       paddingX={1}
       marginBottom={1}
+      width={width}
     >
       {/* Header row: Title + ID */}
       <Box justifyContent="space-between">
@@ -125,11 +133,11 @@ export function TaskCard({ task, isSelected, isExpanded, width }: TaskCardProps)
         <Text color={PALETTE.textMuted}>{task.id}</Text>
       </Box>
 
-      {/* Metadata row: Priority badge + tags + due date */}
+      {/* Metadata row: Priority badge + tags + subtasks + due date */}
       {(task.priority || (task.tags && task.tags.length > 0) || subtasks.length > 0 || task.dueDate) && (
-        <Box marginTop={0}>
+        <Box marginTop={0} width={contentWidth}>
           <PriorityBadge priority={task.priority} />
-          <TagPills tags={task.tags} />
+          <TagPills tags={task.tags} maxWidth={contentWidth - 25} />
           {subtasks.length > 0 && (
             <Box marginLeft={1}>
               <SubtaskProgress completed={completedSubtasks} total={subtasks.length} />
