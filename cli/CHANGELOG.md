@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2025-11-26
+
+### Fixed
+- **TUI empty string rendering bug** - Fixed critical Ink rendering error when `searchQuery` was empty
+  - Changed `searchQuery && ...` to `searchQuery.length > 0 && ...` to return `false` instead of `""`
+  - Empty strings in React/Ink cause "Text string must be rendered inside Text component" errors
+- **truncate() utility** - Returns single space `' '` instead of empty string for Ink compatibility
+- **Progress bar rendering** - Protected `.repeat()` calls from producing empty strings when `filled` or `empty` is 0
+- **Separator lines** - Added `Math.max(1, ...)` safeguard for separator line widths
+
+### Added
+- **TUI task management** - Full interactive task management in the terminal
+  - `e` - Edit task in $EDITOR
+  - `m` - Move task to different column (overlay picker)
+  - `d` - Delete task with confirmation
+  - `t` - Toggle subtask completion (overlay picker)
+  - `n` - Quick add new task (inline input)
+  - `N` - New task in $EDITOR
+  - `p` - Cycle priority (none→low→medium→high→critical)
+  - `a` - Archive task
+  - `y` - Copy task ID to clipboard
+- **Minimum terminal size check** - Shows helpful message if terminal is smaller than 60x16
+- **Due date display** - Shows due dates with color coding (red if overdue, yellow if ≤2 days)
+- **Expanded subtask view** - Shows all subtasks when task is expanded (removed 5-subtask limit)
+- **Search improvements** - Now searches description field, proper trimming, "no results" message
+
+### Changed
+- **TUI styling** - Lipgloss-inspired rounded borders and true black theme
+- Upgraded to @brainfile/core@^0.8.0
+
 ## [0.8.0] - 2025-11-25
 
 ### Added

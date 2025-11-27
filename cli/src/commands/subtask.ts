@@ -2,6 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Brainfile, findTaskById, addSubtask, deleteSubtask, updateSubtask, toggleSubtask } from '@brainfile/core';
 import chalk from 'chalk';
+import {
+  fileNotFoundError,
+  parseError,
+  taskNotFoundError,
+  subtaskNotFoundError,
+  missingRequiredError,
+  validationError,
+  handleError,
+} from '../utils/errorHandler';
 
 interface SubtaskOptions {
   file: string;
@@ -17,25 +26,16 @@ export function subtaskCommand(options: SubtaskOptions) {
   try {
     // Validate required task option
     if (!options.task) {
-      console.error(chalk.red('Error: --task is required'));
-      console.log(chalk.gray('Usage: brainfile subtask --task <task-id> <operation>'));
-      console.log(chalk.gray('Operations:'));
-      console.log(chalk.gray('  --add <title>              Add a new subtask'));
-      console.log(chalk.gray('  --delete <subtask-id>      Delete a subtask'));
-      console.log(chalk.gray('  --update <subtask-id> --title <new-title>  Update subtask title'));
-      console.log(chalk.gray('  --toggle <subtask-id>      Toggle subtask completion'));
-      process.exit(1);
+      missingRequiredError('--task', 'brainfile subtask --task <task-id> <operation>\nOperations:\n  --add <title>              Add a new subtask\n  --delete <subtask-id>      Delete a subtask\n  --update <subtask-id> --title <new-title>  Update subtask title\n  --toggle <subtask-id>      Toggle subtask completion');
     }
 
     // Check for exactly one operation
     const operations = [options.add, options.delete, options.update, options.toggle].filter(Boolean);
     if (operations.length === 0) {
-      console.error(chalk.red('Error: One operation is required (--add, --delete, --update, or --toggle)'));
-      process.exit(1);
+      validationError('One operation is required (--add, --delete, --update, or --toggle)');
     }
     if (operations.length > 1) {
-      console.error(chalk.red('Error: Only one operation can be performed at a time'));
-      process.exit(1);
+      validationError('Only one operation can be performed at a time');
     }
 
     // Resolve file path
@@ -43,8 +43,7 @@ export function subtaskCommand(options: SubtaskOptions) {
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
-      console.error(chalk.red(`Error: File not found: ${filePath}`));
-      process.exit(1);
+      fileNotFoundError(filePath);
     }
 
     // Read and parse the file
@@ -52,11 +51,7 @@ export function subtaskCommand(options: SubtaskOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse brainfile'));
-      if (result.error) {
-        console.error(chalk.red(result.error));
-      }
-      process.exit(1);
+      parseError(result.error);
     }
 
     const board = result.board;
@@ -64,14 +59,7 @@ export function subtaskCommand(options: SubtaskOptions) {
     // Find the task
     const taskInfo = findTaskById(board, options.task);
     if (!taskInfo) {
-      console.error(chalk.red(`Error: Task not found: ${options.task}`));
-      console.log(chalk.gray('\nAvailable tasks:'));
-      board.columns.forEach((col) => {
-        col.tasks.forEach((task) => {
-          console.log(chalk.gray(`  - ${task.id}: ${task.title}`));
-        });
-      });
-      process.exit(1);
+      taskNotFoundError(options.task, board);
     }
 
     let operationResult;
@@ -91,18 +79,11 @@ export function subtaskCommand(options: SubtaskOptions) {
     if (options.delete) {
       // Verify subtask exists
       if (!taskInfo.task.subtasks || taskInfo.task.subtasks.length === 0) {
-        console.error(chalk.red(`Error: Task ${options.task} has no subtasks`));
-        process.exit(1);
+        validationError(`Task ${options.task} has no subtasks`);
       }
       const subtask = taskInfo.task.subtasks.find(st => st.id === options.delete);
       if (!subtask) {
-        console.error(chalk.red(`Error: Subtask not found: ${options.delete}`));
-        console.log(chalk.gray('\nAvailable subtasks:'));
-        taskInfo.task.subtasks.forEach((st) => {
-          const status = st.completed ? chalk.green('[x]') : chalk.gray('[ ]');
-          console.log(chalk.gray(`  ${status} ${st.id}: ${st.title}`));
-        });
-        process.exit(1);
+        subtaskNotFoundError(options.delete, taskInfo.task);
       }
 
       operationResult = deleteSubtask(board, options.task, options.delete);
@@ -112,25 +93,16 @@ export function subtaskCommand(options: SubtaskOptions) {
     // Handle update operation
     if (options.update) {
       if (!options.title) {
-        console.error(chalk.red('Error: --title is required for update operation'));
-        console.log(chalk.gray('Usage: brainfile subtask --task <task-id> --update <subtask-id> --title "New title"'));
-        process.exit(1);
+        missingRequiredError('--title', 'brainfile subtask --task <task-id> --update <subtask-id> --title "New title"');
       }
 
       // Verify subtask exists
       if (!taskInfo.task.subtasks || taskInfo.task.subtasks.length === 0) {
-        console.error(chalk.red(`Error: Task ${options.task} has no subtasks`));
-        process.exit(1);
+        validationError(`Task ${options.task} has no subtasks`);
       }
       const subtask = taskInfo.task.subtasks.find(st => st.id === options.update);
       if (!subtask) {
-        console.error(chalk.red(`Error: Subtask not found: ${options.update}`));
-        console.log(chalk.gray('\nAvailable subtasks:'));
-        taskInfo.task.subtasks.forEach((st) => {
-          const status = st.completed ? chalk.green('[x]') : chalk.gray('[ ]');
-          console.log(chalk.gray(`  ${status} ${st.id}: ${st.title}`));
-        });
-        process.exit(1);
+        subtaskNotFoundError(options.update, taskInfo.task);
       }
 
       operationResult = updateSubtask(board, options.task, options.update, options.title);
@@ -141,18 +113,11 @@ export function subtaskCommand(options: SubtaskOptions) {
     if (options.toggle) {
       // Verify subtask exists
       if (!taskInfo.task.subtasks || taskInfo.task.subtasks.length === 0) {
-        console.error(chalk.red(`Error: Task ${options.task} has no subtasks`));
-        process.exit(1);
+        validationError(`Task ${options.task} has no subtasks`);
       }
       const subtask = taskInfo.task.subtasks.find(st => st.id === options.toggle);
       if (!subtask) {
-        console.error(chalk.red(`Error: Subtask not found: ${options.toggle}`));
-        console.log(chalk.gray('\nAvailable subtasks:'));
-        taskInfo.task.subtasks.forEach((st) => {
-          const status = st.completed ? chalk.green('[x]') : chalk.gray('[ ]');
-          console.log(chalk.gray(`  ${status} ${st.id}: ${st.title}`));
-        });
-        process.exit(1);
+        subtaskNotFoundError(options.toggle, taskInfo.task);
       }
 
       operationResult = toggleSubtask(board, options.task, options.toggle);
@@ -170,10 +135,9 @@ export function subtaskCommand(options: SubtaskOptions) {
     fs.writeFileSync(filePath, updatedContent, 'utf-8');
 
     // Success message
-    console.log(chalk.green('✓ ' + successMessage));
+    console.log(chalk.green(successMessage));
 
   } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    handleError(error);
   }
 }

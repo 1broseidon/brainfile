@@ -2,6 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Brainfile, findTaskById, archiveTask } from '@brainfile/core';
 import chalk from 'chalk';
+import {
+  fileNotFoundError,
+  parseError,
+  taskNotFoundError,
+  missingRequiredError,
+  operationError,
+  handleError,
+} from '../utils/errorHandler';
 
 interface ArchiveOptions {
   file: string;
@@ -12,9 +20,7 @@ export function archiveCommand(options: ArchiveOptions) {
   try {
     // Validate required options
     if (!options.task) {
-      console.error(chalk.red('Error: --task is required'));
-      console.log(chalk.gray('Usage: brainfile archive --task <task-id>'));
-      process.exit(1);
+      missingRequiredError('--task', 'brainfile archive --task <task-id>');
     }
 
     // Resolve file path
@@ -22,8 +28,7 @@ export function archiveCommand(options: ArchiveOptions) {
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
-      console.error(chalk.red(`Error: File not found: ${filePath}`));
-      process.exit(1);
+      fileNotFoundError(filePath);
     }
 
     // Read and parse the file
@@ -31,11 +36,7 @@ export function archiveCommand(options: ArchiveOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse brainfile'));
-      if (result.error) {
-        console.error(chalk.red(result.error));
-      }
-      process.exit(1);
+      parseError(result.error);
     }
 
     const board = result.board;
@@ -43,14 +44,7 @@ export function archiveCommand(options: ArchiveOptions) {
     // Find the task
     const taskInfo = findTaskById(board, options.task);
     if (!taskInfo) {
-      console.error(chalk.red(`Error: Task not found: ${options.task}`));
-      console.log(chalk.gray('\nAvailable tasks:'));
-      board.columns.forEach((col) => {
-        col.tasks.forEach((task) => {
-          console.log(chalk.gray(`  - ${task.id}: ${task.title}`));
-        });
-      });
-      process.exit(1);
+      taskNotFoundError(options.task, board);
     }
 
     const { task, column } = taskInfo;
@@ -59,8 +53,7 @@ export function archiveCommand(options: ArchiveOptions) {
     const archiveResult = archiveTask(board, column.id, options.task);
 
     if (!archiveResult.success) {
-      console.error(chalk.red(`Error: ${archiveResult.error}`));
-      process.exit(1);
+      operationError(archiveResult.error!);
     }
 
     // Serialize and write back
@@ -68,7 +61,7 @@ export function archiveCommand(options: ArchiveOptions) {
     fs.writeFileSync(filePath, updatedContent, 'utf-8');
 
     // Success message
-    console.log(chalk.green('✓ Task archived successfully!'));
+    console.log(chalk.green('Task archived successfully!'));
     console.log('');
     console.log(chalk.gray(`  Task:   ${task.id} - ${task.title}`));
     console.log(chalk.gray(`  From:   ${column.title}`));
@@ -77,7 +70,6 @@ export function archiveCommand(options: ArchiveOptions) {
     console.log(chalk.gray('Use "brainfile restore" to restore this task.'));
 
   } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    handleError(error);
   }
 }

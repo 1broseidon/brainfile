@@ -2,6 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Brainfile, findTaskById, findColumnById, findColumnByName, moveTask } from '@brainfile/core';
 import chalk from 'chalk';
+import {
+  fileNotFoundError,
+  parseError,
+  taskNotFoundError,
+  columnNotFoundError,
+  missingRequiredError,
+  operationError,
+  handleError,
+  warnIncompleteSubtasks,
+} from '../utils/errorHandler';
 
 interface MoveOptions {
   file: string;
@@ -13,15 +23,11 @@ export function moveCommand(options: MoveOptions) {
   try {
     // Validate required options
     if (!options.task) {
-      console.error(chalk.red('Error: --task is required'));
-      console.log(chalk.gray('Usage: brainfile move --task <task-id> --column <column-name>'));
-      process.exit(1);
+      missingRequiredError('--task', 'brainfile move --task <task-id> --column <column-name>');
     }
 
     if (!options.column) {
-      console.error(chalk.red('Error: --column is required'));
-      console.log(chalk.gray('Usage: brainfile move --task <task-id> --column <column-name>'));
-      process.exit(1);
+      missingRequiredError('--column', 'brainfile move --task <task-id> --column <column-name>');
     }
 
     // Resolve file path
@@ -29,11 +35,7 @@ export function moveCommand(options: MoveOptions) {
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
-      console.error(chalk.red(`Error: File not found: ${filePath}`));
-      console.log('');
-      console.log(chalk.gray('To create a new brainfile, run:'));
-      console.log(chalk.cyan('  brainfile init'));
-      process.exit(1);
+      fileNotFoundError(filePath);
     }
 
     // Read and parse the file
@@ -41,11 +43,7 @@ export function moveCommand(options: MoveOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse brainfile'));
-      if (result.error) {
-        console.error(chalk.red(result.error));
-      }
-      process.exit(1);
+      parseError(result.error);
     }
 
     let board = result.board;
@@ -53,14 +51,7 @@ export function moveCommand(options: MoveOptions) {
     // Find the task using core query function
     const taskInfo = findTaskById(board, options.task);
     if (!taskInfo) {
-      console.error(chalk.red(`Error: Task not found: ${options.task}`));
-      console.log(chalk.gray('\nAvailable tasks:'));
-      board.columns.forEach((col) => {
-        col.tasks.forEach((task) => {
-          console.log(chalk.gray(`  - ${task.id}: ${task.title}`));
-        });
-      });
-      process.exit(1);
+      taskNotFoundError(options.task, board);
     }
 
     const { task: foundTask, column: sourceColumn } = taskInfo;
@@ -72,12 +63,7 @@ export function moveCommand(options: MoveOptions) {
     }
 
     if (!targetColumn) {
-      console.error(chalk.red(`Error: Column not found: ${options.column}`));
-      console.log(chalk.gray('Available columns:'));
-      board.columns.forEach((col) => {
-        console.log(chalk.gray(`  - ${col.id} (${col.title})`));
-      });
-      process.exit(1);
+      columnNotFoundError(options.column, board);
     }
 
     // Check if already in target column
@@ -96,8 +82,7 @@ export function moveCommand(options: MoveOptions) {
     );
 
     if (!moveResult.success) {
-      console.error(chalk.red(`Error: ${moveResult.error}`));
-      process.exit(1);
+      operationError(moveResult.error!);
     }
 
     // Serialize and write back
@@ -105,14 +90,16 @@ export function moveCommand(options: MoveOptions) {
     fs.writeFileSync(filePath, updatedContent, 'utf-8');
 
     // Success message
-    console.log(chalk.green('✓ Task moved successfully!'));
+    console.log(chalk.green('Task moved successfully!'));
     console.log('');
     console.log(chalk.gray(`  Task:   ${foundTask.id} - ${foundTask.title}`));
     console.log(chalk.gray(`  From:   ${sourceColumn.title}`));
     console.log(chalk.gray(`  To:     ${targetColumn.title}`));
 
+    // Soft error: warn about incomplete subtasks when moving to done-like column
+    warnIncompleteSubtasks(foundTask, targetColumn);
+
   } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    handleError(error);
   }
 }

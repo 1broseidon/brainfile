@@ -53,11 +53,25 @@ brainfile ./path/to/file.md  # Open specific file
 |-----|--------|
 | `TAB` / `Shift+TAB` | Navigate columns |
 | `j`/`k` or `↑`/`↓` | Navigate tasks |
+| `g`/`G` | Jump to top/bottom |
 | `Enter` | Expand/collapse task |
 | `/` | Search tasks |
 | `?` | Show help |
 | `r` | Refresh |
 | `q` | Quit |
+
+**Task Management:**
+| Key | Action |
+|-----|--------|
+| `e` | Edit task in $EDITOR |
+| `m` | Move task to column |
+| `d` | Delete task |
+| `n` | Quick add new task |
+| `N` | New task in $EDITOR |
+| `p` | Cycle priority |
+| `t` | Toggle subtask |
+| `a` | Archive task |
+| `y` | Copy task ID |
 
 ---
 

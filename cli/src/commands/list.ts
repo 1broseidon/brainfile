@@ -2,6 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Brainfile, Task } from '@brainfile/core';
 import chalk from 'chalk';
+import {
+  fileNotFoundError,
+  parseError,
+  handleError,
+} from '../utils/errorHandler';
 
 interface ListOptions {
   file: string;
@@ -16,11 +21,7 @@ export function listCommand(options: ListOptions) {
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
-      console.error(chalk.red(`Error: File not found: ${filePath}`));
-      console.log('');
-      console.log(chalk.gray('To create a new brainfile, run:'));
-      console.log(chalk.cyan('  brainfile init'));
-      process.exit(1);
+      fileNotFoundError(filePath);
     }
 
     // Read and parse the file
@@ -28,11 +29,7 @@ export function listCommand(options: ListOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse brainfile'));
-      if (result.error) {
-        console.error(chalk.red(result.error));
-      }
-      process.exit(1);
+      parseError(result.error);
     }
 
     const board = result.board;
@@ -82,8 +79,7 @@ export function listCommand(options: ListOptions) {
     console.log(chalk.gray(`Total tasks: ${totalTasks}`));
 
   } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    handleError(error);
   }
 }
 

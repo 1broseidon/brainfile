@@ -2,6 +2,15 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Brainfile, findTaskById, patchTask, type TaskPatch } from '@brainfile/core';
 import chalk from 'chalk';
+import {
+  fileNotFoundError,
+  parseError,
+  taskNotFoundError,
+  missingRequiredError,
+  validationError,
+  operationError,
+  handleError,
+} from '../utils/errorHandler';
 
 interface PatchOptions {
   file: string;
@@ -22,9 +31,7 @@ export function patchCommand(options: PatchOptions) {
   try {
     // Validate required options
     if (!options.task) {
-      console.error(chalk.red('Error: --task is required'));
-      console.log(chalk.gray('Usage: brainfile patch --task <task-id> [field options]'));
-      process.exit(1);
+      missingRequiredError('--task', 'brainfile patch --task <task-id> [field options]');
     }
 
     // Check if any fields are being updated
@@ -33,10 +40,7 @@ export function patchCommand(options: PatchOptions) {
       options.clearTags || options.clearAssignee || options.clearDueDate || options.clearPriority;
 
     if (!hasUpdates) {
-      console.error(chalk.red('Error: At least one field to update is required'));
-      console.log(chalk.gray('Options: --title, --description, --priority, --tags, --assignee, --due-date'));
-      console.log(chalk.gray('Clear:   --clear-tags, --clear-assignee, --clear-due-date, --clear-priority'));
-      process.exit(1);
+      validationError('At least one field to update is required.\nOptions: --title, --description, --priority, --tags, --assignee, --due-date\nClear:   --clear-tags, --clear-assignee, --clear-due-date, --clear-priority');
     }
 
     // Resolve file path
@@ -44,8 +48,7 @@ export function patchCommand(options: PatchOptions) {
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
-      console.error(chalk.red(`Error: File not found: ${filePath}`));
-      process.exit(1);
+      fileNotFoundError(filePath);
     }
 
     // Read and parse the file
@@ -53,11 +56,7 @@ export function patchCommand(options: PatchOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse brainfile'));
-      if (result.error) {
-        console.error(chalk.red(result.error));
-      }
-      process.exit(1);
+      parseError(result.error);
     }
 
     let board = result.board;
@@ -65,14 +64,7 @@ export function patchCommand(options: PatchOptions) {
     // Find the task
     const taskInfo = findTaskById(board, options.task);
     if (!taskInfo) {
-      console.error(chalk.red(`Error: Task not found: ${options.task}`));
-      console.log(chalk.gray('\nAvailable tasks:'));
-      board.columns.forEach((col) => {
-        col.tasks.forEach((task) => {
-          console.log(chalk.gray(`  - ${task.id}: ${task.title}`));
-        });
-      });
-      process.exit(1);
+      taskNotFoundError(options.task, board);
     }
 
     // Build TaskPatch with all provided fields
@@ -129,8 +121,7 @@ export function patchCommand(options: PatchOptions) {
     const patchResult = patchTask(board, options.task, patch);
 
     if (!patchResult.success) {
-      console.error(chalk.red(`Error: ${patchResult.error}`));
-      process.exit(1);
+      operationError(patchResult.error!);
     }
 
     // Serialize and write back
@@ -138,7 +129,7 @@ export function patchCommand(options: PatchOptions) {
     fs.writeFileSync(filePath, updatedContent, 'utf-8');
 
     // Success message
-    console.log(chalk.green('✓ Task updated successfully!'));
+    console.log(chalk.green('Task updated successfully!'));
     console.log('');
     console.log(chalk.gray(`  Task: ${options.task}`));
     changes.forEach(change => {
@@ -146,7 +137,6 @@ export function patchCommand(options: PatchOptions) {
     });
 
   } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    handleError(error);
   }
 }

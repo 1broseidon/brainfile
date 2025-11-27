@@ -2,6 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Brainfile, findColumnById, findColumnByName, addTask, type TaskInput } from '@brainfile/core';
 import chalk from 'chalk';
+import {
+  fileNotFoundError,
+  parseError,
+  columnNotFoundError,
+  missingRequiredError,
+  operationError,
+  handleError,
+} from '../utils/errorHandler';
 
 interface AddOptions {
   file: string;
@@ -20,9 +28,7 @@ export function addCommand(options: AddOptions) {
   try {
     // Validate required options
     if (!options.title) {
-      console.error(chalk.red('Error: --title is required'));
-      console.log(chalk.gray('Usage: brainfile add --title "Task title" [options]'));
-      process.exit(1);
+      missingRequiredError('--title', 'brainfile add --title "Task title" [options]');
     }
 
     // Resolve file path
@@ -30,11 +36,7 @@ export function addCommand(options: AddOptions) {
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {
-      console.error(chalk.red(`Error: File not found: ${filePath}`));
-      console.log('');
-      console.log(chalk.gray('To create a new brainfile, run:'));
-      console.log(chalk.cyan('  brainfile init'));
-      process.exit(1);
+      fileNotFoundError(filePath);
     }
 
     // Read and parse the file
@@ -42,11 +44,7 @@ export function addCommand(options: AddOptions) {
     const result = Brainfile.parseWithErrors(content);
 
     if (!result.board) {
-      console.error(chalk.red('Error: Failed to parse brainfile'));
-      if (result.error) {
-        console.error(chalk.red(result.error));
-      }
-      process.exit(1);
+      parseError(result.error);
     }
 
     let board = result.board;
@@ -58,12 +56,7 @@ export function addCommand(options: AddOptions) {
     }
 
     if (!targetColumn) {
-      console.error(chalk.red(`Error: Column not found: ${options.column}`));
-      console.log(chalk.gray('Available columns:'));
-      board.columns.forEach(col => {
-        console.log(chalk.gray(`  - ${col.id} (${col.title})`));
-      });
-      process.exit(1);
+      columnNotFoundError(options.column, board);
     }
 
     // Build TaskInput with all provided fields
@@ -82,8 +75,7 @@ export function addCommand(options: AddOptions) {
     const addResult = addTask(board, targetColumn.id, taskInput);
 
     if (!addResult.success) {
-      console.error(chalk.red(`Error: ${addResult.error}`));
-      process.exit(1);
+      operationError(addResult.error!);
     }
 
     board = addResult.board!;
@@ -98,7 +90,7 @@ export function addCommand(options: AddOptions) {
     fs.writeFileSync(filePath, updatedContent, 'utf-8');
 
     // Success message
-    console.log(chalk.green('✓ Task added successfully!'));
+    console.log(chalk.green('Task added successfully!'));
     console.log('');
     console.log(chalk.gray(`  ID:       ${newTask.id}`));
     console.log(chalk.gray(`  Title:    ${options.title}`));
@@ -126,7 +118,6 @@ export function addCommand(options: AddOptions) {
     }
 
   } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    handleError(error);
   }
 }

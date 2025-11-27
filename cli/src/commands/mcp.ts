@@ -31,6 +31,7 @@ import {
   type TaskPatch,
   type Board
 } from '@brainfile/core';
+import { mcpCheckIncompleteSubtasks } from '../utils/errorHandler';
 
 interface McpOptions {
   file: string;
@@ -151,7 +152,7 @@ export async function mcpCommand(options: McpOptions) {
 
   const server = new McpServer({
     name: 'brainfile',
-    version: '0.7.1'
+    version: '0.8.1'
   });
 
   // List tasks tool
@@ -450,8 +451,15 @@ export async function mcpCommand(options: McpOptions) {
 
       writeBoard(filePath, moveResult.board!);
 
+      // Check for incomplete subtasks warning when moving to done-like column
+      const warning = mcpCheckIncompleteSubtasks(taskInfo.task, targetColumn);
+      let message = `Task ${task} moved from "${taskInfo.column.title}" to "${targetColumn.title}"`;
+      if (warning) {
+        message += `\n\n${warning.warning}`;
+      }
+
       return {
-        content: [{ type: 'text' as const, text: `Task ${task} moved from "${taskInfo.column.title}" to "${targetColumn.title}"` }]
+        content: [{ type: 'text' as const, text: message }]
       };
     }
   );
@@ -911,18 +919,40 @@ export async function mcpCommand(options: McpOptions) {
         return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
       }
 
+      // Check for incomplete subtasks before move (for warning)
+      const tasksWithIncomplete: Array<{ id: string; incomplete: number; total: number }> = [];
+      for (const taskId of tasks) {
+        const taskInfo = findTaskById(board, taskId);
+        if (taskInfo) {
+          const warning = mcpCheckIncompleteSubtasks(taskInfo.task, targetColumn);
+          if (warning?.incompleteSubtasks) {
+            tasksWithIncomplete.push({
+              id: taskId,
+              incomplete: warning.incompleteSubtasks.incomplete.length,
+              total: warning.incompleteSubtasks.total
+            });
+          }
+        }
+      }
+
       const bulkResult = moveTasks(board, tasks, targetColumn.id);
 
       if (bulkResult.board) {
         writeBoard(filePath, bulkResult.board);
       }
 
-      const output = {
+      const output: Record<string, unknown> = {
         success: bulkResult.success,
         successCount: bulkResult.successCount,
         failureCount: bulkResult.failureCount,
         results: bulkResult.results
       };
+
+      // Add warning about incomplete subtasks if any
+      if (tasksWithIncomplete.length > 0) {
+        output.warning = `${tasksWithIncomplete.length} task(s) moved to "${targetColumn.title}" have incomplete subtasks`;
+        output.tasksWithIncompleteSubtasks = tasksWithIncomplete;
+      }
 
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
