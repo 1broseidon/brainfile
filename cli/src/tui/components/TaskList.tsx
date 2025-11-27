@@ -3,6 +3,7 @@ import { Box, Text } from 'ink';
 import type { Task } from '@brainfile/core';
 import { PALETTE } from '../theme.js';
 import { TaskCard } from './TaskCard.js';
+import { getTaskCardHeight } from './TaskCardMeasure.js';
 
 export interface TaskListProps {
   tasks: Task[];
@@ -14,17 +15,7 @@ export interface TaskListProps {
 
 export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, termWidth }: TaskListProps) {
   const cardWidth = termWidth - 4;
-
-  // Helper to calculate task height
-  const getTaskHeight = (task: Task, isExpanded: boolean): number => {
-    // Base: top border(1) + title(1) + metadata(1) + bottom border(1) + margin(1) = 5
-    if (!isExpanded) return 5;
-    const subtaskCount = task.subtasks?.length || 0;
-    const hasDescription = task.description;
-    const hasFiles = task.relatedFiles?.length;
-    // expandedLines: separator(1) + description(2 if present) + subtasks + files(2 if present)
-    return 5 + 1 + (hasDescription ? 2 : 0) + subtaskCount + (hasFiles ? 2 : 0);
-  };
+  const contentWidth = cardWidth - 6; // indicator (4) + right padding (2) = 6
 
   // Calculate scroll offset - ensure selected task is visible
   // Start from selected task and work backwards to find scroll position
@@ -34,12 +25,14 @@ export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, te
   for (let i = 0; i < selectedIndex; i++) {
     const task = tasks[i];
     const isExpanded = expandedIds.has(task.id);
-    heightBeforeSelected += getTaskHeight(task, isExpanded);
+    heightBeforeSelected += getTaskCardHeight(task, isExpanded, contentWidth);
   }
 
   // If selected task would be off screen, adjust scroll
   const selectedTask = tasks[selectedIndex];
-  const selectedHeight = selectedTask ? getTaskHeight(selectedTask, expandedIds.has(selectedTask.id)) : 5;
+  const selectedHeight = selectedTask
+    ? getTaskCardHeight(selectedTask, expandedIds.has(selectedTask.id), contentWidth)
+    : 5;
 
   if (heightBeforeSelected + selectedHeight > viewportHeight) {
     // Need to scroll - start from selected task
@@ -57,7 +50,7 @@ export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, te
     const task = tasks[i];
     const isSelected = i === selectedIndex;
     const isExpanded = expandedIds.has(task.id);
-    const taskLines = getTaskHeight(task, isExpanded);
+    const taskLines = getTaskCardHeight(task, isExpanded, contentWidth);
 
     // Always include the selected task, even if it's tall
     if (isSelected) {
@@ -93,19 +86,18 @@ export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, te
 
   return (
     <Box flexGrow={1} flexDirection="column" paddingLeft={1}>
-      {visibleItems.map(({ task, isSelected, isExpanded }) => (
-        <TaskCard
-          key={task.id}
-          task={task}
-          isSelected={isSelected}
-          isExpanded={isExpanded}
-          width={cardWidth}
-        />
+      {visibleItems.map(({ task, isSelected, isExpanded }, index) => (
+        <Box key={task.id} marginTop={index > 0 ? 1 : 0}>
+          <TaskCard
+            task={task}
+            isSelected={isSelected}
+            isExpanded={isExpanded}
+            width={cardWidth}
+          />
+        </Box>
       ))}
-      {/* Fill remaining viewport space with empty lines */}
-      {Array.from({ length: emptyLines }).map((_, i) => (
-        <Box key={`empty-${i}`}><Text>{' '}</Text></Box>
-      ))}
+      {/* Fill remaining viewport space */}
+      {emptyLines > 0 && <Box height={emptyLines} />}
     </Box>
   );
 }

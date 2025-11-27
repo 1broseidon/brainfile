@@ -84,4 +84,4 @@ export interface TUIProps {
 }
 
 export const HEADER_ROWS = 7; // title(1) + progress(3: padTop+content+padBottom) + tabs(2: marginTop+content) + separator(1)
-export const FOOTER_ROWS = 3; // separator + status bar (2 rows: content + bottom padding)
+export const FOOTER_ROWS = 4; // separator(1) + status message(1) + status bar(2)

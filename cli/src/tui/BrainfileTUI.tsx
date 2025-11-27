@@ -340,10 +340,12 @@ export function BrainfileTUI({ filePath }: TUIProps) {
         <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
       </Box>
 
-      {/* Status message (toast) */}
-      {state.statusMessage && (
-        <StatusMessageDisplay message={state.statusMessage} />
-      )}
+      {/* Status message (toast) - always reserve space to prevent layout shift */}
+      <Box height={1}>
+        {state.statusMessage && (
+          <StatusMessageDisplay message={state.statusMessage} />
+        )}
+      </Box>
 
       {/* Status bar */}
       <StatusBar

@@ -6,9 +6,10 @@
 
 **Task management for your terminal.** A full kanban board that lives in a markdown file.
 
-- Interactive TUI with vim-style navigation
+- Modern, borderless TUI optimized for information density
+- Vim-style navigation with intuitive keybindings
 - CLI commands for scripting and automation
-- MCP server for AI assistant integration (Claude Code, Cursor, etc.)
+- MCP server for AI assistant integration
 
 ## Installation
 
@@ -47,6 +48,21 @@ Launch an interactive task board:
 brainfile                    # Open with default brainfile.md
 brainfile ./path/to/file.md  # Open specific file
 ```
+
+**Task Card Layout:**
+```
+  ▌ CRIT  Implement user authentication flow
+    [1/5] · Nov 30 · #auth #security                     task-39
+
+    HIGH  Dashboard performance optimization
+    [0/4] · Dec 4 · #performance #frontend               task-40
+```
+
+- `▌` indicator shows selected task
+- Priority badge (CRIT/HIGH/MED/LOW) leads each row
+- `[X/Y]` shows subtask progress
+- Due dates with urgency coloring (red if overdue, yellow if soon)
+- Tags and task ID complete the metadata row
 
 **Panel Navigation:**
 | Key | Action |

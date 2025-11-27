@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2025-11-27
+
+### Changed
+- **TUI redesign** - Complete visual overhaul of the terminal interface
+  - Borderless task cards for cleaner, faster scanning
+  - Selection indicator (`▌`) matches column tabs for visual consistency
+  - Priority badge leads the title row for immediate visibility
+  - Compact `[X/Y]` subtask counts replace block progress bars
+  - Meta row shows progress, due date, and tags with `·` separators
+  - Task IDs right-aligned for consistent table-like appearance
+  - 3 lines per collapsed task (down from 7) - more tasks visible at once
+
+### Fixed
+- **Layout stability** - Reserved space for status messages prevents layout shifts during updates
+- **Row spacing** - Fixed inconsistent margins between task cards
+- **Viewport calculations** - Fixed content width calculations for accurate scrolling
+
 ## [0.10.3] - 2025-11-27
 
 ### Fixed

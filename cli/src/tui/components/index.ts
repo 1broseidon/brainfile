@@ -45,3 +45,9 @@ export type { RulesPanelProps } from './RulesPanel.js';
 
 export { ArchivePanel } from './ArchivePanel.js';
 export type { ArchivePanelProps } from './ArchivePanel.js';
+
+export { ManualBorder, BorderRow } from './ManualBorder.js';
+export type { ManualBorderProps, BorderRowProps } from './ManualBorder.js';
+
+export { measureTaskCard, getTaskCardHeight, wrapText, safeTruncate } from './TaskCardMeasure.js';
+export type { TaskCardDimensions } from './TaskCardMeasure.js';

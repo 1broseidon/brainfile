@@ -1,17 +1,19 @@
 /**
- * TaskCard - Lipgloss-style task card with rounded borders
+ * TaskCard - Linear-style modern minimal (borderless)
  *
- * Features:
- * 1. Rounded borders (like Bubbletea/Lipgloss)
- * 2. Better visual hierarchy with consistent spacing
- * 3. Subtle color accents for priority
- * 4. Cleaner metadata display
+ * Design principles:
+ * 1. No borders - clean, fast scanning
+ * 2. Selected indicator ▌ matches column tabs
+ * 3. Priority badge leads the title row
+ * 4. Meta row indented to align with title
+ * 5. Consistent visual language (█░ progress, · separators)
  */
 import React from 'react';
-import { Box, Text } from 'ink';
+import { Box, Text, Spacer } from 'ink';
 import type { Task } from '@brainfile/core';
-import { PALETTE } from '../theme.js';
+import { PALETTE, ICONS } from '../theme.js';
 import { truncate, getPriorityColor } from '../utils.js';
+import { wrapText } from './TaskCardMeasure.js';
 
 export interface TaskCardProps {
   task: Task;
@@ -20,12 +22,15 @@ export interface TaskCardProps {
   width: number;
 }
 
-// Priority badge with background color
+// ============================================================================
+// Sub-components
+// ============================================================================
+
+/** Priority badge - compact colored label */
 function PriorityBadge({ priority }: { priority?: string }) {
   if (!priority) return null;
 
   const color = getPriorityColor(priority);
-  // Use 3-char abbreviations for consistency: LOW, MED, HI, CRIT
   const abbrev: Record<string, string> = {
     low: 'LOW',
     medium: 'MED',
@@ -41,150 +46,180 @@ function PriorityBadge({ priority }: { priority?: string }) {
   );
 }
 
-// Tag pills with optional truncation
-function TagPills({ tags, maxTags = 3, maxWidth }: { tags?: string[]; maxTags?: number; maxWidth?: number }) {
-  if (!tags || tags.length === 0) return null;
-
-  const visibleTags = tags.slice(0, maxTags);
-  const remaining = tags.length - maxTags;
-
-  // Join tags with spaces for consistent rendering
-  let tagString = visibleTags.map(t => `#${t}`).join(' ');
-  if (remaining > 0) {
-    tagString += ` +${remaining}`;
-  }
-
-  // Truncate if maxWidth provided
-  if (maxWidth && tagString.length > maxWidth) {
-    tagString = tagString.slice(0, maxWidth - 1) + '…';
-  }
-
-  return (
-    <Box marginLeft={1}>
-      <Text color={PALETTE.textSecondary}>{tagString}</Text>
-    </Box>
-  );
-}
-
-// Subtask progress indicator
-function SubtaskProgress({ completed, total }: { completed: number; total: number }) {
+/** Compact bracketed progress count [X/Y] */
+function SubtaskCount({ completed, total }: { completed: number; total: number }) {
   if (total === 0) return null;
 
-  const barWidth = 10;
-  const filled = Math.round((completed / total) * barWidth);
+  const allDone = completed === total;
+  const color = allDone ? PALETTE.success : PALETTE.textSecondary;
 
   return (
-    <Box>
-      <Text color={PALETTE.textSecondary}>{'['}</Text>
-      {filled > 0 && <Text color={PALETTE.success}>{'█'.repeat(filled)}</Text>}
-      {barWidth - filled > 0 && <Text color={PALETTE.textMuted}>{'░'.repeat(barWidth - filled)}</Text>}
-      <Text color={PALETTE.textSecondary}>{`] ${completed}/${total}`}</Text>
-    </Box>
+    <Text color={color}>[{completed}/{total}]</Text>
   );
 }
 
-// Due date indicator with color coding
-function DueDateBadge({ dueDate }: { dueDate?: string }) {
+/** Due date with urgency coloring */
+function DueDate({ dueDate }: { dueDate?: string }) {
   if (!dueDate) return null;
 
   const due = new Date(dueDate);
   const now = new Date();
   const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
-  // Determine color based on urgency
   const getColor = () => {
-    if (diffDays < 0) return PALETTE.error; // Overdue
-    if (diffDays <= 2) return PALETTE.warning; // Due soon
+    if (diffDays < 0) return PALETTE.error;
+    if (diffDays <= 2) return PALETTE.warning;
     return PALETTE.textSecondary;
   };
 
-  // Format as short date
   const formatted = due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const icon = diffDays < 0 ? ` ${ICONS.warning}` : '';
 
   return (
     <Text color={getColor()}>
-      {diffDays < 0 ? '⚠ ' : '📅 '}{formatted}
+      {formatted}{icon}
     </Text>
   );
 }
 
+/** Tags display - compact inline */
+function Tags({ tags, maxTags = 2 }: { tags?: string[]; maxTags?: number }) {
+  if (!tags || tags.length === 0) return null;
+
+  const visible = tags.slice(0, maxTags);
+  const remaining = tags.length - maxTags;
+
+  return (
+    <Text color={PALETTE.textMuted}>
+      {visible.map((t, i) => (
+        <Text key={t}>
+          <Text color={PALETTE.textSecondary}>#{t}</Text>
+          {i < visible.length - 1 && ' '}
+        </Text>
+      ))}
+      {remaining > 0 && <Text color={PALETTE.textDim}> +{remaining}</Text>}
+    </Text>
+  );
+}
+
+/** Separator dot */
+function Sep() {
+  return <Text color={PALETTE.textDim}> · </Text>;
+}
+
+// ============================================================================
+// Main TaskCard Component
+// ============================================================================
+
 export function TaskCard({ task, isSelected, isExpanded, width }: TaskCardProps) {
   const subtasks = task.subtasks || [];
   const completedSubtasks = subtasks.filter(s => s.completed).length;
-  const borderColor = isSelected ? PALETTE.progress : PALETTE.border;
-  const contentWidth = width - 4; // Account for border + padding
+
+  // Indicator width: "  ▌ " = 4 chars for selected, "    " = 4 chars for not
+  const indicatorWidth = 4;
+  const contentWidth = width - indicatorWidth - 2; // -2 for right padding
+
+  // Build meta segments for row 2
+  // Order: progress → date → tags (fixed-width first for table-like alignment)
+  const metaSegments: React.ReactNode[] = [];
+
+  if (subtasks.length > 0) {
+    metaSegments.push(
+      <SubtaskCount key="progress" completed={completedSubtasks} total={subtasks.length} />
+    );
+  }
+
+  if (task.dueDate) {
+    metaSegments.push(<DueDate key="due" dueDate={task.dueDate} />);
+  }
+
+  if (task.tags && task.tags.length > 0) {
+    metaSegments.push(<Tags key="tags" tags={task.tags} maxTags={3} />);
+  }
+
+  // Join meta segments with separators
+  const metaContent: React.ReactNode[] = [];
+  metaSegments.forEach((seg, i) => {
+    if (i > 0) metaContent.push(<Sep key={`sep-${i}`} />);
+    metaContent.push(seg);
+  });
+
+  // Calculate title width (account for priority badge if present)
+  const priorityWidth = task.priority ? 7 : 0; // " HIGH " = 6 + 1 space
+  const titleWidth = contentWidth - priorityWidth;
 
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={borderColor}
-      paddingX={1}
-      marginBottom={1}
-      width={width}
-    >
-      {/* Header row: Title + ID */}
-      <Box justifyContent="space-between">
-        <Box flexShrink={1}>
-          <Text color={isSelected ? PALETTE.text : PALETTE.textSecondary} bold={isSelected}>
-            {truncate(task.title, contentWidth - task.id.length - 2)}
-          </Text>
-        </Box>
-        <Text color={PALETTE.textMuted}>{task.id}</Text>
+    <Box flexDirection="column" width={width}>
+      {/* Row 1: Indicator + Priority + Title */}
+      <Box>
+        <Text color={isSelected ? PALETTE.accent : PALETTE.textDim}>
+          {isSelected ? '  ▌ ' : '    '}
+        </Text>
+        {task.priority && (
+          <>
+            <PriorityBadge priority={task.priority} />
+            <Text> </Text>
+          </>
+        )}
+        <Text color={isSelected ? PALETTE.text : PALETTE.textSecondary} bold={isSelected}>
+          {truncate(task.title, titleWidth)}
+        </Text>
       </Box>
 
-      {/* Metadata row: Priority badge + tags + subtasks + due date */}
-      {(task.priority || (task.tags && task.tags.length > 0) || subtasks.length > 0 || task.dueDate) && (
-        <Box marginTop={0} width={contentWidth}>
-          <PriorityBadge priority={task.priority} />
-          <TagPills tags={task.tags} maxWidth={contentWidth - 25} />
-          {subtasks.length > 0 && (
-            <Box marginLeft={1}>
-              <SubtaskProgress completed={completedSubtasks} total={subtasks.length} />
-            </Box>
-          )}
-          {task.dueDate && (
-            <Box marginLeft={1}>
-              <DueDateBadge dueDate={task.dueDate} />
-            </Box>
-          )}
-        </Box>
-      )}
+      {/* Row 2: Indented meta + ID */}
+      <Box width={width}>
+        <Text>{'    '}</Text>
+        {metaContent.length > 0 ? (
+          <Box>{metaContent}</Box>
+        ) : null}
+        <Spacer />
+        <Text color={PALETTE.textDim}>{task.id}</Text>
+      </Box>
 
       {/* Expanded content */}
       {isExpanded && (
-        <Box flexDirection="column" marginTop={1}>
-          {/* Separator line */}
-          {contentWidth > 0 && <Text color={PALETTE.border}>{'─'.repeat(contentWidth)}</Text>}
-
+        <Box flexDirection="column" marginTop={1} marginLeft={4}>
           {/* Description */}
           {task.description && (
-            <Box marginTop={1}>
-              <Text color={PALETTE.textSecondary}>
-                {truncate(task.description.split('\n')[0], contentWidth)}
-              </Text>
+            <Box flexDirection="column">
+              {wrapText(task.description, contentWidth - 4).slice(0, 3).map((line, i) => (
+                <Text key={i} color={PALETTE.textSecondary}>{truncate(line, contentWidth - 4)}</Text>
+              ))}
+              {wrapText(task.description, contentWidth - 4).length > 3 && (
+                <Text color={PALETTE.textDim}>…</Text>
+              )}
             </Box>
           )}
 
-          {/* Subtasks list - show all when expanded */}
+          {/* Subtasks */}
           {subtasks.length > 0 && (
             <Box flexDirection="column" marginTop={task.description ? 1 : 0}>
-              {subtasks.map((st) => (
-                <Box key={st.id}>
-                  <Text color={st.completed ? PALETTE.success : PALETTE.textSecondary}>
-                    {st.completed ? '✓' : '○'} {truncate(st.title, contentWidth - 2)}
-                  </Text>
-                </Box>
+              {subtasks.slice(0, 5).map((st, i) => (
+                <Text key={i} color={st.completed ? PALETTE.success : PALETTE.textSecondary}>
+                  {st.completed ? ICONS.success : '○'} {truncate(st.title, contentWidth - 6)}
+                </Text>
               ))}
+              {subtasks.length > 5 && (
+                <Text color={PALETTE.textDim}>  +{subtasks.length - 5} more</Text>
+              )}
             </Box>
           )}
 
           {/* Related files */}
           {task.relatedFiles && task.relatedFiles.length > 0 && (
-            <Box marginTop={1}>
-              <Text color={PALETTE.accentAlt}>
-                {'📁 '}{truncate(task.relatedFiles.slice(0, 2).join(', '), contentWidth - 3)}
-              </Text>
+            <Box flexDirection="column" marginTop={1}>
+              {task.relatedFiles.slice(0, 3).map((file, i) => {
+                const fileName = file.split('/').pop() || file;
+                return (
+                  <Text key={i}>
+                    <Text color={PALETTE.textDim}>→ </Text>
+                    <Text color={PALETTE.accentAlt}>{truncate(fileName, contentWidth - 6)}</Text>
+                  </Text>
+                );
+              })}
+              {task.relatedFiles.length > 3 && (
+                <Text color={PALETTE.textDim}>  +{task.relatedFiles.length - 3} more</Text>
+              )}
             </Box>
           )}
         </Box>
