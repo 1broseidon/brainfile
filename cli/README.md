@@ -60,6 +60,16 @@ brainfile ./path/to/file.md  # Open specific file
 | `r` | Refresh |
 | `q` | Quit |
 
+**Search Filters:**
+| Filter | Example | Description |
+|--------|---------|-------------|
+| Priority | `p:high` | Filter by priority |
+| Tag | `#bug` or `t:feature` | Filter by tag |
+| Assignee | `@john` | Filter by assignee |
+| Due date | `due:week` | `overdue`, `today`, `week`, `month` |
+
+Combine filters with text: `p:high #bug login issue`
+
 **Task Management:**
 | Key | Action |
 |-----|--------|

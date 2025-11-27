@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2025-11-26
+
+### Added
+- **Advanced search filters** - Filter tasks using structured queries
+  - `p:high` or `priority:critical` - Filter by priority
+  - `#tag` or `t:bug` - Filter by tag
+  - `@john` or `assignee:john` - Filter by assignee
+  - `due:overdue`, `due:today`, `due:week`, `due:month` - Filter by due date
+  - Combine filters with text search: `p:high #bug fix login`
+- **Filter hints in search bar** - Shows available filters when search is empty
+- **Updated help overlay** - Documents filter syntax
+
 ## [0.9.1] - 2025-11-26
 
 ### Fixed

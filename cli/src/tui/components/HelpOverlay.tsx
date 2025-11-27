@@ -52,9 +52,17 @@ export function HelpOverlay({ termWidth, termHeight }: HelpOverlayProps) {
               <Text color={PALETTE.accent} bold>View</Text>
             </Box>
             <HelpRow k="ENTER" desc="Expand/collapse" />
-            <HelpRow k="/" desc="Search" />
+            <HelpRow k="/" desc="Search/filter" />
             <HelpRow k="r" desc="Refresh" />
             <HelpRow k="ESC" desc="Clear/close" />
+
+            <Box marginTop={1}>
+              <Text color={PALETTE.accent} bold>Filters</Text>
+            </Box>
+            <HelpRow k="p:high" desc="By priority" />
+            <HelpRow k="#tag" desc="By tag" />
+            <HelpRow k="@name" desc="By assignee" />
+            <HelpRow k="due:week" desc="By due date" />
           </Box>
 
           {/* Right column: Task Management */}

@@ -9,7 +9,8 @@ export type { AppState, ViewMode, BoardColumn, TUIProps } from './types.js';
 export { HEADER_ROWS, FOOTER_ROWS } from './types.js';
 
 // Utils
-export { truncate, getPriorityColor } from './utils.js';
+export { truncate, getPriorityColor, parseSearchQuery, taskMatchesFilter } from './utils.js';
+export type { ParsedSearch } from './utils.js';
 
 // Hooks
 export { useBrainfileLoader } from './hooks/useBrainfileLoader.js';

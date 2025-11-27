@@ -7,6 +7,7 @@ import type { AppState, TUIProps } from './types.js';
 import { HEADER_ROWS, FOOTER_ROWS } from './types.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
+import { parseSearchQuery, taskMatchesFilter } from './utils.js';
 import {
   Header,
   ProgressBar,
@@ -85,26 +86,23 @@ export function BrainfileTUI({ filePath }: TUIProps) {
     });
   }, [state.board]);
 
-  // Filtered columns based on search
-  const searchQuery = state.searchQuery.trim().toLowerCase();
+  // Filtered columns based on search with structured filters
+  const searchQuery = state.searchQuery.trim();
+  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
+  const hasActiveFilter = searchQuery.length > 0;
+
   const filteredColumns = useMemo(() => {
     if (!orderedColumns.length) return [];
-    if (!searchQuery) return orderedColumns;
+    if (!hasActiveFilter) return orderedColumns;
 
     return orderedColumns.map(col => ({
       ...col,
-      tasks: col.tasks.filter(task =>
-        task.title.toLowerCase().includes(searchQuery) ||
-        task.id.toLowerCase().includes(searchQuery) ||
-        task.tags?.some(t => t.toLowerCase().includes(searchQuery)) ||
-        task.priority?.toLowerCase().includes(searchQuery) ||
-        task.description?.toLowerCase().includes(searchQuery)
-      ),
+      tasks: col.tasks.filter(task => taskMatchesFilter(task, parsedSearch)),
     })).filter(col => col.tasks.length > 0);
-  }, [orderedColumns, searchQuery]);
+  }, [orderedColumns, hasActiveFilter, parsedSearch]);
 
   // Check if search has no results
-  const hasNoSearchResults = searchQuery.length > 0 && filteredColumns.length === 0;
+  const hasNoSearchResults = hasActiveFilter && filteredColumns.length === 0;
 
   // Current column and its tasks
   const currentColumn = filteredColumns[state.activeColumnIndex];
