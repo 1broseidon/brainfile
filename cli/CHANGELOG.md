@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.1] - 2025-11-27
+
+### Fixed
+- **Status bar rendering** - Fixed character clipping in footer hints
+
 ## [0.11.0] - 2025-11-27
 
 ### Changed

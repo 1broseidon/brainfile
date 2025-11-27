@@ -27,12 +27,8 @@ export function StatusBar({ mode, columnName, taskIndex, taskCount, termWidth, i
     <Text color={PALETTE.textMuted}>
       <Text color={PALETTE.textSecondary}>?</Text>
       <Text>{' help  '}</Text>
-      {tabHint && (
-        <>
-          <Text color={PALETTE.textSecondary}>TAB</Text>
-          <Text>{tabHint}</Text>
-        </>
-      )}
+      {tabHint && <Text color={PALETTE.textSecondary}>TAB</Text>}
+      {tabHint && <Text>{tabHint}</Text>}
       <Text color={PALETTE.textSecondary}>q</Text>
       <Text>{' quit'}</Text>
     </Text>
