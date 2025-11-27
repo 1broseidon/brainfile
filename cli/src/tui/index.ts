@@ -5,7 +5,7 @@ export { BrainfileTUI } from './BrainfileTUI.js';
 export { PALETTE, BOX, BORDERS, SPACING, ICONS } from './theme.js';
 
 // Types
-export type { AppState, ViewMode, BoardColumn, TUIProps } from './types.js';
+export type { AppState, ViewMode, BoardColumn, TUIProps, MainPanel, RuleType } from './types.js';
 export { HEADER_ROWS, FOOTER_ROWS } from './types.js';
 
 // Utils

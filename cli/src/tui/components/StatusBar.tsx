@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { PALETTE, ICONS } from '../theme.js';
-import type { ViewMode } from '../types.js';
+import type { ViewMode, MainPanel } from '../types.js';
 
 export interface StatusBarProps {
   mode: ViewMode;
@@ -10,9 +10,13 @@ export interface StatusBarProps {
   taskCount: number;
   termWidth: number;
   isWatching?: boolean;
+  activePanel?: MainPanel;
 }
 
-export function StatusBar({ mode, columnName, taskIndex, taskCount, termWidth, isWatching = true }: StatusBarProps) {
+export function StatusBar({ mode, columnName, taskIndex, taskCount, termWidth, isWatching = true, activePanel = 'tasks' }: StatusBarProps) {
+  // Determine TAB hint based on panel
+  const tabHint = activePanel === 'tasks' ? ' column  ' : activePanel === 'rules' ? ' type  ' : null;
+
   // Left section: essential commands with subtle styling
   const leftCommands = mode === 'search' ? (
     <Text color={PALETTE.textMuted}>
@@ -23,8 +27,12 @@ export function StatusBar({ mode, columnName, taskIndex, taskCount, termWidth, i
     <Text color={PALETTE.textMuted}>
       <Text color={PALETTE.textSecondary}>?</Text>
       <Text>{' help  '}</Text>
-      <Text color={PALETTE.textSecondary}>TAB</Text>
-      <Text>{' column  '}</Text>
+      {tabHint && (
+        <>
+          <Text color={PALETTE.textSecondary}>TAB</Text>
+          <Text>{tabHint}</Text>
+        </>
+      )}
       <Text color={PALETTE.textSecondary}>q</Text>
       <Text>{' quit'}</Text>
     </Text>

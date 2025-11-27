@@ -36,3 +36,12 @@ export type {
   SubtaskOverlayProps,
   NewTaskOverlayProps,
 } from './Overlays.js';
+
+export { MainPanelTabs } from './MainPanelTabs.js';
+export type { MainPanelTabsProps } from './MainPanelTabs.js';
+
+export { RulesPanel } from './RulesPanel.js';
+export type { RulesPanelProps } from './RulesPanel.js';
+
+export { ArchivePanel } from './ArchivePanel.js';
+export type { ArchivePanelProps } from './ArchivePanel.js';

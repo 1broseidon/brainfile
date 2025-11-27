@@ -8,8 +8,8 @@ export interface HelpOverlayProps {
 }
 
 export function HelpOverlay({ termWidth, termHeight }: HelpOverlayProps) {
-  const panelWidth = 58;
-  const panelHeight = 16;
+  const panelWidth = 72;
+  const panelHeight = 22;
 
   // Calculate centering
   const padTop = Math.max(0, Math.floor((termHeight - panelHeight) / 2));
@@ -38,49 +38,72 @@ export function HelpOverlay({ termWidth, termHeight }: HelpOverlayProps) {
           <Text color={PALETTE.text} bold>KEYBOARD SHORTCUTS</Text>
         </Box>
 
-        {/* Two-column layout */}
+        {/* Three-column layout */}
         <Box>
           {/* Left column: Navigation + View */}
-          <Box flexDirection="column" marginRight={3}>
-            <Text color={PALETTE.accent} bold>Navigation</Text>
-            <HelpRow k="j/k ↓/↑" desc="Move up/down" />
-            <HelpRow k="h/l ←/→" desc="Switch columns" />
-            <HelpRow k="g/G" desc="Top / Bottom" />
-            <HelpRow k="^d/^u" desc="Page down/up" />
+          <Box flexDirection="column" marginRight={2}>
+            <Text color={PALETTE.accent} bold>Panels</Text>
+            <HelpRow k="1" desc="Tasks" />
+            <HelpRow k="2" desc="Rules" />
+            <HelpRow k="3" desc="Archive" />
+
+            <Box marginTop={1}>
+              <Text color={PALETTE.accent} bold>Navigation</Text>
+            </Box>
+            <HelpRow k="j/k" desc="Up/down" />
+            <HelpRow k="h/l" desc="Left/right" />
+            <HelpRow k="g/G" desc="Top/bottom" />
+            <HelpRow k="^d/^u" desc="Page scroll" />
 
             <Box marginTop={1}>
               <Text color={PALETTE.accent} bold>View</Text>
             </Box>
-            <HelpRow k="ENTER" desc="Expand/collapse" />
-            <HelpRow k="/" desc="Search/filter" />
+            <HelpRow k="ENTER" desc="Expand" />
+            <HelpRow k="/" desc="Search" />
             <HelpRow k="r" desc="Refresh" />
-            <HelpRow k="ESC" desc="Clear/close" />
+            <HelpRow k="ESC" desc="Close" />
+          </Box>
+
+          {/* Middle column: Task Management */}
+          <Box flexDirection="column" marginRight={2}>
+            <Text color={PALETTE.accent} bold>Tasks</Text>
+            <HelpRow k="n/N" desc="New task" />
+            <HelpRow k="e" desc="Edit" />
+            <HelpRow k="m" desc="Move" />
+            <HelpRow k="d" desc="Delete" />
+            <HelpRow k="A" desc="Archive" />
+            <HelpRow k="p" desc="Priority" />
+            <HelpRow k="t" desc="Subtask" />
+            <HelpRow k="y" desc="Copy ID" />
 
             <Box marginTop={1}>
               <Text color={PALETTE.accent} bold>Filters</Text>
             </Box>
-            <HelpRow k="p:high" desc="By priority" />
-            <HelpRow k="#tag" desc="By tag" />
-            <HelpRow k="@name" desc="By assignee" />
-            <HelpRow k="due:week" desc="By due date" />
+            <HelpRow k="p:high" desc="Priority" />
+            <HelpRow k="#tag" desc="Tag" />
+            <HelpRow k="@name" desc="Assignee" />
+            <HelpRow k="due:week" desc="Due date" />
           </Box>
 
-          {/* Right column: Task Management */}
+          {/* Right column: Rules + Archive */}
           <Box flexDirection="column">
-            <Text color={PALETTE.accent} bold>Tasks</Text>
-            <HelpRow k="n" desc="New task (quick)" />
-            <HelpRow k="N" desc="New task (editor)" />
-            <HelpRow k="e" desc="Edit in $EDITOR" />
-            <HelpRow k="m" desc="Move to column" />
-            <HelpRow k="d" desc="Delete task" />
-            <HelpRow k="a" desc="Archive task" />
-            <HelpRow k="p" desc="Cycle priority" />
-            <HelpRow k="t" desc="Toggle subtask" />
-            <HelpRow k="y" desc="Copy task ID" />
+            <Text color={PALETTE.accent} bold>Rules</Text>
+            <HelpRow k="h/l" desc="Rule type" />
+            <HelpRow k="n" desc="New rule" />
+            <HelpRow k="e" desc="Edit rule" />
+            <HelpRow k="d" desc="Delete rule" />
 
             <Box marginTop={1}>
-              <Text color={PALETTE.accent} bold>Quit</Text>
+              <Text color={PALETTE.accent} bold>Archive</Text>
             </Box>
+            <HelpRow k="R" desc="Restore" />
+            <HelpRow k="d" desc="Delete" />
+            <HelpRow k="ENTER" desc="Expand" />
+
+            <Box marginTop={1}>
+              <Text color={PALETTE.accent} bold>Global</Text>
+            </Box>
+            <HelpRow k="?" desc="Help" />
             <HelpRow k="q/^c" desc="Exit" />
           </Box>
         </Box>
@@ -97,7 +120,7 @@ export function HelpOverlay({ termWidth, termHeight }: HelpOverlayProps) {
 function HelpRow({ k, desc }: { k: string; desc: string }) {
   return (
     <Box>
-      <Box width={10}>
+      <Box width={9}>
         <Text color={PALETTE.text}>{k}</Text>
       </Box>
       <Text color={PALETTE.textSecondary}>{desc}</Text>

@@ -123,6 +123,8 @@ export const ICONS = {
   collapsed: '▶',
   bullet: '•',
   arrow: '→',
+  pointer: '▸',
+  cursor: '▌',
 
   // Objects
   file: '📄',
@@ -139,4 +141,8 @@ export const ICONS = {
   reload: '↻',
   live: '●',
   search: '🔍',
+  archive: '📦',
+  rules: '📋',
+  restore: '↩',
+  delete: '🗑',
 } as const;

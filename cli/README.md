@@ -48,17 +48,25 @@ brainfile                    # Open with default brainfile.md
 brainfile ./path/to/file.md  # Open specific file
 ```
 
-**Keyboard Controls:**
+**Panel Navigation:**
+| Key | Action |
+|-----|--------|
+| `1` | Switch to Tasks panel |
+| `2` | Switch to Rules panel |
+| `3` | Switch to Archive panel |
+| `?` | Show help |
+| `q` | Quit |
+
+**Tasks Panel:**
 | Key | Action |
 |-----|--------|
 | `TAB` / `Shift+TAB` | Navigate columns |
 | `j`/`k` or `↑`/`↓` | Navigate tasks |
+| `h`/`l` or `←`/`→` | Switch columns |
 | `g`/`G` | Jump to top/bottom |
 | `Enter` | Expand/collapse task |
 | `/` | Search tasks |
-| `?` | Show help |
 | `r` | Refresh |
-| `q` | Quit |
 
 **Search Filters:**
 | Filter | Example | Description |
@@ -80,8 +88,27 @@ Combine filters with text: `p:high #bug login issue`
 | `N` | New task in $EDITOR |
 | `p` | Cycle priority |
 | `t` | Toggle subtask |
-| `a` | Archive task |
+| `A` | Archive task |
 | `y` | Copy task ID |
+
+**Rules Panel:**
+| Key | Action |
+|-----|--------|
+| `TAB` / `Shift+TAB` | Switch rule type |
+| `h`/`l` | Switch rule type (always/never/prefer/context) |
+| `j`/`k` | Navigate rules |
+| `n` | Add new rule |
+| `e` | Edit selected rule |
+| `d` | Delete selected rule |
+
+**Archive Panel:**
+| Key | Action |
+|-----|--------|
+| `j`/`k` | Navigate archived tasks |
+| `Enter` | Expand/collapse task |
+| `R` | Restore task to column |
+| `d` | Permanently delete task |
+| `r` | Refresh archive |
 
 ---
 

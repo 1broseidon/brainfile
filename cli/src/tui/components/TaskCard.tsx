@@ -25,7 +25,14 @@ function PriorityBadge({ priority }: { priority?: string }) {
   if (!priority) return null;
 
   const color = getPriorityColor(priority);
-  const label = priority.toUpperCase().slice(0, 4);
+  // Use 3-char abbreviations for consistency: LOW, MED, HI, CRIT
+  const abbrev: Record<string, string> = {
+    low: 'LOW',
+    medium: 'MED',
+    high: 'HIGH',
+    critical: 'CRIT',
+  };
+  const label = abbrev[priority.toLowerCase()] || priority.toUpperCase().slice(0, 4);
 
   return (
     <Text color="black" backgroundColor={color} bold>

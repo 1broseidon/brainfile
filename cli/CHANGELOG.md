@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2025-11-27
+
+### Fixed
+- **Expanded task disappearing** - Fixed bug where expanding a task with many subtasks would cause it to vanish from view. Selected task is now always rendered regardless of height.
+- **Priority badge labels** - Changed truncated "MEDI" to proper abbreviations: LOW, MED, HIGH, CRIT
+
+## [0.10.1] - 2025-11-27
+
+### Added
+- **TAB navigation in Rules panel** - TAB/Shift+TAB now cycles through rule types (always/never/prefer/context)
+
+### Changed
+- **Context-aware footer hints** - Status bar now shows `TAB type` in Rules panel, hides TAB hint in Archive panel
+
+### Fixed
+- **Removed broken archive search** - Archive panel no longer shows non-functional search box
+
+## [0.10.0] - 2025-11-27
+
+### Added
+- **Rules Panel** - Full rule management in TUI (feature parity with VSCode extension)
+  - Press `2` to switch to Rules panel
+  - Four rule categories: Always, Never, Prefer, Context
+  - `h/l` to switch between rule types
+  - `n` to add new rule, `e` to edit, `d` to delete
+  - Rules persist to brainfile YAML frontmatter
+- **Archive Panel** - View and manage archived tasks in TUI
+  - Press `3` to switch to Archive panel
+  - Browse archived tasks with `j/k` navigation
+  - `R` (Shift+R) to restore task to a column
+  - `d` to permanently delete archived task
+  - `Enter` to expand/collapse task details
+  - `r` to refresh archive from file
+- **Main Panel Tabs** - Tab-based navigation between Tasks, Rules, and Archive
+  - Press `1`, `2`, `3` to switch panels
+  - Visual tab bar shows active panel with counts
+- **Updated Help Overlay** - Three-column layout documenting all panel shortcuts
+- **Clean exit** - Screen clears on quit, returning to clean terminal (like vim/htop)
+
+### Changed
+- **Archive keybinding** - Changed from `a` to `A` (Shift+A) to prevent accidental archiving
+  - Easy to hit `a` thinking "add" and accidentally archive a task
+  - Now requires intentional Shift+A keystroke
+- **Panel tabs visual alignment** - Main panel tabs now match column tabs styling exactly
+  - Same `▌` indicator, spacing, and color treatment for visual consistency
+
+### Fixed
+- **Archive to separate file** - Archive now writes to `brainfile-archive.md` per protocol spec
+  - Previously archived tasks to inline `archive: []` array in same file
+  - Now matches VSCode extension behavior and protocol specification
+  - Archive file is created automatically in same directory as brainfile
+- **Cursor artifact after editor** - Fixed blinking cursor appearing after returning from external editor
+
 ## [0.9.2] - 2025-11-26
 
 ### Added

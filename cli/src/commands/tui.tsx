@@ -8,7 +8,7 @@ interface TuiOptions {
   file: string;
 }
 
-export function tuiCommand(options: TuiOptions) {
+export async function tuiCommand(options: TuiOptions) {
   const filePath = path.resolve(options.file);
 
   if (!fs.existsSync(filePath)) {
@@ -27,5 +27,13 @@ export function tuiCommand(options: TuiOptions) {
     process.exit(1);
   }
 
-  render(<BrainfileTUI filePath={filePath} />);
+  const { waitUntilExit } = render(<BrainfileTUI filePath={filePath} />);
+
+  // Wait for app to exit, then clear screen
+  await waitUntilExit();
+
+  // Clear screen and reset cursor to top-left
+  process.stdout.write('\x1b[2J');   // Clear entire screen
+  process.stdout.write('\x1b[H');    // Move cursor to home position (top-left)
+  process.stdout.write('\x1b[?25h'); // Show cursor (in case it was hidden)
 }

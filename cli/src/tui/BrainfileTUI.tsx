@@ -8,6 +8,7 @@ import { HEADER_ROWS, FOOTER_ROWS } from './types.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
 import { parseSearchQuery, taskMatchesFilter } from './utils.js';
+import { loadArchive } from './actions.js';
 import {
   Header,
   ProgressBar,
@@ -21,6 +22,9 @@ import {
   DeleteConfirmOverlay,
   SubtaskOverlay,
   NewTaskOverlay,
+  MainPanelTabs,
+  RulesPanel,
+  ArchivePanel,
 } from './components/index.js';
 
 type BoardColumn = Board['columns'][number];
@@ -29,6 +33,7 @@ const initialState: AppState = {
   board: null,
   error: null,
   lastUpdated: new Date(),
+  activePanel: 'tasks',
   activeColumnIndex: 0,
   selectedTaskIndex: 0,
   mode: 'browse',
@@ -40,6 +45,17 @@ const initialState: AppState = {
   moveTargetIndex: 0,
   selectedSubtaskIndex: 0,
   newTaskTitle: '',
+  // Rules panel
+  activeRuleType: 'always',
+  selectedRuleIndex: 0,
+  ruleEditText: '',
+  ruleEditId: null,
+  // Archive panel
+  archive: [],
+  selectedArchiveIndex: 0,
+  archiveSearchQuery: '',
+  archiveRestoreColumnIndex: 0,
+  expandedArchiveIds: new Set(),
 };
 
 // Minimum terminal dimensions
@@ -131,6 +147,21 @@ export function BrainfileTUI({ filePath }: TUIProps) {
     return { total, done, percentage };
   }, [state.board]);
 
+  // Calculate rules count
+  const rulesCount = useMemo(() => {
+    if (!state.board?.rules) return 0;
+    const r = state.board.rules;
+    return (r.always?.length || 0) + (r.never?.length || 0) + (r.prefer?.length || 0) + (r.context?.length || 0);
+  }, [state.board?.rules]);
+
+  // Load archive when switching to archive panel
+  useEffect(() => {
+    if (state.activePanel === 'archive') {
+      const result = loadArchive(filePath);
+      setState(prev => ({ ...prev, archive: result.archive }));
+    }
+  }, [state.activePanel, filePath, state.lastUpdated]);
+
   // Keyboard navigation
   useKeyboardNavigation({
     state,
@@ -185,16 +216,11 @@ export function BrainfileTUI({ filePath }: TUIProps) {
       {/* Progress Bar */}
       <ProgressBar done={stats.done} total={stats.total} width={termWidth - 4} />
 
-      {/* Search bar (if active) */}
-      {state.mode === 'search' && (
-        <SearchBar query={state.searchQuery} width={termWidth - 2} />
-      )}
-
-      {/* Column tabs */}
-      <ColumnTabs
-        columns={filteredColumns}
-        activeIndex={state.activeColumnIndex}
-        termWidth={termWidth}
+      {/* Main Panel Tabs (Tasks / Rules / Archive) */}
+      <MainPanelTabs
+        activePanel={state.activePanel}
+        rulesCount={rulesCount}
+        archiveCount={state.archive.length}
       />
 
       {/* Separator */}
@@ -202,60 +228,109 @@ export function BrainfileTUI({ filePath }: TUIProps) {
         <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
       </Box>
 
-      {/* Task list for active column - takes remaining space */}
+      {/* Panel content */}
       <Box flexGrow={1} flexDirection="column">
-        {/* Overlays take precedence over task list */}
-        {state.mode === 'move' && currentTask && (
-          <MoveOverlay
+        {/* ===== TASKS PANEL ===== */}
+        {state.activePanel === 'tasks' && (
+          <>
+            {/* Search bar (if active) */}
+            {state.mode === 'search' && (
+              <SearchBar query={state.searchQuery} width={termWidth - 2} />
+            )}
+
+            {/* Column tabs */}
+            <ColumnTabs
+              columns={filteredColumns}
+              activeIndex={state.activeColumnIndex}
+              termWidth={termWidth}
+            />
+
+            {/* Column separator */}
+            <Box paddingLeft={1}>
+              <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
+            </Box>
+
+            {/* Overlays take precedence over task list */}
+            {state.mode === 'move' && currentTask && (
+              <MoveOverlay
+                columns={orderedColumns}
+                selectedIndex={state.moveTargetIndex}
+                taskTitle={currentTask.title}
+                termWidth={termWidth}
+              />
+            )}
+
+            {state.mode === 'delete-confirm' && currentTask && (
+              <DeleteConfirmOverlay
+                taskId={currentTask.id}
+                taskTitle={currentTask.title}
+                termWidth={termWidth}
+              />
+            )}
+
+            {state.mode === 'subtask' && currentTask && (
+              <SubtaskOverlay
+                task={currentTask}
+                selectedIndex={state.selectedSubtaskIndex}
+                termWidth={termWidth}
+              />
+            )}
+
+            {state.mode === 'new-task' && (
+              <NewTaskOverlay
+                title={state.newTaskTitle}
+                columnName={currentColumn?.title || 'Unknown'}
+                termWidth={termWidth}
+              />
+            )}
+
+            {/* No search results message */}
+            {hasNoSearchResults && (
+              <Box flexDirection="column" paddingX={2} paddingY={1}>
+                <Text color={PALETTE.textSecondary}>
+                  No results for "<Text color={PALETTE.text}>{state.searchQuery}</Text>"
+                </Text>
+                <Text color={PALETTE.textMuted}>Press ESC to clear search</Text>
+              </Box>
+            )}
+
+            {/* Task list (hidden when overlay is active or no results) */}
+            {!hasNoSearchResults && state.mode !== 'move' && state.mode !== 'delete-confirm' && state.mode !== 'subtask' && state.mode !== 'new-task' && (
+              <TaskList
+                tasks={currentTasks}
+                selectedIndex={state.selectedTaskIndex}
+                expandedIds={state.expandedTaskIds}
+                viewportHeight={viewportHeight - (state.mode === 'search' ? 3 : 2)}
+                termWidth={termWidth}
+              />
+            )}
+          </>
+        )}
+
+        {/* ===== RULES PANEL ===== */}
+        {state.activePanel === 'rules' && (
+          <RulesPanel
+            rules={state.board.rules}
+            activeRuleType={state.activeRuleType}
+            selectedRuleIndex={state.selectedRuleIndex}
+            viewportHeight={viewportHeight}
+            termWidth={termWidth}
+            mode={state.mode}
+            editText={state.ruleEditText}
+          />
+        )}
+
+        {/* ===== ARCHIVE PANEL ===== */}
+        {state.activePanel === 'archive' && (
+          <ArchivePanel
+            archive={state.archive}
+            selectedIndex={state.selectedArchiveIndex}
+            viewportHeight={viewportHeight}
+            termWidth={termWidth}
+            expandedIds={state.expandedArchiveIds}
+            mode={state.mode}
             columns={orderedColumns}
-            selectedIndex={state.moveTargetIndex}
-            taskTitle={currentTask.title}
-            termWidth={termWidth}
-          />
-        )}
-
-        {state.mode === 'delete-confirm' && currentTask && (
-          <DeleteConfirmOverlay
-            taskId={currentTask.id}
-            taskTitle={currentTask.title}
-            termWidth={termWidth}
-          />
-        )}
-
-        {state.mode === 'subtask' && currentTask && (
-          <SubtaskOverlay
-            task={currentTask}
-            selectedIndex={state.selectedSubtaskIndex}
-            termWidth={termWidth}
-          />
-        )}
-
-        {state.mode === 'new-task' && (
-          <NewTaskOverlay
-            title={state.newTaskTitle}
-            columnName={currentColumn?.title || 'Unknown'}
-            termWidth={termWidth}
-          />
-        )}
-
-        {/* No search results message */}
-        {hasNoSearchResults && (
-          <Box flexDirection="column" paddingX={2} paddingY={1}>
-            <Text color={PALETTE.textSecondary}>
-              No results for "<Text color={PALETTE.text}>{state.searchQuery}</Text>"
-            </Text>
-            <Text color={PALETTE.textMuted}>Press ESC to clear search</Text>
-          </Box>
-        )}
-
-        {/* Task list (hidden when overlay is active or no results) */}
-        {!hasNoSearchResults && state.mode !== 'move' && state.mode !== 'delete-confirm' && state.mode !== 'subtask' && state.mode !== 'new-task' && (
-          <TaskList
-            tasks={currentTasks}
-            selectedIndex={state.selectedTaskIndex}
-            expandedIds={state.expandedTaskIds}
-            viewportHeight={viewportHeight - (state.mode === 'search' ? 1 : 0)}
-            termWidth={termWidth}
+            restoreColumnIndex={state.archiveRestoreColumnIndex}
           />
         )}
       </Box>
@@ -273,10 +348,11 @@ export function BrainfileTUI({ filePath }: TUIProps) {
       {/* Status bar */}
       <StatusBar
         mode={state.mode}
-        columnName={currentColumn?.title || ''}
-        taskIndex={state.selectedTaskIndex + 1}
-        taskCount={currentTasks.length}
+        columnName={state.activePanel === 'tasks' ? (currentColumn?.title || '') : state.activePanel}
+        taskIndex={state.activePanel === 'tasks' ? state.selectedTaskIndex + 1 : (state.activePanel === 'archive' ? state.selectedArchiveIndex + 1 : state.selectedRuleIndex + 1)}
+        taskCount={state.activePanel === 'tasks' ? currentTasks.length : (state.activePanel === 'archive' ? state.archive.length : (state.board.rules?.[state.activeRuleType]?.length || 0))}
         termWidth={termWidth}
+        activePanel={state.activePanel}
       />
     </Box>
   );

@@ -1,8 +1,28 @@
-import type { Board } from '@brainfile/core';
+import type { Board, Task } from '@brainfile/core';
 
 export type BoardColumn = Board['columns'][number];
 
-export type ViewMode = 'browse' | 'search' | 'help' | 'move' | 'delete-confirm' | 'subtask' | 'new-task';
+/** Main panel tabs */
+export type MainPanel = 'tasks' | 'rules' | 'archive';
+
+/** Rule categories */
+export type RuleType = 'always' | 'never' | 'prefer' | 'context';
+
+export type ViewMode =
+  | 'browse'
+  | 'search'
+  | 'help'
+  | 'move'
+  | 'delete-confirm'
+  | 'subtask'
+  | 'new-task'
+  // Rules modes
+  | 'rule-add'
+  | 'rule-edit'
+  | 'rule-delete-confirm'
+  // Archive modes
+  | 'archive-restore'
+  | 'archive-delete-confirm';
 
 export interface StatusMessage {
   text: string;
@@ -15,7 +35,10 @@ export interface AppState {
   error: string | null;
   lastUpdated: Date;
 
-  // Navigation
+  // Main panel (tabs)
+  activePanel: MainPanel;
+
+  // Navigation (Tasks panel)
   activeColumnIndex: number;
   selectedTaskIndex: number;
 
@@ -41,6 +64,19 @@ export interface AppState {
 
   // New task mode: title input
   newTaskTitle: string;
+
+  // Rules panel state
+  activeRuleType: RuleType;
+  selectedRuleIndex: number;
+  ruleEditText: string;
+  ruleEditId: number | null; // null for new rule
+
+  // Archive panel state
+  archive: Task[];
+  selectedArchiveIndex: number;
+  archiveSearchQuery: string;
+  archiveRestoreColumnIndex: number;
+  expandedArchiveIds: Set<string>;
 }
 
 export interface TUIProps {

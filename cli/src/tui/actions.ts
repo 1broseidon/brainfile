@@ -18,7 +18,6 @@ import {
   patchTask,
   toggleSubtask,
   addTask,
-  archiveTask,
   type Board,
   type Task,
   type TaskPatch,
@@ -110,7 +109,30 @@ export function deleteTaskAction(filePath: string, taskId: string): ActionResult
 }
 
 /**
- * Archive a task
+ * Get the archive file path for a brainfile
+ * Archive lives in same directory: brainfile.md -> brainfile-archive.md
+ */
+function getArchivePath(filePath: string): string {
+  const dir = path.dirname(filePath);
+  const filename = path.basename(filePath);
+  const archiveFilename = filename.replace(/\.md$/, '-archive.md');
+  return path.join(dir, archiveFilename);
+}
+
+/**
+ * Create an empty archive board structure
+ */
+function createEmptyArchiveBoard(): Board {
+  return {
+    title: 'Archive',
+    columns: [],
+    archive: [],
+  };
+}
+
+/**
+ * Archive a task to a separate brainfile-archive.md file
+ * Per protocol spec, archived tasks go to a separate file, not inline archive array
  */
 export function archiveTaskAction(filePath: string, taskId: string): ActionResult {
   const { board, error } = readBrainfile(filePath);
@@ -119,11 +141,56 @@ export function archiveTaskAction(filePath: string, taskId: string): ActionResul
   const taskInfo = findTaskById(board, taskId);
   if (!taskInfo) return { success: false, error: `Task ${taskId} not found` };
 
-  const result = archiveTask(board, taskInfo.column.id, taskId);
+  const task = taskInfo.task;
+  const columnId = taskInfo.column.id;
+
+  // Remove task from the main board (don't use archiveTask - it puts task in inline archive)
+  const result = deleteTask(board, columnId, taskId);
   if (!result.success) return { success: false, error: result.error };
 
+  // Save the main board without the task
   const writeResult = writeBrainfile(filePath, result.board!);
   if (!writeResult.success) return writeResult;
+
+  // Now add the task to the separate archive file
+  const archivePath = getArchivePath(filePath);
+
+  // Read or create archive file
+  let archiveBoard: Board;
+  if (fs.existsSync(archivePath)) {
+    try {
+      const archiveContent = fs.readFileSync(archivePath, 'utf-8');
+      const parseResult = Brainfile.parseWithErrors(archiveContent);
+      if (parseResult.board) {
+        archiveBoard = parseResult.board;
+      } else {
+        archiveBoard = createEmptyArchiveBoard();
+      }
+    } catch {
+      archiveBoard = createEmptyArchiveBoard();
+    }
+  } else {
+    archiveBoard = createEmptyArchiveBoard();
+  }
+
+  // Add task to archive (at beginning)
+  if (!archiveBoard.archive) {
+    archiveBoard.archive = [];
+  }
+  archiveBoard.archive.unshift(task);
+
+  // Save archive file
+  try {
+    const archiveContent = Brainfile.serialize(archiveBoard);
+    fs.writeFileSync(archivePath, archiveContent, 'utf-8');
+  } catch (err) {
+    // Task was removed from main board but archive write failed
+    // This is a partial failure state - log and report
+    return {
+      success: false,
+      error: `Task removed from board but failed to write archive: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
 
   return { success: true, message: `Archived ${taskId}` };
 }
@@ -256,6 +323,11 @@ export function newTaskInEditor(
     shell: true,
     timeout: 300000,
   });
+
+  // Reset terminal state after editor exits - hide cursor and clear line
+  // This fixes cursor blink artifact when returning to Ink TUI
+  process.stdout.write('\x1b[?25l'); // Hide cursor
+  process.stdout.write('\x1b[2K');   // Clear current line
 
   if (result.error) {
     cleanupTempFile(tempFile);
@@ -407,6 +479,11 @@ export function editTaskInEditor(
     shell: true,
     timeout: 300000,
   });
+
+  // Reset terminal state after editor exits - hide cursor and clear line
+  // This fixes cursor blink artifact when returning to Ink TUI
+  process.stdout.write('\x1b[?25l'); // Hide cursor
+  process.stdout.write('\x1b[2K');   // Clear current line
 
   if (result.error) {
     cleanupTempFile(tempFile);
@@ -612,4 +689,259 @@ export function copyToClipboard(text: string): ActionResult {
   } catch (err) {
     return { success: false, error: `Failed to copy: ${err}` };
   }
+}
+
+// =============================================================================
+// RULES OPERATIONS
+// =============================================================================
+
+type RuleType = 'always' | 'never' | 'prefer' | 'context';
+
+interface Rule {
+  id: number;
+  rule: string;
+}
+
+/**
+ * Add a new rule to a rule category
+ */
+export function addRuleAction(
+  filePath: string,
+  ruleType: RuleType,
+  ruleText: string
+): ActionResult {
+  const { board, error } = readBrainfile(filePath);
+  if (!board) return { success: false, error };
+
+  // Initialize rules if not present
+  if (!board.rules) {
+    board.rules = {
+      always: [],
+      never: [],
+      prefer: [],
+      context: [],
+    };
+  }
+
+  // Ensure the rule type array exists
+  if (!board.rules[ruleType]) {
+    board.rules[ruleType] = [];
+  }
+
+  // Generate next rule ID
+  const existingIds = board.rules[ruleType].map((r: Rule) => r.id);
+  const maxId = existingIds.length > 0 ? Math.max(...existingIds) : 0;
+  const newRuleId = maxId + 1;
+
+  // Add the rule
+  board.rules[ruleType].push({
+    id: newRuleId,
+    rule: ruleText.trim(),
+  });
+
+  const writeResult = writeBrainfile(filePath, board);
+  if (!writeResult.success) return writeResult;
+
+  return { success: true, message: `Added ${ruleType} rule #${newRuleId}` };
+}
+
+/**
+ * Update an existing rule
+ */
+export function updateRuleAction(
+  filePath: string,
+  ruleType: RuleType,
+  ruleId: number,
+  ruleText: string
+): ActionResult {
+  const { board, error } = readBrainfile(filePath);
+  if (!board) return { success: false, error };
+
+  if (!board.rules || !board.rules[ruleType]) {
+    return { success: false, error: `No ${ruleType} rules found` };
+  }
+
+  const rule = board.rules[ruleType].find((r: Rule) => r.id === ruleId);
+  if (!rule) {
+    return { success: false, error: `Rule #${ruleId} not found` };
+  }
+
+  rule.rule = ruleText.trim();
+
+  const writeResult = writeBrainfile(filePath, board);
+  if (!writeResult.success) return writeResult;
+
+  return { success: true, message: `Updated ${ruleType} rule #${ruleId}` };
+}
+
+/**
+ * Delete a rule
+ */
+export function deleteRuleAction(
+  filePath: string,
+  ruleType: RuleType,
+  ruleId: number
+): ActionResult {
+  const { board, error } = readBrainfile(filePath);
+  if (!board) return { success: false, error };
+
+  if (!board.rules || !board.rules[ruleType]) {
+    return { success: false, error: `No ${ruleType} rules found` };
+  }
+
+  const ruleIndex = board.rules[ruleType].findIndex((r: Rule) => r.id === ruleId);
+  if (ruleIndex === -1) {
+    return { success: false, error: `Rule #${ruleId} not found` };
+  }
+
+  board.rules[ruleType].splice(ruleIndex, 1);
+
+  const writeResult = writeBrainfile(filePath, board);
+  if (!writeResult.success) return writeResult;
+
+  return { success: true, message: `Deleted ${ruleType} rule #${ruleId}` };
+}
+
+// =============================================================================
+// ARCHIVE OPERATIONS
+// =============================================================================
+
+/**
+ * Load archive from the archive file
+ */
+export function loadArchive(filePath: string): { archive: Task[]; error?: string } {
+  const archivePath = getArchivePath(filePath);
+
+  if (!fs.existsSync(archivePath)) {
+    return { archive: [] };
+  }
+
+  try {
+    const archiveContent = fs.readFileSync(archivePath, 'utf-8');
+    const parseResult = Brainfile.parseWithErrors(archiveContent);
+    if (parseResult.board && parseResult.board.archive) {
+      return { archive: parseResult.board.archive };
+    }
+    return { archive: [] };
+  } catch (err) {
+    return { archive: [], error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Restore a task from the archive to a column
+ */
+export function restoreTaskAction(
+  filePath: string,
+  taskId: string,
+  toColumnId: string
+): ActionResult {
+  const archivePath = getArchivePath(filePath);
+
+  // Read archive file
+  if (!fs.existsSync(archivePath)) {
+    return { success: false, error: 'Archive file not found' };
+  }
+
+  let archiveBoard: Board;
+  try {
+    const archiveContent = fs.readFileSync(archivePath, 'utf-8');
+    const parseResult = Brainfile.parseWithErrors(archiveContent);
+    if (!parseResult.board) {
+      return { success: false, error: 'Failed to parse archive file' };
+    }
+    archiveBoard = parseResult.board;
+  } catch (err) {
+    return { success: false, error: `Failed to read archive: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  // Find task in archive
+  if (!archiveBoard.archive || archiveBoard.archive.length === 0) {
+    return { success: false, error: 'Archive is empty' };
+  }
+
+  const taskIndex = archiveBoard.archive.findIndex(t => t.id === taskId);
+  if (taskIndex === -1) {
+    return { success: false, error: `Task ${taskId} not found in archive` };
+  }
+
+  const task = archiveBoard.archive[taskIndex];
+
+  // Read main board
+  const { board, error } = readBrainfile(filePath);
+  if (!board) return { success: false, error };
+
+  // Find target column
+  const column = findColumnById(board, toColumnId) || findColumnByName(board, toColumnId);
+  if (!column) {
+    return { success: false, error: `Column ${toColumnId} not found` };
+  }
+
+  // Add task to column (at beginning)
+  column.tasks.unshift(task);
+
+  // Remove from archive
+  archiveBoard.archive.splice(taskIndex, 1);
+
+  // Save both files
+  const writeResult = writeBrainfile(filePath, board);
+  if (!writeResult.success) return writeResult;
+
+  try {
+    const archiveContent = Brainfile.serialize(archiveBoard);
+    fs.writeFileSync(archivePath, archiveContent, 'utf-8');
+  } catch (err) {
+    return { success: false, error: `Task restored but failed to update archive: ${err}` };
+  }
+
+  return { success: true, message: `Restored ${taskId} to ${column.title}` };
+}
+
+/**
+ * Permanently delete a task from the archive
+ */
+export function deleteArchivedTaskAction(
+  filePath: string,
+  taskId: string
+): ActionResult {
+  const archivePath = getArchivePath(filePath);
+
+  // Read archive file
+  if (!fs.existsSync(archivePath)) {
+    return { success: false, error: 'Archive file not found' };
+  }
+
+  let archiveBoard: Board;
+  try {
+    const archiveContent = fs.readFileSync(archivePath, 'utf-8');
+    const parseResult = Brainfile.parseWithErrors(archiveContent);
+    if (!parseResult.board) {
+      return { success: false, error: 'Failed to parse archive file' };
+    }
+    archiveBoard = parseResult.board;
+  } catch (err) {
+    return { success: false, error: `Failed to read archive: ${err instanceof Error ? err.message : String(err)}` };
+  }
+
+  // Find and remove task from archive
+  if (!archiveBoard.archive || archiveBoard.archive.length === 0) {
+    return { success: false, error: 'Archive is empty' };
+  }
+
+  const taskIndex = archiveBoard.archive.findIndex(t => t.id === taskId);
+  if (taskIndex === -1) {
+    return { success: false, error: `Task ${taskId} not found in archive` };
+  }
+
+  archiveBoard.archive.splice(taskIndex, 1);
+
+  // Save archive file
+  try {
+    const archiveContent = Brainfile.serialize(archiveBoard);
+    fs.writeFileSync(archivePath, archiveContent, 'utf-8');
+  } catch (err) {
+    return { success: false, error: `Failed to update archive: ${err}` };
+  }
+
+  return { success: true, message: `Permanently deleted ${taskId}` };
 }
