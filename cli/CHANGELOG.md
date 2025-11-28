@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.3] - 2025-11-28
+
+### Improved
+- **Linear auth flow** - Auto-detects teams and prompts for selection
+  - Single team: auto-configures as default
+  - Multiple teams: interactive selection prompt
+  - Offers to set Linear as default archive destination
+
 ## [0.12.2] - 2025-11-28
 
 ### Added
