@@ -76,8 +76,28 @@ Your AI assistant gets access to these operations:
 
 | Tool | Description |
 |------|-------------|
-| `archive_task` | Move a completed task to the archive |
+| `archive_task` | Archive a task locally or to GitHub/Linear |
 | `restore_task` | Restore an archived task to a column |
+
+The `archive_task` tool supports an optional `destination` parameter:
+- `"local"` — Move to local archive section (default)
+- `"github"` — Create a closed GitHub Issue
+- `"linear"` — Create a completed Linear issue
+
+If not specified, uses your project default (`archive.destination` in brainfile.md) or user default (`~/.config/brainfile/config.json`).
+
+::: tip External Archive Setup
+To archive to GitHub or Linear, first authenticate:
+```bash
+npx @brainfile/cli auth github
+npx @brainfile/cli auth linear --token <api-key>
+```
+Then configure your repository:
+```bash
+npx @brainfile/cli config set archive.github.owner myorg
+npx @brainfile/cli config set archive.github.repo myrepo
+```
+:::
 
 ### Subtasks
 
