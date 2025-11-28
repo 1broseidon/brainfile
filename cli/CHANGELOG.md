@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2025-11-27
+
+### Added
+- **config command** - Manage CLI configuration
+  - `brainfile config list` - Show all config values
+  - `brainfile config get <key>` - Get a specific value
+  - `brainfile config set <key> <value>` - Set a value
+  - `brainfile config path` - Show config file path
+  - Configuration stored at `~/.config/brainfile/config.json`
+
+## [0.12.0] - 2025-11-27
+
+### Added
+- **External archive destinations** - Archive completed tasks to GitHub Issues or Linear
+  - `brainfile archive --task task-1 --to=github` - Create closed GitHub Issue
+  - `brainfile archive --task task-1 --to=linear` - Create completed Linear issue
+  - `brainfile archive --all --to=github` - Batch archive entire local archive
+  - `brainfile archive --dry-run` - Preview without creating
+  - Reads `archive.destination` from brainfile.md for project-level defaults
+  - Reads `~/.config/brainfile/config.json` for user-level defaults
+- **auth command** - Authenticate with external services
+  - `brainfile auth github` - OAuth device flow (opens browser) or detects gh CLI
+  - `brainfile auth github --token <PAT>` - Manual Personal Access Token
+  - `brainfile auth linear --token <API_KEY>` - Linear API key authentication
+  - `brainfile auth status` - Show authentication status for all providers
+  - `brainfile auth logout [provider]` - Clear stored credentials
+  - `brainfile auth logout --all` - Clear all credentials
+  - Secure token storage in `~/.config/brainfile/auth.json`
+  - Automatic gh CLI detection (piggybacks on existing auth)
+
+### Changed
+- Upgraded to @brainfile/core@^0.9.0 with task formatter functions
+
 ## [0.11.1] - 2025-11-27
 
 ### Fixed

@@ -14,6 +14,12 @@ import { patchCommand } from './commands/patch';
 import { deleteCommand } from './commands/delete';
 import { archiveCommand } from './commands/archive';
 import { restoreCommand } from './commands/restore';
+import {
+  githubAuthCommand,
+  linearAuthCommand,
+  authStatusCommand,
+  authLogoutCommand,
+} from './commands/auth';
 import { subtaskCommand } from './commands/subtask';
 import { mcpCommand } from './commands/mcp';
 import {
@@ -24,6 +30,7 @@ import {
   uninstallCommand,
   listCommand as hooksListCommand
 } from './commands/hooks';
+import { configCommand } from './commands/config';
 
 // Read version from package.json
 const packageJson = JSON.parse(
@@ -31,7 +38,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'list', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'help'];
+const SUBCOMMANDS = ['init', 'list', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -137,9 +144,12 @@ program
 
 program
   .command('archive')
-  .description('Move a task to the archive')
+  .description('Archive a task (locally or to GitHub/Linear)')
   .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
-  .option('-t, --task <id>', 'Task ID to archive (required)')
+  .option('-t, --task <id>', 'Task ID to archive')
+  .option('--to <destination>', 'Archive destination: local, github, or linear')
+  .option('--all', 'Archive all tasks from local archive to external service')
+  .option('--dry-run', 'Preview what would be created without making changes')
   .action(archiveCommand);
 
 program
@@ -231,6 +241,59 @@ hooksCommand
   .command('list [tool]')
   .description('List installed brainfile hooks')
   .action((tool) => hooksListCommand({ tool }));
+
+// Add auth command group
+const authCommand = program
+  .command('auth')
+  .description('Manage authentication for external services (GitHub, Linear)');
+
+authCommand
+  .command('github')
+  .description('Authenticate with GitHub')
+  .option('--token <token>', 'Personal Access Token (or use OAuth device flow)')
+  .action(githubAuthCommand);
+
+authCommand
+  .command('linear')
+  .description('Authenticate with Linear')
+  .option('--token <token>', 'Linear API key (required)')
+  .action(linearAuthCommand);
+
+authCommand
+  .command('status')
+  .description('Show authentication status for all providers')
+  .action(authStatusCommand);
+
+authCommand
+  .command('logout [provider]')
+  .description('Log out from a provider (github, linear, or --all)')
+  .option('--all', 'Log out from all providers')
+  .action(authLogoutCommand);
+
+// Add config command group
+const configCmd = program
+  .command('config')
+  .description('Manage user configuration (~/.config/brainfile/config.json)');
+
+configCmd
+  .command('list')
+  .description('Show all config values')
+  .action(() => configCommand('list', {}));
+
+configCmd
+  .command('get <key>')
+  .description('Get a specific config value')
+  .action((key) => configCommand('get', { key }));
+
+configCmd
+  .command('set <key> <value>')
+  .description('Set a config value')
+  .action((key, value) => configCommand('set', { key, value }));
+
+configCmd
+  .command('path')
+  .description('Show config file path')
+  .action(() => configCommand('path', {}));
 
 program
   .command('mcp')
