@@ -21,13 +21,15 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`move`](#move) | Move task between columns |
 | [`patch`](#patch) | Update task fields |
 | [`delete`](#delete) | Permanently delete a task |
-| [`archive`](#archive) | Archive a task |
+| [`archive`](#archive) | Archive a task (local, GitHub, or Linear) |
 | [`restore`](#restore) | Restore from archive |
 | [`subtask`](#subtask) | Manage subtasks |
 | [`lint`](#lint) | Validate and fix syntax |
 | [`template`](#template) | Create from templates |
 | [`tui`](#tui) | Interactive terminal UI |
 | [`hooks`](#hooks) | AI agent hook integration |
+| [`auth`](#auth) | Authenticate with GitHub/Linear |
+| [`config`](#config) | Manage CLI configuration |
 | [`mcp`](#mcp) | MCP server for AI assistants |
 
 ---
@@ -146,14 +148,52 @@ brainfile delete --task task-1 --force
 
 ## archive
 
-Move a task to the archive section.
+Archive a task locally or export to an external service (GitHub Issues, Linear).
 
 ```bash
+# Local archive (default)
 brainfile archive --task task-1
+
+# Archive to GitHub as closed issue
+brainfile archive --task task-1 --to=github
+
+# Archive to Linear as completed issue
+brainfile archive --task task-1 --to=linear
+
+# Batch archive all locally archived tasks to GitHub
+brainfile archive --all --to=github
+
+# Preview what would be created
+brainfile archive --task task-1 --to=github --dry-run
 ```
 
 **Options:**
-- `-t, --task <id>` - Task ID (required)
+- `-t, --task <id>` - Task ID to archive
+- `--to <destination>` - Archive destination: `local`, `github`, or `linear`
+- `--all` - Archive all tasks from local archive to external service
+- `--dry-run` - Preview without creating external issues
+
+**Configuration:**
+
+Set defaults in `~/.config/brainfile/config.json`:
+
+```bash
+brainfile config set archive.default github
+brainfile config set archive.github.owner myorg
+brainfile config set archive.github.repo myrepo
+brainfile config set archive.linear.teamId <team-id>
+```
+
+Or set project-level default in your brainfile.md frontmatter:
+
+```yaml
+archive:
+  destination: github
+```
+
+::: tip Authentication Required
+External archive destinations require authentication. Run `brainfile auth github` or `brainfile auth linear` first.
+:::
 
 ---
 
@@ -296,6 +336,90 @@ brainfile hooks uninstall claude-code --scope all
 3. **Session start** - Detects brainfile and reminds about task tracking
 
 See [AI Agent Integration](/agents/integration) for detailed configuration.
+
+---
+
+## auth
+
+Authenticate with external services for archiving tasks to GitHub Issues or Linear.
+
+```bash
+# GitHub - OAuth device flow (opens browser)
+brainfile auth github
+
+# GitHub - Manual token
+brainfile auth github --token ghp_xxxxxxxxxxxx
+
+# Linear - API key (required)
+brainfile auth linear --token lin_api_xxxxxxxxxxxx
+
+# Check authentication status
+brainfile auth status
+
+# Log out from a specific provider
+brainfile auth logout github
+
+# Log out from all providers
+brainfile auth logout --all
+```
+
+**Subcommands:**
+- `github` - Authenticate with GitHub
+- `linear` - Authenticate with Linear
+- `status` - Show authentication status
+- `logout [provider]` - Clear stored credentials
+
+**Options:**
+- `--token <token>` - Provide token directly (skips interactive flow)
+- `--all` - Log out from all providers (with `logout`)
+
+**Authentication Methods:**
+
+| Provider | Methods |
+|----------|---------|
+| GitHub | 1. Detects existing `gh` CLI auth<br>2. OAuth device flow (browser)<br>3. Personal Access Token |
+| Linear | API key from [linear.app/settings/api](https://linear.app/settings/api) |
+
+Credentials are stored securely in `~/.config/brainfile/auth.json`.
+
+---
+
+## config
+
+Manage CLI configuration stored in `~/.config/brainfile/config.json`.
+
+```bash
+# Show all config values
+brainfile config list
+
+# Get a specific value
+brainfile config get archive.default
+
+# Set a value
+brainfile config set archive.default github
+brainfile config set archive.github.owner myorg
+brainfile config set archive.github.repo myrepo
+
+# Show config file path
+brainfile config path
+```
+
+**Subcommands:**
+- `list` - Show all configuration values
+- `get <key>` - Get a specific value
+- `set <key> <value>` - Set a value
+- `path` - Show config file location
+
+**Available Keys:**
+
+| Key | Description |
+|-----|-------------|
+| `archive.default` | Default archive destination: `local`, `github`, or `linear` |
+| `archive.github.owner` | GitHub repository owner (username or org) |
+| `archive.github.repo` | GitHub repository name |
+| `archive.github.labels` | Comma-separated labels for GitHub issues |
+| `archive.linear.teamId` | Linear team ID |
+| `archive.linear.projectId` | Linear project ID |
 
 ---
 

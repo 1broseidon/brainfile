@@ -103,8 +103,41 @@ brainfile subtask --task task-1 --delete task-1-2
 ### Archive & Restore
 
 ```bash
+# Local archive
 brainfile archive --task task-5
+
+# Archive to GitHub Issues (creates closed issue)
+brainfile archive --task task-5 --to=github
+
+# Archive to Linear (creates completed issue)
+brainfile archive --task task-5 --to=linear
+
+# Restore from archive
 brainfile restore --task task-5 --column todo
+```
+
+### Authentication
+
+Archive to external services requires authentication:
+
+```bash
+# GitHub (auto-detects gh CLI, or uses OAuth device flow)
+brainfile auth github
+
+# Linear (requires API key)
+brainfile auth linear --token <api-key>
+
+# Check status
+brainfile auth status
+```
+
+### Configuration
+
+```bash
+# Set default archive destination
+brainfile config set archive.default github
+brainfile config set archive.github.owner myorg
+brainfile config set archive.github.repo myrepo
 ```
 
 ### Validate
