@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2025-11-28
+
+### Added
+- **MCP archive_task destination support** - Archive tasks to GitHub/Linear via MCP
+  - New `destination` parameter: `"local"`, `"github"`, or `"linear"`
+  - Respects project default from `brainfile.md` `archive.destination`
+  - Falls back to user default from `~/.config/brainfile/config.json`
+  - Helpful error messages with exact CLI commands when auth/config needed
+  - Example: `archive_task({ task: "task-1", destination: "github" })`
+
 ## [0.12.1] - 2025-11-27
 
 ### Added

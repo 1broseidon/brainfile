@@ -32,6 +32,10 @@ import {
   type Board
 } from '@brainfile/core';
 import { mcpCheckIncompleteSubtasks } from '../utils/errorHandler';
+import { getEffectiveArchiveDestination, getArchiveConfig } from '../utils/config';
+import { isGitHubAuthenticated, createGitHubIssue } from '../utils/github-auth';
+import { isLinearAuthenticated, createLinearIssue, getLinearTeams } from '../utils/linear-auth';
+import { formatTaskForGitHub, formatTaskForLinear } from '@brainfile/core';
 
 interface McpOptions {
   file: string;
@@ -564,13 +568,14 @@ export async function mcpCommand(options: McpOptions) {
     'archive_task',
     {
       title: 'Archive Task',
-      description: 'Move a task to the archive',
+      description: 'Archive a task locally or to an external service (GitHub Issues, Linear). If no destination is specified, uses the project default from brainfile.md, then user default from ~/.config/brainfile/config.json, then falls back to local.',
       inputSchema: {
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to archive')
+        task: z.string().describe('Task ID to archive'),
+        destination: z.enum(['local', 'github', 'linear']).optional().describe('Archive destination: local (default), github (creates closed issue), or linear (creates completed issue)')
       }
     },
-    async ({ file, task }) => {
+    async ({ file, task, destination }) => {
       const filePath = file || defaultFile;
       const result = readBoard(filePath);
 
@@ -586,16 +591,175 @@ export async function mcpCommand(options: McpOptions) {
         return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
       }
 
-      const archiveResult = archiveTask(board, taskInfo.column.id, task);
+      // Determine effective destination
+      const brainfileDestination = (board as any).archive?.destination;
+      const effectiveDestination = destination || getEffectiveArchiveDestination(brainfileDestination);
 
-      if (!archiveResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${archiveResult.error}` }], isError: true };
+      // Handle local archive
+      if (effectiveDestination === 'local') {
+        const archiveResult = archiveTask(board, taskInfo.column.id, task);
+
+        if (!archiveResult.success) {
+          return { content: [{ type: 'text' as const, text: `Error: ${archiveResult.error}` }], isError: true };
+        }
+
+        writeBoard(filePath, archiveResult.board!);
+
+        return {
+          content: [{ type: 'text' as const, text: `Task ${task} archived locally` }]
+        };
       }
 
-      writeBoard(filePath, archiveResult.board!);
+      // Handle GitHub archive
+      if (effectiveDestination === 'github') {
+        // Check authentication
+        if (!(await isGitHubAuthenticated())) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Error: Not authenticated with GitHub.\n\nTo authenticate, run:\n  npx @brainfile/cli auth github\n\nOr fall back to local archive:\n  Use destination: "local"`
+            }],
+            isError: true
+          };
+        }
+
+        // Check configuration
+        const config = getArchiveConfig();
+        if (!config.github?.owner || !config.github?.repo) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Error: GitHub repository not configured.\n\nTo configure, run:\n  npx @brainfile/cli config set archive.github.owner <owner>\n  npx @brainfile/cli config set archive.github.repo <repo>\n\nOr fall back to local archive:\n  Use destination: "local"`
+            }],
+            isError: true
+          };
+        }
+
+        // Format and create GitHub issue
+        const payload = formatTaskForGitHub(taskInfo.task, {
+          includeMeta: true,
+          includeSubtasks: true,
+          includeRelatedFiles: true,
+          boardTitle: board.title,
+          fromColumn: taskInfo.column.title,
+          extraLabels: config.github.labels,
+        });
+
+        const ghResult = await createGitHubIssue({
+          owner: config.github.owner,
+          repo: config.github.repo,
+          title: payload.title,
+          body: payload.body,
+          labels: payload.labels,
+          state: 'closed',
+        });
+
+        if (!ghResult.success) {
+          return {
+            content: [{ type: 'text' as const, text: `Error creating GitHub issue: ${ghResult.error}` }],
+            isError: true
+          };
+        }
+
+        // Remove task from board
+        const deleteResult = deleteTask(board, taskInfo.column.id, task);
+        if (deleteResult.success) {
+          writeBoard(filePath, deleteResult.board!);
+        }
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Task ${task} archived to GitHub Issue #${ghResult.issueNumber} (closed)\n\nView: ${ghResult.issueUrl}`
+          }]
+        };
+      }
+
+      // Handle Linear archive
+      if (effectiveDestination === 'linear') {
+        // Check authentication
+        if (!(await isLinearAuthenticated())) {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: `Error: Not authenticated with Linear.\n\nTo authenticate, run:\n  npx @brainfile/cli auth linear --token <api-key>\n\nGet your API key from: https://linear.app/settings/api\n\nOr fall back to local archive:\n  Use destination: "local"`
+            }],
+            isError: true
+          };
+        }
+
+        // Check/get team configuration
+        const config = getArchiveConfig();
+        let teamId = config.linear?.teamId;
+
+        if (!teamId) {
+          const teams = await getLinearTeams();
+          if (teams.length === 0) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `Error: No Linear teams found.\n\nVerify your authentication:\n  npx @brainfile/cli auth status`
+              }],
+              isError: true
+            };
+          }
+          if (teams.length === 1) {
+            teamId = teams[0].id;
+          } else {
+            const teamList = teams.map(t => `  ${t.key}: ${t.name} (${t.id})`).join('\n');
+            return {
+              content: [{
+                type: 'text' as const,
+                text: `Error: Multiple Linear teams found. Please configure a default.\n\nAvailable teams:\n${teamList}\n\nTo configure, run:\n  npx @brainfile/cli config set archive.linear.teamId <team-id>\n\nOr fall back to local archive:\n  Use destination: "local"`
+              }],
+              isError: true
+            };
+          }
+        }
+
+        // Format and create Linear issue
+        const payload = formatTaskForLinear(taskInfo.task, {
+          includeMeta: true,
+          includeSubtasks: true,
+          includeRelatedFiles: true,
+          boardTitle: board.title,
+          fromColumn: taskInfo.column.title,
+          stateName: 'Done',
+        });
+
+        const linearResult = await createLinearIssue({
+          teamId,
+          title: payload.title,
+          description: payload.description,
+          priority: payload.priority,
+          labelNames: payload.labelNames,
+          stateName: 'Done',
+        });
+
+        if (!linearResult.success) {
+          return {
+            content: [{ type: 'text' as const, text: `Error creating Linear issue: ${linearResult.error}` }],
+            isError: true
+          };
+        }
+
+        // Remove task from board
+        const deleteResult = deleteTask(board, taskInfo.column.id, task);
+        if (deleteResult.success) {
+          writeBoard(filePath, deleteResult.board!);
+        }
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Task ${task} archived to Linear Issue ${linearResult.issueId} (Done)\n\nView: ${linearResult.issueUrl}`
+          }]
+        };
+      }
 
       return {
-        content: [{ type: 'text' as const, text: `Task ${task} archived successfully` }]
+        content: [{ type: 'text' as const, text: `Error: Unknown destination: ${effectiveDestination}` }],
+        isError: true
       };
     }
   );
