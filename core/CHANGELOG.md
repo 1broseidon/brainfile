@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2025-12-04
+
+### Added
+- **Rule operations** - Manage project rules and preferences in brainfile frontmatter
+  - `addRule(board, ruleType, ruleText)` - Add a rule to any category (always, never, prefer, context)
+  - `deleteRule(board, ruleType, ruleId)` - Remove a rule by ID
+  - Auto-generates sequential IDs within each rule category
+  - Cleans up empty rule categories automatically
+
 ## [0.8.0] - 2025-11-25
 
 ### Added

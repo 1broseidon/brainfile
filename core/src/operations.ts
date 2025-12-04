@@ -3,9 +3,11 @@
  * These functions return new board objects without side effects
  */
 
-import type { Board, Task, Subtask } from './types';
+import type { Board, Task, Subtask, Rule, Rules } from './types';
 import { findColumnById, findTaskById } from './query';
 import { generateNextTaskId, generateNextSubtaskId } from './idGen';
+
+type RuleCategory = keyof Rules;
 
 /**
  * Input for creating a new task
@@ -722,6 +724,89 @@ export function setAllSubtasksCompleted(
   };
 
   return { success: true, board: newBoard };
+}
+
+/**
+ * Add a rule entry to the board's guidelines
+ * @param board - Board to modify
+ * @param ruleType - Rule category (always, never, prefer, context)
+ * @param ruleText - Rule description text
+ */
+export function addRule(
+  board: Board,
+  ruleType: RuleCategory,
+  ruleText: string
+): BoardOperationResult {
+  if (!ruleText || ruleText.trim() === '') {
+    return { success: false, error: 'Rule text is required' };
+  }
+
+  const trimmedRule = ruleText.trim();
+  const existingRules = board.rules?.[ruleType] ?? [];
+  const nextId = existingRules.reduce((maxId, rule) => Math.max(maxId, rule.id), 0) + 1;
+
+  const newRule: Rule = {
+    id: nextId,
+    rule: trimmedRule,
+  };
+
+  const updatedRulesForType = [...existingRules, newRule];
+  const updatedRules: Rules = {
+    ...(board.rules ?? {}),
+    [ruleType]: updatedRulesForType,
+  };
+
+  return {
+    success: true,
+    board: {
+      ...board,
+      rules: updatedRules,
+    },
+  };
+}
+
+/**
+ * Remove a rule entry from the board
+ * @param board - Board to modify
+ * @param ruleType - Rule category (always, never, prefer, context)
+ * @param ruleId - ID of the rule to remove
+ */
+export function deleteRule(
+  board: Board,
+  ruleType: RuleCategory,
+  ruleId: number
+): BoardOperationResult {
+  const rulesForType = board.rules?.[ruleType];
+
+  if (!rulesForType || rulesForType.length === 0) {
+    return { success: false, error: `Rule type ${ruleType} has no entries` };
+  }
+
+  const exists = rulesForType.some((rule) => rule.id === ruleId);
+  if (!exists) {
+    return { success: false, error: `Rule ${ruleId} not found in ${ruleType}` };
+  }
+
+  const updatedRulesForType = rulesForType.filter((rule) => rule.id !== ruleId);
+  const updatedRules: Rules = { ...(board.rules ?? {}) };
+
+  if (updatedRulesForType.length > 0) {
+    updatedRules[ruleType] = updatedRulesForType;
+  } else {
+    delete updatedRules[ruleType];
+  }
+
+  const hasAnyRules = Object.values(updatedRules).some(
+    (collection) => collection !== undefined && collection.length > 0
+  );
+
+  return {
+    success: true,
+    board: {
+      ...board,
+      rules: hasAnyRules ? updatedRules : undefined,
+    },
+  };
 }
 
 // =============================================================================
