@@ -11,8 +11,6 @@ import {
   addTask,
   moveTask,
   deleteTask,
-  archiveTask,
-  restoreTask,
   patchTask,
   addSubtask,
   deleteSubtask,
@@ -24,7 +22,6 @@ import {
   moveTasks,
   patchTasks,
   deleteTasks,
-  archiveTasks,
   // Discovery
   findNearestBrainfile,
   type TaskInput,
@@ -36,6 +33,14 @@ import { getEffectiveArchiveDestination, getArchiveConfig } from '../utils/confi
 import { isGitHubAuthenticated, createGitHubIssue } from '../utils/github-auth';
 import { isLinearAuthenticated, createLinearIssue, getLinearTeams } from '../utils/linear-auth';
 import { formatTaskForGitHub, formatTaskForLinear } from '@brainfile/core';
+import { pickupContract, deliverContract, validateContract } from '../lib/contractRunner';
+import {
+  archiveTaskToFile,
+  loadArchivedTasks,
+  restoreFromArchive,
+  removeFromArchive,
+  getArchivePath,
+} from '../utils/archive';
 
 interface McpOptions {
   file: string;
@@ -595,18 +600,17 @@ export async function mcpCommand(options: McpOptions) {
       const brainfileDestination = (board as any).archive?.destination;
       const effectiveDestination = destination || getEffectiveArchiveDestination(brainfileDestination);
 
-      // Handle local archive
+      // Handle local archive (to separate brainfile-archive.md file)
       if (effectiveDestination === 'local') {
-        const archiveResult = archiveTask(board, taskInfo.column.id, task);
+        const archiveResult = archiveTaskToFile(filePath, board, taskInfo.column.id, task);
 
         if (!archiveResult.success) {
           return { content: [{ type: 'text' as const, text: `Error: ${archiveResult.error}` }], isError: true };
         }
 
-        writeBoard(filePath, archiveResult.board!);
-
+        const archivePath = getArchivePath(filePath);
         return {
-          content: [{ type: 'text' as const, text: `Task ${task} archived locally` }]
+          content: [{ type: 'text' as const, text: `Task ${task} archived to ${path.basename(archivePath)}` }]
         };
       }
 
@@ -796,13 +800,20 @@ export async function mcpCommand(options: McpOptions) {
         return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
       }
 
-      const restoreResult = restoreTask(board, task, targetColumn.id);
+      // Restore from separate archive file
+      const restoreResult = restoreFromArchive(filePath, task, targetColumn.id);
 
       if (!restoreResult.success) {
+        // Provide helpful error if archive is empty
+        const { tasks } = loadArchivedTasks(filePath);
+        if (tasks.length === 0) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: Archive is empty (${path.basename(getArchivePath(filePath))})` }],
+            isError: true
+          };
+        }
         return { content: [{ type: 'text' as const, text: `Error: ${restoreResult.error}` }], isError: true };
       }
-
-      writeBoard(filePath, restoreResult.board!);
 
       return {
         content: [{ type: 'text' as const, text: `Task ${task} restored to "${targetColumn.title}"` }]
@@ -1223,7 +1234,7 @@ export async function mcpCommand(options: McpOptions) {
     'bulk_archive_tasks',
     {
       title: 'Bulk Archive Tasks',
-      description: 'Archive multiple tasks in a single operation',
+      description: 'Archive multiple tasks to the separate archive file',
       inputSchema: {
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
         tasks: z.array(z.string()).describe('Array of task IDs to archive')
@@ -1231,30 +1242,126 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, tasks }) => {
       const filePath = file || defaultFile;
-      const result = readBoard(filePath);
 
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
+      const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+      let successCount = 0;
+      let failureCount = 0;
 
-      let { board } = result;
+      // Archive each task individually (need to re-read board after each archive)
+      for (const taskId of tasks) {
+        const boardResult = readBoard(filePath);
+        if ('error' in boardResult) {
+          results.push({ taskId, success: false, error: boardResult.error });
+          failureCount++;
+          continue;
+        }
 
-      const bulkResult = archiveTasks(board, tasks);
+        const { board } = boardResult;
+        const taskInfo = findTaskById(board, taskId);
 
-      if (bulkResult.board) {
-        writeBoard(filePath, bulkResult.board);
+        if (!taskInfo) {
+          results.push({ taskId, success: false, error: 'Task not found' });
+          failureCount++;
+          continue;
+        }
+
+        const archiveResult = archiveTaskToFile(filePath, board, taskInfo.column.id, taskId);
+
+        if (archiveResult.success) {
+          results.push({ taskId, success: true });
+          successCount++;
+        } else {
+          results.push({ taskId, success: false, error: archiveResult.error });
+          failureCount++;
+        }
       }
 
       const output = {
-        success: bulkResult.success,
-        successCount: bulkResult.successCount,
-        failureCount: bulkResult.failureCount,
-        results: bulkResult.results
+        success: failureCount === 0,
+        successCount,
+        failureCount,
+        results,
+        archiveFile: path.basename(getArchivePath(filePath))
       };
 
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
-        isError: !bulkResult.success
+        isError: failureCount > 0 && successCount === 0
+      };
+    }
+  );
+
+  // ==========================================================================
+  // CONTRACTS
+  // ==========================================================================
+
+  server.registerTool(
+    'contract_pickup',
+    {
+      title: 'Contract Pickup',
+      description: 'Claim a task contract (sets status to in_progress) and return agent context as markdown',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Task ID to pick up'),
+      }
+    },
+    async ({ file, task }) => {
+      const filePath = file || defaultFile;
+      const result = pickupContract({ filePath, taskId: task });
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text' as const, text: result.markdown }] };
+    }
+  );
+
+  server.registerTool(
+    'contract_deliver',
+    {
+      title: 'Contract Deliver',
+      description: 'Mark a task contract as delivered (sets status to delivered)',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Task ID to deliver'),
+      }
+    },
+    async ({ file, task }) => {
+      const filePath = file || defaultFile;
+      const result = deliverContract({ filePath, taskId: task });
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+      return { content: [{ type: 'text' as const, text: `Contract delivered: ${task}` }] };
+    }
+  );
+
+  server.registerTool(
+    'contract_validate',
+    {
+      title: 'Contract Validate',
+      description: 'Validate contract deliverables + commands; sets status to done/failed',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Task ID to validate'),
+      }
+    },
+    async ({ file, task }) => {
+      const filePath = file || defaultFile;
+      const result = validateContract({ filePath, taskId: task });
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      const output = {
+        ok: result.ok,
+        status: result.ok ? 'done' : 'failed',
+        deliverables: result.deliverableChecks,
+        commands: result.commandResults,
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        isError: !result.ok
       };
     }
   );

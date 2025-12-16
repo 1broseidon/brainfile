@@ -3,8 +3,8 @@ import { Box, Text, useStdout } from 'ink';
 import type { Board } from '@brainfile/core';
 
 import { PALETTE, BOX } from './theme.js';
-import type { AppState, TUIProps } from './types.js';
-import { HEADER_ROWS, FOOTER_ROWS } from './types.js';
+import type { AppState, TUIProps, LayoutMode } from './types.js';
+import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
 import { parseSearchQuery, taskMatchesFilter } from './utils.js';
@@ -15,6 +15,8 @@ import {
   SearchBar,
   ColumnTabs,
   TaskList,
+  StackedTaskList,
+  flattenTasks,
   StatusBar,
   HelpOverlay,
   StatusMessageDisplay,
@@ -36,6 +38,7 @@ const initialState: AppState = {
   activePanel: 'tasks',
   activeColumnIndex: 0,
   selectedTaskIndex: 0,
+  selectedGlobalIndex: 0,
   mode: 'browse',
   searchQuery: '',
   expandedTaskIds: new Set(),
@@ -58,36 +61,45 @@ const initialState: AppState = {
   expandedArchiveIds: new Set(),
 };
 
-// Minimum terminal dimensions
-const MIN_WIDTH = 60;
-const MIN_HEIGHT = 16;
-
 export function BrainfileTUI({ filePath }: TUIProps) {
   const { stdout } = useStdout();
-  const termWidth = stdout?.columns ?? process.stdout.columns ?? 80;
-  const termHeight = stdout?.rows ?? process.stdout.rows ?? 24;
+
+  // Track terminal dimensions with resize listener
+  const [dimensions, setDimensions] = useState({
+    width: stdout?.columns ?? process.stdout.columns ?? 80,
+    height: stdout?.rows ?? process.stdout.rows ?? 24,
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setDimensions({
+        width: process.stdout.columns ?? 80,
+        height: process.stdout.rows ?? 24,
+      });
+    };
+
+    process.stdout.on('resize', handleResize);
+    return () => {
+      process.stdout.off('resize', handleResize);
+    };
+  }, []);
+
+  const termWidth = dimensions.width;
+  const termHeight = dimensions.height;
+  const isTooSmall = termWidth < LAYOUT.NARROW_MIN_WIDTH || termHeight < LAYOUT.MIN_HEIGHT;
+
+  // Determine layout mode based on width
+  const layoutMode: LayoutMode = termWidth >= LAYOUT.WIDE_MIN_WIDTH ? 'wide' : 'narrow';
 
   const [state, setState] = useState<AppState>(initialState);
 
-  // Check minimum terminal size
-  if (termWidth < MIN_WIDTH || termHeight < MIN_HEIGHT) {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <Text color={PALETTE.error} bold>Terminal too small</Text>
-        <Text color={PALETTE.textSecondary}>
-          Minimum size: {MIN_WIDTH}x{MIN_HEIGHT}
-        </Text>
-        <Text color={PALETTE.textSecondary}>
-          Current size: {termWidth}x{termHeight}
-        </Text>
-        <Box marginTop={1}>
-          <Text color={PALETTE.textMuted}>Resize your terminal and restart.</Text>
-        </Box>
-      </Box>
-    );
-  }
-
   const viewportHeight = Math.max(termHeight - HEADER_ROWS - FOOTER_ROWS, 5);
+  // Height available for task lists after accounting for in-panel UI (search bar, column tabs + separator)
+  const searchBarRows = state.mode === 'search'
+    ? (state.searchQuery.trim().length === 0 ? 2 : 1)
+    : 0;
+  const columnHeaderRows = layoutMode === 'wide' ? 3 : 0; // ColumnTabs (2) + separator (1)
+  const tasksViewportHeight = Math.max(1, viewportHeight - searchBarRows - columnHeaderRows);
 
   // Load brainfile and watch for changes
   const { loadBrainfile } = useBrainfileLoader(filePath, state, setState);
@@ -120,10 +132,16 @@ export function BrainfileTUI({ filePath }: TUIProps) {
   // Check if search has no results
   const hasNoSearchResults = hasActiveFilter && filteredColumns.length === 0;
 
-  // Current column and its tasks
+  // Flatten tasks for narrow mode
+  const flatTasks = useMemo(() => flattenTasks(filteredColumns), [filteredColumns]);
+  const maxGlobalIndex = Math.max(0, flatTasks.length - 1);
+
+  // Current column and its tasks (wide mode)
   const currentColumn = filteredColumns[state.activeColumnIndex];
   const currentTasks = currentColumn?.tasks || [];
-  const currentTask = currentTasks[state.selectedTaskIndex];
+  const currentTask = layoutMode === 'wide'
+    ? currentTasks[state.selectedTaskIndex]
+    : flatTasks[state.selectedGlobalIndex]?.task;
   const maxTaskIndex = Math.max(0, currentTasks.length - 1);
 
   // Keep selection in bounds
@@ -132,8 +150,9 @@ export function BrainfileTUI({ filePath }: TUIProps) {
       ...prev,
       activeColumnIndex: Math.min(prev.activeColumnIndex, Math.max(0, filteredColumns.length - 1)),
       selectedTaskIndex: Math.min(prev.selectedTaskIndex, maxTaskIndex),
+      selectedGlobalIndex: Math.min(prev.selectedGlobalIndex, maxGlobalIndex),
     }));
-  }, [filteredColumns.length, maxTaskIndex]);
+  }, [filteredColumns.length, maxTaskIndex, maxGlobalIndex]);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -173,7 +192,25 @@ export function BrainfileTUI({ filePath }: TUIProps) {
     loadBrainfile,
     filePath,
     allColumns: orderedColumns,
+    layoutMode,
+    flatTasks,
+    maxGlobalIndex,
   });
+
+  // Check minimum terminal size (after all hooks)
+  if (isTooSmall) {
+    return (
+      <Box flexDirection="column" width={termWidth} height={termHeight} justifyContent="center" alignItems="center">
+        <Text color={PALETTE.error} bold>Terminal too small</Text>
+        <Text color={PALETTE.textSecondary}>
+          Minimum: {LAYOUT.NARROW_MIN_WIDTH}x{LAYOUT.MIN_HEIGHT} · Current: {termWidth}x{termHeight}
+        </Text>
+        <Box marginTop={1}>
+          <Text color={PALETTE.textMuted}>Resize terminal to continue</Text>
+        </Box>
+      </Box>
+    );
+  }
 
   // Error state
   if (state.error) {
@@ -201,7 +238,7 @@ export function BrainfileTUI({ filePath }: TUIProps) {
 
   // Help overlay
   if (state.mode === 'help') {
-    return <HelpOverlay termWidth={termWidth} termHeight={termHeight} />;
+    return <HelpOverlay termWidth={termWidth} termHeight={termHeight} layoutMode={layoutMode} />;
   }
 
   return (
@@ -211,16 +248,21 @@ export function BrainfileTUI({ filePath }: TUIProps) {
         title={state.board.title || 'Brainfile'}
         stats={stats}
         reloadFlash={state.reloadFlash}
+        layoutMode={layoutMode}
+        termWidth={termWidth}
       />
 
-      {/* Progress Bar */}
-      <ProgressBar done={stats.done} total={stats.total} width={termWidth - 4} />
+      {/* Progress Bar (wide mode only - narrow mode shows % in header) */}
+      {layoutMode === 'wide' && (
+        <ProgressBar done={stats.done} total={stats.total} width={termWidth - 4} />
+      )}
 
       {/* Main Panel Tabs (Tasks / Rules / Archive) */}
       <MainPanelTabs
         activePanel={state.activePanel}
         rulesCount={rulesCount}
         archiveCount={state.archive.length}
+        layoutMode={layoutMode}
       />
 
       {/* Separator */}
@@ -238,17 +280,19 @@ export function BrainfileTUI({ filePath }: TUIProps) {
               <SearchBar query={state.searchQuery} width={termWidth - 2} />
             )}
 
-            {/* Column tabs */}
-            <ColumnTabs
-              columns={filteredColumns}
-              activeIndex={state.activeColumnIndex}
-              termWidth={termWidth}
-            />
-
-            {/* Column separator */}
-            <Box paddingLeft={1}>
-              <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
-            </Box>
+            {/* Column tabs (wide mode only) */}
+            {layoutMode === 'wide' && (
+              <>
+                <ColumnTabs
+                  columns={filteredColumns}
+                  activeIndex={state.activeColumnIndex}
+                  termWidth={termWidth}
+                />
+              <Box paddingLeft={1}>
+                <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
+              </Box>
+            </>
+          )}
 
             {/* Overlays take precedence over task list */}
             {state.mode === 'move' && currentTask && (
@@ -296,13 +340,23 @@ export function BrainfileTUI({ filePath }: TUIProps) {
 
             {/* Task list (hidden when overlay is active or no results) */}
             {!hasNoSearchResults && state.mode !== 'move' && state.mode !== 'delete-confirm' && state.mode !== 'subtask' && state.mode !== 'new-task' && (
-              <TaskList
-                tasks={currentTasks}
-                selectedIndex={state.selectedTaskIndex}
-                expandedIds={state.expandedTaskIds}
-                viewportHeight={viewportHeight - (state.mode === 'search' ? 3 : 2)}
-                termWidth={termWidth}
-              />
+              layoutMode === 'wide' ? (
+                <TaskList
+                  tasks={currentTasks}
+                  selectedIndex={state.selectedTaskIndex}
+                  expandedIds={state.expandedTaskIds}
+                  viewportHeight={tasksViewportHeight}
+                  termWidth={termWidth}
+                />
+              ) : (
+                <StackedTaskList
+                  columns={filteredColumns}
+                  selectedGlobalIndex={state.selectedGlobalIndex}
+                  expandedIds={state.expandedTaskIds}
+                  viewportHeight={tasksViewportHeight}
+                  termWidth={termWidth}
+                />
+              )
             )}
           </>
         )}
@@ -317,6 +371,7 @@ export function BrainfileTUI({ filePath }: TUIProps) {
             termWidth={termWidth}
             mode={state.mode}
             editText={state.ruleEditText}
+            layoutMode={layoutMode}
           />
         )}
 
@@ -331,6 +386,7 @@ export function BrainfileTUI({ filePath }: TUIProps) {
             mode={state.mode}
             columns={orderedColumns}
             restoreColumnIndex={state.archiveRestoreColumnIndex}
+            layoutMode={layoutMode}
           />
         )}
       </Box>
@@ -350,11 +406,18 @@ export function BrainfileTUI({ filePath }: TUIProps) {
       {/* Status bar */}
       <StatusBar
         mode={state.mode}
-        columnName={state.activePanel === 'tasks' ? (currentColumn?.title || '') : state.activePanel}
-        taskIndex={state.activePanel === 'tasks' ? state.selectedTaskIndex + 1 : (state.activePanel === 'archive' ? state.selectedArchiveIndex + 1 : state.selectedRuleIndex + 1)}
-        taskCount={state.activePanel === 'tasks' ? currentTasks.length : (state.activePanel === 'archive' ? state.archive.length : (state.board.rules?.[state.activeRuleType]?.length || 0))}
+        columnName={state.activePanel === 'tasks'
+          ? (layoutMode === 'wide' ? (currentColumn?.title || '') : 'ALL')
+          : state.activePanel}
+        taskIndex={state.activePanel === 'tasks'
+          ? (layoutMode === 'wide' ? state.selectedTaskIndex + 1 : state.selectedGlobalIndex + 1)
+          : (state.activePanel === 'archive' ? state.selectedArchiveIndex + 1 : state.selectedRuleIndex + 1)}
+        taskCount={state.activePanel === 'tasks'
+          ? (layoutMode === 'wide' ? currentTasks.length : flatTasks.length)
+          : (state.activePanel === 'archive' ? state.archive.length : (state.board.rules?.[state.activeRuleType]?.length || 0))}
         termWidth={termWidth}
         activePanel={state.activePanel}
+        layoutMode={layoutMode}
       />
     </Box>
   );

@@ -1,50 +1,32 @@
+import * as path from 'path';
+import * as os from 'os';
 import { isGitRepo, hasUncommittedChanges, getModifiedFiles } from '../utils/git-helper';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-
-const execAsync = promisify(exec);
 
 describe('git-helper', () => {
   describe('isGitRepo', () => {
     it('should return true in a git repository', async () => {
       // This test assumes we're running in a git repo
       const result = await isGitRepo();
-      expect(typeof result).toBe('boolean');
+      expect(result).toBe(true);
     });
 
-    it('should handle non-git directories gracefully', async () => {
-      // Save original cwd
-      const originalCwd = process.cwd();
-
-      try {
-        // Change to /tmp which is typically not a git repo
-        process.chdir('/tmp');
-        const result = await isGitRepo();
-        expect(typeof result).toBe('boolean');
-      } finally {
-        // Restore original cwd
-        process.chdir(originalCwd);
-      }
+    it('should return false for non-git directories', async () => {
+      // Use /tmp which is typically not a git repo - pass cwd instead of chdir
+      const result = await isGitRepo({ cwd: os.tmpdir() });
+      expect(result).toBe(false);
     });
   });
 
   describe('hasUncommittedChanges', () => {
-    it('should return false when no changes exist', async () => {
-      // This test assumes a clean working directory
+    it('should return a boolean', async () => {
       const result = await hasUncommittedChanges();
       expect(typeof result).toBe('boolean');
     });
 
-    it('should handle non-git directories', async () => {
-      const originalCwd = process.cwd();
-
-      try {
-        process.chdir('/tmp');
-        const result = await hasUncommittedChanges();
-        expect(result).toBe(false);
-      } finally {
-        process.chdir(originalCwd);
-      }
+    it('should return false for non-git directories', async () => {
+      // Pass cwd instead of using process.chdir
+      const result = await hasUncommittedChanges([], { cwd: os.tmpdir() });
+      expect(result).toBe(false);
     });
 
     it('should handle exclude patterns', async () => {
@@ -59,16 +41,10 @@ describe('git-helper', () => {
       expect(Array.isArray(result)).toBe(true);
     });
 
-    it('should handle non-git directories', async () => {
-      const originalCwd = process.cwd();
-
-      try {
-        process.chdir('/tmp');
-        const result = await getModifiedFiles();
-        expect(result).toEqual([]);
-      } finally {
-        process.chdir(originalCwd);
-      }
+    it('should return empty array for non-git directories', async () => {
+      // Pass cwd instead of using process.chdir
+      const result = await getModifiedFiles({ cwd: os.tmpdir() });
+      expect(result).toEqual([]);
     });
 
     it('should return file paths without status codes', async () => {

@@ -3,7 +3,7 @@ import { Box, Text } from 'ink';
 import type { Task } from '@brainfile/core';
 import { PALETTE, BOX, ICONS } from '../theme.js';
 import { truncate, getPriorityColor } from '../utils.js';
-import type { BoardColumn } from '../types.js';
+import type { BoardColumn, LayoutMode } from '../types.js';
 
 export interface ArchivePanelProps {
   archive: Task[];
@@ -14,6 +14,7 @@ export interface ArchivePanelProps {
   mode: string;
   columns: BoardColumn[];
   restoreColumnIndex: number;
+  layoutMode?: LayoutMode;
 }
 
 export function ArchivePanel({
@@ -25,12 +26,14 @@ export function ArchivePanel({
   mode,
   columns,
   restoreColumnIndex,
+  layoutMode = 'wide',
 }: ArchivePanelProps) {
   const maxWidth = Math.max(termWidth - 8, 20);
 
   // Calculate scroll offset
   const scrollPadding = 2;
-  const visibleTasks = Math.max(viewportHeight - 8, 3);
+  const headerRows = layoutMode === 'narrow' ? 4 : 6;
+  const visibleTasks = Math.max(viewportHeight - headerRows, 3);
   let scrollOffset = 0;
   if (selectedIndex >= visibleTasks - scrollPadding) {
     scrollOffset = Math.min(
@@ -46,16 +49,18 @@ export function ArchivePanel({
       {/* Header with count and instructions */}
       <Box marginBottom={1}>
         <Text color={PALETTE.textSecondary}>
-          {archive.length} archived task{archive.length !== 1 ? 's' : ''}
+          {archive.length} archived{layoutMode === 'wide' ? ` task${archive.length !== 1 ? 's' : ''}` : ''}
         </Text>
-        <Box marginLeft={2}>
-          <Text color={PALETTE.textMuted}>
-            <Text color={PALETTE.textSecondary}>j/k</Text> select{' '}
-            <Text color={PALETTE.textSecondary}>Enter</Text> expand{' '}
-            <Text color={PALETTE.textSecondary}>R</Text> restore{' '}
-            <Text color={PALETTE.textSecondary}>d</Text> delete
-          </Text>
-        </Box>
+        {layoutMode === 'wide' && (
+          <Box marginLeft={2}>
+            <Text color={PALETTE.textMuted}>
+              <Text color={PALETTE.textSecondary}>j/k</Text> select{' '}
+              <Text color={PALETTE.textSecondary}>Enter</Text> expand{' '}
+              <Text color={PALETTE.textSecondary}>R</Text> restore{' '}
+              <Text color={PALETTE.textSecondary}>d</Text> delete
+            </Text>
+          </Box>
+        )}
       </Box>
 
       {/* Separator */}

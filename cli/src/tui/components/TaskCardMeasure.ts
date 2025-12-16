@@ -64,7 +64,7 @@ export function safeTruncate(text: string | undefined, maxWidth: number): string
  * Linear-style borderless design:
  *
  * COLLAPSED (always 3 lines):
- * - Row 1: indicator + priority + title = 1
+ * - Row 1: indicator + priority + title + [subtasks] = 1
  * - Row 2: indented meta + ID = 1
  * - Margin between cards (handled by TaskList) = 1
  *
@@ -112,6 +112,20 @@ export function measureTaskCard(task: Task, contentWidth: number): TaskCardDimen
     if (task.relatedFiles.length > 3) {
       expanded += 1; // "+N more" line
     }
+  }
+
+  // Contract section (display-only, if present)
+  if ((task as any).contract) {
+    const hasPrevious =
+      Boolean(task.description) ||
+      Boolean(task.subtasks && task.subtasks.length > 0) ||
+      Boolean(task.relatedFiles && task.relatedFiles.length > 0);
+
+    if (hasPrevious) {
+      expanded += 1; // marginTop before contract block
+    }
+
+    expanded += 3; // "Contract" header + Status + Deliverables count
   }
 
   return { collapsed, expanded };

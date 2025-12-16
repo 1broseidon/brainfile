@@ -14,7 +14,6 @@ import * as path from 'path';
 import {
   Brainfile,
   findTaskById,
-  archiveTask,
   deleteTask,
   formatTaskForGitHub,
   formatTaskForLinear,
@@ -30,9 +29,20 @@ import {
   operationError,
   handleError,
 } from '../utils/errorHandler';
-import { getEffectiveArchiveDestination, getArchiveConfig } from '../utils/config';
+import {
+  getEffectiveArchiveDestination,
+  getArchiveConfig,
+  getEffectiveDestination,
+  type ParsedDestination,
+} from '../utils/config';
 import { createGitHubIssue, isGitHubAuthenticated } from '../utils/github-auth';
 import { createLinearIssue, isLinearAuthenticated, getLinearTeams } from '../utils/linear-auth';
+import {
+  archiveTaskToFile,
+  loadArchivedTasks,
+  removeFromArchive,
+  getArchivePath,
+} from '../utils/archive';
 
 // ============================================================================
 // Types
@@ -77,10 +87,19 @@ export async function archiveCommand(options: ArchiveOptions) {
 
     const board = result.board;
 
-    // Determine destination
+    // Determine destination (supports extended format like github:owner/repo)
     const brainfileDestination = (board as any).archive?.destination;
-    const destination: ArchiveDestination = options.to ||
-      getEffectiveArchiveDestination(brainfileDestination);
+    let parsedDest: ParsedDestination;
+
+    if (options.to) {
+      // CLI flag takes precedence (simple format only)
+      parsedDest = { type: options.to };
+    } else {
+      // Parse from brainfile or config (may have extended format)
+      parsedDest = getEffectiveDestination(brainfileDestination);
+    }
+
+    const destination = parsedDest.type;
 
     // Validate destination auth if needed
     if (destination === 'github' && !(await isGitHubAuthenticated())) {
@@ -105,7 +124,7 @@ export async function archiveCommand(options: ArchiveOptions) {
 
     // Single task archive
     if (options.task) {
-      await archiveSingleTask(filePath, board, options.task, destination, options.dryRun);
+      await archiveSingleTask(filePath, board, options.task, destination, options.dryRun, parsedDest);
     }
   } catch (error) {
     handleError(error);
@@ -121,7 +140,8 @@ async function archiveSingleTask(
   board: Board,
   taskId: string,
   destination: ArchiveDestination,
-  dryRun?: boolean
+  dryRun?: boolean,
+  parsedDest?: ParsedDestination
 ) {
   // Find the task
   const taskInfo = findTaskById(board, taskId);
@@ -141,9 +161,9 @@ async function archiveSingleTask(
   if (destination === 'local') {
     await archiveToLocal(filePath, board, task, column.id, column.title, dryRun);
   } else if (destination === 'github') {
-    await archiveToGitHub(filePath, board, task, column.id, column.title, dryRun);
+    await archiveToGitHub(filePath, board, task, column.id, column.title, dryRun, parsedDest);
   } else if (destination === 'linear') {
-    await archiveToLinear(filePath, board, task, column.id, column.title, dryRun);
+    await archiveToLinear(filePath, board, task, column.id, column.title, dryRun, parsedDest);
   }
 }
 
@@ -159,28 +179,26 @@ async function archiveToLocal(
   columnTitle: string,
   dryRun?: boolean
 ) {
+  const archivePath = getArchivePath(filePath);
+
   if (dryRun) {
-    console.log(`Would archive task ${chalk.cyan(task.id)} to local archive`);
+    console.log(`Would archive task ${chalk.cyan(task.id)} to ${chalk.cyan(path.basename(archivePath))}`);
     return;
   }
 
-  const archiveResult = archiveTask(board, columnId, task.id);
+  const archiveResult = archiveTaskToFile(filePath, board, columnId, task.id);
 
   if (!archiveResult.success) {
     operationError(archiveResult.error!);
     return;
   }
 
-  // Write back
-  const updatedContent = Brainfile.serialize(archiveResult.board!);
-  fs.writeFileSync(filePath, updatedContent, 'utf-8');
-
   // Success message
   console.log(chalk.green('✓') + ' Task archived locally');
   console.log('');
   console.log(chalk.gray(`  Task:   ${task.id} - ${task.title}`));
   console.log(chalk.gray(`  From:   ${columnTitle}`));
-  console.log(chalk.gray(`  To:     Local Archive`));
+  console.log(chalk.gray(`  To:     ${path.basename(archivePath)}`));
   console.log('');
   console.log(chalk.gray('Use "brainfile restore" to restore this task.'));
 }
@@ -195,20 +213,26 @@ async function archiveToGitHub(
   task: Task,
   columnId: string,
   columnTitle: string,
-  dryRun?: boolean
+  dryRun?: boolean,
+  parsedDest?: ParsedDestination
 ) {
   const config = getArchiveConfig();
-  const github = config.github;
 
-  if (!github?.owner || !github?.repo) {
+  // Use parsed destination if available, otherwise fall back to config
+  const owner = parsedDest?.owner || config.github?.owner;
+  const repo = parsedDest?.repo || config.github?.repo;
+  const labels = config.github?.labels;
+
+  if (!owner || !repo) {
     console.log(chalk.red('✗') + ' GitHub owner/repo not configured.');
     console.log('');
-    console.log('Set up GitHub config:');
+    console.log('Set in brainfile.md:');
+    console.log(chalk.cyan('  archive:'));
+    console.log(chalk.cyan('    destination: github:owner/repo'));
+    console.log('');
+    console.log('Or set up global config:');
     console.log(chalk.cyan('  brainfile config set archive.github.owner <owner>'));
     console.log(chalk.cyan('  brainfile config set archive.github.repo <repo>'));
-    console.log('');
-    console.log('Or add to ~/.config/brainfile/config.json:');
-    console.log(chalk.gray(JSON.stringify({ archive: { github: { owner: 'myorg', repo: 'myrepo' } } }, null, 2)));
     process.exit(1);
   }
 
@@ -219,11 +243,11 @@ async function archiveToGitHub(
     includeRelatedFiles: true,
     boardTitle: board.title,
     fromColumn: columnTitle,
-    extraLabels: github.labels,
+    extraLabels: labels,
   });
 
   if (dryRun) {
-    console.log(`Would create GitHub Issue in ${chalk.cyan(`${github.owner}/${github.repo}`)}:`);
+    console.log(`Would create GitHub Issue in ${chalk.cyan(`${owner}/${repo}`)}:`);
     console.log('');
     console.log(chalk.bold('Title:'), payload.title);
     console.log(chalk.bold('Labels:'), payload.labels?.join(', ') || 'none');
@@ -234,11 +258,11 @@ async function archiveToGitHub(
     return;
   }
 
-  console.log(`Creating GitHub Issue in ${chalk.cyan(`${github.owner}/${github.repo}`)}...`);
+  console.log(`Creating GitHub Issue in ${chalk.cyan(`${owner}/${repo}`)}...`);
 
   const result = await createGitHubIssue({
-    owner: github.owner,
-    repo: github.repo,
+    owner,
+    repo,
     title: payload.title,
     body: payload.body,
     labels: payload.labels,
@@ -278,10 +302,29 @@ async function archiveToLinear(
   task: Task,
   columnId: string,
   columnTitle: string,
-  dryRun?: boolean
+  dryRun?: boolean,
+  parsedDest?: ParsedDestination
 ) {
   const config = getArchiveConfig();
   let teamId = config.linear?.teamId;
+
+  // If teamKey is provided in destination, resolve it to teamId
+  if (parsedDest?.teamKey) {
+    const teams = await getLinearTeams();
+    const matchingTeam = teams.find(
+      (t) => t.key.toLowerCase() === parsedDest.teamKey!.toLowerCase()
+    );
+
+    if (matchingTeam) {
+      teamId = matchingTeam.id;
+    } else {
+      console.log(chalk.red('✗') + ` Linear team "${parsedDest.teamKey}" not found.`);
+      console.log('');
+      console.log('Available teams:');
+      teams.forEach((t) => console.log(`  ${t.key}: ${t.name}`));
+      process.exit(1);
+    }
+  }
 
   // If no teamId configured, try to get it interactively
   if (!teamId) {
@@ -298,10 +341,14 @@ async function archiveToLinear(
     } else {
       console.log(chalk.red('✗') + ' Multiple Linear teams found. Please configure a default:');
       console.log('');
-      console.log('Available teams:');
-      teams.forEach((t) => console.log(`  ${t.key}: ${t.name} (${t.id})`));
+      console.log('Set in brainfile.md:');
+      console.log(chalk.cyan('  archive:'));
+      console.log(chalk.cyan('    destination: linear:TEAM_KEY'));
       console.log('');
-      console.log('Set the default team:');
+      console.log('Available teams:');
+      teams.forEach((t) => console.log(`  ${t.key}: ${t.name}`));
+      console.log('');
+      console.log('Or set the default team:');
       console.log(chalk.cyan(`  brainfile config set archive.linear.teamId <team-id>`));
       process.exit(1);
     }
@@ -379,14 +426,20 @@ async function archiveAllToExternal(
     return;
   }
 
-  const archivedTasks = board.archive || [];
+  // Load archived tasks from the separate archive file
+  const { tasks: archivedTasks, archivePath, error } = loadArchivedTasks(filePath);
 
-  if (archivedTasks.length === 0) {
-    console.log('No tasks in local archive to export.');
+  if (error) {
+    console.log(chalk.red('✗') + ` ${error}`);
     return;
   }
 
-  console.log(`Found ${archivedTasks.length} task(s) in local archive.`);
+  if (archivedTasks.length === 0) {
+    console.log(`No tasks in local archive (${path.basename(archivePath)}) to export.`);
+    return;
+  }
+
+  console.log(`Found ${archivedTasks.length} task(s) in ${path.basename(archivePath)}.`);
   console.log('');
 
   if (dryRun) {
@@ -400,7 +453,6 @@ async function archiveAllToExternal(
 
   let successCount = 0;
   let failCount = 0;
-  let updatedBoard = board;
 
   for (const task of archivedTasks) {
     console.log(`Archiving ${task.id}...`);
@@ -432,11 +484,8 @@ async function archiveAllToExternal(
         });
 
         if (result.success) {
-          // Remove from archive
-          updatedBoard = {
-            ...updatedBoard,
-            archive: updatedBoard.archive?.filter((t) => t.id !== task.id),
-          };
+          // Remove from archive file
+          removeFromArchive(filePath, task.id);
           console.log(chalk.green('  ✓') + ` Created #${result.issueNumber}`);
           successCount++;
         } else {
@@ -469,11 +518,8 @@ async function archiveAllToExternal(
         });
 
         if (result.success) {
-          // Remove from archive
-          updatedBoard = {
-            ...updatedBoard,
-            archive: updatedBoard.archive?.filter((t) => t.id !== task.id),
-          };
+          // Remove from archive file
+          removeFromArchive(filePath, task.id);
           console.log(chalk.green('  ✓') + ` Created ${result.issueId}`);
           successCount++;
         } else {
@@ -485,12 +531,6 @@ async function archiveAllToExternal(
       console.log(chalk.red('  ✗') + ` Error: ${error}`);
       failCount++;
     }
-  }
-
-  // Write updated board
-  if (successCount > 0) {
-    const updatedContent = Brainfile.serialize(updatedBoard);
-    fs.writeFileSync(filePath, updatedContent, 'utf-8');
   }
 
   console.log('');

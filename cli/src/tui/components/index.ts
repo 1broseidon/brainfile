@@ -16,6 +16,9 @@ export type { TaskCardProps } from './TaskCard.js';
 export { TaskList } from './TaskList.js';
 export type { TaskListProps } from './TaskList.js';
 
+export { StackedTaskList, flattenTasks } from './StackedTaskList.js';
+export type { StackedTaskListProps, FlatTask } from './StackedTaskList.js';
+
 export { StatusBar } from './StatusBar.js';
 export type { StatusBarProps } from './StatusBar.js';
 

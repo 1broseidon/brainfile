@@ -11,20 +11,25 @@ import {
 import { findBrainfile, getFileAgeMinutes } from '../utils/brainfile-finder';
 import { hasUncommittedChanges } from '../utils/git-helper';
 import { parseHookInput, shouldOutputJSON } from '../utils/hook-parser';
+import { defaultLogger, type Logger } from '../utils/logger';
+import { CLIError } from '../utils/cli-error';
+import { ExitCode } from '../utils/errorHandler';
 
 /**
  * Read JSON from stdin
  */
-async function readStdin(): Promise<any> {
+async function readStdin(inputParams: { stdin?: NodeJS.ReadStream } = {}): Promise<any> {
+  const stdin = inputParams.stdin || process.stdin;
+
   // If stdin is a TTY (terminal), no data is being piped, so return empty object
-  if (process.stdin.isTTY) {
+  if (stdin.isTTY) {
     return {};
   }
 
   return new Promise((resolve) => {
     let data = '';
     const rl = readline.createInterface({
-      input: process.stdin,
+      input: stdin,
       output: process.stdout,
       terminal: false
     });
@@ -46,55 +51,50 @@ async function readStdin(): Promise<any> {
 /**
  * Handle after-edit hook event
  */
-export async function afterEditCommand() {
+export async function afterEditCommand(logger: Logger = defaultLogger, stdin?: NodeJS.ReadStream) {
   try {
-    const input = await readStdin();
+    const input = await readStdin({ stdin });
     const parsed = parseHookInput(input);
 
     // Skip if no file path
     if (!parsed.filePath) {
-      process.exit(0);
       return;
     }
 
     // Skip if editing brainfile itself
     if (parsed.filePath.includes('brainfile.md')) {
-      process.exit(0);
       return;
     }
 
     // Check if brainfile exists
     const brainfilePath = findBrainfile();
     if (!brainfilePath) {
-      process.exit(0);
       return;
     }
 
     // Output reminder
-    console.log('💡 Consider updating @brainfile.md');
+    logger.log('💡 Consider updating @brainfile.md');
 
-    process.exit(0);
   } catch (error) {
     // Fail silently
-    process.exit(0);
+    return;
   }
 }
 
 /**
  * Handle before-prompt hook event
  */
-export async function beforePromptCommand() {
+export async function beforePromptCommand(logger: Logger = defaultLogger, stdin?: NodeJS.ReadStream) {
   try {
-    const input = await readStdin();
+    const input = await readStdin({ stdin });
     const outputJSON = shouldOutputJSON(input);
 
     // Find brainfile
     const brainfilePath = findBrainfile();
     if (!brainfilePath) {
       if (outputJSON) {
-        console.log(JSON.stringify({ continue: true }));
+        logger.log(JSON.stringify({ continue: true }));
       }
-      process.exit(0);
       return;
     }
 
@@ -102,9 +102,8 @@ export async function beforePromptCommand() {
     const ageMinutes = getFileAgeMinutes(brainfilePath);
     if (ageMinutes < 5) {
       if (outputJSON) {
-        console.log(JSON.stringify({ continue: true }));
+        logger.log(JSON.stringify({ continue: true }));
       }
-      process.exit(0);
       return;
     }
 
@@ -112,202 +111,208 @@ export async function beforePromptCommand() {
     const hasChanges = await hasUncommittedChanges(['brainfile.md', '.brainfile.md']);
 
     if (hasChanges) {
-      console.log('\n⚠️  Files modified but @brainfile.md hasn\'t been updated.');
-      console.log('Update task status before continuing.\n');
+      logger.log('\n⚠️  Files modified but @brainfile.md hasn\'t been updated.');
+      logger.log('Update task status before continuing.\n');
     }
 
     if (outputJSON) {
-      console.log(JSON.stringify({ continue: true }));
+      logger.log(JSON.stringify({ continue: true }));
     }
 
-    process.exit(0);
   } catch (error) {
     // Fail silently with proper JSON response for Cursor
-    const input = await readStdin();
-    if (shouldOutputJSON(input)) {
-      console.log(JSON.stringify({ continue: true }));
+    try {
+      // Create a fresh promise for reading input if the previous one failed? 
+      // Actually readStdin handles empty input gracefull. 
+      // But if we are here, something threw.
+      // We can't easily re-read stdin if it was consumed. 
+      // For now, just assume we should output JSON if we can infer or default to it?
+      // Or just fail silently.
+      // Original code re-read stdin?
+      // const input = await readStdin(); // This would fail or hang if stdin used?
+      // Assuming we just want to output continue: true if we crashed.
+      logger.log(JSON.stringify({ continue: true }));
+    } catch {
+      // Ignore
     }
-    process.exit(0);
   }
 }
 
 /**
  * Handle session-start hook event
  */
-export async function sessionStartCommand() {
+export async function sessionStartCommand(logger: Logger = defaultLogger, stdin?: NodeJS.ReadStream) {
   try {
-    await readStdin(); // Read input even though we don't use it
+    await readStdin({ stdin }); // Read input even though we don't use it
 
     // Find brainfile
     const brainfilePath = findBrainfile();
     if (!brainfilePath) {
-      process.exit(0);
       return;
     }
 
     // Output welcome message
     const fileName = brainfilePath.split('/').pop();
-    console.log(`✅ Brainfile detected: @${fileName}`);
-    console.log('Remember to update task status as you work.');
+    logger.log(`✅ Brainfile detected: @${fileName}`);
+    logger.log('Remember to update task status as you work.');
 
-    process.exit(0);
   } catch (error) {
     // Fail silently
-    process.exit(0);
   }
 }
 
 /**
  * Install hooks for a specific tool
  */
-export function installCommand(options: { tool: string; scope: SettingsScope }) {
+export function installCommand(options: { tool: string; scope: SettingsScope }, logger: Logger = defaultLogger) {
+  const tool = options.tool as SupportedTool;
+
+  // Validate tool
+  if (tool !== 'claude-code' && tool !== 'cursor' && tool !== 'cline') {
+    logger.error(chalk.red(`Error: Unknown tool '${options.tool}'`));
+    logger.log(chalk.gray('Supported tools: claude-code, cursor, cline'));
+    throw new CLIError(`Unknown tool '${options.tool}'`, ExitCode.USER_ERROR);
+  }
+
   try {
-    const tool = options.tool as SupportedTool;
-
-    // Validate tool
-    if (tool !== 'claude-code' && tool !== 'cursor' && tool !== 'cline') {
-      console.error(chalk.red(`Error: Unknown tool '${options.tool}'`));
-      console.log(chalk.gray('Supported tools: claude-code, cursor, cline'));
-      process.exit(1);
-    }
-
     // Install hooks
     installBrainfileHooks(tool, options.scope);
-
-    const settingsPath = getSettingsPath(tool, options.scope);
-    const toolName = tool === 'claude-code' ? 'Claude Code' : tool === 'cursor' ? 'Cursor' : 'Cline';
-
-    console.log(chalk.green(`✅ Brainfile hooks installed for ${toolName}!`));
-    console.log(chalk.gray(`   Settings: ${settingsPath}`));
-    console.log(chalk.gray(`   Scope: ${options.scope}`));
-    console.log('');
-    console.log(chalk.white('Hooks configured:'));
-
-    if (tool === 'claude-code') {
-      console.log(chalk.gray('  • PostToolUse → brainfile hooks after-edit'));
-      console.log(chalk.gray('  • UserPromptSubmit → brainfile hooks before-prompt'));
-      console.log(chalk.gray('  • SessionStart → brainfile hooks session-start'));
-    } else if (tool === 'cursor') {
-      console.log(chalk.gray('  • afterFileEdit → brainfile hooks after-edit'));
-      console.log(chalk.gray('  • beforeSubmitPrompt → brainfile hooks before-prompt'));
-      console.log(chalk.gray('  • stop → brainfile hooks session-start'));
-    } else if (tool === 'cline') {
-      console.log(chalk.gray('  • PostToolUse → brainfile hooks after-edit'));
-      console.log(chalk.gray('  • UserPromptSubmit → brainfile hooks before-prompt'));
-      console.log(chalk.gray('  • TaskStart → brainfile hooks session-start'));
-    }
-
-    console.log('');
-    console.log(chalk.gray('Next steps:'));
-    console.log(chalk.gray(`  1. Restart ${toolName} to activate hooks`));
-    console.log(chalk.gray('  2. Edit files and watch for brainfile reminders'));
-    console.log(chalk.gray('  3. Run \'brainfile hooks list\' to verify installation'));
-
   } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    throw new CLIError(
+      `Failed to install hooks: ${error instanceof Error ? error.message : String(error)}`,
+      ExitCode.USER_ERROR
+    );
   }
+
+  const settingsPath = getSettingsPath(tool, options.scope);
+  const toolName = tool === 'claude-code' ? 'Claude Code' : tool === 'cursor' ? 'Cursor' : 'Cline';
+
+  logger.log(chalk.green(`✅ Brainfile hooks installed for ${toolName}!`));
+  logger.log(chalk.gray(`   Settings: ${settingsPath}`));
+  logger.log(chalk.gray(`   Scope: ${options.scope}`));
+  logger.log('');
+  logger.log(chalk.white('Hooks configured:'));
+
+  if (tool === 'claude-code') {
+    logger.log(chalk.gray('  • PostToolUse → brainfile hooks after-edit'));
+    logger.log(chalk.gray('  • UserPromptSubmit → brainfile hooks before-prompt'));
+    logger.log(chalk.gray('  • SessionStart → brainfile hooks session-start'));
+  } else if (tool === 'cursor') {
+    logger.log(chalk.gray('  • afterFileEdit → brainfile hooks after-edit'));
+    logger.log(chalk.gray('  • beforeSubmitPrompt → brainfile hooks before-prompt'));
+    logger.log(chalk.gray('  • stop → brainfile hooks session-start'));
+  } else if (tool === 'cline') {
+    logger.log(chalk.gray('  • PostToolUse → brainfile hooks after-edit'));
+    logger.log(chalk.gray('  • UserPromptSubmit → brainfile hooks before-prompt'));
+    logger.log(chalk.gray('  • TaskStart → brainfile hooks session-start'));
+  }
+
+  logger.log('');
+  logger.log(chalk.gray('Next steps:'));
+  logger.log(chalk.gray(`  1. Restart ${toolName} to activate hooks`));
+  logger.log(chalk.gray('  2. Edit files and watch for brainfile reminders'));
+  logger.log(chalk.gray('  3. Run \'brainfile hooks list\' to verify installation'));
 }
 
 /**
  * Uninstall hooks for a specific tool
  */
-export function uninstallCommand(options: { tool: string; scope: SettingsScope | 'all' }) {
-  try {
-    const tool = options.tool as SupportedTool;
+export function uninstallCommand(options: { tool: string; scope: SettingsScope | 'all' }, logger: Logger = defaultLogger) {
+  const tool = options.tool as SupportedTool;
 
-    // Validate tool
-    if (tool !== 'claude-code' && tool !== 'cursor' && tool !== 'cline') {
-      console.error(chalk.red(`Error: Unknown tool '${options.tool}'`));
-      console.log(chalk.gray('Supported tools: claude-code, cursor, cline'));
-      process.exit(1);
-    }
+  // Validate tool
+  if (tool !== 'claude-code' && tool !== 'cursor' && tool !== 'cline') {
+    logger.error(chalk.red(`Error: Unknown tool '${options.tool}'`));
+    logger.log(chalk.gray('Supported tools: claude-code, cursor, cline'));
+    throw new CLIError(`Unknown tool '${options.tool}'`, ExitCode.USER_ERROR);
+  }
 
-    const scopes: SettingsScope[] = options.scope === 'all'
-      ? ['user', 'project']
-      : [options.scope as SettingsScope];
+  const scopes: SettingsScope[] = options.scope === 'all'
+    ? ['user', 'project']
+    : [options.scope as SettingsScope];
 
-    let removed = false;
+  let removed = false;
 
-    for (const scope of scopes) {
-      if (areBrainfileHooksInstalled(tool, scope)) {
+  for (const scope of scopes) {
+    if (areBrainfileHooksInstalled(tool, scope)) {
+      try {
         uninstallBrainfileHooks(tool, scope);
         removed = true;
 
         const settingsPath = getSettingsPath(tool, scope);
-        console.log(chalk.green(`✓ Removed brainfile hooks from ${scope} settings`));
-        console.log(chalk.gray(`  ${settingsPath}`));
+        logger.log(chalk.green(`✓ Removed brainfile hooks from ${scope} settings`));
+        logger.log(chalk.gray(`  ${settingsPath}`));
+      } catch (error) {
+        logger.warn(`Failed to remove hooks from ${scope}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
+  }
 
-    if (!removed) {
-      console.log(chalk.yellow('No brainfile hooks found to remove'));
-    }
-
-  } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+  if (!removed) {
+    logger.log(chalk.yellow('No brainfile hooks found to remove'));
   }
 }
 
 /**
  * List installed hooks
  */
-export function listCommand(options: { tool?: string }) {
-  try {
-    const tools: SupportedTool[] = options.tool
-      ? [options.tool as SupportedTool]
-      : ['claude-code', 'cursor', 'cline'];
+export function listCommand(options: { tool?: string }, logger: Logger = defaultLogger) {
+  const tools: SupportedTool[] = options.tool
+    ? [options.tool as SupportedTool]
+    : ['claude-code', 'cursor', 'cline'];
 
-    console.log(chalk.bold.white('\nBrainfile Hooks Status\n'));
+  logger.log(chalk.bold.white('\nBrainfile Hooks Status\n'));
 
-    for (const tool of tools) {
-      const toolName = tool === 'claude-code' ? 'Claude Code' : tool === 'cursor' ? 'Cursor' : 'Cline';
-      console.log(chalk.cyan(toolName + ':'));
+  for (const tool of tools) {
+    const toolName = tool === 'claude-code' ? 'Claude Code' : tool === 'cursor' ? 'Cursor' : 'Cline';
+    logger.log(chalk.cyan(toolName + ':'));
 
-      // Check user scope
+    // Check user scope
+    try {
       const userInstalled = areBrainfileHooksInstalled(tool, 'user');
       const userPath = getSettingsPath(tool, 'user');
 
-      console.log(chalk.white(`  User scope (${userPath}):`));
+      logger.log(chalk.white(`  User scope (${userPath}):`));
       if (userInstalled) {
         if (tool === 'cline') {
-          console.log(chalk.green('    ✓ PostToolUse → brainfile hooks after-edit'));
-          console.log(chalk.green('    ✓ UserPromptSubmit → brainfile hooks before-prompt'));
-          console.log(chalk.green('    ✓ TaskStart → brainfile hooks session-start'));
+          logger.log(chalk.green('    ✓ PostToolUse → brainfile hooks after-edit'));
+          logger.log(chalk.green('    ✓ UserPromptSubmit → brainfile hooks before-prompt'));
+          logger.log(chalk.green('    ✓ TaskStart → brainfile hooks session-start'));
         } else {
-          console.log(chalk.green('    ✓ PostToolUse/afterFileEdit → brainfile hooks after-edit'));
-          console.log(chalk.green('    ✓ UserPromptSubmit/beforeSubmitPrompt → brainfile hooks before-prompt'));
-          console.log(chalk.green('    ✓ SessionStart/stop → brainfile hooks session-start'));
+          logger.log(chalk.green('    ✓ PostToolUse/afterFileEdit → brainfile hooks after-edit'));
+          logger.log(chalk.green('    ✓ UserPromptSubmit/beforeSubmitPrompt → brainfile hooks before-prompt'));
+          logger.log(chalk.green('    ✓ SessionStart/stop → brainfile hooks session-start'));
         }
       } else {
-        console.log(chalk.gray('    ✗ Not installed'));
+        logger.log(chalk.gray('    ✗ Not installed'));
       }
+    } catch (error) {
+      logger.log(chalk.gray(`    Error checking user scope: ${error}`));
+    }
 
-      // Check project scope
+    // Check project scope
+    try {
       const projectInstalled = areBrainfileHooksInstalled(tool, 'project');
       const projectPath = getSettingsPath(tool, 'project');
 
-      console.log(chalk.white(`  Project scope (${projectPath}):`));
+      logger.log(chalk.white(`  Project scope (${projectPath}):`));
       if (projectInstalled) {
         if (tool === 'cline') {
-          console.log(chalk.green('    ✓ PostToolUse → brainfile hooks after-edit'));
-          console.log(chalk.green('    ✓ UserPromptSubmit → brainfile hooks before-prompt'));
-          console.log(chalk.green('    ✓ TaskStart → brainfile hooks session-start'));
+          logger.log(chalk.green('    ✓ PostToolUse → brainfile hooks after-edit'));
+          logger.log(chalk.green('    ✓ UserPromptSubmit → brainfile hooks before-prompt'));
+          logger.log(chalk.green('    ✓ TaskStart → brainfile hooks session-start'));
         } else {
-          console.log(chalk.green('    ✓ PostToolUse/afterFileEdit → brainfile hooks after-edit'));
-          console.log(chalk.green('    ✓ UserPromptSubmit/beforeSubmitPrompt → brainfile hooks before-prompt'));
-          console.log(chalk.green('    ✓ SessionStart/stop → brainfile hooks session-start'));
+          logger.log(chalk.green('    ✓ PostToolUse/afterFileEdit → brainfile hooks after-edit'));
+          logger.log(chalk.green('    ✓ UserPromptSubmit/beforeSubmitPrompt → brainfile hooks before-prompt'));
+          logger.log(chalk.green('    ✓ SessionStart/stop → brainfile hooks session-start'));
         }
       } else {
-        console.log(chalk.gray('    ✗ Not installed'));
+        logger.log(chalk.gray('    ✗ Not installed'));
       }
-
-      console.log('');
+    } catch (error) {
+      logger.log(chalk.gray(`    Error checking project scope: ${error}`));
     }
 
-  } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    logger.log('');
   }
 }

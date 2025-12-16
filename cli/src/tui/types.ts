@@ -5,6 +5,16 @@ export type BoardColumn = Board['columns'][number];
 /** Main panel tabs */
 export type MainPanel = 'tasks' | 'rules' | 'archive';
 
+/** Responsive layout mode */
+export type LayoutMode = 'wide' | 'narrow';
+
+/** Layout breakpoints */
+export const LAYOUT = {
+  WIDE_MIN_WIDTH: 80,    // Full tabbed layout
+  NARROW_MIN_WIDTH: 50,  // Stacked columns layout
+  MIN_HEIGHT: 16,
+} as const;
+
 /** Rule categories */
 export type RuleType = 'always' | 'never' | 'prefer' | 'context';
 
@@ -41,6 +51,7 @@ export interface AppState {
   // Navigation (Tasks panel)
   activeColumnIndex: number;
   selectedTaskIndex: number;
+  selectedGlobalIndex: number; // For narrow/stacked layout
 
   // Modes
   mode: ViewMode;

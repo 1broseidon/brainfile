@@ -10,15 +10,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { getSettingsPath, readToolSettings } from '../utils/hook-settings';
+import { MemoryLogger } from '../utils/logger';
+import { CLIError } from '../utils/cli-error';
 
 describe('hooks commands', () => {
   let tempDir: string;
   let originalCwd: string;
   let originalHome: string | undefined;
-  let originalStdin: any;
-  let originalStdout: any;
-  let stdinData: string;
-  let stdoutData: string[];
+  let logger: MemoryLogger;
 
   beforeEach(() => {
     // Create a temporary directory for each test
@@ -30,95 +29,69 @@ describe('hooks commands', () => {
     process.env.HOME = tempDir;
     process.chdir(tempDir);
 
-    // Mock stdin and stdout
-    stdinData = '';
-    stdoutData = [];
-
-    originalStdin = process.stdin;
-    originalStdout = process.stdout.write;
-
-    // Mock stdout.write to capture console.log output
-    process.stdout.write = jest.fn((str: string) => {
-      stdoutData.push(str);
-      return true;
-    });
+    logger = new MemoryLogger();
   });
 
   afterEach(() => {
     // Restore original state
     process.chdir(originalCwd);
     process.env.HOME = originalHome;
-    process.stdout.write = originalStdout;
 
     // Clean up temporary directory
     if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (e) {
+        // Ignore cleanup errors
+      }
     }
   });
 
   describe('installCommand', () => {
     it('should install hooks for Claude Code', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
-
-      installCommand({ tool: 'claude-code', scope: 'user' });
+      installCommand({ tool: 'claude-code', scope: 'user' }, logger);
 
       const settings = readToolSettings('claude-code', 'user');
 
       expect(settings.hooks).toBeDefined();
       expect(settings.hooks.PostToolUse).toBeDefined();
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Brainfile hooks installed')
-      );
-
-      consoleSpy.mockRestore();
+      expect(logger.getOutput()).toContain('Brainfile hooks installed');
     });
 
     it('should install hooks for Cursor', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
-
-      installCommand({ tool: 'cursor', scope: 'user' });
+      installCommand({ tool: 'cursor', scope: 'user' }, logger);
 
       const settings = readToolSettings('cursor', 'user');
 
       expect(settings.hooks).toBeDefined();
       expect(settings.hooks.afterFileEdit).toBeDefined();
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Brainfile hooks installed')
-      );
-
-      consoleSpy.mockRestore();
+      expect(logger.getOutput()).toContain('Brainfile hooks installed');
     });
 
     it('should install hooks for Cline', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
-
-      installCommand({ tool: 'cline', scope: 'project' });
+      installCommand({ tool: 'cline', scope: 'project' }, logger);
 
       const settings = readToolSettings('cline', 'project');
 
       expect(settings.hooks).toBeDefined();
       expect(settings.hooks.PostToolUse).toBe(true);
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Brainfile hooks installed')
-      );
-
-      consoleSpy.mockRestore();
+      expect(logger.getOutput()).toContain('Brainfile hooks installed');
     });
 
-    it('should exit with error for unknown tool', () => {
-      const exitSpy = jest.spyOn(process, 'exit').mockImplementation((code?: any) => {
-        throw new Error(`process.exit: ${code}`);
-      });
-
+    it('should throw CLIError for unknown tool', () => {
       expect(() => {
-        installCommand({ tool: 'unknown-tool', scope: 'user' });
-      }).toThrow();
+        installCommand({ tool: 'unknown-tool', scope: 'user' }, logger);
+      }).toThrow(CLIError);
 
-      exitSpy.mockRestore();
+      try {
+        installCommand({ tool: 'unknown-tool', scope: 'user' }, logger);
+      } catch (e) {
+        expect((e as CLIError).message).toContain('Unknown tool');
+      }
     });
 
     it('should handle project scope', () => {
-      installCommand({ tool: 'claude-code', scope: 'project' });
+      installCommand({ tool: 'claude-code', scope: 'project' }, logger);
 
       const settings = readToolSettings('claude-code', 'project');
 
@@ -129,11 +102,11 @@ describe('hooks commands', () => {
   describe('uninstallCommand', () => {
     it('should uninstall hooks for Claude Code', () => {
       // First install
-      installCommand({ tool: 'claude-code', scope: 'user' });
+      installCommand({ tool: 'claude-code', scope: 'user' }, logger);
+      logger = new MemoryLogger(); // Reset logger
 
       // Then uninstall
-      const consoleSpy = jest.spyOn(console, 'log');
-      uninstallCommand({ tool: 'claude-code', scope: 'user' });
+      uninstallCommand({ tool: 'claude-code', scope: 'user' }, logger);
 
       const settings = readToolSettings('claude-code', 'user');
 
@@ -142,32 +115,23 @@ describe('hooks commands', () => {
       );
 
       expect(hasBrainfileHooks).toBeFalsy();
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Removed brainfile hooks')
-      );
-
-      consoleSpy.mockRestore();
+      expect(logger.getOutput()).toContain('Removed brainfile hooks');
     });
 
     it('should handle uninstalling when not installed', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
+      uninstallCommand({ tool: 'claude-code', scope: 'user' }, logger);
 
-      uninstallCommand({ tool: 'claude-code', scope: 'user' });
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('No brainfile hooks found')
-      );
-
-      consoleSpy.mockRestore();
+      expect(logger.getOutput()).toContain('No brainfile hooks found');
     });
 
     it('should uninstall from all scopes when scope is "all"', () => {
       // Install in both scopes
-      installCommand({ tool: 'claude-code', scope: 'user' });
-      installCommand({ tool: 'claude-code', scope: 'project' });
+      installCommand({ tool: 'claude-code', scope: 'user' }, logger);
+      installCommand({ tool: 'claude-code', scope: 'project' }, logger);
+      logger = new MemoryLogger(); // Reset logger
 
       // Uninstall from all
-      uninstallCommand({ tool: 'claude-code', scope: 'all' });
+      uninstallCommand({ tool: 'claude-code', scope: 'all' }, logger);
 
       const userSettings = readToolSettings('claude-code', 'user');
       const projectSettings = readToolSettings('claude-code', 'project');
@@ -187,71 +151,43 @@ describe('hooks commands', () => {
 
   describe('listCommand', () => {
     it('should list all tools when no tool specified', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
+      listCommand({}, logger);
 
-      listCommand({});
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Claude Code')
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Cursor')
-      );
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Cline')
-      );
-
-      consoleSpy.mockRestore();
+      const output = logger.getOutput();
+      expect(output).toContain('Claude Code');
+      expect(output).toContain('Cursor');
+      expect(output).toContain('Cline');
     });
 
     it('should list specific tool when specified', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
+      listCommand({ tool: 'claude-code' }, logger);
 
-      listCommand({ tool: 'claude-code' });
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Claude Code')
-      );
-
-      consoleSpy.mockRestore();
+      const output = logger.getOutput();
+      expect(output).toContain('Claude Code');
     });
 
     it('should list Cline when specified', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
+      listCommand({ tool: 'cline' }, logger);
 
-      listCommand({ tool: 'cline' });
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Cline')
-      );
-
-      consoleSpy.mockRestore();
+      const output = logger.getOutput();
+      expect(output).toContain('Cline');
     });
 
     it('should show installed status correctly', () => {
-      installCommand({ tool: 'claude-code', scope: 'user' });
+      installCommand({ tool: 'claude-code', scope: 'user' }, logger);
+      logger = new MemoryLogger();
 
-      const consoleSpy = jest.spyOn(console, 'log');
+      listCommand({ tool: 'claude-code' }, logger);
 
-      listCommand({ tool: 'claude-code' });
-
-      const output = consoleSpy.mock.calls.map(call => call[0]).join('\n');
-
+      const output = logger.getOutput();
       expect(output).toContain('✓');
-
-      consoleSpy.mockRestore();
     });
 
     it('should show not installed status correctly', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
+      listCommand({ tool: 'cursor' }, logger);
 
-      listCommand({ tool: 'cursor' });
-
-      const output = consoleSpy.mock.calls.map(call => call[0]).join('\n');
-
+      const output = logger.getOutput();
       expect(output).toContain('✗ Not installed');
-
-      consoleSpy.mockRestore();
     });
   });
 });

@@ -1,26 +1,20 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { addCommand } from '../commands/add';
-import { Brainfile } from '@brainfile/core';
+import { Brainfile, type Board, type Column, type Task } from '@brainfile/core';
+import { MemoryLogger } from '../utils/logger';
+import { CLIError } from '../utils/cli-error';
 
 describe('add command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board.md');
-
-  let consoleLogSpy: jest.SpyInstance;
-  let consoleErrorSpy: jest.SpyInstance;
-  let processExitSpy: jest.SpyInstance;
+  const tempBoardPath = path.join(fixturesDir, 'temp-board-add.md');
+  let logger: MemoryLogger;
 
   beforeEach(() => {
     // Copy test board to temp location
     fs.copyFileSync(testBoardPath, tempBoardPath);
-
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit');
-    });
+    logger = new MemoryLogger();
   });
 
   afterEach(() => {
@@ -28,50 +22,50 @@ describe('add command', () => {
     if (fs.existsSync(tempBoardPath)) {
       fs.unlinkSync(tempBoardPath);
     }
-
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-    processExitSpy.mockRestore();
   });
 
   it('should add a task with only title', () => {
-    addCommand({
+    const result = addCommand({
       file: tempBoardPath,
       column: 'todo',
       title: 'New task',
-    });
+    }, logger);
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Task added successfully')
-    );
+    expect(result.success).toBe(true);
+    expect(result.taskId).toBeDefined();
+
+    const output = logger.getOutput();
+    expect(output).toContain('Task added successfully');
 
     // Verify task was added to file
     const content = fs.readFileSync(tempBoardPath, 'utf-8');
     const board = Brainfile.parse(content);
 
-    const todoColumn = board?.columns.find(col => col.id === 'todo');
+    const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
     expect(todoColumn?.tasks).toHaveLength(2); // Original task + new task
 
-    const newTask = todoColumn?.tasks.find(t => t.title === 'New task');
+    const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'New task');
     expect(newTask).toBeDefined();
     expect(newTask?.id).toBeDefined();
   });
 
   it('should add a task with all metadata', () => {
-    addCommand({
+    const result = addCommand({
       file: tempBoardPath,
       column: 'todo',
       title: 'Feature task',
       description: 'Test description',
       priority: 'high',
       tags: 'feature,new',
-    });
+    }, logger);
+
+    expect(result.success).toBe(true);
 
     const content = fs.readFileSync(tempBoardPath, 'utf-8');
     const board = Brainfile.parse(content);
 
-    const todoColumn = board?.columns.find(col => col.id === 'todo');
-    const newTask = todoColumn?.tasks.find(t => t.title === 'Feature task');
+    const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
+    const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'Feature task');
 
     expect(newTask?.description).toBe('Test description');
     expect(newTask?.priority).toBe('high');
@@ -79,59 +73,81 @@ describe('add command', () => {
   });
 
   it('should add task to different columns', () => {
-    addCommand({
+    const result = addCommand({
       file: tempBoardPath,
       column: 'in-progress',
       title: 'Active task',
-    });
+    }, logger);
+
+    expect(result.success).toBe(true);
 
     const content = fs.readFileSync(tempBoardPath, 'utf-8');
     const board = Brainfile.parse(content);
 
-    const inProgressColumn = board?.columns.find(col => col.id === 'in-progress');
-    const newTask = inProgressColumn?.tasks.find(t => t.title === 'Active task');
+    const inProgressColumn = board?.columns.find((col: Column) => col.id === 'in-progress');
+    const newTask = inProgressColumn?.tasks.find((t: Task) => t.title === 'Active task');
 
     expect(newTask).toBeDefined();
   });
 
-  it('should require title', () => {
+  it('should throw CLIError when title is missing', () => {
     expect(() => {
       addCommand({
         file: tempBoardPath,
         column: 'todo',
-      });
-    }).toThrow('process.exit');
+      }, logger);
+    }).toThrow(CLIError);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('--title is required')
-    );
+    try {
+      addCommand({
+        file: tempBoardPath,
+        column: 'todo',
+      }, logger);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CLIError);
+      expect((e as CLIError).message).toContain('--title is required');
+    }
   });
 
-  it('should handle invalid column', () => {
+  it('should throw CLIError for invalid column', () => {
     expect(() => {
       addCommand({
         file: tempBoardPath,
         column: 'invalid-column',
         title: 'Test task',
-      });
-    }).toThrow('process.exit');
+      }, logger);
+    }).toThrow(CLIError);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Column not found')
-    );
+    try {
+      addCommand({
+        file: tempBoardPath,
+        column: 'invalid-column',
+        title: 'Test task',
+      }, logger);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CLIError);
+      expect((e as CLIError).message).toContain('Column not found');
+    }
   });
 
-  it('should handle non-existent file', () => {
+  it('should throw CLIError for non-existent file', () => {
     expect(() => {
       addCommand({
         file: 'non-existent.md',
         column: 'todo',
         title: 'Test task',
-      });
-    }).toThrow('process.exit');
+      }, logger);
+    }).toThrow(CLIError);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('File not found')
-    );
+    try {
+      addCommand({
+        file: 'non-existent.md',
+        column: 'todo',
+        title: 'Test task',
+      }, logger);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CLIError);
+      expect((e as CLIError).message).toContain('File not found');
+    }
   });
 });

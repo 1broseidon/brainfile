@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.4] - 2025-11-28
+
+### Fixed
+- **Archive file separation** - CLI now correctly uses separate `brainfile-archive.md` file
+  - Archive command writes to separate file, not inline `archive: []` array
+  - Restore command reads from separate archive file
+  - `--all` flag reads from `brainfile-archive.md` for bulk export
+  - MCP tools (archive_task, restore_task, bulk_archive_tasks) use separate file
+
+### Added
+- **Extended destination format** - Inline archive destination in brainfile.md
+  - `archive.destination: github:owner/repo` - specify GitHub repo directly
+  - `archive.destination: linear:TEAM_KEY` - specify Linear team by key
+  - Falls back to global config if target not specified
+- **TUI external archive** - Shift+A now supports GitHub/Linear destinations
+  - Respects `archive.destination` from brainfile.md or global config
+  - Shows "Archiving..." status during async operation
+  - Displays result (e.g., "Archived to GitHub #123")
+- **Shared archive utilities** - New `cli/src/utils/archive.ts` module
+  - `archiveTaskToFile()` - archive to separate file
+  - `loadArchivedTasks()` - read from archive file
+  - `restoreFromArchive()` - restore task to main file
+  - `removeFromArchive()` - remove after external export
+
 ## [0.12.3] - 2025-11-28
 
 ### Improved

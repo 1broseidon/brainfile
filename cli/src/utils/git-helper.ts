@@ -3,12 +3,18 @@ import { promisify } from 'util';
 
 const execAsync = promisify(exec);
 
+export interface GitHelperOptions {
+  /** Working directory for git commands. Defaults to process.cwd() */
+  cwd?: string;
+}
+
 /**
- * Check if current directory is a git repository
+ * Check if a directory is a git repository
  */
-export async function isGitRepo(): Promise<boolean> {
+export async function isGitRepo(options: GitHelperOptions = {}): Promise<boolean> {
   try {
-    await execAsync('git rev-parse --git-dir');
+    const cwd = options.cwd ?? process.cwd();
+    await execAsync('git rev-parse --git-dir', { cwd });
     return true;
   } catch {
     return false;
@@ -18,9 +24,13 @@ export async function isGitRepo(): Promise<boolean> {
 /**
  * Check if there are uncommitted changes (excluding specified files)
  */
-export async function hasUncommittedChanges(excludePatterns: string[] = []): Promise<boolean> {
+export async function hasUncommittedChanges(
+  excludePatterns: string[] = [],
+  options: GitHelperOptions = {}
+): Promise<boolean> {
   try {
-    const isRepo = await isGitRepo();
+    const cwd = options.cwd ?? process.cwd();
+    const isRepo = await isGitRepo({ cwd });
     if (!isRepo) return false;
 
     // Build exclude arguments for git
@@ -29,7 +39,7 @@ export async function hasUncommittedChanges(excludePatterns: string[] = []): Pro
       .join(' ');
 
     const cmd = `git diff --name-only -- . ${excludeArgs}`.trim();
-    const { stdout } = await execAsync(cmd);
+    const { stdout } = await execAsync(cmd, { cwd });
 
     return stdout.trim().length > 0;
   } catch {
@@ -40,12 +50,13 @@ export async function hasUncommittedChanges(excludePatterns: string[] = []): Pro
 /**
  * Get list of modified files (both staged and unstaged)
  */
-export async function getModifiedFiles(): Promise<string[]> {
+export async function getModifiedFiles(options: GitHelperOptions = {}): Promise<string[]> {
   try {
-    const isRepo = await isGitRepo();
+    const cwd = options.cwd ?? process.cwd();
+    const isRepo = await isGitRepo({ cwd });
     if (!isRepo) return [];
 
-    const { stdout } = await execAsync('git status --porcelain');
+    const { stdout } = await execAsync('git status --porcelain', { cwd });
 
     return stdout
       .split('\n')

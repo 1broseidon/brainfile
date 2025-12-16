@@ -1,48 +1,38 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { templateCommand } from '../commands/template';
-import { Brainfile } from '@brainfile/core';
+import { Brainfile, type Column, type Task } from '@brainfile/core';
+import { MemoryLogger } from '../utils/logger';
+import { CLIError } from '../utils/cli-error';
 
 describe('template command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board.md');
-
-  let consoleLogSpy: jest.SpyInstance;
-  let consoleErrorSpy: jest.SpyInstance;
-  let processExitSpy: jest.SpyInstance;
+  const tempBoardPath = path.join(fixturesDir, 'temp-board-template.md');
+  let logger: MemoryLogger;
 
   beforeEach(() => {
     fs.copyFileSync(testBoardPath, tempBoardPath);
-
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit');
-    });
+    logger = new MemoryLogger();
   });
 
   afterEach(() => {
     if (fs.existsSync(tempBoardPath)) {
       fs.unlinkSync(tempBoardPath);
     }
-
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-    processExitSpy.mockRestore();
   });
 
   describe('list templates', () => {
     it('should list all built-in templates', () => {
-      templateCommand({
+      const result = templateCommand({
         file: tempBoardPath,
         list: true,
         column: 'todo',
-      });
+      }, logger);
 
-      expect(consoleLogSpy).toHaveBeenCalled();
-      const output = consoleLogSpy.mock.calls.map(call => call.join(' ')).join('\n');
+      expect(result.success).toBe(true);
 
+      const output = logger.getOutput();
       expect(output).toContain('Available Templates');
       expect(output).toContain('bug-report');
       expect(output).toContain('feature-request');
@@ -54,9 +44,9 @@ describe('template command', () => {
         file: tempBoardPath,
         list: true,
         column: 'todo',
-      });
+      }, logger);
 
-      const output = consoleLogSpy.mock.calls.map(call => call.join(' ')).join('\n');
+      const output = logger.getOutput();
 
       expect(output).toContain('Bug Report');
       expect(output).toContain('Default Priority');
@@ -67,22 +57,21 @@ describe('template command', () => {
 
   describe('use template', () => {
     it('should create task from bug-report template', () => {
-      templateCommand({
+      const result = templateCommand({
         file: tempBoardPath,
         use: 'bug-report',
         title: 'Test bug',
         column: 'todo',
-      });
+      }, logger);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Task created from template')
-      );
+      expect(result.success).toBe(true);
+      expect(logger.getOutput()).toContain('Task created from template');
 
       const content = fs.readFileSync(tempBoardPath, 'utf-8');
       const board = Brainfile.parse(content);
 
-      const todoColumn = board?.columns.find(col => col.id === 'todo');
-      const newTask = todoColumn?.tasks.find(t => t.title === 'Test bug');
+      const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
+      const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'Test bug');
 
       expect(newTask).toBeDefined();
       expect(newTask?.template).toBe('bug');
@@ -98,13 +87,13 @@ describe('template command', () => {
         use: 'feature-request',
         title: 'New feature',
         column: 'todo',
-      });
+      }, logger);
 
       const content = fs.readFileSync(tempBoardPath, 'utf-8');
       const board = Brainfile.parse(content);
 
-      const todoColumn = board?.columns.find(col => col.id === 'todo');
-      const newTask = todoColumn?.tasks.find(t => t.title === 'New feature');
+      const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
+      const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'New feature');
 
       expect(newTask).toBeDefined();
       expect(newTask?.template).toBe('feature');
@@ -119,12 +108,12 @@ describe('template command', () => {
         use: 'refactor',
         title: 'Code cleanup',
         column: 'todo',
-      });
+      }, logger);
 
       const content = fs.readFileSync(tempBoardPath, 'utf-8');
       const board = Brainfile.parse(content);
 
-      const todoColumn = board?.columns.find(col => col.id === 'todo');
+      const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
       // Refactor template uses {area} variable, so title may be different
       const newTask = todoColumn?.tasks[todoColumn.tasks.length - 1]; // Get last added task
 
@@ -135,32 +124,30 @@ describe('template command', () => {
     });
 
     it('should require title when using template', () => {
-      expect(() => {
+      try {
         templateCommand({
           file: tempBoardPath,
           use: 'bug-report',
           column: 'todo',
-        });
-      }).toThrow('process.exit');
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('--title is required')
-      );
+        }, logger);
+      } catch (error) {
+        expect(error).toBeInstanceOf(CLIError);
+        expect((error as CLIError).message).toContain('--title is required');
+      }
     });
 
     it('should handle invalid template', () => {
-      expect(() => {
+      try {
         templateCommand({
           file: tempBoardPath,
           use: 'invalid-template',
           title: 'Test',
           column: 'todo',
-        });
-      }).toThrow('process.exit');
-
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Template not found')
-      );
+        }, logger);
+      } catch (error) {
+        expect(error).toBeInstanceOf(CLIError);
+        expect((error as CLIError).message).toContain('Template not found');
+      }
     });
 
     it('should support custom description', () => {
@@ -170,13 +157,13 @@ describe('template command', () => {
         title: 'Bug with description',
         description: 'Custom description text',
         column: 'todo',
-      });
+      }, logger);
 
       const content = fs.readFileSync(tempBoardPath, 'utf-8');
       const board = Brainfile.parse(content);
 
-      const todoColumn = board?.columns.find(col => col.id === 'todo');
-      const newTask = todoColumn?.tasks.find(t => t.title === 'Bug with description');
+      const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
+      const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'Bug with description');
 
       expect(newTask?.description).toContain('Custom description text');
     });
@@ -187,13 +174,13 @@ describe('template command', () => {
         use: 'feature-request',
         title: 'Feature in progress',
         column: 'in-progress',
-      });
+      }, logger);
 
       const content = fs.readFileSync(tempBoardPath, 'utf-8');
       const board = Brainfile.parse(content);
 
-      const inProgressColumn = board?.columns.find(col => col.id === 'in-progress');
-      const newTask = inProgressColumn?.tasks.find(t => t.title === 'Feature in progress');
+      const inProgressColumn = board?.columns.find((col: Column) => col.id === 'in-progress');
+      const newTask = inProgressColumn?.tasks.find((t: Task) => t.title === 'Feature in progress');
 
       expect(newTask).toBeDefined();
     });
@@ -201,14 +188,13 @@ describe('template command', () => {
 
   describe('no action specified', () => {
     it('should show help when no flags provided', () => {
-      templateCommand({
+      const result = templateCommand({
         file: tempBoardPath,
         column: 'todo',
-      });
+      }, logger);
 
-      expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Please specify an action')
-      );
+      expect(result.success).toBe(false);
+      expect(logger.getOutput()).toContain('Please specify an action');
     });
   });
 });

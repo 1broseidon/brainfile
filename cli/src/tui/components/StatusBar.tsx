@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { PALETTE, ICONS } from '../theme.js';
-import type { ViewMode, MainPanel } from '../types.js';
+import type { ViewMode, MainPanel, LayoutMode } from '../types.js';
 
 export interface StatusBarProps {
   mode: ViewMode;
@@ -11,11 +11,15 @@ export interface StatusBarProps {
   termWidth: number;
   isWatching?: boolean;
   activePanel?: MainPanel;
+  layoutMode?: LayoutMode;
 }
 
-export function StatusBar({ mode, columnName, taskIndex, taskCount, termWidth, isWatching = true, activePanel = 'tasks' }: StatusBarProps) {
-  // Determine TAB hint based on panel
-  const tabHint = activePanel === 'tasks' ? ' column  ' : activePanel === 'rules' ? ' type  ' : null;
+export function StatusBar({ mode, columnName, taskIndex, taskCount, termWidth, isWatching = true, activePanel = 'tasks', layoutMode = 'wide' }: StatusBarProps) {
+  // Determine TAB hint based on panel and layout mode
+  // In narrow mode, TAB doesn't switch columns (no tabs shown)
+  const tabHint = activePanel === 'tasks'
+    ? (layoutMode === 'wide' ? ' column  ' : null)
+    : activePanel === 'rules' ? ' type  ' : null;
 
   // Left section: essential commands with subtle styling
   const leftCommands = mode === 'search' ? (

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { PALETTE, BOX, ICONS } from '../theme.js';
-import type { RuleType } from '../types.js';
+import type { RuleType, LayoutMode } from '../types.js';
 import { truncate } from '../utils.js';
 
 interface Rule {
@@ -24,6 +24,7 @@ export interface RulesPanelProps {
   termWidth: number;
   mode: string;
   editText?: string;
+  layoutMode?: LayoutMode;
 }
 
 const RULE_TYPES: RuleType[] = ['always', 'never', 'prefer', 'context'];
@@ -50,13 +51,15 @@ export function RulesPanel({
   termWidth,
   mode,
   editText,
+  layoutMode = 'wide',
 }: RulesPanelProps) {
   const currentRules = rules?.[activeRuleType] || [];
   const maxWidth = Math.max(termWidth - 8, 20);
 
   // Calculate scroll offset for rules list
   const scrollPadding = 2;
-  const visibleRules = Math.max(viewportHeight - 8, 3); // Reserve space for tabs and footer
+  const headerRows = layoutMode === 'narrow' ? 4 : 6; // Compact header in narrow mode
+  const visibleRules = Math.max(viewportHeight - headerRows, 3);
   let scrollOffset = 0;
   if (selectedRuleIndex >= visibleRules - scrollPadding) {
     scrollOffset = Math.min(
@@ -67,38 +70,63 @@ export function RulesPanel({
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      {/* Rule type tabs */}
-      <Box marginBottom={1}>
-        {RULE_TYPES.map((type, idx) => {
-          const count = rules?.[type]?.length || 0;
-          const isActive = type === activeRuleType;
-          return (
-            <Box key={type} marginRight={2}>
-              <Text
-                color={isActive ? RULE_TYPE_COLORS[type] : PALETTE.textMuted}
-                bold={isActive}
-                inverse={isActive}
-              >
-                {' '}{RULE_TYPE_LABELS[type]}
-                {count > 0 && <Text color={PALETTE.textSecondary}> ({count})</Text>}
-                {' '}
+      {/* Rule type tabs - compact in narrow mode */}
+      {layoutMode === 'narrow' ? (
+        <Box marginBottom={1}>
+          {RULE_TYPES.map((type) => {
+            const count = rules?.[type]?.length || 0;
+            const isActive = type === activeRuleType;
+            const initial = RULE_TYPE_LABELS[type].charAt(0);
+            return (
+              <Text key={type}>
+                <Text
+                  color={isActive ? RULE_TYPE_COLORS[type] : PALETTE.textDim}
+                  bold={isActive}
+                >
+                  {initial}
+                </Text>
+                {count > 0 && <Text color={PALETTE.textDim}>({count})</Text>}
+                <Text>{' '}</Text>
               </Text>
-              <Text color={PALETTE.textDim}> [{idx + 1}]</Text>
-            </Box>
-          );
-        })}
-      </Box>
+            );
+          })}
+          <Text color={PALETTE.textDim}>h/l</Text>
+        </Box>
+      ) : (
+        <Box marginBottom={1}>
+          {RULE_TYPES.map((type, idx) => {
+            const count = rules?.[type]?.length || 0;
+            const isActive = type === activeRuleType;
+            return (
+              <Box key={type} marginRight={2}>
+                <Text
+                  color={isActive ? RULE_TYPE_COLORS[type] : PALETTE.textMuted}
+                  bold={isActive}
+                  inverse={isActive}
+                >
+                  {' '}{RULE_TYPE_LABELS[type]}
+                  {count > 0 && <Text color={PALETTE.textSecondary}> ({count})</Text>}
+                  {' '}
+                </Text>
+                <Text color={PALETTE.textDim}> [{idx + 1}]</Text>
+              </Box>
+            );
+          })}
+        </Box>
+      )}
 
-      {/* Instructions */}
-      <Box marginBottom={1}>
-        <Text color={PALETTE.textMuted}>
-          <Text color={PALETTE.textSecondary}>h/l</Text> switch type{' '}
-          <Text color={PALETTE.textSecondary}>j/k</Text> select{' '}
-          <Text color={PALETTE.textSecondary}>n</Text> new{' '}
-          <Text color={PALETTE.textSecondary}>e</Text> edit{' '}
-          <Text color={PALETTE.textSecondary}>d</Text> delete
-        </Text>
-      </Box>
+      {/* Instructions - hide in narrow mode to save space */}
+      {layoutMode === 'wide' && (
+        <Box marginBottom={1}>
+          <Text color={PALETTE.textMuted}>
+            <Text color={PALETTE.textSecondary}>h/l</Text> switch type{' '}
+            <Text color={PALETTE.textSecondary}>j/k</Text> select{' '}
+            <Text color={PALETTE.textSecondary}>n</Text> new{' '}
+            <Text color={PALETTE.textSecondary}>e</Text> edit{' '}
+            <Text color={PALETTE.textSecondary}>d</Text> delete
+          </Text>
+        </Box>
+      )}
 
       {/* Separator */}
       <Box>

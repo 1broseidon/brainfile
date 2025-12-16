@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Brainfile, BUILT_IN_TEMPLATES, generateTaskId } from '@brainfile/core';
-import chalk from 'chalk';
+import { Brainfile, BUILT_IN_TEMPLATES, generateTaskId, type Board, type Column, type Task } from '@brainfile/core';
+import { defaultLogger, type Logger } from '../utils/logger';
+import { CLIError, fileNotFound, parseFailure, missingRequired, columnNotFound, operationFailed } from '../utils/cli-error';
+import { ExitCode } from '../utils/errorHandler';
 
 interface TemplateOptions {
   file: string;
@@ -12,157 +14,150 @@ interface TemplateOptions {
   column: string;
 }
 
-export function templateCommand(options: TemplateOptions) {
-  try {
-    // List templates
-    if (options.list) {
-      console.log(chalk.bold.white('\nAvailable Templates\n'));
+export interface TemplateResult {
+  success: boolean;
+  taskId?: string;
+  templateName?: string;
+}
 
-      BUILT_IN_TEMPLATES.forEach(template => {
-        console.log(chalk.cyan(`${template.id}`));
-        console.log(chalk.gray(`  Name: ${template.name}`));
-        console.log(chalk.gray(`  Description: ${template.description}`));
+export function templateCommand(options: TemplateOptions, logger: Logger = defaultLogger): TemplateResult {
+  // List templates
+  if (options.list) {
+    logger.log('\nAvailable Templates\n');
 
-        if (template.template.priority) {
-          console.log(chalk.gray(`  Default Priority: ${template.template.priority}`));
-        }
+    BUILT_IN_TEMPLATES.forEach(template => {
+      logger.log(template.id);
+      logger.log(`  Name: ${template.name}`);
+      logger.log(`  Description: ${template.description}`);
 
-        if (template.template.tags && template.template.tags.length > 0) {
-          console.log(chalk.gray(`  Default Tags: ${template.template.tags.join(', ')}`));
-        }
-
-        if (template.template.subtasks && template.template.subtasks.length > 0) {
-          console.log(chalk.gray(`  Subtasks: ${template.template.subtasks.length}`));
-        }
-
-        console.log('');
-      });
-
-      console.log(chalk.gray('Usage: brainfile template --use <template-id> --title "Task title"'));
-      return;
-    }
-
-    // Use a template
-    if (options.use) {
-      if (!options.title) {
-        console.error(chalk.red('Error: --title is required when using a template'));
-        console.log(chalk.gray('Usage: brainfile template --use <template-id> --title "Task title"'));
-        process.exit(1);
+      if (template.template.priority) {
+        logger.log(`  Default Priority: ${template.template.priority}`);
       }
 
-      // Resolve file path
-      const filePath = path.resolve(options.file);
-
-      // Check if file exists
-      if (!fs.existsSync(filePath)) {
-        console.error(chalk.red(`Error: File not found: ${filePath}`));
-        console.log('');
-        console.log(chalk.gray('To create a new brainfile, run:'));
-        console.log(chalk.cyan('  brainfile init'));
-        process.exit(1);
+      if (template.template.tags && template.template.tags.length > 0) {
+        logger.log(`  Default Tags: ${template.template.tags.join(', ')}`);
       }
 
-      // Read and parse the file
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const result = Brainfile.parseWithErrors(content);
-
-      if (!result.board) {
-        console.error(chalk.red('Error: Failed to parse brainfile'));
-        if (result.error) {
-          console.error(chalk.red(result.error));
-        }
-        process.exit(1);
+      if (template.template.subtasks && template.template.subtasks.length > 0) {
+        logger.log(`  Subtasks: ${template.template.subtasks.length}`);
       }
 
-      const board = result.board;
+      logger.log('');
+    });
 
-      // Find the target column
-      const targetColumn = board.columns.find(
-        col => col.id === options.column || col.title.toLowerCase() === options.column.toLowerCase()
-      );
-
-      if (!targetColumn) {
-        console.error(chalk.red(`Error: Column not found: ${options.column}`));
-        console.log(chalk.gray('Available columns:'));
-        board.columns.forEach(col => {
-          console.log(chalk.gray(`  - ${col.id} (${col.title})`));
-        });
-        process.exit(1);
-      }
-
-      // Create task from template
-      const values: Record<string, string> = {
-        title: options.title,
-      };
-
-      if (options.description) {
-        values.description = options.description;
-      }
-
-      let partialTask;
-      try {
-        partialTask = Brainfile.createFromTemplate(options.use, values);
-      } catch (error) {
-        console.error(chalk.red(`Error: ${error instanceof Error ? error.message : String(error)}`));
-        console.log(chalk.gray('\nAvailable templates:'));
-        BUILT_IN_TEMPLATES.forEach(t => {
-          console.log(chalk.gray(`  - ${t.id}: ${t.name}`));
-        });
-        process.exit(1);
-      }
-
-      // Generate task ID
-      const newTaskId = generateTaskId();
-
-      // Create complete task - ensure title is set
-      // Spread partialTask first, then override with explicit values
-      const newTask: any = {
-        ...partialTask,
-        id: newTaskId,
-        title: options.title, // Always use the provided title
-      };
-
-      // Add task to column
-      targetColumn.tasks.push(newTask);
-
-      // Serialize and write back
-      const updatedContent = Brainfile.serialize(board);
-      fs.writeFileSync(filePath, updatedContent, 'utf-8');
-
-      // Success message
-      console.log(chalk.green('✓ Task created from template!'));
-      console.log('');
-      console.log(chalk.gray(`  ID:       ${newTaskId}`));
-      console.log(chalk.gray(`  Title:    ${newTask.title}`));
-      console.log(chalk.gray(`  Template: ${options.use}`));
-      console.log(chalk.gray(`  Column:   ${targetColumn.title}`));
-
-      if (newTask.priority) {
-        console.log(chalk.gray(`  Priority: ${newTask.priority}`));
-      }
-
-      if (newTask.tags && newTask.tags.length > 0) {
-        console.log(chalk.gray(`  Tags:     ${newTask.tags.join(', ')}`));
-      }
-
-      if (newTask.subtasks && newTask.subtasks.length > 0) {
-        console.log(chalk.gray(`  Subtasks: ${newTask.subtasks.length}`));
-      }
-
-      return;
-    }
-
-    // No action specified
-    console.log(chalk.yellow('Please specify an action:'));
-    console.log(chalk.gray('  --list           List all available templates'));
-    console.log(chalk.gray('  --use <id>       Create task from template'));
-    console.log('');
-    console.log(chalk.gray('Examples:'));
-    console.log(chalk.gray('  brainfile template --list'));
-    console.log(chalk.gray('  brainfile template --use bug-report --title "Fix login issue"'));
-
-  } catch (error) {
-    console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    logger.log('Usage: brainfile template --use <template-id> --title "Task title"');
+    return { success: true };
   }
+
+  // Use a template
+  if (options.use) {
+    if (!options.title) {
+      throw missingRequired('--title', 'brainfile template --use <template-id> --title "Task title"');
+    }
+
+    // Resolve file path
+    const filePath = path.resolve(options.file);
+
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      throw fileNotFound(filePath);
+    }
+
+    // Read and parse the file
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const result = Brainfile.parseWithErrors(content);
+
+    if (!result.board) {
+      throw parseFailure(result.error);
+    }
+
+    const board = result.board;
+
+    // Find the target column
+    const targetColumn = board.columns.find(
+      (col: Column) => col.id === options.column || col.title.toLowerCase() === options.column.toLowerCase()
+    );
+
+    if (!targetColumn) {
+      const availableColumns = board.columns.map((c: Column) => `${c.id} (${c.title})`);
+      throw columnNotFound(options.column, availableColumns);
+    }
+
+    // Create task from template
+    const values: Record<string, string> = {
+      title: options.title,
+    };
+
+    if (options.description) {
+      values.description = options.description;
+    }
+
+    let partialTask;
+    try {
+      partialTask = Brainfile.createFromTemplate(options.use, values);
+    } catch (error) {
+      // Create a nice error message listing available templates
+      const availableTemplates = BUILT_IN_TEMPLATES.map(t => `  - ${t.id}: ${t.name}`).join('\n');
+      throw new CLIError(
+        error instanceof Error ? error.message : String(error),
+        ExitCode.USER_ERROR,
+        `Available templates:\n${availableTemplates}`
+      );
+    }
+
+    // Generate task ID
+    const newTaskId = generateTaskId();
+
+    // Create complete task - ensure title is set
+    // Spread partialTask first, then override with explicit values
+    const newTask: any = {
+      ...partialTask,
+      id: newTaskId,
+      title: options.title, // Always use the provided title
+    };
+
+    // Add task to column
+    targetColumn.tasks.push(newTask);
+
+    // Serialize and write back
+    const updatedContent = Brainfile.serialize(board);
+    fs.writeFileSync(filePath, updatedContent, 'utf-8');
+
+    // Success message
+    logger.log('✓ Task created from template!');
+    logger.log('');
+    logger.log(`  ID:       ${newTaskId}`);
+    logger.log(`  Title:    ${newTask.title}`);
+    logger.log(`  Template: ${options.use}`);
+    logger.log(`  Column:   ${targetColumn.title}`);
+
+    if (newTask.priority) {
+      logger.log(`  Priority: ${newTask.priority}`);
+    }
+
+    if (newTask.tags && newTask.tags.length > 0) {
+      logger.log(`  Tags:     ${newTask.tags.join(', ')}`);
+    }
+
+    if (newTask.subtasks && newTask.subtasks.length > 0) {
+      logger.log(`  Subtasks: ${newTask.subtasks.length}`);
+    }
+
+    return {
+      success: true,
+      taskId: newTaskId,
+      templateName: options.use
+    };
+  }
+
+  // No action specified
+  logger.warn('Please specify an action:');
+  logger.log('  --list           List all available templates');
+  logger.log('  --use <id>       Create task from template');
+  logger.log('');
+  logger.log('Examples:');
+  logger.log('  brainfile template --list');
+  logger.log('  brainfile template --use bug-report --title "Fix login issue"');
+
+  return { success: false };
 }

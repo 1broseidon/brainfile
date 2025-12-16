@@ -1,72 +1,63 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { moveCommand } from '../commands/move';
-import { Brainfile } from '@brainfile/core';
+import { Brainfile, type Column, type Task } from '@brainfile/core';
+import { MemoryLogger } from '../utils/logger';
+import { CLIError } from '../utils/cli-error';
 
 describe('move command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board.md');
-
-  let consoleLogSpy: jest.SpyInstance;
-  let consoleErrorSpy: jest.SpyInstance;
-  let processExitSpy: jest.SpyInstance;
+  const tempBoardPath = path.join(fixturesDir, 'temp-board-move.md');
+  let logger: MemoryLogger;
 
   beforeEach(() => {
     fs.copyFileSync(testBoardPath, tempBoardPath);
-
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit');
-    });
+    logger = new MemoryLogger();
   });
 
   afterEach(() => {
     if (fs.existsSync(tempBoardPath)) {
       fs.unlinkSync(tempBoardPath);
     }
-
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-    processExitSpy.mockRestore();
   });
 
   it('should move task between columns', () => {
-    moveCommand({
+    const result = moveCommand({
       file: tempBoardPath,
       task: 'task-1',
       column: 'in-progress',
-    });
+    }, logger);
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Task moved successfully')
-    );
+    expect(result.success).toBe(true);
+
+    const output = logger.getOutput();
+    expect(output).toContain('Task moved successfully');
 
     const content = fs.readFileSync(tempBoardPath, 'utf-8');
     const board = Brainfile.parse(content);
 
-    const todoColumn = board?.columns.find(col => col.id === 'todo');
-    const inProgressColumn = board?.columns.find(col => col.id === 'in-progress');
+    const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
+    const inProgressColumn = board?.columns.find((col: Column) => col.id === 'in-progress');
 
     expect(todoColumn?.tasks).toHaveLength(0);
     expect(inProgressColumn?.tasks).toHaveLength(2);
 
-    const movedTask = inProgressColumn?.tasks.find(t => t.id === 'task-1');
+    const movedTask = inProgressColumn?.tasks.find((t: Task) => t.id === 'task-1');
     expect(movedTask).toBeDefined();
     expect(movedTask?.title).toBe('First task');
   });
 
   it('should handle moving to same column', () => {
-    moveCommand({
+    const result = moveCommand({
       file: tempBoardPath,
       task: 'task-1',
       column: 'todo',
-    });
+    }, logger);
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining('already in column')
-    );
+    expect(result.success).toBe(true);
+    // Should warn but not fail
+    expect(logger.getOutput()).toContain('already in column');
   });
 
   it('should require task ID', () => {
@@ -75,12 +66,18 @@ describe('move command', () => {
         file: tempBoardPath,
         task: '',
         column: 'done',
-      });
-    }).toThrow('process.exit');
+      }, logger);
+    }).toThrow(CLIError);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('--task is required')
-    );
+    try {
+      moveCommand({
+        file: tempBoardPath,
+        task: '',
+        column: 'done',
+      }, logger);
+    } catch (error) {
+      expect((error as CLIError).message).toContain('--task is required');
+    }
   });
 
   it('should require column', () => {
@@ -89,12 +86,18 @@ describe('move command', () => {
         file: tempBoardPath,
         task: 'task-1',
         column: '',
-      });
-    }).toThrow('process.exit');
+      }, logger);
+    }).toThrow(CLIError);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('--column is required')
-    );
+    try {
+      moveCommand({
+        file: tempBoardPath,
+        task: 'task-1',
+        column: '',
+      }, logger);
+    } catch (error) {
+      expect((error as CLIError).message).toContain('--column is required');
+    }
   });
 
   it('should handle non-existent task', () => {
@@ -103,12 +106,18 @@ describe('move command', () => {
         file: tempBoardPath,
         task: 'task-999',
         column: 'done',
-      });
-    }).toThrow('process.exit');
+      }, logger);
+    }).toThrow(CLIError);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Task not found')
-    );
+    try {
+      moveCommand({
+        file: tempBoardPath,
+        task: 'task-999',
+        column: 'done',
+      }, logger);
+    } catch (error) {
+      expect((error as CLIError).message).toContain('Task not found');
+    }
   });
 
   it('should handle non-existent column', () => {
@@ -117,26 +126,34 @@ describe('move command', () => {
         file: tempBoardPath,
         task: 'task-1',
         column: 'invalid-column',
-      });
-    }).toThrow('process.exit');
+      }, logger);
+    }).toThrow(CLIError);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Column not found')
-    );
+    try {
+      moveCommand({
+        file: tempBoardPath,
+        task: 'task-1',
+        column: 'invalid-column',
+      }, logger);
+    } catch (error) {
+      expect((error as CLIError).message).toContain('Column not found');
+    }
   });
 
   it('should preserve task metadata when moving', () => {
-    moveCommand({
+    const result = moveCommand({
       file: tempBoardPath,
       task: 'task-2',
       column: 'done',
-    });
+    }, logger);
+
+    expect(result.success).toBe(true);
 
     const content = fs.readFileSync(tempBoardPath, 'utf-8');
     const board = Brainfile.parse(content);
 
-    const doneColumn = board?.columns.find(col => col.id === 'done');
-    const movedTask = doneColumn?.tasks.find(t => t.id === 'task-2');
+    const doneColumn = board?.columns.find((col: Column) => col.id === 'done');
+    const movedTask = doneColumn?.tasks.find((t: Task) => t.id === 'task-2');
 
     expect(movedTask?.title).toBe('Second task');
     expect(movedTask?.priority).toBe('medium');

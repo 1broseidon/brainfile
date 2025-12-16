@@ -1,12 +1,13 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { PALETTE } from '../theme.js';
-import type { MainPanel } from '../types.js';
+import type { MainPanel, LayoutMode } from '../types.js';
 
 export interface MainPanelTabsProps {
   activePanel: MainPanel;
   rulesCount: number;
   archiveCount: number;
+  layoutMode?: LayoutMode;
 }
 
 interface TabProps {
@@ -49,7 +50,37 @@ function Tab({ label, shortcut, isActive, count }: TabProps) {
   );
 }
 
-export function MainPanelTabs({ activePanel, rulesCount, archiveCount }: MainPanelTabsProps) {
+/** Compact tab for narrow mode - just shows shortcut hint */
+function CompactTab({ label, shortcut, isActive, count }: TabProps) {
+  return (
+    <Text>
+      <Text color={isActive ? PALETTE.accent : PALETTE.textDim} bold={isActive}>
+        {shortcut}
+      </Text>
+      <Text color={isActive ? PALETTE.text : PALETTE.textMuted}>
+        {label.charAt(0)}
+      </Text>
+      {count !== undefined && count > 0 && (
+        <Text color={PALETTE.textDim}>({count})</Text>
+      )}
+      <Text>{' '}</Text>
+    </Text>
+  );
+}
+
+export function MainPanelTabs({ activePanel, rulesCount, archiveCount, layoutMode = 'wide' }: MainPanelTabsProps) {
+  // Narrow mode: compact single-line format
+  if (layoutMode === 'narrow') {
+    return (
+      <Box paddingLeft={1} marginTop={1}>
+        <CompactTab label="Tasks" shortcut="1" isActive={activePanel === 'tasks'} />
+        <CompactTab label="Rules" shortcut="2" isActive={activePanel === 'rules'} count={rulesCount} />
+        <CompactTab label="Archive" shortcut="3" isActive={activePanel === 'archive'} count={archiveCount} />
+      </Box>
+    );
+  }
+
+  // Wide mode: full tabs
   return (
     <Box paddingLeft={1} paddingRight={1} marginTop={1}>
       <Tab

@@ -14,12 +14,17 @@ import type { Task } from '@brainfile/core';
 import { PALETTE, ICONS } from '../theme.js';
 import { truncate, getPriorityColor } from '../utils.js';
 import { wrapText } from './TaskCardMeasure.js';
+import { TaskDetail } from './TaskDetail.js';
 
 export interface TaskCardProps {
   task: Task;
   isSelected: boolean;
   isExpanded: boolean;
   width: number;
+  /** Hide tags in meta row when collapsed (for narrow/stacked mode) */
+  hideTagsWhenCollapsed?: boolean;
+  /** Show contract badge in the title row (tasks with contracts only) */
+  showContractBadge?: boolean;
 }
 
 // ============================================================================
@@ -107,11 +112,31 @@ function Sep() {
   return <Text color={PALETTE.textDim}> · </Text>;
 }
 
+function getContractStatusColor(status: string) {
+  switch (status) {
+    case 'done':
+      return PALETTE.success;
+    case 'in_progress':
+      return PALETTE.warning;
+    case 'failed':
+      return PALETTE.error;
+    default:
+      return PALETTE.textMuted;
+  }
+}
+
 // ============================================================================
 // Main TaskCard Component
 // ============================================================================
 
-export function TaskCard({ task, isSelected, isExpanded, width }: TaskCardProps) {
+export function TaskCard({
+  task,
+  isSelected,
+  isExpanded,
+  width,
+  hideTagsWhenCollapsed = false,
+  showContractBadge = false,
+}: TaskCardProps) {
   const subtasks = task.subtasks || [];
   const completedSubtasks = subtasks.filter(s => s.completed).length;
 
@@ -123,17 +148,14 @@ export function TaskCard({ task, isSelected, isExpanded, width }: TaskCardProps)
   // Order: progress → date → tags (fixed-width first for table-like alignment)
   const metaSegments: React.ReactNode[] = [];
 
-  if (subtasks.length > 0) {
-    metaSegments.push(
-      <SubtaskCount key="progress" completed={completedSubtasks} total={subtasks.length} />
-    );
-  }
+
 
   if (task.dueDate) {
     metaSegments.push(<DueDate key="due" dueDate={task.dueDate} />);
   }
 
-  if (task.tags && task.tags.length > 0) {
+  // Only show tags when expanded, or when not hiding tags in collapsed state
+  if (task.tags && task.tags.length > 0 && (isExpanded || !hideTagsWhenCollapsed)) {
     metaSegments.push(<Tags key="tags" tags={task.tags} maxTags={3} />);
   }
 
@@ -144,9 +166,16 @@ export function TaskCard({ task, isSelected, isExpanded, width }: TaskCardProps)
     metaContent.push(seg);
   });
 
-  // Calculate title width (account for priority badge if present)
+  // Calculate title width (account for priority badge and subtask count)
   const priorityWidth = task.priority ? 7 : 0; // " HIGH " = 6 + 1 space
-  const titleWidth = contentWidth - priorityWidth;
+
+  // Estimate subtask width: "[10/10]" = 7 chars, plus padding
+  const subtaskLabelWidth = subtasks.length > 0 ? 9 : 0;
+
+  const contractBadgeText = showContractBadge && task.contract ? `[C:${task.contract.status}]` : null;
+  const contractBadgeWidth = contractBadgeText ? contractBadgeText.length + 1 : 0; // +1 for leading space
+
+  const titleWidth = contentWidth - priorityWidth - subtaskLabelWidth - contractBadgeWidth;
 
   return (
     <Box flexDirection="column" width={width}>
@@ -164,10 +193,22 @@ export function TaskCard({ task, isSelected, isExpanded, width }: TaskCardProps)
         <Text color={isSelected ? PALETTE.text : PALETTE.textSecondary} bold={isSelected}>
           {truncate(task.title, titleWidth)}
         </Text>
+        {contractBadgeText && (
+          <>
+            <Text> </Text>
+            <Text color={getContractStatusColor(task.contract!.status)}>[C:{task.contract!.status}]</Text>
+          </>
+        )}
+        {subtasks.length > 0 && (
+          <>
+            <Text> </Text>
+            <SubtaskCount completed={completedSubtasks} total={subtasks.length} />
+          </>
+        )}
       </Box>
 
       {/* Row 2: Indented meta + ID */}
-      <Box width={width}>
+      <Box width={width} marginTop={0}>
         <Text>{'    '}</Text>
         {metaContent.length > 0 ? (
           <Box>{metaContent}</Box>
@@ -222,6 +263,12 @@ export function TaskCard({ task, isSelected, isExpanded, width }: TaskCardProps)
               )}
             </Box>
           )}
+
+          {/* Contract details (display-only, only for tasks with contracts) */}
+          <TaskDetail
+            task={task}
+            marginTop={(task.description || subtasks.length > 0 || (task.relatedFiles && task.relatedFiles.length > 0)) ? 1 : 0}
+          />
         </Box>
       )}
     </Box>

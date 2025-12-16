@@ -186,6 +186,110 @@ export function getEffectiveArchiveDestination(
 }
 
 // ============================================================================
+// Destination Parsing
+// ============================================================================
+
+export interface ParsedDestination {
+  type: 'local' | 'github' | 'linear';
+  /** GitHub owner (from github:owner/repo) */
+  owner?: string;
+  /** GitHub repo (from github:owner/repo) */
+  repo?: string;
+  /** Linear team key (from linear:TEAM) */
+  teamKey?: string;
+}
+
+/**
+ * Parse an archive destination string
+ *
+ * Formats:
+ * - `local` → local archive
+ * - `github` → GitHub with config defaults
+ * - `github:owner/repo` → GitHub with explicit owner/repo
+ * - `linear` → Linear with config defaults
+ * - `linear:TEAM` → Linear with explicit team key
+ *
+ * @param destination - Destination string from brainfile.md or CLI
+ * @returns Parsed destination with type and optional target info
+ */
+export function parseArchiveDestination(destination: string): ParsedDestination | null {
+  if (!destination) return null;
+
+  // Simple destinations
+  if (destination === 'local') {
+    return { type: 'local' };
+  }
+
+  if (destination === 'github') {
+    return { type: 'github' };
+  }
+
+  if (destination === 'linear') {
+    return { type: 'linear' };
+  }
+
+  // Extended format: github:owner/repo
+  if (destination.startsWith('github:')) {
+    const target = destination.slice(7); // Remove 'github:'
+    const parts = target.split('/');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      return { type: 'github', owner: parts[0], repo: parts[1] };
+    }
+    // Invalid format, treat as plain github
+    return { type: 'github' };
+  }
+
+  // Extended format: linear:TEAM
+  if (destination.startsWith('linear:')) {
+    const teamKey = destination.slice(7); // Remove 'linear:'
+    if (teamKey) {
+      return { type: 'linear', teamKey };
+    }
+    // Invalid format, treat as plain linear
+    return { type: 'linear' };
+  }
+
+  return null;
+}
+
+/**
+ * Get effective archive destination with full config resolution
+ *
+ * @param brainfileDestination - Destination from brainfile.md (may include target)
+ * @returns Fully resolved destination with type and target info
+ */
+export function getEffectiveDestination(brainfileDestination?: string): ParsedDestination {
+  // Priority 1: brainfile.md setting (may have inline target)
+  if (brainfileDestination) {
+    const parsed = parseArchiveDestination(brainfileDestination);
+    if (parsed) {
+      // Fill in missing config from global config
+      const config = getArchiveConfig();
+
+      if (parsed.type === 'github' && !parsed.owner) {
+        parsed.owner = config.github?.owner;
+        parsed.repo = config.github?.repo;
+      }
+
+      if (parsed.type === 'linear' && !parsed.teamKey) {
+        // We'll resolve teamKey to teamId later in the archive command
+      }
+
+      return parsed;
+    }
+  }
+
+  // Priority 2: config default
+  const config = getArchiveConfig();
+  if (config.default && isValidDestination(config.default)) {
+    return { type: config.default };
+  }
+
+  // Priority 3: fallback to local
+  return { type: 'local' };
+}
+
+// ============================================================================
 // Helper Functions
 // ============================================================================
 

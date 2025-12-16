@@ -1,11 +1,13 @@
 import { useInput, useApp } from 'ink';
-import type { AppState, StatusMessage, BoardColumn, RuleType, MainPanel } from '../types.js';
+import type { AppState, StatusMessage, BoardColumn, RuleType, MainPanel, LayoutMode } from '../types.js';
 import type { Task } from '@brainfile/core';
+import type { FlatTask } from '../components/StackedTaskList.js';
 import {
   editTaskInEditor,
   moveTaskAction,
   deleteTaskAction,
   archiveTaskAction,
+  archiveTaskActionAsync,
   cyclePriorityAction,
   toggleSubtaskAction,
   copyToClipboard,
@@ -31,6 +33,10 @@ interface UseKeyboardNavigationProps {
   loadBrainfile: (forceRefresh?: boolean) => void;
   filePath: string;
   allColumns: BoardColumn[];
+  // Responsive layout
+  layoutMode: LayoutMode;
+  flatTasks: FlatTask[];
+  maxGlobalIndex: number;
 }
 
 // Helper to show status message
@@ -66,11 +72,16 @@ export function useKeyboardNavigation({
   loadBrainfile,
   filePath,
   allColumns,
+  layoutMode,
+  flatTasks,
+  maxGlobalIndex,
 }: UseKeyboardNavigationProps) {
   const { exit } = useApp();
 
-  // Get current task
-  const currentTask = currentTasks[state.selectedTaskIndex];
+  // Get current task based on layout mode
+  const currentTask = layoutMode === 'wide'
+    ? currentTasks[state.selectedTaskIndex]
+    : flatTasks[state.selectedGlobalIndex]?.task;
 
   useInput((input, key) => {
     // Help mode - any key closes
@@ -473,19 +484,26 @@ export function useKeyboardNavigation({
         return;
       }
 
-      // 'A' - Archive task
+      // 'A' - Archive task (supports external destinations)
       if (input === 'A') {
         if (!currentTask) {
           showStatus(setState, 'No task selected', 'error');
           return;
         }
-        const result = archiveTaskAction(filePath, currentTask.id);
-        if (result.success) {
-          showStatus(setState, result.message || 'Task archived', 'success');
-          loadBrainfile(true);
-        } else {
-          showStatus(setState, result.error || 'Archive failed', 'error');
-        }
+        // Show archiving status while async operation runs
+        showStatus(setState, 'Archiving...', 'info');
+
+        // Call async archive function (supports GitHub/Linear destinations)
+        archiveTaskActionAsync(filePath, currentTask.id).then((result) => {
+          if (result.success) {
+            showStatus(setState, result.message || 'Task archived', 'success');
+            loadBrainfile(true);
+          } else {
+            showStatus(setState, result.error || 'Archive failed', 'error');
+          }
+        }).catch((err) => {
+          showStatus(setState, `Archive failed: ${err}`, 'error');
+        });
         return;
       }
 
@@ -557,72 +575,112 @@ export function useKeyboardNavigation({
 
       // Navigation: up/down
       if (key.downArrow || input === 'j') {
-        setState(prev => ({
-          ...prev,
-          selectedTaskIndex: Math.min(prev.selectedTaskIndex + 1, maxTaskIndex),
-        }));
+        if (layoutMode === 'narrow') {
+          setState(prev => ({
+            ...prev,
+            selectedGlobalIndex: Math.min(prev.selectedGlobalIndex + 1, maxGlobalIndex),
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            selectedTaskIndex: Math.min(prev.selectedTaskIndex + 1, maxTaskIndex),
+          }));
+        }
         return;
       }
 
       if (key.upArrow || input === 'k') {
-        setState(prev => ({
-          ...prev,
-          selectedTaskIndex: Math.max(prev.selectedTaskIndex - 1, 0),
-        }));
+        if (layoutMode === 'narrow') {
+          setState(prev => ({
+            ...prev,
+            selectedGlobalIndex: Math.max(prev.selectedGlobalIndex - 1, 0),
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            selectedTaskIndex: Math.max(prev.selectedTaskIndex - 1, 0),
+          }));
+        }
         return;
       }
 
       // Page scrolling
       if (key.ctrl && input === 'd') {
-        setState(prev => ({
-          ...prev,
-          selectedTaskIndex: Math.min(prev.selectedTaskIndex + Math.floor(viewportHeight / 2), maxTaskIndex),
-        }));
+        if (layoutMode === 'narrow') {
+          setState(prev => ({
+            ...prev,
+            selectedGlobalIndex: Math.min(prev.selectedGlobalIndex + Math.floor(viewportHeight / 2), maxGlobalIndex),
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            selectedTaskIndex: Math.min(prev.selectedTaskIndex + Math.floor(viewportHeight / 2), maxTaskIndex),
+          }));
+        }
         return;
       }
 
       if (key.ctrl && input === 'u') {
-        setState(prev => ({
-          ...prev,
-          selectedTaskIndex: Math.max(prev.selectedTaskIndex - Math.floor(viewportHeight / 2), 0),
-        }));
+        if (layoutMode === 'narrow') {
+          setState(prev => ({
+            ...prev,
+            selectedGlobalIndex: Math.max(prev.selectedGlobalIndex - Math.floor(viewportHeight / 2), 0),
+          }));
+        } else {
+          setState(prev => ({
+            ...prev,
+            selectedTaskIndex: Math.max(prev.selectedTaskIndex - Math.floor(viewportHeight / 2), 0),
+          }));
+        }
         return;
       }
 
-      // Column switching
-      if (key.tab || key.rightArrow || input === 'l') {
-        setState(prev => ({
-          ...prev,
-          activeColumnIndex: (prev.activeColumnIndex + 1) % filteredColumnsLength,
-          selectedTaskIndex: 0,
-        }));
-        return;
-      }
+      // Column switching (wide mode only - narrow mode navigates all tasks with j/k)
+      if (layoutMode === 'wide') {
+        if (key.tab || key.rightArrow || input === 'l') {
+          setState(prev => ({
+            ...prev,
+            activeColumnIndex: (prev.activeColumnIndex + 1) % filteredColumnsLength,
+            selectedTaskIndex: 0,
+          }));
+          return;
+        }
 
-      if ((key.shift && key.tab) || key.leftArrow || input === 'h') {
-        setState(prev => ({
-          ...prev,
-          activeColumnIndex: prev.activeColumnIndex === 0
-            ? filteredColumnsLength - 1
-            : prev.activeColumnIndex - 1,
-          selectedTaskIndex: 0,
-        }));
-        return;
+        if ((key.shift && key.tab) || key.leftArrow || input === 'h') {
+          setState(prev => ({
+            ...prev,
+            activeColumnIndex: prev.activeColumnIndex === 0
+              ? filteredColumnsLength - 1
+              : prev.activeColumnIndex - 1,
+            selectedTaskIndex: 0,
+          }));
+          return;
+        }
       }
 
       // Home/End
       if (input === 'g') {
-        setState(prev => ({ ...prev, selectedTaskIndex: 0 }));
+        if (layoutMode === 'narrow') {
+          setState(prev => ({ ...prev, selectedGlobalIndex: 0 }));
+        } else {
+          setState(prev => ({ ...prev, selectedTaskIndex: 0 }));
+        }
         return;
       }
       if (input === 'G') {
-        setState(prev => ({ ...prev, selectedTaskIndex: maxTaskIndex }));
+        if (layoutMode === 'narrow') {
+          setState(prev => ({ ...prev, selectedGlobalIndex: maxGlobalIndex }));
+        } else {
+          setState(prev => ({ ...prev, selectedTaskIndex: maxTaskIndex }));
+        }
         return;
       }
 
       // Expand/collapse task
       if (key.return) {
-        const task = currentTasks[state.selectedTaskIndex];
+        const task = layoutMode === 'wide'
+          ? currentTasks[state.selectedTaskIndex]
+          : flatTasks[state.selectedGlobalIndex]?.task;
         if (task) {
           setState(prev => {
             const newExpanded = new Set(prev.expandedTaskIds);

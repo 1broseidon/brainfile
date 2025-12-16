@@ -1,36 +1,24 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import { listCommand } from '../commands/list';
+import { MemoryLogger } from '../utils/logger';
+import { CLIError } from '../utils/cli-error';
 
 describe('list command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-
-  // Mock console.log and console.error
-  let consoleLogSpy: jest.SpyInstance;
-  let consoleErrorSpy: jest.SpyInstance;
-  let processExitSpy: jest.SpyInstance;
+  let logger: MemoryLogger;
 
   beforeEach(() => {
-    consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
-    consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
-    processExitSpy = jest.spyOn(process, 'exit').mockImplementation(() => {
-      throw new Error('process.exit');
-    });
-  });
-
-  afterEach(() => {
-    consoleLogSpy.mockRestore();
-    consoleErrorSpy.mockRestore();
-    processExitSpy.mockRestore();
+    logger = new MemoryLogger();
   });
 
   it('should list all tasks when no filters are provided', () => {
-    listCommand({ file: testBoardPath });
+    const result = listCommand({ file: testBoardPath }, logger);
 
-    expect(consoleLogSpy).toHaveBeenCalled();
-    const output = consoleLogSpy.mock.calls.map(call => call.join(' ')).join('\n');
+    expect(result.success).toBe(true);
+    expect(result.totalTasks).toBeGreaterThan(0);
 
+    const output = logger.getOutput();
     expect(output).toContain('Test Board');
     expect(output).toContain('task-1');
     expect(output).toContain('First task');
@@ -41,10 +29,10 @@ describe('list command', () => {
   });
 
   it('should filter tasks by column', () => {
-    listCommand({ file: testBoardPath, column: 'todo' });
+    const result = listCommand({ file: testBoardPath, column: 'todo' }, logger);
 
-    expect(consoleLogSpy).toHaveBeenCalled();
-    const output = consoleLogSpy.mock.calls.map(call => call.join(' ')).join('\n');
+    expect(result.success).toBe(true);
+    const output = logger.getOutput();
 
     expect(output).toContain('task-1');
     expect(output).toContain('First task');
@@ -53,39 +41,44 @@ describe('list command', () => {
   });
 
   it('should filter tasks by tag', () => {
-    listCommand({ file: testBoardPath, tag: 'urgent' });
+    const result = listCommand({ file: testBoardPath, tag: 'urgent' }, logger);
 
-    expect(consoleLogSpy).toHaveBeenCalled();
-    const output = consoleLogSpy.mock.calls.map(call => call.join(' ')).join('\n');
+    expect(result.success).toBe(true);
+    const output = logger.getOutput();
 
     expect(output).toContain('task-1');
     expect(output).not.toContain('task-2');
     expect(output).not.toContain('task-3');
   });
 
-  it('should handle non-existent file', () => {
+  it('should throw CLIError for non-existent file', () => {
     expect(() => {
-      listCommand({ file: 'non-existent.md' });
-    }).toThrow('process.exit');
+      listCommand({ file: 'non-existent.md' }, logger);
+    }).toThrow(CLIError);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('File not found')
-    );
+    try {
+      listCommand({ file: 'non-existent.md' }, logger);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CLIError);
+      expect((e as CLIError).message).toContain('File not found');
+    }
   });
 
   it('should handle non-existent column gracefully', () => {
-    listCommand({ file: testBoardPath, column: 'non-existent' });
+    const result = listCommand({ file: testBoardPath, column: 'non-existent' }, logger);
 
-    expect(consoleLogSpy).toHaveBeenCalledWith(
-      expect.stringContaining('No columns found matching')
-    );
+    expect(result.success).toBe(true);
+    expect(result.columnsDisplayed).toBe(0);
+
+    const output = logger.getOutput();
+    expect(output).toContain('No columns found matching');
   });
 
   it('should show subtask progress', () => {
-    listCommand({ file: testBoardPath, column: 'in-progress' });
+    const result = listCommand({ file: testBoardPath, column: 'in-progress' }, logger);
 
-    expect(consoleLogSpy).toHaveBeenCalled();
-    const output = consoleLogSpy.mock.calls.map(call => call.join(' ')).join('\n');
+    expect(result.success).toBe(true);
+    const output = logger.getOutput();
 
     expect(output).toContain('Subtasks:');
     expect(output).toContain('1/2'); // 1 of 2 subtasks completed

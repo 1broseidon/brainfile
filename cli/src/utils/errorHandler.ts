@@ -86,30 +86,26 @@ export function checkIncompleteSubtasks(task: Task): IncompleteSubtasksResult {
  * Prints a warning about incomplete subtasks when moving to a done column.
  * Returns true if warning was printed.
  */
-export function warnIncompleteSubtasks(
+export function getIncompleteSubtasksWarning(
   task: Task,
   targetColumn: { id: string; title: string }
-): boolean {
+): string | null {
   if (!isDoneColumn(targetColumn)) {
-    return false;
+    return null;
   }
 
   const result = checkIncompleteSubtasks(task);
   if (!result.hasIncomplete) {
-    return false;
+    return null;
   }
 
-  console.log('');
-  console.log(chalk.yellow(`Warning: Task has ${result.incomplete.length}/${result.total} incomplete subtasks`));
-  console.log(chalk.gray('  Incomplete:'));
-  result.incomplete.forEach(st => {
-    console.log(chalk.gray(`    - [ ] ${st.id}: ${st.title}`));
-  });
-  console.log('');
-  console.log(chalk.gray('  Consider completing subtasks before marking done.'));
+  const incompleteList = result.incomplete
+    .map(st => `      - [ ] ${st.id}: ${st.title}`)
+    .join('\n');
 
-  return true;
+  return `Warning: Task has ${result.incomplete.length}/${result.total} incomplete subtasks\n    Incomplete:\n${incompleteList}\n\n    Consider completing subtasks before marking done.`;
 }
+
 
 // ============================================================================
 // Error Handlers

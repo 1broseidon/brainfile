@@ -18,11 +18,20 @@ import {
   patchTask,
   toggleSubtask,
   addTask,
+  formatTaskForGitHub,
+  formatTaskForLinear,
   type Board,
   type Task,
   type TaskPatch,
   type TaskInput,
 } from '@brainfile/core';
+import {
+  getEffectiveDestination,
+  getArchiveConfig,
+  type ParsedDestination,
+} from '../utils/config';
+import { isGitHubAuthenticated, createGitHubIssue } from '../utils/github-auth';
+import { isLinearAuthenticated, createLinearIssue, getLinearTeams } from '../utils/linear-auth';
 
 export interface ActionResult {
   success: boolean;
@@ -193,6 +202,147 @@ export function archiveTaskAction(filePath: string, taskId: string): ActionResul
   }
 
   return { success: true, message: `Archived ${taskId}` };
+}
+
+/**
+ * Archive a task with support for external destinations (GitHub, Linear)
+ * Respects archive.destination from brainfile.md or global config
+ */
+export async function archiveTaskActionAsync(
+  filePath: string,
+  taskId: string
+): Promise<ActionResult> {
+  const { board, error } = readBrainfile(filePath);
+  if (!board) return { success: false, error };
+
+  const taskInfo = findTaskById(board, taskId);
+  if (!taskInfo) return { success: false, error: `Task ${taskId} not found` };
+
+  const task = taskInfo.task;
+  const columnId = taskInfo.column.id;
+  const columnTitle = taskInfo.column.title;
+
+  // Determine destination from brainfile or config
+  const brainfileDestination = (board as any).archive?.destination;
+  const parsedDest = getEffectiveDestination(brainfileDestination);
+  const destination = parsedDest.type;
+
+  // Handle local archive (default behavior)
+  if (destination === 'local') {
+    return archiveTaskAction(filePath, taskId);
+  }
+
+  // Handle GitHub archive
+  if (destination === 'github') {
+    if (!(await isGitHubAuthenticated())) {
+      return { success: false, error: 'Not authenticated with GitHub. Run: brainfile auth github' };
+    }
+
+    const config = getArchiveConfig();
+    const owner = parsedDest.owner || config.github?.owner;
+    const repo = parsedDest.repo || config.github?.repo;
+
+    if (!owner || !repo) {
+      return { success: false, error: 'GitHub owner/repo not configured. Set archive.destination: github:owner/repo' };
+    }
+
+    const payload = formatTaskForGitHub(task, {
+      includeMeta: true,
+      includeSubtasks: true,
+      includeRelatedFiles: true,
+      boardTitle: board.title,
+      fromColumn: columnTitle,
+      extraLabels: config.github?.labels,
+    });
+
+    const ghResult = await createGitHubIssue({
+      owner,
+      repo,
+      title: payload.title,
+      body: payload.body,
+      labels: payload.labels,
+      state: 'closed',
+    });
+
+    if (!ghResult.success) {
+      return { success: false, error: `GitHub: ${ghResult.error}` };
+    }
+
+    // Remove task from board
+    const deleteResult = deleteTask(board, columnId, taskId);
+    if (deleteResult.success) {
+      writeBrainfile(filePath, deleteResult.board!);
+    }
+
+    return { success: true, message: `Archived to GitHub #${ghResult.issueNumber}` };
+  }
+
+  // Handle Linear archive
+  if (destination === 'linear') {
+    if (!(await isLinearAuthenticated())) {
+      return { success: false, error: 'Not authenticated with Linear. Run: brainfile auth linear --token <key>' };
+    }
+
+    const config = getArchiveConfig();
+    let teamId = config.linear?.teamId;
+
+    // Resolve teamKey to teamId if provided in destination
+    if (parsedDest.teamKey) {
+      const teams = await getLinearTeams();
+      const matchingTeam = teams.find(
+        (t) => t.key.toLowerCase() === parsedDest.teamKey!.toLowerCase()
+      );
+      if (matchingTeam) {
+        teamId = matchingTeam.id;
+      } else {
+        return { success: false, error: `Linear team "${parsedDest.teamKey}" not found` };
+      }
+    }
+
+    if (!teamId) {
+      // Try to auto-select if only one team
+      const teams = await getLinearTeams();
+      if (teams.length === 1) {
+        teamId = teams[0].id;
+      } else if (teams.length > 1) {
+        return { success: false, error: 'Multiple Linear teams. Set archive.destination: linear:TEAM_KEY' };
+      } else {
+        return { success: false, error: 'No Linear teams found' };
+      }
+    }
+
+    const payload = formatTaskForLinear(task, {
+      includeMeta: true,
+      includeSubtasks: true,
+      includeRelatedFiles: true,
+      boardTitle: board.title,
+      fromColumn: columnTitle,
+      stateName: 'Done',
+    });
+
+    const linearResult = await createLinearIssue({
+      teamId,
+      title: payload.title,
+      description: payload.description,
+      priority: payload.priority,
+      labelNames: payload.labelNames,
+      stateName: 'Done',
+    });
+
+    if (!linearResult.success) {
+      return { success: false, error: `Linear: ${linearResult.error}` };
+    }
+
+    // Remove task from board
+    const deleteResult = deleteTask(board, columnId, taskId);
+    if (deleteResult.success) {
+      writeBrainfile(filePath, deleteResult.board!);
+    }
+
+    return { success: true, message: `Archived to Linear ${linearResult.issueId}` };
+  }
+
+  return { success: false, error: `Unknown destination: ${destination}` };
 }
 
 /**

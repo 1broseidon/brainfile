@@ -74,7 +74,7 @@ export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, te
 
   if (tasks.length === 0) {
     return (
-      <Box flexGrow={1} flexDirection="column" paddingLeft={2}>
+      <Box flexDirection="column" paddingLeft={2} height={viewportHeight}>
         <Text color={PALETTE.textMuted} dimColor>No tasks in this column</Text>
         {/* Fill remaining space */}
         {Array.from({ length: viewportHeight - 1 }).map((_, i) => (
@@ -85,16 +85,18 @@ export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, te
   }
 
   return (
-    <Box flexGrow={1} flexDirection="column" paddingLeft={1}>
+    <Box flexDirection="column" paddingLeft={1} height={viewportHeight}>
       {visibleItems.map(({ task, isSelected, isExpanded }, index) => (
-        <Box key={task.id} marginTop={index > 0 ? 1 : 0}>
+        <React.Fragment key={task.id}>
+          {index > 0 && <Box height={1} />}
           <TaskCard
             task={task}
             isSelected={isSelected}
             isExpanded={isExpanded}
             width={cardWidth}
+            showContractBadge={true}
           />
-        </Box>
+        </React.Fragment>
       ))}
       {/* Fill remaining viewport space */}
       {emptyLines > 0 && <Box height={emptyLines} />}

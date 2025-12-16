@@ -1,13 +1,55 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { PALETTE } from '../theme.js';
+import { PALETTE, BOX } from '../theme.js';
+import type { LayoutMode } from '../types.js';
 
 export interface HelpOverlayProps {
   termWidth: number;
   termHeight: number;
+  layoutMode?: LayoutMode;
 }
 
-export function HelpOverlay({ termWidth, termHeight }: HelpOverlayProps) {
+export function HelpOverlay({ termWidth, termHeight, layoutMode = 'wide' }: HelpOverlayProps) {
+  // Narrow mode: full-screen single-column scrollable layout
+  if (layoutMode === 'narrow') {
+    return (
+      <Box flexDirection="column" width={termWidth} height={termHeight} paddingX={1}>
+        {/* Header */}
+        <Box marginBottom={1}>
+          <Text color={PALETTE.accent} bold>{BOX.topLeft}{BOX.horizontal}</Text>
+          <Text color={PALETTE.text} bold> HELP </Text>
+        </Box>
+
+        {/* Single column layout - most important shortcuts first */}
+        <Box flexDirection="column" paddingLeft={1}>
+          <Text color={PALETTE.accent} bold>Navigation</Text>
+          <CompactRow k="j/k" desc="Up/down" />
+          <CompactRow k="g/G" desc="Top/bottom" />
+          <CompactRow k="1/2/3" desc="Panels" />
+
+          <Box marginTop={1}><Text color={PALETTE.accent} bold>Actions</Text></Box>
+          <CompactRow k="ENTER" desc="Expand" />
+          <CompactRow k="/" desc="Search" />
+          <CompactRow k="n" desc="New" />
+          <CompactRow k="m" desc="Move" />
+          <CompactRow k="d" desc="Delete" />
+
+          <Box marginTop={1}><Text color={PALETTE.accent} bold>Global</Text></Box>
+          <CompactRow k="?" desc="Help" />
+          <CompactRow k="r" desc="Refresh" />
+          <CompactRow k="q" desc="Exit" />
+        </Box>
+
+        {/* Footer */}
+        <Box flexGrow={1} />
+        <Box>
+          <Text color={PALETTE.textMuted}>any key to close</Text>
+        </Box>
+      </Box>
+    );
+  }
+
+  // Wide mode: centered panel with three columns
   const panelWidth = 72;
   const panelHeight = 22;
 
@@ -121,6 +163,18 @@ function HelpRow({ k, desc }: { k: string; desc: string }) {
   return (
     <Box>
       <Box width={9}>
+        <Text color={PALETTE.text}>{k}</Text>
+      </Box>
+      <Text color={PALETTE.textSecondary}>{desc}</Text>
+    </Box>
+  );
+}
+
+/** Compact row for narrow mode - tighter spacing */
+function CompactRow({ k, desc }: { k: string; desc: string }) {
+  return (
+    <Box>
+      <Box width={8}>
         <Text color={PALETTE.text}>{k}</Text>
       </Box>
       <Text color={PALETTE.textSecondary}>{desc}</Text>

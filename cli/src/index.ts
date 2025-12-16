@@ -4,3 +4,8 @@ export { addCommand } from './commands/add';
 export { moveCommand } from './commands/move';
 export { templateCommand } from './commands/template';
 export { lintCommand } from './commands/lint';
+export {
+  contractPickupCommand,
+  contractDeliverCommand,
+  contractValidateCommand,
+} from './commands/contract';
