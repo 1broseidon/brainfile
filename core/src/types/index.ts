@@ -9,6 +9,9 @@ export * from './base';
 // Type system enums
 export * from './enums';
 
+// Contracts (optional task extension)
+export * from './contract';
+
 // Type-specific definitions
 export * from './board';
 export * from './journal';

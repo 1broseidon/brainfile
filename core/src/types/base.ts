@@ -3,6 +3,8 @@
  * @packageDocumentation
  */
 
+import type { Contract } from './contract';
+
 /**
  * Rule definition for project guidelines
  */
@@ -77,6 +79,8 @@ export interface Task {
   dueDate?: string;
   subtasks?: Subtask[];
   template?: 'bug' | 'feature' | 'refactor';
+  /** Optional PM-to-agent contract metadata */
+  contract?: Contract;
   createdAt?: string;  // ISO 8601 timestamp
   updatedAt?: string;  // ISO 8601 timestamp
 }

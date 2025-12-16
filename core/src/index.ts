@@ -10,23 +10,44 @@
 // Export types
 export * from './types';
 
+// Export contract types (optional task extension) and operations
+export * from './types/contract';
+export {
+  type ContractPatch,
+  setTaskContract,
+  clearTaskContract,
+  setTaskContractStatus,
+  patchTaskContract,
+  addTaskContractDeliverable,
+  removeTaskContractDeliverable,
+  addTaskContractValidationCommand,
+  removeTaskContractValidationCommand,
+  addTaskContractConstraint,
+  removeTaskContractConstraint,
+} from './contract';
+
 // Export parser
-export { BrainfileParser, ParseResult } from './parser';
+export { BrainfileParser } from './parser';
+export type { ParseResult } from './parser';
 
 // Export inference functions
-export { inferType, inferRenderer, SchemaHints } from './inference';
+export { inferType, inferRenderer } from './inference';
+export type { SchemaHints } from './inference';
 
 // Export schema hints parser
 export { parseSchemaHints, loadSchemaHints } from './schemaHints';
 
 // Export serializer
-export { BrainfileSerializer, SerializeOptions } from './serializer';
+export { BrainfileSerializer } from './serializer';
+export type { SerializeOptions } from './serializer';
 
 // Export validator
-export { BrainfileValidator, ValidationError, ValidationResult } from './validator';
+export { BrainfileValidator } from './validator';
+export type { ValidationError, ValidationResult } from './validator';
 
 // Export linter
-export { BrainfileLinter, LintIssue, LintResult, LintOptions } from './linter';
+export { BrainfileLinter } from './linter';
+export type { LintIssue, LintResult, LintOptions } from './linter';
 
 // Export realtime helpers
 export {
@@ -75,6 +96,9 @@ export {
   patchTasks,
   deleteTasks,
   archiveTasks,
+  // Rule operations
+  addRule,
+  deleteRule,
 } from './operations';
 
 // Export query functions
@@ -121,7 +145,19 @@ export {
   type DiscoveredFile,
   type DiscoveryOptions,
   type DiscoveryResult,
+  type WatchError,
+  type WatchResult,
 } from './discovery';
+
+// Export formatters for external services
+export {
+  formatTaskForGitHub,
+  formatTaskForLinear,
+  type GitHubIssuePayload,
+  type GitHubFormatOptions,
+  type LinearIssuePayload,
+  type LinearFormatOptions,
+} from './formatters';
 
 // Re-export commonly used interfaces for convenience
 export type {
@@ -245,9 +281,11 @@ export class Brainfile {
 }
 
 // Import necessary types for the Brainfile class
-import { Board, SerializeOptions } from './index';
+import type { Board } from './types';
+import type { SerializeOptions } from './serializer';
 import { BrainfileParser } from './parser';
 import { BrainfileSerializer } from './serializer';
 import { BrainfileValidator } from './validator';
-import { BrainfileLinter, LintOptions } from './linter';
+import { BrainfileLinter } from './linter';
+import type { LintOptions } from './linter';
 import { BUILT_IN_TEMPLATES, getTemplateById, processTemplate } from './templates';
