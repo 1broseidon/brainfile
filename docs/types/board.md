@@ -49,6 +49,7 @@ columns:
   - id: done
     title: Done
     order: 3
+    completionColumn: true
     tasks: []
 ```
 
@@ -140,6 +141,23 @@ order: 2
 ```
 
 Columns without `order` appear after ordered columns, in definition order.
+
+#### `completionColumn`
+
+**Type**: `boolean`
+**Default**: `false`
+**Description**: Marks this column as a completion column
+
+```yaml
+completionColumn: true
+```
+
+When `true`, tasks moved to this column are considered complete. This enables:
+- **Non-English workflows**: "Terminé", "Fertig", "完了" are recognized
+- **Custom semantics**: "Deployed", "Verified", "Archived" as completion
+- **Explicit configuration**: No reliance on name-based pattern matching
+
+**Backward Compatibility**: If not specified, implementations may fall back to name-based detection (matching "done", "complete", "finished", "closed" patterns) or use the last column as the default completion column.
 
 ## Task Structure
 
@@ -433,6 +451,7 @@ columns:
   - id: done
     title: Done
     order: 3
+    completionColumn: true
     tasks:
       - id: task-2
         title: Set up CI/CD pipeline
@@ -498,6 +517,7 @@ columns:
   - id: verified
     title: Verified
     order: 5
+    completionColumn: true  # Bugs are complete when verified
 ```
 
 ### Personal GTD
@@ -519,6 +539,42 @@ columns:
   - id: done
     title: Done
     order: 5
+    completionColumn: true
+```
+
+### International Workflows
+
+```yaml
+columns:
+  - id: todo
+    title: À faire
+    order: 1
+  - id: en-cours
+    title: En cours
+    order: 2
+  - id: termine
+    title: Terminé
+    order: 3
+    completionColumn: true  # Explicit marking for non-English column names
+```
+
+### DevOps Pipeline
+
+```yaml
+columns:
+  - id: todo
+    title: To Do
+    order: 1
+  - id: in-progress
+    title: In Progress
+    order: 2
+  - id: deployed
+    title: Deployed
+    order: 3
+    completionColumn: true  # Custom semantic: "Deployed" means done
+  - id: archived
+    title: Archived
+    order: 4
 ```
 
 ## Best Practices
@@ -528,6 +584,7 @@ columns:
 - **Keep it simple**: 3-5 columns is usually sufficient
 - **Clear stages**: Each column should represent a distinct workflow stage
 - **Use order**: Explicit `order` prevents visual inconsistency
+- **Mark completion**: Use `completionColumn: true` for non-English workflows or custom semantics
 - **Stats config**: Exclude backlog/archive from progress calculations
 
 ### Task Management
@@ -575,6 +632,37 @@ tasks:
     title: Existing task
     createdAt: "2025-11-24T10:00:00Z"  # Add creation time
 ```
+
+### Adding Explicit Completion Column
+
+If your workflow uses non-English column names or custom completion semantics, add the `completionColumn` property:
+
+**Before** (relies on name-based detection):
+```yaml
+columns:
+  - id: termine
+    title: Terminé
+    order: 3
+    tasks: []
+```
+
+**After** (explicit marking):
+```yaml
+columns:
+  - id: termine
+    title: Terminé
+    order: 3
+    completionColumn: true  # Explicit completion column
+    tasks: []
+```
+
+**Benefits of explicit marking:**
+- Works with any language ("Terminé", "Fertig", "完了", etc.)
+- Supports custom semantics ("Deployed", "Verified", "Archived")
+- No reliance on pattern matching
+- Machine-readable for third-party tools
+
+**Backward compatibility:** Boards without `completionColumn` continue to work using name-based detection (matching "done", "complete", "finished", "closed") or defaulting to the last column.
 
 ## See Also
 

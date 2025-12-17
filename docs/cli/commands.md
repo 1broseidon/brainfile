@@ -30,6 +30,7 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`hooks`](#hooks) | AI agent hook integration |
 | [`auth`](#auth) | Authenticate with GitHub/Linear |
 | [`config`](#config) | Manage CLI configuration |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
 | [`mcp`](#mcp) | MCP server for AI assistants |
 
 ---
@@ -76,6 +77,7 @@ brainfile add --title "Implement auth"
 brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
 brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
 brainfile add --title "Fix auth bug" --files "src/auth.ts,src/login.tsx"
+brainfile add --title "Implement API" --with-contract --deliverable "src/api.ts"
 ```
 
 **Options:**
@@ -88,6 +90,10 @@ brainfile add --title "Fix auth bug" --files "src/auth.ts,src/login.tsx"
 - `--due-date <date>` - Due date (YYYY-MM-DD)
 - `--subtasks <list>` - Comma-separated subtask titles
 - `--files <list>` - Comma-separated related file paths
+- `--with-contract` - Initialize with an empty contract
+- `--deliverable <path:desc>` - Add deliverable (repeatable)
+- `--validation <command>` - Add validation command (repeatable)
+- `--constraint <text>` - Add constraint (repeatable)
 
 ---
 
@@ -420,6 +426,20 @@ brainfile config path
 | `archive.github.labels` | Comma-separated labels for GitHub issues |
 | `archive.linear.teamId` | Linear team ID |
 | `archive.linear.projectId` | Linear project ID |
+
+---
+
+## contract
+
+Manage the lifecycle of agent-to-agent contracts.
+
+```bash
+brainfile contract pickup --task task-1
+brainfile contract deliver --task task-1
+brainfile contract validate --task task-1
+```
+
+See the [Contract Commands Reference](./contract-commands) for detailed documentation of all contract subcommands.
 
 ---
 

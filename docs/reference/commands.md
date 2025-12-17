@@ -32,6 +32,7 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`template`](#template) | Create from templates |
 | [`tui`](#tui) | Interactive terminal UI |
 | [`hooks`](#hooks) | AI agent hook integration |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
 | [`mcp`](#mcp) | MCP server for AI assistants |
 
 ---
@@ -94,6 +95,10 @@ brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
 | `--assignee <name>` | Assignee name |
 | `--due-date <date>` | Due date (YYYY-MM-DD) |
 | `--subtasks <list>` | Comma-separated subtask titles |
+| `--with-contract` | Initialize with an empty contract |
+| `--deliverable <path:desc>` | Add deliverable (repeatable) |
+| `--validation <command>` | Add validation command (repeatable) |
+| `--constraint <text>` | Add constraint (repeatable) |
 
 ---
 
@@ -308,6 +313,32 @@ brainfile hooks uninstall claude-code --scope all
 | Option | Description |
 |--------|-------------|
 | `--scope <scope>` | `user` (default), `project`, or `all` |
+
+---
+
+## contract
+
+Manage the lifecycle of agent-to-agent contracts.
+
+```bash
+brainfile contract pickup --task task-1
+brainfile contract deliver --task task-1
+brainfile contract validate --task task-1
+```
+
+**Subcommands:**
+| Command | Description |
+|---------|-------------|
+| `pickup` | Claim a task for implementation |
+| `deliver` | Submit completed work for review |
+| `validate` | Run automated validation commands |
+| `approve` | Manually approve work |
+| `reject` | Reject work with feedback |
+| `attach` | Add contract to existing task |
+| `blocked` | Mark as blocked |
+| `reset` | Reset status |
+
+See the [Contract Commands Reference](/cli/contract-commands) for detailed documentation.
 
 ---
 

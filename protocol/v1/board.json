@@ -73,6 +73,11 @@
           "description": "Display order for the column. Lower numbers appear first. Columns without order appear last.",
           "minimum": 0
         },
+        "completionColumn": {
+          "type": "boolean",
+          "description": "Marks this column as a completion column. When true, tasks moved to this column are considered complete. Enables explicit completion semantics for non-English column names and custom workflows.",
+          "default": false
+        },
         "tasks": {
           "type": "array",
           "description": "Tasks in this column",

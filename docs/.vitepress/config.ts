@@ -141,11 +141,19 @@ export default defineConfig({
         ],
       },
       {
+        text: 'Guides',
+        items: [
+          { text: 'Agent Contracts', link: '/guides/contracts' },
+          { text: 'Agent Workflows', link: '/guides/agent-workflows' },
+        ],
+      },
+      {
         text: 'Reference',
         items: [
           { text: 'Protocol Specification', link: '/reference/protocol' },
           { text: 'API Reference', link: '/reference/api' },
           { text: 'CLI Commands', link: '/reference/commands' },
+          { text: 'Contract Commands', link: '/cli/contract-commands' },
           { text: 'Schema Types', link: '/reference/types' },
         ],
       },

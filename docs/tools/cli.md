@@ -150,7 +150,7 @@ brainfile lint --check      # Exit with error code (for CI)
 
 ---
 
-## Templates
+### Templates
 
 Create tasks from built-in templates:
 
@@ -164,6 +164,34 @@ Available templates:
 - `bug-report` — Bug tracking with triage subtasks
 - `feature-request` — Feature proposals
 - `refactor` — Code refactoring tasks
+
+---
+
+## Agent Contracts
+
+The CLI facilitates structured coordination between agents through the contract system.
+
+### Create Task with Contract
+
+```bash
+brainfile add --title "Implement API" \
+  --with-contract \
+  --deliverable "src/api.ts" \
+  --validation "npm test"
+```
+
+### Worker Agent Lifecycle
+
+1. **Pickup**: `brainfile contract pickup -t task-1`
+2. **Deliver**: `brainfile contract deliver -t task-1`
+
+### PM Agent Lifecycle
+
+1. **Validate**: `brainfile contract validate -t task-1` (Auto)
+2. **Approve**: `brainfile contract approve -t task-1` (Manual)
+3. **Reject**: `brainfile contract reject -t task-1 --feedback "..."`
+
+See the [Agent Contracts Guide](/guides/contracts) for more details.
 
 ---
 
