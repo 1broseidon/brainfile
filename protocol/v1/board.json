@@ -166,6 +166,9 @@
           "type": "string",
           "description": "Optional task template type",
           "enum": ["bug", "feature", "refactor"]
+        },
+        "contract": {
+          "$ref": "https://brainfile.md/v1/contract.json"
         }
       },
       "additionalProperties": true

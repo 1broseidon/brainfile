@@ -13,6 +13,7 @@ Brainfile uses JSON Schema to define the structure of task boards.
 |--------|-----|---------|
 | **Base** | `/v1/base.json` | Shared fields (title, agent, rules) |
 | **Board** | `/v1/board.json` | Kanban task management |
+| **Contract** | `/v1/contract.json` | Task contract object (`task.contract`) |
 
 ---
 
@@ -40,6 +41,26 @@ columns:
 **Renderer:** Kanban board with columns
 
 [View Board Schema](https://brainfile.md/v1/board.json) · [Example](https://brainfile.md/example/board.md)
+
+---
+
+## Contract (Task Extension)
+
+Task contracts define structured deliverables, validation commands, and constraints for PM-to-agent workflows.
+
+```yaml
+contract:
+  status: ready
+  deliverables:
+    - type: file
+      path: src/feature.ts
+      description: Implementation
+  validation:
+    commands:
+      - npm test
+```
+
+[View Contract Schema](https://brainfile.md/v1/contract.json) · [Docs](/types/contract)
 
 ---
 

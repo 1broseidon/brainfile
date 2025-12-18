@@ -21,6 +21,7 @@ brainfile mcp           # Start MCP server for AI assistants
 |---------|-------------|
 | [`init`](#init) | Create a new brainfile |
 | [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
 | [`add`](#add) | Create a new task |
 | [`move`](#move) | Move task between columns |
 | [`patch`](#patch) | Update task fields |
@@ -33,6 +34,9 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`tui`](#tui) | Interactive terminal UI |
 | [`hooks`](#hooks) | AI agent hook integration |
 | [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
 | [`mcp`](#mcp) | MCP server for AI assistants |
 
 ---
@@ -63,6 +67,7 @@ Display all tasks with optional filtering.
 brainfile list
 brainfile list --column "In Progress"
 brainfile list --tag bug
+brainfile list --contract ready
 ```
 
 **Options:**
@@ -71,6 +76,31 @@ brainfile list --tag bug
 | `-f, --file <path>` | Path to brainfile (default: `brainfile.md`) |
 | `-c, --column <name>` | Filter by column |
 | `-t, --tag <name>` | Filter by tag |
+| `--contract <status>` | Filter by contract status (`ready`, `in_progress`, `delivered`, `done`, `failed`) |
+
+---
+
+## show
+
+Display full details of a single task.
+
+```bash
+brainfile show --task task-1
+brainfile show -t task-42
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `-t, --task <id>` | Task ID (required) |
+| `-f, --file <path>` | Path to brainfile (default: `brainfile.md`) |
+
+**Output includes:**
+- Task ID, title, column, priority, tags, assignee
+- Full description
+- Subtasks with completion status
+- Related files
+- Contract details (if present)
 
 ---
 
@@ -324,21 +354,109 @@ Manage the lifecycle of agent-to-agent contracts.
 brainfile contract pickup --task task-1
 brainfile contract deliver --task task-1
 brainfile contract validate --task task-1
+brainfile contract attach --task task-1 --deliverable "file:src/feature.ts:Implementation"
 ```
 
 **Subcommands:**
 | Command | Description |
 |---------|-------------|
-| `pickup` | Claim a task for implementation |
-| `deliver` | Submit completed work for review |
-| `validate` | Run automated validation commands |
-| `approve` | Manually approve work |
-| `reject` | Reject work with feedback |
+| `pickup` | Claim a contract and set status to in_progress |
+| `deliver` | Mark contract as delivered (ready for validation) |
+| `validate` | Check deliverables and run validation commands |
 | `attach` | Add contract to existing task |
-| `blocked` | Mark as blocked |
-| `reset` | Reset status |
+
+**Common Options:**
+| Option | Description |
+|--------|-------------|
+| `-t, --task <id>` | Task ID (required) |
+| `-f, --file <path>` | Path to brainfile (default: `brainfile.md`) |
+
+**Attach Options:**
+| Option | Description |
+|--------|-------------|
+| `--deliverable <spec>` | Add deliverable (format: `type:path:description`) |
+| `--validation <command>` | Add validation command (repeatable) |
+| `--constraint <text>` | Add constraint (repeatable) |
 
 See the [Contract Commands Reference](/cli/contract-commands) for detailed documentation.
+
+---
+
+## migrate
+
+Move root brainfile.md to .brainfile/ directory structure.
+
+```bash
+brainfile migrate
+brainfile migrate --dir ./project
+brainfile migrate --force
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--dir <path>` | Project directory (default: current directory) |
+| `--force` | Overwrite existing .brainfile/brainfile.md |
+
+**What it does:**
+- Creates `.brainfile/` directory
+- Moves `brainfile.md` → `.brainfile/brainfile.md`
+- Creates `.brainfile/.gitignore` (ignores state.json)
+- Preserves all content exactly
+
+---
+
+## config
+
+Manage user configuration stored in `~/.config/brainfile/config.json`.
+
+```bash
+brainfile config list
+brainfile config get archive.default
+brainfile config set archive.default github
+brainfile config path
+```
+
+**Subcommands:**
+| Command | Description |
+|---------|-------------|
+| `list` | Show all configuration values |
+| `get <key>` | Get specific config value |
+| `set <key> <value>` | Set config value |
+| `path` | Show config file path |
+
+**Common Config Keys:**
+- `archive.default` — Default archive destination (`local`, `github`, `linear`)
+- `archive.github.owner` — GitHub repository owner
+- `archive.github.repo` — GitHub repository name
+- `archive.linear.teamId` — Linear team ID
+
+---
+
+## auth
+
+Authenticate with external services for archive functionality.
+
+```bash
+brainfile auth github
+brainfile auth linear --token <api-key>
+brainfile auth status
+brainfile auth logout github
+```
+
+**Subcommands:**
+| Command | Description |
+|---------|-------------|
+| `github [--token <token>]` | Authenticate with GitHub (auto-detects gh CLI or uses OAuth) |
+| `linear --token <token>` | Authenticate with Linear API |
+| `status` | Show authentication status for all services |
+| `logout [provider] [--all]` | Log out from service(s) |
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `--token <token>` | API token (required for Linear, optional for GitHub) |
+| `--all` | Log out from all services |
 
 ---
 

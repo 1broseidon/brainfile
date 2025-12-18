@@ -195,6 +195,148 @@ restoreTask(board, "task-5", "todo");
 
 ---
 
+## Contract Operations
+
+All contract operations return `BoardOperationResult` and are immutable.
+
+### `setTaskContract(board, taskId, contract): BoardOperationResult`
+
+Set or replace the complete contract for a task.
+
+```typescript
+import { setTaskContract, type Contract } from "@brainfile/core";
+
+const contract: Contract = {
+  status: "ready",
+  deliverables: [
+    { type: "file", path: "src/feature.ts", description: "Implementation" },
+    { type: "test", path: "src/__tests__/feature.test.ts" },
+  ],
+  validation: {
+    commands: ["npm test"],
+  },
+  constraints: ["Follow existing patterns"],
+};
+
+const result = setTaskContract(board, "task-1", contract);
+```
+
+### `clearTaskContract(board, taskId): BoardOperationResult`
+
+Remove the contract from a task.
+
+### `setTaskContractStatus(board, taskId, status): BoardOperationResult`
+
+Update just the contract status.
+
+```typescript
+import { setTaskContractStatus } from "@brainfile/core";
+
+setTaskContractStatus(board, "task-1", "in_progress");
+```
+
+### `patchTaskContract(board, taskId, patch): BoardOperationResult`
+
+Update specific contract fields. Set fields to `null` to remove them.
+
+```typescript
+import { patchTaskContract } from "@brainfile/core";
+
+// Update fields
+patchTaskContract(board, "task-1", {
+  status: "delivered",
+  constraints: ["New constraint"],
+});
+
+// Remove fields
+patchTaskContract(board, "task-1", {
+  validation: null,
+});
+```
+
+### `addTaskContractDeliverable(board, taskId, deliverable): BoardOperationResult`
+
+Add a deliverable to the contract.
+
+```typescript
+import { addTaskContractDeliverable } from "@brainfile/core";
+
+addTaskContractDeliverable(board, "task-1", {
+  type: "docs",
+  path: "docs/api.md",
+  description: "API documentation",
+});
+```
+
+### `removeTaskContractDeliverable(board, taskId, path): BoardOperationResult`
+
+Remove a deliverable by path.
+
+### `addTaskContractValidationCommand(board, taskId, command): BoardOperationResult`
+
+Add a validation command.
+
+### `removeTaskContractValidationCommand(board, taskId, command): BoardOperationResult`
+
+Remove a validation command.
+
+### `addTaskContractConstraint(board, taskId, constraint): BoardOperationResult`
+
+Add a constraint.
+
+### `removeTaskContractConstraint(board, taskId, constraint): BoardOperationResult`
+
+Remove a constraint.
+
+---
+
+## Bulk Operations
+
+Process multiple tasks in a single operation. All bulk operations return `BulkOperationResult`.
+
+### `moveTasks(board, taskIds, toColumnId): BulkOperationResult`
+
+Move multiple tasks to a column.
+
+```typescript
+import { moveTasks } from "@brainfile/core";
+
+const result = moveTasks(board, ["task-1", "task-2", "task-3"], "done");
+
+console.log(`Success: ${result.successCount}, Failed: ${result.failureCount}`);
+result.results.forEach((r) => {
+  if (!r.success) {
+    console.log(`Failed to move ${r.id}: ${r.error}`);
+  }
+});
+```
+
+### `patchTasks(board, taskIds, patch): BulkOperationResult`
+
+Apply the same patch to multiple tasks.
+
+```typescript
+import { patchTasks } from "@brainfile/core";
+
+patchTasks(board, ["task-1", "task-2"], { priority: "high", assignee: "john" });
+```
+
+### `deleteTasks(board, taskIds): BulkOperationResult`
+
+Delete multiple tasks.
+
+### `archiveTasks(board, taskIds): BulkOperationResult`
+
+Archive multiple tasks.
+
+```typescript
+import { archiveTasks } from "@brainfile/core";
+
+archiveTasks(board, ["task-10", "task-11", "task-12"]);
+```
+
+---
+
 ## Subtask Operations
 
 ### `addSubtask(board, taskId, title): BoardOperationResult`
@@ -295,6 +437,44 @@ interface Task {
   dueDate?: string;
   subtasks?: Subtask[];
   template?: "bug" | "feature" | "refactor";
+  contract?: Contract;
+}
+```
+
+### Contract
+
+```typescript
+interface Contract {
+  status: ContractStatus;
+  deliverables?: Deliverable[];
+  validation?: ValidationConfig;
+  constraints?: string[];
+  context?: ContractContext;
+}
+
+type ContractStatus =
+  | "draft"
+  | "ready"
+  | "in_progress"
+  | "delivered"
+  | "done"
+  | "failed";
+
+interface Deliverable {
+  type: string; // "file", "test", "docs", "design", "research"
+  path: string;
+  description?: string;
+}
+
+interface ValidationConfig {
+  commands?: string[];
+}
+
+interface ContractContext {
+  relevantFiles?: string[];
+  background?: string;
+  feedback?: string;
+  outOfScope?: string[];
 }
 ```
 
@@ -343,6 +523,20 @@ interface TaskPatch {
 }
 ```
 
+### ContractPatch
+
+For `patchTaskContract()`. Use `null` to remove fields.
+
+```typescript
+interface ContractPatch {
+  status?: ContractStatus;
+  deliverables?: Deliverable[] | null;
+  validation?: ValidationConfig | null;
+  constraints?: string[] | null;
+  context?: ContractContext | null;
+}
+```
+
 ### BoardOperationResult
 
 ```typescript
@@ -350,6 +544,26 @@ interface BoardOperationResult {
   success: boolean;
   board?: Board;  // New board if success
   error?: string; // Error message if failed
+}
+```
+
+### BulkOperationResult
+
+For bulk operations (`moveTasks`, `patchTasks`, `deleteTasks`, `archiveTasks`).
+
+```typescript
+interface BulkOperationResult {
+  success: boolean; // True if all operations succeeded
+  board?: Board;    // New board if at least one operation succeeded
+  results: BulkItemResult[];
+  successCount: number;
+  failureCount: number;
+}
+
+interface BulkItemResult {
+  id: string;       // Task ID
+  success: boolean;
+  error?: string;   // Error message if failed
 }
 ```
 

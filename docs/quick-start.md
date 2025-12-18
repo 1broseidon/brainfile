@@ -65,9 +65,27 @@ Your assistant can now list tasks, create new ones, move them between columns, u
 
 ---
 
+## Agent Coordination (Optional)
+
+Brainfile allows you to create **Contracts** for your AI assistants. A contract defines exactly what an agent needs to deliver.
+
+### 1. Create a task with a contract
+```bash
+brainfile add --title "Create API docs" \
+  --with-contract \
+  --deliverable "docs/api.md" \
+  --validation "npm run docs:build"
+```
+
+### 2. How agents use it
+When an AI agent (like Claude or Cursor) picks up this task, it will see the structured `deliverables` and `validation` commands. This ensures the agent produces exactly what you need.
+
+---
+
 ## Next Steps
 
 - [Why Brainfile?](/why) — The full story
+- [Getting Started with Contracts](/guides/getting-started-with-contracts) — 2-minute intro
 - [CLI Commands](/tools/cli) — All available commands
 - [MCP Integration](/tools/mcp) — AI assistant setup
 - [Protocol Specification](/reference/protocol) — File format details

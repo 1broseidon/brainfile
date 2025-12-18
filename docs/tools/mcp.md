@@ -66,11 +66,22 @@ Your AI assistant gets access to these operations:
 
 | Tool | Description |
 |------|-------------|
-| `list_tasks` | List all tasks, filter by column or tag |
+| `list_tasks` | List all tasks, filter by column, tag, or contract status |
+| `get_task` | Get detailed information about a specific task |
+| `search_tasks` | Search tasks by query, column, priority, assignee |
 | `add_task` | Create a task with title, priority, tags, etc. |
 | `move_task` | Move a task between columns |
 | `patch_task` | Update specific fields on a task |
 | `delete_task` | Permanently delete a task |
+
+### Bulk Operations
+
+| Tool | Description |
+|------|-------------|
+| `bulk_move_tasks` | Move multiple tasks to a column in one operation |
+| `bulk_patch_tasks` | Apply same patch to multiple tasks |
+| `bulk_delete_tasks` | Delete multiple tasks |
+| `bulk_archive_tasks` | Archive multiple tasks to local file |
 
 ### Archiving
 
@@ -107,6 +118,24 @@ npx @brainfile/cli config set archive.github.repo myrepo
 | `toggle_subtask` | Mark a subtask complete/incomplete |
 | `update_subtask` | Change a subtask's title |
 | `delete_subtask` | Remove a subtask |
+| `bulk_set_subtasks` | Set multiple subtasks to completed or incomplete at once |
+| `complete_all_subtasks` | Mark all subtasks in a task as completed or incomplete |
+
+### Agent Contracts
+
+| Tool | Description |
+|------|-------------|
+| `contract_pickup` | Claim a contract and set status to in_progress |
+| `contract_deliver` | Mark contract as delivered (ready for validation) |
+| `contract_validate` | Check deliverables exist and run validation commands |
+| `attach_contract` | Add contract to existing task with deliverables and validation |
+
+**Contract workflow:**
+1. PM creates task with contract using `add_task` (with `with_contract`, `deliverables`, `validation_commands`, `constraints` parameters)
+2. Worker agent calls `contract_pickup` to claim the work
+3. Worker implements the deliverables
+4. Worker calls `contract_deliver` when done
+5. PM calls `contract_validate` to check work
 
 ---
 

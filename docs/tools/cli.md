@@ -19,6 +19,15 @@ Verify installation:
 brainfile --version
 ```
 
+## Core Features
+
+- **Interactive TUI**: A full-featured terminal kanban board.
+- **Agent Coordination**: Built-in support for [Agent Contracts](#agent-contracts) to coordinate work between AI assistants.
+- **Rich Task Metadata**: Support for priorities, tags, assignees, due dates, and subtasks.
+- **Multi-Destination Archive**: Move completed tasks to GitHub Issues or Linear.
+
+---
+
 ## Interactive TUI
 
 Launch an interactive kanban board in your terminal:
@@ -100,7 +109,37 @@ brainfile subtask --task task-1 --toggle task-1-1
 brainfile subtask --task task-1 --delete task-1-2
 ```
 
-### Archive & Restore
+---
+
+## Agent Contracts
+
+The CLI facilitates structured coordination between agents through the contract system.
+
+### Create Task with Contract
+
+```bash
+brainfile add --title "Implement API" \
+  --with-contract \
+  --deliverable "src/api.ts" \
+  --validation "npm test"
+```
+
+### Worker Agent Lifecycle
+
+1. **Pickup**: `brainfile contract pickup -t task-1`
+2. **Deliver**: `brainfile contract deliver -t task-1`
+
+### PM Agent Lifecycle
+
+1. **Validate**: `brainfile contract validate -t task-1` (Auto)
+2. **Approve**: `brainfile contract approve -t task-1` (Manual)
+3. **Reject**: `brainfile contract reject -t task-1 --feedback "..."`
+
+See the [Agent Contracts Guide](/guides/contracts) for more details.
+
+---
+
+## Archive & Restore
 
 ```bash
 # Local archive
@@ -164,34 +203,6 @@ Available templates:
 - `bug-report` — Bug tracking with triage subtasks
 - `feature-request` — Feature proposals
 - `refactor` — Code refactoring tasks
-
----
-
-## Agent Contracts
-
-The CLI facilitates structured coordination between agents through the contract system.
-
-### Create Task with Contract
-
-```bash
-brainfile add --title "Implement API" \
-  --with-contract \
-  --deliverable "src/api.ts" \
-  --validation "npm test"
-```
-
-### Worker Agent Lifecycle
-
-1. **Pickup**: `brainfile contract pickup -t task-1`
-2. **Deliver**: `brainfile contract deliver -t task-1`
-
-### PM Agent Lifecycle
-
-1. **Validate**: `brainfile contract validate -t task-1` (Auto)
-2. **Approve**: `brainfile contract approve -t task-1` (Manual)
-3. **Reject**: `brainfile contract reject -t task-1 --feedback "..."`
-
-See the [Agent Contracts Guide](/guides/contracts) for more details.
 
 ---
 

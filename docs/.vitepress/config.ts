@@ -7,11 +7,16 @@ export default defineConfig({
   description: 'A protocol-first task management system for the AI era',
   cleanUrls: true,
   ignoreDeadLinks: true,
+  appearance: 'force-dark',
+
+  markdown: {
+    html: true,
+  },
 
   head: [
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
-    ['link', { href: 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap', rel: 'stylesheet' }],
+    ['link', { href: 'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap', rel: 'stylesheet' }],
   ],
 
   // Fix EMFILE error on systems with low file watcher limits
@@ -143,8 +148,11 @@ export default defineConfig({
       {
         text: 'Guides',
         items: [
-          { text: 'Agent Contracts', link: '/guides/contracts' },
-          { text: 'Agent Workflows', link: '/guides/agent-workflows' },
+          { text: 'What are Contracts?', link: '/guides/getting-started-with-contracts' },
+          { text: 'Comprehensive Guide', link: '/guides/contracts' },
+          { text: 'Contract Commands', link: '/cli/contract-commands' },
+          { text: 'Workflow Patterns', link: '/guides/agent-workflows' },
+          { text: 'Schema Reference', link: '/reference/contract-schema' },
         ],
       },
       {
@@ -153,8 +161,10 @@ export default defineConfig({
           { text: 'Protocol Specification', link: '/reference/protocol' },
           { text: 'API Reference', link: '/reference/api' },
           { text: 'CLI Commands', link: '/reference/commands' },
-          { text: 'Contract Commands', link: '/cli/contract-commands' },
           { text: 'Schema Types', link: '/reference/types' },
+          { text: 'Base Schema', link: '/types/base' },
+          { text: 'Board Schema', link: '/types/board' },
+          { text: 'Contract Schema Reference', link: '/reference/contract-schema' },
         ],
       },
     ],

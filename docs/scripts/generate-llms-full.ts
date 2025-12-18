@@ -20,6 +20,9 @@ interface DocSection {
 const sections: DocSection[] = [
   { file: 'quick-start.md', title: 'Quick Start Guide' },
   { file: 'why.md', title: 'Why Brainfile?' },
+  { file: 'guides/getting-started-with-contracts.md', title: 'Getting Started with Contracts' },
+  { file: 'guides/contracts.md', title: 'Comprehensive Guide to Contracts' },
+  { file: 'guides/agent-workflows.md', title: 'Agent Workflow Patterns' },
   { file: 'tools/cli.md', title: 'CLI & Terminal UI' },
   { file: 'tools/mcp.md', title: 'MCP Server Integration' },
   { file: 'tools/vscode.md', title: 'VSCode Extension' },
@@ -27,6 +30,7 @@ const sections: DocSection[] = [
   { file: 'reference/protocol.md', title: 'Protocol Specification' },
   { file: 'reference/api.md', title: 'API Reference' },
   { file: 'reference/commands.md', title: 'CLI Commands Reference' },
+  { file: 'reference/contract-schema.md', title: 'Contract Schema Reference' },
   { file: 'reference/types.md', title: 'Schema Types' },
 ];
 

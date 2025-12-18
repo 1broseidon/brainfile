@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v1/contract.json",
+  "title": "Brainfile Contract Schema",
+  "description": "Schema for task contracts (PM-to-agent workflows). Contracts are an optional extension on tasks that define deliverables, validation commands, constraints, and status tracking.",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "Contract lifecycle status",
+      "enum": ["draft", "ready", "in_progress", "delivered", "done", "failed"],
+      "examples": ["ready", "in_progress", "delivered"]
+    },
+    "deliverables": {
+      "type": "array",
+      "description": "Optional list of deliverables the agent must produce",
+      "items": {
+        "$ref": "#/definitions/deliverable"
+      }
+    },
+    "validation": {
+      "$ref": "#/definitions/validation"
+    },
+    "constraints": {
+      "type": "array",
+      "description": "Optional list of implementation constraints to follow",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "context": {
+      "$ref": "#/definitions/context"
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "deliverable": {
+      "type": "object",
+      "description": "A single deliverable required by the contract",
+      "required": ["type", "path"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Deliverable category (e.g. file, test, docs)",
+          "minLength": 1,
+          "examples": ["file", "test", "docs"]
+        },
+        "path": {
+          "type": "string",
+          "description": "Path or identifier for the deliverable",
+          "minLength": 1,
+          "examples": ["src/rateLimiter.ts", "docs/api.md"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional human-readable description of the deliverable"
+        }
+      },
+      "additionalProperties": true
+    },
+    "validation": {
+      "type": "object",
+      "description": "Optional validation configuration (stored only; execution is tool-specific)",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "description": "Shell commands that can be run to validate the deliverables",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [["npm test", "npm run build"]]
+        }
+      },
+      "additionalProperties": true
+    },
+    "context": {
+      "type": "object",
+      "description": "Optional additional context for the contract",
+      "properties": {
+        "background": {
+          "type": "string",
+          "description": "Optional background context for the agent"
+        },
+        "relevantFiles": {
+          "type": "array",
+          "description": "Optional list of relevant file paths or code locations",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "outOfScope": {
+          "type": "array",
+          "description": "Optional list of items explicitly out of scope for this work",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

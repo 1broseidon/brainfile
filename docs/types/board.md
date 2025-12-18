@@ -354,6 +354,25 @@ Templates provide default structures:
 - **feature**: Requirements, design, implementation, testing
 - **refactor**: Analysis, design, implementation, performance
 
+#### `contract`
+
+**Type**: `contract` object
+**Description**: Optional PM-to-agent contract metadata (deliverables, validation, constraints)
+
+```yaml
+contract:
+  status: ready
+  deliverables:
+    - type: file
+      path: protocol/v1/contract.json
+      description: New contract schema file
+  validation:
+    commands:
+      - npm test
+```
+
+See: [Contract Schema](./contract.md)
+
 ## Subtask Structure
 
 ### Required Subtask Fields

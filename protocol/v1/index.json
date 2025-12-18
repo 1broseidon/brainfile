@@ -28,6 +28,16 @@
       "examples": [
         "https://brainfile.md/example/board.md"
       ]
+    },
+    "contract": {
+      "id": "contract",
+      "title": "Contract Schema",
+      "description": "Task contract object used by boards (Task.contract)",
+      "url": "https://brainfile.md/v1/contract.json",
+      "status": "stable",
+      "extends": null,
+      "requiredFields": ["status"],
+      "optionalFields": ["deliverables", "validation", "constraints", "context"]
     }
   },
   "links": {
