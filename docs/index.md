@@ -224,15 +224,28 @@ onMounted(() => {
   const nodeCount = 50
   const connectionDistance = 200
 
+  const visualViewport = window.visualViewport
+
+  function getViewportSize() {
+    const viewportWidth = visualViewport?.width ?? window.innerWidth
+    const viewportHeight = visualViewport?.height ?? window.innerHeight
+
+    return {
+      width: Math.max(1, Math.floor(viewportWidth)),
+      height: Math.max(1, Math.floor(viewportHeight)),
+    }
+  }
+
   function resize() {
-    width = Math.max(1, window.innerWidth)
-    height = Math.max(1, window.innerHeight)
+    const viewportSize = getViewportSize()
+    width = viewportSize.width
+    height = viewportSize.height
 
     const dpr = Math.min(2, window.devicePixelRatio || 1)
     canvas.width = Math.floor(width * dpr)
     canvas.height = Math.floor(height * dpr)
-    canvas.style.width = `${width}px`
-    canvas.style.height = `${height}px`
+    canvas.style.width = '100%'
+    canvas.style.height = '100%'
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   }
 
@@ -294,6 +307,7 @@ onMounted(() => {
   }
 
   window.addEventListener('resize', onResize, { passive: true })
+  visualViewport?.addEventListener('resize', onResize, { passive: true })
 
   resize()
   createNodes()
@@ -301,6 +315,7 @@ onMounted(() => {
 
   cleanupNeural = () => {
     window.removeEventListener('resize', onResize)
+    visualViewport?.removeEventListener('resize', onResize)
     window.cancelAnimationFrame(raf)
   }
 })
