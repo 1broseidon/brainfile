@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { Brainfile } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
-import { contractPickupCommand, contractDeliverCommand, contractValidateCommand } from '../commands/contract';
+import { contractPickupCommand, contractDeliverCommand, contractValidateCommand, contractAttachCommand } from '../commands/contract';
 
 describe('contract command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
@@ -147,6 +147,40 @@ columns:
     // ran1 should exist, ran2 should NOT (stop on first failure)
     expect(fs.existsSync(path.join(fixturesDir, 'ran1'))).toBe(true);
     expect(fs.existsSync(path.join(fixturesDir, 'ran2'))).toBe(false);
+  });
+
+  it('attach should create a ready contract on an existing task', () => {
+    const markdown = `---
+title: Contract Board
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+      - id: task-1
+        title: Task Without Contract
+---\n`;
+
+    fs.writeFileSync(tempBoardPath, markdown, 'utf-8');
+
+    const result = contractAttachCommand({
+      file: tempBoardPath,
+      task: 'task-1',
+      deliverable: [
+        'file:src/a.ts:Implementation',
+        'test:src/a.test.ts:Tests',
+      ],
+      validation: ['npm test'],
+      constraint: ['Follow existing patterns'],
+    }, logger);
+
+    expect(result.success).toBe(true);
+
+    const updated = Brainfile.parse(fs.readFileSync(tempBoardPath, 'utf-8'));
+    const task = updated?.columns[0].tasks[0];
+    expect(task?.contract?.status).toBe('ready');
+    expect(task?.contract?.deliverables?.length).toBe(2);
+    expect(task?.contract?.validation?.commands).toEqual(['npm test']);
+    expect(task?.contract?.constraints).toEqual(['Follow existing patterns']);
   });
 });
 

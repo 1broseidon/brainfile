@@ -45,7 +45,7 @@ brainfile move --task task-1 --column done        # Move a task
 Launch an interactive task board:
 
 ```bash
-brainfile                    # Open with default brainfile.md
+brainfile                    # Auto-detect (prefers .brainfile/brainfile.md)
 brainfile ./path/to/file.md  # Open specific file
 ```
 
@@ -142,6 +142,21 @@ brainfile list --tag bug
 - `-f, --file <path>` - Brainfile path (default: `brainfile.md`)
 - `-c, --column <name>` - Filter by column
 - `-t, --tag <name>` - Filter by tag
+
+---
+
+### show
+
+Show full details of a single task:
+
+```bash
+brainfile show --task task-1
+brainfile show -t task-1 --file ./brainfile.md
+```
+
+**Options:**
+- `-f, --file <path>` - Brainfile path (default: `brainfile.md`)
+- `-t, --task <id>` - Task ID (required)
 
 ---
 
@@ -385,8 +400,17 @@ Create a new brainfile:
 
 ```bash
 brainfile init
-brainfile init --file ./project/tasks.md
+brainfile init --file ./project/tasks.md  # Custom location (optional)
 brainfile init --force  # Overwrite existing
+```
+
+### migrate
+
+Move a legacy root `brainfile.md` into the preferred `.brainfile/` directory:
+
+```bash
+brainfile migrate
+brainfile migrate --force
 ```
 
 ## Output Colors

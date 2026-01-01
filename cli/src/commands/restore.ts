@@ -16,6 +16,7 @@ import {
   restoreFromArchive,
   getArchivePath,
 } from '../utils/archive';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 interface RestoreOptions {
   file: string;
@@ -35,7 +36,7 @@ export function restoreCommand(options: RestoreOptions) {
     }
 
     // Resolve file path
-    const filePath = path.resolve(options.file);
+    const filePath = resolveCliBrainfilePath(options.file);
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {

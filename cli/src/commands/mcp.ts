@@ -9,6 +9,7 @@ import {
   findColumnByName,
   findTaskById,
   addTask,
+  setTaskContract,
   moveTask,
   deleteTask,
   patchTask,
@@ -24,11 +25,14 @@ import {
   deleteTasks,
   // Discovery
   findNearestBrainfile,
+  findBrainfile,
+  resolveBrainfilePath,
   type TaskInput,
   type TaskPatch,
   type Board
 } from '@brainfile/core';
 import { mcpCheckIncompleteSubtasks } from '../utils/errorHandler';
+import { buildContract } from '../utils/contractSpec';
 import { getEffectiveArchiveDestination, getArchiveConfig } from '../utils/config';
 import { isGitHubAuthenticated, createGitHubIssue } from '../utils/github-auth';
 import { isLinearAuthenticated, createLinearIssue, getLinearTeams } from '../utils/linear-auth';
@@ -106,9 +110,9 @@ export async function mcpCommand(options: McpOptions) {
       // Can be colon-separated list of paths
       const paths = workspacePaths.split(':').filter(Boolean);
       for (const wsPath of paths) {
-        const wsBrainfile = path.join(wsPath, 'brainfile.md');
-        if (fs.existsSync(wsBrainfile)) {
-          defaultFile = wsBrainfile;
+        const found = findBrainfile(wsPath);
+        if (found) {
+          defaultFile = found.absolutePath;
           console.error(`[brainfile-mcp] Found in workspace: ${defaultFile}`);
           break;
         }
@@ -126,12 +130,11 @@ export async function mcpCommand(options: McpOptions) {
     if (defaultFile === 'brainfile.md') {
       const gitRoot = findGitRoot(process.cwd());
       if (gitRoot) {
-        const gitRootBrainfile = path.join(gitRoot, 'brainfile.md');
-        if (fs.existsSync(gitRootBrainfile)) {
-          defaultFile = gitRootBrainfile;
-          console.error(`[brainfile-mcp] Found in git root: ${defaultFile}`);
+        const found = findBrainfile(gitRoot);
+        if (found) {
+          defaultFile = found.absolutePath;
+          console.error(`[brainfile-mcp] Found from git root: ${defaultFile}`);
         } else {
-          // Try discovery from git root
           const discovered = findNearestBrainfile(gitRoot);
           if (discovered) {
             defaultFile = discovered.absolutePath;
@@ -143,19 +146,18 @@ export async function mcpCommand(options: McpOptions) {
 
     // Strategy 3: If still default, try discovery from cwd
     if (defaultFile === 'brainfile.md') {
-      const discovered = findNearestBrainfile();
-      if (discovered) {
-        defaultFile = discovered.absolutePath;
+      const found = findBrainfile();
+      if (found) {
+        defaultFile = found.absolutePath;
         console.error(`[brainfile-mcp] Auto-discovered: ${defaultFile}`);
       } else {
-        // Fall back to relative path in cwd
-        defaultFile = path.resolve('brainfile.md');
+        defaultFile = resolveBrainfilePath({ filePath: 'brainfile.md', startDir: process.cwd() });
         console.error(`[brainfile-mcp] No brainfile found, using: ${defaultFile}`);
       }
     }
   } else {
     // User specified a file - resolve it
-    defaultFile = path.resolve(defaultFile);
+    defaultFile = resolveBrainfilePath({ filePath: defaultFile, startDir: process.cwd() });
     console.error(`[brainfile-mcp] Using specified file: ${defaultFile}`);
   }
 
@@ -360,10 +362,35 @@ export async function mcpCommand(options: McpOptions) {
         assignee: z.string().optional().describe('Task assignee'),
         dueDate: z.string().optional().describe('Due date (YYYY-MM-DD)'),
         subtasks: z.array(z.string()).optional().describe('Subtask titles (IDs auto-generated)'),
-        relatedFiles: z.array(z.string()).optional().describe('Related file paths')
+        relatedFiles: z.array(z.string()).optional().describe('Related file paths'),
+        // Contract creation (optional)
+        with_contract: z.boolean().optional().describe('Attach a contract to the new task (status=ready)'),
+        deliverables: z.array(z.string()).optional().describe('Contract deliverables: type:path:description'),
+        validation_commands: z.array(z.string()).optional().describe('Contract validation commands'),
+        constraints: z.array(z.string()).optional().describe('Contract constraints'),
+        // Aliases (some clients prefer camelCase)
+        withContract: z.boolean().optional().describe('Alias of with_contract'),
+        validationCommands: z.array(z.string()).optional().describe('Alias of validation_commands'),
       }
     },
-    async ({ file, column, title, description, priority, tags, assignee, dueDate, subtasks, relatedFiles }) => {
+    async ({
+      file,
+      column,
+      title,
+      description,
+      priority,
+      tags,
+      assignee,
+      dueDate,
+      subtasks,
+      relatedFiles,
+      with_contract,
+      deliverables,
+      validation_commands,
+      constraints,
+      withContract,
+      validationCommands,
+    }) => {
       const filePath = file || defaultFile;
       const result = readBoard(filePath);
 
@@ -401,16 +428,97 @@ export async function mcpCommand(options: McpOptions) {
         return { content: [{ type: 'text' as const, text: `Error: ${addResult.error}` }], isError: true };
       }
 
-      writeBoard(filePath, addResult.board!);
-
       // Get the new task
       const newTask = addResult.board!.columns
         .find(c => c.id === targetColumn!.id)!
         .tasks.slice(-1)[0];
 
+      // Optionally attach a contract (status=ready)
+      const wantsContract =
+        Boolean(with_contract ?? withContract) ||
+        Boolean(deliverables && deliverables.length > 0) ||
+        Boolean(validation_commands && validation_commands.length > 0) ||
+        Boolean(validationCommands && validationCommands.length > 0) ||
+        Boolean(constraints && constraints.length > 0);
+
+      let nextBoard = addResult.board!;
+      if (wantsContract) {
+        try {
+          const contract = buildContract({
+            deliverableSpecs: deliverables,
+            validationCommands: validation_commands ?? validationCommands,
+            constraints,
+          });
+
+          const contractResult = setTaskContract(nextBoard, newTask.id, contract);
+          if (!contractResult.success || !contractResult.board) {
+            return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to set contract'}` }], isError: true };
+          }
+          nextBoard = contractResult.board;
+        } catch (e) {
+          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+        }
+      }
+
+      writeBoard(filePath, nextBoard);
+
       return {
         content: [{ type: 'text' as const, text: `Task added successfully: ${newTask.id} - ${newTask.title}` }]
       };
+    }
+  );
+
+  // Attach contract tool
+  server.registerTool(
+    'attach_contract',
+    {
+      title: 'Attach Contract',
+      description: 'Attach a new contract to an existing task (status=ready)',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().optional().describe('Task ID to attach contract to'),
+        task_id: z.string().optional().describe('Alias of task'),
+        deliverables: z.array(z.string()).optional().describe('Contract deliverables: type:path:description'),
+        validation_commands: z.array(z.string()).optional().describe('Contract validation commands'),
+        constraints: z.array(z.string()).optional().describe('Contract constraints'),
+        validationCommands: z.array(z.string()).optional().describe('Alias of validation_commands'),
+      }
+    },
+    async ({ file, task, task_id, deliverables, validation_commands, constraints, validationCommands }) => {
+      const filePath = file || defaultFile;
+      const resolvedTaskId = task || task_id;
+      if (!resolvedTaskId) {
+        return { content: [{ type: 'text' as const, text: 'Error: task is required' }], isError: true };
+      }
+
+      const result = readBoard(filePath);
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+      const taskInfo = findTaskById(board, resolvedTaskId);
+      if (!taskInfo) {
+        return { content: [{ type: 'text' as const, text: `Error: Task not found: ${resolvedTaskId}` }], isError: true };
+      }
+
+      try {
+        const contract = buildContract({
+          deliverableSpecs: deliverables,
+          validationCommands: validation_commands ?? validationCommands,
+          constraints,
+        });
+
+        const contractResult = setTaskContract(board, resolvedTaskId, contract);
+        if (!contractResult.success || !contractResult.board) {
+          return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to attach contract'}` }], isError: true };
+        }
+
+        writeBoard(filePath, contractResult.board);
+        return { content: [{ type: 'text' as const, text: `Contract attached: ${resolvedTaskId}` }] };
+      } catch (e) {
+        return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+      }
     }
   );
 
@@ -1357,6 +1465,7 @@ export async function mcpCommand(options: McpOptions) {
         status: result.ok ? 'done' : 'failed',
         deliverables: result.deliverableChecks,
         commands: result.commandResults,
+        warnings: result.warnings,
       };
 
       return {

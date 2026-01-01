@@ -1,9 +1,9 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { Brainfile, findTaskById, findColumnById, findColumnByName, moveTask, type Board, type Column, type Task } from '@brainfile/core';
 import { CLIError, fileNotFound, parseFailure, missingRequired, operationFailed, columnNotFound, taskNotFound } from '../utils/cli-error';
 import { defaultLogger, type Logger } from '../utils/logger';
 import { getIncompleteSubtasksWarning } from '../utils/errorHandler';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 interface MoveOptions {
   file: string;
@@ -29,7 +29,7 @@ export function moveCommand(options: MoveOptions, logger: Logger = defaultLogger
   }
 
   // Resolve file path
-  const filePath = path.resolve(options.file);
+  const filePath = resolveCliBrainfilePath(options.file);
 
   // Check if file exists
   if (!fs.existsSync(filePath)) {

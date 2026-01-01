@@ -108,7 +108,7 @@ export async function beforePromptCommand(logger: Logger = defaultLogger, stdin?
     }
 
     // Check for uncommitted changes (excluding brainfile)
-    const hasChanges = await hasUncommittedChanges(['brainfile.md', '.brainfile.md']);
+    const hasChanges = await hasUncommittedChanges(['brainfile.md', '.brainfile.md', '.brainfile/brainfile.md']);
 
     if (hasChanges) {
       logger.log('\n⚠️  Files modified but @brainfile.md hasn\'t been updated.');

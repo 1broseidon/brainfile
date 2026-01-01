@@ -90,6 +90,35 @@ describe('add command', () => {
     expect(newTask).toBeDefined();
   });
 
+  it('should add a task with a contract when --with-contract options are provided', () => {
+    const result = addCommand({
+      file: tempBoardPath,
+      column: 'todo',
+      title: 'Contracted task',
+      withContract: true,
+      deliverable: [
+        'file:src/feature.ts:Main implementation',
+        'test:src/feature.test.ts:Unit tests',
+      ],
+      validation: ['npm test'],
+      constraint: ['Follow existing patterns'],
+    }, logger);
+
+    expect(result.success).toBe(true);
+
+    const content = fs.readFileSync(tempBoardPath, 'utf-8');
+    const board = Brainfile.parse(content);
+    const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
+    const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'Contracted task');
+
+    expect(newTask?.contract).toBeDefined();
+    expect(newTask?.contract?.status).toBe('ready');
+    expect(newTask?.contract?.deliverables?.map((d: any) => d.type)).toEqual(['file', 'test']);
+    expect(newTask?.contract?.deliverables?.[0].path).toBe('src/feature.ts');
+    expect(newTask?.contract?.validation?.commands).toEqual(['npm test']);
+    expect(newTask?.contract?.constraints).toEqual(['Follow existing patterns']);
+  });
+
   it('should throw CLIError when title is missing', () => {
     expect(() => {
       addCommand({

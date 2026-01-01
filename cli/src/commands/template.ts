@@ -1,9 +1,9 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { Brainfile, BUILT_IN_TEMPLATES, generateTaskId, type Board, type Column, type Task } from '@brainfile/core';
 import { defaultLogger, type Logger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure, missingRequired, columnNotFound, operationFailed } from '../utils/cli-error';
 import { ExitCode } from '../utils/errorHandler';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 interface TemplateOptions {
   file: string;
@@ -56,7 +56,7 @@ export function templateCommand(options: TemplateOptions, logger: Logger = defau
     }
 
     // Resolve file path
-    const filePath = path.resolve(options.file);
+    const filePath = resolveCliBrainfilePath(options.file);
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {

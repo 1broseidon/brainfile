@@ -8,4 +8,7 @@ export {
   contractPickupCommand,
   contractDeliverCommand,
   contractValidateCommand,
+  contractAttachCommand,
 } from './commands/contract';
+export { initCommand } from './commands/init';
+export { migrateCommand } from './commands/migrate';

@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { Brainfile, findTaskById, deleteTask } from '@brainfile/core';
 import chalk from 'chalk';
 import {
@@ -10,6 +9,7 @@ import {
   operationError,
   handleError,
 } from '../utils/errorHandler';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 interface DeleteOptions {
   file: string;
@@ -25,7 +25,7 @@ export function deleteCommand(options: DeleteOptions) {
     }
 
     // Resolve file path
-    const filePath = path.resolve(options.file);
+    const filePath = resolveCliBrainfilePath(options.file);
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {

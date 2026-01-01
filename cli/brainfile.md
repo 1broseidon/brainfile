@@ -14,7 +14,7 @@ columns:
     tasks:
       - id: task-100
         title: "[Long Description] Task with very long description to test wrapping"
-        description: "This is a very long description that should wrap across multiple keyboard lines. It is designed to test the layout engine's ability to handle multi-line content gracefully without breaking the visual hierarchy or causing overlap with subsequent tasks. We want to ensure that the truncation happens correctly after 3 lines as specified in the design doc."
+        description: This is a very long description that should wrap across multiple keyboard lines. It is designed to test the layout engine's ability to handle multi-line content gracefully without breaking the visual hierarchy or causing overlap with subsequent tasks. We want to ensure that the truncation happens correctly after 3 lines as specified in the design doc.
         priority: high
         tags:
           - test
@@ -26,7 +26,7 @@ columns:
           - test
       - id: task-102
         title: "[Subtasks] Task with subtasks (Mixed status)"
-        description: "Task with some completed and some incomplete subtasks"
+        description: Task with some completed and some incomplete subtasks
         priority: high
         subtasks:
           - id: task-102-1
@@ -50,15 +50,15 @@ columns:
             completed: false
       - id: task-104
         title: "[Related] Task with related files"
-        description: "Task showing related files display"
+        description: Task showing related files display
         relatedFiles:
-          - "src/tui/components/TaskCard.tsx"
-          - "src/tui/components/TaskList.tsx"
-          - "src/tui/theme.ts"
-          - "src/utils/very-long-file-name-that-should-be-truncated-correctly.ts"
+          - src/tui/components/TaskCard.tsx
+          - src/tui/components/TaskList.tsx
+          - src/tui/theme.ts
+          - src/utils/very-long-file-name-that-should-be-truncated-correctly.ts
       - id: task-105
         title: "[All Features] Complex task with everything"
-        description: "This task has priority, tags, due date, subtasks, and related files."
+        description: This task has priority, tags, due date, subtasks, and related files.
         priority: critical
         tags:
           - feature
@@ -69,7 +69,40 @@ columns:
             title: Subtask A
             completed: true
         relatedFiles:
-          - "README.md"
+          - README.md
+      - id: task-303
+        title: "Phase 1: Enable contract badges in TUI"
+        description: |-
+          Enable the existing contract badge functionality in task lists. The code already exists but the prop is not being passed.
+
+          **Changes needed:**
+          - TaskList.tsx: Pass showContractBadge={true} to TaskCard
+          - StackedTaskList.tsx: Pass showContractBadge={true} to TaskCard
+
+          **Expected behavior:**
+          Tasks with contracts show inline badge: [C:ready], [C:in_progress], [C:done], [C:failed]
+
+          **Testing:**
+          - Verify badges appear in collapsed task view
+          - Verify badges are color-coded correctly
+          - Test with tasks that have no contracts (should not show badge)
+        priority: high
+        tags:
+          - tui
+          - contracts
+          - ux
+        assignee: codex
+        relatedFiles:
+          - cli/src/tui/components/TaskList.tsx
+          - cli/src/tui/components/StackedTaskList.tsx
+      - id: task-304
+        title: Revamp CLI help screens and command documentation
+        priority: high
+        tags:
+          - cli
+          - ux
+          - documentation
+        assignee: codex
   - id: spacing-test
     title: Spacing Test
     tasks:
@@ -99,4 +132,40 @@ columns:
       - id: task-301
         title: Completed Task
         priority: low
+      - id: task-302
+        title: Research PM-to-worker flow improvements in CLI
+        description: |-
+          Research the CLI codebase (TUI and commands) to identify improvements for the PM → worker contract workflow experience.
+
+          **Research Questions:**
+          1. How does the current contract workflow work in TUI vs CLI commands?
+          2. What friction points exist in the pickup → deliver → validate cycle?
+          3. What visual/UX improvements could make contracts more discoverable and actionable?
+          4. How can we improve the PM experience when creating and managing contracts?
+          5. What best practices from other CLI tools could we adopt?
+
+          **Focus Areas:**
+          - TUI contract display and interaction
+          - CLI command ergonomics (pickup, deliver, validate)
+          - Contract creation workflow (currently manual YAML editing)
+          - Visual indicators for contract status
+          - Agent handoff experience
+          - Validation feedback and error handling
+
+          **Deliverables:**
+          - Current state analysis
+          - Pain points identified
+          - Proposed improvements (prioritized)
+          - Implementation recommendations
+        priority: high
+        tags:
+          - research
+          - cli
+          - tui
+          - ux
+        assignee: "@research"
+        relatedFiles:
+          - cli/src/tui/index.ts
+          - cli/src/commands/contract.ts
+          - cli/src/lib/contractRunner.ts
 ---

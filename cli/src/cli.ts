@@ -3,12 +3,14 @@
 import { Command } from 'commander';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { listCommand } from './commands/list';
-import { addCommand } from './commands/add';
+import { listCommand, LIST_COMMAND_HELP } from './commands/list';
+import { showCommand } from './commands/show';
+import { addCommand, ADD_COMMAND_HELP } from './commands/add';
 import { moveCommand } from './commands/move';
 import { templateCommand } from './commands/template';
 import { lintCommand } from './commands/lint';
 import { initCommand } from './commands/init';
+import { migrateCommand } from './commands/migrate';
 import { tuiCommand } from './commands/tui';
 import { patchCommand } from './commands/patch';
 import { deleteCommand } from './commands/delete';
@@ -22,7 +24,17 @@ import {
 } from './commands/auth';
 import { subtaskCommand } from './commands/subtask';
 import { mcpCommand } from './commands/mcp';
-import { contractPickupCommand, contractDeliverCommand, contractValidateCommand } from './commands/contract';
+import {
+  contractPickupCommand,
+  contractDeliverCommand,
+  contractValidateCommand,
+  contractAttachCommand,
+  CONTRACT_COMMAND_HELP,
+  CONTRACT_PICKUP_HELP,
+  CONTRACT_DELIVER_HELP,
+  CONTRACT_VALIDATE_HELP,
+  CONTRACT_ATTACH_HELP,
+} from './commands/contract';
 import {
   afterEditCommand,
   beforePromptCommand,
@@ -39,7 +51,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'list', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -84,29 +96,77 @@ if (tuiCheck.launch) {
 
   program
     .name('brainfile')
-    .description('Command-line interface for Brainfile task management\n\nUsage:\n  brainfile [file]        Open TUI (default: brainfile.md)\n  brainfile <command>     Run CLI command\n  brainfile mcp           Start MCP server for AI assistants')
+    .description('Command-line interface for Brainfile task management')
     .version(packageJson.version);
+
+  program.addHelpText('after', `
+Common workflows:
+  # Create a board
+  brainfile init
+
+  # Move an existing root brainfile.md into .brainfile/
+  brainfile migrate
+
+  # Daily usage
+  brainfile list
+  brainfile add -c todo -t "My task"
+  brainfile move -t task-1 -c done
+
+Contract workflow (PM ↔ Agent):
+  # PM creates a task with a contract
+  brainfile add -c todo -t "Feature" --assignee codex --with-contract --deliverable "file:src/feature.ts:Impl"
+
+  # Agent picks up / delivers
+  brainfile contract pickup -t task-123
+  brainfile contract deliver -t task-123
+
+  # PM validates
+  brainfile contract validate -t task-123
+
+Brainfile file resolution (when you don't pass --file):
+  1) .brainfile/brainfile.md
+  2) brainfile.md
+  3) .brainfile.md
+  4) .bb.md
+`.trimEnd());
 
   // Register commands
   program
     .command('init')
-    .description('Initialize a new brainfile.md in the current directory')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .description('Initialize a new .brainfile/brainfile.md in the current directory')
+    .option('-f, --file <path>', 'Path to brainfile file', '.brainfile/brainfile.md')
     .option('--force', 'Overwrite existing file')
     .action(initCommand);
 
   program
+    .command('migrate')
+    .description('Migrate root brainfile.md to .brainfile/brainfile.md')
+    .option('--dir <path>', 'Directory containing brainfile.md (default: cwd)')
+    .option('--force', 'Overwrite existing .brainfile/brainfile.md')
+    .action(migrateCommand);
+
+  const listCmd = program
     .command('list')
-    .description('List all tasks from brainfile.md')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .description('List tasks')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-c, --column <name>', 'Filter by column')
     .option('-t, --tag <name>', 'Filter by tag')
+    .option('--contract <status>', 'Filter by contract status (ready|in_progress|delivered|done|failed)')
     .action((options) => { listCommand(options); });
+  listCmd.addHelpText('after', `\n${LIST_COMMAND_HELP}`);
 
   program
+    .command('show')
+    .description('Show full details of a single task')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --task <id>', 'Task ID to show (required)')
+    .option('--json', 'Output task data as JSON')
+    .action((options) => { showCommand(options); });
+
+  const addCmd = program
     .command('add')
     .description('Add a new task')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-c, --column <name>', 'Column to add task to', 'todo')
     .option('-t, --title <text>', 'Task title (required)')
     .option('-d, --description <text>', 'Task description')
@@ -116,12 +176,32 @@ if (tuiCheck.launch) {
     .option('--due-date <date>', 'Due date (YYYY-MM-DD)')
     .option('--subtasks <titles>', 'Comma-separated subtask titles')
     .option('--files <paths>', 'Comma-separated related file paths')
+    .option('--with-contract', 'Attach a contract (status=ready)')
+    .option(
+      '--deliverable <spec>',
+      'Contract deliverable: type:path:description (description optional). Type: file|test|docs|design|research',
+      (value, previous: string[]) => (previous ? [...previous, value] : [value]),
+      []
+    )
+    .option(
+      '--validation <command>',
+      'Contract validation command (repeatable)',
+      (value, previous: string[]) => (previous ? [...previous, value] : [value]),
+      []
+    )
+    .option(
+      '--constraint <text>',
+      'Contract constraint (repeatable)',
+      (value, previous: string[]) => (previous ? [...previous, value] : [value]),
+      []
+    )
     .action((options) => { addCommand(options); });
+  addCmd.addHelpText('after', `\n${ADD_COMMAND_HELP}`);
 
   program
     .command('patch')
     .description('Update task fields (partial update)')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to update (required)')
     .option('--title <text>', 'New task title')
     .option('-d, --description <text>', 'New task description')
@@ -138,7 +218,7 @@ if (tuiCheck.launch) {
   program
     .command('delete')
     .description('Delete a task permanently')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to delete (required)')
     .option('--force', 'Confirm deletion (required)')
     .action(deleteCommand);
@@ -146,7 +226,7 @@ if (tuiCheck.launch) {
   program
     .command('archive')
     .description('Archive a task (locally or to GitHub/Linear)')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to archive')
     .option('--to <destination>', 'Archive destination: local, github, or linear')
     .option('--all', 'Archive all tasks from local archive to external service')
@@ -156,7 +236,7 @@ if (tuiCheck.launch) {
   program
     .command('restore')
     .description('Restore a task from the archive')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to restore (required)')
     .option('-c, --column <name>', 'Target column name or ID (required)')
     .action(restoreCommand);
@@ -164,7 +244,7 @@ if (tuiCheck.launch) {
   program
     .command('subtask')
     .description('Manage subtasks (add, delete, update, toggle)')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Parent task ID (required)')
     .option('--add <title>', 'Add a new subtask')
     .option('--delete <subtask-id>', 'Delete a subtask')
@@ -176,7 +256,7 @@ if (tuiCheck.launch) {
   program
     .command('move')
     .description('Move a task to a different column')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to move (required)')
     .option('-c, --column <name>', 'Target column name or ID (required)')
     .action((options) => { moveCommand(options); });
@@ -184,7 +264,7 @@ if (tuiCheck.launch) {
   program
     .command('template')
     .description('Manage and use task templates')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-l, --list', 'List all available templates')
     .option('-u, --use <template-id>', 'Create task from template')
     .option('--title <text>', 'Task title (for template usage)')
@@ -195,7 +275,7 @@ if (tuiCheck.launch) {
   program
     .command('lint')
     .description('Validate and auto-fix brainfile.md syntax')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('--fix', 'Automatically fix issues when possible')
     .option('--check', 'Exit with error code if issues found (for CI/CD)')
     .action((options) => { lintCommand(options); });
@@ -203,7 +283,7 @@ if (tuiCheck.launch) {
   program
     .command('tui')
     .description('Launch interactive Terminal UI for task management')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .action(tuiCommand);
 
   // Add hooks command group
@@ -299,34 +379,64 @@ if (tuiCheck.launch) {
   program
     .command('mcp')
     .description('Start MCP server for AI assistant integration')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .action(mcpCommand);
 
   // Add contract command group
   const contractCmd = program
     .command('contract')
     .description('Manage task contracts (pickup, deliver, validate)');
+  contractCmd.addHelpText('after', `\n${CONTRACT_COMMAND_HELP}`);
 
-  contractCmd
+  const contractPickupCmd = contractCmd
     .command('pickup')
     .description('Claim a contract and output context for an agent')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to pick up (required)')
     .action((options) => { contractPickupCommand(options); });
+  contractPickupCmd.addHelpText('after', `\n${CONTRACT_PICKUP_HELP}`);
 
-  contractCmd
+  const contractDeliverCmd = contractCmd
     .command('deliver')
     .description('Mark a contract as delivered')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to deliver (required)')
     .action((options) => { contractDeliverCommand(options); });
+  contractDeliverCmd.addHelpText('after', `\n${CONTRACT_DELIVER_HELP}`);
 
-  contractCmd
+  const contractValidateCmd = contractCmd
     .command('validate')
     .description('Validate contract deliverables and commands; set status done/failed')
-    .option('-f, --file <path>', 'Path to brainfile.md file', 'brainfile.md')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to validate (required)')
     .action((options) => { contractValidateCommand(options); });
+  contractValidateCmd.addHelpText('after', `\n${CONTRACT_VALIDATE_HELP}`);
+
+  const contractAttachCmd = contractCmd
+    .command('attach')
+    .description('Attach a new contract to an existing task (status=ready)')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --task <id>', 'Task ID to attach contract to (required)')
+    .option(
+      '--deliverable <spec>',
+      'Contract deliverable: type:path:description (description optional). Type: file|test|docs|design|research',
+      (value, previous: string[]) => (previous ? [...previous, value] : [value]),
+      []
+    )
+    .option(
+      '--validation <command>',
+      'Contract validation command (repeatable)',
+      (value, previous: string[]) => (previous ? [...previous, value] : [value]),
+      []
+    )
+    .option(
+      '--constraint <text>',
+      'Contract constraint (repeatable)',
+      (value, previous: string[]) => (previous ? [...previous, value] : [value]),
+      []
+    )
+    .action((options) => { contractAttachCommand(options); });
+  contractAttachCmd.addHelpText('after', `\n${CONTRACT_ATTACH_HELP}`);
 
   program.parse();
 

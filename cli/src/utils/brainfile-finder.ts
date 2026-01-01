@@ -1,23 +1,13 @@
 import * as fs from 'fs';
-import * as path from 'path';
+import { findBrainfile as findBrainfileCore } from '@brainfile/core';
 
 /**
- * Find brainfile.md or .brainfile.md in the current directory
+ * Find a brainfile by walking up from the current directory.
  * @returns Absolute path to brainfile, or null if not found
  */
 export function findBrainfile(): string | null {
-  const cwd = process.cwd();
-
-  const possibleNames = ['brainfile.md', '.brainfile.md'];
-
-  for (const name of possibleNames) {
-    const filePath = path.join(cwd, name);
-    if (fs.existsSync(filePath)) {
-      return filePath;
-    }
-  }
-
-  return null;
+  const found = findBrainfileCore(process.cwd());
+  return found?.absolutePath ?? null;
 }
 
 /**

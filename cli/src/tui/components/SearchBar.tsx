@@ -32,7 +32,9 @@ export function SearchBar({ query, width, showHints = true }: SearchBarProps) {
             <Text color={PALETTE.textSecondary}>@</Text>
             <Text color={PALETTE.textDim}>assignee </Text>
             <Text color={PALETTE.textSecondary}>due:</Text>
-            <Text color={PALETTE.textDim}>overdue|today|week</Text>
+            <Text color={PALETTE.textDim}>overdue|today|week </Text>
+            <Text color={PALETTE.textSecondary}>contract:</Text>
+            <Text color={PALETTE.textDim}>ready|in_progress|delivered|done|failed</Text>
           </Text>
         </Box>
       )}

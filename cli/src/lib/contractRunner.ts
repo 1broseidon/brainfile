@@ -3,6 +3,8 @@ import * as path from 'path';
 import { spawnSync } from 'child_process';
 import {
   Brainfile,
+  resolveBrainfilePath,
+  recordContractPickup,
   findTaskById,
   setTaskContractStatus,
   type Board,
@@ -37,6 +39,11 @@ export interface ContractDeliverResult {
   board: Board;
 }
 
+export interface ValidationWarning {
+  command: string;
+  message: string;
+}
+
 export interface ContractValidateResult {
   action: 'validate';
   board: Board;
@@ -47,7 +54,30 @@ export interface ContractValidateResult {
     error?: string;
   }>;
   commandResults: ValidationCommandResult[];
+  warnings: ValidationWarning[];
   ok: boolean;
+}
+
+/**
+ * Detects if a command changes directories, which can cause brainfile resolution issues.
+ * Returns a warning message if detected, undefined otherwise.
+ */
+function detectDirectoryChangeWarning(command: string): string | undefined {
+  // Patterns that change directory
+  const patterns = [
+    /\bcd\s+[^\s;|&]+/,           // cd path
+    /\bpushd\s+/,                  // pushd
+    /\bchdir\s+/,                  // chdir (less common)
+  ];
+
+  for (const pattern of patterns) {
+    if (pattern.test(command)) {
+      return `Command changes directory which may cause brainfile CLI to find a different brainfile. ` +
+        `If this command invokes brainfile CLI, use -f to specify the brainfile path explicitly, ` +
+        `or run the command from project root without cd.`;
+    }
+  }
+  return undefined;
 }
 
 export type ContractRunnerResult =
@@ -171,7 +201,8 @@ export function formatContractContextMarkdown(params: {
 }
 
 export function pickupContract(ctx: ContractRunContext): ContractPickupResult | { error: string } {
-  const read = readBoardFromFile(ctx.filePath);
+  const resolvedFilePath = resolveBrainfilePath({ filePath: ctx.filePath, startDir: process.cwd() });
+  const read = readBoardFromFile(resolvedFilePath);
   if ('error' in read) return { error: read.error };
 
   const { board } = read;
@@ -184,10 +215,22 @@ export function pickupContract(ctx: ContractRunContext): ContractPickupResult | 
   const result = setTaskContractStatus(board, ctx.taskId, 'in_progress');
   if (!result.success || !result.board) return { error: result.error || 'Failed to update contract status' };
 
-  writeBoardToFile(ctx.filePath, result.board);
+  writeBoardToFile(resolvedFilePath, result.board);
 
   const updatedTaskInfo = findTaskById(result.board, ctx.taskId)!;
   const updatedContract = updatedTaskInfo.task.contract!;
+
+  try {
+    const agent =
+      process.env.BRAINFILE_AGENT ||
+      process.env.CURSOR_AGENT ||
+      process.env.GITHUB_ACTOR ||
+      process.env.USER ||
+      'unknown';
+    recordContractPickup({ brainfilePath: resolvedFilePath, taskId: ctx.taskId, agent });
+  } catch {
+    // Never fail contract pickup due to state tracking.
+  }
 
   const markdown = formatContractContextMarkdown({
     taskId: updatedTaskInfo.task.id,
@@ -202,7 +245,8 @@ export function pickupContract(ctx: ContractRunContext): ContractPickupResult | 
 }
 
 export function deliverContract(ctx: ContractRunContext): ContractDeliverResult | { error: string } {
-  const read = readBoardFromFile(ctx.filePath);
+  const resolvedFilePath = resolveBrainfilePath({ filePath: ctx.filePath, startDir: process.cwd() });
+  const read = readBoardFromFile(resolvedFilePath);
   if ('error' in read) return { error: read.error };
 
   const { board } = read;
@@ -215,13 +259,14 @@ export function deliverContract(ctx: ContractRunContext): ContractDeliverResult 
   const result = setTaskContractStatus(board, ctx.taskId, 'delivered');
   if (!result.success || !result.board) return { error: result.error || 'Failed to update contract status' };
 
-  writeBoardToFile(ctx.filePath, result.board);
+  writeBoardToFile(resolvedFilePath, result.board);
 
   return { action: 'deliver', board: result.board };
 }
 
 export function validateContract(ctx: ContractRunContext): ContractValidateResult | { error: string } {
-  const read = readBoardFromFile(ctx.filePath);
+  const resolvedFilePath = resolveBrainfilePath({ filePath: ctx.filePath, startDir: process.cwd() });
+  const read = readBoardFromFile(resolvedFilePath);
   if ('error' in read) return { error: read.error };
 
   const { board } = read;
@@ -232,8 +277,14 @@ export function validateContract(ctx: ContractRunContext): ContractValidateResul
   if (!contractInfo.ok) return { error: contractInfo.error };
 
   const contract = contractInfo.contract;
-  const brainfileAbs = path.resolve(ctx.filePath);
-  const baseDir = path.dirname(brainfileAbs);
+  const brainfileAbs = path.resolve(resolvedFilePath);
+  const brainfileDir = path.dirname(brainfileAbs);
+
+  // If brainfile is inside .brainfile/, use parent as project root
+  // This ensures paths like "cli/src/file.ts" resolve from project root, not .brainfile/
+  const baseDir = path.basename(brainfileDir) === '.brainfile'
+    ? path.dirname(brainfileDir)
+    : brainfileDir;
 
   const deliverables = contract.deliverables ?? [];
   const deliverableChecks: ContractValidateResult['deliverableChecks'] = [];
@@ -264,6 +315,7 @@ export function validateContract(ctx: ContractRunContext): ContractValidateResul
   // If any deliverable failed, fail fast (and do not run commands)
   const deliverablesOk = deliverableChecks.every((c) => c.ok);
   const commandResults: ValidationCommandResult[] = [];
+  const warnings: ValidationWarning[] = [];
 
   let ok = deliverablesOk;
   if (ok) {
@@ -274,6 +326,12 @@ export function validateContract(ctx: ContractRunContext): ContractValidateResul
         commandResults.push({ command: raw, exitCode: 1, stdout: '', stderr: normalized.error });
         ok = false;
         break;
+      }
+
+      // Check for directory-changing commands that may cause issues
+      const dirWarning = detectDirectoryChangeWarning(normalized.value);
+      if (dirWarning) {
+        warnings.push({ command: normalized.value, message: dirWarning });
       }
 
       const res = spawnSync(normalized.value, {
@@ -310,7 +368,7 @@ export function validateContract(ctx: ContractRunContext): ContractValidateResul
     board: statusResult.board,
     deliverableChecks,
     commandResults,
+    warnings,
     ok,
   };
 }
-

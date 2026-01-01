@@ -10,11 +10,12 @@ export interface ParsedSearch {
   tag?: string;           // t:bug, #bug, tag:feature
   assignee?: string;      // @john, assignee:john
   due?: 'overdue' | 'today' | 'week' | 'month';  // due:overdue, due:today, due:week
+  contract?: 'ready' | 'in_progress' | 'delivered' | 'done' | 'failed'; // contract:ready, contract:in_progress
 }
 
 /**
  * Parse search query to extract structured filters
- * Supports: p:high, t:bug, #tag, @assignee, due:overdue
+ * Supports: p:high, t:bug, #tag, @assignee, due:overdue, contract:ready
  */
 export function parseSearchQuery(query: string): ParsedSearch {
   const result: ParsedSearch = { text: '' };
@@ -57,6 +58,15 @@ export function parseSearchQuery(query: string): ParsedSearch {
       const value = lower.split(':')[1];
       if (['overdue', 'today', 'week', 'month'].includes(value)) {
         result.due = value as ParsedSearch['due'];
+      }
+      continue;
+    }
+
+    // Contract status filter: contract:ready, contract:in_progress, contract:delivered, contract:done, contract:failed
+    if (lower.startsWith('contract:')) {
+      const value = lower.split(':')[1];
+      if (['ready', 'in_progress', 'delivered', 'done', 'failed'].includes(value)) {
+        result.contract = value as NonNullable<ParsedSearch['contract']>;
       }
       continue;
     }
@@ -118,6 +128,14 @@ export function taskMatchesFilter(task: Task, filter: ParsedSearch): boolean {
   } else if (filter.due) {
     // Due filter specified but task has no due date
     return false;
+  }
+
+  // Contract status filter
+  if (filter.contract) {
+    const contractStatus = (task as any).contract?.status as string | undefined;
+    if (!contractStatus || contractStatus !== filter.contract) {
+      return false;
+    }
   }
 
   // Text search (substring match across multiple fields)

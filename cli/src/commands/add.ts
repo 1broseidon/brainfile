@@ -1,9 +1,31 @@
 import * as fs from 'fs';
-import * as path from 'path';
-import { Brainfile, findColumnById, findColumnByName, addTask, type TaskInput, type Task } from '@brainfile/core';
+import { Brainfile, findColumnById, findColumnByName, addTask, setTaskContract, type TaskInput, type Task } from '@brainfile/core';
 import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
-import { CLIError, fileNotFound, parseFailure, missingRequired, operationFailed, columnNotFound } from '../utils/cli-error';
+import { CLIError, fileNotFound, parseFailure, missingRequired, operationFailed, columnNotFound, validationError } from '../utils/cli-error';
+import { buildContract, normalizeToArray } from '../utils/contractSpec';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+
+export const ADD_COMMAND_HELP = `
+Examples:
+  brainfile add --title "Fix login bug" --column todo
+
+Create a task with a contract (for an agent):
+  brainfile add -c todo -t "Implement feature" --assignee codex \\
+    --with-contract \\
+    --deliverable "file:src/feature.ts:Implementation" \\
+    --deliverable "test:src/__tests__/feature.test.ts:Unit tests" \\
+    --validation "cd core && npm test" \\
+    --constraint "Make minimal changes"
+
+Create a task from a template:
+  brainfile template --list
+  brainfile template --use bugfix --title "Fix login bug" -c todo
+
+Deliverable format:
+  type:path:description
+  type ∈ file | test | docs | design | research
+`.trimEnd();
 
 export interface AddOptions {
   file: string;
@@ -16,6 +38,10 @@ export interface AddOptions {
   dueDate?: string;
   subtasks?: string;
   files?: string;
+  withContract?: boolean;
+  deliverable?: string | string[];
+  validation?: string | string[];
+  constraint?: string | string[];
 }
 
 export interface AddResult {
@@ -35,7 +61,7 @@ export function addCommand(options: AddOptions, logger: Logger = defaultLogger):
   }
 
   // Resolve file path
-  const filePath = path.resolve(options.file);
+  const filePath = resolveCliBrainfilePath(options.file);
 
   // Check if file exists
   if (!fs.existsSync(filePath)) {
@@ -88,6 +114,34 @@ export function addCommand(options: AddOptions, logger: Logger = defaultLogger):
   const newTask = board.columns
     .find(col => col.id === targetColumn!.id)!
     .tasks[board.columns.find(col => col.id === targetColumn!.id)!.tasks.length - 1];
+
+  // Optionally attach a contract (status=ready)
+  const deliverableSpecs = normalizeToArray(options.deliverable);
+  const validationCommands = normalizeToArray(options.validation);
+  const constraints = normalizeToArray(options.constraint);
+  const shouldAttachContract =
+    Boolean(options.withContract) ||
+    deliverableSpecs.length > 0 ||
+    validationCommands.length > 0 ||
+    constraints.length > 0;
+  if (shouldAttachContract) {
+    let contract;
+    try {
+      contract = buildContract({
+        deliverableSpecs,
+        validationCommands,
+        constraints,
+      });
+    } catch (e) {
+      throw validationError((e as Error).message);
+    }
+
+    const contractResult = setTaskContract(board, newTask.id, contract);
+    if (!contractResult.success) {
+      throw operationFailed(contractResult.error || 'Failed to set task contract');
+    }
+    board = contractResult.board!;
+  }
 
   // Serialize and write back
   const updatedContent = Brainfile.serialize(board);

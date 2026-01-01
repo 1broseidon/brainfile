@@ -51,6 +51,17 @@ describe('list command', () => {
     expect(output).not.toContain('task-3');
   });
 
+  it('should filter tasks by contract status', () => {
+    const result = listCommand({ file: testBoardPath, contract: 'ready' }, logger);
+
+    expect(result.success).toBe(true);
+    const output = logger.getOutput();
+
+    expect(output).toContain('task-1');
+    expect(output).not.toContain('task-2');
+    expect(output).not.toContain('task-3');
+  });
+
   it('should throw CLIError for non-existent file', () => {
     expect(() => {
       listCommand({ file: 'non-existent.md' }, logger);

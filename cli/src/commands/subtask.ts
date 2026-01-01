@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { Brainfile, findTaskById, addSubtask, deleteSubtask, updateSubtask, toggleSubtask } from '@brainfile/core';
 import chalk from 'chalk';
 import {
@@ -11,6 +10,7 @@ import {
   validationError,
   handleError,
 } from '../utils/errorHandler';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 interface SubtaskOptions {
   file: string;
@@ -39,7 +39,7 @@ export function subtaskCommand(options: SubtaskOptions) {
     }
 
     // Resolve file path
-    const filePath = path.resolve(options.file);
+    const filePath = resolveCliBrainfilePath(options.file);
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {

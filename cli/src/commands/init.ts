@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
+import { ensureDotBrainfileGitignore } from '@brainfile/core';
 
 interface InitOptions {
   file?: string;
@@ -35,8 +36,11 @@ Add your project description here.
 
 export function initCommand(options: InitOptions) {
   try {
-    // Resolve file path
-    const filePath = path.resolve(options.file || 'brainfile.md');
+    // Default to the new directory structure
+    const filePath = path.resolve(options.file || path.join('.brainfile', 'brainfile.md'));
+
+    // Ensure `.brainfile/.gitignore` ignores state.json by default
+    ensureDotBrainfileGitignore(filePath);
 
     // Check if file already exists
     if (fs.existsSync(filePath) && !options.force) {
@@ -44,6 +48,8 @@ export function initCommand(options: InitOptions) {
       console.log(chalk.gray('Use --force to overwrite'));
       process.exit(1);
     }
+
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
 
     // Write the default brainfile
     fs.writeFileSync(filePath, DEFAULT_BRAINFILE, 'utf-8');
@@ -54,7 +60,7 @@ export function initCommand(options: InitOptions) {
     console.log(chalk.gray(`  Created: ${filePath}`));
     console.log('');
     console.log(chalk.gray('Next steps:'));
-    console.log(chalk.gray('  1. Edit brainfile.md to customize your project'));
+    console.log(chalk.gray('  1. Edit your brainfile to customize your project'));
     console.log(chalk.gray('  2. Add tasks: brainfile add --title "Your task"'));
     console.log(chalk.gray('  3. View tasks: brainfile list'));
 

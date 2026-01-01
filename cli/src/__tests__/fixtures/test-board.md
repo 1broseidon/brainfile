@@ -7,6 +7,8 @@ columns:
       - id: task-1
         title: First task
         priority: high
+        contract:
+          status: ready
         tags:
           - test
           - urgent
@@ -16,6 +18,8 @@ columns:
       - id: task-2
         title: Second task
         priority: medium
+        contract:
+          status: in_progress
         tags:
           - test
         subtasks:
@@ -31,4 +35,6 @@ columns:
       - id: task-3
         title: Completed task
         priority: low
+        contract:
+          status: done
 ---

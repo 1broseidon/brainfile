@@ -125,6 +125,7 @@ export function HelpOverlay({ termWidth, termHeight, layoutMode = 'wide' }: Help
             <HelpRow k="#tag" desc="Tag" />
             <HelpRow k="@name" desc="Assignee" />
             <HelpRow k="due:week" desc="Due date" />
+            <HelpRow k="contract:ready" desc="Contract status" />
           </Box>
 
           {/* Right column: Rules + Archive */}

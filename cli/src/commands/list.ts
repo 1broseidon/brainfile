@@ -1,14 +1,15 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { Brainfile, Task } from '@brainfile/core';
 import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure } from '../utils/cli-error';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 export interface ListOptions {
   file: string;
   column?: string;
   tag?: string;
+  contract?: string;
 }
 
 export interface ListResult {
@@ -17,13 +18,25 @@ export interface ListResult {
   columnsDisplayed: number;
 }
 
+export const LIST_COMMAND_HELP = `
+Examples:
+  brainfile list
+  brainfile list --column todo
+  brainfile list --tag urgent
+  brainfile list --contract ready
+
+Notes:
+  - When you don't pass --file, Brainfile auto-detects (prefers .brainfile/brainfile.md)
+  - Contract statuses: ready | in_progress | delivered | done | failed
+`.trimEnd();
+
 /**
  * List tasks from a brainfile.
  * Throws CLIError on failure instead of calling process.exit.
  */
 export function listCommand(options: ListOptions, logger: Logger = defaultLogger): ListResult {
   // Resolve file path
-  const filePath = path.resolve(options.file);
+  const filePath = resolveCliBrainfilePath(options.file);
 
   // Check if file exists
   if (!fs.existsSync(filePath)) {
@@ -56,11 +69,19 @@ export function listCommand(options: ListOptions, logger: Logger = defaultLogger
   // Display each column
   for (const column of columns) {
     // Filter tasks by tag if specified
-    const tasks = options.tag
-      ? column.tasks.filter(task => task.tags?.includes(options.tag!))
-      : column.tasks;
+    let tasks = column.tasks;
+    if (options.tag) {
+      tasks = tasks.filter(task => task.tags?.includes(options.tag!));
+    }
+    if (options.contract) {
+      const status = options.contract.trim().toLowerCase();
+      tasks = tasks.filter(task => task.contract?.status?.toLowerCase() === status);
+    }
 
     if (tasks.length === 0 && options.tag) {
+      continue;
+    }
+    if (tasks.length === 0 && options.contract) {
       continue;
     }
 

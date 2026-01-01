@@ -1,10 +1,10 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { BrainfileLinter, LintIssue } from '@brainfile/core';
 import chalk from 'chalk';
 import { defaultLogger, type Logger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure } from '../utils/cli-error';
 import { ExitCode } from '../utils/errorHandler';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 interface LintOptions {
   file: string;
@@ -21,7 +21,7 @@ export interface LintResult {
 
 export function lintCommand(options: LintOptions, logger: Logger = defaultLogger): LintResult {
   // Resolve file path
-  const filePath = path.resolve(options.file);
+  const filePath = resolveCliBrainfilePath(options.file);
 
   // Check if file exists
   if (!fs.existsSync(filePath)) {

@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import { Brainfile, findTaskById, patchTask, type TaskPatch } from '@brainfile/core';
 import chalk from 'chalk';
 import {
@@ -11,6 +10,7 @@ import {
   operationError,
   handleError,
 } from '../utils/errorHandler';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 interface PatchOptions {
   file: string;
@@ -44,7 +44,7 @@ export function patchCommand(options: PatchOptions) {
     }
 
     // Resolve file path
-    const filePath = path.resolve(options.file);
+    const filePath = resolveCliBrainfilePath(options.file);
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {

@@ -1,15 +1,15 @@
 import React from 'react';
 import { render } from 'ink';
 import * as fs from 'fs';
-import * as path from 'path';
 import { BrainfileTUI } from '../tui/index.js';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 
 interface TuiOptions {
   file: string;
 }
 
 export async function tuiCommand(options: TuiOptions) {
-  const filePath = path.resolve(options.file);
+  const filePath = resolveCliBrainfilePath(options.file);
 
   if (!fs.existsSync(filePath)) {
     console.error(`Error: File not found: ${filePath}`);

@@ -20,7 +20,17 @@ describe('brainfile-finder', () => {
   });
 
   describe('findBrainfile', () => {
-    it('should find brainfile.md in current directory', () => {
+    it('should find .brainfile/brainfile.md in current directory', () => {
+      fs.mkdirSync(path.join(tempDir, '.brainfile'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, '.brainfile', 'brainfile.md'), 'test content');
+
+      const result = findBrainfile();
+
+      expect(result).not.toBeNull();
+      expect(result).toBe(path.join(tempDir, '.brainfile', 'brainfile.md'));
+    });
+
+    it('should find brainfile.md in current directory when .brainfile/brainfile.md is missing', () => {
       fs.writeFileSync(path.join(tempDir, 'brainfile.md'), 'test content');
 
       const result = findBrainfile();
@@ -29,7 +39,7 @@ describe('brainfile-finder', () => {
       expect(result).toBe(path.join(tempDir, 'brainfile.md'));
     });
 
-    it('should find .brainfile.md in current directory', () => {
+    it('should find .brainfile.md in current directory when other options are missing', () => {
       fs.writeFileSync(path.join(tempDir, '.brainfile.md'), 'test content');
 
       const result = findBrainfile();
@@ -38,14 +48,15 @@ describe('brainfile-finder', () => {
       expect(result).toBe(path.join(tempDir, '.brainfile.md'));
     });
 
-    it('should prefer brainfile.md over .brainfile.md', () => {
-      fs.writeFileSync(path.join(tempDir, 'brainfile.md'), 'test content 1');
-      fs.writeFileSync(path.join(tempDir, '.brainfile.md'), 'test content 2');
+    it('should prefer .brainfile/brainfile.md over brainfile.md', () => {
+      fs.mkdirSync(path.join(tempDir, '.brainfile'), { recursive: true });
+      fs.writeFileSync(path.join(tempDir, '.brainfile', 'brainfile.md'), 'test content 1');
+      fs.writeFileSync(path.join(tempDir, 'brainfile.md'), 'test content 2');
 
       const result = findBrainfile();
 
       expect(result).not.toBeNull();
-      expect(result).toBe(path.join(tempDir, 'brainfile.md'));
+      expect(result).toBe(path.join(tempDir, '.brainfile', 'brainfile.md'));
     });
 
     it('should return null when no brainfile exists', () => {

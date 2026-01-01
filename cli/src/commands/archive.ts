@@ -35,6 +35,7 @@ import {
   getEffectiveDestination,
   type ParsedDestination,
 } from '../utils/config';
+import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { createGitHubIssue, isGitHubAuthenticated } from '../utils/github-auth';
 import { createLinearIssue, isLinearAuthenticated, getLinearTeams } from '../utils/linear-auth';
 import {
@@ -70,7 +71,7 @@ export async function archiveCommand(options: ArchiveOptions) {
     }
 
     // Resolve file path
-    const filePath = path.resolve(options.file);
+    const filePath = resolveCliBrainfilePath(options.file);
 
     // Check if file exists
     if (!fs.existsSync(filePath)) {

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.2] - 2026-01-01
+
+### Fixed
+- **Contract validation base directory** - When brainfile is at `.brainfile/brainfile.md`, validation now correctly resolves paths from project root instead of `.brainfile/` directory
+  - Deliverable paths like `cli/src/file.ts` now resolve correctly
+  - Validation commands run from project root, not `.brainfile/`
+
+### Added
+- **Directory-change warning in validation** - Warns when validation commands use `cd`, `pushd`, or `chdir`
+  - Explains that directory changes may cause brainfile CLI to find a different brainfile
+  - Suggests using `-f` flag or running from project root
+  - Warning appears in both CLI and MCP tool output
+- **`--json` flag for show command** - Output task data as JSON for scripting
+  - `brainfile show -t task-123 --json`
+  - Includes all task fields plus `column` and `archived` metadata
+
 ## [0.12.4] - 2025-11-28
 
 ### Fixed
