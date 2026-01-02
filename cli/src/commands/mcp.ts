@@ -23,13 +23,17 @@ import {
   moveTasks,
   patchTasks,
   deleteTasks,
+  // Rule operations
+  addRule,
+  deleteRule,
   // Discovery
   findNearestBrainfile,
   findBrainfile,
   resolveBrainfilePath,
   type TaskInput,
   type TaskPatch,
-  type Board
+  type Board,
+  type Rules,
 } from '@brainfile/core';
 import { mcpCheckIncompleteSubtasks } from '../utils/errorHandler';
 import { buildContract } from '../utils/contractSpec';
@@ -1471,6 +1475,161 @@ export async function mcpCommand(options: McpOptions) {
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
         isError: !result.ok
+      };
+    }
+  );
+
+  // ==========================================================================
+  // RULES
+  // ==========================================================================
+
+  // List rules tool
+  server.registerTool(
+    'list_rules',
+    {
+      title: 'List Rules',
+      description: 'List all project rules (always, never, prefer, context) from the brainfile',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        category: z.enum(['always', 'never', 'prefer', 'context']).optional().describe('Filter by rule category')
+      }
+    },
+    async ({ file, category }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      const { board } = result;
+      const rules = board.rules || {};
+
+      // Filter by category if specified
+      let outputRules: Rules = rules;
+      if (category) {
+        outputRules = { [category]: rules[category] || [] } as Rules;
+      }
+
+      // Count total rules
+      const countRules = (r: Rules) =>
+        (r.always?.length || 0) +
+        (r.never?.length || 0) +
+        (r.prefer?.length || 0) +
+        (r.context?.length || 0);
+
+      const output = {
+        rules: outputRules,
+        totalCount: category
+          ? (outputRules[category]?.length || 0)
+          : countRules(rules),
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
+      };
+    }
+  );
+
+  // Add rule tool
+  server.registerTool(
+    'add_rule',
+    {
+      title: 'Add Rule',
+      description: 'Add a new project rule to the brainfile',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        category: z.enum(['always', 'never', 'prefer', 'context']).describe('Rule category'),
+        text: z.string().describe('Rule text/description')
+      }
+    },
+    async ({ file, category, text }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+
+      const addResult = addRule(board, category, text);
+
+      if (!addResult.success || !addResult.board) {
+        return { content: [{ type: 'text' as const, text: `Error: ${addResult.error}` }], isError: true };
+      }
+
+      writeBoard(filePath, addResult.board);
+
+      // Find the newly added rule (last one in the category)
+      const newRules = addResult.board.rules?.[category] || [];
+      const newRule = newRules[newRules.length - 1];
+
+      const output = {
+        success: true,
+        category,
+        rule: newRule,
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
+      };
+    }
+  );
+
+  // Delete rule tool
+  server.registerTool(
+    'delete_rule',
+    {
+      title: 'Delete Rule',
+      description: 'Delete a project rule from the brainfile by category and ID',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        category: z.enum(['always', 'never', 'prefer', 'context']).describe('Rule category'),
+        id: z.number().describe('Rule ID to delete')
+      }
+    },
+    async ({ file, category, id }) => {
+      const filePath = file || defaultFile;
+      const result = readBoard(filePath);
+
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      let { board } = result;
+
+      // Find the rule being deleted for the response
+      const existingRules = board.rules?.[category] || [];
+      const ruleToDelete = existingRules.find((r: { id: number; rule: string }) => r.id === id);
+
+      if (!ruleToDelete) {
+        const availableIds = existingRules.map((r: { id: number }) => r.id).join(', ');
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error: Rule ${id} not found in ${category}. ${availableIds ? `Available IDs: ${availableIds}` : `No rules in ${category} category`}`
+          }],
+          isError: true
+        };
+      }
+
+      const deleteResult = deleteRule(board, category, id);
+
+      if (!deleteResult.success || !deleteResult.board) {
+        return { content: [{ type: 'text' as const, text: `Error: ${deleteResult.error}` }], isError: true };
+      }
+
+      writeBoard(filePath, deleteResult.board);
+
+      const output = {
+        success: true,
+        category,
+        deletedRule: ruleToDelete,
+      };
+
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
       };
     }
   );

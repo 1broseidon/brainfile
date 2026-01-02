@@ -1,6 +1,6 @@
 {
   "name": "@brainfile/cli",
-  "version": "0.13.2",
+  "version": "0.13.3",
   "description": "Command-line interface for Brainfile task management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -8,7 +8,8 @@
     "brainfile": "./dist/cli.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run copy-schemas",
+    "copy-schemas": "mkdir -p dist/schemas && cp src/schemas/*.json dist/schemas/",
     "clean": "rm -rf dist",
     "dev": "tsc --watch",
     "test": "jest",

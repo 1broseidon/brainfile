@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.3] - 2026-01-01
+
+### Added
+- **`brainfile schema` command** - View and manage brainfile schemas
+  - `brainfile schema` - List available schemas (board, base)
+  - `brainfile schema <name>` - Display specific schema as JSON
+  - `brainfile schema update` - Check for schema updates from protocol repo
+  - Schemas bundled with CLI package (no network for basic usage)
+  - 24-hour auto-check for updates with non-blocking notification
+  - `--json` flag for programmatic output
+- **`brainfile rules` command** - Manage project rules
+  - `brainfile rules` - List all rules by category
+  - `brainfile rules add <category> "rule text"` - Add a rule
+  - `brainfile rules delete <category> <id>` - Delete a rule by ID
+  - Categories: `always`, `never`, `prefer`, `context`
+  - `--json` flag for programmatic output
+- **MCP tools for rules** - `list_rules`, `add_rule`, `delete_rule`
+
 ## [0.13.2] - 2026-01-01
 
 ### Fixed

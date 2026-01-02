@@ -44,6 +44,8 @@ import {
   listCommand as hooksListCommand
 } from './commands/hooks';
 import { configCommand } from './commands/config';
+import { schemaCommand, SCHEMA_COMMAND_HELP } from './commands/schema';
+import { rulesCommand, RULES_COMMAND_HELP } from './commands/rules';
 
 // Read version from package.json
 const packageJson = JSON.parse(
@@ -51,7 +53,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -437,6 +439,31 @@ Brainfile file resolution (when you don't pass --file):
     )
     .action((options) => { contractAttachCommand(options); });
   contractAttachCmd.addHelpText('after', `\n${CONTRACT_ATTACH_HELP}`);
+
+  // Add schema command
+  const schemaCmd = program
+    .command('schema [name]')
+    .description('View and manage brainfile schemas')
+    .option('--json', 'Output in JSON format')
+    .action((name, options) => { schemaCommand({ name, json: options.json }); });
+  schemaCmd.addHelpText('after', `\n${SCHEMA_COMMAND_HELP}`);
+
+  // Add rules command group
+  const rulesCmd = program
+    .command('rules [action]')
+    .description('Manage project rules (always, never, prefer, context)')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output in JSON format')
+    .option('--category <category>', 'Filter by category (for list)')
+    .argument('[args...]', 'Arguments for the action (category, text/id)')
+    .action((action, args, options) => {
+      rulesCommand(action, args, {
+        file: options.file,
+        json: options.json,
+        category: options.category,
+      });
+    });
+  rulesCmd.addHelpText('after', `\n${RULES_COMMAND_HELP}`);
 
   program.parse();
 

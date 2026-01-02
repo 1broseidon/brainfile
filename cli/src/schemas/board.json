@@ -1,0 +1,198 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v1/board.json",
+  "title": "Brainfile Board Schema",
+  "description": "Schema for Kanban-style task boards with columns and tasks",
+  "x-brainfile-renderer": "kanban",
+  "x-brainfile-columns-path": "$.columns",
+  "x-brainfile-items-path": "$.columns[*].tasks",
+  "x-brainfile-title-field": "title",
+  "x-brainfile-status-field": "priority",
+  "allOf": [
+    {
+      "$ref": "https://brainfile.md/v1/base.json"
+    },
+    {
+      "type": "object",
+      "required": ["columns"],
+      "properties": {
+        "type": {
+          "const": "board"
+        },
+        "columns": {
+          "type": "array",
+          "description": "Task columns (e.g., To Do, In Progress, Done)",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/column"
+          }
+        },
+        "statsConfig": {
+          "type": "object",
+          "description": "Configuration for statistics calculation",
+          "properties": {
+            "columns": {
+              "type": "array",
+              "description": "Column IDs to include in progress statistics",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "archive": {
+          "type": "array",
+          "description": "Archived tasks removed from active columns",
+          "items": {
+            "$ref": "#/definitions/task"
+          }
+        }
+      },
+      "additionalProperties": true
+    }
+  ],
+  "definitions": {
+    "column": {
+      "type": "object",
+      "required": ["id", "title", "tasks"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique column identifier in kebab-case (e.g., 'todo', 'in-progress')",
+          "pattern": "^[a-z]+(-[a-z]+)*$",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "description": "Display title for the column",
+          "minLength": 1
+        },
+        "order": {
+          "type": "integer",
+          "description": "Display order for the column. Lower numbers appear first. Columns without order appear last.",
+          "minimum": 0
+        },
+        "completionColumn": {
+          "type": "boolean",
+          "description": "Marks this column as a completion column. When true, tasks moved to this column are considered complete. Enables explicit completion semantics for non-English column names and custom workflows.",
+          "default": false
+        },
+        "tasks": {
+          "type": "array",
+          "description": "Tasks in this column",
+          "items": {
+            "$ref": "#/definitions/task"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "task": {
+      "type": "object",
+      "required": ["id", "title"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique task identifier following pattern 'task-N'",
+          "pattern": "^task-[0-9]+$"
+        },
+        "title": {
+          "type": "string",
+          "description": "Task title",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional detailed task description (supports Markdown)"
+        },
+        "assignee": {
+          "type": "string",
+          "description": "Optional task assignee"
+        },
+        "tags": {
+          "type": "array",
+          "description": "Optional task tags",
+          "items": {
+            "type": "string"
+          }
+        },
+        "priority": {
+          "type": "string",
+          "description": "Optional task priority",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "effort": {
+          "type": "string",
+          "description": "Optional effort estimation for AI planning",
+          "enum": ["trivial", "small", "medium", "large", "xlarge"]
+        },
+        "blockedBy": {
+          "type": "array",
+          "description": "Optional list of task IDs that block this task",
+          "items": {
+            "type": "string",
+            "pattern": "^task-[0-9]+$"
+          }
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "Optional due date in ISO 8601 format",
+          "format": "date"
+        },
+        "createdAt": {
+          "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+          "description": "When the task was created"
+        },
+        "updatedAt": {
+          "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+          "description": "When the task was last updated"
+        },
+        "relatedFiles": {
+          "type": "array",
+          "description": "Optional list of related file paths or code locations",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subtasks": {
+          "type": "array",
+          "description": "Optional list of subtasks for tracking granular progress",
+          "items": {
+            "$ref": "#/definitions/subtask"
+          }
+        },
+        "template": {
+          "type": "string",
+          "description": "Optional task template type",
+          "enum": ["bug", "feature", "refactor"]
+        },
+        "contract": {
+          "$ref": "https://brainfile.md/v1/contract.json"
+        }
+      },
+      "additionalProperties": true
+    },
+    "subtask": {
+      "type": "object",
+      "required": ["id", "title", "completed"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique subtask identifier, typically 'task-N-M' pattern",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "description": "Subtask title",
+          "minLength": 1
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Whether the subtask is completed"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
