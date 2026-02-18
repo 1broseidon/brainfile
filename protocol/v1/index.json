@@ -38,7 +38,7 @@
       "extends": null,
       "requiredFields": ["id", "title"],
       "conditionallyRequired": ["column (required for active tasks, omitted for completed tasks)"],
-      "optionalFields": ["position", "description", "assignee", "tags", "priority", "effort", "blockedBy", "dueDate", "createdAt", "updatedAt", "completedAt", "relatedFiles", "subtasks", "template", "contract"],
+      "optionalFields": ["position", "description", "assignee", "tags", "priority", "effort", "blockedBy", "dueDate", "createdAt", "updatedAt", "completedAt", "relatedFiles", "subtasks", "template", "type", "contract"],
       "filePattern": ".brainfile/tasks/*.md",
       "completedFilePattern": ".brainfile/logs/*.md"
     },
@@ -51,6 +51,26 @@
       "extends": null,
       "requiredFields": ["status"],
       "optionalFields": ["version", "deliverables", "validation", "constraints", "outOfScope", "feedback", "metrics", "context"]
+    }
+  },
+  "examples": {
+    "epic": {
+      "id": "epic",
+      "title": "Epic Schema (Example)",
+      "description": "Example schema for epic documents. Groups related tasks and tracks collective progress with children and status fields.",
+      "url": "https://brainfile.md/v1/examples/epic.json",
+      "status": "example",
+      "extends": "task",
+      "additionalFields": ["children", "status"]
+    },
+    "adr": {
+      "id": "adr",
+      "title": "ADR Schema (Example)",
+      "description": "Example schema for Architecture Decision Records. Captures architectural decisions with lifecycle status and supersession tracking.",
+      "url": "https://brainfile.md/v1/examples/adr.json",
+      "status": "example",
+      "extends": "task",
+      "additionalFields": ["status", "supersededBy"]
     }
   },
   "links": {

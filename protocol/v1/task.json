@@ -8,8 +8,8 @@
   "properties": {
     "id": {
       "type": "string",
-      "description": "Unique task identifier following pattern 'task-N'",
-      "pattern": "^task-[0-9]+$"
+      "description": "Unique identifier following pattern '{type}-N' (e.g., task-1, epic-1, adr-1)",
+      "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
     },
     "title": {
       "type": "string",
@@ -18,7 +18,7 @@
     },
     "column": {
       "type": "string",
-      "description": "Column ID this task belongs to. References a column.id in the board file. Required for active tasks in tasks/. Omitted for completed tasks in logs/ (replaced by completedAt).",
+      "description": "Column ID this task belongs to. References a column.id in the board file. Required for active tasks in tasks/. Omitted for completed tasks in logs/ (replaced by completedAt). In board.strict mode, CLI operations reject unknown columns (including move targets).",
       "pattern": "^[a-z]+(-[a-z]+)*$",
       "minLength": 1
     },
@@ -54,10 +54,10 @@
     },
     "blockedBy": {
       "type": "array",
-      "description": "List of task IDs that block this task",
+      "description": "List of item IDs that block this task",
       "items": {
         "type": "string",
-        "pattern": "^task-[0-9]+$"
+        "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
       }
     },
     "dueDate": {
@@ -90,6 +90,12 @@
       "items": {
         "$ref": "#/definitions/subtask"
       }
+    },
+    "type": {
+      "type": "string",
+      "description": "Document type identifier. Determines which schema and behavior apply to this item. When omitted, the item is a standard task. Custom types (e.g., 'epic', 'adr') are defined in the board's types map. In board.strict mode, CLI add operations reject unknown types. The task type is always implicitly valid even when not present in the board.types map.",
+      "minLength": 1,
+      "examples": ["epic", "adr"]
     },
     "template": {
       "type": "string",

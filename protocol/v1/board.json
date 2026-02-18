@@ -26,6 +26,32 @@
             "$ref": "#/definitions/column"
           }
         },
+        "types": {
+          "type": "object",
+          "description": "Optional map of document type definitions. Keys are type identifiers (e.g., 'epic', 'adr') that match the type field in task.json. In strict mode, this map is the allowlist for non-task types; the built-in task type is always implicitly valid. When omitted, all items are standard tasks.",
+          "additionalProperties": {
+            "$ref": "#/definitions/typeEntry"
+          },
+          "examples": [
+            {
+              "epic": {
+                "idPrefix": "epic",
+                "completable": false,
+                "schema": "https://brainfile.md/v1/examples/epic.json"
+              },
+              "adr": {
+                "idPrefix": "adr",
+                "completable": false,
+                "schema": "https://brainfile.md/v1/examples/adr.json"
+              }
+            }
+          ]
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Enables strict validation for CLI operations. When true, add rejects unknown task types and move rejects unknown columns. When false (default), unknown types and columns are allowed for backward compatibility. The task type is always implicitly valid even if not listed in types.",
+          "default": false
+        },
         "statsConfig": {
           "type": "object",
           "description": "Configuration for statistics calculation",
@@ -53,6 +79,34 @@
     }
   ],
   "definitions": {
+    "typeEntry": {
+      "type": "object",
+      "description": "Configuration for a custom document type. Defines how items of this type behave within the board.",
+      "required": ["idPrefix"],
+      "properties": {
+        "idPrefix": {
+          "type": "string",
+          "description": "Prefix for auto-generated IDs of this type (e.g., 'epic' produces 'epic-1', 'epic-2'). Must be unique across all type entries.",
+          "pattern": "^[a-z]+(-[a-z]+)*$",
+          "minLength": 1
+        },
+        "completable": {
+          "type": "boolean",
+          "description": "Whether items of this type can be completed (moved to completion columns and logs/). Defaults to true. Set to false for reference documents like ADRs or epics that are not completable tasks.",
+          "default": true
+        },
+        "schema": {
+          "type": "string",
+          "description": "Optional JSON Schema URL for validating the extended fields of this type. Can be a remote URI (https://) or a local file path relative to the project root.",
+          "format": "uri-reference",
+          "examples": [
+            "https://brainfile.md/v1/examples/epic.json",
+            ".brainfile/schemas/adr.json"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
     "column": {
       "type": "object",
       "required": ["id", "title"],
@@ -98,8 +152,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique task identifier following pattern 'task-N'",
-          "pattern": "^task-[0-9]+$"
+          "description": "Unique identifier following pattern '{type}-N'",
+          "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
         },
         "title": {
           "type": "string",
@@ -133,10 +187,10 @@
         },
         "blockedBy": {
           "type": "array",
-          "description": "Optional list of task IDs that block this task",
+          "description": "Optional list of item IDs that block this task",
           "items": {
             "type": "string",
-            "pattern": "^task-[0-9]+$"
+            "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
           }
         },
         "dueDate": {

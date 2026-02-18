@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v1/examples/adr.json",
+  "title": "Brainfile ADR Schema",
+  "description": "Example schema for Architecture Decision Record (ADR) documents. An ADR captures a significant architectural decision along with its context and consequences. Extends the base task schema with status and supersededBy fields.",
+  "allOf": [
+    {
+      "$ref": "https://brainfile.md/v1/task.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "adr"
+        },
+        "status": {
+          "type": "string",
+          "description": "Current status of the ADR in its lifecycle.",
+          "enum": ["proposed", "accepted", "deprecated", "superseded"]
+        },
+        "supersededBy": {
+          "type": "string",
+          "description": "ID of the ADR that supersedes this one. Only relevant when status is 'superseded'.",
+          "minLength": 1,
+          "examples": ["adr-5"]
+        }
+      }
+    }
+  ]
+}

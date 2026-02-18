@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v1/examples/epic.json",
+  "title": "Brainfile Epic Schema",
+  "description": "Example schema for epic documents. An epic groups related tasks and tracks their collective progress. Extends the base task schema with children (grouped item IDs) and status fields.",
+  "allOf": [
+    {
+      "$ref": "https://brainfile.md/v1/task.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "epic"
+        },
+        "children": {
+          "type": "array",
+          "description": "List of item IDs that this epic groups together. These are typically task IDs (e.g., 'task-1', 'task-5') but can reference any item type.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "examples": [
+            ["task-1", "task-2", "task-5"]
+          ]
+        },
+        "status": {
+          "type": "string",
+          "description": "Current status of the epic. Unlike task priority or column, this is a freeform field for tracking epic-level progress.",
+          "minLength": 1,
+          "examples": ["draft", "active", "completed", "cancelled"]
+        }
+      }
+    }
+  ]
+}

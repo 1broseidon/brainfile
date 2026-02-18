@@ -4,110 +4,173 @@
 
 # Brainfile Protocol
 
-The canonical specification and JSON Schema for the Brainfile task management protocol.
+A document board protocol. Manage tasks, decisions, and project artifacts as structured markdown files on a kanban board -- readable by both humans and AI agents.
 
-## What is Brainfile?
+## 1. Protocol Overview
 
-Brainfile is a protocol-first task management system designed for AI-assisted development. It uses a simple YAML-based format in `brainfile.md` files that both humans and AI agents can understand.
+Brainfile defines a structured way to manage project work using Markdown files. It separates **configuration** (the board) from **content** (tasks, documents).
 
-## Schema
+- **Schema-driven**: All files are validated against JSON schemas (`board.json`, `task.json`, `contract.json`).
+- **File-based**: Tasks are individual files in `.brainfile/board/`, allowing for easy diffs, history, and conflict resolution.
+- **Agent-centric**: Designed to be read and manipulated by AI agents (human-readable frontmatter, clear instructions).
 
-The JSON Schema is available at:
-- **Canonical URL**: `https://brainfile.md/v1`
-- **GitHub**: `brainfile.schema.json` (this repo)
-- **Formats**: JSON (`v1.json`), YAML (`v1.yaml`)
+## 2. File Structure
 
-### Usage
+A Brainfile project lives in a `.brainfile` directory:
 
-In your `brainfile.md` file:
+```
+.brainfile/
+├── brainfile.md        # Board Configuration
+├── board/              # Active Documents (Todo, In Progress)
+│   ├── task-1.md
+│   └── epic-1.md
+└── logs/               # Completed Documents (Archive/History)
+    ├── task-2.md
+    └── adr-1.md
+```
+
+### Board Configuration (`brainfile.md`)
+
+The entry point. Defines columns, rules, and document types. **No tasks are stored here.**
 
 ```yaml
 ---
-schema: https://brainfile.md/v1
 title: My Project
-# ... rest of your config
+columns:
+  - id: todo
+    title: To Do
+  - id: in-progress
+    title: In Progress
+agent:
+  instructions:
+    - "Update task status in real-time"
+strict: true
+rules:
+  always:
+    - id: 1
+      rule: "Use TypeScript for all new code"
+types:
+  epic:
+    idPrefix: epic
+    completable: true
+  adr:
+    idPrefix: adr
+    completable: false
 ---
+
+# Project Description
+High-level context for the project...
 ```
 
-## AI Agent Integration
+### Document Files (`board/*.md`)
 
-Add these instructions to your agent configuration file (`AGENTS.md`, `CLAUDE.md`, `.cursorrules`, etc.):
+Each document is a standalone Markdown file with YAML frontmatter.
 
-```markdown
-# Task Management Rules
+```yaml
+---
+id: task-1
+type: task
+title: Implement feature X
+column: in-progress
+parentId: epic-1
+assignee: codex
+contract:
+  status: ready
+  deliverables: ...
+---
 
-- review and follow rules in @brainfile.md
-- update task status in @brainfile.md as you work (todo → in-progress → done)
-- reference `schema` in the file for how to create tasks
-- your existing tools do not modify this file, you need to edit it directly
+## Description
+Detailed requirements...
+
+## Log
+- 2026-02-18T10:00:00Z: Started work
 ```
 
-**Recommended**: Keep only these minimal instructions in your agent config file, and use `brainfile.md` for project-specific rules and context. This keeps agent instructions clean and portable across projects.
+## 3. Document Types
 
-## Quick Start
+The protocol supports custom document types via the `types` configuration in `brainfile.md`.
 
-### Step 1: Copy the Example
+| Field | Description |
+|-------|-------------|
+| `idPrefix` | Prefix for IDs (e.g., `epic` -> `epic-1`). |
+| `completable` | If `true`, items move to `logs/` when done. If `false`, they stay on the board (e.g., ADRs). |
+| `schema` | Optional JSON Schema URL for validation. |
 
-Download the fully-featured example:
+**Strict Mode**: If `strict: true` is set in `brainfile.md`, only explicitly defined types (plus the default `task`) are allowed.
 
-```bash
-curl -o brainfile.md https://raw.githubusercontent.com/brainfile/protocol/main/example/brainfile.md
+## 4. Lifecycle & Behavior
+
+### Task Lifecycle
+1.  **Created**: Added to `board/` in a default column.
+2.  **Active**: Moves between columns in `board/`.
+3.  **Completed**: The file is moved from `board/` to `logs/` and `completedAt` is set. Optionally, if a column has `completionColumn: true`, moving a task there triggers auto-completion.
+
+### Epic Lifecycle
+Epics are container documents. They can be completed like tasks, but often stay active longer.
+- **Linking**: Tasks link to Epics via `parentId: epic-N`.
+- **Progress**: Calculated based on the completion status of child tasks.
+
+### ADR Lifecycle (Architecture Decision Records)
+ADRs track decisions.
+1.  **Draft**: Created in `board/` (or a specific column).
+2.  **Accepted**: Marked as `status: accepted`.
+3.  **Promoted**: Using `brainfile adr promote`, the ADR is moved to `logs/` (status: `promoted`) and its title is extracted as a permanent rule in `brainfile.md`.
+
+## 5. Linking Model (`parentId`)
+
+Brainfile uses a loose linking model via the `parentId` field in frontmatter.
+
+- **Any-to-Any**: Any document can parent any other document.
+- **One Parent**: A document has exactly one parent.
+- **Reference**: `parentId` stores the ID string (e.g., `epic-1`).
+
+This replaces the need for inline `subtasks` for complex hierarchies, though inline subtasks are still supported for simple checklists.
+
+## 6. Contract System
+
+Contracts define formal agreements between a Project Manager (PM) and an Agent (Assignee). They are embedded in the `contract` field of a task.
+
+### Structure
+
+```yaml
+contract:
+  status: ready      # ready | in_progress | delivered | done | failed | blocked
+  version: 1
+  deliverables:
+    - path: src/main.ts
+      description: Core implementation
+  validation:
+    commands: ["npm test"]
+  constraints:
+    - "No external dependencies"
 ```
 
-This includes multiple columns, tasks with metadata, project rules, and AI agent instructions.
+### Lifecycle
 
-**Alternative**: Use the [CLI tool](https://github.com/brainfile/cli) to initialize a minimal brainfile:
+1.  **Ready**: PM defines requirements.
+2.  **In Progress**: Agent picks up the task (`brainfile contract pickup`).
+3.  **Delivered**: Agent submits work (`brainfile contract deliver`).
+4.  **Done**: PM validates and approves (`brainfile contract validate`).
+5.  **Failed**: Validation fails, requires rework.
 
-```bash
-npm install -g @brainfile/cli
-brainfile init
+## 7. Rules System
+
+Project rules are centralized in `brainfile.md`. Agents must read these before starting work.
+
+**Format:**
+```yaml
+rules:
+  category: # always, never, prefer, context
+    - id: 1
+      rule: "Rule text"
+      source: "adr-1" # Optional backlink
 ```
 
-### Step 2: Integrate with Your AI Agent
+## 8. Schema Reference
 
-Add the instructions above to your `AGENTS.md`, `CLAUDE.md`, or `.cursorrules` file. That's it.
+- **Board**: [`https://brainfile.md/v1/board.json`](https://brainfile.md/v1/board.json)
+- **Task**: [`https://brainfile.md/v1/task.json`](https://brainfile.md/v1/task.json)
+- **Contract**: [`https://brainfile.md/v1/contract.json`](https://brainfile.md/v1/contract.json)
 
-Optional: Add this comment to your README to auto-load the board:
-
-```markdown
-<!-- load:brainfile.md -->
-```
-
-## Documentation
-
-Complete documentation is available at **[brainfile.md](https://brainfile.md)**
-
-The site includes:
-- Protocol specification
-- AI agent integration guide
-- Core library API reference
-- CLI tool documentation
-- VSCode extension guide
-
-## Deployment
-
-This repository is deployed to `brainfile.md` via GitHub Pages. The documentation is built using Astro Starlight from the `docs/` directory.
-
-**Schema Endpoints**:
-- `https://brainfile.md/v1.json` - JSON Schema
-- `https://brainfile.md/v1/` - Schema directory
-
-## Examples
-
-Example brainfile.md files are in the [`example/`](./example/) directory.
-
-## Ecosystem
-
-The Brainfile ecosystem consists of multiple repositories:
-
-- **[@brainfile/core](https://github.com/brainfile/core)** - TypeScript/JavaScript library for parsing and manipulating brainfiles
-- **[@brainfile/cli](https://github.com/brainfile/cli)** - Command-line tool for task management
-- **[brainfile/vscode](https://github.com/brainfile/vscode)** - VSCode extension with kanban board UI
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution guidelines.
-
-## License
-
-MIT License - see [LICENSE](./LICENSE)
+---
+*Generated for Brainfile v2 Protocol*
