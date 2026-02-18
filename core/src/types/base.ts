@@ -66,7 +66,7 @@ export interface Subtask {
 }
 
 /**
- * Task definition - used by board type
+ * Task definition - used by board type and per-task files (v2)
  */
 export interface Task {
   id: string;
@@ -83,6 +83,25 @@ export interface Task {
   contract?: Contract;
   createdAt?: string;  // ISO 8601 timestamp
   updatedAt?: string;  // ISO 8601 timestamp
+  /** Column this task belongs to (v2 per-task files) */
+  column?: string;
+  /** Sort position within the column (v2 per-task files) */
+  position?: number;
+  /** ISO 8601 timestamp when task was completed (v2 per-task files, set when moved to logs/) */
+  completedAt?: string;
+}
+
+/**
+ * A task document wrapping the YAML frontmatter metadata and markdown body.
+ * Represents a standalone task file in `.brainfile/tasks/` or `.brainfile/logs/`.
+ */
+export interface TaskDocument {
+  /** Task metadata parsed from YAML frontmatter */
+  task: Task;
+  /** Markdown body content (everything after the frontmatter closing `---`) */
+  body: string;
+  /** Absolute path to the task file on disk (set when read from filesystem) */
+  filePath?: string;
 }
 
 // Task Template Types

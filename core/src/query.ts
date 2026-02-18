@@ -143,6 +143,43 @@ export function columnExists(board: Board, columnId: string): boolean {
 }
 
 /**
+ * Find the completion column in a board
+ * Uses explicit completionColumn property if set, otherwise falls back to name-based detection
+ * @param board - Board to search
+ * @returns Completion column or undefined if not found
+ */
+export function findCompletionColumn(board: Board): Column | undefined {
+  if (!board.columns || board.columns.length === 0) return undefined;
+
+  // First, check for explicit completionColumn property
+  const explicitColumn = board.columns.find((col) => col.completionColumn === true);
+  if (explicitColumn) return explicitColumn;
+
+  // Fall back to name-based detection (common completion column patterns)
+  const completionPatterns = [/done/i, /complete/i, /finished/i, /closed/i];
+  for (const pattern of completionPatterns) {
+    const match = board.columns.find(
+      (col) => pattern.test(col.title) || pattern.test(col.id)
+    );
+    if (match) return match;
+  }
+
+  // Fall back to the last column (common Kanban convention)
+  return board.columns[board.columns.length - 1];
+}
+
+/**
+ * Check if a column is a completion column
+ * @param board - Board to check
+ * @param columnId - Column ID to check
+ * @returns True if the column is the completion column
+ */
+export function isCompletionColumn(board: Board, columnId: string): boolean {
+  const completionCol = findCompletionColumn(board);
+  return completionCol?.id === columnId;
+}
+
+/**
  * Find tasks with incomplete subtasks
  * @param board - Board to query
  * @returns Array of tasks that have at least one incomplete subtask

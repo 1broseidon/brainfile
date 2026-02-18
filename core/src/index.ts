@@ -115,6 +115,8 @@ export {
   getColumnTaskCount,
   getTotalTaskCount,
   columnExists,
+  findCompletionColumn,
+  isCompletionColumn,
   getTasksWithIncompleteSubtasks,
   getOverdueTasks
 } from './query';
@@ -149,6 +151,28 @@ export {
   type WatchResult,
 } from './discovery';
 
+// Export filesystem helpers (brainfile path resolution + .brainfile state)
+export {
+  findBrainfile,
+  resolveBrainfilePath,
+  getBrainfileStateDir,
+  getBrainfileStatePath,
+  getDotBrainfileGitignorePath,
+  ensureDotBrainfileDir,
+  ensureDotBrainfileGitignore,
+  readBrainfileState,
+  writeBrainfileState,
+  updateBrainfileState,
+  recordContractPickup,
+  DOT_BRAINFILE_DIRNAME,
+  BRAINFILE_BASENAME,
+  BRAINFILE_STATE_BASENAME,
+  DOT_BRAINFILE_GITIGNORE_BASENAME,
+  type FoundBrainfile,
+  type BrainfileResolutionKind,
+  type ResolveBrainfilePathOptions,
+} from './utils/files';
+
 // Export formatters for external services
 export {
   formatTaskForGitHub,
@@ -159,11 +183,41 @@ export {
   type LinearFormatOptions,
 } from './formatters';
 
+// Export task file reader/writer (v2 per-task file architecture)
+export {
+  parseTaskContent,
+  serializeTaskContent,
+  readTaskFile,
+  writeTaskFile,
+  readTasksDir,
+  taskFileName,
+} from './taskFile';
+
+// Export file-based task operations (v2 per-task file architecture)
+export {
+  type TaskOperationResult,
+  type TaskFileInput,
+  type TaskFilters,
+  generateNextFileTaskId,
+  addTaskFile,
+  moveTaskFile,
+  completeTaskFile,
+  deleteTaskFile,
+  appendLog,
+  listTasks,
+  findTask,
+  searchTaskFiles,
+  searchLogs,
+} from './taskOperations';
+
 // Re-export commonly used interfaces for convenience
 export type {
   Board,
+  BoardConfig,
   Column,
+  ColumnConfig,
   Task,
+  TaskDocument,
   Subtask,
   Rule,
   Rules,

@@ -11,6 +11,8 @@ import {
   getColumnTaskCount,
   getTotalTaskCount,
   columnExists,
+  findCompletionColumn,
+  isCompletionColumn,
   getTasksWithIncompleteSubtasks,
   getOverdueTasks
 } from '../query';
@@ -282,6 +284,203 @@ describe('Query Functions', () => {
 
     it('should return false for non-existent column', () => {
       expect(columnExists(mockBoard, 'col99')).toBe(false);
+    });
+  });
+
+  describe('findCompletionColumn', () => {
+    it('should find column with explicit completionColumn property', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'To Do', tasks: [] },
+          { id: 'done', title: 'Done', completionColumn: true, tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('done');
+    });
+
+    it('should prefer explicit completionColumn over name-based detection', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'done', title: 'Done', tasks: [] },
+          { id: 'deployed', title: 'Deployed', completionColumn: true, tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('deployed');
+    });
+
+    it('should fall back to name-based detection for "done"', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'To Do', tasks: [] },
+          { id: 'done', title: 'Done', tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('done');
+    });
+
+    it('should fall back to name-based detection for "complete"', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'To Do', tasks: [] },
+          { id: 'completed', title: 'Completed', tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('completed');
+    });
+
+    it('should fall back to name-based detection for "finished"', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'To Do', tasks: [] },
+          { id: 'finished', title: 'Finished', tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('finished');
+    });
+
+    it('should fall back to name-based detection for "closed"', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'open', title: 'Open', tasks: [] },
+          { id: 'closed', title: 'Closed', tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('closed');
+    });
+
+    it('should be case-insensitive for name-based detection', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'To Do', tasks: [] },
+          { id: 'done', title: 'DONE', tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('done');
+    });
+
+    it('should match pattern in column ID when not in title', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'To Do', tasks: [] },
+          { id: 'done', title: 'Finished Tasks', tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('done');
+    });
+
+    it('should fall back to last column when no explicit or pattern match', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'inbox', title: 'Inbox', tasks: [] },
+          { id: 'waiting', title: 'Waiting', tasks: [] },
+          { id: 'archived', title: 'Archived', tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('archived');
+    });
+
+    it('should work with non-English column names when explicit', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'À faire', tasks: [] },
+          { id: 'termine', title: 'Terminé', completionColumn: true, tasks: [] }
+        ]
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeDefined();
+      expect(column!.id).toBe('termine');
+    });
+
+    it('should return undefined for empty board', () => {
+      const board: Board = {
+        title: 'Empty',
+        type: 'board',
+        columns: []
+      };
+      const column = findCompletionColumn(board);
+      expect(column).toBeUndefined();
+    });
+  });
+
+  describe('isCompletionColumn', () => {
+    it('should return true for explicit completion column', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'To Do', tasks: [] },
+          { id: 'done', title: 'Done', completionColumn: true, tasks: [] }
+        ]
+      };
+      expect(isCompletionColumn(board, 'done')).toBe(true);
+      expect(isCompletionColumn(board, 'todo')).toBe(false);
+    });
+
+    it('should return true for name-based detected column', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'todo', title: 'To Do', tasks: [] },
+          { id: 'done', title: 'Done', tasks: [] }
+        ]
+      };
+      expect(isCompletionColumn(board, 'done')).toBe(true);
+    });
+
+    it('should return true for last column fallback', () => {
+      const board: Board = {
+        title: 'Test',
+        type: 'board',
+        columns: [
+          { id: 'inbox', title: 'Inbox', tasks: [] },
+          { id: 'archived', title: 'Archived', tasks: [] }
+        ]
+      };
+      expect(isCompletionColumn(board, 'archived')).toBe(true);
+      expect(isCompletionColumn(board, 'inbox')).toBe(false);
+    });
+
+    it('should return false for non-existent column', () => {
+      expect(isCompletionColumn(mockBoard, 'nonexistent')).toBe(false);
     });
   });
 

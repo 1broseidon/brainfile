@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-02-18
+
+### Added
+- **Per-task file architecture (v2)** - Tasks are now standalone `.md` files with YAML frontmatter + markdown body
+  - `readTaskFile(path)` - Parse task file, returns both YAML metadata and markdown body
+  - `writeTaskFile(path, task, body)` - Serialize task to YAML frontmatter + markdown body
+  - `readTasksDir(dirPath)` - Scan directory and return all task documents
+  - `parseTaskContent(content)` / `serializeTaskContent(task, body)` - Low-level parse/serialize
+  - `taskFileName(taskId)` - Generate conventional filename from task ID
+- **File-based task operations**
+  - `addTaskFile(tasksDir, input, body?, logsDir?)` - Create new task file with auto-generated ID
+  - `moveTaskFile(taskPath, newColumn, newPosition?)` - Update column in task frontmatter
+  - `completeTaskFile(taskPath, logsDir)` - Move task from `tasks/` to `logs/`, set `completedAt`, strip `column`/`position`
+  - `deleteTaskFile(taskPath)` - Remove task file from disk
+  - `appendLog(taskPath, entry, agent?)` - Append timestamped entry to `## Log` section (creates section if absent)
+- **Task query functions**
+  - `listTasks(tasksDir, filters?)` - Scan, filter, sort by column then position
+  - `findTask(tasksDir, taskId)` - Find by ID (fast path by filename, fallback to scan)
+  - `searchTaskFiles(tasksDir, query)` - Search title, description, body, and tags
+  - `searchLogs(logsDir, query)` - Search completed task logs
+  - `generateNextFileTaskId(tasksDir, logsDir?)` - Auto-increment task IDs across directories
+- **New types**
+  - `TaskDocument` - Wraps `Task` metadata + markdown body + optional file path
+  - `BoardConfig` / `ColumnConfig` - Config-only board types for v2 (no embedded task arrays)
+
+### Changed
+- `Task` interface gains `column?: string`, `position?: number`, `completedAt?: string` fields
+
 ## [0.9.0] - 2025-12-04
 
 ### Added

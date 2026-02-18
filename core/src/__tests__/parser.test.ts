@@ -107,40 +107,40 @@ describe("BrainfileParser duplicate column handling", () => {
     expect(board?.columns).toHaveLength(3); // todo, in-progress, done (todo duplicates merged)
     
     // Find the todo column
-    const todoColumn = board?.columns.find(col => col.id === "todo");
+    const todoColumn = board?.columns.find((col: { id: string }) => col.id === "todo");
     expect(todoColumn).toBeDefined();
     expect(todoColumn?.title).toBe("To Do"); // Uses title from first occurrence
   });
 
   it("merges tasks from all duplicate columns", () => {
     const board = BrainfileParser.parse(markdown);
-    const todoColumn = board?.columns.find(col => col.id === "todo");
+    const todoColumn = board?.columns.find((col: { id: string }) => col.id === "todo");
 
     // Should have 4 tasks: task-1 (original), task-3, task-4 (first duplicate), task-6 (second duplicate)
     expect(todoColumn?.tasks).toHaveLength(4);
-    expect(todoColumn?.tasks.map(t => t.id)).toEqual(["task-1", "task-3", "task-4", "task-6"]);
+    expect(todoColumn?.tasks.map((t: { id: string }) => t.id)).toEqual(["task-1", "task-3", "task-4", "task-6"]);
   });
 
   it("preserves task data when merging", () => {
     const board = BrainfileParser.parse(markdown);
-    const todoColumn = board?.columns.find(col => col.id === "todo");
+    const todoColumn = board?.columns.find((col: { id: string }) => col.id === "todo");
 
-    const task3 = todoColumn?.tasks.find(t => t.id === "task-3");
+    const task3 = todoColumn?.tasks.find((t: { id: string }) => t.id === "task-3");
     expect(task3?.title).toBe("Third Task");
     expect(task3?.description).toBe("This is in the duplicate todo column");
 
-    const task6 = todoColumn?.tasks.find(t => t.id === "task-6");
+    const task6 = todoColumn?.tasks.find((t: { id: string }) => t.id === "task-6");
     expect(task6?.title).toBe("Sixth Task");
   });
 
   it("keeps other columns unchanged", () => {
     const board = BrainfileParser.parse(markdown);
 
-    const inProgressColumn = board?.columns.find(col => col.id === "in-progress");
+    const inProgressColumn = board?.columns.find((col: { id: string }) => col.id === "in-progress");
     expect(inProgressColumn?.tasks).toHaveLength(1);
     expect(inProgressColumn?.tasks[0].id).toBe("task-2");
 
-    const doneColumn = board?.columns.find(col => col.id === "done");
+    const doneColumn = board?.columns.find((col: { id: string }) => col.id === "done");
     expect(doneColumn?.tasks).toHaveLength(1);
     expect(doneColumn?.tasks[0].id).toBe("task-5");
   });

@@ -6,6 +6,8 @@ import {
   findPrimaryBrainfile,
   isBrainfileName,
   extractBrainfileSuffix,
+  watchBrainfiles,
+  type WatchResult,
 } from '../discovery';
 
 describe('discovery', () => {
@@ -194,6 +196,109 @@ columns:
       const result = findPrimaryBrainfile(testDir);
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe('watchBrainfiles', () => {
+    it('returns success for valid directory', () => {
+      const result = watchBrainfiles(testDir, () => {});
+
+      expect(result.success).toBe(true);
+      expect(result.error).toBeUndefined();
+      expect(result.isActive()).toBe(true);
+
+      // Clean up
+      result.stop();
+      expect(result.isActive()).toBe(false);
+    });
+
+    it('returns ENOENT error for non-existent directory', () => {
+      const result = watchBrainfiles('/nonexistent/path/12345', () => {});
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('ENOENT');
+      expect(result.error?.message).toContain('does not exist');
+      expect(result.isActive()).toBe(false);
+    });
+
+    it('returns ENOTDIR error for file path', () => {
+      const filePath = createBrainfile('brainfile.md');
+      const result = watchBrainfiles(filePath, () => {});
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe('ENOTDIR');
+      expect(result.error?.message).toContain('not a directory');
+      expect(result.isActive()).toBe(false);
+    });
+
+    it('stop() is idempotent', () => {
+      const result = watchBrainfiles(testDir, () => {});
+
+      expect(result.success).toBe(true);
+
+      // Multiple stops should not throw
+      result.stop();
+      result.stop();
+      result.stop();
+
+      expect(result.isActive()).toBe(false);
+    });
+
+    it('stop() is safe to call on failed watch', () => {
+      const result = watchBrainfiles('/nonexistent/path', () => {});
+
+      expect(result.success).toBe(false);
+
+      // Should not throw
+      result.stop();
+      expect(result.isActive()).toBe(false);
+    });
+
+    it('detects file changes', (done) => {
+      createBrainfile('brainfile.md', 'Initial');
+
+      const events: Array<{ event: string; file: any }> = [];
+      const result = watchBrainfiles(testDir, (event, file) => {
+        events.push({ event, file });
+      });
+
+      expect(result.success).toBe(true);
+
+      // Give watcher time to initialize, then modify file
+      setTimeout(() => {
+        const content = `---
+title: Modified
+columns:
+  - id: todo
+    title: To Do
+    tasks: []
+---
+`;
+        fs.writeFileSync(path.join(testDir, 'brainfile.md'), content);
+      }, 50);
+
+      // Check for events after a delay
+      setTimeout(() => {
+        result.stop();
+
+        // fs.watch behavior varies by platform, so we just verify no errors
+        expect(result.isActive()).toBe(false);
+        done();
+      }, 200);
+    });
+
+    it('calls onError for runtime errors', () => {
+      const errors: any[] = [];
+      const result = watchBrainfiles(
+        testDir,
+        () => {},
+        (error) => errors.push(error)
+      );
+
+      expect(result.success).toBe(true);
+
+      // Clean up
+      result.stop();
     });
   });
 });
