@@ -46,8 +46,8 @@ export type { MainPanelTabsProps } from './MainPanelTabs.js';
 export { RulesPanel } from './RulesPanel.js';
 export type { RulesPanelProps } from './RulesPanel.js';
 
-export { ArchivePanel } from './ArchivePanel.js';
-export type { ArchivePanelProps } from './ArchivePanel.js';
+export { LogsPanel } from './LogsPanel.js';
+export type { LogsPanelProps } from './LogsPanel.js';
 
 export { ManualBorder, BorderRow } from './ManualBorder.js';
 export type { ManualBorderProps, BorderRowProps } from './ManualBorder.js';

@@ -8,7 +8,7 @@ import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
 import { parseSearchQuery, taskMatchesFilter } from './utils.js';
-import { loadArchive } from './actions.js';
+import { loadLogs } from './actions.js';
 import {
   Header,
   ProgressBar,
@@ -26,7 +26,7 @@ import {
   NewTaskOverlay,
   MainPanelTabs,
   RulesPanel,
-  ArchivePanel,
+  LogsPanel,
 } from './components/index.js';
 
 type BoardColumn = Board['columns'][number];
@@ -53,12 +53,12 @@ const initialState: AppState = {
   selectedRuleIndex: 0,
   ruleEditText: '',
   ruleEditId: null,
-  // Archive panel
-  archive: [],
-  selectedArchiveIndex: 0,
-  archiveSearchQuery: '',
-  archiveRestoreColumnIndex: 0,
-  expandedArchiveIds: new Set(),
+  // Logs panel
+  logs: [],
+  selectedLogIndex: 0,
+  logSearchQuery: '',
+  logRestoreColumnIndex: 0,
+  expandedLogIds: new Set(),
 };
 
 export function BrainfileTUI({ filePath }: TUIProps) {
@@ -114,6 +114,11 @@ export function BrainfileTUI({ filePath }: TUIProps) {
     });
   }, [state.board]);
 
+  const allBoardTasks = useMemo(
+    () => orderedColumns.flatMap(col => col.tasks ?? []),
+    [orderedColumns]
+  );
+
   // Filtered columns based on search with structured filters
   const searchQuery = state.searchQuery.trim();
   const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
@@ -123,10 +128,12 @@ export function BrainfileTUI({ filePath }: TUIProps) {
     if (!orderedColumns.length) return [];
     if (!hasActiveFilter) return orderedColumns;
 
-    return orderedColumns.map(col => ({
-      ...col,
-      tasks: col.tasks.filter(task => taskMatchesFilter(task, parsedSearch)),
-    })).filter(col => col.tasks.length > 0);
+    return orderedColumns
+      .map(col => ({
+        ...col,
+        tasks: (col.tasks ?? []).filter(task => taskMatchesFilter(task, parsedSearch)),
+      }))
+      .filter(col => (col.tasks?.length ?? 0) > 0);
   }, [orderedColumns, hasActiveFilter, parsedSearch]);
 
   // Check if search has no results
@@ -158,9 +165,9 @@ export function BrainfileTUI({ filePath }: TUIProps) {
   const stats = useMemo(() => {
     if (!state.board) return { total: 0, done: 0, percentage: 0 };
 
-    const total = state.board.columns.reduce((sum, col) => sum + col.tasks.length, 0);
+    const total = state.board.columns.reduce((sum, col) => sum + (col.tasks?.length ?? 0), 0);
     const doneCol = state.board.columns.find(col => col.id === 'done' || col.title.toLowerCase() === 'done');
-    const done = doneCol?.tasks.length || 0;
+    const done = doneCol?.tasks?.length || 0;
     const percentage = total > 0 ? Math.round((done / total) * 100) : 0;
 
     return { total, done, percentage };
@@ -173,11 +180,11 @@ export function BrainfileTUI({ filePath }: TUIProps) {
     return (r.always?.length || 0) + (r.never?.length || 0) + (r.prefer?.length || 0) + (r.context?.length || 0);
   }, [state.board?.rules]);
 
-  // Load archive when switching to archive panel
+  // Load logs when switching to logs panel
   useEffect(() => {
-    if (state.activePanel === 'archive') {
-      const result = loadArchive(filePath);
-      setState(prev => ({ ...prev, archive: result.archive }));
+    if (state.activePanel === 'logs') {
+      const result = loadLogs(filePath);
+      setState(prev => ({ ...prev, logs: result.logs }));
     }
   }, [state.activePanel, filePath, state.lastUpdated]);
 
@@ -191,7 +198,7 @@ export function BrainfileTUI({ filePath }: TUIProps) {
     viewportHeight,
     loadBrainfile,
     filePath,
-    allColumns: orderedColumns,
+    allColumns: orderedColumns as BoardColumn[],
     layoutMode,
     flatTasks,
     maxGlobalIndex,
@@ -257,11 +264,11 @@ export function BrainfileTUI({ filePath }: TUIProps) {
         <ProgressBar done={stats.done} total={stats.total} width={termWidth - 4} />
       )}
 
-      {/* Main Panel Tabs (Tasks / Rules / Archive) */}
+      {/* Main Panel Tabs (Tasks / Rules / Logs) */}
       <MainPanelTabs
         activePanel={state.activePanel}
         rulesCount={rulesCount}
-        archiveCount={state.archive.length}
+        logsCount={state.logs.length}
         layoutMode={layoutMode}
       />
 
@@ -288,16 +295,16 @@ export function BrainfileTUI({ filePath }: TUIProps) {
                   activeIndex={state.activeColumnIndex}
                   termWidth={termWidth}
                 />
-              <Box paddingLeft={1}>
-                <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
-              </Box>
-            </>
-          )}
+                <Box paddingLeft={1}>
+                  <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
+                </Box>
+              </>
+            )}
 
             {/* Overlays take precedence over task list */}
             {state.mode === 'move' && currentTask && (
               <MoveOverlay
-                columns={orderedColumns}
+                columns={orderedColumns as BoardColumn[]}
                 selectedIndex={state.moveTargetIndex}
                 taskTitle={currentTask.title}
                 termWidth={termWidth}
@@ -343,6 +350,7 @@ export function BrainfileTUI({ filePath }: TUIProps) {
               layoutMode === 'wide' ? (
                 <TaskList
                   tasks={currentTasks}
+                  allTasks={allBoardTasks}
                   selectedIndex={state.selectedTaskIndex}
                   expandedIds={state.expandedTaskIds}
                   viewportHeight={tasksViewportHeight}
@@ -351,6 +359,7 @@ export function BrainfileTUI({ filePath }: TUIProps) {
               ) : (
                 <StackedTaskList
                   columns={filteredColumns}
+                  allTasks={allBoardTasks}
                   selectedGlobalIndex={state.selectedGlobalIndex}
                   expandedIds={state.expandedTaskIds}
                   viewportHeight={tasksViewportHeight}
@@ -375,17 +384,17 @@ export function BrainfileTUI({ filePath }: TUIProps) {
           />
         )}
 
-        {/* ===== ARCHIVE PANEL ===== */}
-        {state.activePanel === 'archive' && (
-          <ArchivePanel
-            archive={state.archive}
-            selectedIndex={state.selectedArchiveIndex}
+        {/* ===== LOGS PANEL ===== */}
+        {state.activePanel === 'logs' && (
+          <LogsPanel
+            logs={state.logs}
+            selectedIndex={state.selectedLogIndex}
             viewportHeight={viewportHeight}
             termWidth={termWidth}
-            expandedIds={state.expandedArchiveIds}
+            expandedIds={state.expandedLogIds}
             mode={state.mode}
-            columns={orderedColumns}
-            restoreColumnIndex={state.archiveRestoreColumnIndex}
+            columns={orderedColumns as BoardColumn[]}
+            restoreColumnIndex={state.logRestoreColumnIndex}
             layoutMode={layoutMode}
           />
         )}
@@ -411,10 +420,10 @@ export function BrainfileTUI({ filePath }: TUIProps) {
           : state.activePanel}
         taskIndex={state.activePanel === 'tasks'
           ? (layoutMode === 'wide' ? state.selectedTaskIndex + 1 : state.selectedGlobalIndex + 1)
-          : (state.activePanel === 'archive' ? state.selectedArchiveIndex + 1 : state.selectedRuleIndex + 1)}
+          : (state.activePanel === 'logs' ? state.selectedLogIndex + 1 : state.selectedRuleIndex + 1)}
         taskCount={state.activePanel === 'tasks'
           ? (layoutMode === 'wide' ? currentTasks.length : flatTasks.length)
-          : (state.activePanel === 'archive' ? state.archive.length : (state.board.rules?.[state.activeRuleType]?.length || 0))}
+          : (state.activePanel === 'logs' ? state.logs.length : (state.board.rules?.[state.activeRuleType]?.length || 0))}
         termWidth={termWidth}
         activePanel={state.activePanel}
         layoutMode={layoutMode}

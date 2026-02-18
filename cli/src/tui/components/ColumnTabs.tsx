@@ -25,8 +25,10 @@ export function ColumnTabs({ columns, activeIndex, termWidth }: ColumnTabsProps)
     <Box paddingLeft={1} paddingRight={1} marginTop={1}>
       {columns.map((col, idx) => {
         const isActive = idx === activeIndex;
-        const label = truncate(col.title.toUpperCase(), maxTabWidth - 4);
-        const count = col.tasks.length;
+        const completionIndicator = col.completionColumn ? '⟶✓' : '';
+        const indicatorWidth = completionIndicator ? completionIndicator.length + 1 : 0;
+        const label = truncate(col.title.toUpperCase(), Math.max(4, maxTabWidth - 4 - indicatorWidth));
+        const count = col.tasks?.length ?? 0;
 
         return (
           <Box key={col.id} marginRight={1}>
@@ -34,12 +36,14 @@ export function ColumnTabs({ columns, activeIndex, termWidth }: ColumnTabsProps)
               <Text>
                 <Text color={PALETTE.accent}>▌</Text>
                 <Text color={PALETTE.text} bold backgroundColor={PALETTE.bgHighlight}>{` ${label} `}</Text>
+                {completionIndicator && <Text color={PALETTE.success}>{` ${completionIndicator}`}</Text>}
                 <Text color={PALETTE.accent} bold>{` ${count}`}</Text>
               </Text>
             ) : (
               <Text>
                 <Text color={PALETTE.textDim}>{' '}</Text>
                 <Text color={PALETTE.textMuted}>{` ${label} `}</Text>
+                {completionIndicator && <Text color={PALETTE.success}>{` ${completionIndicator}`}</Text>}
                 <Text color={PALETTE.textDim}>{` ${count}`}</Text>
               </Text>
             )}

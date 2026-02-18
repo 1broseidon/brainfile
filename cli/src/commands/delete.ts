@@ -38,7 +38,7 @@ export function deleteCommand(options: DeleteOptions) {
     // V2 per-task file architecture
     if (isV2(filePath)) {
       const dirs = getV2Dirs(filePath);
-      const taskPath = path.join(dirs.tasksDir, taskFileName(options.task));
+      const taskPath = path.join(dirs.boardDir, taskFileName(options.task));
 
       const doc = readTaskFile(taskPath);
       if (!doc) {

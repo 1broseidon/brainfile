@@ -23,23 +23,25 @@ describe('init command', () => {
 
     const brainfilePath = path.join(tempDir, '.brainfile', 'brainfile.md');
     const gitignorePath = path.join(tempDir, '.brainfile', '.gitignore');
-    const tasksDir = path.join(tempDir, '.brainfile', 'tasks');
+    const boardDir = path.join(tempDir, '.brainfile', 'board');
     const logsDir = path.join(tempDir, '.brainfile', 'logs');
     const statePath = path.join(tempDir, '.brainfile', 'state.json');
 
     expect(fs.existsSync(brainfilePath)).toBe(true);
     expect(fs.existsSync(gitignorePath)).toBe(true);
-    expect(fs.existsSync(tasksDir)).toBe(true);
+    expect(fs.existsSync(boardDir)).toBe(true);
     expect(fs.existsSync(logsDir)).toBe(true);
-    expect(fs.existsSync(statePath)).toBe(true);
+    expect(fs.existsSync(statePath)).toBe(false);
 
     const contents = fs.readFileSync(brainfilePath, 'utf-8');
     // Default init now uses v2 format
     expect(contents).toContain('schema: https://brainfile.md/v2/board.json');
-    expect(contents).toContain('completionColumn: true');
+    expect(contents).toContain('- id: todo');
+    expect(contents).toContain('- id: in-progress');
+    expect(contents).not.toContain('- id: done');
+    expect(contents).toContain('moves it to `logs/` via `brainfile complete`');
 
     const gitignore = fs.readFileSync(gitignorePath, 'utf-8');
-    expect(gitignore).toContain('state.json');
+    expect(gitignore).not.toContain('state.json');
   });
 });
-

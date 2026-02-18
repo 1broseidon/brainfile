@@ -10,7 +10,7 @@ import { composeBody } from '../utils/v2-detect';
 describe('search command (v2)', () => {
   let tempDir: string;
   let dotDir: string;
-  let tasksDir: string;
+  let boardDir: string;
   let logsDir: string;
   let brainfilePath: string;
   let logger: MemoryLogger;
@@ -18,11 +18,11 @@ describe('search command (v2)', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-search-test-'));
     dotDir = path.join(tempDir, '.brainfile');
-    tasksDir = path.join(dotDir, 'tasks');
+    boardDir = path.join(dotDir, 'board');
     logsDir = path.join(dotDir, 'logs');
     brainfilePath = path.join(dotDir, 'brainfile.md');
 
-    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.mkdirSync(boardDir, { recursive: true });
     fs.mkdirSync(logsDir, { recursive: true });
 
     // Write v2 config-only brainfile
@@ -46,7 +46,7 @@ columns:
       position: 0,
       tags: ['bug', 'auth'],
     };
-    writeTaskFile(path.join(tasksDir, 'task-1.md'), task1, composeBody('Authentication fails on mobile'));
+    writeTaskFile(path.join(boardDir, 'task-1.md'), task1, composeBody('Authentication fails on mobile'));
 
     const task2: Task = {
       id: 'task-2',
@@ -55,7 +55,7 @@ columns:
       position: 0,
       tags: ['feature'],
     };
-    writeTaskFile(path.join(tasksDir, 'task-2.md'), task2, composeBody('Implement token bucket rate limiting'));
+    writeTaskFile(path.join(boardDir, 'task-2.md'), task2, composeBody('Implement token bucket rate limiting'));
 
     // Create a completed log
     const log1: Task = {

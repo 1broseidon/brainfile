@@ -4,7 +4,6 @@ import { spawnSync } from 'child_process';
 import {
   Brainfile,
   resolveBrainfilePath,
-  recordContractPickup,
   findTaskById,
   setTaskContractStatus,
   type Board,
@@ -17,8 +16,6 @@ import {
   getV2Dirs,
   findV2Task,
   extractDescription,
-  extractLog,
-  composeBody,
 } from '../utils/v2-detect';
 
 export type ContractAction = 'pickup' | 'deliver' | 'validate';
@@ -123,6 +120,45 @@ function normalizeNonEmpty(input: string, errorMessage: string): { ok: true; val
 function getContractOrError(taskId: string, contract: Contract | undefined): { ok: true; contract: Contract } | { ok: false; error: string } {
   if (!contract) return { ok: false, error: `Task ${taskId} has no contract` };
   return { ok: true, contract };
+}
+
+type ContractMetricsBag = {
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  duration?: number;
+  reworkCount?: number;
+};
+
+type ContractWithMetrics = Contract & { metrics?: ContractMetricsBag };
+
+function applyPickupMetrics(contract: Contract, at: Date = new Date()): void {
+  const withMetrics = contract as ContractWithMetrics;
+  const metrics: ContractMetricsBag = { ...(withMetrics.metrics ?? {}) };
+  metrics.pickedUpAt = at.toISOString();
+
+  if (typeof metrics.reworkCount === 'number' && Number.isFinite(metrics.reworkCount)) {
+    metrics.reworkCount = Math.max(0, Math.round(metrics.reworkCount)) + 1;
+  } else {
+    metrics.reworkCount = 0;
+  }
+
+  withMetrics.metrics = metrics;
+}
+
+function applyDeliverMetrics(contract: Contract, at: Date = new Date()): void {
+  const withMetrics = contract as ContractWithMetrics;
+  const metrics: ContractMetricsBag = { ...(withMetrics.metrics ?? {}) };
+  metrics.deliveredAt = at.toISOString();
+
+  if (typeof metrics.pickedUpAt === 'string') {
+    const pickedUpMs = Date.parse(metrics.pickedUpAt);
+    const deliveredMs = at.getTime();
+    if (Number.isFinite(pickedUpMs)) {
+      metrics.duration = Math.max(0, Math.round((deliveredMs - pickedUpMs) / 1000));
+    }
+  }
+
+  withMetrics.metrics = metrics;
 }
 
 export function formatContractContextMarkdown(params: {
@@ -230,22 +266,15 @@ export function pickupContract(ctx: ContractRunContext): ContractPickupResult | 
   const result = setTaskContractStatus(board, ctx.taskId, 'in_progress');
   if (!result.success || !result.board) return { error: result.error || 'Failed to update contract status' };
 
+  const updatedTaskInfo = findTaskById(result.board, ctx.taskId);
+  if (!updatedTaskInfo?.task.contract) {
+    return { error: `Task ${ctx.taskId} has no contract` };
+  }
+
+  applyPickupMetrics(updatedTaskInfo.task.contract);
   writeBoardToFile(resolvedFilePath, result.board);
 
-  const updatedTaskInfo = findTaskById(result.board, ctx.taskId)!;
-  const updatedContract = updatedTaskInfo.task.contract!;
-
-  try {
-    const agent =
-      process.env.BRAINFILE_AGENT ||
-      process.env.CURSOR_AGENT ||
-      process.env.GITHUB_ACTOR ||
-      process.env.USER ||
-      'unknown';
-    recordContractPickup({ brainfilePath: resolvedFilePath, taskId: ctx.taskId, agent });
-  } catch {
-    // Never fail contract pickup due to state tracking.
-  }
+  const updatedContract = updatedTaskInfo.task.contract;
 
   const markdown = formatContractContextMarkdown({
     taskId: updatedTaskInfo.task.id,
@@ -279,6 +308,12 @@ export function deliverContract(ctx: ContractRunContext): ContractDeliverResult 
   const result = setTaskContractStatus(board, ctx.taskId, 'delivered');
   if (!result.success || !result.board) return { error: result.error || 'Failed to update contract status' };
 
+  const updatedTaskInfo = findTaskById(result.board, ctx.taskId);
+  if (!updatedTaskInfo?.task.contract) {
+    return { error: `Task ${ctx.taskId} has no contract` };
+  }
+
+  applyDeliverMetrics(updatedTaskInfo.task.contract);
   writeBoardToFile(resolvedFilePath, result.board);
 
   return { action: 'deliver', board: result.board };
@@ -412,22 +447,10 @@ function pickupContractV2(ctx: ContractRunContext, resolvedFilePath: string): Co
 
   if (!task.contract) return { error: `Task ${ctx.taskId} has no contract` };
 
-  // Update contract status
+  // Update contract status + metrics atomically
   task.contract.status = 'in_progress';
+  applyPickupMetrics(task.contract);
   writeTaskFile(taskPath, task, doc.body);
-
-  // Record pickup in state
-  try {
-    const agent =
-      process.env.BRAINFILE_AGENT ||
-      process.env.CURSOR_AGENT ||
-      process.env.GITHUB_ACTOR ||
-      process.env.USER ||
-      'unknown';
-    recordContractPickup({ brainfilePath: resolvedFilePath, taskId: ctx.taskId, agent });
-  } catch {
-    // Never fail contract pickup due to state tracking.
-  }
 
   const description = task.description || extractDescription(doc.body);
   const markdown = formatContractContextMarkdown({
@@ -456,6 +479,7 @@ function deliverContractV2(ctx: ContractRunContext, resolvedFilePath: string): C
   if (!task.contract) return { error: `Task ${ctx.taskId} has no contract` };
 
   task.contract.status = 'delivered';
+  applyDeliverMetrics(task.contract);
   writeTaskFile(taskPath, task, doc.body);
 
   const board: Board = { title: '', columns: [] };

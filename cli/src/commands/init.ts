@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { ensureDotBrainfileGitignore } from '@brainfile/core';
+import { ensureDotBrainfileGitignore, removeLegacyStateFile } from '../utils/dot-brainfile';
 
 const DEFAULT_BRAINFILE_V1 = `---
 schema: https://brainfile.md/v1/board.json
@@ -34,7 +34,7 @@ schema: https://brainfile.md/v2/board.json
 title: My Project
 agent:
   instructions:
-    - Task files are individual .md files in tasks/
+    - Task files are individual .md files in board/
     - Completed tasks are in logs/
     - Preserve all IDs
     - Make minimal changes
@@ -43,14 +43,13 @@ columns:
     title: To Do
   - id: in-progress
     title: In Progress
-  - id: done
-    title: Done
-    completionColumn: true
 ---
 
 # My Project
 
 Add your project description here.
+
+> Note: Completing a task moves it to \`logs/\` via \`brainfile complete\`.
 `;
 
 interface InitOptions {
@@ -65,7 +64,7 @@ export function initCommand(options: InitOptions) {
     const filePath = path.resolve(options.file || path.join('.brainfile', 'brainfile.md'));
     const dotDir = path.dirname(filePath);
 
-    // Ensure `.brainfile/.gitignore` ignores state.json by default
+    // Ensure `.brainfile/.gitignore` exists
     ensureDotBrainfileGitignore(filePath);
 
     // Check if file already exists
@@ -77,29 +76,25 @@ export function initCommand(options: InitOptions) {
 
     fs.mkdirSync(dotDir, { recursive: true });
 
-    // Always create tasks/ and logs/ directories (v2 structure)
-    const tasksDir = path.join(dotDir, 'tasks');
+    // Always create board/ and logs/ directories (v2 structure)
+    const boardDir = path.join(dotDir, 'board');
     const logsDir = path.join(dotDir, 'logs');
-    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.mkdirSync(boardDir, { recursive: true });
     fs.mkdirSync(logsDir, { recursive: true });
 
     // Write the default brainfile (v2 format by default now)
     const template = options.v2 === false ? DEFAULT_BRAINFILE_V1 : DEFAULT_BRAINFILE_V2;
     fs.writeFileSync(filePath, template, 'utf-8');
 
-    // Ensure state.json exists
-    const statePath = path.join(dotDir, 'state.json');
-    if (!fs.existsSync(statePath)) {
-      fs.writeFileSync(statePath, '{}', 'utf-8');
-    }
+    // Remove legacy state file if present
+    removeLegacyStateFile(filePath);
 
     // Success message
     console.log(chalk.green('Brainfile initialized successfully!'));
     console.log('');
     console.log(chalk.gray(`  Created: ${filePath}`));
-    console.log(chalk.gray(`  Created: ${tasksDir}/`));
+    console.log(chalk.gray(`  Created: ${boardDir}/`));
     console.log(chalk.gray(`  Created: ${logsDir}/`));
-    console.log(chalk.gray(`  Created: ${statePath}`));
     console.log('');
     console.log(chalk.gray('Next steps:'));
     console.log(chalk.gray('  1. Edit your brainfile to customize your project'));

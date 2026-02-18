@@ -1,7 +1,8 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { moveCommand } from '../commands/move';
-import { Brainfile, type Column, type Task } from '@brainfile/core';
+import { Brainfile, readTaskFile, taskFileName, writeTaskFile, type Column, type Task } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 
@@ -159,5 +160,104 @@ describe('move command', () => {
     expect(movedTask?.priority).toBe('medium');
     expect(movedTask?.tags).toEqual(['test']);
     expect(movedTask?.subtasks).toHaveLength(2);
+  });
+});
+
+describe('move command (v2 completionColumn auto-complete)', () => {
+  let tempDir: string;
+  let dotDir: string;
+  let boardDir: string;
+  let logsDir: string;
+  let brainfilePath: string;
+  let logger: MemoryLogger;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-move-v2-test-'));
+    dotDir = path.join(tempDir, '.brainfile');
+    boardDir = path.join(dotDir, 'board');
+    logsDir = path.join(dotDir, 'logs');
+    brainfilePath = path.join(dotDir, 'brainfile.md');
+
+    fs.mkdirSync(boardDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+
+    fs.writeFileSync(brainfilePath, `---
+title: Move V2 Test Board
+schema: https://brainfile.md/v2/board.json
+types:
+  adr:
+    idPrefix: adr
+    completable: false
+columns:
+  - id: todo
+    title: To Do
+  - id: done
+    title: Done
+    completionColumn: true
+---
+`, 'utf-8');
+
+    logger = new MemoryLogger();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('auto-completes a default task type when moved to completionColumn', () => {
+    const task: Task = {
+      id: 'task-1',
+      title: 'Default task type',
+      column: 'todo',
+      position: 0,
+      createdAt: new Date().toISOString(),
+    };
+    writeTaskFile(path.join(boardDir, taskFileName(task.id)), task, '## Description\nMove me\n');
+
+    const result = moveCommand({
+      file: brainfilePath,
+      task: task.id,
+      column: 'done',
+    }, logger);
+
+    expect(result.success).toBe(true);
+    expect(result.movedTask.completedAt).toBeDefined();
+    expect(result.movedTask.column).toBeUndefined();
+    expect(fs.existsSync(path.join(boardDir, taskFileName(task.id)))).toBe(false);
+    expect(fs.existsSync(path.join(logsDir, taskFileName(task.id)))).toBe(true);
+
+    const completedDoc = readTaskFile(path.join(logsDir, taskFileName(task.id)));
+    expect(completedDoc).not.toBeNull();
+    expect(completedDoc!.task.completedAt).toBeDefined();
+    expect(completedDoc!.task.column).toBeUndefined();
+  });
+
+  it('does not auto-complete non-completable task types', () => {
+    const task: Task = {
+      id: 'adr-1',
+      title: 'Architecture decision',
+      type: 'adr',
+      column: 'todo',
+      position: 0,
+      createdAt: new Date().toISOString(),
+    };
+    writeTaskFile(path.join(boardDir, taskFileName(task.id)), task, '');
+
+    const result = moveCommand({
+      file: brainfilePath,
+      task: task.id,
+      column: 'done',
+    }, logger);
+
+    expect(result.success).toBe(true);
+    expect(result.movedTask.completedAt).toBeUndefined();
+    expect(result.movedTask.column).toBe('done');
+    expect(fs.existsSync(path.join(boardDir, taskFileName(task.id)))).toBe(true);
+    expect(fs.existsSync(path.join(logsDir, taskFileName(task.id)))).toBe(false);
+
+    const movedDoc = readTaskFile(path.join(boardDir, taskFileName(task.id)));
+    expect(movedDoc).not.toBeNull();
+    expect(movedDoc!.task.column).toBe('done');
+    expect(movedDoc!.task.completedAt).toBeUndefined();
   });
 });

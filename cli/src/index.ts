@@ -10,5 +10,6 @@ export {
   contractValidateCommand,
   contractAttachCommand,
 } from './commands/contract';
+export { adrPromoteCommand } from './commands/adr';
 export { initCommand } from './commands/init';
 export { migrateCommand } from './commands/migrate';

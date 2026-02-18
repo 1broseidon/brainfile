@@ -7,6 +7,7 @@ import {
   addTask,
   setTaskContract,
   writeTaskFile,
+  readTaskFile,
   readTasksDir,
   generateNextFileTaskId,
   taskFileName,
@@ -23,7 +24,10 @@ import {
   ensureV2Dirs,
   readV2BoardConfig,
   composeBody,
+  shouldSuggestV2Migration,
+  markV2MigrationHintShown,
 } from '../utils/v2-detect';
+import { validateType } from '../utils/strict-validation';
 
 export const ADD_COMMAND_HELP = `
 Examples:
@@ -36,6 +40,13 @@ Create a task with a contract (for an agent):
     --deliverable "test:src/__tests__/feature.test.ts:Unit tests" \\
     --validation "cd core && npm test" \\
     --constraint "Make minimal changes"
+
+Create a parent task and children in one shot:
+  brainfile add -c todo -t "Auth epic" --type epic \
+    --child "OAuth flow" --child "Session hardening"
+
+Attach to an existing parent:
+  brainfile add -c todo -t "OAuth flow" --parent epic-1
 
 Create a task from a template:
   brainfile template --list
@@ -57,6 +68,9 @@ export interface AddOptions {
   dueDate?: string;
   subtasks?: string;
   files?: string;
+  type?: string;
+  parent?: string;
+  child?: string | string[];
   withContract?: boolean;
   deliverable?: string | string[];
   validation?: string | string[];
@@ -67,6 +81,68 @@ export interface AddResult {
   success: true;
   taskId: string;
   columnId: string;
+}
+
+function findActiveTaskById(boardDir: string, taskId: string): Task | null {
+  const direct = readTaskFile(path.join(boardDir, taskFileName(taskId)));
+  if (direct && direct.task.id === taskId) return direct.task;
+
+  const docs = readTasksDir(boardDir);
+  const found = docs.find((doc) => doc.task.id === taskId);
+  return found?.task || null;
+}
+
+function nextPositionForColumn(boardDir: string, columnId: string): number {
+  return readTasksDir(boardDir).filter((doc) => doc.task.column === columnId).length;
+}
+
+function createV2TaskFile(
+  dirs: { boardDir: string; logsDir: string },
+  input: {
+    title: string;
+    columnId: string;
+    type?: string;
+    description?: string;
+    priority?: 'low' | 'medium' | 'high' | 'critical';
+    tags?: string[];
+    assignee?: string;
+    dueDate?: string;
+    relatedFiles?: string[];
+    subtaskTitles?: string[];
+    parentId?: string;
+    contract?: unknown;
+  },
+): Task {
+  const typePrefix = input.type || 'task';
+  const taskId = generateNextFileTaskId(dirs.boardDir, dirs.logsDir, typePrefix);
+  const position = nextPositionForColumn(dirs.boardDir, input.columnId);
+
+  const subtasks = input.subtaskTitles?.map((title, index) => ({
+    id: `${taskId}-${index + 1}`,
+    title: title.trim(),
+    completed: false,
+  })).filter((subtask) => subtask.title.length > 0);
+
+  const task: Task & { parentId?: string } = {
+    id: taskId,
+    title: input.title,
+    ...(input.type && input.type !== 'task' && { type: input.type }),
+    column: input.columnId,
+    position,
+    ...(input.priority && { priority: input.priority }),
+    ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
+    ...(input.assignee && { assignee: input.assignee }),
+    ...(input.dueDate && { dueDate: input.dueDate }),
+    ...(input.relatedFiles && input.relatedFiles.length > 0 && { relatedFiles: input.relatedFiles }),
+    ...(subtasks && subtasks.length > 0 && { subtasks }),
+    ...(input.parentId && input.parentId.trim().length > 0 && { parentId: input.parentId.trim() }),
+    ...(input.contract ? { contract: input.contract as any } : {}),
+    createdAt: new Date().toISOString(),
+  };
+
+  const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
+  writeTaskFile(taskPath, task, composeBody(input.description));
+  return task;
 }
 
 /**
@@ -98,6 +174,11 @@ export function addCommand(options: AddOptions, logger: Logger = defaultLogger):
 function addCommandV2(options: AddOptions, filePath: string, logger: Logger): AddResult {
   const dirs = ensureV2Dirs(filePath);
   const board = readV2BoardConfig(filePath);
+  const typeName = options.type || 'task';
+  const typeValidation = validateType(board, typeName);
+  if (!typeValidation.valid) {
+    throw new CLIError(typeValidation.error || `Invalid type: ${typeName}`);
+  }
 
   // Find target column
   let targetColumn = board.columns.find(c => c.id === options.column);
@@ -109,38 +190,13 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
     throw columnNotFound(options.column, availableColumns);
   }
 
-  // Generate new task ID
-  const taskId = generateNextFileTaskId(dirs.tasksDir, dirs.logsDir);
-
-  // Calculate position (append to end of column)
-  const existingTasks = readTasksDir(dirs.tasksDir)
-    .filter(t => t.task.column === targetColumn!.id);
-  const position = existingTasks.length;
-
-  // Build subtasks
-  let subtasks: Array<{ id: string; title: string; completed: boolean }> | undefined;
-  if (options.subtasks) {
-    subtasks = options.subtasks.split(',').map((title, i) => ({
-      id: `${taskId}-${i + 1}`,
-      title: title.trim(),
-      completed: false,
-    }));
+  const parentId = options.parent?.trim();
+  if (parentId) {
+    const parentTask = findActiveTaskById(dirs.boardDir, parentId);
+    if (!parentTask) {
+      logger.warn(chalk.yellow(`Warning: parent task ${parentId} not found in board/. Creating task anyway.`));
+    }
   }
-
-  // Build task
-  const task: Task = {
-    id: taskId,
-    title: options.title!,
-    column: targetColumn.id,
-    position,
-    ...(options.priority && { priority: options.priority }),
-    ...(options.tags && { tags: options.tags.split(',').map(t => t.trim()) }),
-    ...(options.assignee && { assignee: options.assignee }),
-    ...(options.dueDate && { dueDate: options.dueDate }),
-    ...(options.files && { relatedFiles: options.files.split(',').map(f => f.trim()) }),
-    ...(subtasks && { subtasks }),
-    createdAt: new Date().toISOString(),
-  };
 
   // Build and attach contract if requested
   const deliverableSpecs = normalizeToArray(options.deliverable);
@@ -152,8 +208,8 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
     validationCommands.length > 0 ||
     constraints.length > 0;
 
+  let contract: unknown;
   if (shouldAttachContract) {
-    let contract;
     try {
       contract = buildContract({
         deliverableSpecs,
@@ -163,18 +219,39 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
     } catch (e) {
       throw validationError((e as Error).message);
     }
-    task.contract = contract;
   }
 
-  // Write task file
-  const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
-  const body = composeBody(options.description);
-  writeTaskFile(taskPath, task, body);
+  const parentTask = createV2TaskFile(dirs, {
+    title: options.title!,
+    columnId: targetColumn.id,
+    type: options.type,
+    description: options.description,
+    priority: options.priority,
+    tags: options.tags ? options.tags.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
+    assignee: options.assignee,
+    dueDate: options.dueDate,
+    relatedFiles: options.files ? options.files.split(',').map((f) => f.trim()).filter(Boolean) : undefined,
+    subtaskTitles: options.subtasks ? options.subtasks.split(',').map((title) => title.trim()) : undefined,
+    parentId,
+    contract,
+  });
+
+  const childTitles = normalizeToArray(options.child).map((title) => title.trim()).filter(Boolean);
+  const createdChildren: Task[] = [];
+
+  for (const childTitle of childTitles) {
+    const childTask = createV2TaskFile(dirs, {
+      title: childTitle,
+      columnId: targetColumn.id,
+      parentId: parentTask.id,
+    });
+    createdChildren.push(childTask);
+  }
 
   // Success message
-  logAddSuccess(options, taskId, targetColumn.title, logger);
+  logAddSuccess(options, parentTask.id, targetColumn.title, logger, createdChildren);
 
-  return { success: true, taskId, columnId: targetColumn.id };
+  return { success: true, taskId: parentTask.id, columnId: targetColumn.id };
 }
 
 function addCommandV1(options: AddOptions, filePath: string, logger: Logger): AddResult {
@@ -187,6 +264,13 @@ function addCommandV1(options: AddOptions, filePath: string, logger: Logger): Ad
   }
 
   let board = result.board;
+
+  if (options.parent) {
+    logger.warn(chalk.yellow('Warning: --parent is only supported in v2 per-task file architecture. Ignoring for v1 board.'));
+  }
+  if (normalizeToArray(options.child).length > 0) {
+    logger.warn(chalk.yellow('Warning: --child is only supported in v2 per-task file architecture. Ignoring for v1 board.'));
+  }
 
   // Find the target column by ID or name
   let targetColumn = findColumnById(board, options.column);
@@ -260,15 +344,38 @@ function addCommandV1(options: AddOptions, filePath: string, logger: Logger): Ad
   // Success message
   logAddSuccess(options, newTask.id, targetColumn.title, logger);
 
+  // Show one-time v2 migration hint for v1 boards
+  if (shouldSuggestV2Migration(filePath)) {
+    logger.log('');
+    logger.log(
+      chalk.gray('Tip: Run ') +
+      chalk.cyan('brainfile migrate --v2') +
+      chalk.gray(' to upgrade to per-task files for better agent workflows and task history.')
+    );
+    markV2MigrationHintShown(filePath);
+  }
+
   return { success: true, taskId: newTask.id, columnId: targetColumn.id };
 }
 
-function logAddSuccess(options: AddOptions, taskId: string, columnTitle: string, logger: Logger): void {
+function logAddSuccess(
+  options: AddOptions,
+  taskId: string,
+  columnTitle: string,
+  logger: Logger,
+  createdChildren: Task[] = [],
+): void {
   logger.log(chalk.green('Task added successfully!'));
   logger.log('');
   logger.log(chalk.gray(`  ID:       ${taskId}`));
   logger.log(chalk.gray(`  Title:    ${options.title}`));
   logger.log(chalk.gray(`  Column:   ${columnTitle}`));
+  if (options.type && options.type !== 'task') {
+    logger.log(chalk.gray(`  Type:     ${options.type}`));
+  }
+  if (options.parent) {
+    logger.log(chalk.gray(`  Parent:   ${options.parent}`));
+  }
   if (options.description) {
     logger.log(chalk.gray(`  Desc:     ${options.description.substring(0, 50)}${options.description.length > 50 ? '...' : ''}`));
   }
@@ -289,5 +396,11 @@ function logAddSuccess(options: AddOptions, taskId: string, columnTitle: string,
   }
   if (options.files) {
     logger.log(chalk.gray(`  Files:    ${options.files.split(',').length} linked`));
+  }
+  if (createdChildren.length > 0) {
+    logger.log(chalk.gray(`  Children: ${createdChildren.length} created`));
+    for (const child of createdChildren) {
+      logger.log(chalk.gray(`    - ${child.id}: ${child.title}`));
+    }
   }
 }

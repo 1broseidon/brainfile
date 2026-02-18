@@ -18,6 +18,14 @@ import {
   patchTask,
   toggleSubtask,
   addTask,
+  addTaskFile,
+  moveTaskFile,
+  deleteTaskFile,
+  completeTaskFile,
+  findTask,
+  readTaskFile,
+  writeTaskFile,
+  readTasksDir,
   formatTaskForGitHub,
   formatTaskForLinear,
   type Board,
@@ -30,6 +38,12 @@ import {
   getArchiveConfig,
   type ParsedDestination,
 } from '../utils/config';
+import {
+  isV2,
+  getV2Dirs,
+  buildBoardFromV2,
+  readV2BoardConfig,
+} from '../utils/v2-detect';
 import { isGitHubAuthenticated, createGitHubIssue } from '../utils/github-auth';
 import { isLinearAuthenticated, createLinearIssue, getLinearTeams } from '../utils/linear-auth';
 
@@ -69,6 +83,50 @@ function writeBrainfile(filePath: string, board: Board): ActionResult {
 }
 
 /**
+ * Read board with tasks populated (v1: embedded, v2: reconstructed from board/ files).
+ */
+function readBoardState(filePath: string): { board: Board | null; content: string; error?: string } {
+  if (isV2(filePath)) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const board = buildBoardFromV2(filePath);
+      return { board, content };
+    } catch (err) {
+      return { board: null, content: '', error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  return readBrainfile(filePath);
+}
+
+/**
+ * Read board config only (for rules/settings changes that should not touch task files).
+ */
+function readBoardConfigOnly(filePath: string): { board: Board | null; content: string; error?: string } {
+  if (isV2(filePath)) {
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const board = readV2BoardConfig(filePath);
+      return { board, content };
+    } catch (err) {
+      return { board: null, content: '', error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  return readBrainfile(filePath);
+}
+
+/**
+ * Resolve a task file path in v2 board directory.
+ */
+function resolveV2TaskPath(filePath: string, taskId: string): { taskPath: string; task: Task } | null {
+  const dirs = getV2Dirs(filePath);
+  const doc = findTask(dirs.boardDir, taskId);
+  if (!doc || !doc.filePath) return null;
+  return { taskPath: doc.filePath, task: doc.task };
+}
+
+/**
  * Move a task to a different column
  */
 export function moveTaskAction(
@@ -76,7 +134,7 @@ export function moveTaskAction(
   taskId: string,
   targetColumnId: string
 ): ActionResult {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardState(filePath);
   if (!board) return { success: false, error };
 
   const taskInfo = findTaskById(board, taskId);
@@ -87,6 +145,16 @@ export function moveTaskAction(
 
   if (taskInfo.column.id === targetColumn.id) {
     return { success: true, message: 'Task already in this column' };
+  }
+
+  if (isV2(filePath)) {
+    const located = resolveV2TaskPath(filePath, taskId);
+    if (!located) return { success: false, error: `Task ${taskId} not found` };
+
+    const moveResult = moveTaskFile(located.taskPath, targetColumn.id, targetColumn.tasks.length);
+    if (!moveResult.success) return { success: false, error: moveResult.error };
+
+    return { success: true, message: `Moved to ${targetColumn.title}` };
   }
 
   const result = moveTask(board, taskId, taskInfo.column.id, targetColumn.id, targetColumn.tasks.length);
@@ -102,11 +170,21 @@ export function moveTaskAction(
  * Delete a task permanently
  */
 export function deleteTaskAction(filePath: string, taskId: string): ActionResult {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardState(filePath);
   if (!board) return { success: false, error };
 
   const taskInfo = findTaskById(board, taskId);
   if (!taskInfo) return { success: false, error: `Task ${taskId} not found` };
+
+  if (isV2(filePath)) {
+    const located = resolveV2TaskPath(filePath, taskId);
+    if (!located) return { success: false, error: `Task ${taskId} not found` };
+
+    const result = deleteTaskFile(located.taskPath);
+    if (!result.success) return { success: false, error: result.error };
+
+    return { success: true, message: `Deleted ${taskId}` };
+  }
 
   const result = deleteTask(board, taskInfo.column.id, taskId);
   if (!result.success) return { success: false, error: result.error };
@@ -133,7 +211,7 @@ function getArchivePath(filePath: string): string {
  */
 function createEmptyArchiveBoard(): Board {
   return {
-    title: 'Archive',
+    title: 'Logs',
     columns: [],
     archive: [],
   };
@@ -144,6 +222,17 @@ function createEmptyArchiveBoard(): Board {
  * Per protocol spec, archived tasks go to a separate file, not inline archive array
  */
 export function archiveTaskAction(filePath: string, taskId: string): ActionResult {
+  if (isV2(filePath)) {
+    const dirs = getV2Dirs(filePath);
+    const located = resolveV2TaskPath(filePath, taskId);
+    if (!located) return { success: false, error: `Task ${taskId} not found` };
+
+    const result = completeTaskFile(located.taskPath, dirs.logsDir);
+    if (!result.success) return { success: false, error: result.error };
+
+    return { success: true, message: `Moved ${taskId} to logs` };
+  }
+
   const { board, error } = readBrainfile(filePath);
   if (!board) return { success: false, error };
 
@@ -197,11 +286,11 @@ export function archiveTaskAction(filePath: string, taskId: string): ActionResul
     // This is a partial failure state - log and report
     return {
       success: false,
-      error: `Task removed from board but failed to write archive: ${err instanceof Error ? err.message : String(err)}`,
+      error: `Task removed from board but failed to write logs: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
 
-  return { success: true, message: `Archived ${taskId}` };
+  return { success: true, message: `Moved ${taskId} to logs` };
 }
 
 /**
@@ -212,7 +301,7 @@ export async function archiveTaskActionAsync(
   filePath: string,
   taskId: string
 ): Promise<ActionResult> {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardState(filePath);
   if (!board) return { success: false, error };
 
   const taskInfo = findTaskById(board, taskId);
@@ -269,12 +358,19 @@ export async function archiveTaskActionAsync(
     }
 
     // Remove task from board
-    const deleteResult = deleteTask(board, columnId, taskId);
-    if (deleteResult.success) {
-      writeBrainfile(filePath, deleteResult.board!);
+    if (isV2(filePath)) {
+      const located = resolveV2TaskPath(filePath, taskId);
+      if (located) {
+        deleteTaskFile(located.taskPath);
+      }
+    } else {
+      const deleteResult = deleteTask(board, columnId, taskId);
+      if (deleteResult.success) {
+        writeBrainfile(filePath, deleteResult.board!);
+      }
     }
 
-    return { success: true, message: `Archived to GitHub #${ghResult.issueNumber}` };
+    return { success: true, message: `Moved to logs via GitHub #${ghResult.issueNumber}` };
   }
 
   // Handle Linear archive
@@ -334,12 +430,19 @@ export async function archiveTaskActionAsync(
     }
 
     // Remove task from board
-    const deleteResult = deleteTask(board, columnId, taskId);
-    if (deleteResult.success) {
-      writeBrainfile(filePath, deleteResult.board!);
+    if (isV2(filePath)) {
+      const located = resolveV2TaskPath(filePath, taskId);
+      if (located) {
+        deleteTaskFile(located.taskPath);
+      }
+    } else {
+      const deleteResult = deleteTask(board, columnId, taskId);
+      if (deleteResult.success) {
+        writeBrainfile(filePath, deleteResult.board!);
+      }
     }
 
-    return { success: true, message: `Archived to Linear ${linearResult.issueId}` };
+    return { success: true, message: `Moved to logs via Linear ${linearResult.issueId}` };
   }
 
   return { success: false, error: `Unknown destination: ${destination}` };
@@ -353,6 +456,75 @@ export function patchTaskAction(
   taskId: string,
   patch: TaskPatch
 ): ActionResult {
+  if (isV2(filePath)) {
+    const located = resolveV2TaskPath(filePath, taskId);
+    if (!located) return { success: false, error: `Task ${taskId} not found` };
+
+    const doc = readTaskFile(located.taskPath);
+    if (!doc) return { success: false, error: `Failed to read task ${taskId}` };
+
+    const updatedTask: Task = { ...doc.task };
+
+    if (patch.title !== undefined) updatedTask.title = patch.title;
+
+    if (patch.description !== undefined) {
+      if (patch.description === null) {
+        delete updatedTask.description;
+      } else {
+        updatedTask.description = patch.description;
+      }
+    }
+
+    if (patch.priority !== undefined) {
+      if (patch.priority === null) {
+        delete updatedTask.priority;
+      } else {
+        updatedTask.priority = patch.priority;
+      }
+    }
+
+    if (patch.tags !== undefined) {
+      if (patch.tags === null) {
+        delete updatedTask.tags;
+      } else {
+        updatedTask.tags = patch.tags;
+      }
+    }
+
+    if (patch.assignee !== undefined) {
+      if (patch.assignee === null) {
+        delete updatedTask.assignee;
+      } else {
+        updatedTask.assignee = patch.assignee;
+      }
+    }
+
+    if (patch.dueDate !== undefined) {
+      if (patch.dueDate === null) {
+        delete updatedTask.dueDate;
+      } else {
+        updatedTask.dueDate = patch.dueDate;
+      }
+    }
+
+    if (patch.relatedFiles !== undefined) {
+      if (patch.relatedFiles === null) {
+        delete updatedTask.relatedFiles;
+      } else {
+        updatedTask.relatedFiles = patch.relatedFiles;
+      }
+    }
+
+    updatedTask.updatedAt = new Date().toISOString();
+
+    try {
+      writeTaskFile(located.taskPath, updatedTask, doc.body);
+      return { success: true, message: `Updated ${taskId}` };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   const { board, error } = readBrainfile(filePath);
   if (!board) return { success: false, error };
 
@@ -369,13 +541,42 @@ export function patchTaskAction(
  * Cycle task priority: none -> low -> medium -> high -> critical -> none
  */
 export function cyclePriorityAction(filePath: string, taskId: string): ActionResult {
+  const priorities = [undefined, 'low', 'medium', 'high', 'critical'] as const;
+
+  if (isV2(filePath)) {
+    const located = resolveV2TaskPath(filePath, taskId);
+    if (!located) return { success: false, error: `Task ${taskId} not found` };
+
+    const doc = readTaskFile(located.taskPath);
+    if (!doc) return { success: false, error: `Failed to read task ${taskId}` };
+
+    const currentIndex = priorities.indexOf(doc.task.priority as typeof priorities[number]);
+    const nextIndex = (currentIndex + 1) % priorities.length;
+    const nextPriority = priorities[nextIndex];
+
+    const updatedTask: Task = {
+      ...doc.task,
+      ...(nextPriority ? { priority: nextPriority } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    if (!nextPriority) {
+      delete updatedTask.priority;
+    }
+
+    try {
+      writeTaskFile(located.taskPath, updatedTask, doc.body);
+      return { success: true, message: `Priority: ${nextPriority || 'none'}` };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   const { board, error } = readBrainfile(filePath);
   if (!board) return { success: false, error };
 
   const taskInfo = findTaskById(board, taskId);
   if (!taskInfo) return { success: false, error: `Task ${taskId} not found` };
 
-  const priorities = [undefined, 'low', 'medium', 'high', 'critical'] as const;
   const currentIndex = priorities.indexOf(taskInfo.task.priority as typeof priorities[number]);
   const nextIndex = (currentIndex + 1) % priorities.length;
   const nextPriority = priorities[nextIndex];
@@ -398,6 +599,39 @@ export function toggleSubtaskAction(
   taskId: string,
   subtaskId: string
 ): ActionResult {
+  if (isV2(filePath)) {
+    const located = resolveV2TaskPath(filePath, taskId);
+    if (!located) return { success: false, error: `Task ${taskId} not found` };
+
+    const doc = readTaskFile(located.taskPath);
+    if (!doc) return { success: false, error: `Failed to read task ${taskId}` };
+
+    if (!doc.task.subtasks || doc.task.subtasks.length === 0) {
+      return { success: false, error: `Task ${taskId} has no subtasks` };
+    }
+
+    const updatedSubtasks = doc.task.subtasks.map((subtask) => {
+      if (subtask.id !== subtaskId) return subtask;
+      return { ...subtask, completed: !subtask.completed };
+    });
+
+    const found = updatedSubtasks.some((subtask) => subtask.id === subtaskId);
+    if (!found) return { success: false, error: `Subtask ${subtaskId} not found` };
+
+    const updatedTask: Task = {
+      ...doc.task,
+      subtasks: updatedSubtasks,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      writeTaskFile(located.taskPath, updatedTask, doc.body);
+      return { success: true, message: `Toggled ${subtaskId}` };
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   const { board, error } = readBrainfile(filePath);
   if (!board) return { success: false, error };
 
@@ -418,11 +652,33 @@ export function addTaskAction(
   columnId: string,
   taskInput: TaskInput
 ): ActionResult {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardState(filePath);
   if (!board) return { success: false, error };
 
   const column = findColumnById(board, columnId) || findColumnByName(board, columnId);
   if (!column) return { success: false, error: `Column ${columnId} not found` };
+
+  if (isV2(filePath)) {
+    const dirs = getV2Dirs(filePath);
+    const result = addTaskFile(
+      dirs.boardDir,
+      {
+        title: taskInput.title,
+        column: column.id,
+        description: taskInput.description,
+        priority: taskInput.priority,
+        tags: taskInput.tags,
+        assignee: taskInput.assignee,
+        dueDate: taskInput.dueDate,
+        relatedFiles: taskInput.relatedFiles,
+      },
+      taskInput.description ? `## Description\n${taskInput.description.trim()}\n` : '',
+      dirs.logsDir,
+    );
+
+    if (!result.success) return { success: false, error: result.error };
+    return { success: true, message: `Added ${result.task?.id || 'task'}` };
+  }
 
   const result = addTask(board, column.id, taskInput);
   if (!result.success) return { success: false, error: result.error };
@@ -444,7 +700,7 @@ export function newTaskInEditor(
   filePath: string,
   columnId: string
 ): ActionResult {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardState(filePath);
   if (!board) return { success: false, error };
 
   const column = findColumnById(board, columnId) || findColumnByName(board, columnId);
@@ -594,7 +850,7 @@ export function editTaskInEditor(
   filePath: string,
   taskId: string
 ): ActionResult {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardState(filePath);
   if (!board) {
     return { success: false, error };
   }
@@ -860,7 +1116,7 @@ export function addRuleAction(
   ruleType: RuleType,
   ruleText: string
 ): ActionResult {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardConfigOnly(filePath);
   if (!board) return { success: false, error };
 
   // Initialize rules if not present
@@ -904,7 +1160,7 @@ export function updateRuleAction(
   ruleId: number,
   ruleText: string
 ): ActionResult {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardConfigOnly(filePath);
   if (!board) return { success: false, error };
 
   if (!board.rules || !board.rules[ruleType]) {
@@ -932,7 +1188,7 @@ export function deleteRuleAction(
   ruleType: RuleType,
   ruleId: number
 ): ActionResult {
-  const { board, error } = readBrainfile(filePath);
+  const { board, error } = readBoardConfigOnly(filePath);
   if (!board) return { success: false, error };
 
   if (!board.rules || !board.rules[ruleType]) {
@@ -957,40 +1213,94 @@ export function deleteRuleAction(
 // =============================================================================
 
 /**
- * Load archive from the archive file
+ * Load logs from the logs file
  */
-export function loadArchive(filePath: string): { archive: Task[]; error?: string } {
+export function loadLogs(filePath: string): { logs: Task[]; error?: string } {
+  if (isV2(filePath)) {
+    try {
+      const dirs = getV2Dirs(filePath);
+      const docs = readTasksDir(dirs.logsDir);
+      const logs = docs
+        .map((doc) => ({ ...doc.task }))
+        .sort((a, b) => {
+          const aTime = a.completedAt ? Date.parse(a.completedAt) : 0;
+          const bTime = b.completedAt ? Date.parse(b.completedAt) : 0;
+          return bTime - aTime;
+        });
+      return { logs };
+    } catch (err) {
+      return { logs: [], error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
   const archivePath = getArchivePath(filePath);
 
   if (!fs.existsSync(archivePath)) {
-    return { archive: [] };
+    return { logs: [] };
   }
 
   try {
     const archiveContent = fs.readFileSync(archivePath, 'utf-8');
     const parseResult = Brainfile.parseWithErrors(archiveContent);
     if (parseResult.board && parseResult.board.archive) {
-      return { archive: parseResult.board.archive };
+      return { logs: parseResult.board.archive };
     }
-    return { archive: [] };
+    return { logs: [] };
   } catch (err) {
-    return { archive: [], error: err instanceof Error ? err.message : String(err) };
+    return { logs: [], error: err instanceof Error ? err.message : String(err) };
   }
 }
 
 /**
- * Restore a task from the archive to a column
+ * Restore a task from logs to a column
  */
 export function restoreTaskAction(
   filePath: string,
   taskId: string,
   toColumnId: string
 ): ActionResult {
+  if (isV2(filePath)) {
+    const dirs = getV2Dirs(filePath);
+    const { board, error } = readBoardState(filePath);
+    if (!board) return { success: false, error };
+
+    const column = findColumnById(board, toColumnId) || findColumnByName(board, toColumnId);
+    if (!column) {
+      return { success: false, error: `Column ${toColumnId} not found` };
+    }
+
+    if (findTask(dirs.boardDir, taskId)) {
+      return { success: false, error: `Task ${taskId} already exists in board` };
+    }
+
+    const logDoc = findTask(dirs.logsDir, taskId);
+    if (!logDoc || !logDoc.filePath) {
+      return { success: false, error: `Task ${taskId} not found in logs` };
+    }
+
+    const restoredTask: Task = {
+      ...logDoc.task,
+      column: column.id,
+      updatedAt: new Date().toISOString(),
+    };
+    delete restoredTask.completedAt;
+
+    const targetPath = path.join(dirs.boardDir, `${taskId}.md`);
+
+    try {
+      writeTaskFile(targetPath, restoredTask, logDoc.body);
+      fs.unlinkSync(logDoc.filePath);
+      return { success: true, message: `Restored ${taskId} to ${column.title}` };
+    } catch (err) {
+      return { success: false, error: `Failed to restore task: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
   const archivePath = getArchivePath(filePath);
 
   // Read archive file
   if (!fs.existsSync(archivePath)) {
-    return { success: false, error: 'Archive file not found' };
+    return { success: false, error: 'Logs file not found' };
   }
 
   let archiveBoard: Board;
@@ -998,31 +1308,31 @@ export function restoreTaskAction(
     const archiveContent = fs.readFileSync(archivePath, 'utf-8');
     const parseResult = Brainfile.parseWithErrors(archiveContent);
     if (!parseResult.board) {
-      return { success: false, error: 'Failed to parse archive file' };
+      return { success: false, error: 'Failed to parse logs file' };
     }
     archiveBoard = parseResult.board;
   } catch (err) {
-    return { success: false, error: `Failed to read archive: ${err instanceof Error ? err.message : String(err)}` };
+    return { success: false, error: `Failed to read logs: ${err instanceof Error ? err.message : String(err)}` };
   }
 
   // Find task in archive
   if (!archiveBoard.archive || archiveBoard.archive.length === 0) {
-    return { success: false, error: 'Archive is empty' };
+    return { success: false, error: 'Logs are empty' };
   }
 
   const taskIndex = archiveBoard.archive.findIndex(t => t.id === taskId);
   if (taskIndex === -1) {
-    return { success: false, error: `Task ${taskId} not found in archive` };
+    return { success: false, error: `Task ${taskId} not found in logs` };
   }
 
   const task = archiveBoard.archive[taskIndex];
 
   // Read main board
-  const { board, error } = readBrainfile(filePath);
-  if (!board) return { success: false, error };
+  const { board: mainBoard, error: mainBoardError } = readBrainfile(filePath);
+  if (!mainBoard) return { success: false, error: mainBoardError };
 
   // Find target column
-  const column = findColumnById(board, toColumnId) || findColumnByName(board, toColumnId);
+  const column = findColumnById(mainBoard, toColumnId) || findColumnByName(mainBoard, toColumnId);
   if (!column) {
     return { success: false, error: `Column ${toColumnId} not found` };
   }
@@ -1034,31 +1344,46 @@ export function restoreTaskAction(
   archiveBoard.archive.splice(taskIndex, 1);
 
   // Save both files
-  const writeResult = writeBrainfile(filePath, board);
+  const writeResult = writeBrainfile(filePath, mainBoard);
   if (!writeResult.success) return writeResult;
 
   try {
     const archiveContent = Brainfile.serialize(archiveBoard);
     fs.writeFileSync(archivePath, archiveContent, 'utf-8');
   } catch (err) {
-    return { success: false, error: `Task restored but failed to update archive: ${err}` };
+    return { success: false, error: `Task restored but failed to update logs: ${err}` };
   }
 
   return { success: true, message: `Restored ${taskId} to ${column.title}` };
 }
 
 /**
- * Permanently delete a task from the archive
+ * Permanently delete a task from logs
  */
 export function deleteArchivedTaskAction(
   filePath: string,
   taskId: string
 ): ActionResult {
+  if (isV2(filePath)) {
+    const dirs = getV2Dirs(filePath);
+    const logDoc = findTask(dirs.logsDir, taskId);
+    if (!logDoc || !logDoc.filePath) {
+      return { success: false, error: `Task ${taskId} not found in logs` };
+    }
+
+    const result = deleteTaskFile(logDoc.filePath);
+    if (!result.success) {
+      return { success: false, error: result.error || `Failed to delete ${taskId}` };
+    }
+
+    return { success: true, message: `Permanently deleted ${taskId}` };
+  }
+
   const archivePath = getArchivePath(filePath);
 
   // Read archive file
   if (!fs.existsSync(archivePath)) {
-    return { success: false, error: 'Archive file not found' };
+    return { success: false, error: 'Logs file not found' };
   }
 
   let archiveBoard: Board;
@@ -1066,21 +1391,21 @@ export function deleteArchivedTaskAction(
     const archiveContent = fs.readFileSync(archivePath, 'utf-8');
     const parseResult = Brainfile.parseWithErrors(archiveContent);
     if (!parseResult.board) {
-      return { success: false, error: 'Failed to parse archive file' };
+      return { success: false, error: 'Failed to parse logs file' };
     }
     archiveBoard = parseResult.board;
   } catch (err) {
-    return { success: false, error: `Failed to read archive: ${err instanceof Error ? err.message : String(err)}` };
+    return { success: false, error: `Failed to read logs: ${err instanceof Error ? err.message : String(err)}` };
   }
 
   // Find and remove task from archive
   if (!archiveBoard.archive || archiveBoard.archive.length === 0) {
-    return { success: false, error: 'Archive is empty' };
+    return { success: false, error: 'Logs are empty' };
   }
 
   const taskIndex = archiveBoard.archive.findIndex(t => t.id === taskId);
   if (taskIndex === -1) {
-    return { success: false, error: `Task ${taskId} not found in archive` };
+    return { success: false, error: `Task ${taskId} not found in logs` };
   }
 
   archiveBoard.archive.splice(taskIndex, 1);
@@ -1090,7 +1415,7 @@ export function deleteArchivedTaskAction(
     const archiveContent = Brainfile.serialize(archiveBoard);
     fs.writeFileSync(archivePath, archiveContent, 'utf-8');
   } catch (err) {
-    return { success: false, error: `Failed to update archive: ${err}` };
+    return { success: false, error: `Failed to update logs: ${err}` };
   }
 
   return { success: true, message: `Permanently deleted ${taskId}` };

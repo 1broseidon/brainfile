@@ -49,6 +49,12 @@ import {
 import { configCommand } from './commands/config';
 import { schemaCommand, SCHEMA_COMMAND_HELP } from './commands/schema';
 import { rulesCommand, RULES_COMMAND_HELP } from './commands/rules';
+import { adrPromoteCommand, ADR_COMMAND_HELP } from './commands/adr';
+import {
+  typesListCommand,
+  typesAddCommand,
+  parseBooleanFlag,
+} from './commands/types';
 
 // Read version from package.json
 const packageJson = JSON.parse(
@@ -56,7 +62,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'adr', 'types', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -157,6 +163,7 @@ Brainfile file resolution (when you don't pass --file):
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-c, --column <name>', 'Filter by column')
     .option('-t, --tag <name>', 'Filter by tag')
+    .option('--parent <id>', 'Filter by parent task ID (parentId)')
     .option('--contract <status>', 'Filter by contract status (ready|in_progress|delivered|done|failed)')
     .action((options) => { listCommand(options); });
   listCmd.addHelpText('after', `\n${LIST_COMMAND_HELP}`);
@@ -182,6 +189,14 @@ Brainfile file resolution (when you don't pass --file):
     .option('--due-date <date>', 'Due date (YYYY-MM-DD)')
     .option('--subtasks <titles>', 'Comma-separated subtask titles')
     .option('--files <paths>', 'Comma-separated related file paths')
+    .option('--type <type>', 'Document type (e.g., epic, adr). Determines ID prefix. Default: task')
+    .option('--parent <id>', 'Parent task ID (sets parentId on the new task file)')
+    .option(
+      '--child <title>',
+      'Create a child task under the newly created parent (repeatable; children default to type: task)',
+      (value, previous: string[]) => (previous ? [...previous, value] : [value]),
+      []
+    )
     .option('--with-contract', 'Attach a contract (status=ready)')
     .option(
       '--deliverable <spec>',
@@ -252,9 +267,10 @@ Brainfile file resolution (when you don't pass --file):
     .description('Complete a task (move to logs in v2, or move to done column in v1)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to complete (required)')
+    .option('--force', 'Force epic completion even if child tasks are still active')
     .action((options) => { completeCommand(options); });
 
-  const logCmd = program
+  program
     .command('log')
     .description('View, search, and manage completed task logs (v2 only)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
@@ -263,7 +279,7 @@ Brainfile file resolution (when you don't pass --file):
     .option('--recent', 'List recently completed tasks')
     .action((options) => { logCommand(options); });
 
-  logCmd
+  program
     .command('note')
     .description('Append a timestamped note to a task log')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
@@ -501,6 +517,60 @@ Brainfile file resolution (when you don't pass --file):
       });
     });
   rulesCmd.addHelpText('after', `\n${RULES_COMMAND_HELP}`);
+
+  // Add ADR command group
+  const adrCmd = program
+    .command('adr')
+    .description('Manage Architectural Decision Records (ADR) lifecycle');
+  adrCmd.addHelpText('after', `\n${ADR_COMMAND_HELP}`);
+
+  adrCmd
+    .command('promote')
+    .description('Promote an ADR into a project rule and move it to logs/')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --task <id>', 'ADR task ID to promote (required)')
+    .option('--category <category>', 'Rule category (prefer|always|never|context)')
+    .action((options) => { adrPromoteCommand(options); });
+
+  // Add types command
+  program
+    .command('types [action]')
+    .description('Inspect and manage board document types')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output in JSON format (list action)')
+    .option('--id-prefix <prefix>', 'ID prefix to use for the type (add action; default: type name)')
+    .option('--completable <bool>', 'Whether this type can be completed (add action; default: true)')
+    .option('--schema <url>', 'Optional schema URL/path for this type (add action)')
+    .argument('[name]', 'Type name (required for add action)')
+    .action((action, name, options) => {
+      const normalizedAction = (action || 'list').toLowerCase();
+
+      if (normalizedAction === 'list') {
+        typesListCommand({
+          file: options.file,
+          json: options.json,
+        });
+        return;
+      }
+
+      if (normalizedAction === 'add') {
+        const completable =
+          options.completable !== undefined
+            ? parseBooleanFlag(String(options.completable))
+            : undefined;
+
+        typesAddCommand({
+          file: options.file,
+          name,
+          idPrefix: options.idPrefix,
+          completable,
+          schema: options.schema,
+        });
+        return;
+      }
+
+      throw new Error(`Unknown types action: ${action}`);
+    });
 
   program.parse();
 

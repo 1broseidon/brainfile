@@ -10,7 +10,7 @@ import { composeBody } from '../utils/v2-detect';
 describe('complete command', () => {
   let tempDir: string;
   let dotDir: string;
-  let tasksDir: string;
+  let boardDir: string;
   let logsDir: string;
   let brainfilePath: string;
   let logger: MemoryLogger;
@@ -18,11 +18,11 @@ describe('complete command', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-complete-test-'));
     dotDir = path.join(tempDir, '.brainfile');
-    tasksDir = path.join(dotDir, 'tasks');
+    boardDir = path.join(dotDir, 'board');
     logsDir = path.join(dotDir, 'logs');
     brainfilePath = path.join(dotDir, 'brainfile.md');
 
-    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.mkdirSync(boardDir, { recursive: true });
     fs.mkdirSync(logsDir, { recursive: true });
 
     // Write v2 config-only brainfile
@@ -48,7 +48,7 @@ columns:
       priority: 'high',
       tags: ['test'],
     };
-    writeTaskFile(path.join(tasksDir, 'task-1.md'), task, composeBody('Test description'));
+    writeTaskFile(path.join(boardDir, 'task-1.md'), task, composeBody('Test description'));
 
     logger = new MemoryLogger();
   });
@@ -57,15 +57,15 @@ columns:
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('should complete a v2 task - move from tasks/ to logs/', () => {
+  it('should complete a v2 task - move from board/ to logs/', () => {
     const result = completeCommand({ file: brainfilePath, task: 'task-1' }, logger);
 
     expect(result.success).toBe(true);
     expect(result.taskId).toBe('task-1');
     expect(result.completedAt).toBeDefined();
 
-    // Task file should be removed from tasks/
-    expect(fs.existsSync(path.join(tasksDir, 'task-1.md'))).toBe(false);
+    // Task file should be removed from board/
+    expect(fs.existsSync(path.join(boardDir, 'task-1.md'))).toBe(false);
 
     // Task file should exist in logs/
     expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(true);

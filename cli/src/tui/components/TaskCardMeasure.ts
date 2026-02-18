@@ -60,22 +60,8 @@ export function safeTruncate(text: string | undefined, maxWidth: number): string
 
 /**
  * Calculate exact height dimensions for a TaskCard.
- *
- * Linear-style borderless design:
- *
- * COLLAPSED (always 3 lines):
- * - Row 1: indicator + priority + title + [subtasks] = 1
- * - Row 2: indented meta + ID = 1
- * - Margin between cards (handled by TaskList) = 1
- *
- * EXPANDED (variable):
- * - Base collapsed: 3
- * - marginTop before expanded content: 1
- * - Description: min(lines, 3) + overflow(1) (if present)
- * - Subtasks: marginTop(conditional) + min(count, 5) + overflow(1) (if present)
- * - Related files: marginTop(1) + min(count, 3) + overflow(1) (if present)
  */
-export function measureTaskCard(task: Task, contentWidth: number): TaskCardDimensions {
+export function measureTaskCard(task: Task, contentWidth: number, allTasks: Task[] = []): TaskCardDimensions {
   // Collapsed is ALWAYS 3 lines (2 content + 1 margin)
   const collapsed = 3;
 
@@ -114,18 +100,36 @@ export function measureTaskCard(task: Task, contentWidth: number): TaskCardDimen
     }
   }
 
-  // Contract section (display-only, if present)
-  if ((task as any).contract) {
-    const hasPrevious =
-      Boolean(task.description) ||
-      Boolean(task.subtasks && task.subtasks.length > 0) ||
-      Boolean(task.relatedFiles && task.relatedFiles.length > 0);
+  const hasPreviousSections =
+    Boolean(task.description) ||
+    Boolean(task.subtasks && task.subtasks.length > 0) ||
+    Boolean(task.relatedFiles && task.relatedFiles.length > 0);
 
-    if (hasPrevious) {
-      expanded += 1; // marginTop before contract block
+  const childrenCount = allTasks.filter(t => {
+    const parentId = (t as Task & { parentId?: string }).parentId;
+    return parentId === task.id && t.id !== task.id;
+  }).length;
+  const isAdr = (task.type || 'task').toLowerCase() === 'adr';
+  const hasAdrStatus = Boolean((task as Task & { status?: string }).status) && isAdr;
+  const hasContract = Boolean((task as Task & { contract?: unknown }).contract);
+  const parentId = (task as Task & { parentId?: string }).parentId;
+  const hasDetailBlock = Boolean(parentId) || childrenCount > 0 || hasAdrStatus || hasContract;
+
+  if (hasDetailBlock) {
+    if (hasPreviousSections) {
+      expanded += 1; // marginTop before TaskDetail block
     }
 
-    expanded += 3; // "Contract" header + Status + Deliverables count
+    if (parentId) expanded += 1; // Parent row
+    if (childrenCount > 0) expanded += 1; // Children row
+    if (hasAdrStatus) expanded += 1; // ADR status row
+
+    if (hasContract) {
+      if (parentId || childrenCount > 0 || hasAdrStatus) {
+        expanded += 1; // spacer before Contract header
+      }
+      expanded += 3; // Contract header + status + deliverables
+    }
   }
 
   return { collapsed, expanded };
@@ -135,7 +139,7 @@ export function measureTaskCard(task: Task, contentWidth: number): TaskCardDimen
  * Get the height for a task card based on expanded state.
  * Convenience wrapper for TaskList viewport calculations.
  */
-export function getTaskCardHeight(task: Task, isExpanded: boolean, contentWidth: number): number {
-  const dims = measureTaskCard(task, contentWidth);
+export function getTaskCardHeight(task: Task, isExpanded: boolean, contentWidth: number, allTasks: Task[] = []): number {
+  const dims = measureTaskCard(task, contentWidth, allTasks);
   return isExpanded ? dims.expanded : dims.collapsed;
 }

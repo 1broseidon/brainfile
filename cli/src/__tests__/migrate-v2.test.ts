@@ -60,22 +60,22 @@ columns:
     // Run v2 migration
     migrateCommand({ v2: true });
 
-    // Verify tasks/ and logs/ directories were created
-    const tasksDir = path.join(dotDir, 'tasks');
+    // Verify board/ and logs/ directories were created
+    const boardDir = path.join(dotDir, 'board');
     const logsDir = path.join(dotDir, 'logs');
-    expect(fs.existsSync(tasksDir)).toBe(true);
+    expect(fs.existsSync(boardDir)).toBe(true);
     expect(fs.existsSync(logsDir)).toBe(true);
 
-    // Verify active tasks are in tasks/
-    expect(fs.existsSync(path.join(tasksDir, 'task-1.md'))).toBe(true);
-    expect(fs.existsSync(path.join(tasksDir, 'task-2.md'))).toBe(true);
-    expect(fs.existsSync(path.join(tasksDir, 'task-3.md'))).toBe(true);
+    // Verify active tasks are in board/
+    expect(fs.existsSync(path.join(boardDir, 'task-1.md'))).toBe(true);
+    expect(fs.existsSync(path.join(boardDir, 'task-2.md'))).toBe(true);
+    expect(fs.existsSync(path.join(boardDir, 'task-3.md'))).toBe(true);
 
     // Verify done tasks are in logs/
     expect(fs.existsSync(path.join(logsDir, 'task-4.md'))).toBe(true);
 
     // Verify task content
-    const task1 = readTaskFile(path.join(tasksDir, 'task-1.md'));
+    const task1 = readTaskFile(path.join(boardDir, 'task-1.md'));
     expect(task1).not.toBeNull();
     expect(task1!.task.id).toBe('task-1');
     expect(task1!.task.title).toBe('First task');
@@ -83,7 +83,7 @@ columns:
     expect(task1!.task.column).toBe('todo');
     expect(task1!.task.position).toBe(0);
 
-    const task3 = readTaskFile(path.join(tasksDir, 'task-3.md'));
+    const task3 = readTaskFile(path.join(boardDir, 'task-3.md'));
     expect(task3).not.toBeNull();
     expect(task3!.task.column).toBe('in-progress');
     expect(task3!.task.assignee).toBe('alice');

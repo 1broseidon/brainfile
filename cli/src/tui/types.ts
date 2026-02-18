@@ -3,7 +3,7 @@ import type { Board, Task } from '@brainfile/core';
 export type BoardColumn = Board['columns'][number];
 
 /** Main panel tabs */
-export type MainPanel = 'tasks' | 'rules' | 'archive';
+export type MainPanel = 'tasks' | 'rules' | 'logs';
 
 /** Responsive layout mode */
 export type LayoutMode = 'wide' | 'narrow';
@@ -30,9 +30,9 @@ export type ViewMode =
   | 'rule-add'
   | 'rule-edit'
   | 'rule-delete-confirm'
-  // Archive modes
-  | 'archive-restore'
-  | 'archive-delete-confirm';
+  // Logs modes
+  | 'logs-restore'
+  | 'logs-delete-confirm';
 
 export interface StatusMessage {
   text: string;
@@ -82,12 +82,12 @@ export interface AppState {
   ruleEditText: string;
   ruleEditId: number | null; // null for new rule
 
-  // Archive panel state
-  archive: Task[];
-  selectedArchiveIndex: number;
-  archiveSearchQuery: string;
-  archiveRestoreColumnIndex: number;
-  expandedArchiveIds: Set<string>;
+  // Logs panel state
+  logs: Task[];
+  selectedLogIndex: number;
+  logSearchQuery: string;
+  logRestoreColumnIndex: number;
+  expandedLogIds: Set<string>;
 }
 
 export interface TUIProps {

@@ -5,8 +5,8 @@ import { PALETTE, BOX, ICONS } from '../theme.js';
 import { truncate, getPriorityColor } from '../utils.js';
 import type { BoardColumn, LayoutMode } from '../types.js';
 
-export interface ArchivePanelProps {
-  archive: Task[];
+export interface LogsPanelProps {
+  logs: Task[];
   selectedIndex: number;
   viewportHeight: number;
   termWidth: number;
@@ -17,8 +17,8 @@ export interface ArchivePanelProps {
   layoutMode?: LayoutMode;
 }
 
-export function ArchivePanel({
-  archive,
+export function LogsPanel({
+  logs,
   selectedIndex,
   viewportHeight,
   termWidth,
@@ -27,7 +27,7 @@ export function ArchivePanel({
   columns,
   restoreColumnIndex,
   layoutMode = 'wide',
-}: ArchivePanelProps) {
+}: LogsPanelProps) {
   const maxWidth = Math.max(termWidth - 8, 20);
 
   // Calculate scroll offset
@@ -38,18 +38,18 @@ export function ArchivePanel({
   if (selectedIndex >= visibleTasks - scrollPadding) {
     scrollOffset = Math.min(
       selectedIndex - visibleTasks + scrollPadding + 1,
-      Math.max(0, archive.length - visibleTasks)
+      Math.max(0, logs.length - visibleTasks)
     );
   }
 
-  const selectedTask = archive[selectedIndex];
+  const selectedTask = logs[selectedIndex];
 
   return (
     <Box flexDirection="column" paddingX={1}>
       {/* Header with count and instructions */}
       <Box marginBottom={1}>
         <Text color={PALETTE.textSecondary}>
-          {archive.length} archived{layoutMode === 'wide' ? ` task${archive.length !== 1 ? 's' : ''}` : ''}
+          {logs.length} logged{layoutMode === 'wide' ? ` task${logs.length !== 1 ? 's' : ''}` : ''}
         </Text>
         {layoutMode === 'wide' && (
           <Box marginLeft={2}>
@@ -69,7 +69,7 @@ export function ArchivePanel({
       </Box>
 
       {/* Restore mode: column picker */}
-      {mode === 'archive-restore' && selectedTask && (
+      {mode === 'logs-restore' && selectedTask && (
         <Box flexDirection="column" marginY={1}>
           <Text color={PALETTE.accent}>
             Restore "<Text color={PALETTE.text}>{truncate(selectedTask.title, 30)}</Text>" to:
@@ -83,7 +83,7 @@ export function ArchivePanel({
                   bold={idx === restoreColumnIndex}
                 >
                   {idx === restoreColumnIndex ? ICONS.pointer : ' '} {col.title}
-                  <Text color={PALETTE.textDim}> ({col.tasks.length})</Text>
+                  <Text color={PALETTE.textDim}> ({col.tasks?.length ?? 0})</Text>
                 </Text>
               </Box>
             ))}
@@ -97,10 +97,10 @@ export function ArchivePanel({
       )}
 
       {/* Delete confirmation */}
-      {mode === 'archive-delete-confirm' && selectedTask && (
+      {mode === 'logs-delete-confirm' && selectedTask && (
         <Box flexDirection="column" marginY={1} paddingX={1}>
           <Text color={PALETTE.error} bold>
-            Permanently delete this task?
+            Permanently delete this logged task?
           </Text>
           <Box marginTop={1}>
             <Text color={PALETTE.textSecondary}>
@@ -118,15 +118,15 @@ export function ArchivePanel({
         </Box>
       )}
 
-      {/* Archive list */}
-      {mode !== 'archive-restore' && mode !== 'archive-delete-confirm' && (
+      {/* Logs list */}
+      {mode !== 'logs-restore' && mode !== 'logs-delete-confirm' && (
         <Box flexDirection="column" marginTop={1}>
-          {archive.length === 0 ? (
+          {logs.length === 0 ? (
             <Box paddingY={1}>
-              <Text color={PALETTE.textMuted}>No archived tasks.</Text>
+              <Text color={PALETTE.textMuted}>No logged tasks.</Text>
             </Box>
           ) : (
-            archive.slice(scrollOffset, scrollOffset + visibleTasks).map((task, displayIdx) => {
+            logs.slice(scrollOffset, scrollOffset + visibleTasks).map((task, displayIdx) => {
               const actualIdx = scrollOffset + displayIdx;
               const isSelected = actualIdx === selectedIndex;
               const isExpanded = expandedIds.has(task.id);
@@ -181,10 +181,10 @@ export function ArchivePanel({
           )}
 
           {/* Scroll indicator */}
-          {archive.length > visibleTasks && (
+          {logs.length > visibleTasks && (
             <Box marginTop={1}>
               <Text color={PALETTE.textDim}>
-                {scrollOffset + 1}-{Math.min(scrollOffset + visibleTasks, archive.length)} of {archive.length}
+                {scrollOffset + 1}-{Math.min(scrollOffset + visibleTasks, logs.length)} of {logs.length}
               </Text>
             </Box>
           )}

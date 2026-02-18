@@ -7,13 +7,14 @@ import { getTaskCardHeight } from './TaskCardMeasure.js';
 
 export interface TaskListProps {
   tasks: Task[];
+  allTasks?: Task[];
   selectedIndex: number;
   expandedIds: Set<string>;
   viewportHeight: number;
   termWidth: number;
 }
 
-export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, termWidth }: TaskListProps) {
+export function TaskList({ tasks, allTasks = [], selectedIndex, expandedIds, viewportHeight, termWidth }: TaskListProps) {
   const cardWidth = termWidth - 4;
   const contentWidth = cardWidth - 6; // indicator (4) + right padding (2) = 6
 
@@ -25,13 +26,13 @@ export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, te
   for (let i = 0; i < selectedIndex; i++) {
     const task = tasks[i];
     const isExpanded = expandedIds.has(task.id);
-    heightBeforeSelected += getTaskCardHeight(task, isExpanded, contentWidth);
+    heightBeforeSelected += getTaskCardHeight(task, isExpanded, contentWidth, allTasks);
   }
 
   // If selected task would be off screen, adjust scroll
   const selectedTask = tasks[selectedIndex];
   const selectedHeight = selectedTask
-    ? getTaskCardHeight(selectedTask, expandedIds.has(selectedTask.id), contentWidth)
+    ? getTaskCardHeight(selectedTask, expandedIds.has(selectedTask.id), contentWidth, allTasks)
     : 5;
 
   if (heightBeforeSelected + selectedHeight > viewportHeight) {
@@ -50,7 +51,7 @@ export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, te
     const task = tasks[i];
     const isSelected = i === selectedIndex;
     const isExpanded = expandedIds.has(task.id);
-    const taskLines = getTaskCardHeight(task, isExpanded, contentWidth);
+    const taskLines = getTaskCardHeight(task, isExpanded, contentWidth, allTasks);
 
     // Always include the selected task, even if it's tall
     if (isSelected) {
@@ -91,6 +92,7 @@ export function TaskList({ tasks, selectedIndex, expandedIds, viewportHeight, te
           {index > 0 && <Box height={1} />}
           <TaskCard
             task={task}
+            allTasks={allTasks}
             isSelected={isSelected}
             isExpanded={isExpanded}
             width={cardWidth}

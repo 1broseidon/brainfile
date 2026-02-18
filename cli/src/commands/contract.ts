@@ -20,6 +20,8 @@ Workflow (PM → Agent → PM):
   4) PM validates (status → done | failed):
      brainfile contract validate -t task-123
 
+Contract metrics are tracked on the task file under contract.metrics.
+
 Find available contracts:
   brainfile list --contract ready
 `.trimEnd();

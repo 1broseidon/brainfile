@@ -21,6 +21,7 @@ export interface FlatTask {
 
 export interface StackedTaskListProps {
   columns: BoardColumn[];
+  allTasks?: Task[];
   selectedGlobalIndex: number;
   expandedIds: Set<string>;
   viewportHeight: number;
@@ -33,7 +34,7 @@ export function flattenTasks(columns: BoardColumn[]): FlatTask[] {
   let globalIndex = 0;
 
   for (const col of columns) {
-    for (const task of col.tasks) {
+    for (const task of (col.tasks ?? [])) {
       flat.push({
         task,
         columnId: col.id,
@@ -49,6 +50,7 @@ export function flattenTasks(columns: BoardColumn[]): FlatTask[] {
 
 export function StackedTaskList({
   columns,
+  allTasks = [],
   selectedGlobalIndex,
   expandedIds,
   viewportHeight,
@@ -82,12 +84,12 @@ export function StackedTaskList({
     if (i === 0 || flatTasks[i - 1].columnId !== ft.columnId) {
       heightBeforeSelected += 2; // header + margin
     }
-    heightBeforeSelected += getTaskCardHeight(ft.task, isExpanded, contentWidth);
+    heightBeforeSelected += getTaskCardHeight(ft.task, isExpanded, contentWidth, allTasks);
   }
 
   const selectedFlatTask = flatTasks[selectedGlobalIndex];
   const selectedHeight = selectedFlatTask
-    ? getTaskCardHeight(selectedFlatTask.task, expandedIds.has(selectedFlatTask.task.id), contentWidth)
+    ? getTaskCardHeight(selectedFlatTask.task, expandedIds.has(selectedFlatTask.task.id), contentWidth, allTasks)
     : 5;
 
   if (heightBeforeSelected + selectedHeight > viewportHeight) {
@@ -125,14 +127,14 @@ export function StackedTaskList({
       visibleItems.push(
         <Box key={`header-${ft.columnId}-${itemKey++}`} marginTop={lastColumnId ? 1 : 0} paddingLeft={1}>
           <Text color={PALETTE.accent} bold>{ft.columnTitle.toUpperCase()}</Text>
-          <Text color={PALETTE.textDim}> ({columns.find(c => c.id === ft.columnId)?.tasks.length || 0})</Text>
+          <Text color={PALETTE.textDim}> ({columns.find(c => c.id === ft.columnId)?.tasks?.length || 0})</Text>
         </Box>
       );
-      linesUsed += lastColumnId ? 1 : 1;
+      linesUsed += 1;
       lastColumnId = ft.columnId;
     }
 
-    const taskLines = getTaskCardHeight(ft.task, isExpanded, contentWidth);
+    const taskLines = getTaskCardHeight(ft.task, isExpanded, contentWidth, allTasks);
 
     // Always include selected task
     if (isSelected) {
@@ -140,6 +142,7 @@ export function StackedTaskList({
         <Box key={ft.task.id} marginTop={visibleItems.length > 0 ? 1 : 0}>
           <TaskCard
             task={ft.task}
+            allTasks={allTasks}
             isSelected={true}
             isExpanded={isExpanded}
             width={cardWidth}
@@ -157,6 +160,7 @@ export function StackedTaskList({
         <Box key={ft.task.id} marginTop={1}>
           <TaskCard
             task={ft.task}
+            allTasks={allTasks}
             isSelected={false}
             isExpanded={isExpanded}
             width={cardWidth}

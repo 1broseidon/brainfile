@@ -6,7 +6,7 @@ import type { MainPanel, LayoutMode } from '../types.js';
 export interface MainPanelTabsProps {
   activePanel: MainPanel;
   rulesCount: number;
-  archiveCount: number;
+  logsCount: number;
   layoutMode?: LayoutMode;
 }
 
@@ -68,14 +68,14 @@ function CompactTab({ label, shortcut, isActive, count }: TabProps) {
   );
 }
 
-export function MainPanelTabs({ activePanel, rulesCount, archiveCount, layoutMode = 'wide' }: MainPanelTabsProps) {
+export function MainPanelTabs({ activePanel, rulesCount, logsCount, layoutMode = 'wide' }: MainPanelTabsProps) {
   // Narrow mode: compact single-line format
   if (layoutMode === 'narrow') {
     return (
       <Box paddingLeft={1} marginTop={1}>
         <CompactTab label="Tasks" shortcut="1" isActive={activePanel === 'tasks'} />
         <CompactTab label="Rules" shortcut="2" isActive={activePanel === 'rules'} count={rulesCount} />
-        <CompactTab label="Archive" shortcut="3" isActive={activePanel === 'archive'} count={archiveCount} />
+        <CompactTab label="Logs" shortcut="3" isActive={activePanel === 'logs'} count={logsCount} />
       </Box>
     );
   }
@@ -95,10 +95,10 @@ export function MainPanelTabs({ activePanel, rulesCount, archiveCount, layoutMod
         count={rulesCount}
       />
       <Tab
-        label="Archive"
+        label="Logs"
         shortcut="3"
-        isActive={activePanel === 'archive'}
-        count={archiveCount}
+        isActive={activePanel === 'logs'}
+        count={logsCount}
       />
     </Box>
   );

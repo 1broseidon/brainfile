@@ -1,5 +1,16 @@
 import * as fs from 'fs';
-import { Brainfile, findTaskById, addSubtask, deleteSubtask, updateSubtask, toggleSubtask } from '@brainfile/core';
+import {
+  Brainfile,
+  findTaskById,
+  addSubtask,
+  deleteSubtask,
+  updateSubtask,
+  toggleSubtask,
+  readTaskFile,
+  writeTaskFile,
+  generateNextSubtaskId,
+  type Subtask,
+} from '@brainfile/core';
 import chalk from 'chalk';
 import {
   fileNotFoundError,
@@ -11,6 +22,7 @@ import {
   handleError,
 } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { isV2, getV2Dirs, findV2Task } from '../utils/v2-detect';
 
 interface SubtaskOptions {
   file: string;
@@ -46,7 +58,13 @@ export function subtaskCommand(options: SubtaskOptions) {
       fileNotFoundError(filePath);
     }
 
-    // Read and parse the file
+    // V2: per-task file path
+    if (isV2(filePath)) {
+      subtaskCommandV2(options, filePath);
+      return;
+    }
+
+    // V1: board-based subtask operations
     const content = fs.readFileSync(filePath, 'utf-8');
     const result = Brainfile.parseWithErrors(content);
 
@@ -77,7 +95,6 @@ export function subtaskCommand(options: SubtaskOptions) {
 
     // Handle delete operation
     if (options.delete) {
-      // Verify subtask exists
       if (!taskInfo.task.subtasks || taskInfo.task.subtasks.length === 0) {
         validationError(`Task ${options.task} has no subtasks`);
       }
@@ -96,7 +113,6 @@ export function subtaskCommand(options: SubtaskOptions) {
         missingRequiredError('--title', 'brainfile subtask --task <task-id> --update <subtask-id> --title "New title"');
       }
 
-      // Verify subtask exists
       if (!taskInfo.task.subtasks || taskInfo.task.subtasks.length === 0) {
         validationError(`Task ${options.task} has no subtasks`);
       }
@@ -111,7 +127,6 @@ export function subtaskCommand(options: SubtaskOptions) {
 
     // Handle toggle operation
     if (options.toggle) {
-      // Verify subtask exists
       if (!taskInfo.task.subtasks || taskInfo.task.subtasks.length === 0) {
         validationError(`Task ${options.task} has no subtasks`);
       }
@@ -134,10 +149,86 @@ export function subtaskCommand(options: SubtaskOptions) {
     const updatedContent = Brainfile.serialize(operationResult.board!);
     fs.writeFileSync(filePath, updatedContent, 'utf-8');
 
-    // Success message
     console.log(chalk.green(successMessage));
 
   } catch (error) {
     handleError(error);
+  }
+}
+
+/**
+ * V2 subtask operations - reads/writes task files directly.
+ */
+function subtaskCommandV2(options: SubtaskOptions, brainfilePath: string) {
+  const dirs = getV2Dirs(brainfilePath);
+  const found = findV2Task(dirs, options.task, true);
+
+  if (!found) {
+    console.error(chalk.red(`Error: Task ${options.task} not found`));
+    process.exit(1);
+  }
+
+  const { doc, filePath } = found;
+  const task = doc.task;
+
+  // Handle add
+  if (options.add) {
+    const existingIds = (task.subtasks || []).map(st => st.id);
+    const newId = generateNextSubtaskId(task.id, existingIds);
+    const newSubtask: Subtask = { id: newId, title: options.add, completed: false };
+    task.subtasks = [...(task.subtasks || []), newSubtask];
+    writeTaskFile(filePath, task, doc.body);
+    console.log(chalk.green(`Subtask added: ${newId} - ${options.add}`));
+    return;
+  }
+
+  // Shared subtask lookup for delete/update/toggle
+  if (!task.subtasks || task.subtasks.length === 0) {
+    validationError(`Task ${options.task} has no subtasks`);
+  }
+
+  // Handle delete
+  if (options.delete) {
+    const subtask = task.subtasks!.find(st => st.id === options.delete);
+    if (!subtask) {
+      subtaskNotFoundError(options.delete!, task);
+    }
+    task.subtasks = task.subtasks!.filter(st => st.id !== options.delete);
+    writeTaskFile(filePath, task, doc.body);
+    console.log(chalk.green(`Subtask deleted: ${options.delete} - ${subtask!.title}`));
+    return;
+  }
+
+  // Handle update
+  if (options.update) {
+    if (!options.title) {
+      missingRequiredError('--title', 'brainfile subtask --task <task-id> --update <subtask-id> --title "New title"');
+    }
+    const subtask = task.subtasks!.find(st => st.id === options.update);
+    if (!subtask) {
+      subtaskNotFoundError(options.update!, task);
+    }
+    const oldTitle = subtask!.title;
+    task.subtasks = task.subtasks!.map(st =>
+      st.id === options.update ? { ...st, title: options.title! } : st
+    );
+    writeTaskFile(filePath, task, doc.body);
+    console.log(chalk.green(`Subtask updated: ${options.update}\n  "${oldTitle}" → "${options.title}"`));
+    return;
+  }
+
+  // Handle toggle
+  if (options.toggle) {
+    const subtask = task.subtasks!.find(st => st.id === options.toggle);
+    if (!subtask) {
+      subtaskNotFoundError(options.toggle!, task);
+    }
+    const newStatus = !subtask!.completed ? 'completed' : 'incomplete';
+    task.subtasks = task.subtasks!.map(st =>
+      st.id === options.toggle ? { ...st, completed: !st.completed } : st
+    );
+    writeTaskFile(filePath, task, doc.body);
+    console.log(chalk.green(`Subtask ${options.toggle} marked as ${newStatus}`));
+    return;
   }
 }

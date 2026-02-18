@@ -37,6 +37,7 @@ import {
 } from '@brainfile/core';
 import { mcpCheckIncompleteSubtasks } from '../utils/errorHandler';
 import { buildContract } from '../utils/contractSpec';
+import { validateType, validateColumn } from '../utils/strict-validation';
 import { getEffectiveArchiveDestination, getArchiveConfig } from '../utils/config';
 import { isGitHubAuthenticated, createGitHubIssue } from '../utils/github-auth';
 import { isLinearAuthenticated, createLinearIssue, getLinearTeams } from '../utils/linear-auth';
@@ -53,6 +54,7 @@ import {
   readTaskFile as coreReadTaskFile,
   writeTaskFile as coreWriteTaskFile,
   readTasksDir,
+  completeTaskFile as coreCompleteTaskFile,
   taskFileName,
   generateNextFileTaskId,
   type TaskDocument,
@@ -71,6 +73,51 @@ import {
 
 interface McpOptions {
   file: string;
+}
+
+interface TypeEntry {
+  idPrefix: string;
+  completable?: boolean;
+  schema?: string;
+}
+
+type TypesConfig = Record<string, TypeEntry>;
+
+function sanitizeTypesConfig(raw: unknown): TypesConfig {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {};
+  }
+
+  const out: TypesConfig = {};
+  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      continue;
+    }
+
+    const entry = value as Record<string, unknown>;
+    const idPrefix = typeof entry.idPrefix === 'string' && entry.idPrefix.trim()
+      ? entry.idPrefix.trim()
+      : name;
+
+    const normalized: TypeEntry = { idPrefix };
+    if (typeof entry.completable === 'boolean') normalized.completable = entry.completable;
+    if (typeof entry.schema === 'string' && entry.schema.trim()) normalized.schema = entry.schema.trim();
+
+    out[name] = normalized;
+  }
+
+  return out;
+}
+
+function isTaskCompletable(taskType: string | undefined, rawTypes: unknown): boolean {
+  const resolvedType = taskType || 'task';
+  if (resolvedType === 'task') {
+    return true;
+  }
+
+  const types = sanitizeTypesConfig(rawTypes);
+  const typeConfig = types[resolvedType];
+  return typeConfig?.completable !== false;
 }
 
 function resolveBrainfile(filePath: string): string {
@@ -98,6 +145,20 @@ function writeBoard(filePath: string, board: Board): void {
   const resolvedPath = resolveBrainfile(filePath);
   const content = Brainfile.serialize(board);
   fs.writeFileSync(resolvedPath, content, 'utf-8');
+}
+
+function mcpStructuredError(message: string, field: string, value: string) {
+  return {
+    content: [{
+      type: 'text' as const,
+      text: JSON.stringify(
+        { error: { code: 'VALIDATION_ERROR', message, field, value } },
+        null,
+        2
+      )
+    }],
+    isError: true
+  };
 }
 
 /**
@@ -198,10 +259,11 @@ export async function mcpCommand(options: McpOptions) {
       inputSchema: {
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
         column: z.string().optional().describe('Filter by column ID or name'),
-        tag: z.string().optional().describe('Filter by tag')
+        tag: z.string().optional().describe('Filter by tag'),
+        type: z.string().optional().describe('Filter by document type (e.g., epic, adr). Only returns tasks matching this type.'),
       }
     },
-    async ({ file, column, tag }) => {
+    async ({ file, column, tag, type: filterType }) => {
       const filePath = file || defaultFile;
 
       // V2: use per-task files
@@ -216,6 +278,11 @@ export async function mcpCommand(options: McpOptions) {
           }
           for (const task of col.tasks) {
             if (tag && (!task.tags || !task.tags.includes(tag))) continue;
+            // Filter by type: match explicit type field, or treat missing/undefined as "task"
+            if (filterType) {
+              const taskType = task.type || 'task';
+              if (taskType !== filterType) continue;
+            }
             tasks.push({ id: task.id, title: task.title, column: col.title, priority: task.priority, tags: task.tags, assignee: task.assignee });
           }
         }
@@ -240,6 +307,11 @@ export async function mcpCommand(options: McpOptions) {
 
         for (const task of col.tasks) {
           if (tag && (!task.tags || !task.tags.includes(tag))) continue;
+          // Filter by type: match explicit type field, or treat missing/undefined as "task"
+          if (filterType) {
+            const taskType = task.type || 'task';
+            if (taskType !== filterType) continue;
+          }
 
           tasks.push({
             id: task.id,
@@ -339,7 +411,7 @@ export async function mcpCommand(options: McpOptions) {
         const queryLower = query.toLowerCase();
         let matches: Array<{ id: string; title: string; column?: string; priority?: string; tags?: string[]; assignee?: string; score: number; isLog?: boolean }> = [];
 
-        const taskDocs = readTasksDir(dirs.tasksDir);
+        const taskDocs = readTasksDir(dirs.boardDir);
         for (const doc of taskDocs) {
           const task = doc.task;
           if (column && task.column !== column) continue;
@@ -437,6 +509,7 @@ export async function mcpCommand(options: McpOptions) {
         dueDate: z.string().optional().describe('Due date (YYYY-MM-DD)'),
         subtasks: z.array(z.string()).optional().describe('Subtask titles (IDs auto-generated)'),
         relatedFiles: z.array(z.string()).optional().describe('Related file paths'),
+        type: z.string().optional().describe('Document type (e.g., epic, adr). Determines ID prefix. Default: task'),
         // Contract creation (optional)
         with_contract: z.boolean().optional().describe('Attach a contract to the new task (status=ready)'),
         deliverables: z.array(z.string()).optional().describe('Contract deliverables: type:path:description'),
@@ -458,6 +531,7 @@ export async function mcpCommand(options: McpOptions) {
       dueDate,
       subtasks,
       relatedFiles,
+      type: docType,
       with_contract,
       deliverables,
       validation_commands,
@@ -472,6 +546,15 @@ export async function mcpCommand(options: McpOptions) {
         try {
           const dirs = ensureV2Dirs(filePath);
           const board = readV2BoardConfig(filePath);
+          const typePrefix = docType || 'task';
+          const typeValidation = validateType(board, typePrefix);
+          if (!typeValidation.valid) {
+            return mcpStructuredError(
+              typeValidation.error || `Invalid type: ${typePrefix}`,
+              'type',
+              typePrefix
+            );
+          }
 
           let targetColumn = board.columns.find(c => c.id === column);
           if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
@@ -480,8 +563,8 @@ export async function mcpCommand(options: McpOptions) {
             return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}. Available: ${available}` }], isError: true };
           }
 
-          const taskId = generateNextFileTaskId(dirs.tasksDir, dirs.logsDir);
-          const existingTasks = readTasksDir(dirs.tasksDir).filter(t => t.task.column === targetColumn!.id);
+          const taskId = generateNextFileTaskId(dirs.boardDir, dirs.logsDir, typePrefix);
+          const existingTasks = readTasksDir(dirs.boardDir).filter(t => t.task.column === targetColumn!.id);
           const position = existingTasks.length;
 
           const builtSubtasks = subtasks && subtasks.length > 0
@@ -491,6 +574,7 @@ export async function mcpCommand(options: McpOptions) {
           const task: any = {
             id: taskId,
             title,
+            ...(docType && docType !== 'task' && { type: docType }),
             column: targetColumn.id,
             position,
             ...(description && { description }),
@@ -520,7 +604,7 @@ export async function mcpCommand(options: McpOptions) {
             task.contract = contract;
           }
 
-          const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+          const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
           const body = description ? composeBody(description) : '';
           coreWriteTaskFile(taskPath, task, body);
 
@@ -700,7 +784,7 @@ export async function mcpCommand(options: McpOptions) {
       // V2: update task file
       if (isV2(filePath)) {
         const dirs = getV2Dirs(filePath);
-        const taskPath = path.join(dirs.tasksDir, taskFileName(task));
+        const taskPath = path.join(dirs.boardDir, taskFileName(task));
         const doc = coreReadTaskFile(taskPath);
         if (!doc) {
           return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
@@ -709,19 +793,37 @@ export async function mcpCommand(options: McpOptions) {
         const board = readV2BoardConfig(filePath);
         let targetColumn = board.columns.find(c => c.id === column);
         if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
-        if (!targetColumn) {
-          return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
+        const targetColumnId = targetColumn?.id || column;
+        const columnValidation = validateColumn(board, targetColumnId);
+        if (!columnValidation.valid) {
+          return mcpStructuredError(
+            columnValidation.error || `Invalid column: ${targetColumnId}`,
+            'column',
+            targetColumnId
+          );
         }
+        const resolvedTargetColumn = targetColumn || { id: column, title: column, tasks: [] };
 
         const sourceColumn = doc.task.column || '';
-        const targetTasks = readTasksDir(dirs.tasksDir).filter(t => t.task.column === targetColumn!.id);
-        doc.task.column = targetColumn.id;
+        const targetTasks = readTasksDir(dirs.boardDir).filter(t => t.task.column === resolvedTargetColumn.id);
+        doc.task.column = resolvedTargetColumn.id;
         doc.task.position = targetTasks.length;
         doc.task.updatedAt = new Date().toISOString();
         coreWriteTaskFile(taskPath, doc.task, doc.body);
 
-        const warning = mcpCheckIncompleteSubtasks(doc.task, targetColumn);
-        let message = `Task ${task} moved from "${sourceColumn}" to "${targetColumn.title}"`;
+        const shouldAutoComplete = resolvedTargetColumn.completionColumn === true && isTaskCompletable(doc.task.type, (board as unknown as Record<string, unknown>).types);
+        if (shouldAutoComplete) {
+          const completeResult = coreCompleteTaskFile(taskPath, dirs.logsDir);
+          if (!completeResult.success) {
+            return { content: [{ type: 'text' as const, text: `Error: ${completeResult.error || `Failed to complete task: ${task}`}` }], isError: true };
+          }
+        }
+
+        const warning = mcpCheckIncompleteSubtasks(doc.task, resolvedTargetColumn);
+        let message = `Task ${task} moved from "${sourceColumn}" to "${resolvedTargetColumn.title}"`;
+        if (shouldAutoComplete) {
+          message += '\nTask auto-completed and moved to logs/.';
+        }
         if (warning) message += `\n\n${warning.warning}`;
 
         return { content: [{ type: 'text' as const, text: message }] };
@@ -794,7 +896,7 @@ export async function mcpCommand(options: McpOptions) {
       // V2: update task file directly
       if (isV2(filePath)) {
         const dirs = getV2Dirs(filePath);
-        const taskPath = path.join(dirs.tasksDir, taskFileName(task));
+        const taskPath = path.join(dirs.boardDir, taskFileName(task));
         const doc = coreReadTaskFile(taskPath);
         if (!doc) {
           return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
@@ -919,7 +1021,7 @@ export async function mcpCommand(options: McpOptions) {
     async ({ file, task, destination }) => {
       const filePath = file || defaultFile;
 
-      // V2: archive means move task from tasks/ to logs/
+      // V2: archive means move task from board/ to logs/
       if (isV2(filePath)) {
         const dirs = getV2Dirs(filePath);
         const found = findV2Task(dirs, task);
@@ -981,7 +1083,7 @@ export async function mcpCommand(options: McpOptions) {
           return { content: [{ type: 'text' as const, text: `Task ${task} archived to Linear Issue ${linearResult.issueId} (Done)\n\nView: ${linearResult.issueUrl}` }] };
         }
 
-        // Local archive: move from tasks/ to logs/
+        // Local archive: move from board/ to logs/
         const logPath = path.join(dirs.logsDir, taskFileName(task));
         found.doc.task.completedAt = found.doc.task.completedAt || new Date().toISOString();
         delete found.doc.task.column;
@@ -1193,7 +1295,7 @@ export async function mcpCommand(options: McpOptions) {
     async ({ file, task, column }) => {
       const filePath = file || defaultFile;
 
-      // V2: restore means move from logs/ to tasks/
+      // V2: restore means move from logs/ to board/
       if (isV2(filePath)) {
         const dirs = getV2Dirs(filePath);
         const board = readV2BoardConfig(filePath);
@@ -1211,14 +1313,14 @@ export async function mcpCommand(options: McpOptions) {
           return { content: [{ type: 'text' as const, text: `Error: Task not found in logs: ${task}` }], isError: true };
         }
 
-        // Move to tasks/ with column info
-        const targetTasks = readTasksDir(dirs.tasksDir).filter(t => t.task.column === targetColumn!.id);
+        // Move to board/ with column info
+        const targetTasks = readTasksDir(dirs.boardDir).filter(t => t.task.column === targetColumn!.id);
         doc.task.column = targetColumn.id;
         doc.task.position = targetTasks.length;
         delete doc.task.completedAt;
         doc.task.updatedAt = new Date().toISOString();
 
-        const taskPath = path.join(dirs.tasksDir, taskFileName(task));
+        const taskPath = path.join(dirs.boardDir, taskFileName(task));
         coreWriteTaskFile(taskPath, doc.task, doc.body);
         fs.unlinkSync(logPath);
 
@@ -1680,7 +1782,7 @@ export async function mcpCommand(options: McpOptions) {
         let failureCount = 0;
 
         for (const taskId of tasks) {
-          const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+          const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
           const doc = coreReadTaskFile(taskPath);
           if (!doc) {
             results.push({ taskId, success: false, error: 'Task not found' });
@@ -1787,7 +1889,7 @@ export async function mcpCommand(options: McpOptions) {
         let failureCount = 0;
 
         for (const taskId of tasks) {
-          const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+          const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
           const doc = coreReadTaskFile(taskPath);
           if (!doc) {
             results.push({ taskId, success: false, error: 'Task not found' });
@@ -1928,7 +2030,7 @@ export async function mcpCommand(options: McpOptions) {
     async ({ file, tasks }) => {
       const filePath = file || defaultFile;
 
-      // V2: move task files from tasks/ to logs/
+      // V2: move task files from board/ to logs/
       if (isV2(filePath)) {
         const dirs = getV2Dirs(filePath);
         const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
@@ -1936,7 +2038,7 @@ export async function mcpCommand(options: McpOptions) {
         let failureCount = 0;
 
         for (const taskId of tasks) {
-          const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+          const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
           const doc = coreReadTaskFile(taskPath);
           if (!doc) {
             results.push({ taskId, success: false, error: 'Task not found' });
@@ -2084,6 +2186,57 @@ export async function mcpCommand(options: McpOptions) {
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
         isError: !result.ok
+      };
+    }
+  );
+
+  // ==========================================================================
+  // TYPES
+  // ==========================================================================
+
+  server.registerTool(
+    'list_types',
+    {
+      title: 'List Types',
+      description: 'List board strict mode and custom type configuration',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+      }
+    },
+    async ({ file }) => {
+      const filePath = file || defaultFile;
+
+      if (isV2(filePath)) {
+        try {
+          const board = readV2BoardConfig(filePath);
+          const boardConfig = board as unknown as Record<string, unknown>;
+          const output = {
+            strict: boardConfig.strict === true,
+            types: sanitizeTypesConfig(boardConfig.types),
+          };
+
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
+          };
+        } catch (e) {
+          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+        }
+      }
+
+      const result = readBoard(filePath);
+      if ('error' in result) {
+        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+      }
+
+      const boardConfig = result.board as unknown as Record<string, unknown>;
+      const strict = boardConfig.strict === true;
+      const types = sanitizeTypesConfig(boardConfig.types);
+
+      return {
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({ strict, types }, null, 2)
+        }]
       };
     }
   );
@@ -2252,7 +2405,7 @@ export async function mcpCommand(options: McpOptions) {
     'complete_task',
     {
       title: 'Complete Task',
-      description: 'Complete a task - in v2, moves task file from tasks/ to logs/ with completedAt timestamp. In v1, moves to done column.',
+      description: 'Complete a task - in v2, moves task file from board/ to logs/ with completedAt timestamp. In v1, moves to done column.',
       inputSchema: {
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
         task: z.string().describe('Task ID to complete'),

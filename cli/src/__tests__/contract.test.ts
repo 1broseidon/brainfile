@@ -59,10 +59,13 @@ columns:
     expect(logger.getOutput()).toContain('src/b.ts');
 
     const updated = Brainfile.parse(fs.readFileSync(tempBoardPath, 'utf-8'));
-    expect(updated?.columns[0].tasks[0].contract?.status).toBe('in_progress');
+    const contract = updated?.columns[0].tasks[0].contract as any;
+    expect(contract?.status).toBe('in_progress');
+    expect(contract?.metrics?.pickedUpAt).toBeDefined();
+    expect(contract?.metrics?.reworkCount).toBe(0);
   });
 
-  it('deliver should set status to delivered', () => {
+  it('deliver should set status to delivered and write delivery metrics', () => {
     const markdown = `---
 title: Contract Board
 columns:
@@ -73,6 +76,8 @@ columns:
         title: Task With Contract
         contract:
           status: in_progress
+          metrics:
+            pickedUpAt: "2026-01-01T00:00:00.000Z"
 ---\n`;
 
     fs.writeFileSync(tempBoardPath, markdown, 'utf-8');
@@ -81,7 +86,10 @@ columns:
     expect(result.success).toBe(true);
 
     const updated = Brainfile.parse(fs.readFileSync(tempBoardPath, 'utf-8'));
-    expect(updated?.columns[0].tasks[0].contract?.status).toBe('delivered');
+    const contract = updated?.columns[0].tasks[0].contract as any;
+    expect(contract?.status).toBe('delivered');
+    expect(contract?.metrics?.deliveredAt).toBeDefined();
+    expect(typeof contract?.metrics?.duration).toBe('number');
   });
 
   it('validate should set status to done when deliverables exist and commands pass', () => {

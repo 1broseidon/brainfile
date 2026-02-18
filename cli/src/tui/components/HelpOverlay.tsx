@@ -87,7 +87,7 @@ export function HelpOverlay({ termWidth, termHeight, layoutMode = 'wide' }: Help
             <Text color={PALETTE.accent} bold>Panels</Text>
             <HelpRow k="1" desc="Tasks" />
             <HelpRow k="2" desc="Rules" />
-            <HelpRow k="3" desc="Archive" />
+            <HelpRow k="3" desc="Logs" />
 
             <Box marginTop={1}>
               <Text color={PALETTE.accent} bold>Navigation</Text>
@@ -113,7 +113,7 @@ export function HelpOverlay({ termWidth, termHeight, layoutMode = 'wide' }: Help
             <HelpRow k="e" desc="Edit" />
             <HelpRow k="m" desc="Move" />
             <HelpRow k="d" desc="Delete" />
-            <HelpRow k="A" desc="Archive" />
+            <HelpRow k="A" desc="To logs" />
             <HelpRow k="p" desc="Priority" />
             <HelpRow k="t" desc="Subtask" />
             <HelpRow k="y" desc="Copy ID" />
@@ -128,7 +128,7 @@ export function HelpOverlay({ termWidth, termHeight, layoutMode = 'wide' }: Help
             <HelpRow k="contract:ready" desc="Contract status" />
           </Box>
 
-          {/* Right column: Rules + Archive */}
+          {/* Right column: Rules + Logs */}
           <Box flexDirection="column">
             <Text color={PALETTE.accent} bold>Rules</Text>
             <HelpRow k="h/l" desc="Rule type" />
@@ -137,7 +137,7 @@ export function HelpOverlay({ termWidth, termHeight, layoutMode = 'wide' }: Help
             <HelpRow k="d" desc="Delete rule" />
 
             <Box marginTop={1}>
-              <Text color={PALETTE.accent} bold>Archive</Text>
+              <Text color={PALETTE.accent} bold>Logs</Text>
             </Box>
             <HelpRow k="R" desc="Restore" />
             <HelpRow k="d" desc="Delete" />

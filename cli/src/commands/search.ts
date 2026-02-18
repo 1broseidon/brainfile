@@ -69,7 +69,7 @@ function searchV2(filePath: string, query: string, column: string | undefined, l
   const results: SearchResult['results'] = [];
 
   // Search active tasks
-  const taskDocs = readTasksDir(dirs.tasksDir);
+  const taskDocs = readTasksDir(dirs.boardDir);
   for (const doc of taskDocs) {
     const task = doc.task;
 

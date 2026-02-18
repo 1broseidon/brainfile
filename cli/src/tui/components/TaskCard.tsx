@@ -21,6 +21,7 @@ export interface TaskCardProps {
   isSelected: boolean;
   isExpanded: boolean;
   width: number;
+  allTasks?: Task[];
   /** Hide tags in meta row when collapsed (for narrow/stacked mode) */
   hideTagsWhenCollapsed?: boolean;
   /** Show contract badge in the title row (tasks with contracts only) */
@@ -49,6 +50,32 @@ function PriorityBadge({ priority }: { priority?: string }) {
       {` ${label} `}
     </Text>
   );
+}
+
+function getTypeBadgeColor(type: string): string {
+  switch (type.toLowerCase()) {
+    case 'epic':
+      return 'cyan';
+    case 'adr':
+      return 'yellow';
+    default:
+      return 'gray';
+  }
+}
+
+function getTypeBadgeLabel(type?: string): string | null {
+  if (!type) return null;
+  const normalized = type.toLowerCase();
+  if (normalized === 'task') return null;
+  return `[${normalized}]`;
+}
+
+/** Type badge for non-default task types */
+function TypeBadge({ type }: { type?: string }) {
+  const label = getTypeBadgeLabel(type);
+  if (!label) return null;
+
+  return <Text color={getTypeBadgeColor(type!)}>{label}</Text>;
 }
 
 /** Compact bracketed progress count [X/Y] */
@@ -134,21 +161,27 @@ export function TaskCard({
   isSelected,
   isExpanded,
   width,
+  allTasks = [],
   hideTagsWhenCollapsed = false,
-  showContractBadge = false,
+  showContractBadge = true,
 }: TaskCardProps) {
   const subtasks = task.subtasks || [];
   const completedSubtasks = subtasks.filter(s => s.completed).length;
+  const parentId = (task as Task & { parentId?: string }).parentId;
 
   // Indicator width: "  ▌ " = 4 chars for selected, "    " = 4 chars for not
   const indicatorWidth = 4;
   const contentWidth = width - indicatorWidth - 2; // -2 for right padding
 
   // Build meta segments for row 2
-  // Order: progress → date → tags (fixed-width first for table-like alignment)
+  // Order: parent -> date -> tags
   const metaSegments: React.ReactNode[] = [];
 
-
+  if (parentId) {
+    metaSegments.push(
+      <Text key="parent" color={PALETTE.textDim}>Child of: {parentId}</Text>
+    );
+  }
 
   if (task.dueDate) {
     metaSegments.push(<DueDate key="due" dueDate={task.dueDate} />);
@@ -166,8 +199,10 @@ export function TaskCard({
     metaContent.push(seg);
   });
 
-  // Calculate title width (account for priority badge and subtask count)
+  // Calculate title width (account for priority badge, type badge, subtask count, contract badge)
   const priorityWidth = task.priority ? 7 : 0; // " HIGH " = 6 + 1 space
+  const typeBadgeLabel = getTypeBadgeLabel(task.type);
+  const typeBadgeWidth = typeBadgeLabel ? typeBadgeLabel.length + 1 : 0; // +1 for trailing space
 
   // Estimate subtask width: "[10/10]" = 7 chars, plus padding
   const subtaskLabelWidth = subtasks.length > 0 ? 9 : 0;
@@ -175,11 +210,11 @@ export function TaskCard({
   const contractBadgeText = showContractBadge && task.contract ? `[C:${task.contract.status}]` : null;
   const contractBadgeWidth = contractBadgeText ? contractBadgeText.length + 1 : 0; // +1 for leading space
 
-  const titleWidth = contentWidth - priorityWidth - subtaskLabelWidth - contractBadgeWidth;
+  const titleWidth = contentWidth - priorityWidth - typeBadgeWidth - subtaskLabelWidth - contractBadgeWidth;
 
   return (
     <Box flexDirection="column" width={width}>
-      {/* Row 1: Indicator + Priority + Title */}
+      {/* Row 1: Indicator + Priority + Type + Title */}
       <Box>
         <Text color={isSelected ? PALETTE.accent : PALETTE.textDim}>
           {isSelected ? '  ▌ ' : '    '}
@@ -187,6 +222,12 @@ export function TaskCard({
         {task.priority && (
           <>
             <PriorityBadge priority={task.priority} />
+            <Text> </Text>
+          </>
+        )}
+        {typeBadgeLabel && (
+          <>
+            <TypeBadge type={task.type} />
             <Text> </Text>
           </>
         )}
@@ -264,9 +305,10 @@ export function TaskCard({
             </Box>
           )}
 
-          {/* Contract details (display-only, only for tasks with contracts) */}
+          {/* Parent/children/ADR/contract details */}
           <TaskDetail
             task={task}
+            allTasks={allTasks}
             marginTop={(task.description || subtasks.length > 0 || (task.relatedFiles && task.relatedFiles.length > 0)) ? 1 : 0}
           />
         </Box>

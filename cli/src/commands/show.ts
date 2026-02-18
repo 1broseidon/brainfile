@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Brainfile, findTaskById, type Task } from '@brainfile/core';
+import { Brainfile, findTaskById, readTasksDir, type Task } from '@brainfile/core';
 import chalk from 'chalk';
 import { defaultLogger, type Logger } from '../utils/logger';
 import {
@@ -12,7 +12,7 @@ import {
 } from '../utils/cli-error';
 import { loadArchivedTasks } from '../utils/archive';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { isV2, getV2Dirs, findV2Task, extractDescription, extractLog } from '../utils/v2-detect';
+import { isV2, getV2Dirs, findV2Task, extractDescription, extractLog, shouldSuggestV2Migration, markV2MigrationHintShown } from '../utils/v2-detect';
 
 export interface ShowOptions {
   file: string;
@@ -56,11 +56,17 @@ export function showCommand(options: ShowOptions, logger: Logger = defaultLogger
   const board = parsed.board;
   const taskInfo = findTaskById(board, options.task);
   if (taskInfo) {
+    const childIds = board.columns
+      .flatMap((column) => column.tasks)
+      .filter((task) => (task as any).parentId === taskInfo.task.id)
+      .map((task) => task.id);
+
     if (options.json) {
       const jsonOutput = {
         ...taskInfo.task,
         column: taskInfo.column.title,
         archived: false,
+        ...(childIds.length > 0 ? { children: childIds } : {}),
       };
       logger.log(JSON.stringify(jsonOutput, null, 2));
     } else {
@@ -68,7 +74,9 @@ export function showCommand(options: ShowOptions, logger: Logger = defaultLogger
         task: taskInfo.task,
         columnTitle: taskInfo.column.title,
         archived: false,
+        childIds,
       }, logger);
+      showV2MigrationHint(filePath, logger);
     }
     return { success: true, taskId: taskInfo.task.id, archived: false, task: taskInfo.task, column: taskInfo.column.title };
   }
@@ -95,6 +103,7 @@ export function showCommand(options: ShowOptions, logger: Logger = defaultLogger
         archived: true,
         archivePath,
       }, logger);
+      showV2MigrationHint(filePath, logger);
     }
     return { success: true, taskId: archivedTask.id, archived: true, task: archivedTask, column: 'Archive' };
   }
@@ -128,6 +137,10 @@ function showCommandV2(options: ShowOptions, filePath: string, logger: Logger): 
     if (desc) task.description = desc;
   }
 
+  const childIds = readTasksDir(dirs.boardDir)
+    .filter((childDoc) => (childDoc.task as any).parentId === task.id)
+    .map((childDoc) => childDoc.task.id);
+
   const columnTitle = isLog ? 'Completed' : (task.column || 'unknown');
   const archived = isLog;
   const logContent = extractLog(doc.body);
@@ -137,12 +150,13 @@ function showCommandV2(options: ShowOptions, filePath: string, logger: Logger): 
       ...task,
       column: columnTitle,
       archived,
+      ...(childIds.length > 0 ? { children: childIds } : {}),
       ...(task.completedAt && { completedAt: task.completedAt }),
       ...(logContent && { log: logContent }),
     };
     logger.log(JSON.stringify(jsonOutput, null, 2));
   } else {
-    renderTask({ task, columnTitle, archived }, logger);
+    renderTask({ task, columnTitle, archived, childIds }, logger);
     if (task.completedAt) {
       logger.log(`${chalk.bold('Completed:')} ${chalk.white(task.completedAt)}`);
     }
@@ -158,10 +172,10 @@ function showCommandV2(options: ShowOptions, filePath: string, logger: Logger): 
 }
 
 function renderTask(
-  input: { task: Task; columnTitle: string; archived: boolean; archivePath?: string },
+  input: { task: Task; columnTitle: string; archived: boolean; archivePath?: string; childIds?: string[] },
   logger: Logger
 ) {
-  const { task, columnTitle, archived, archivePath } = input;
+  const { task, columnTitle, archived, archivePath, childIds = [] } = input;
 
   logger.log('');
   logger.log(`${chalk.bold('Task:')} ${chalk.cyan(task.id)}`);
@@ -220,6 +234,11 @@ function renderTask(
     }
   }
 
+  if (childIds.length > 0) {
+    logger.log('');
+    logger.log(`${chalk.bold('Children:')} ${chalk.white(childIds.join(', '))}`);
+  }
+
   const contract = (task as any).contract as any | undefined;
   if (contract) {
     logger.log('');
@@ -249,4 +268,18 @@ function formatPriority(priority: string): string {
         p === 'medium' ? chalk.yellow :
           chalk.blue;
   return color(priority);
+}
+
+/**
+ * Show one-time v2 migration hint after v1 command output.
+ */
+function showV2MigrationHint(filePath: string, logger: Logger): void {
+  if (shouldSuggestV2Migration(filePath)) {
+    logger.log(
+      chalk.gray('Tip: Run ') +
+      chalk.cyan('brainfile migrate --v2') +
+      chalk.gray(' to upgrade to per-task files for better agent workflows and task history.')
+    );
+    markV2MigrationHintShown(filePath);
+  }
 }

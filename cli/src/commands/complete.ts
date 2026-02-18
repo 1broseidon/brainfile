@@ -1,8 +1,8 @@
 /**
- * Complete command - move a task from tasks/ to logs/, set completedAt.
+ * Complete command - move a task from board/ to logs/, set completedAt.
  *
  * In v2 per-task file architecture:
- * - Moves .brainfile/tasks/task-X.md to .brainfile/logs/task-X.md
+ * - Moves .brainfile/board/task-X.md to .brainfile/logs/task-X.md
  * - Adds completedAt timestamp to frontmatter
  * - Removes column and position fields
  *
@@ -15,16 +15,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { Brainfile, findTaskById, moveTask, patchTask, findCompletionColumn } from '@brainfile/core';
+import { Brainfile, findTaskById, moveTask, findCompletionColumn } from '@brainfile/core';
 import { type Logger, defaultLogger } from '../utils/logger';
-import { CLIError, fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
+import { fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { readTaskFile, writeTaskFile, taskFileName } from '@brainfile/core';
+import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, type Task } from '@brainfile/core';
 import { isV2, getV2Dirs } from '../utils/v2-detect';
 
 export interface CompleteOptions {
   file: string;
   task?: string;
+  force?: boolean;
 }
 
 export interface CompleteResult {
@@ -33,13 +34,142 @@ export interface CompleteResult {
   completedAt: string;
 }
 
+type ChildTaskStateStatus = 'active' | 'completed' | 'missing';
+
+interface ChildTaskState {
+  id: string;
+  title: string;
+  status: ChildTaskStateStatus;
+}
+
+function appendBodySection(body: string, section: string): string {
+  const trimmed = body.trimEnd();
+  if (!trimmed) {
+    return `${section}\n`;
+  }
+  return `${trimmed}\n\n${section}\n`;
+}
+
+function extractEpicChildTaskIds(task: Task): string[] {
+  const rawSubtasks = (task as { subtasks?: unknown }).subtasks;
+  if (!Array.isArray(rawSubtasks)) {
+    return [];
+  }
+
+  const childIds: string[] = [];
+  for (const subtask of rawSubtasks) {
+    if (typeof subtask === 'string' && subtask.trim() !== '') {
+      childIds.push(subtask.trim());
+      continue;
+    }
+    if (subtask && typeof subtask === 'object') {
+      const candidateId = (subtask as { id?: unknown }).id;
+      if (typeof candidateId === 'string' && candidateId.trim() !== '') {
+        childIds.push(candidateId.trim());
+      }
+    }
+  }
+
+  return [...new Set(childIds)];
+}
+
+function resolveChildTaskStates(
+  childIds: string[],
+  boardDir: string,
+  logsDir: string,
+): ChildTaskState[] {
+  if (childIds.length === 0) {
+    return [];
+  }
+
+  const activeDocs = readTasksDir(boardDir);
+  const completedDocs = readTasksDir(logsDir);
+
+  const activeById = new Map<string, string>();
+  for (const doc of activeDocs) {
+    if (!activeById.has(doc.task.id)) {
+      activeById.set(doc.task.id, doc.task.title);
+    }
+  }
+
+  const completedById = new Map<string, string>();
+  for (const doc of completedDocs) {
+    if (!completedById.has(doc.task.id)) {
+      completedById.set(doc.task.id, doc.task.title);
+    }
+  }
+
+  return childIds.map((childId) => {
+    const activeTitle = activeById.get(childId);
+    if (activeTitle) {
+      return { id: childId, title: activeTitle, status: 'active' as const };
+    }
+
+    const completedTitle = completedById.get(childId);
+    if (completedTitle) {
+      return { id: childId, title: completedTitle, status: 'completed' as const };
+    }
+
+    return { id: childId, title: 'Unknown task reference', status: 'missing' as const };
+  });
+}
+
+function resolveParentLinkedChildStates(epicId: string, boardDir: string, logsDir: string): ChildTaskState[] {
+  const activeChildren = readTasksDir(boardDir)
+    .filter((doc) => (doc.task as any).parentId === epicId)
+    .map((doc) => ({ id: doc.task.id, title: doc.task.title, status: 'active' as const }));
+
+  const completedChildren = readTasksDir(logsDir)
+    .filter((doc) => (doc.task as any).parentId === epicId)
+    .map((doc) => ({ id: doc.task.id, title: doc.task.title, status: 'completed' as const }));
+
+  return [...activeChildren, ...completedChildren];
+}
+
+function resolveEpicChildStates(task: Task, boardDir: string, logsDir: string): ChildTaskState[] {
+  const linkedByParentId = resolveParentLinkedChildStates(task.id, boardDir, logsDir);
+  if (linkedByParentId.length > 0) {
+    return linkedByParentId;
+  }
+
+  const childIds = extractEpicChildTaskIds(task);
+  return resolveChildTaskStates(childIds, boardDir, logsDir);
+}
+
+function buildChildTasksSection(childTasks: ChildTaskState[]): string {
+  if (childTasks.length === 0) {
+    return '## Child Tasks\nNo child tasks recorded.';
+  }
+
+  const totalChildren = childTasks.length;
+  const completedChildren = childTasks.filter((child) => child.status === 'completed').length;
+
+  const lines: string[] = [
+    '## Child Tasks',
+    `Summary: ${completedChildren}/${totalChildren} children completed.`,
+  ];
+
+  for (const child of childTasks) {
+    const statusLabel =
+      child.status === 'completed'
+        ? 'completed'
+        : child.status === 'active'
+          ? 'incomplete'
+          : 'missing';
+
+    lines.push(`- ${child.id}: ${child.title} (${statusLabel})`);
+  }
+
+  return lines.join('\n');
+}
+
 /**
  * Complete a task - move to logs with completedAt timestamp.
  * Throws CLIError on failure.
  */
 export function completeCommand(options: CompleteOptions, logger: Logger = defaultLogger): CompleteResult {
   if (!options.task) {
-    throw missingRequired('--task', 'brainfile complete --task <task-id> [--file <path>]');
+    throw missingRequired('--task', 'brainfile complete --task <task-id> [--file <path>] [--force]');
   }
 
   const filePath = resolveCliBrainfilePath(options.file);
@@ -47,18 +177,17 @@ export function completeCommand(options: CompleteOptions, logger: Logger = defau
     throw fileNotFound(filePath);
   }
 
-  const completedAt = new Date().toISOString();
-
   if (isV2(filePath)) {
-    return completeV2(filePath, options.task, completedAt, logger);
+    return completeV2(filePath, options.task, options.force === true, logger);
   }
 
+  const completedAt = new Date().toISOString();
   return completeV1(filePath, options.task, completedAt, logger);
 }
 
-function completeV2(filePath: string, taskId: string, completedAt: string, logger: Logger): CompleteResult {
+function completeV2(filePath: string, taskId: string, force: boolean, logger: Logger): CompleteResult {
   const dirs = getV2Dirs(filePath);
-  const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+  const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
 
   const doc = readTaskFile(taskPath);
   if (!doc) {
@@ -66,9 +195,36 @@ function completeV2(filePath: string, taskId: string, completedAt: string, logge
   }
 
   const task = doc.task;
+  const completedAt = new Date().toISOString();
+
+  let completedBody = doc.body;
+  if (task.type === 'epic') {
+    const childStates = resolveEpicChildStates(task, dirs.boardDir, dirs.logsDir);
+    const incompleteChildren = childStates.filter((child) => child.status === 'active');
+
+    if (incompleteChildren.length > 0 && !force) {
+      logger.warn(chalk.yellow(`Epic ${taskId} has incomplete child tasks:`));
+      for (const child of incompleteChildren) {
+        logger.warn(chalk.yellow(`  - ${child.id}: ${child.title}`));
+      }
+      logger.warn(chalk.yellow('Aborting completion. Re-run with --force to override.'));
+      throw operationFailed(`Epic ${taskId} has ${incompleteChildren.length} incomplete child task(s). Use --force to override.`);
+    }
+
+    if (incompleteChildren.length > 0 && force) {
+      logger.warn(
+        chalk.yellow(
+          `Completing epic ${taskId} with --force despite ${incompleteChildren.length} incomplete child task(s).`
+        )
+      );
+    }
+
+    const childTasksSection = buildChildTasksSection(childStates);
+    completedBody = appendBodySection(doc.body, childTasksSection);
+  }
 
   // Create completed task: remove column/position, add completedAt
-  const completedTask = { ...task, completedAt };
+  const completedTask = { ...task, completedAt, updatedAt: completedAt };
   delete completedTask.column;
   delete completedTask.position;
 
@@ -77,7 +233,7 @@ function completeV2(filePath: string, taskId: string, completedAt: string, logge
 
   // Write to logs directory
   const logPath = path.join(dirs.logsDir, taskFileName(taskId));
-  writeTaskFile(logPath, completedTask, doc.body);
+  writeTaskFile(logPath, completedTask, completedBody);
 
   // Remove from tasks directory
   fs.unlinkSync(taskPath);

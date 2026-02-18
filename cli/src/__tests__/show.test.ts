@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { showCommand } from '../commands/show';
 import { MemoryLogger } from '../utils/logger';
@@ -20,6 +21,9 @@ describe('show command', () => {
     for (const p of [tempBoardPath, tempArchivePath]) {
       if (fs.existsSync(p)) fs.unlinkSync(p);
     }
+    // Clean up state.json that may be created by v2 migration hint
+    const fixtureStatePath = path.join(fixturesDir, 'state.json');
+    if (fs.existsSync(fixtureStatePath)) fs.unlinkSync(fixtureStatePath);
   });
 
   it('should show details for a task in the board', () => {
@@ -89,6 +93,72 @@ archive:
 
   it('should throw CLIError for non-existent file', () => {
     expect(() => showCommand({ file: 'non-existent.md', task: 'task-1' }, logger)).toThrow(CLIError);
+  });
+});
+
+describe('show command (v2 children)', () => {
+  let tempDir: string;
+  let brainfilePath: string;
+  let logger: MemoryLogger;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-show-children-'));
+    const dotDir = path.join(tempDir, '.brainfile');
+    const boardDir = path.join(dotDir, 'board');
+    fs.mkdirSync(boardDir, { recursive: true });
+    fs.mkdirSync(path.join(dotDir, 'logs'), { recursive: true });
+
+    brainfilePath = path.join(dotDir, 'brainfile.md');
+    fs.writeFileSync(brainfilePath, `---
+title: Test Board
+columns:
+  - id: todo
+    title: To Do
+---
+`, 'utf-8');
+
+    fs.writeFileSync(path.join(boardDir, 'epic-1.md'), `---
+id: epic-1
+title: Parent epic
+type: epic
+column: todo
+position: 0
+---
+`, 'utf-8');
+
+    fs.writeFileSync(path.join(boardDir, 'task-1.md'), `---
+id: task-1
+title: Child one
+column: todo
+position: 1
+parentId: epic-1
+---
+`, 'utf-8');
+
+    fs.writeFileSync(path.join(boardDir, 'task-2.md'), `---
+id: task-2
+title: Child two
+column: todo
+position: 2
+parentId: epic-1
+---
+`, 'utf-8');
+
+    logger = new MemoryLogger();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('shows child IDs for a parent task', () => {
+    const result = showCommand({ file: brainfilePath, task: 'epic-1' }, logger);
+
+    expect(result.success).toBe(true);
+    const output = logger.getOutput();
+    expect(output).toContain('Children:');
+    expect(output).toContain('task-1');
+    expect(output).toContain('task-2');
   });
 });
 

@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { Brainfile, ensureDotBrainfileGitignore } from '@brainfile/core';
+import { Brainfile } from '@brainfile/core';
+import { ensureDotBrainfileGitignore, removeLegacyStateFile } from '../utils/dot-brainfile';
 import { writeTaskFile, taskFileName, type Task } from '@brainfile/core';
 import { ensureV2Dirs } from '../utils/v2-detect';
 
@@ -55,6 +56,7 @@ function migrateToDirectory(options: MigrateOptions) {
 
   fs.mkdirSync(dotDir, { recursive: true });
   ensureDotBrainfileGitignore(targetPath);
+  removeLegacyStateFile(targetPath);
 
   if (fs.existsSync(targetPath) && options.force) {
     fs.rmSync(targetPath, { force: true });
@@ -83,7 +85,7 @@ function migrateToDirectory(options: MigrateOptions) {
  * V2 migration: convert v1 board (embedded tasks in YAML) to v2 per-task files.
  *
  * - Reads all tasks from columns + archive in brainfile.md
- * - Writes each as an individual file in tasks/ (active) or logs/ (done/archived)
+ * - Writes each as an individual file in board/ (active) or logs/ (done/archived)
  * - Rewrites brainfile.md as config-only (columns without tasks)
  * - Non-destructive: backs up original brainfile.md first
  */
@@ -133,16 +135,16 @@ function migrateToV2(options: MigrateOptions) {
   let activeCount = 0;
   let logCount = 0;
 
-  // Check for existing tasks/ files to avoid clobbering
-  const existingTaskFiles = fs.existsSync(dirs.tasksDir)
-    ? fs.readdirSync(dirs.tasksDir).filter(f => f.endsWith('.md'))
+  // Check for existing board/ files to avoid clobbering
+  const existingTaskFiles = fs.existsSync(dirs.boardDir)
+    ? fs.readdirSync(dirs.boardDir).filter(f => f.endsWith('.md'))
     : [];
   const existingLogFiles = fs.existsSync(dirs.logsDir)
     ? fs.readdirSync(dirs.logsDir).filter(f => f.endsWith('.md'))
     : [];
 
   if ((existingTaskFiles.length > 0 || existingLogFiles.length > 0) && !options.force) {
-    console.error(chalk.red('Error: tasks/ or logs/ directory already contains files.'));
+    console.error(chalk.red('Error: board/ or logs/ directory already contains files.'));
     console.log(chalk.gray('Use --force to overwrite.'));
     process.exit(1);
     return;
@@ -187,7 +189,7 @@ function migrateToV2(options: MigrateOptions) {
           position: i,
         };
 
-        const taskPath = path.join(dirs.tasksDir, taskFileName(task.id));
+        const taskPath = path.join(dirs.boardDir, taskFileName(task.id));
         writeTaskFile(taskPath, activeTask);
         activeCount++;
       }
@@ -227,12 +229,13 @@ function migrateToV2(options: MigrateOptions) {
   const configContent = Brainfile.serialize(configBoard);
   fs.writeFileSync(brainfilePath, configContent, 'utf-8');
 
-  // Ensure .gitignore
+  // Ensure .gitignore and remove legacy state file
   ensureDotBrainfileGitignore(brainfilePath);
+  removeLegacyStateFile(brainfilePath);
 
   console.log(chalk.green('Migration to v2 complete!'));
   console.log('');
-  console.log(chalk.gray(`  Active tasks:    ${activeCount} files in tasks/`));
+  console.log(chalk.gray(`  Active tasks:    ${activeCount} files in board/`));
   console.log(chalk.gray(`  Completed/logs:  ${logCount} files in logs/`));
   console.log(chalk.gray(`  Board config:    ${brainfilePath} (config-only)`));
   console.log(chalk.gray(`  Backup:          ${backupPath}`));

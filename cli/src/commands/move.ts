@@ -5,10 +5,12 @@ import { CLIError, fileNotFound, parseFailure, missingRequired, operationFailed,
 import { defaultLogger, type Logger } from '../utils/logger';
 import { getIncompleteSubtasksWarning } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { validateColumn } from '../utils/strict-validation';
 import {
   readTaskFile,
   readTasksDir,
   writeTaskFile,
+  completeTaskFile,
   taskFileName,
 } from '@brainfile/core';
 import {
@@ -21,6 +23,27 @@ interface MoveOptions {
   file: string;
   task: string;
   column: string;
+}
+
+interface TypeEntry {
+  completable?: boolean;
+}
+
+type TypesConfig = Record<string, TypeEntry>;
+
+function getBoardTypes(board: Board): TypesConfig {
+  const rawTypes = (board as Board & { types?: TypesConfig }).types;
+  return rawTypes && typeof rawTypes === 'object' ? rawTypes : {};
+}
+
+function isTaskCompletable(task: Task, board: Board): boolean {
+  const taskType = task.type || 'task';
+  if (taskType === 'task') {
+    return true;
+  }
+
+  const typeConfig = getBoardTypes(board)[taskType];
+  return typeConfig?.completable !== false;
 }
 
 export interface MoveResult {
@@ -140,7 +163,7 @@ export function moveCommand(options: MoveOptions, logger: Logger = defaultLogger
 function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): MoveResult {
   const dirs = getV2Dirs(filePath);
   const board = readV2BoardConfig(filePath);
-  const taskPath = path.join(dirs.tasksDir, taskFileName(options.task));
+  const taskPath = path.join(dirs.boardDir, taskFileName(options.task));
 
   const doc = readTaskFile(taskPath);
   if (!doc) {
@@ -150,16 +173,20 @@ function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): 
   const task = doc.task;
   const sourceColumnId = task.column || '';
 
-  // Find source and target columns from board config
+  // Find source and target columns from board config (title aliases still supported)
   const sourceColumn = board.columns.find(c => c.id === sourceColumnId);
-  let targetColumn = board.columns.find(c => c.id === options.column);
-  if (!targetColumn) {
-    targetColumn = board.columns.find(c => c.title.toLowerCase() === options.column.toLowerCase());
+  let configuredTargetColumn = board.columns.find(c => c.id === options.column);
+  if (!configuredTargetColumn) {
+    configuredTargetColumn = board.columns.find(c => c.title.toLowerCase() === options.column.toLowerCase());
   }
-  if (!targetColumn) {
-    const availableColumns = board.columns.map(c => `${c.id} (${c.title})`);
-    throw columnNotFound(options.column, availableColumns);
+
+  // Strict boards must target a configured column; non-strict boards allow any column ID.
+  const targetColumnId = configuredTargetColumn?.id || options.column;
+  const columnValidation = validateColumn(board, targetColumnId);
+  if (!columnValidation.valid) {
+    throw new CLIError(columnValidation.error || `Invalid column: ${targetColumnId}`);
   }
+  const targetColumn = configuredTargetColumn || { id: options.column, title: options.column, tasks: [] };
 
   if (sourceColumnId === targetColumn.id) {
     logger.warn(`Task ${options.task} is already in column "${targetColumn.title}"`);
@@ -172,7 +199,7 @@ function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): 
   }
 
   // Calculate new position (append to end)
-  const targetTasks = readTasksDir(dirs.tasksDir)
+  const targetTasks = readTasksDir(dirs.boardDir)
     .filter(t => t.task.column === targetColumn!.id);
   const newPosition = targetTasks.length;
 
@@ -181,11 +208,24 @@ function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): 
   task.position = newPosition;
   writeTaskFile(taskPath, task, doc.body);
 
+  const shouldAutoComplete = targetColumn.completionColumn === true && isTaskCompletable(task, board);
+  let movedTask: Task = task;
+  if (shouldAutoComplete) {
+    const completeResult = completeTaskFile(taskPath, dirs.logsDir);
+    if (!completeResult.success || !completeResult.task) {
+      throw operationFailed(completeResult.error || `Failed to complete task: ${task.id}`);
+    }
+    movedTask = completeResult.task;
+  }
+
   logger.log('Task moved successfully!');
   logger.log('');
   logger.log(`  Task:   ${task.id} - ${task.title}`);
   logger.log(`  From:   ${sourceColumn?.title || sourceColumnId}`);
   logger.log(`  To:     ${targetColumn.title}`);
+  if (shouldAutoComplete) {
+    logger.log('  Status: Completed (moved to logs/)');
+  }
 
   // Soft error: warn about incomplete subtasks when moving to done-like column
   const warning = getIncompleteSubtasksWarning(task, targetColumn);
@@ -196,7 +236,7 @@ function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): 
 
   return {
     success: true,
-    movedTask: task,
+    movedTask,
     sourceColumn: sourceColumn || { id: sourceColumnId, title: sourceColumnId, tasks: [] },
     targetColumn
   };

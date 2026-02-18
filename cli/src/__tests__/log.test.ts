@@ -10,7 +10,7 @@ import { composeBody } from '../utils/v2-detect';
 describe('log command', () => {
   let tempDir: string;
   let dotDir: string;
-  let tasksDir: string;
+  let boardDir: string;
   let logsDir: string;
   let brainfilePath: string;
   let logger: MemoryLogger;
@@ -18,11 +18,11 @@ describe('log command', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-log-test-'));
     dotDir = path.join(tempDir, '.brainfile');
-    tasksDir = path.join(dotDir, 'tasks');
+    boardDir = path.join(dotDir, 'board');
     logsDir = path.join(dotDir, 'logs');
     brainfilePath = path.join(dotDir, 'brainfile.md');
 
-    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.mkdirSync(boardDir, { recursive: true });
     fs.mkdirSync(logsDir, { recursive: true });
 
     // Write v2 config-only brainfile
@@ -66,7 +66,7 @@ columns:
       column: 'todo',
       position: 0,
     };
-    writeTaskFile(path.join(tasksDir, 'task-20.md'), active, composeBody('In progress work'));
+    writeTaskFile(path.join(boardDir, 'task-20.md'), active, composeBody('In progress work'));
 
     logger = new MemoryLogger();
   });
@@ -116,7 +116,7 @@ columns:
 describe('log note command', () => {
   let tempDir: string;
   let dotDir: string;
-  let tasksDir: string;
+  let boardDir: string;
   let logsDir: string;
   let brainfilePath: string;
   let logger: MemoryLogger;
@@ -124,11 +124,11 @@ describe('log note command', () => {
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-lognote-test-'));
     dotDir = path.join(tempDir, '.brainfile');
-    tasksDir = path.join(dotDir, 'tasks');
+    boardDir = path.join(dotDir, 'board');
     logsDir = path.join(dotDir, 'logs');
     brainfilePath = path.join(dotDir, 'brainfile.md');
 
-    fs.mkdirSync(tasksDir, { recursive: true });
+    fs.mkdirSync(boardDir, { recursive: true });
     fs.mkdirSync(logsDir, { recursive: true });
 
     fs.writeFileSync(brainfilePath, `---
@@ -146,7 +146,7 @@ columns:
       column: 'todo',
       position: 0,
     };
-    writeTaskFile(path.join(tasksDir, 'task-5.md'), task, composeBody('Work in progress'));
+    writeTaskFile(path.join(boardDir, 'task-5.md'), task, composeBody('Work in progress'));
 
     logger = new MemoryLogger();
   });
@@ -166,7 +166,7 @@ columns:
     expect(result.entry).toContain('Found the root cause');
 
     // Verify the file was updated
-    const content = fs.readFileSync(path.join(tasksDir, 'task-5.md'), 'utf-8');
+    const content = fs.readFileSync(path.join(boardDir, 'task-5.md'), 'utf-8');
     expect(content).toContain('Found the root cause');
     expect(content).toContain('## Log');
   });

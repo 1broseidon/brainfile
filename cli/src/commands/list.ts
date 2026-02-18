@@ -4,12 +4,13 @@ import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { isV2, buildBoardFromV2 } from '../utils/v2-detect';
+import { isV2, buildBoardFromV2, shouldSuggestV2Migration, markV2MigrationHintShown } from '../utils/v2-detect';
 
 export interface ListOptions {
   file: string;
   column?: string;
   tag?: string;
+  parent?: string;
   contract?: string;
 }
 
@@ -24,6 +25,7 @@ Examples:
   brainfile list
   brainfile list --column todo
   brainfile list --tag urgent
+  brainfile list --parent epic-1
   brainfile list --contract ready
 
 Notes:
@@ -80,15 +82,15 @@ export function listCommand(options: ListOptions, logger: Logger = defaultLogger
     if (options.tag) {
       tasks = tasks.filter(task => task.tags?.includes(options.tag!));
     }
+    if (options.parent) {
+      tasks = tasks.filter(task => (task as any).parentId === options.parent);
+    }
     if (options.contract) {
       const status = options.contract.trim().toLowerCase();
       tasks = tasks.filter(task => task.contract?.status?.toLowerCase() === status);
     }
 
-    if (tasks.length === 0 && options.tag) {
-      continue;
-    }
-    if (tasks.length === 0 && options.contract) {
+    if (tasks.length === 0 && (options.tag || options.parent || options.contract)) {
       continue;
     }
 
@@ -112,14 +114,26 @@ export function listCommand(options: ListOptions, logger: Logger = defaultLogger
   const totalTasks = board.columns.reduce((sum, col) => sum + col.tasks.length, 0);
   logger.log(chalk.gray(`Total tasks: ${totalTasks}`));
 
+  // Show one-time v2 migration hint for v1 boards
+  if (shouldSuggestV2Migration(filePath)) {
+    logger.log('');
+    logger.log(
+      chalk.gray('Tip: Run ') +
+      chalk.cyan('brainfile migrate --v2') +
+      chalk.gray(' to upgrade to per-task files for better agent workflows and task history.')
+    );
+    markV2MigrationHintShown(filePath);
+  }
+
   return { success: true, totalTasks, columnsDisplayed: columns.length };
 }
 
 function displayTask(task: Task, logger: Logger) {
-  // Task ID and title
+  // Task ID and title, with optional type badge for non-task types
   const idStr = chalk.gray(`[${task.id}]`);
+  const typeBadge = task.type && task.type !== 'task' ? chalk.magenta(`[${task.type}]`) + ' ' : '';
   const titleStr = chalk.white(task.title);
-  logger.log(`  ${idStr} ${titleStr}`);
+  logger.log(`  ${idStr} ${typeBadge}${titleStr}`);
 
   // Priority
   if (task.priority) {
@@ -139,6 +153,11 @@ function displayTask(task: Task, logger: Logger) {
   // Template
   if (task.template) {
     logger.log(`    ${chalk.gray('Template:')} ${chalk.magenta(task.template)}`);
+  }
+
+  const parentId = (task as any).parentId as string | undefined;
+  if (parentId) {
+    logger.log(`    ${chalk.gray('Parent:')} ${chalk.white(parentId)}`);
   }
 
   // Subtasks summary

@@ -1,372 +1,205 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/brainfile/cli/main/logo.png" alt="Brainfile Logo" width="128" height="128">
-</p>
-
 # @brainfile/cli
 
-**Task management for your terminal.** A full kanban board that lives in a markdown file.
+**The official CLI for Brainfile.** Manage tasks, contracts, and ADRs directly from your terminal.
 
-- Modern, borderless TUI optimized for information density
-- Vim-style navigation with intuitive keybindings
-- CLI commands for scripting and automation
-- MCP server for AI assistant integration
+Designed for developers who want a local-first, file-based task management system that plays nicely with AI agents.
 
-## Installation
+## Install
 
 ```bash
-npm install -g @brainfile/cli
-```
-
-Verify installation:
-
-```bash
-brainfile --version
+npm i -g @brainfile/cli
 ```
 
 ## Quick Start
 
+Initialize a new brainfile in your project root:
+
 ```bash
-# Initialize a new brainfile
 brainfile init
-
-# Launch interactive TUI
-brainfile
-
-# Or use CLI commands
-brainfile list                                    # List all tasks
-brainfile add --title "My task" --column todo     # Add a task
-brainfile move --task task-1 --column done        # Move a task
 ```
 
-## Commands
+This creates the standard v2 structure:
+- `.brainfile/brainfile.md` (Configuration, rules, definitions)
+- `.brainfile/board/` (Active tasks)
+- `.brainfile/logs/` (Completed tasks)
 
-### Terminal UI (TUI)
+The board comes pre-configured with `To Do` and `In Progress` columns.
 
-Launch an interactive task board:
+## Core Workflow
+
+### Add Tasks
+Create new tasks with rich metadata.
 
 ```bash
-brainfile                    # Auto-detect (prefers .brainfile/brainfile.md)
-brainfile ./path/to/file.md  # Open specific file
+# Basic task
+brainfile add --title "Implement login" --column todo
+
+# Full featured task
+brainfile add \
+  --title "Refactor database layer" \
+  --type task \
+  --column todo \
+  --priority high \
+  --assignee @josh \
+  --tags "refactor,db" \
+  --parent epic-123
+
+# Create a parent with children in one shot
+brainfile add -c todo -t "Auth overhaul" \
+  --child "OAuth flow" --child "Session hardening"
 ```
 
-**Task Card Layout:**
+**Key Flags:**
+- `--title, -t`: Task summary
+- `--type`: `task`, `epic`, or `adr` (default: `task`)
+- `--column, -c`: Target column ID
+- `--parent`: Parent task/epic ID
+- `--child`: Create child task(s) under the new parent (repeatable)
+- `--priority, -p`: `low`, `medium`, `high`, `critical`
+- `--tags`: Comma-separated list
+
+### List Tasks
+View your board from the command line.
+
+```bash
+brainfile list                        # View all active tasks
+brainfile list --column todo          # Filter by column
+brainfile list --tag bug              # Filter by tag
+brainfile list --parent epic-123      # See all children of an epic
+brainfile list --contract ready       # See tasks with contracts waiting for pickup
 ```
-  ▌ CRIT  Implement user authentication flow
-    [1/5] · Nov 30 · #auth #security                     task-39
 
-    HIGH  Dashboard performance optimization
-    [0/4] · Dec 4 · #performance #frontend               task-40
+### Manage Tasks
+Manipulate tasks as you work.
+
+```bash
+# View details
+brainfile show -t task-10
+
+# Move to another column
+brainfile move -t task-10 -c in-progress
+
+# Update fields
+brainfile patch -t task-10 --priority critical --tags "frontend,urgent"
+
+# Clear fields
+brainfile patch -t task-10 --clear-tags --clear-assignee
+
+# Delete (permanently)
+brainfile delete -t task-10
 ```
 
-- `▌` indicator shows selected task
-- Priority badge (CRIT/HIGH/MED/LOW) leads each row
-- `[X/Y]` shows subtask progress
-- Due dates with urgency coloring (red if overdue, yellow if soon)
-- Tags and task ID complete the metadata row
+### Complete
+When a task is done, move it to the archive.
 
-**Panel Navigation:**
+```bash
+brainfile complete -t task-10
+```
+This moves the file from `.brainfile/board/` to `.brainfile/logs/`, preserving its history forever.
+
+## Types
+
+Brainfile supports different document types.
+
+```bash
+brainfile types list       # See available types (task, epic, adr)
+brainfile types add        # (Coming soon: define custom types)
+```
+
+## Contracts: Working with AI Agents
+
+Contracts allow you to define explicit deliverables and validation rules for AI agents.
+
+### 1. Create a Contract
+Add a task with a contract definition.
+
+```bash
+brainfile add -c todo -t "Optimize image loader" \
+  --with-contract \
+  --deliverable "file:src/utils/loader.ts:Optimized implementation" \
+  --validation "npm test -- loader" \
+  --constraint "Must use lazy loading"
+```
+
+### 2. Pickup (Agent)
+The agent claims the task.
+
+```bash
+brainfile contract pickup -t task-45
+```
+Status changes to `in_progress`. Metrics tracking begins.
+
+### 3. Deliver (Agent)
+The agent marks work as ready for review.
+
+```bash
+brainfile contract deliver -t task-45
+```
+Status changes to `delivered`.
+
+### 4. Validate (User)
+Run the validation commands automatically.
+
+```bash
+brainfile contract validate -t task-45
+```
+- **Pass**: Task is marked `done`.
+- **Fail**: Task status reverts to `ready` (or `failed`) for rework.
+
+## ADR Promotion
+
+Architecture Decision Records (ADRs) are first-class citizens. You can promote an accepted ADR to a global rule that agents must follow.
+
+```bash
+# 1. Create an ADR
+brainfile add -t "Use Postgres for all user data" --type adr -c proposed
+
+# 2. Accept it (move to accepted column)
+brainfile move -t adr-1 -c accepted
+
+# 3. Promote to a rule
+brainfile adr promote -t adr-1 --category always
+```
+
+**Categories:**
+- `always`: Strict rules (e.g., "Always use TypeScript")
+- `never`: Prohibitions (e.g., "Never commit secrets")
+- `prefer`: Guidelines (e.g., "Prefer functional components")
+- `context`: informational context
+
+Promoted rules are added to `.brainfile/brainfile.md` and injected into agent prompts.
+
+## TUI (Terminal UI)
+
+Launch the interactive board:
+
+```bash
+brainfile          # No arguments launches the TUI
+brainfile tui      # Explicit subcommand also works
+```
+
+### Panels
+- **Board (`1`)**: Kanban view of active tasks.
+- **Logs (`2`)**: List of completed tasks.
+- **Rules (`3`)**: Active rules and configuration.
+
+### Keyboard Shortcuts
 | Key | Action |
 |-----|--------|
-| `1` | Switch to Tasks panel |
-| `2` | Switch to Rules panel |
-| `3` | Switch to Archive panel |
-| `?` | Show help |
+| `tab` | Next column |
+| `j` / `k` | Down / Up |
+| `enter` | View task details |
+| `n` | New task |
+| `m` | Move task |
+| `e` | Edit task (in $EDITOR) |
+| `/` | Search |
 | `q` | Quit |
 
-**Tasks Panel:**
-| Key | Action |
-|-----|--------|
-| `TAB` / `Shift+TAB` | Navigate columns |
-| `j`/`k` or `↑`/`↓` | Navigate tasks |
-| `h`/`l` or `←`/`→` | Switch columns |
-| `g`/`G` | Jump to top/bottom |
-| `Enter` | Expand/collapse task |
-| `/` | Search tasks |
-| `r` | Refresh |
+## AI Integration
 
-**Search Filters:**
-| Filter | Example | Description |
-|--------|---------|-------------|
-| Priority | `p:high` | Filter by priority |
-| Tag | `#bug` or `t:feature` | Filter by tag |
-| Assignee | `@john` | Filter by assignee |
-| Due date | `due:week` | `overdue`, `today`, `week`, `month` |
+The CLI includes an MCP (Model Context Protocol) server.
 
-Combine filters with text: `p:high #bug login issue`
-
-**Task Management:**
-| Key | Action |
-|-----|--------|
-| `e` | Edit task in $EDITOR |
-| `m` | Move task to column |
-| `d` | Delete task |
-| `n` | Quick add new task |
-| `N` | New task in $EDITOR |
-| `p` | Cycle priority |
-| `t` | Toggle subtask |
-| `A` | Archive task |
-| `y` | Copy task ID |
-
-**Rules Panel:**
-| Key | Action |
-|-----|--------|
-| `TAB` / `Shift+TAB` | Switch rule type |
-| `h`/`l` | Switch rule type (always/never/prefer/context) |
-| `j`/`k` | Navigate rules |
-| `n` | Add new rule |
-| `e` | Edit selected rule |
-| `d` | Delete selected rule |
-
-**Archive Panel:**
-| Key | Action |
-|-----|--------|
-| `j`/`k` | Navigate archived tasks |
-| `Enter` | Expand/collapse task |
-| `R` | Restore task to column |
-| `d` | Permanently delete task |
-| `r` | Refresh archive |
-
----
-
-### list
-
-List all tasks with optional filtering:
-
-```bash
-brainfile list
-brainfile list --column "In Progress"
-brainfile list --tag bug
-```
-
-**Options:**
-- `-f, --file <path>` - Brainfile path (default: `brainfile.md`)
-- `-c, --column <name>` - Filter by column
-- `-t, --tag <name>` - Filter by tag
-
----
-
-### show
-
-Show full details of a single task:
-
-```bash
-brainfile show --task task-1
-brainfile show -t task-1 --file ./brainfile.md
-```
-
-**Options:**
-- `-f, --file <path>` - Brainfile path (default: `brainfile.md`)
-- `-t, --task <id>` - Task ID (required)
-
----
-
-### add
-
-Create a new task:
-
-```bash
-brainfile add --title "Implement auth" --column todo
-brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
-brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
-```
-
-**Options:**
-- `-t, --title <text>` - Task title (required)
-- `-c, --column <name>` - Target column (default: `todo`)
-- `-d, --description <text>` - Task description
-- `-p, --priority <level>` - `low`, `medium`, `high`, or `critical`
-- `--tags <list>` - Comma-separated tags
-- `--assignee <name>` - Assignee name
-- `--due-date <date>` - Due date (YYYY-MM-DD)
-- `--subtasks <list>` - Comma-separated subtask titles
-
----
-
-### move
-
-Move a task to a different column:
-
-```bash
-brainfile move --task task-1 --column "In Progress"
-brainfile move --task task-5 --column done
-```
-
-**Options:**
-- `-t, --task <id>` - Task ID (required)
-- `-c, --column <name>` - Target column (required)
-
----
-
-### patch
-
-Update specific fields of a task:
-
-```bash
-brainfile patch --task task-1 --priority critical
-brainfile patch --task task-1 --title "Updated title" --tags "new,tags"
-brainfile patch --task task-1 --clear-assignee  # Remove assignee
-```
-
-**Options:**
-- `-t, --task <id>` - Task ID (required)
-- `--title <text>` - New title
-- `--description <text>` - New description
-- `--priority <level>` - New priority
-- `--tags <list>` - New tags (comma-separated)
-- `--assignee <name>` - New assignee
-- `--due-date <date>` - New due date
-- `--clear-description` - Remove description
-- `--clear-priority` - Remove priority
-- `--clear-tags` - Remove tags
-- `--clear-assignee` - Remove assignee
-- `--clear-due-date` - Remove due date
-
----
-
-### delete
-
-Permanently delete a task:
-
-```bash
-brainfile delete --task task-1 --force
-```
-
-**Options:**
-- `-t, --task <id>` - Task ID (required)
-- `--force` - Confirm deletion (required)
-
----
-
-### archive
-
-Move a task to the archive:
-
-```bash
-brainfile archive --task task-1
-```
-
----
-
-### restore
-
-Restore a task from the archive:
-
-```bash
-brainfile restore --task task-1 --column todo
-```
-
-**Options:**
-- `-t, --task <id>` - Task ID (required)
-- `-c, --column <name>` - Target column (required)
-
----
-
-### subtask
-
-Manage subtasks:
-
-```bash
-brainfile subtask --task task-1 --add "New subtask"
-brainfile subtask --task task-1 --toggle task-1-1
-brainfile subtask --task task-1 --update task-1-1 --title "Updated"
-brainfile subtask --task task-1 --delete task-1-2
-```
-
-**Options:**
-- `-t, --task <id>` - Parent task ID (required)
-- `--add <title>` - Add a new subtask
-- `--toggle <id>` - Toggle subtask completion
-- `--update <id>` - Update subtask (use with `--title`)
-- `--delete <id>` - Delete a subtask
-- `--title <text>` - New title (for `--update`)
-
----
-
-### lint
-
-Validate and auto-fix brainfile syntax:
-
-```bash
-brainfile lint              # Check for issues
-brainfile lint --fix        # Auto-fix issues
-brainfile lint --check      # Exit with error code (for CI)
-```
-
-**What it checks:**
-- YAML syntax errors
-- Unquoted strings with colons (auto-fixable)
-- Duplicate column IDs
-- Missing required fields
-
----
-
-### template
-
-Create tasks from templates:
-
-```bash
-brainfile template --list
-brainfile template --use bug-report --title "Login fails"
-brainfile template --use feature-request --title "Dark mode"
-```
-
-**Built-in Templates:**
-- `bug-report` - Bug tracking with triage steps
-- `feature-request` - Feature proposals
-- `refactor` - Code refactoring tasks
-
----
-
-### hooks
-
-Integrate with AI coding assistants:
-
-```bash
-brainfile hooks install claude-code
-brainfile hooks install cursor --scope project
-brainfile hooks install cline
-brainfile hooks list
-brainfile hooks uninstall claude-code --scope all
-```
-
-**Supported Assistants:**
-- Claude Code
-- Cursor
-- Cline
-
-Hooks provide automatic reminders to update task status during AI-assisted development.
-
----
-
-### mcp
-
-Start an MCP (Model Context Protocol) server for AI assistant integration:
-
-```bash
-brainfile mcp
-brainfile mcp --file ./project/brainfile.md
-```
-
-The MCP server exposes all brainfile operations as tools that AI assistants can use directly.
-
-**Available MCP Tools:**
-| Tool | Description |
-|------|-------------|
-| `list_tasks` | List tasks with optional filtering |
-| `add_task` | Create a new task |
-| `move_task` | Move task between columns |
-| `patch_task` | Update task fields |
-| `delete_task` | Permanently delete a task |
-| `archive_task` | Archive a task |
-| `restore_task` | Restore from archive |
-| `add_subtask` | Add a subtask |
-| `delete_subtask` | Delete a subtask |
-| `toggle_subtask` | Toggle subtask completion |
-| `update_subtask` | Update subtask title |
-
-**Configuration for Claude Code:**
-
-Add to your MCP settings (`.mcp.json` or Claude Code config):
+Add to your `claude_desktop_config.json`:
 
 ```json
 {
@@ -379,72 +212,4 @@ Add to your MCP settings (`.mcp.json` or Claude Code config):
 }
 ```
 
-Or with a specific file:
-
-```json
-{
-  "mcpServers": {
-    "brainfile": {
-      "command": "npx",
-      "args": ["@brainfile/cli", "mcp", "-f", "path/to/brainfile.md"]
-    }
-  }
-}
-```
-
----
-
-### init
-
-Create a new brainfile:
-
-```bash
-brainfile init
-brainfile init --file ./project/tasks.md  # Custom location (optional)
-brainfile init --force  # Overwrite existing
-```
-
-### migrate
-
-Move a legacy root `brainfile.md` into the preferred `.brainfile/` directory:
-
-```bash
-brainfile migrate
-brainfile migrate --force
-```
-
-## Output Colors
-
-The CLI uses colors to highlight information:
-
-| Element | Color |
-|---------|-------|
-| Task IDs | Gray |
-| Titles | White |
-| Critical Priority | Red (bold) |
-| High Priority | Red |
-| Medium Priority | Yellow |
-| Low Priority | Blue |
-| Tags | Cyan |
-| Completed | Green |
-
-## Package Information
-
-- **npm**: https://www.npmjs.com/package/@brainfile/cli
-- **GitHub**: https://github.com/brainfile/cli
-- **Core Library**: [@brainfile/core](https://www.npmjs.com/package/@brainfile/core)
-- **Protocol**: https://brainfile.md
-
-## Development
-
-```bash
-git clone https://github.com/brainfile/cli.git
-cd cli
-npm install
-npm run build
-npm test
-```
-
-## License
-
-MIT
+This gives Claude (and other MCP clients) full access to read your board, create tasks, and manage contracts.

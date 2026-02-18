@@ -1,12 +1,11 @@
 import { useInput, useApp } from 'ink';
-import type { AppState, StatusMessage, BoardColumn, RuleType, MainPanel, LayoutMode } from '../types.js';
+import type { AppState, StatusMessage, BoardColumn, RuleType, LayoutMode } from '../types.js';
 import type { Task } from '@brainfile/core';
 import type { FlatTask } from '../components/StackedTaskList.js';
 import {
   editTaskInEditor,
   moveTaskAction,
   deleteTaskAction,
-  archiveTaskAction,
   archiveTaskActionAsync,
   cyclePriorityAction,
   toggleSubtaskAction,
@@ -18,7 +17,7 @@ import {
   deleteRuleAction,
   restoreTaskAction,
   deleteArchivedTaskAction,
-  loadArchive,
+  loadLogs,
 } from '../actions.js';
 
 const RULE_TYPES: RuleType[] = ['always', 'never', 'prefer', 'context'];
@@ -326,8 +325,8 @@ export function useKeyboardNavigation({
       return;
     }
 
-    // Archive restore mode - column picker
-    if (state.mode === 'archive-restore') {
+    // Logs restore mode - column picker
+    if (state.mode === 'logs-restore') {
       if (key.escape) {
         setState(prev => ({ ...prev, mode: 'browse' }));
         return;
@@ -335,32 +334,32 @@ export function useKeyboardNavigation({
       if (key.downArrow || input === 'j') {
         setState(prev => ({
           ...prev,
-          archiveRestoreColumnIndex: Math.min(prev.archiveRestoreColumnIndex + 1, allColumns.length - 1),
+          logRestoreColumnIndex: Math.min(prev.logRestoreColumnIndex + 1, allColumns.length - 1),
         }));
         return;
       }
       if (key.upArrow || input === 'k') {
         setState(prev => ({
           ...prev,
-          archiveRestoreColumnIndex: Math.max(prev.archiveRestoreColumnIndex - 1, 0),
+          logRestoreColumnIndex: Math.max(prev.logRestoreColumnIndex - 1, 0),
         }));
         return;
       }
       if (key.return) {
-        const task = state.archive[state.selectedArchiveIndex];
-        const column = allColumns[state.archiveRestoreColumnIndex];
+        const task = state.logs[state.selectedLogIndex];
+        const column = allColumns[state.logRestoreColumnIndex];
         if (task && column) {
           const result = restoreTaskAction(filePath, task.id, column.id);
           if (result.success) {
             showStatus(setState, result.message || 'Task restored', 'success');
             loadBrainfile(true);
-            // Reload archive
-            const archiveResult = loadArchive(filePath);
+            // Reload logs
+            const logResult = loadLogs(filePath);
             setState(prev => ({
               ...prev,
               mode: 'browse',
-              archive: archiveResult.archive,
-              selectedArchiveIndex: Math.max(0, prev.selectedArchiveIndex - 1),
+              logs: logResult.logs,
+              selectedLogIndex: Math.max(0, prev.selectedLogIndex - 1),
             }));
           } else {
             showStatus(setState, result.error || 'Failed to restore task', 'error');
@@ -372,21 +371,21 @@ export function useKeyboardNavigation({
       return;
     }
 
-    // Archive delete confirmation
-    if (state.mode === 'archive-delete-confirm') {
-      const task = state.archive[state.selectedArchiveIndex];
+    // Logs delete confirmation
+    if (state.mode === 'logs-delete-confirm') {
+      const task = state.logs[state.selectedLogIndex];
       if (input === 'y' || input === 'Y') {
         if (task) {
           const result = deleteArchivedTaskAction(filePath, task.id);
           if (result.success) {
             showStatus(setState, result.message || 'Task permanently deleted', 'success');
-            // Reload archive
-            const archiveResult = loadArchive(filePath);
+            // Reload logs
+            const logResult = loadLogs(filePath);
             setState(prev => ({
               ...prev,
               mode: 'browse',
-              archive: archiveResult.archive,
-              selectedArchiveIndex: Math.max(0, prev.selectedArchiveIndex - 1),
+              logs: logResult.logs,
+              selectedLogIndex: Math.max(0, prev.selectedLogIndex - 1),
             }));
           } else {
             showStatus(setState, result.error || 'Failed to delete task', 'error');
@@ -427,13 +426,13 @@ export function useKeyboardNavigation({
       return;
     }
     if (input === '3') {
-      setState(prev => ({ ...prev, activePanel: 'archive', mode: 'browse' }));
-      // Archive is loaded via useEffect in BrainfileTUI
+      setState(prev => ({ ...prev, activePanel: 'logs', mode: 'browse' }));
+      // Logs are loaded via useEffect in BrainfileTUI
       return;
     }
 
     // Refresh (force refresh bypasses hash check)
-    if (input === 'r' && state.activePanel !== 'archive') {
+    if (input === 'r' && state.activePanel !== 'logs') {
       loadBrainfile(true);
       showStatus(setState, 'Refreshed', 'info');
       return;
@@ -484,25 +483,25 @@ export function useKeyboardNavigation({
         return;
       }
 
-      // 'A' - Archive task (supports external destinations)
+      // 'A' - Move task to logs (supports external destinations)
       if (input === 'A') {
         if (!currentTask) {
           showStatus(setState, 'No task selected', 'error');
           return;
         }
-        // Show archiving status while async operation runs
-        showStatus(setState, 'Archiving...', 'info');
+        // Show status while async operation runs
+        showStatus(setState, 'Moving to logs...', 'info');
 
         // Call async archive function (supports GitHub/Linear destinations)
         archiveTaskActionAsync(filePath, currentTask.id).then((result) => {
           if (result.success) {
-            showStatus(setState, result.message || 'Task archived', 'success');
+            showStatus(setState, result.message || 'Task moved to logs', 'success');
             loadBrainfile(true);
           } else {
-            showStatus(setState, result.error || 'Archive failed', 'error');
+            showStatus(setState, result.error || 'Move to logs failed', 'error');
           }
         }).catch((err) => {
-          showStatus(setState, `Archive failed: ${err}`, 'error');
+          showStatus(setState, `Move to logs failed: ${err}`, 'error');
         });
         return;
       }
@@ -797,16 +796,16 @@ export function useKeyboardNavigation({
     }
 
     // ============================================================
-    // ARCHIVE PANEL - Browse mode
+    // LOGS PANEL - Browse mode
     // ============================================================
-    if (state.activePanel === 'archive') {
-      const maxArchiveIndex = Math.max(0, state.archive.length - 1);
+    if (state.activePanel === 'logs') {
+      const maxArchiveIndex = Math.max(0, state.logs.length - 1);
 
-      // r - Refresh archive
+      // r - Refresh logs
       if (input === 'r') {
-        const result = loadArchive(filePath);
-        setState(prev => ({ ...prev, archive: result.archive }));
-        showStatus(setState, 'Archive refreshed', 'info');
+        const result = loadLogs(filePath);
+        setState(prev => ({ ...prev, logs: result.logs }));
+        showStatus(setState, 'Logs refreshed', 'info');
         return;
       }
 
@@ -814,7 +813,7 @@ export function useKeyboardNavigation({
       if (key.downArrow || input === 'j') {
         setState(prev => ({
           ...prev,
-          selectedArchiveIndex: Math.min(prev.selectedArchiveIndex + 1, maxArchiveIndex),
+          selectedLogIndex: Math.min(prev.selectedLogIndex + 1, maxArchiveIndex),
         }));
         return;
       }
@@ -822,23 +821,23 @@ export function useKeyboardNavigation({
       if (key.upArrow || input === 'k') {
         setState(prev => ({
           ...prev,
-          selectedArchiveIndex: Math.max(prev.selectedArchiveIndex - 1, 0),
+          selectedLogIndex: Math.max(prev.selectedLogIndex - 1, 0),
         }));
         return;
       }
 
       // Enter - Expand/collapse
       if (key.return) {
-        const task = state.archive[state.selectedArchiveIndex];
+        const task = state.logs[state.selectedLogIndex];
         if (task) {
           setState(prev => {
-            const newExpanded = new Set(prev.expandedArchiveIds);
+            const newExpanded = new Set(prev.expandedLogIds);
             if (newExpanded.has(task.id)) {
               newExpanded.delete(task.id);
             } else {
               newExpanded.add(task.id);
             }
-            return { ...prev, expandedArchiveIds: newExpanded };
+            return { ...prev, expandedLogIds: newExpanded };
           });
         }
         return;
@@ -846,31 +845,31 @@ export function useKeyboardNavigation({
 
       // r key for restore (use 'R' to avoid conflict with refresh)
       if (input === 'R') {
-        if (state.archive.length === 0) {
-          showStatus(setState, 'No archived tasks', 'error');
+        if (state.logs.length === 0) {
+          showStatus(setState, 'No logged tasks', 'error');
           return;
         }
-        setState(prev => ({ ...prev, mode: 'archive-restore', archiveRestoreColumnIndex: 0 }));
+        setState(prev => ({ ...prev, mode: 'logs-restore', logRestoreColumnIndex: 0 }));
         return;
       }
 
       // d - Delete permanently
       if (input === 'd') {
-        if (state.archive.length === 0) {
-          showStatus(setState, 'No archived tasks', 'error');
+        if (state.logs.length === 0) {
+          showStatus(setState, 'No logged tasks', 'error');
           return;
         }
-        setState(prev => ({ ...prev, mode: 'archive-delete-confirm' }));
+        setState(prev => ({ ...prev, mode: 'logs-delete-confirm' }));
         return;
       }
 
       // Home/End
       if (input === 'g') {
-        setState(prev => ({ ...prev, selectedArchiveIndex: 0 }));
+        setState(prev => ({ ...prev, selectedLogIndex: 0 }));
         return;
       }
       if (input === 'G') {
-        setState(prev => ({ ...prev, selectedArchiveIndex: maxArchiveIndex }));
+        setState(prev => ({ ...prev, selectedLogIndex: maxArchiveIndex }));
         return;
       }
 
@@ -878,7 +877,7 @@ export function useKeyboardNavigation({
       if (key.escape) {
         setState(prev => ({
           ...prev,
-          expandedArchiveIds: new Set(),
+          expandedLogIds: new Set(),
         }));
         return;
       }

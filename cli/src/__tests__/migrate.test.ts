@@ -31,7 +31,7 @@ describe('migrate command', () => {
     expect(fs.existsSync(legacyPath)).toBe(false);
     expect(fs.existsSync(targetPath)).toBe(true);
     expect(fs.readFileSync(targetPath, 'utf-8')).toBe(original);
-    expect(fs.readFileSync(gitignorePath, 'utf-8')).toContain('state.json');
+    expect(fs.readFileSync(gitignorePath, 'utf-8')).not.toContain('state.json');
   });
 });
 

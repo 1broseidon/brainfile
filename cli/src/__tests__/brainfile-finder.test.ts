@@ -5,6 +5,7 @@ import * as os from 'os';
 
 describe('brainfile-finder', () => {
   let tempDir: string;
+  const originalCwd = process.cwd();
 
   beforeEach(() => {
     // Create a temporary directory for each test
@@ -13,6 +14,7 @@ describe('brainfile-finder', () => {
   });
 
   afterEach(() => {
+    process.chdir(originalCwd);
     // Clean up temporary directory
     if (tempDir && fs.existsSync(tempDir)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
