@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v1/task.json",
+  "title": "Brainfile Task Schema",
+  "description": "Schema for standalone task documents. Each task is an individual .md file with YAML frontmatter (structured metadata) and an optional markdown body (narrative, log entries). Active tasks live in .brainfile/tasks/, completed tasks in .brainfile/logs/.",
+  "type": "object",
+  "required": ["id", "title"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique task identifier following pattern 'task-N'",
+      "pattern": "^task-[0-9]+$"
+    },
+    "title": {
+      "type": "string",
+      "description": "Task title",
+      "minLength": 1
+    },
+    "column": {
+      "type": "string",
+      "description": "Column ID this task belongs to. References a column.id in the board file. Required for active tasks in tasks/. Omitted for completed tasks in logs/ (replaced by completedAt).",
+      "pattern": "^[a-z]+(-[a-z]+)*$",
+      "minLength": 1
+    },
+    "position": {
+      "type": "integer",
+      "description": "Sort order within the column. Lower numbers appear first. Tasks without position are sorted after positioned tasks.",
+      "minimum": 0
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed task description (supports Markdown). This is the single source of truth for context and background - contracts should not duplicate this."
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Task assignee. Convention: external agents use plain names (codex, cursor, gemini, claude, human), internal subagents use @ prefix (@research, @review)."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Task tags for filtering and categorization",
+      "items": {
+        "type": "string"
+      }
+    },
+    "priority": {
+      "type": "string",
+      "description": "Task priority level",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "effort": {
+      "type": "string",
+      "description": "Effort estimation for planning",
+      "enum": ["trivial", "small", "medium", "large", "xlarge"]
+    },
+    "blockedBy": {
+      "type": "array",
+      "description": "List of task IDs that block this task",
+      "items": {
+        "type": "string",
+        "pattern": "^task-[0-9]+$"
+      }
+    },
+    "dueDate": {
+      "type": "string",
+      "description": "Due date in ISO 8601 format",
+      "format": "date"
+    },
+    "createdAt": {
+      "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+      "description": "When the task was created"
+    },
+    "updatedAt": {
+      "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+      "description": "When the task was last updated"
+    },
+    "completedAt": {
+      "$ref": "https://brainfile.md/v1/base.json#/definitions/timestamp",
+      "description": "When the task was completed. Set automatically when a task file is moved from tasks/ to logs/."
+    },
+    "relatedFiles": {
+      "type": "array",
+      "description": "Related file paths or code locations. This is the single source of truth for relevant files - contracts should not duplicate this.",
+      "items": {
+        "type": "string"
+      }
+    },
+    "subtasks": {
+      "type": "array",
+      "description": "Subtasks for tracking granular progress",
+      "items": {
+        "$ref": "#/definitions/subtask"
+      }
+    },
+    "template": {
+      "type": "string",
+      "description": "Task template type used to create this task",
+      "enum": ["bug", "feature", "refactor"]
+    },
+    "contract": {
+      "$ref": "https://brainfile.md/v1/contract.json"
+    }
+  },
+  "if": {
+    "not": {
+      "required": ["completedAt"]
+    }
+  },
+  "then": {
+    "required": ["column"]
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "subtask": {
+      "type": "object",
+      "required": ["id", "title", "completed"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique subtask identifier, typically 'task-N-M' pattern",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "description": "Subtask title",
+          "minLength": 1
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Whether the subtask is completed"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

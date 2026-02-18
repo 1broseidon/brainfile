@@ -2,19 +2,24 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brainfile.md/v1/contract.json",
   "title": "Brainfile Contract Schema",
-  "description": "Schema for task contracts (PM-to-agent workflows). Contracts are an optional extension on tasks that define deliverables, validation commands, constraints, and status tracking.",
+  "description": "Schema for task contracts (PM-to-agent workflows). Contracts are an optional extension on tasks that define deliverables, validation commands, constraints, and status tracking. In v2, context.background and context.relevantFiles are removed in favor of task.description and task.relatedFiles as the single source of truth.",
   "type": "object",
   "required": ["status"],
   "properties": {
     "status": {
       "type": "string",
-      "description": "Contract lifecycle status",
-      "enum": ["draft", "ready", "in_progress", "delivered", "done", "failed"],
-      "examples": ["ready", "in_progress", "delivered"]
+      "description": "Contract lifecycle status. In v2, 'draft' is removed (contracts start at 'ready') and 'blocked' is added for external dependency issues.",
+      "enum": ["ready", "in_progress", "delivered", "done", "failed", "blocked"]
+    },
+    "version": {
+      "type": "integer",
+      "description": "Contract version number. Increment when amending the contract so agents can detect changes. Starts at 1.",
+      "minimum": 1,
+      "default": 1
     },
     "deliverables": {
       "type": "array",
-      "description": "Optional list of deliverables the agent must produce",
+      "description": "List of deliverables the agent must produce",
       "items": {
         "$ref": "#/definitions/deliverable"
       }
@@ -24,11 +29,26 @@
     },
     "constraints": {
       "type": "array",
-      "description": "Optional list of implementation constraints to follow",
+      "description": "Implementation constraints the agent must follow",
       "items": {
         "type": "string",
         "minLength": 1
       }
+    },
+    "outOfScope": {
+      "type": "array",
+      "description": "Items explicitly out of scope for this contract. Agents must not implement these.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "feedback": {
+      "type": "string",
+      "description": "Rework guidance from the PM after a failed validation. Only present when status is 'failed' or after rework. Contains specific instructions for what needs to be fixed."
+    },
+    "metrics": {
+      "$ref": "#/definitions/metrics"
     },
     "context": {
       "$ref": "#/definitions/context"
@@ -39,17 +59,17 @@
     "deliverable": {
       "type": "object",
       "description": "A single deliverable required by the contract",
-      "required": ["type", "path"],
+      "required": ["path"],
       "properties": {
         "type": {
           "type": "string",
-          "description": "Deliverable category (e.g. file, test, docs)",
+          "description": "Optional deliverable category. Common values: file, test, docs, design, research. Can be omitted when the type is obvious from the path.",
           "minLength": 1,
-          "examples": ["file", "test", "docs"]
+          "examples": ["file", "test", "docs", "design", "research"]
         },
         "path": {
           "type": "string",
-          "description": "Path or identifier for the deliverable",
+          "description": "Path or identifier for the deliverable, relative to project root",
           "minLength": 1,
           "examples": ["src/rateLimiter.ts", "docs/api.md"]
         },
@@ -62,11 +82,11 @@
     },
     "validation": {
       "type": "object",
-      "description": "Optional validation configuration (stored only; execution is tool-specific)",
+      "description": "Optional validation configuration. When commands are defined, 'contract validate' runs them automatically. When absent, PM uses manual approval via 'contract approve'.",
       "properties": {
         "commands": {
           "type": "array",
-          "description": "Shell commands that can be run to validate the deliverables",
+          "description": "Shell commands to run to validate the deliverables. Commands run sequentially; any failure marks the contract as failed.",
           "items": {
             "type": "string",
             "minLength": 1
@@ -76,17 +96,53 @@
       },
       "additionalProperties": true
     },
+    "metrics": {
+      "type": "object",
+      "description": "Automatically tracked contract metrics. Managed by the CLI/MCP tools, not manually edited.",
+      "properties": {
+        "pickedUpAt": {
+          "type": "string",
+          "description": "When the agent claimed the contract (ISO 8601)",
+          "format": "date-time"
+        },
+        "deliveredAt": {
+          "type": "string",
+          "description": "When the agent marked the contract as delivered (ISO 8601)",
+          "format": "date-time"
+        },
+        "validatedAt": {
+          "type": "string",
+          "description": "When the PM validated the contract (ISO 8601)",
+          "format": "date-time"
+        },
+        "duration": {
+          "type": "integer",
+          "description": "Time between pickup and delivery in seconds",
+          "minimum": 0
+        },
+        "reworkCount": {
+          "type": "integer",
+          "description": "Number of times the contract was re-picked up after failure",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "additionalProperties": true
+    },
     "context": {
       "type": "object",
-      "description": "Optional additional context for the contract",
+      "description": "Deprecated in v2. In v2, use task.description for background and task.relatedFiles for relevant files. The outOfScope field has been promoted to a top-level contract property. This object is retained for v1 backward compatibility.",
+      "x-brainfile-deprecated": true,
       "properties": {
         "background": {
           "type": "string",
-          "description": "Optional background context for the agent"
+          "description": "Deprecated in v2. Use task.description instead.",
+          "x-brainfile-deprecated": true
         },
         "relevantFiles": {
           "type": "array",
-          "description": "Optional list of relevant file paths or code locations",
+          "description": "Deprecated in v2. Use task.relatedFiles instead.",
+          "x-brainfile-deprecated": true,
           "items": {
             "type": "string",
             "minLength": 1
@@ -94,7 +150,8 @@
         },
         "outOfScope": {
           "type": "array",
-          "description": "Optional list of items explicitly out of scope for this work",
+          "description": "Deprecated in v2. Use contract.outOfScope (top-level) instead.",
+          "x-brainfile-deprecated": true,
           "items": {
             "type": "string",
             "minLength": 1

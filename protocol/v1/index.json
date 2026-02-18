@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Brainfile v1 Schema Directory",
   "description": "Official schemas hosted at brainfile.md/v1/",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "baseUrl": "https://brainfile.md/v1",
   "schemas": {
     "base": {
@@ -18,7 +18,7 @@
     "board": {
       "id": "board",
       "title": "Board Schema",
-      "description": "Kanban-style task boards with columns and tasks",
+      "description": "Kanban-style task boards. In v2, config-only (columns, rules, metadata). Tasks are standalone files validated against task.json.",
       "url": "https://brainfile.md/v1/board.json",
       "status": "stable",
       "extends": "base",
@@ -29,15 +29,28 @@
         "https://brainfile.md/example/board.md"
       ]
     },
+    "task": {
+      "id": "task",
+      "title": "Task Schema",
+      "description": "Standalone task document for per-task file architecture. Each task is an individual .md file with YAML frontmatter (metadata) and optional markdown body (narrative, log).",
+      "url": "https://brainfile.md/v1/task.json",
+      "status": "stable",
+      "extends": null,
+      "requiredFields": ["id", "title"],
+      "conditionallyRequired": ["column (required for active tasks, omitted for completed tasks)"],
+      "optionalFields": ["position", "description", "assignee", "tags", "priority", "effort", "blockedBy", "dueDate", "createdAt", "updatedAt", "completedAt", "relatedFiles", "subtasks", "template", "contract"],
+      "filePattern": ".brainfile/tasks/*.md",
+      "completedFilePattern": ".brainfile/logs/*.md"
+    },
     "contract": {
       "id": "contract",
       "title": "Contract Schema",
-      "description": "Task contract object used by boards (Task.contract)",
+      "description": "Task contract object for PM-to-agent workflows (Task.contract). In v2, context is deprecated in favor of task.description and task.relatedFiles.",
       "url": "https://brainfile.md/v1/contract.json",
       "status": "stable",
       "extends": null,
       "requiredFields": ["status"],
-      "optionalFields": ["deliverables", "validation", "constraints", "context"]
+      "optionalFields": ["version", "deliverables", "validation", "constraints", "outOfScope", "feedback", "metrics", "context"]
     }
   },
   "links": {

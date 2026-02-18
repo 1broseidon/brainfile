@@ -2,10 +2,9 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brainfile.md/v1/board.json",
   "title": "Brainfile Board Schema",
-  "description": "Schema for Kanban-style task boards with columns and tasks",
+  "description": "Schema for Kanban-style task boards. In v2 (per-task file architecture), the board file is config-only: it defines columns, rules, and project metadata. Tasks are standalone .md files in .brainfile/tasks/ (active) and .brainfile/logs/ (completed), each validated against task.json. In v1 (legacy), tasks are embedded in column arrays within this file.",
   "x-brainfile-renderer": "kanban",
   "x-brainfile-columns-path": "$.columns",
-  "x-brainfile-items-path": "$.columns[*].tasks",
   "x-brainfile-title-field": "title",
   "x-brainfile-status-field": "priority",
   "allOf": [
@@ -21,7 +20,7 @@
         },
         "columns": {
           "type": "array",
-          "description": "Task columns (e.g., To Do, In Progress, Done)",
+          "description": "Board columns defining workflow stages. In v2, columns are config-only (no embedded tasks). In v1 (legacy), columns may contain a tasks array.",
           "minItems": 1,
           "items": {
             "$ref": "#/definitions/column"
@@ -43,7 +42,8 @@
         },
         "archive": {
           "type": "array",
-          "description": "Archived tasks removed from active columns",
+          "description": "Deprecated in v2. In v1, holds archived tasks removed from active columns. In v2, completed tasks live as individual files in .brainfile/logs/.",
+          "x-brainfile-deprecated": true,
           "items": {
             "$ref": "#/definitions/task"
           }
@@ -55,11 +55,11 @@
   "definitions": {
     "column": {
       "type": "object",
-      "required": ["id", "title", "tasks"],
+      "required": ["id", "title"],
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique column identifier in kebab-case (e.g., 'todo', 'in-progress')",
+          "description": "Unique column identifier in kebab-case (e.g., 'todo', 'in-progress'). Referenced by task.column in per-task files.",
           "pattern": "^[a-z]+(-[a-z]+)*$",
           "minLength": 1
         },
@@ -80,7 +80,8 @@
         },
         "tasks": {
           "type": "array",
-          "description": "Tasks in this column",
+          "description": "Deprecated in v2. In v1, holds tasks embedded in this column. In v2, task membership is declared via the column field in each task's frontmatter (see task.json).",
+          "x-brainfile-deprecated": true,
           "items": {
             "$ref": "#/definitions/task"
           }
@@ -90,6 +91,9 @@
     },
     "task": {
       "type": "object",
+      "description": "Deprecated in v2. Inline task definition for v1 backward compatibility. In v2, use the standalone task.json schema instead.",
+      "x-brainfile-deprecated": true,
+      "x-brainfile-see": "https://brainfile.md/v1/task.json",
       "required": ["id", "title"],
       "properties": {
         "id": {
