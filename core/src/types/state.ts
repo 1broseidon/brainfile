@@ -1,8 +1,7 @@
 /**
- * Agent state persisted in `.brainfile/state.json`.
+ * @deprecated Legacy state model from `.brainfile/state.json`.
  *
- * This file is intended for machine-managed metadata (pickup versions, caches, etc.)
- * and should be git-ignored by default.
+ * Brainfile no longer persists state.json. These types remain for compatibility only.
  */
 
 export const BRAINFILE_STATE_VERSION = '1.0.0' as const;

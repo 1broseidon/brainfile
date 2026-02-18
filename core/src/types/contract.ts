@@ -65,11 +65,19 @@ export interface ContractContext {
 /**
  * A contract attached to a task.
  */
+export interface ContractMetrics {
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  duration?: number;
+  reworkCount?: number;
+}
+
 export interface Contract {
   status: ContractStatus;
   deliverables?: Deliverable[];
   validation?: ValidationConfig;
   constraints?: string[];
   context?: ContractContext;
+  metrics?: ContractMetrics;
 }
 

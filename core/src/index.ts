@@ -101,6 +101,14 @@ export {
   deleteRule,
 } from './operations';
 
+// Export strict board validation helpers
+export {
+  getBoardTypes,
+  validateType,
+  validateColumn,
+  type BoardValidationResult,
+} from './boardValidation';
+
 // Export query functions
 export {
   findColumnById,
@@ -151,7 +159,7 @@ export {
   type WatchResult,
 } from './discovery';
 
-// Export filesystem helpers (brainfile path resolution + .brainfile state)
+// Export filesystem helpers (brainfile path resolution + .brainfile helpers)
 export {
   findBrainfile,
   resolveBrainfilePath,
@@ -160,10 +168,6 @@ export {
   getDotBrainfileGitignorePath,
   ensureDotBrainfileDir,
   ensureDotBrainfileGitignore,
-  readBrainfileState,
-  writeBrainfileState,
-  updateBrainfileState,
-  recordContractPickup,
   DOT_BRAINFILE_DIRNAME,
   BRAINFILE_BASENAME,
   BRAINFILE_STATE_BASENAME,
@@ -209,6 +213,22 @@ export {
   searchTaskFiles,
   searchLogs,
 } from './taskOperations';
+
+// Export v2 workspace helpers (directory detection, board reconstruction, body helpers)
+export {
+  type V2Dirs,
+  getV2Dirs,
+  isV2,
+  ensureV2Dirs,
+  getTaskFilePath,
+  getLogFilePath,
+  findV2Task,
+  extractDescription,
+  extractLog,
+  composeBody,
+  readV2BoardConfig,
+  buildBoardFromV2,
+} from './workspace';
 
 // Re-export commonly used interfaces for convenience
 export type {

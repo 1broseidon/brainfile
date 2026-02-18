@@ -64,7 +64,7 @@ describe('Query Functions', () => {
               tags: ['bug'],
               priority: 'high',
               assignee: 'Alice',
-              dueDate: '2025-12-31T00:00:00Z'
+              dueDate: '2027-12-31T00:00:00Z'
             }
           ]
         },
@@ -527,7 +527,7 @@ describe('Query Functions', () => {
     });
 
     it('should use current date by default', () => {
-      // task-1 is overdue (2024-01-01), task-3 is future (2025-12-31)
+      // task-1 is overdue (2024-01-01), task-3 is future (2027-12-31)
       const tasks = getOverdueTasks(mockBoard);
       expect(tasks).toHaveLength(1);
       expect(tasks[0].id).toBe('task-1');

@@ -71,6 +71,10 @@ export interface Subtask {
 export interface Task {
   id: string;
   title: string;
+  /** Optional parent task/document ID for first-class parent-child linking. */
+  parentId?: string;
+  /** Document type (e.g., 'epic', 'adr', 'bug'). Determines ID prefix when generating IDs. */
+  type?: string;
   description?: string;
   relatedFiles?: string[];
   assignee?: string;
@@ -93,7 +97,7 @@ export interface Task {
 
 /**
  * A task document wrapping the YAML frontmatter metadata and markdown body.
- * Represents a standalone task file in `.brainfile/tasks/` or `.brainfile/logs/`.
+ * Represents a standalone task file in `.brainfile/board/` or `.brainfile/logs/`.
  */
 export interface TaskDocument {
   /** Task metadata parsed from YAML frontmatter */

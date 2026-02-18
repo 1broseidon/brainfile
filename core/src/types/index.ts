@@ -11,7 +11,6 @@ export * from './enums';
 
 // Contracts (optional task extension)
 export * from './contract';
-export * from './state';
 
 // Type-specific definitions
 export * from './board';

@@ -4,13 +4,19 @@
 
 import type { Board } from './types';
 
+/** Default prefix for task IDs */
+const DEFAULT_PREFIX = 'task';
+
 /**
- * Extract numeric ID from task ID string
- * @param taskId - Task ID like "task-123"
+ * Extract numeric ID from a prefixed ID string.
+ * Also matches subtask IDs (e.g., "task-42-1" returns 42).
+ * @param taskId - ID like "task-123", "task-42-1", or "epic-5"
+ * @param prefix - Prefix to match (default: "task")
  * @returns Numeric portion or 0 if not parseable
  */
-export function extractTaskIdNumber(taskId: string): number {
-  const match = taskId.match(/task-(\d+)/);
+export function extractTaskIdNumber(taskId: string, prefix: string = DEFAULT_PREFIX): number {
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = taskId.match(new RegExp(`${escaped}-(\\d+)`));
   return match ? parseInt(match[1], 10) : 0;
 }
 
@@ -65,29 +71,38 @@ export function generateNextSubtaskId(taskId: string, existingSubtaskIds: string
 }
 
 /**
- * Validate task ID format
+ * Validate task ID format.
+ * Accepts "task-N" by default, or "{prefix}-N" when a prefix is provided.
  * @param taskId - Task ID to validate
- * @returns True if valid format (task-N)
+ * @param prefix - Optional prefix (default: "task")
+ * @returns True if valid format
  */
-export function isValidTaskId(taskId: string): boolean {
-  return /^task-\d+$/.test(taskId);
+export function isValidTaskId(taskId: string, prefix: string = DEFAULT_PREFIX): boolean {
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped}-\\d+$`).test(taskId);
 }
 
 /**
- * Validate subtask ID format
+ * Validate subtask ID format.
+ * Accepts "task-N-M" by default, or "{prefix}-N-M" when a prefix is provided.
  * @param subtaskId - Subtask ID to validate
- * @returns True if valid format (task-N-M)
+ * @param prefix - Optional prefix (default: "task")
+ * @returns True if valid format
  */
-export function isValidSubtaskId(subtaskId: string): boolean {
-  return /^task-\d+-\d+$/.test(subtaskId);
+export function isValidSubtaskId(subtaskId: string, prefix: string = DEFAULT_PREFIX): boolean {
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^${escaped}-\\d+-\\d+$`).test(subtaskId);
 }
 
 /**
- * Extract parent task ID from subtask ID
- * @param subtaskId - Subtask ID like "task-42-1"
+ * Extract parent task ID from subtask ID.
+ * Accepts "task-N-M" by default, or "{prefix}-N-M" when a prefix is provided.
+ * @param subtaskId - Subtask ID like "task-42-1" or "epic-3-2"
+ * @param prefix - Optional prefix (default: "task")
  * @returns Parent task ID like "task-42", or undefined if invalid
  */
-export function getParentTaskId(subtaskId: string): string | undefined {
-  const match = subtaskId.match(/^(task-\d+)-\d+$/);
+export function getParentTaskId(subtaskId: string, prefix: string = DEFAULT_PREFIX): string | undefined {
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = subtaskId.match(new RegExp(`^(${escaped}-\\d+)-\\d+$`));
   return match ? match[1] : undefined;
 }

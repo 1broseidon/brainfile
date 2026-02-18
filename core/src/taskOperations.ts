@@ -1,7 +1,7 @@
 /**
  * File-based task operations for per-task file architecture (v2).
  *
- * These functions operate on individual task files in `.brainfile/tasks/`
+ * These functions operate on individual task files in `.brainfile/board/`
  * and `.brainfile/logs/`. Unlike the v1 board operations (operations.ts),
  * these have filesystem side effects (reading/writing/moving files).
  *
@@ -39,6 +39,10 @@ export interface TaskFileInput {
   relatedFiles?: string[];
   template?: 'bug' | 'feature' | 'refactor';
   subtasks?: string[];
+  /** Optional parent task/document ID for first-class parent-child linking. */
+  parentId?: string;
+  /** Document type (e.g., 'epic', 'adr'). When set, IDs use this as prefix (epic-1, adr-1). */
+  type?: string;
 }
 
 /**
@@ -49,22 +53,112 @@ export interface TaskFilters {
   tag?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
   assignee?: string;
+  parentId?: string;
+}
+
+interface ChildTaskSummary {
+  id: string;
+  title: string;
+}
+
+function appendBodySection(body: string, section: string): string {
+  const trimmed = body.trimEnd();
+  if (!trimmed) {
+    return `${section}\n`;
+  }
+  return `${trimmed}\n\n${section}\n`;
+}
+
+function extractEpicChildTaskIds(task: Task): string[] {
+  const rawSubtasks = (task as { subtasks?: unknown }).subtasks;
+  if (!Array.isArray(rawSubtasks)) {
+    return [];
+  }
+
+  const childIds: string[] = [];
+
+  for (const subtask of rawSubtasks) {
+    if (typeof subtask === 'string' && subtask.trim() !== '') {
+      childIds.push(subtask.trim());
+      continue;
+    }
+
+    if (subtask && typeof subtask === 'object') {
+      const candidateId = (subtask as { id?: unknown }).id;
+      if (typeof candidateId === 'string' && candidateId.trim() !== '') {
+        childIds.push(candidateId.trim());
+      }
+    }
+  }
+
+  return [...new Set(childIds)];
+}
+
+function resolveChildTasks(
+  epicId: string,
+  childIds: string[],
+  boardDir: string,
+  logsDir: string,
+): ChildTaskSummary[] {
+  const docs = [...readTasksDir(boardDir), ...readTasksDir(logsDir)];
+
+  // Prefer first-class parentId links when present.
+  const linked = docs.filter((doc) => doc.task.parentId === epicId);
+  if (linked.length > 0) {
+    return linked.map((doc) => ({ id: doc.task.id, title: doc.task.title }));
+  }
+
+  if (childIds.length === 0) {
+    return [];
+  }
+
+  const titleById = new Map<string, string>();
+  for (const doc of docs) {
+    if (!titleById.has(doc.task.id)) {
+      titleById.set(doc.task.id, doc.task.title);
+    }
+  }
+
+  const childTasks: ChildTaskSummary[] = [];
+  for (const childId of childIds) {
+    const title = titleById.get(childId);
+    if (title) {
+      childTasks.push({ id: childId, title });
+    }
+  }
+
+  return childTasks;
+}
+
+function buildChildTasksSection(childTasks: ChildTaskSummary[]): string {
+  if (childTasks.length === 0) {
+    return '## Child Tasks\nNo child tasks recorded.';
+  }
+
+  const lines = childTasks.map((child) => `- ${child.id}: ${child.title}`);
+  return `## Child Tasks\n${lines.join('\n')}`;
 }
 
 /**
  * Generate the next task ID by scanning an existing tasks directory.
  *
- * @param tasksDir - Path to the tasks directory
+ * When `typePrefix` is provided (e.g., "epic"), generates IDs like `epic-1`
+ * and only scans for IDs matching that prefix. Defaults to "task".
+ *
+ * @param boardDir - Path to the tasks directory
  * @param logsDir - Optional path to the logs directory (also scanned for used IDs)
- * @returns Next available task ID (e.g., `task-42`)
+ * @param typePrefix - Optional ID prefix (default: "task"). E.g., "epic" produces "epic-1".
+ * @returns Next available ID (e.g., `task-42` or `epic-1`)
  */
-export function generateNextFileTaskId(tasksDir: string, logsDir?: string): string {
+export function generateNextFileTaskId(boardDir: string, logsDir?: string, typePrefix: string = 'task'): string {
   let maxNum = 0;
+  const escaped = typePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`^${escaped}-(\\d+)$`);
 
   const scanDir = (dir: string) => {
     const docs = readTasksDir(dir);
     for (const doc of docs) {
-      const match = doc.task.id.match(/task-(\d+)/);
+      const match = doc.task.id.match(pattern);
       if (match) {
         const num = parseInt(match[1], 10);
         if (num > maxNum) maxNum = num;
@@ -72,25 +166,25 @@ export function generateNextFileTaskId(tasksDir: string, logsDir?: string): stri
     }
   };
 
-  scanDir(tasksDir);
+  scanDir(boardDir);
   if (logsDir) {
     scanDir(logsDir);
   }
 
-  return `task-${maxNum + 1}`;
+  return `${typePrefix}-${maxNum + 1}`;
 }
 
 /**
  * Add a new task file to the tasks directory.
  *
- * @param tasksDir - Absolute path to `.brainfile/tasks/`
+ * @param boardDir - Absolute path to `.brainfile/board/`
  * @param input - Task creation input
  * @param body - Optional markdown body content
  * @param logsDir - Optional logs directory to scan for used IDs
  * @returns TaskOperationResult with the created task
  */
 export function addTaskFile(
-  tasksDir: string,
+  boardDir: string,
   input: TaskFileInput,
   body: string = '',
   logsDir?: string,
@@ -103,7 +197,9 @@ export function addTaskFile(
     return { success: false, error: 'Task column is required' };
   }
 
-  const taskId = input.id || generateNextFileTaskId(tasksDir, logsDir);
+  // Determine ID prefix from type (e.g., type="epic" -> prefix "epic" -> "epic-1")
+  const typePrefix = input.type || 'task';
+  const taskId = input.id || generateNextFileTaskId(boardDir, logsDir, typePrefix);
   const now = new Date().toISOString();
 
   // Build subtasks if provided
@@ -116,6 +212,7 @@ export function addTaskFile(
   const task: Task = {
     id: taskId,
     title: input.title.trim(),
+    ...(input.type && { type: input.type }),
     column: input.column.trim(),
     ...(input.position !== undefined && { position: input.position }),
     ...(input.description && { description: input.description.trim() }),
@@ -125,11 +222,12 @@ export function addTaskFile(
     ...(input.dueDate && { dueDate: input.dueDate }),
     ...(input.relatedFiles && input.relatedFiles.length > 0 && { relatedFiles: input.relatedFiles }),
     ...(input.template && { template: input.template }),
+    ...(input.parentId && input.parentId.trim().length > 0 && { parentId: input.parentId.trim() }),
     ...(subtasks && subtasks.length > 0 && { subtasks }),
     createdAt: now,
   };
 
-  const filePath = path.join(tasksDir, taskFileName(taskId));
+  const filePath = path.join(boardDir, taskFileName(taskId));
 
   try {
     writeTaskFile(filePath, task, body);
@@ -176,9 +274,9 @@ export function moveTaskFile(
 }
 
 /**
- * Complete a task by moving its file from tasks/ to logs/ and adding completedAt.
+ * Complete a task by moving its file from board/ to logs/ and adding completedAt.
  *
- * @param taskPath - Absolute path to the task file in tasks/
+ * @param taskPath - Absolute path to the task file in board/
  * @param logsDir - Absolute path to the logs directory
  * @returns TaskOperationResult with the completed task
  */
@@ -202,10 +300,19 @@ export function completeTaskFile(
   };
 
   const destPath = path.join(logsDir, path.basename(taskPath));
+  let completedBody = doc.body;
+
+  if (doc.task.type === 'epic') {
+    const boardDir = path.dirname(taskPath);
+    const childIds = extractEpicChildTaskIds(doc.task);
+    const childTasks = resolveChildTasks(doc.task.id, childIds, boardDir, logsDir);
+    const childTasksSection = buildChildTasksSection(childTasks);
+    completedBody = appendBodySection(doc.body, childTasksSection);
+  }
 
   try {
     fs.mkdirSync(logsDir, { recursive: true });
-    writeTaskFile(destPath, completedTask, doc.body);
+    writeTaskFile(destPath, completedTask, completedBody);
     fs.unlinkSync(taskPath);
     return { success: true, task: completedTask, filePath: destPath };
   } catch (err) {
@@ -295,15 +402,15 @@ export function appendLog(
  * List tasks from a directory, with optional filters.
  * Results are grouped by column and sorted by position.
  *
- * @param tasksDir - Absolute path to the tasks directory
+ * @param boardDir - Absolute path to the tasks directory
  * @param filters - Optional filters to apply
  * @returns Array of TaskDocument objects, sorted by column and position
  */
 export function listTasks(
-  tasksDir: string,
+  boardDir: string,
   filters?: TaskFilters,
 ): TaskDocument[] {
-  let docs = readTasksDir(tasksDir);
+  let docs = readTasksDir(boardDir);
 
   if (filters) {
     if (filters.column) {
@@ -317,6 +424,9 @@ export function listTasks(
     }
     if (filters.assignee) {
       docs = docs.filter((d) => d.task.assignee === filters.assignee);
+    }
+    if (filters.parentId) {
+      docs = docs.filter((d) => d.task.parentId === filters.parentId);
     }
   }
 
@@ -340,39 +450,39 @@ export function listTasks(
  * First attempts direct file lookup by convention (`{taskId}.md`),
  * then falls back to scanning all files.
  *
- * @param tasksDir - Absolute path to the tasks directory
+ * @param boardDir - Absolute path to the tasks directory
  * @param taskId - Task ID to find
  * @returns TaskDocument or null if not found
  */
 export function findTask(
-  tasksDir: string,
+  boardDir: string,
   taskId: string,
 ): TaskDocument | null {
   // Fast path: try convention-based filename
-  const directPath = path.join(tasksDir, taskFileName(taskId));
+  const directPath = path.join(boardDir, taskFileName(taskId));
   const directDoc = readTaskFile(directPath);
   if (directDoc && directDoc.task.id === taskId) {
     return directDoc;
   }
 
   // Slow path: scan all files
-  const docs = readTasksDir(tasksDir);
+  const docs = readTasksDir(boardDir);
   return docs.find((d) => d.task.id === taskId) || null;
 }
 
 /**
  * Search tasks by query string across title, description, and body.
  *
- * @param tasksDir - Absolute path to the tasks directory
+ * @param boardDir - Absolute path to the tasks directory
  * @param query - Search query (case-insensitive substring match)
  * @returns Array of matching TaskDocument objects
  */
 export function searchTaskFiles(
-  tasksDir: string,
+  boardDir: string,
   query: string,
 ): TaskDocument[] {
   const normalizedQuery = query.toLowerCase();
-  const docs = readTasksDir(tasksDir);
+  const docs = readTasksDir(boardDir);
 
   return docs.filter((doc) => {
     const titleMatch = doc.task.title.toLowerCase().includes(normalizedQuery);

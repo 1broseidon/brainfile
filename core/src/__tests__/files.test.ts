@@ -3,10 +3,9 @@ import * as path from 'path';
 import * as os from 'os';
 import {
   findBrainfile,
-  readBrainfileState,
-  recordContractPickup,
-  getBrainfileStatePath,
+  ensureDotBrainfileGitignore,
   getDotBrainfileGitignorePath,
+  getBrainfileStatePath,
 } from '../utils/files';
 
 describe('utils/files', () => {
@@ -60,43 +59,22 @@ describe('utils/files', () => {
     });
   });
 
-  describe('state.json', () => {
-    it('returns default state when missing', () => {
+  describe('dot-brainfile helpers', () => {
+    it('creates .brainfile/.gitignore without state.json entry', () => {
       const brainfilePath = writeFile('brainfile.md', 'root');
 
-      const state = readBrainfileState(brainfilePath);
-
-      expect(state.version).toBe('1.0.0');
-      expect(state.contracts).toEqual({});
-      expect(state.agents).toEqual({});
-    });
-
-    it('records contract pickup with version increments and creates .gitignore', () => {
-      const brainfilePath = writeFile('brainfile.md', 'root');
-
-      recordContractPickup({ brainfilePath, taskId: 'task-1', agent: 'codex' });
-      recordContractPickup({ brainfilePath, taskId: 'task-1', agent: 'codex' });
-
-      const statePath = getBrainfileStatePath(brainfilePath);
-      expect(fs.existsSync(statePath)).toBe(true);
-
-      const parsed = JSON.parse(fs.readFileSync(statePath, 'utf-8'));
-      expect(parsed.contracts['task-1'].pickedUpVersion).toBe(2);
-      expect(parsed.contracts['task-1'].agent).toBe('codex');
+      ensureDotBrainfileGitignore(brainfilePath);
 
       const gitignorePath = getDotBrainfileGitignorePath(brainfilePath);
-      expect(fs.readFileSync(gitignorePath, 'utf-8')).toContain('state.json');
+      expect(fs.existsSync(gitignorePath)).toBe(true);
+      expect(fs.readFileSync(gitignorePath, 'utf-8')).not.toContain('state.json');
     });
 
-    it('stores state alongside .brainfile/brainfile.md', () => {
+    it('getBrainfileStatePath still resolves deprecated state path deterministically', () => {
       const brainfilePath = writeFile('.brainfile/brainfile.md', 'dotdir');
-
-      recordContractPickup({ brainfilePath, taskId: 'task-2', agent: 'codex' });
-
       const statePath = getBrainfileStatePath(brainfilePath);
+
       expect(statePath).toBe(path.join(testDir, '.brainfile', 'state.json'));
-      expect(fs.existsSync(statePath)).toBe(true);
     });
   });
 });
-

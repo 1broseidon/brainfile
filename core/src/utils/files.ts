@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { BRAINFILE_STATE_VERSION, type BrainfileState, type ContractState } from '../types/state';
 
 export const DOT_BRAINFILE_DIRNAME = '.brainfile';
 export const BRAINFILE_BASENAME = 'brainfile.md';
+/** @deprecated state.json is no longer used by Brainfile. */
 export const BRAINFILE_STATE_BASENAME = 'state.json';
 export const DOT_BRAINFILE_GITIGNORE_BASENAME = '.gitignore';
 
@@ -106,10 +106,10 @@ export function resolveBrainfilePath(options: ResolveBrainfilePathOptions = {}):
 }
 
 /**
- * Return the `.brainfile/` directory used for machine state for a given brainfile.
+ * Return the `.brainfile/` directory for a given brainfile.
  *
- * - If the brainfile itself is inside `.brainfile/`, state lives alongside it.
- * - Otherwise state lives in `<brainfileDir>/.brainfile/`.
+ * - If the brainfile itself is inside `.brainfile/`, returns that directory.
+ * - Otherwise returns `<brainfileDir>/.brainfile/`.
  */
 export function getBrainfileStateDir(brainfilePath: string): string {
   const abs = toAbsolute(brainfilePath);
@@ -118,6 +118,9 @@ export function getBrainfileStateDir(brainfilePath: string): string {
   return path.join(dir, DOT_BRAINFILE_DIRNAME);
 }
 
+/**
+ * @deprecated state.json is no longer used by Brainfile.
+ */
 export function getBrainfileStatePath(brainfilePath: string): string {
   return path.join(getBrainfileStateDir(brainfilePath), BRAINFILE_STATE_BASENAME);
 }
@@ -132,113 +135,16 @@ export function ensureDotBrainfileDir(brainfilePath: string): string {
   return dir;
 }
 
+/**
+ * Ensure `.brainfile/.gitignore` exists.
+ *
+ * Note: Brainfile no longer writes `state.json`, so no state entry is added.
+ */
 export function ensureDotBrainfileGitignore(brainfilePath: string): void {
   ensureDotBrainfileDir(brainfilePath);
   const gitignorePath = getDotBrainfileGitignorePath(brainfilePath);
-  const entry = `${BRAINFILE_STATE_BASENAME}\n`;
 
   if (!fs.existsSync(gitignorePath)) {
-    fs.writeFileSync(gitignorePath, entry, 'utf-8');
-    return;
+    fs.writeFileSync(gitignorePath, '', 'utf-8');
   }
-
-  const existing = fs.readFileSync(gitignorePath, 'utf-8');
-  const lines = existing.split(/\r?\n/);
-  const hasEntry = lines.some((line) => line.trim() === BRAINFILE_STATE_BASENAME);
-  if (hasEntry) return;
-
-  const needsNewline = existing.length > 0 && !existing.endsWith('\n');
-  const next = `${existing}${needsNewline ? '\n' : ''}${entry}`;
-  fs.writeFileSync(gitignorePath, next, 'utf-8');
-}
-
-function defaultState(): BrainfileState {
-  return {
-    version: BRAINFILE_STATE_VERSION,
-    contracts: {},
-    agents: {},
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function safeParseState(contents: string): BrainfileState {
-  try {
-    const parsed = JSON.parse(contents) as unknown;
-    if (!isRecord(parsed)) return defaultState();
-    const version = typeof parsed.version === 'string' ? parsed.version : BRAINFILE_STATE_VERSION;
-    const merged = { ...defaultState(), ...parsed, version };
-    return merged as BrainfileState;
-  } catch {
-    return defaultState();
-  }
-}
-
-export function readBrainfileState(brainfilePath: string): BrainfileState {
-  const statePath = getBrainfileStatePath(brainfilePath);
-  if (!fs.existsSync(statePath)) return defaultState();
-  const contents = fs.readFileSync(statePath, 'utf-8');
-  return safeParseState(contents);
-}
-
-export function writeBrainfileState(brainfilePath: string, state: BrainfileState): void {
-  ensureDotBrainfileDir(brainfilePath);
-  ensureDotBrainfileGitignore(brainfilePath);
-  const statePath = getBrainfileStatePath(brainfilePath);
-  fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
-}
-
-export function updateBrainfileState(
-  brainfilePath: string,
-  updater: (state: BrainfileState) => BrainfileState
-): BrainfileState {
-  const current = readBrainfileState(brainfilePath);
-  const next = updater(current);
-  writeBrainfileState(brainfilePath, next);
-  return next;
-}
-
-export function recordContractPickup(params: {
-  brainfilePath: string;
-  taskId: string;
-  agent?: string;
-  at?: Date;
-}): BrainfileState {
-  const at = params.at ?? new Date();
-  const atIso = at.toISOString();
-
-  return updateBrainfileState(params.brainfilePath, (state) => {
-    const contracts = { ...(state.contracts ?? {}) };
-    const existing = contracts[params.taskId];
-    const nextVersion = (existing?.pickedUpVersion ?? 0) + 1;
-
-    const nextContract: ContractState = {
-      pickedUpVersion: nextVersion,
-      pickedUpAt: atIso,
-      agent: params.agent,
-    };
-
-    contracts[params.taskId] = nextContract;
-
-    const agents = { ...(state.agents ?? {}) };
-    if (params.agent) {
-      const prevAgent = agents[params.agent] ?? {};
-      const active = new Set(prevAgent.activeContracts ?? []);
-      active.add(params.taskId);
-      agents[params.agent] = {
-        ...prevAgent,
-        lastSeen: atIso,
-        activeContracts: [...active],
-      };
-    }
-
-    return {
-      ...state,
-      version: state.version || BRAINFILE_STATE_VERSION,
-      contracts,
-      agents,
-    };
-  });
 }

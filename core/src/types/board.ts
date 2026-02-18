@@ -10,6 +10,8 @@ import { BrainfileBase, Task, StatsConfig } from './base';
  *
  * In v1 (embedded), columns contain tasks directly.
  * In v2 (per-task files), columns are config-only and tasks declare their column membership.
+ *
+ * Parent-child links use Task.parentId (declared in base.ts) and are independent of column layout.
  */
 export interface Column {
   id: string;
@@ -34,6 +36,25 @@ export interface ColumnConfig {
 }
 
 /**
+ * Per-type configuration entry for board document types.
+ */
+export interface TypeEntry {
+  /** Prefix used when generating IDs for this type. */
+  idPrefix: string;
+  /** Whether this type can be completed/archived like a task. */
+  completable?: boolean;
+  /** Optional schema URI/path for the type. */
+  schema?: string;
+}
+
+/**
+ * Map of type name -> type configuration.
+ */
+export interface TypesConfig {
+  [typeName: string]: TypeEntry;
+}
+
+/**
  * Board type - Kanban-style task board with columns
  * Extends BrainfileBase with board-specific fields
  */
@@ -47,10 +68,14 @@ export interface Board extends BrainfileBase {
 /**
  * v2 board config - config-only board without embedded tasks.
  * Used when the board file is the central config (columns, rules, agent) and
- * tasks live as individual files in `.brainfile/tasks/`.
+ * tasks live as individual files in `.brainfile/board/`.
  */
 export interface BoardConfig extends BrainfileBase {
   type?: 'board';
   columns: ColumnConfig[];
+  /** Enables strict validation of columns and types for CLI operations. */
+  strict?: boolean;
+  /** Optional per-type configuration used by strict type validation. */
+  types?: TypesConfig;
   statsConfig?: StatsConfig;
 }

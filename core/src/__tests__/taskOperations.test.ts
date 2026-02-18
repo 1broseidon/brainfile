@@ -73,6 +73,31 @@ describe('taskOperations', () => {
       seedLogTask('task-10');
       expect(generateNextFileTaskId(tasksDir, logsDir)).toBe('task-11');
     });
+
+    it('generates IDs with custom type prefix', () => {
+      expect(generateNextFileTaskId(tasksDir, undefined, 'epic')).toBe('epic-1');
+    });
+
+    it('increments custom prefix IDs based on existing matching tasks', () => {
+      seedTask('epic-1', 'todo');
+      seedTask('epic-3', 'todo');
+      seedTask('task-10', 'todo'); // should be ignored for epic prefix
+      expect(generateNextFileTaskId(tasksDir, undefined, 'epic')).toBe('epic-4');
+    });
+
+    it('ignores non-matching prefixes when scanning', () => {
+      seedTask('task-5', 'todo');
+      seedTask('adr-2', 'todo');
+      seedTask('epic-3', 'todo');
+      // Only scans for adr-* IDs
+      expect(generateNextFileTaskId(tasksDir, undefined, 'adr')).toBe('adr-3');
+    });
+
+    it('scans logs dir for custom prefix too', () => {
+      seedTask('epic-2', 'todo');
+      seedLogTask('epic-5');
+      expect(generateNextFileTaskId(tasksDir, logsDir, 'epic')).toBe('epic-6');
+    });
   });
 
   describe('addTaskFile', () => {
@@ -126,6 +151,21 @@ describe('taskOperations', () => {
       expect(result.task!.subtasks![1].id).toBe('task-1-2');
     });
 
+    it('sets parentId when provided', () => {
+      const result = addTaskFile(tasksDir, {
+        title: 'Child task',
+        column: 'todo',
+        parentId: 'epic-1',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.parentId).toBe('epic-1');
+
+      const doc = readTaskFile(result.filePath!);
+      expect(doc).not.toBeNull();
+      expect(doc!.task.parentId).toBe('epic-1');
+    });
+
     it('fails with empty title', () => {
       const result = addTaskFile(tasksDir, { title: '', column: 'todo' });
       expect(result.success).toBe(false);
@@ -148,6 +188,129 @@ describe('taskOperations', () => {
       expect(result.success).toBe(true);
       const doc = readTaskFile(result.filePath!);
       expect(doc!.body).toContain('## Notes');
+    });
+
+    it('creates task with type field and type-prefixed ID', () => {
+      const result = addTaskFile(tasksDir, {
+        title: 'Project roadmap',
+        column: 'todo',
+        type: 'epic',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.id).toBe('epic-1');
+      expect(result.task!.type).toBe('epic');
+      expect(result.filePath).toContain('epic-1.md');
+    });
+
+    it('creates adr-prefixed task', () => {
+      const result = addTaskFile(tasksDir, {
+        title: 'Use token bucket for rate limiting',
+        column: 'todo',
+        type: 'adr',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.id).toBe('adr-1');
+      expect(result.task!.type).toBe('adr');
+    });
+
+    it('increments typed IDs independently from task IDs', () => {
+      // Create some regular tasks
+      seedTask('task-5', 'todo');
+      seedTask('task-10', 'todo');
+
+      // Create an epic - should be epic-1, not affected by task-* IDs
+      const result = addTaskFile(tasksDir, {
+        title: 'First epic',
+        column: 'todo',
+        type: 'epic',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.id).toBe('epic-1');
+    });
+
+    it('increments typed IDs based on existing same-type tasks', () => {
+      seedTask('epic-1', 'todo');
+      seedTask('epic-3', 'todo');
+
+      const result = addTaskFile(tasksDir, {
+        title: 'Next epic',
+        column: 'todo',
+        type: 'epic',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.id).toBe('epic-4');
+    });
+
+    it('mixes multiple types in the same directory', () => {
+      seedTask('task-1', 'todo');
+      seedTask('epic-2', 'todo');
+      seedTask('adr-1', 'todo');
+
+      const epicResult = addTaskFile(tasksDir, {
+        title: 'New epic',
+        column: 'todo',
+        type: 'epic',
+      });
+
+      const adrResult = addTaskFile(tasksDir, {
+        title: 'New ADR',
+        column: 'todo',
+        type: 'adr',
+      });
+
+      const taskResult = addTaskFile(tasksDir, {
+        title: 'New task',
+        column: 'todo',
+      });
+
+      expect(epicResult.task!.id).toBe('epic-3');
+      expect(adrResult.task!.id).toBe('adr-2');
+      expect(taskResult.task!.id).toBe('task-2');
+    });
+
+    it('does not set type field when type is omitted', () => {
+      const result = addTaskFile(tasksDir, {
+        title: 'Plain task',
+        column: 'todo',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.id).toBe('task-1');
+      expect(result.task!.type).toBeUndefined();
+    });
+
+    it('type field roundtrips through file read/write', () => {
+      const result = addTaskFile(tasksDir, {
+        title: 'Typed task',
+        column: 'todo',
+        type: 'epic',
+      });
+
+      expect(result.success).toBe(true);
+
+      // Read the file back and verify type is preserved
+      const doc = readTaskFile(result.filePath!);
+      expect(doc).not.toBeNull();
+      expect(doc!.task.type).toBe('epic');
+      expect(doc!.task.id).toBe('epic-1');
+    });
+
+    it('creates subtasks with type-prefixed parent ID', () => {
+      const result = addTaskFile(tasksDir, {
+        title: 'Epic with subtasks',
+        column: 'todo',
+        type: 'epic',
+        subtasks: ['Sub A', 'Sub B'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.subtasks).toHaveLength(2);
+      expect(result.task!.subtasks![0].id).toBe('epic-1-1');
+      expect(result.task!.subtasks![1].id).toBe('epic-1-2');
     });
   });
 
@@ -225,6 +388,23 @@ describe('taskOperations', () => {
       const doc = readTaskFile(path.join(logsDir, 'task-1.md'));
       expect(doc!.body).toContain('## Log');
       expect(doc!.body).toContain('Started work');
+    });
+
+    it('prefers parentId-linked children in epic completion summary', () => {
+      seedTask('task-10', 'todo', { title: 'Linked child', parentId: 'epic-1' });
+      const epicPath = seedTask('epic-1', 'done', {
+        type: 'epic',
+        subtasks: [{ id: 'task-999', title: 'stale ref', completed: false }],
+      });
+
+      const result = completeTaskFile(epicPath, logsDir);
+      expect(result.success).toBe(true);
+
+      const doc = readTaskFile(path.join(logsDir, 'epic-1.md'));
+      expect(doc).not.toBeNull();
+      expect(doc!.body).toContain('## Child Tasks');
+      expect(doc!.body).toContain('- task-10: Linked child');
+      expect(doc!.body).not.toContain('stale ref');
     });
 
     it('creates logs directory if missing', () => {
@@ -367,6 +547,17 @@ describe('taskOperations', () => {
       seedTask('task-2', 'todo', { assignee: 'bob' });
 
       const docs = listTasks(tasksDir, { assignee: 'alice' });
+
+      expect(docs).toHaveLength(1);
+      expect(docs[0].task.id).toBe('task-1');
+    });
+
+    it('filters by parentId', () => {
+      seedTask('task-1', 'todo', { parentId: 'epic-1' });
+      seedTask('task-2', 'todo', { parentId: 'epic-2' });
+      seedTask('task-3', 'todo');
+
+      const docs = listTasks(tasksDir, { parentId: 'epic-1' });
 
       expect(docs).toHaveLength(1);
       expect(docs[0].task.id).toBe('task-1');
