@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-02-18
+
+### Added
+- **Per-task file architecture (v2)** - Tasks are now individual `.md` files instead of embedded YAML
+  - `brainfile init` creates v2 structure: `brainfile.md` (config), `tasks/`, `logs/`, `state.json`
+  - `brainfile migrate --v2` converts v1 boards to v2 per-task files (creates `.v1.bak` backup)
+  - All existing commands auto-detect v1 vs v2 and handle both transparently
+- **`brainfile complete`** - Move task from `tasks/` to `logs/` with `completedAt` timestamp
+  - Strips `column` and `position` fields from completed task
+  - `complete_task` MCP tool for parity
+- **`brainfile log`** - View and manage task history
+  - `brainfile log -t <id>` - View a completed task's log
+  - `brainfile log --search <query>` - Search across all completed task logs
+  - `brainfile log --recent` - List recently completed tasks
+  - `brainfile log note -t <id> "<message>"` - Append timestamped entry to any task's `## Log` section
+  - `search_logs` and `append_log` MCP tools for parity
+- **`brainfile search`** - Search across active tasks and completed logs with relevance scoring
+  - `search_tasks` MCP tool updated for v2
+
+### Changed
+- **All MCP tools have v2 support** - 29 tools detect v1/v2 and handle per-task files correctly
+  - Uses `@brainfile/core` as single source of truth for all task I/O operations
+  - CLI is a thin wrapper over core (no duplicated parsing/serialization logic)
+- **`brainfile init` defaults to v2** - Creates per-task file directory structure
+- Upgraded to @brainfile/core@^0.11.0
+
 ## [0.13.3] - 2026-01-01
 
 ### Added

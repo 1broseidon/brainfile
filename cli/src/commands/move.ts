@@ -1,9 +1,21 @@
 import * as fs from 'fs';
+import * as path from 'path';
 import { Brainfile, findTaskById, findColumnById, findColumnByName, moveTask, type Board, type Column, type Task } from '@brainfile/core';
 import { CLIError, fileNotFound, parseFailure, missingRequired, operationFailed, columnNotFound, taskNotFound } from '../utils/cli-error';
 import { defaultLogger, type Logger } from '../utils/logger';
 import { getIncompleteSubtasksWarning } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import {
+  readTaskFile,
+  readTasksDir,
+  writeTaskFile,
+  taskFileName,
+} from '@brainfile/core';
+import {
+  isV2,
+  getV2Dirs,
+  readV2BoardConfig,
+} from '../utils/v2-detect';
 
 interface MoveOptions {
   file: string;
@@ -34,6 +46,11 @@ export function moveCommand(options: MoveOptions, logger: Logger = defaultLogger
   // Check if file exists
   if (!fs.existsSync(filePath)) {
     throw fileNotFound(filePath);
+  }
+
+  // V2 per-task file architecture
+  if (isV2(filePath)) {
+    return moveCommandV2(options, filePath, logger);
   }
 
   // Read and parse the file
@@ -116,6 +133,71 @@ export function moveCommand(options: MoveOptions, logger: Logger = defaultLogger
     success: true,
     movedTask: foundTask,
     sourceColumn,
+    targetColumn
+  };
+}
+
+function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): MoveResult {
+  const dirs = getV2Dirs(filePath);
+  const board = readV2BoardConfig(filePath);
+  const taskPath = path.join(dirs.tasksDir, taskFileName(options.task));
+
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    throw taskNotFound(options.task);
+  }
+
+  const task = doc.task;
+  const sourceColumnId = task.column || '';
+
+  // Find source and target columns from board config
+  const sourceColumn = board.columns.find(c => c.id === sourceColumnId);
+  let targetColumn = board.columns.find(c => c.id === options.column);
+  if (!targetColumn) {
+    targetColumn = board.columns.find(c => c.title.toLowerCase() === options.column.toLowerCase());
+  }
+  if (!targetColumn) {
+    const availableColumns = board.columns.map(c => `${c.id} (${c.title})`);
+    throw columnNotFound(options.column, availableColumns);
+  }
+
+  if (sourceColumnId === targetColumn.id) {
+    logger.warn(`Task ${options.task} is already in column "${targetColumn.title}"`);
+    return {
+      success: true,
+      movedTask: task,
+      sourceColumn: sourceColumn || { id: sourceColumnId, title: sourceColumnId, tasks: [] },
+      targetColumn
+    };
+  }
+
+  // Calculate new position (append to end)
+  const targetTasks = readTasksDir(dirs.tasksDir)
+    .filter(t => t.task.column === targetColumn!.id);
+  const newPosition = targetTasks.length;
+
+  // Update task
+  task.column = targetColumn.id;
+  task.position = newPosition;
+  writeTaskFile(taskPath, task, doc.body);
+
+  logger.log('Task moved successfully!');
+  logger.log('');
+  logger.log(`  Task:   ${task.id} - ${task.title}`);
+  logger.log(`  From:   ${sourceColumn?.title || sourceColumnId}`);
+  logger.log(`  To:     ${targetColumn.title}`);
+
+  // Soft error: warn about incomplete subtasks when moving to done-like column
+  const warning = getIncompleteSubtasksWarning(task, targetColumn);
+  if (warning) {
+    logger.warn('');
+    logger.warn(warning);
+  }
+
+  return {
+    success: true,
+    movedTask: task,
+    sourceColumn: sourceColumn || { id: sourceColumnId, title: sourceColumnId, tasks: [] },
     targetColumn
   };
 }

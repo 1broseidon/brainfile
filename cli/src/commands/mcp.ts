@@ -49,6 +49,25 @@ import {
   removeFromArchive,
   getArchivePath,
 } from '../utils/archive';
+import {
+  readTaskFile as coreReadTaskFile,
+  writeTaskFile as coreWriteTaskFile,
+  readTasksDir,
+  taskFileName,
+  generateNextFileTaskId,
+  type TaskDocument,
+} from '@brainfile/core';
+import {
+  isV2,
+  getV2Dirs,
+  buildBoardFromV2,
+  findV2Task,
+  readV2BoardConfig,
+  ensureV2Dirs,
+  extractDescription,
+  extractLog,
+  composeBody,
+} from '../utils/v2-detect';
 
 interface McpOptions {
   file: string;
@@ -184,8 +203,27 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, column, tag }) => {
       const filePath = file || defaultFile;
-      const result = readBoard(filePath);
 
+      // V2: use per-task files
+      if (isV2(filePath)) {
+        const board = buildBoardFromV2(filePath);
+        let tasks: Array<{ id: string; title: string; column: string; priority?: string; tags?: string[]; assignee?: string }> = [];
+        for (const col of board.columns) {
+          if (column) {
+            const matchesId = col.id === column;
+            const matchesName = col.title.toLowerCase() === column.toLowerCase();
+            if (!matchesId && !matchesName) continue;
+          }
+          for (const task of col.tasks) {
+            if (tag && (!task.tags || !task.tags.includes(tag))) continue;
+            tasks.push({ id: task.id, title: task.title, column: col.title, priority: task.priority, tags: task.tags, assignee: task.assignee });
+          }
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ tasks, count: tasks.length }, null, 2) }] };
+      }
+
+      // V1: use board
+      const result = readBoard(filePath);
       if ('error' in result) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
@@ -194,7 +232,6 @@ export async function mcpCommand(options: McpOptions) {
       let tasks: Array<{ id: string; title: string; column: string; priority?: string; tags?: string[]; assignee?: string }> = [];
 
       for (const col of board.columns) {
-        // Filter by column if specified
         if (column) {
           const matchesId = col.id === column;
           const matchesName = col.title.toLowerCase() === column.toLowerCase();
@@ -202,7 +239,6 @@ export async function mcpCommand(options: McpOptions) {
         }
 
         for (const task of col.tasks) {
-          // Filter by tag if specified
           if (tag && (!task.tags || !task.tags.includes(tag))) continue;
 
           tasks.push({
@@ -236,8 +272,27 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task }) => {
       const filePath = file || defaultFile;
-      const result = readBoard(filePath);
 
+      // V2: use per-task files
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task, true);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+        const { doc, isLog } = found;
+        const description = extractDescription(doc.body);
+        const output = {
+          ...doc.task,
+          ...(description && !doc.task.description && { description }),
+          column: isLog ? 'Completed' : (doc.task.column || 'unknown'),
+          ...(isLog && { archived: true }),
+        };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+      }
+
+      // V1: use board
+      const result = readBoard(filePath);
       if ('error' in result) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
@@ -277,8 +332,57 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, query, column, priority, assignee }) => {
       const filePath = file || defaultFile;
-      const result = readBoard(filePath);
 
+      // V2: search per-task files
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const queryLower = query.toLowerCase();
+        let matches: Array<{ id: string; title: string; column?: string; priority?: string; tags?: string[]; assignee?: string; score: number; isLog?: boolean }> = [];
+
+        const taskDocs = readTasksDir(dirs.tasksDir);
+        for (const doc of taskDocs) {
+          const task = doc.task;
+          if (column && task.column !== column) continue;
+          if (priority && task.priority !== priority) continue;
+          if (assignee && task.assignee !== assignee) continue;
+
+          let score = 0;
+          if (task.title.toLowerCase().includes(queryLower)) { score += 10; if (task.title.toLowerCase().startsWith(queryLower)) score += 5; }
+          if (task.description?.toLowerCase().includes(queryLower)) score += 5;
+          if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) score += 3;
+          if (task.id.toLowerCase() === queryLower) score += 20;
+
+          if (score > 0) {
+            matches.push({ id: task.id, title: task.title, column: task.column, priority: task.priority, tags: task.tags, assignee: task.assignee, score });
+          }
+        }
+
+        // Also search logs
+        if (!column) {
+          const logDocs = readTasksDir(dirs.logsDir);
+          for (const doc of logDocs) {
+            const task = doc.task;
+            if (priority && task.priority !== priority) continue;
+            if (assignee && task.assignee !== assignee) continue;
+
+            let score = 0;
+            if (task.title.toLowerCase().includes(queryLower)) { score += 10; if (task.title.toLowerCase().startsWith(queryLower)) score += 5; }
+            if (task.description?.toLowerCase().includes(queryLower)) score += 5;
+            if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) score += 3;
+            if (task.id.toLowerCase() === queryLower) score += 20;
+
+            if (score > 0) {
+              matches.push({ id: task.id, title: task.title, column: 'Completed', priority: task.priority, tags: task.tags, assignee: task.assignee, score, isLog: true });
+            }
+          }
+        }
+
+        matches.sort((a, b) => b.score - a.score);
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ results: matches, count: matches.length }, null, 2) }] };
+      }
+
+      // V1: use board
+      const result = readBoard(filePath);
       if ('error' in result) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
@@ -288,7 +392,6 @@ export async function mcpCommand(options: McpOptions) {
       let matches: Array<{ id: string; title: string; column: string; priority?: string; tags?: string[]; assignee?: string; score: number }> = [];
 
       for (const col of board.columns) {
-        // Filter by column if specified
         if (column) {
           const matchesId = col.id === column;
           const matchesName = col.title.toLowerCase() === column.toLowerCase();
@@ -296,57 +399,24 @@ export async function mcpCommand(options: McpOptions) {
         }
 
         for (const task of col.tasks) {
-          // Filter by priority if specified
           if (priority && task.priority !== priority) continue;
-
-          // Filter by assignee if specified
           if (assignee && task.assignee !== assignee) continue;
 
-          // Calculate search score
           let score = 0;
-
-          // Title match (highest weight)
-          if (task.title.toLowerCase().includes(queryLower)) {
-            score += 10;
-            if (task.title.toLowerCase().startsWith(queryLower)) score += 5;
-          }
-
-          // Description match
-          if (task.description?.toLowerCase().includes(queryLower)) {
-            score += 5;
-          }
-
-          // Tag match
-          if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) {
-            score += 3;
-          }
-
-          // ID exact match
-          if (task.id.toLowerCase() === queryLower) {
-            score += 20;
-          }
+          if (task.title.toLowerCase().includes(queryLower)) { score += 10; if (task.title.toLowerCase().startsWith(queryLower)) score += 5; }
+          if (task.description?.toLowerCase().includes(queryLower)) score += 5;
+          if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) score += 3;
+          if (task.id.toLowerCase() === queryLower) score += 20;
 
           if (score > 0) {
-            matches.push({
-              id: task.id,
-              title: task.title,
-              column: col.title,
-              priority: task.priority,
-              tags: task.tags,
-              assignee: task.assignee,
-              score
-            });
+            matches.push({ id: task.id, title: task.title, column: col.title, priority: task.priority, tags: task.tags, assignee: task.assignee, score });
           }
         }
       }
 
-      // Sort by score descending
       matches.sort((a, b) => b.score - a.score);
-
       const output = { results: matches, count: matches.length };
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
-      };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
     }
   );
 
@@ -396,15 +466,78 @@ export async function mcpCommand(options: McpOptions) {
       validationCommands,
     }) => {
       const filePath = file || defaultFile;
-      const result = readBoard(filePath);
 
+      // V2: add task as individual file
+      if (isV2(filePath)) {
+        try {
+          const dirs = ensureV2Dirs(filePath);
+          const board = readV2BoardConfig(filePath);
+
+          let targetColumn = board.columns.find(c => c.id === column);
+          if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
+          if (!targetColumn) {
+            const available = board.columns.map(c => `${c.id} (${c.title})`).join(', ');
+            return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}. Available: ${available}` }], isError: true };
+          }
+
+          const taskId = generateNextFileTaskId(dirs.tasksDir, dirs.logsDir);
+          const existingTasks = readTasksDir(dirs.tasksDir).filter(t => t.task.column === targetColumn!.id);
+          const position = existingTasks.length;
+
+          const builtSubtasks = subtasks && subtasks.length > 0
+            ? subtasks.map((st: string, i: number) => ({ id: `${taskId}-${i + 1}`, title: st.trim(), completed: false }))
+            : undefined;
+
+          const task: any = {
+            id: taskId,
+            title,
+            column: targetColumn.id,
+            position,
+            ...(description && { description }),
+            ...(priority && { priority }),
+            ...(tags && tags.length > 0 && { tags }),
+            ...(assignee && { assignee }),
+            ...(dueDate && { dueDate }),
+            ...(relatedFiles && relatedFiles.length > 0 && { relatedFiles }),
+            ...(builtSubtasks && { subtasks: builtSubtasks }),
+            createdAt: new Date().toISOString(),
+          };
+
+          // Optionally attach contract
+          const wantsContract =
+            Boolean(with_contract ?? withContract) ||
+            Boolean(deliverables && deliverables.length > 0) ||
+            Boolean(validation_commands && validation_commands.length > 0) ||
+            Boolean(validationCommands && validationCommands.length > 0) ||
+            Boolean(constraints && constraints.length > 0);
+
+          if (wantsContract) {
+            const contract = buildContract({
+              deliverableSpecs: deliverables,
+              validationCommands: validation_commands ?? validationCommands,
+              constraints,
+            });
+            task.contract = contract;
+          }
+
+          const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+          const body = description ? composeBody(description) : '';
+          coreWriteTaskFile(taskPath, task, body);
+
+          return { content: [{ type: 'text' as const, text: `Task added successfully: ${taskId} - ${title}` }] };
+        } catch (e) {
+          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+        }
+      }
+
+      // V1: use board
+      const result = readBoard(filePath);
       if ('error' in result) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
 
       let { board } = result;
 
-      // Find target column
       let targetColumn = findColumnById(board, column);
       if (!targetColumn) {
         targetColumn = findColumnByName(board, column);
@@ -432,12 +565,10 @@ export async function mcpCommand(options: McpOptions) {
         return { content: [{ type: 'text' as const, text: `Error: ${addResult.error}` }], isError: true };
       }
 
-      // Get the new task
       const newTask = addResult.board!.columns
         .find(c => c.id === targetColumn!.id)!
         .tasks.slice(-1)[0];
 
-      // Optionally attach a contract (status=ready)
       const wantsContract =
         Boolean(with_contract ?? withContract) ||
         Boolean(deliverables && deliverables.length > 0) ||
@@ -495,6 +626,31 @@ export async function mcpCommand(options: McpOptions) {
         return { content: [{ type: 'text' as const, text: 'Error: task is required' }], isError: true };
       }
 
+      // V2: update task file directly
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, resolvedTaskId);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${resolvedTaskId}` }], isError: true };
+        }
+
+        try {
+          const contract = buildContract({
+            deliverableSpecs: deliverables,
+            validationCommands: validation_commands ?? validationCommands,
+            constraints,
+          });
+
+          found.doc.task.contract = contract;
+          found.doc.task.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
+          return { content: [{ type: 'text' as const, text: `Contract attached: ${resolvedTaskId}` }] };
+        } catch (e) {
+          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+        }
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
       if ('error' in result) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
@@ -540,21 +696,49 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, column }) => {
       const filePath = file || defaultFile;
-      const result = readBoard(filePath);
 
+      // V2: update task file
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const taskPath = path.join(dirs.tasksDir, taskFileName(task));
+        const doc = coreReadTaskFile(taskPath);
+        if (!doc) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        const board = readV2BoardConfig(filePath);
+        let targetColumn = board.columns.find(c => c.id === column);
+        if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
+        if (!targetColumn) {
+          return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
+        }
+
+        const sourceColumn = doc.task.column || '';
+        const targetTasks = readTasksDir(dirs.tasksDir).filter(t => t.task.column === targetColumn!.id);
+        doc.task.column = targetColumn.id;
+        doc.task.position = targetTasks.length;
+        doc.task.updatedAt = new Date().toISOString();
+        coreWriteTaskFile(taskPath, doc.task, doc.body);
+
+        const warning = mcpCheckIncompleteSubtasks(doc.task, targetColumn);
+        let message = `Task ${task} moved from "${sourceColumn}" to "${targetColumn.title}"`;
+        if (warning) message += `\n\n${warning.warning}`;
+
+        return { content: [{ type: 'text' as const, text: message }] };
+      }
+
+      // V1: use board
+      const result = readBoard(filePath);
       if ('error' in result) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
 
       let { board } = result;
-
-      // Find the task
       const taskInfo = findTaskById(board, task);
       if (!taskInfo) {
         return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
       }
 
-      // Find target column
       let targetColumn = findColumnById(board, column);
       if (!targetColumn) {
         targetColumn = findColumnByName(board, column);
@@ -572,7 +756,6 @@ export async function mcpCommand(options: McpOptions) {
 
       writeBoard(filePath, moveResult.board!);
 
-      // Check for incomplete subtasks warning when moving to done-like column
       const warning = mcpCheckIncompleteSubtasks(taskInfo.task, targetColumn);
       let message = `Task ${task} moved from "${taskInfo.column.title}" to "${targetColumn.title}"`;
       if (warning) {
@@ -605,16 +788,39 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, title, description, priority, tags, assignee, dueDate, relatedFiles }) => {
       const filePath = file || defaultFile;
-      const result = readBoard(filePath);
 
+      const isNull = (v: unknown) => v === null || v === 'null';
+
+      // V2: update task file directly
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const taskPath = path.join(dirs.tasksDir, taskFileName(task));
+        const doc = coreReadTaskFile(taskPath);
+        if (!doc) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        const t = doc.task;
+        if (title !== undefined) t.title = title;
+        if (description !== undefined) { if (isNull(description)) delete t.description; else t.description = description as string; }
+        if (priority !== undefined) { if (isNull(priority)) delete t.priority; else t.priority = priority as any; }
+        if (tags !== undefined) { if (isNull(tags)) delete t.tags; else t.tags = tags as string[]; }
+        if (assignee !== undefined) { if (isNull(assignee)) delete t.assignee; else t.assignee = assignee as string; }
+        if (dueDate !== undefined) { if (isNull(dueDate)) delete t.dueDate; else t.dueDate = dueDate as string; }
+        if (relatedFiles !== undefined) { if (isNull(relatedFiles)) delete t.relatedFiles; else t.relatedFiles = relatedFiles as string[]; }
+        t.updatedAt = new Date().toISOString();
+
+        coreWriteTaskFile(taskPath, t, doc.body);
+        return { content: [{ type: 'text' as const, text: `Task ${task} updated successfully` }] };
+      }
+
+      // V1: use board
+      const result = readBoard(filePath);
       if ('error' in result) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
 
       let { board } = result;
-
-      // Helper to check for null or "null" string (MCP clients may send either)
-      const isNull = (v: unknown) => v === null || v === 'null';
 
       const patch: TaskPatch = {};
       if (title !== undefined) patch.title = title;
@@ -652,6 +858,24 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task }) => {
       const filePath = file || defaultFile;
+
+      // V2: delete task file
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task, true);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        try {
+          fs.unlinkSync(found.filePath);
+          return { content: [{ type: 'text' as const, text: `Task ${task} deleted successfully` }] };
+        } catch (e) {
+          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+        }
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -694,6 +918,80 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, destination }) => {
       const filePath = file || defaultFile;
+
+      // V2: archive means move task from tasks/ to logs/
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        // Determine effective destination
+        const board = readV2BoardConfig(filePath);
+        const brainfileDestination = (board as any).archive?.destination;
+        const effectiveDestination = destination || getEffectiveArchiveDestination(brainfileDestination);
+
+        // For GitHub/Linear, format and send before removing
+        if (effectiveDestination === 'github') {
+          if (!(await isGitHubAuthenticated())) {
+            return { content: [{ type: 'text' as const, text: `Error: Not authenticated with GitHub.\n\nTo authenticate, run:\n  npx @brainfile/cli auth github\n\nOr fall back to local archive:\n  Use destination: "local"` }], isError: true };
+          }
+          const config = getArchiveConfig();
+          if (!config.github?.owner || !config.github?.repo) {
+            return { content: [{ type: 'text' as const, text: `Error: GitHub repository not configured.\n\nTo configure, run:\n  npx @brainfile/cli config set archive.github.owner <owner>\n  npx @brainfile/cli config set archive.github.repo <repo>` }], isError: true };
+          }
+          const payload = formatTaskForGitHub(found.doc.task, {
+            includeMeta: true, includeSubtasks: true, includeRelatedFiles: true,
+            boardTitle: board.title, fromColumn: found.doc.task.column || 'unknown',
+            extraLabels: config.github.labels,
+          });
+          const ghResult = await createGitHubIssue({ owner: config.github.owner, repo: config.github.repo, title: payload.title, body: payload.body, labels: payload.labels, state: 'closed' });
+          if (!ghResult.success) {
+            return { content: [{ type: 'text' as const, text: `Error creating GitHub issue: ${ghResult.error}` }], isError: true };
+          }
+          fs.unlinkSync(found.filePath);
+          return { content: [{ type: 'text' as const, text: `Task ${task} archived to GitHub Issue #${ghResult.issueNumber} (closed)\n\nView: ${ghResult.issueUrl}` }] };
+        }
+
+        if (effectiveDestination === 'linear') {
+          if (!(await isLinearAuthenticated())) {
+            return { content: [{ type: 'text' as const, text: `Error: Not authenticated with Linear.\n\nTo authenticate, run:\n  npx @brainfile/cli auth linear --token <api-key>` }], isError: true };
+          }
+          const config = getArchiveConfig();
+          let teamId = config.linear?.teamId;
+          if (!teamId) {
+            const teams = await getLinearTeams();
+            if (teams.length === 0) { return { content: [{ type: 'text' as const, text: `Error: No Linear teams found.` }], isError: true }; }
+            if (teams.length === 1) { teamId = teams[0].id; }
+            else {
+              const teamList = teams.map(t => `  ${t.key}: ${t.name} (${t.id})`).join('\n');
+              return { content: [{ type: 'text' as const, text: `Error: Multiple Linear teams found. Please configure a default.\n\nAvailable teams:\n${teamList}` }], isError: true };
+            }
+          }
+          const payload = formatTaskForLinear(found.doc.task, {
+            includeMeta: true, includeSubtasks: true, includeRelatedFiles: true,
+            boardTitle: board.title, fromColumn: found.doc.task.column || 'unknown', stateName: 'Done',
+          });
+          const linearResult = await createLinearIssue({ teamId, title: payload.title, description: payload.description, priority: payload.priority, labelNames: payload.labelNames, stateName: 'Done' });
+          if (!linearResult.success) {
+            return { content: [{ type: 'text' as const, text: `Error creating Linear issue: ${linearResult.error}` }], isError: true };
+          }
+          fs.unlinkSync(found.filePath);
+          return { content: [{ type: 'text' as const, text: `Task ${task} archived to Linear Issue ${linearResult.issueId} (Done)\n\nView: ${linearResult.issueUrl}` }] };
+        }
+
+        // Local archive: move from tasks/ to logs/
+        const logPath = path.join(dirs.logsDir, taskFileName(task));
+        found.doc.task.completedAt = found.doc.task.completedAt || new Date().toISOString();
+        delete found.doc.task.column;
+        delete found.doc.task.position;
+        coreWriteTaskFile(logPath, found.doc.task, found.doc.body);
+        fs.unlinkSync(found.filePath);
+        return { content: [{ type: 'text' as const, text: `Task ${task} archived to logs/` }] };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -894,6 +1192,40 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, column }) => {
       const filePath = file || defaultFile;
+
+      // V2: restore means move from logs/ to tasks/
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const board = readV2BoardConfig(filePath);
+
+        let targetColumn = board.columns.find(c => c.id === column);
+        if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
+        if (!targetColumn) {
+          return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
+        }
+
+        // Look in logs
+        const logPath = path.join(dirs.logsDir, taskFileName(task));
+        const doc = coreReadTaskFile(logPath);
+        if (!doc) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found in logs: ${task}` }], isError: true };
+        }
+
+        // Move to tasks/ with column info
+        const targetTasks = readTasksDir(dirs.tasksDir).filter(t => t.task.column === targetColumn!.id);
+        doc.task.column = targetColumn.id;
+        doc.task.position = targetTasks.length;
+        delete doc.task.completedAt;
+        doc.task.updatedAt = new Date().toISOString();
+
+        const taskPath = path.join(dirs.tasksDir, taskFileName(task));
+        coreWriteTaskFile(taskPath, doc.task, doc.body);
+        fs.unlinkSync(logPath);
+
+        return { content: [{ type: 'text' as const, text: `Task ${task} restored to "${targetColumn.title}"` }] };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -947,6 +1279,29 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, title }) => {
       const filePath = file || defaultFile;
+
+      // V2: update task file directly
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        const t = found.doc.task;
+        if (!t.subtasks) t.subtasks = [];
+        const nextId = t.subtasks.length > 0
+          ? `${task}-${Math.max(...t.subtasks.map(s => parseInt(s.id.split('-').pop() || '0', 10))) + 1}`
+          : `${task}-1`;
+        const newSubtask = { id: nextId, title, completed: false };
+        t.subtasks.push(newSubtask);
+        t.updatedAt = new Date().toISOString();
+        coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+        return { content: [{ type: 'text' as const, text: `Subtask added: ${newSubtask.id} - ${newSubtask.title}` }] };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -987,6 +1342,28 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, subtask }) => {
       const filePath = file || defaultFile;
+
+      // V2: update task file directly
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        const t = found.doc.task;
+        if (!t.subtasks || !t.subtasks.some(s => s.id === subtask)) {
+          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${subtask}` }], isError: true };
+        }
+
+        t.subtasks = t.subtasks.filter(s => s.id !== subtask);
+        t.updatedAt = new Date().toISOString();
+        coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+        return { content: [{ type: 'text' as const, text: `Subtask ${subtask} deleted successfully` }] };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -1023,6 +1400,31 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, subtask }) => {
       const filePath = file || defaultFile;
+
+      // V2: update task file directly
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        const t = found.doc.task;
+        const st = t.subtasks?.find(s => s.id === subtask);
+        if (!st) {
+          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${subtask}` }], isError: true };
+        }
+
+        const wasCompleted = st.completed;
+        st.completed = !st.completed;
+        t.updatedAt = new Date().toISOString();
+        coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+        const newStatus = wasCompleted ? 'incomplete' : 'completed';
+        return { content: [{ type: 'text' as const, text: `Subtask ${subtask} marked as ${newStatus}` }] };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -1066,6 +1468,29 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, subtask, title }) => {
       const filePath = file || defaultFile;
+
+      // V2: update task file directly
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        const t = found.doc.task;
+        const st = t.subtasks?.find(s => s.id === subtask);
+        if (!st) {
+          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${subtask}` }], isError: true };
+        }
+
+        st.title = title;
+        t.updatedAt = new Date().toISOString();
+        coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+        return { content: [{ type: 'text' as const, text: `Subtask ${subtask} updated to "${title}"` }] };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -1103,6 +1528,34 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, subtasks, completed }) => {
       const filePath = file || defaultFile;
+
+      // V2: update task file directly
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        const t = found.doc.task;
+        if (!t.subtasks) {
+          return { content: [{ type: 'text' as const, text: `Error: Task has no subtasks` }], isError: true };
+        }
+
+        const subtaskSet = new Set(subtasks);
+        for (const st of t.subtasks) {
+          if (subtaskSet.has(st.id)) {
+            st.completed = completed;
+          }
+        }
+        t.updatedAt = new Date().toISOString();
+        coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+        const status = completed ? 'completed' : 'incomplete';
+        return { content: [{ type: 'text' as const, text: `${subtasks.length} subtasks marked as ${status}` }] };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -1140,6 +1593,31 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, task, completed }) => {
       const filePath = file || defaultFile;
+      const markCompleted = completed ?? true;
+
+      // V2: update task file directly
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+
+        const t = found.doc.task;
+        const count = t.subtasks?.length || 0;
+        if (t.subtasks) {
+          for (const st of t.subtasks) {
+            st.completed = markCompleted;
+          }
+        }
+        t.updatedAt = new Date().toISOString();
+        coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+        const status = markCompleted ? 'completed' : 'incomplete';
+        return { content: [{ type: 'text' as const, text: `All ${count} subtasks in ${task} marked as ${status}` }] };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -1147,9 +1625,6 @@ export async function mcpCommand(options: McpOptions) {
       }
 
       let { board } = result;
-
-      // Default to true if not specified
-      const markCompleted = completed ?? true;
 
       const bulkResult = setAllSubtasksCompleted(board, task, markCompleted);
 
@@ -1188,6 +1663,43 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, tasks, column }) => {
       const filePath = file || defaultFile;
+
+      // V2: update each task file
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const board = readV2BoardConfig(filePath);
+
+        let targetColumn = board.columns.find(c => c.id === column);
+        if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
+        if (!targetColumn) {
+          return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
+        }
+
+        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+        let successCount = 0;
+        let failureCount = 0;
+
+        for (const taskId of tasks) {
+          const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+          const doc = coreReadTaskFile(taskPath);
+          if (!doc) {
+            results.push({ taskId, success: false, error: 'Task not found' });
+            failureCount++;
+            continue;
+          }
+
+          doc.task.column = targetColumn.id;
+          doc.task.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(taskPath, doc.task, doc.body);
+          results.push({ taskId, success: true });
+          successCount++;
+        }
+
+        const output = { success: failureCount === 0, successCount, failureCount, results };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }], isError: failureCount > 0 && successCount === 0 };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -1264,6 +1776,40 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, tasks, priority, tags, assignee }) => {
       const filePath = file || defaultFile;
+
+      const isNull = (v: unknown) => v === null || v === 'null';
+
+      // V2: update each task file
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+        let successCount = 0;
+        let failureCount = 0;
+
+        for (const taskId of tasks) {
+          const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+          const doc = coreReadTaskFile(taskPath);
+          if (!doc) {
+            results.push({ taskId, success: false, error: 'Task not found' });
+            failureCount++;
+            continue;
+          }
+
+          const t = doc.task;
+          if (priority !== undefined) { if (isNull(priority)) delete t.priority; else t.priority = priority as any; }
+          if (tags !== undefined) { if (isNull(tags)) delete t.tags; else t.tags = tags as string[]; }
+          if (assignee !== undefined) { if (isNull(assignee)) delete t.assignee; else t.assignee = assignee as string; }
+          t.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(taskPath, t, doc.body);
+          results.push({ taskId, success: true });
+          successCount++;
+        }
+
+        const output = { success: failureCount === 0, successCount, failureCount, results };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }], isError: failureCount > 0 && successCount === 0 };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -1271,9 +1817,6 @@ export async function mcpCommand(options: McpOptions) {
       }
 
       let { board } = result;
-
-      // Helper to check for null or "null" string
-      const isNull = (v: unknown) => v === null || v === 'null';
 
       const patch: TaskPatch = {};
       if (priority !== undefined) patch.priority = isNull(priority) ? undefined : priority;
@@ -1313,6 +1856,36 @@ export async function mcpCommand(options: McpOptions) {
     },
     async ({ file, tasks }) => {
       const filePath = file || defaultFile;
+
+      // V2: delete task files
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+        let successCount = 0;
+        let failureCount = 0;
+
+        for (const taskId of tasks) {
+          const found = findV2Task(dirs, taskId, true);
+          if (!found) {
+            results.push({ taskId, success: false, error: 'Task not found' });
+            failureCount++;
+            continue;
+          }
+          try {
+            fs.unlinkSync(found.filePath);
+            results.push({ taskId, success: true });
+            successCount++;
+          } catch (e) {
+            results.push({ taskId, success: false, error: (e as Error).message });
+            failureCount++;
+          }
+        }
+
+        const output = { success: failureCount === 0, successCount, failureCount, results };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }], isError: failureCount > 0 && successCount === 0 };
+      }
+
+      // V1: use board
       const result = readBoard(filePath);
 
       if ('error' in result) {
@@ -1355,6 +1928,42 @@ export async function mcpCommand(options: McpOptions) {
     async ({ file, tasks }) => {
       const filePath = file || defaultFile;
 
+      // V2: move task files from tasks/ to logs/
+      if (isV2(filePath)) {
+        const dirs = getV2Dirs(filePath);
+        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+        let successCount = 0;
+        let failureCount = 0;
+
+        for (const taskId of tasks) {
+          const taskPath = path.join(dirs.tasksDir, taskFileName(taskId));
+          const doc = coreReadTaskFile(taskPath);
+          if (!doc) {
+            results.push({ taskId, success: false, error: 'Task not found' });
+            failureCount++;
+            continue;
+          }
+
+          try {
+            const logPath = path.join(dirs.logsDir, taskFileName(taskId));
+            doc.task.completedAt = doc.task.completedAt || new Date().toISOString();
+            delete doc.task.column;
+            delete doc.task.position;
+            coreWriteTaskFile(logPath, doc.task, doc.body);
+            fs.unlinkSync(taskPath);
+            results.push({ taskId, success: true });
+            successCount++;
+          } catch (e) {
+            results.push({ taskId, success: false, error: (e as Error).message });
+            failureCount++;
+          }
+        }
+
+        const output = { success: failureCount === 0, successCount, failureCount, results };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }], isError: failureCount > 0 && successCount === 0 };
+      }
+
+      // V1: use board
       const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
       let successCount = 0;
       let failureCount = 0;
@@ -1631,6 +2240,147 @@ export async function mcpCommand(options: McpOptions) {
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
       };
+    }
+  );
+
+  // ==========================================================================
+  // V2 NEW TOOLS: complete_task, search_logs, append_log
+  // ==========================================================================
+
+  // Complete task tool
+  server.registerTool(
+    'complete_task',
+    {
+      title: 'Complete Task',
+      description: 'Complete a task - in v2, moves task file from tasks/ to logs/ with completedAt timestamp. In v1, moves to done column.',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Task ID to complete'),
+      }
+    },
+    async ({ file, task }) => {
+      const filePath = file || defaultFile;
+
+      try {
+        const { completeCommand } = await import('./complete');
+        const result = completeCommand({ file: filePath, task }, { log: () => {}, warn: () => {}, error: () => {}, info: () => {} });
+        return {
+          content: [{ type: 'text' as const, text: `Task ${task} completed at ${result.completedAt}` }]
+        };
+      } catch (e) {
+        return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+      }
+    }
+  );
+
+  // Search logs tool
+  server.registerTool(
+    'search_logs',
+    {
+      title: 'Search Logs',
+      description: 'Search across completed task logs. Requires v2 per-task file architecture.',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        query: z.string().optional().describe('Search query to match against log content'),
+        recent: z.boolean().optional().describe('List recently completed tasks'),
+        task: z.string().optional().describe('View a specific task log'),
+      }
+    },
+    async ({ file, query, recent, task: taskId }) => {
+      const filePath = file || defaultFile;
+
+      if (!isV2(filePath)) {
+        return { content: [{ type: 'text' as const, text: 'Error: search_logs requires v2 per-task file architecture. Run: brainfile migrate --v2' }], isError: true };
+      }
+
+      const dirs = getV2Dirs(filePath);
+
+      // View specific task log
+      if (taskId) {
+        const found = findV2Task(dirs, taskId, true);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${taskId}` }], isError: true };
+        }
+        const output = {
+          id: found.doc.task.id,
+          title: found.doc.task.title,
+          completedAt: found.doc.task.completedAt,
+          description: extractDescription(found.doc.body),
+          log: extractLog(found.doc.body),
+        };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+      }
+
+      // Search logs
+      if (query) {
+        const logDocs = readTasksDir(dirs.logsDir);
+        const queryLower = query.toLowerCase();
+        const matches: Array<{ id: string; title: string; completedAt?: string }> = [];
+
+        for (const doc of logDocs) {
+          const task = doc.task;
+          const desc = extractDescription(doc.body) || '';
+          const log = extractLog(doc.body) || '';
+          const fullText = [task.title, task.description || '', desc, log].join(' ').toLowerCase();
+          if (fullText.includes(queryLower)) {
+            matches.push({ id: task.id, title: task.title, completedAt: task.completedAt });
+          }
+        }
+
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ results: matches, count: matches.length }, null, 2) }] };
+      }
+
+      // Recent logs (default)
+      const logDocs = readTasksDir(dirs.logsDir);
+      logDocs.sort((a, b) => (b.task.completedAt || '').localeCompare(a.task.completedAt || ''));
+      const recent20 = logDocs.slice(0, 20).map(doc => ({
+        id: doc.task.id,
+        title: doc.task.title,
+        completedAt: doc.task.completedAt,
+      }));
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ logs: recent20, count: recent20.length }, null, 2) }] };
+    }
+  );
+
+  // Append log tool
+  server.registerTool(
+    'append_log',
+    {
+      title: 'Append Log',
+      description: 'Append a timestamped entry to a task log section. Works on both active tasks and completed logs. Requires v2 per-task file architecture.',
+      inputSchema: {
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Task ID to append log to'),
+        message: z.string().describe('Log message to append'),
+        agent: z.string().optional().describe('Agent name for attribution'),
+      }
+    },
+    async ({ file, task: taskId, message, agent }) => {
+      const filePath = file || defaultFile;
+
+      if (!isV2(filePath)) {
+        return { content: [{ type: 'text' as const, text: 'Error: append_log requires v2 per-task file architecture. Run: brainfile migrate --v2' }], isError: true };
+      }
+
+      const dirs = getV2Dirs(filePath);
+      const found = findV2Task(dirs, taskId, true);
+      if (!found) {
+        return { content: [{ type: 'text' as const, text: `Error: Task not found: ${taskId}` }], isError: true };
+      }
+
+      const { doc, filePath: taskFilePath } = found;
+      const timestamp = new Date().toISOString();
+      const agentPrefix = agent ? `[${agent}] ` : '';
+      const entry = `- ${timestamp}: ${agentPrefix}${message}`;
+
+      const existingDescription = extractDescription(doc.body);
+      const existingLog = extractLog(doc.body) || '';
+      const newLog = existingLog ? `${existingLog}\n${entry}` : entry;
+      const newBody = composeBody(existingDescription, newLog);
+      coreWriteTaskFile(taskFilePath, doc.task, newBody);
+
+      return { content: [{ type: 'text' as const, text: `Log entry added to ${taskId}: ${entry}` }] };
     }
   );
 

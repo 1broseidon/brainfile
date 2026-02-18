@@ -16,6 +16,9 @@ import { patchCommand } from './commands/patch';
 import { deleteCommand } from './commands/delete';
 import { archiveCommand } from './commands/archive';
 import { restoreCommand } from './commands/restore';
+import { completeCommand } from './commands/complete';
+import { logCommand, logNoteCommand } from './commands/log';
+import { searchCommand } from './commands/search';
 import {
   githubAuthCommand,
   linearAuthCommand,
@@ -53,7 +56,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -142,9 +145,10 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('migrate')
-    .description('Migrate root brainfile.md to .brainfile/brainfile.md')
+    .description('Migrate root brainfile.md to .brainfile/brainfile.md, or convert to v2 per-task files')
     .option('--dir <path>', 'Directory containing brainfile.md (default: cwd)')
     .option('--force', 'Overwrite existing .brainfile/brainfile.md')
+    .option('--v2', 'Convert v1 embedded tasks to v2 per-task file architecture')
     .action(migrateCommand);
 
   const listCmd = program
@@ -242,6 +246,39 @@ Brainfile file resolution (when you don't pass --file):
     .option('-t, --task <id>', 'Task ID to restore (required)')
     .option('-c, --column <name>', 'Target column name or ID (required)')
     .action(restoreCommand);
+
+  program
+    .command('complete')
+    .description('Complete a task (move to logs in v2, or move to done column in v1)')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --task <id>', 'Task ID to complete (required)')
+    .action((options) => { completeCommand(options); });
+
+  const logCmd = program
+    .command('log')
+    .description('View, search, and manage completed task logs (v2 only)')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --task <id>', 'View a specific task log')
+    .option('-s, --search <query>', 'Search across all logs')
+    .option('--recent', 'List recently completed tasks')
+    .action((options) => { logCommand(options); });
+
+  logCmd
+    .command('note')
+    .description('Append a timestamped note to a task log')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --task <id>', 'Task ID to add note to (required)')
+    .option('--agent <name>', 'Agent name for attribution')
+    .argument('[message]', 'Log message to append')
+    .action((message, options) => { logNoteCommand({ ...options, message }); });
+
+  program
+    .command('search')
+    .description('Search across active tasks and completed logs')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-c, --column <name>', 'Filter by column')
+    .argument('<query>', 'Search query')
+    .action((query, options) => { searchCommand({ ...options, query }); });
 
   program
     .command('subtask')

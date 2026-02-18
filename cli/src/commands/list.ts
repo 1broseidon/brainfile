@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { isV2, buildBoardFromV2 } from '../utils/v2-detect';
 
 export interface ListOptions {
   file: string;
@@ -43,15 +44,21 @@ export function listCommand(options: ListOptions, logger: Logger = defaultLogger
     throw fileNotFound(filePath);
   }
 
-  // Read and parse the file
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const result = Brainfile.parseWithErrors(content);
+  // Detect v2 per-task file architecture
+  let board;
+  if (isV2(filePath)) {
+    board = buildBoardFromV2(filePath);
+  } else {
+    // Read and parse the file (v1)
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const result = Brainfile.parseWithErrors(content);
 
-  if (!result.board) {
-    throw parseFailure(result.error);
+    if (!result.board) {
+      throw parseFailure(result.error);
+    }
+
+    board = result.board;
   }
-
-  const board = result.board;
 
   // Filter columns if specified
   const columns = options.column

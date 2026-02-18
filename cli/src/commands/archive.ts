@@ -44,6 +44,12 @@ import {
   removeFromArchive,
   getArchivePath,
 } from '../utils/archive';
+import { readTasksDir, taskFileName } from '@brainfile/core';
+import {
+  isV2,
+  getV2Dirs,
+  findV2Task,
+} from '../utils/v2-detect';
 
 // ============================================================================
 // Types
@@ -123,6 +129,24 @@ export async function archiveCommand(options: ArchiveOptions) {
       return;
     }
 
+    // V2: for external export, read from logs/ directory
+    if (isV2(filePath) && destination !== 'local') {
+      if (options.all) {
+        await archiveAllFromLogsV2(filePath, board, destination, options.dryRun);
+        return;
+      }
+      if (options.task) {
+        await archiveSingleFromLogsV2(filePath, board, options.task, destination, options.dryRun, parsedDest);
+        return;
+      }
+    }
+
+    // Handle --all flag (archive all from local archive to external)
+    if (options.all) {
+      await archiveAllToExternal(filePath, board, destination, options.dryRun);
+      return;
+    }
+
     // Single task archive
     if (options.task) {
       await archiveSingleTask(filePath, board, options.task, destination, options.dryRun, parsedDest);
@@ -130,6 +154,157 @@ export async function archiveCommand(options: ArchiveOptions) {
   } catch (error) {
     handleError(error);
   }
+}
+
+// ============================================================================
+// V2 External Export from logs/
+// ============================================================================
+
+async function archiveSingleFromLogsV2(
+  filePath: string,
+  board: Board,
+  taskId: string,
+  destination: ArchiveDestination,
+  dryRun?: boolean,
+  parsedDest?: ParsedDestination
+) {
+  const dirs = getV2Dirs(filePath);
+  const logPath = path.join(dirs.logsDir, taskFileName(taskId));
+
+  if (!fs.existsSync(logPath)) {
+    operationError(`Task not found in logs: ${taskId}`);
+    return;
+  }
+
+  const found = findV2Task(dirs, taskId, true);
+  if (!found || !found.isLog) {
+    operationError(`Task ${taskId} not found in logs/. Complete the task first with: brainfile complete -t ${taskId}`);
+    return;
+  }
+
+  const task = found.doc.task;
+
+  if (dryRun) {
+    console.log(chalk.yellow('DRY RUN') + ' - No changes will be made');
+    console.log('');
+    console.log(`Would export task ${chalk.cyan(task.id)} to ${destination}`);
+    return;
+  }
+
+  // Export to external service then remove from logs
+  if (destination === 'github') {
+    await archiveToGitHub(filePath, board, task, '', 'Completed', dryRun, parsedDest);
+    // Remove from logs
+    fs.unlinkSync(logPath);
+  } else if (destination === 'linear') {
+    await archiveToLinear(filePath, board, task, '', 'Completed', dryRun, parsedDest);
+    fs.unlinkSync(logPath);
+  }
+}
+
+async function archiveAllFromLogsV2(
+  filePath: string,
+  board: Board,
+  destination: ArchiveDestination,
+  dryRun?: boolean
+) {
+  if (destination === 'local') {
+    console.log(chalk.yellow('Note:') + ' --all with --to=local has no effect in v2 (tasks are in logs/)');
+    return;
+  }
+
+  const dirs = getV2Dirs(filePath);
+  const logDocs = readTasksDir(dirs.logsDir);
+
+  if (logDocs.length === 0) {
+    console.log('No completed tasks in logs/ to export.');
+    return;
+  }
+
+  console.log(`Found ${logDocs.length} task(s) in logs/.`);
+  if (dryRun) {
+    console.log(chalk.yellow('DRY RUN') + ' - No changes will be made');
+    for (const doc of logDocs) {
+      console.log(`  Would export: ${doc.task.id} - ${doc.task.title}`);
+    }
+    return;
+  }
+
+  let successCount = 0;
+  let failCount = 0;
+
+  for (const doc of logDocs) {
+    const task = doc.task;
+    console.log(`Exporting ${task.id}...`);
+
+    try {
+      if (destination === 'github') {
+        const config = getArchiveConfig();
+        if (!config.github?.owner || !config.github?.repo) {
+          console.log(chalk.red('  Failed: GitHub not configured'));
+          failCount++;
+          continue;
+        }
+        const payload = formatTaskForGitHub(task, {
+          includeMeta: true,
+          boardTitle: board.title,
+          fromColumn: 'Completed',
+        });
+        const result = await createGitHubIssue({
+          owner: config.github.owner,
+          repo: config.github.repo,
+          title: payload.title,
+          body: payload.body,
+          labels: payload.labels,
+          state: 'closed',
+        });
+        if (result.success) {
+          const logPath = path.join(dirs.logsDir, taskFileName(task.id));
+          fs.unlinkSync(logPath);
+          console.log(chalk.green('  OK') + ` #${result.issueNumber}`);
+          successCount++;
+        } else {
+          console.log(chalk.red('  Failed:') + ` ${result.error}`);
+          failCount++;
+        }
+      } else if (destination === 'linear') {
+        const config = getArchiveConfig();
+        if (!config.linear?.teamId) {
+          console.log(chalk.red('  Failed: Linear not configured'));
+          failCount++;
+          continue;
+        }
+        const payload = formatTaskForLinear(task, {
+          includeMeta: true,
+          boardTitle: board.title,
+          fromColumn: 'Completed',
+          stateName: 'Done',
+        });
+        const result = await createLinearIssue({
+          teamId: config.linear.teamId,
+          title: payload.title,
+          description: payload.description,
+          priority: payload.priority,
+          stateName: 'Done',
+        });
+        if (result.success) {
+          const logPath = path.join(dirs.logsDir, taskFileName(task.id));
+          fs.unlinkSync(logPath);
+          console.log(chalk.green('  OK') + ` ${result.issueId}`);
+          successCount++;
+        } else {
+          console.log(chalk.red('  Failed:') + ` ${result.error}`);
+          failCount++;
+        }
+      }
+    } catch (error) {
+      console.log(chalk.red('  Error:') + ` ${error}`);
+      failCount++;
+    }
+  }
+
+  console.log('');
+  console.log(`Done: ${chalk.green(successCount + ' succeeded')}, ${chalk.red(failCount + ' failed')}`);
 }
 
 // ============================================================================

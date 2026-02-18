@@ -12,6 +12,7 @@ import {
 } from '../utils/cli-error';
 import { loadArchivedTasks } from '../utils/archive';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { isV2, getV2Dirs, findV2Task, extractDescription, extractLog } from '../utils/v2-detect';
 
 export interface ShowOptions {
   file: string;
@@ -39,6 +40,11 @@ export function showCommand(options: ShowOptions, logger: Logger = defaultLogger
   const filePath = resolveCliBrainfilePath(options.file);
   if (!fs.existsSync(filePath)) {
     throw fileNotFound(filePath);
+  }
+
+  // V2 per-task file architecture
+  if (isV2(filePath)) {
+    return showCommandV2(options, filePath, logger);
   }
 
   const content = fs.readFileSync(filePath, 'utf-8');
@@ -104,6 +110,51 @@ export function showCommand(options: ShowOptions, logger: Logger = defaultLogger
     available.push(`${t.id}: ${t.title} (archived)`);
   }
   throw taskNotFound(options.task, available);
+}
+
+function showCommandV2(options: ShowOptions, filePath: string, logger: Logger): ShowResult {
+  const dirs = getV2Dirs(filePath);
+  const found = findV2Task(dirs, options.task!, true);
+
+  if (!found) {
+    throw taskNotFound(options.task!);
+  }
+
+  const { doc, isLog } = found;
+  const task = { ...doc.task };
+  // Restore description from markdown body if not in frontmatter
+  if (!task.description) {
+    const desc = extractDescription(doc.body);
+    if (desc) task.description = desc;
+  }
+
+  const columnTitle = isLog ? 'Completed' : (task.column || 'unknown');
+  const archived = isLog;
+  const logContent = extractLog(doc.body);
+
+  if (options.json) {
+    const jsonOutput = {
+      ...task,
+      column: columnTitle,
+      archived,
+      ...(task.completedAt && { completedAt: task.completedAt }),
+      ...(logContent && { log: logContent }),
+    };
+    logger.log(JSON.stringify(jsonOutput, null, 2));
+  } else {
+    renderTask({ task, columnTitle, archived }, logger);
+    if (task.completedAt) {
+      logger.log(`${chalk.bold('Completed:')} ${chalk.white(task.completedAt)}`);
+    }
+    if (logContent) {
+      logger.log('');
+      logger.log(chalk.bold('Log:'));
+      logger.log(logContent);
+    }
+    logger.log('');
+  }
+
+  return { success: true, taskId: task.id, archived, task, column: columnTitle };
 }
 
 function renderTask(
