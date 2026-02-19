@@ -81,7 +81,8 @@ brainfile list --contract ready
 | `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
 | `-c, --column <name>` | Filter by column |
 | `-t, --tag <name>` | Filter by tag |
-| `--contract <status>` | Filter by contract status (`ready`, `in_progress`, `delivered`, `done`, `failed`) |
+| `--parent <id>` | Filter by parent task ID (`parentId`) |
+| `--contract <status>` | Filter by contract status (`ready`, `in_progress`, `delivered`, `done`, `failed`, `blocked`) |
 
 ---
 
@@ -99,6 +100,7 @@ brainfile show -t task-42
 |--------|-------------|
 | `-t, --task <id>` | Task ID (required) |
 | `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
+| `--json` | Output task data as JSON |
 
 **Output includes:**
 - Task ID, title, column, priority, tags, assignee
@@ -205,16 +207,21 @@ brainfile delete --task task-1 --force
 
 ## archive
 
-Move a task to the archive section.
+Archive a task locally or to an external service (GitHub Issues, Linear).
 
 ```bash
 brainfile archive --task task-1
+brainfile archive --task task-1 --to github
+brainfile archive --all --to linear --dry-run
 ```
 
 **Options:**
 | Option | Description |
 |--------|-------------|
-| `-t, --task <id>` | Task ID (required) |
+| `-t, --task <id>` | Task ID to archive |
+| `--to <destination>` | Archive destination: `local`, `github`, or `linear` |
+| `--all` | Archive all tasks from local archive to external service |
+| `--dry-run` | Preview what would be created without making changes |
 
 ---
 
@@ -472,6 +479,24 @@ brainfile log --search "auth"      # Search logs
 
 ---
 
+## note
+
+Append a timestamped note to a task's log section.
+
+```bash
+brainfile note -t task-1 "Started implementation"
+brainfile note -t task-1 "Fixed failing test" --agent codex
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `-t, --task <id>` | Task ID (required) |
+| `--agent <name>` | Agent name for attribution |
+| `[message]` | Log message to append (positional argument) |
+
+---
+
 ## migrate
 
 Move root brainfile.md to .brainfile/ directory structure.
@@ -564,21 +589,67 @@ brainfile mcp --file ./project/brainfile.md
 |--------|-------------|
 | `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
 
-**Available MCP Tools:**
+**Available MCP Tools (30):**
+
+*Task Management:*
 
 | Tool | Description |
 |------|-------------|
-| `list_tasks` | List tasks with optional filtering |
-| `add_task` | Create a new task |
+| `list_tasks` | List tasks with optional filtering (column, tag, type, contract status) |
+| `get_task` | Get detailed information about a specific task |
+| `search_tasks` | Search tasks by query, column, priority, assignee |
+| `add_task` | Create a task with title, priority, tags, type, relatedFiles, contracts |
 | `move_task` | Move task between columns |
 | `patch_task` | Update task fields |
 | `delete_task` | Permanently delete a task |
-| `archive_task` | Archive a task |
+| `complete_task` | Complete a task (move from `board/` to `logs/`) |
+
+*Bulk Operations:*
+
+| Tool | Description |
+|------|-------------|
+| `bulk_move_tasks` | Move multiple tasks to a column |
+| `bulk_patch_tasks` | Apply same patch to multiple tasks |
+| `bulk_delete_tasks` | Delete multiple tasks |
+| `bulk_archive_tasks` | Archive multiple tasks |
+
+*Archiving:*
+
+| Tool | Description |
+|------|-------------|
+| `archive_task` | Archive a task (local, GitHub, or Linear) |
 | `restore_task` | Restore from archive |
+
+*Subtasks:*
+
+| Tool | Description |
+|------|-------------|
 | `add_subtask` | Add a subtask |
-| `delete_subtask` | Delete a subtask |
 | `toggle_subtask` | Toggle subtask completion |
 | `update_subtask` | Update subtask title |
+| `delete_subtask` | Delete a subtask |
+| `bulk_set_subtasks` | Set multiple subtasks to completed or incomplete |
+| `complete_all_subtasks` | Mark all subtasks as completed or incomplete |
+
+*Agent Contracts:*
+
+| Tool | Description |
+|------|-------------|
+| `contract_pickup` | Claim a contract (status → in_progress) |
+| `contract_deliver` | Mark contract as delivered |
+| `contract_validate` | Check deliverables and run validation commands |
+| `attach_contract` | Add contract to existing task |
+
+*Logs, Types, and Rules:*
+
+| Tool | Description |
+|------|-------------|
+| `search_logs` | Search completed task logs |
+| `append_log` | Append a timestamped log entry to a task |
+| `list_types` | List board type configuration |
+| `list_rules` | List project rules |
+| `add_rule` | Add a project rule |
+| `delete_rule` | Delete a project rule |
 
 ---
 

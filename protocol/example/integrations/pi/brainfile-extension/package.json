@@ -1,0 +1,22 @@
+{
+  "name": "@brainfile/pi-extension-example",
+  "version": "0.1.0",
+  "description": "Example Brainfile extension for Pi powered by @brainfile/core",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "keywords": [
+    "brainfile",
+    "pi",
+    "extension",
+    "protocol"
+  ],
+  "files": [
+    "index.ts",
+    "README.md"
+  ],
+  "dependencies": {
+    "@brainfile/core": "^0.12.0",
+    "@sinclair/typebox": "^0.34.41"
+  }
+}

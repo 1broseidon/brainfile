@@ -35,8 +35,8 @@ brainfile add --title "Add OAuth2 Support" \
   --description "Implement Google OAuth2 login flow. See design docs for details." \
   --assignee codex \
   --with-contract \
-  --deliverable "src/auth/oauth.ts:Implementation" \
-  --deliverable "src/auth/__tests__/oauth.test.ts:Tests" \
+  --deliverable "file:src/auth/oauth.ts:Implementation" \
+  --deliverable "test:src/auth/__tests__/oauth.test.ts:Tests" \
   --validation "npm test -- oauth" \
   --constraint "Use official google-auth-library"
 ```
@@ -95,7 +95,7 @@ If the PM agent finds issues during validation or manual review, the rework flow
 
 Sometimes a worker agent cannot proceed due to external factors (missing API keys, ambiguous requirements, upstream bugs).
 
-1.  **Agent Reports Blocked**: The agent edits the task file to set `contract.status` to `blocked` and adds a note to the task log explaining the blocker.
+1.  **Agent Reports Blocked**: The agent edits the task file to set `contract.status` to `blocked` and adds a note to the task log explaining the blocker. (Either the agent or PM can set this status via manual YAML edit; there is no dedicated CLI command for it.)
 2.  **PM Notification**: The PM sees the `blocked` status in the TUI or via `brainfile list`.
 3.  **Resolution**: The PM provides the missing info or fixes the dependency.
 4.  **Reset**: The PM edits `contract.status` back to `ready` or `in_progress`.

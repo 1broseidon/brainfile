@@ -108,12 +108,16 @@ See [AI Agent Integration](/agents/integration) for details.
 
 ---
 
-## VSCode Extension
+## Pi Extension (Recommended)
 
-1. Install "Brainfile" from VSCode marketplace
-2. Open a project with `.brainfile/brainfile.md`
-3. View the kanban board in the sidebar
-4. Drag and drop tasks between columns
+For multi-agent orchestration, use the Brainfile extension in [Pi](https://pi.dev/):
+
+1.  Run `/reload` to activate the extension
+2.  PM session: `/listen role pm` → `/listen on`
+3.  Worker sessions: `/listen role worker` → `/listen on`
+4.  Run `/listen status` to see active workers and run state
+
+See [Pi Extension](/tools/pi) for the full command reference and setup guide.
 
 ---
 

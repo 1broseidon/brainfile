@@ -254,11 +254,11 @@ brainfile template --list
 brainfile template --use bug-report --title "Login fails"
 ```
 
-## VSCode Integration
+## Agent Integration
 
-The VSCode extension provides a UI for creating tasks from templates through:
-- Command Palette: "Brainfile: Create Task from Template"
-- UI button in the sidebar: "New from Template"
+Templates work well in agent-driven workflows:
 
-See the [VSCode Extension documentation](/vscode/extension) for details.
+- Create templated tasks from the CLI: `brainfile template --use bug-report --title "..."`
+- In [Pi](https://pi.dev/), the [Pi Extension](/tools/pi) can delegate templated tasks as contracts to workers.
+- With the [MCP Server](/tools/mcp), any MCP-compatible agent can create tasks from templates via tool calls.
 

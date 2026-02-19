@@ -2,6 +2,10 @@
 
 This guide explains how to act as an orchestrator (PM) coordinating work across multiple AI agents using brainfile contracts.
 
+::: tip Multi-Agent Orchestration in Pi
+For a fully automated PM/Worker workflow with event-sourced coordination, worker presence, stale detection, and lease-based identity assignment, see the **[Pi Extension](/tools/pi)**.
+:::
+
 ## Role
 
 As orchestrator, you **plan, delegate, and coordinate** - you don't implement directly unless explicitly asked.

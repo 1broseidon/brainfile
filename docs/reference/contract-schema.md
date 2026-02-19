@@ -9,6 +9,10 @@ The Contract object is an optional extension to a Brainfile task. It defines the
 
 **Source of Truth**: [contract.json](https://brainfile.md/v2/contract.json)
 
+::: tip See also
+For a field-by-field walkthrough with examples, see [Types → Contract](/types/contract).
+:::
+
 ## Object Structure
 
 | Field | Type | Description | Required |
@@ -19,19 +23,19 @@ The Contract object is an optional extension to a Brainfile task. It defines the
 | `constraints` | `Array<string>` | Implementation rules to follow | No |
 | `outOfScope` | `Array<string>` | Explicitly out-of-scope items | No |
 | `feedback` | `string` | PM feedback after failed validation | No |
-| `version` | `number` | Contract version (incremented on amendment) | No |
+| `version` | `integer` | Contract version (incremented on amendment) | No |
 | `metrics` | `Metrics` | Auto-tracked timing and rework data | No |
 
 ## Lifecycle Status (`status`)
 
 Contracts follow a strict state machine to coordinate between different agents.
 
-- `draft`: Contract is being defined.
 - `ready`: Work is defined and available for an agent to pick up.
 - `in_progress`: An agent has claimed the task and is working on it.
 - `delivered`: Work is completed and submitted for validation.
 - `done`: Work has passed validation and is finalized.
 - `failed`: Work failed validation or was abandoned.
+- `blocked`: Agent is stuck on an external dependency.
 
 ## Deliverable Object
 

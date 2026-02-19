@@ -51,9 +51,11 @@ brainfile move --task task-1 --column in-progress  # Move columns
 brainfile complete --task task-1            # Complete (moves to logs/)
 ```
 
-**Option C: VSCode Extension**
-1. Install "Brainfile" from the marketplace
-2. Open your project — the kanban board appears in the sidebar
+**Option C: AI Agent ([Pi](https://pi.dev/))**
+1.  PM session: `/listen role pm` → `/listen on`
+2.  Worker sessions: `/listen role worker` → `/listen on`
+3.  Create tasks with contracts — workers pick them up automatically
+4.  Run `/listen status` to see active workers and progress
 
 ---
 

@@ -18,7 +18,7 @@ Last Updated: 2026-02-19
 5. Agent Workflow Patterns
 6. CLI & Terminal UI
 7. MCP Server Integration
-8. VSCode Extension
+8. Pi Extension Integration
 9. Core Library
 10. Protocol Specification
 11. API Reference
@@ -76,9 +76,11 @@ brainfile move --task task-1 --column in-progress  # Move columns
 brainfile complete --task task-1            # Complete (moves to logs/)
 `
 
-Option C: VSCode Extension
-  Install "Brainfile" from the marketplace
-  Open your project — the kanban board appears in the sidebar
+Option C: AI Agent (Pi)
+  PM session: /listen role pm → /listen on
+  Worker sessions: /listen role worker → /listen on
+  Create tasks with contracts — workers pick them up automatically
+  Run /listen status to see active workers and progress
 
 ---
 
@@ -205,6 +207,7 @@ A Simple Example
 Imagine you want an agent to create a new React component. Instead of a vague task, you create a contract:
 
 ``
+---
 id: task-101
 title: "Create UserProfile component"
 contract:
@@ -221,14 +224,16 @@ contract:
   constraints:
   - Use Tailwind CSS for styling
   - Must be a functional component
+---
 `
 
 The Coordination Lifecycle
-  Draft: The contract is being defined (usually by you or a PM agent).
-  Ready: The task is ready for a worker agent to pick up.
-  In Progress: A worker agent has started the work.
-  Delivered: The worker has finished and is waiting for validation.
-  Done: The work is validated and complete.
+  Ready (ready): The contract is defined and available for a worker agent to pick up.
+  In Progress (in_progress): A worker agent has claimed the task and started work.
+  Delivered (delivered): The worker has finished and is waiting for PM validation.
+  Done (done): The work has been validated and accepted.
+  Failed (failed): Validation failed — feedback is provided for rework.
+  Blocked (blocked): The agent is stuck on an external dependency and needs PM help.
 
 Try it now
 
@@ -237,7 +242,7 @@ You can add a contract to any task using the CLI:
 `
 brainfile add --title "Refactor Auth" \
   --with-contract \
-  --deliverable "src/auth.ts" \
+  --deliverable "file:src/auth.ts:Auth refactor" \
   --validation "npm test"
 ``
 
@@ -263,26 +268,30 @@ The Contract Schema
 A contract is an optional property of a task. When present, it formalizes the "handshake" between agents.
 
 ``
-  - id: task-101
-  title: Implement rate limiter
-  description: |
-    Implement token bucket rate limiting to prevent API quota exhaustion.
-  assignee: codex
-  relatedFiles:
+---
+id: task-101
+title: Implement rate limiter
+description: |
+  Implement token bucket rate limiting to prevent API quota exhaustion.
+assignee: codex
+relatedFiles:
   - src/api/middleware.ts
-  contract:
-    status: ready
-    deliverables:
-  - path: src/rateLimiter.ts
-        description: Token bucket implementation
-  - path: src/__tests__/rateLimiter.test.ts
-        description: Unit tests
-    validation:
-      commands:
+contract:
+  status: ready
+  deliverables:
+  - type: file
+      path: src/rateLimiter.ts
+      description: Token bucket implementation
+  - type: test
+      path: src/__tests__/rateLimiter.test.ts
+      description: Unit tests
+  validation:
+    commands:
   - "npm test -- rateLimiter"
-    constraints:
+  constraints:
   - "Use token bucket algorithm"
   - "Must be non-blocking (async)"
+---
 `
 
 Key Fields
@@ -318,7 +327,7 @@ graph LR
 | delivered | Work is complete and awaiting PM review. | PM: contract validate |
 | done | PM has verified and accepted the work. | PM: brainfile complete to move to logs/. |
 | failed | Validation failed. Feedback is provided. | PM: Add feedback, reset to ready for rework. |
-| blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to ready. |
+| blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to ready. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
 
 ---
 
@@ -332,11 +341,11 @@ Contracts can be created alongside a task or attached to an existing one.
 
 Create task with contract
 
-brainfile add --with-contract --deliverable "src/auth.ts" --validation "npm test"
+brainfile add --with-contract --deliverable "file:src/auth.ts:Implementation" --validation "npm test"
 
 Attach contract to existing task
 
-brainfile contract attach -t task-42 --deliverable "docs/api.md"
+brainfile contract attach -t task-42 --deliverable "docs:docs/api.md:API documentation"
 `
 
 For Worker Agents
@@ -417,8 +426,8 @@ brainfile add --title "Add OAuth2 Support" \
   --description "Implement Google OAuth2 login flow. See design docs for details." \
   --assignee codex \
   --with-contract \
-  --deliverable "src/auth/oauth.ts:Implementation" \
-  --deliverable "src/auth/__tests__/oauth.test.ts:Tests" \
+  --deliverable "file:src/auth/oauth.ts:Implementation" \
+  --deliverable "test:src/auth/__tests__/oauth.test.ts:Tests" \
   --validation "npm test -- oauth" \
   --constraint "Use official google-auth-library"
 `
@@ -485,7 +494,7 @@ If the PM agent finds issues during validation or manual review, the rework flow
 Blocked Agents
 
 Sometimes a worker agent cannot proceed due to external factors (missing API keys, ambiguous requirements, upstream bugs).
-  Agent Reports Blocked: The agent edits the task file to set contract.status to blocked and adds a note to the task log explaining the blocker.
+  Agent Reports Blocked: The agent edits the task file to set contract.status to blocked and adds a note to the task log explaining the blocker. (Either the agent or PM can set this status via manual YAML edit; there is no dedicated CLI command for it.)
   PM Notification: The PM sees the blocked status in the TUI or via brainfile list.
   Resolution: The PM provides the missing info or fixes the dependency.
   Reset: The PM edits contract.status back to ready or in_progress.
@@ -566,7 +575,7 @@ Keyboard Controls
 | q | Quit |
 
 ::: info Real-time sync
-The TUI watches your file for changes — edits from VSCode or AI assistants appear instantly.
+The TUI watches your file for changes — edits from your editor or AI assistants appear instantly.
 :::
 
 ---
@@ -817,13 +826,14 @@ Task Management
 
 | Tool | Description |
 |------|-------------|
-| list_tasks | List all tasks, filter by column, tag, or contract status |
+| list_tasks | List all tasks, filter by column, tag, type, or contract status |
 | get_task | Get detailed information about a specific task |
 | search_tasks | Search tasks by query, column, priority, assignee |
-| add_task | Create a task with title, priority, tags, etc. |
+| add_task | Create a task with title, priority, tags, type, relatedFiles, etc. |
 | move_task | Move a task between columns |
 | patch_task | Update specific fields on a task |
 | delete_task | Permanently delete a task |
+| complete_task | Complete a task (move from board/ to logs/) |
 
 Bulk Operations
 
@@ -871,6 +881,27 @@ Subtasks
 | delete_subtask | Remove a subtask |
 | bulk_set_subtasks | Set multiple subtasks to completed or incomplete at once |
 | complete_all_subtasks | Mark all subtasks in a task as completed or incomplete |
+
+Log Operations
+
+| Tool | Description |
+|------|-------------|
+| search_logs | Search completed task logs by query, or list recent completions |
+| append_log | Append a timestamped log entry to any task (active or completed) |
+
+Type Operations
+
+| Tool | Description |
+|------|-------------|
+| list_types | List board strict mode setting and custom type configuration |
+
+Rule Operations
+
+| Tool | Description |
+|------|-------------|
+| list_rules | List project rules, optionally filtered by category |
+| add_rule | Add a new project rule (always, never, prefer, context) |
+| delete_rule | Delete a project rule by category and ID |
 
 Agent Contracts
 
@@ -991,133 +1022,164 @@ Next Steps
 
 ---
 
-## 8. VSCode Extension
+## 8. Pi Extension Integration
 
-VSCode Extension
+Pi Extension
 
-The Brainfile extension brings a visual kanban board directly into VSCode. See your tasks in the sidebar, drag and drop between columns, and stay in your editor.
+The Brainfile extension for Pi is the primary way to run multi-agent orchestration against a Brainfile board.
 
-Installation
-  Open VSCode
-  Go to Extensions (Cmd+Shift+X / Ctrl+Shift+X)
-  Search for "Brainfile"
-  Click Install
-
-Or install from the command line:
-
-``
-code --install-extension brainfile.brainfile
-`
+Source code: protocol/example/integrations/pi/brainfile-extension/
 
 Features
 
-Kanban Board View
+PM and Worker Roles
 
-The extension adds a Brainfile panel to your sidebar. Open any project with a brainfile.md file and the board appears automatically.
-  - Columns — Your workflow stages (To Do, In Progress, Done)
-  - Tasks — Cards showing title, priority, tags
-  - Drag & Drop — Move tasks between columns visually
+Every Pi session runs as either a PM (project manager) or a Worker:
 
-Real-time Sync
+| Role | Listener default | Responsibility |
+|------|-----------------|---------------|
+| PM | Off | Creates contracts, delegates work, validates deliveries |
+| Worker | On | Picks up assigned contracts, implements, delivers |
 
-::: info All tools stay in sync
-The extension watches your brainfile.md for changes. Edits from the CLI, AI assistants, or direct file changes appear instantly. No refresh needed.
-:::
+Set the role with /listen role <pm|worker|auto>. In auto mode the extension checks for an existing open PM run on startup — if one exists, the session demotes itself to worker to avoid conflicts. The same check runs on model switch.
 
-Task Details
+Event-Sourced Coordination
 
-Click a task to see:
-  - Full description
-  - Subtasks with completion status
-  - Assignee and due date
-  - Related files
-  - Tags and priority
+All orchestration state is recorded as an append-only event log at .brainfile/state/pi-events.jsonl. Each PM run gets a unique runId, and events are scoped to that run.
 
-Quick Actions
-  - Add Task — Click + in any column
-  - Edit Task — Click the edit icon
-  - Delete Task — Right-click menu
-  - Move Task — Drag between columns
-
----
-
-File Discovery
-
-The extension looks for brainfile in this order:
-  brainfile.md (preferred)
-  .brainfile.md (hidden, backward compat)
-
-If found, the kanban view activates automatically.
-
----
-
-Keyboard Shortcuts
-
-| Shortcut | Action |
+| Category | Events |
 |----------|--------|
-| Cmd+Shift+B | Toggle Brainfile panel |
-| Cmd+Shift+N | New task in current column |
+| Run lifecycle | run.started, run.blocked, run.closed |
+| Contracts | contract.delegated, contract.picked_up, contract.delivered, contract.validated |
+| Tasks | task.stale, task.completed |
+| Workers | worker.online, worker.heartbeat, worker.offline |
 
----
+worker.offline is best-effort — it fires on shutdown, listener disable, or role switch, but a crashed session won't emit it. The heartbeat TTL handles that case.
 
-Settings
+Run Lifecycle
+  PM enables listener → run.started is emitted.
+  PM creates contracts and assigns workers → contract.delegated for each.
+  Workers claim and complete contracts → contract.picked_up, contract.delivered, contract.validated.
+  The PM tracks all delegated tasks by runId.
+  The run ends with run.closed, which includes:
+  - result — success, blocked, etc.
+  - counts — how many tasks were delegated, completed, failed
+  - openTasks — any unresolved tasks (required when result is not success)
 
-Configure via VSCode settings (Cmd+,):
+PM Notifications
 
-`
+During multi-agent runs the PM chat stays quiet. The PM is only interrupted for:
+  - Deliveries ready — all open tasks in the run have been delivered and are awaiting validation
+  - Blocked — a worker hit an external dependency (run.blocked)
+  - Run complete — all delegated work is validated and finished (run.closed)
+
+Routine progress is visible via /listen status.
+
+Stale Task Detection
+
+If an in_progress contract shows no activity for too long, the extension flags it as stale:
+  task.stale is emitted for each affected task.
+  run.blocked is emitted with the reason and counts.
+  If the run cannot continue, run.closed is emitted with remaining openTasks.
+
+The default timeout is 1 hour. Override per workspace in .pi/settings.json:
+
+``
 {
-  "brainfile.defaultFile": "brainfile.md",
-  "brainfile.showInActivityBar": true
+  "brainfileExtension": {
+    "staleTimeoutSeconds": 1800
+  }
 }
 `
 
----
+Worker Presence and Identity
 
-Troubleshooting
+Workers are auto-assigned numbered identities based on their model family — claude-1, codex-2, gemini-1, etc. Slot assignment uses filesystem lease locks under .brainfile/state/worker-claims/ so that multiple workers starting at the same time never collide on the same identity.
 
-Board not showing
-  Ensure brainfile.md exists in your workspace root
-  Check the file is valid YAML (run brainfile lint)
-  Reload the window (Cmd+Shift+P → "Reload Window")
+Presence is tracked via periodic heartbeats:
 
-Changes not syncing
+| Event | When |
+|-------|------|
+| worker.online | First heartbeat after listener starts |
+| worker.heartbeat | Every 20 seconds while active |
+| worker.offline | Listener stops, role changes, or session exits |
 
-The extension uses file watching. If changes aren't appearing:
-  Save the file explicitly
-  Check VSCode's file watcher isn't rate-limited
-  Reload the window
+A worker is considered unavailable if no heartbeat arrives within the 45-second TTL. From the PM session, /listen status shows the current run ID, online workers, and stale timeout.
 
-Invalid YAML errors
+Assignee matching: Numbered identities match exactly — codex-1 only picks up tasks assigned to codex-1. Bare family names like codex act as wildcards for backward compatibility.
 
-::: tip Quick fix
-Run brainfile lint --fix to auto-fix common issues like unquoted strings with colons.
-:::
+Delivery Verification
 
----
+/bf contract deliver checks that all declared deliverable files exist before accepting. It also records evidence in contract metrics: git HEAD, file sizes, and validation output.
 
-Works With
+Commands
 
-The VSCode extension complements other Brainfile tools:
-  - CLI — Use both interchangeably
-  - MCP Server — AI updates appear in real-time
-  - TUI — Terminal users see the same data
+Listener
 
-All tools read the same brainfile.md` file.
+| Command | Description |
+|---------|-------------|
+| /listen | Toggle listener on/off |
+| /listen on | Start the background listener |
+| /listen off | Stop the listener |
+| /listen status | Show run state, active workers, stale timeout |
+| /listen now | Run one poll cycle immediately |
+| /listen role <pm\|worker\|auto> | Set session role |
+| /listen assignee <name> | Override worker identity |
+| /listen auto | Reset to auto-assigned identity |
+| /listen mode <start\|wait> | Start working immediately or wait for assignment |
 
----
+Role aliases: main, planner, orchestrator → pm; agent → worker.
 
-Source Code
+Board
 
-The extension is open source:
-  - GitHub Repository
-  - Issue Tracker
+| Command | Description |
+|---------|-------------|
+| /bf pick | Interactively select an active task |
+| /bf <task-id> | Set active task directly (shortcut) |
+| /bf status | Show current task and contract state |
+| /bf board | Print the board summary |
+| /bf clear | Clear the active task |
+| /bf move <id> <column> | Move a task to a column |
+| /bf contract pickup <id> | Claim a specific contract |
+| /bf contract deliver <id> | Mark a contract as delivered |
+| /bf contract validate <id> | Validate deliverables and run checks |
+| /bf plan | Toggle plan mode (mutations disabled) |
 
----
+Top-Level
 
-Next Steps
-  - CLI & TUI — Command-line interface
-  - MCP Server — AI integration
-  - Quick Start — Getting started guide
+| Command | Description |
+|---------|-------------|
+| /plan | Toggle plan mode (mutations disabled) |
+
+Setup
+  Copy the extension into your workspace:
+
+`
+cp -r protocol/example/integrations/pi/brainfile-extension/ .pi/extensions/brainfile-extension/
+`
+  Install dependencies:
+
+`
+cd .pi/extensions/brainfile-extension && npm install
+`
+  In Pi, run /reload to activate.
+
+Typical Workflow
+  PM session — /listen role pm → /listen on
+  Worker sessions — /listen role worker → /listen on
+  PM creates tasks with contracts and assigns them to workers
+  Workers automatically pick up ready contracts matching their identity
+  Workers implement deliverables and run /bf contract deliver
+  PM receives a notification when work is blocked or the run is complete, then validates
+
+Backward Compatibility
+
+Existing /listen, /bf, and brainfile_*` tool workflows continue to work unchanged.
+
+See Also
+  - Orchestration Guide — General orchestration patterns
+  - AI Agent Integration — MCP, hooks, and manual setup
+  - MCP Server — Tool-based integration for other agents
 
 ---
 
@@ -1583,14 +1645,16 @@ Each task is a standalone .md file in .brainfile/board/:
 | subtasks | array | No | Subtask objects |
 | contract | object | No | Agent contract |
 | createdAt | string | No | ISO 8601 timestamp |
+| updatedAt | string | No | ISO 8601 timestamp, set on mutations |
 | completedAt | string | No | Set when moved to logs/ |
 | parentId | string | No | Parent document ID |
+| position | number | No | Sort position within the column |
 
 Subtask Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| id | string | Yes | Unique ID (e.g., sub-1) |
+| id | string | Yes | Unique ID (e.g., task-1-1) |
 | title | string | Yes | Subtask title |
 | completed | boolean | Yes | Completion status |
 
@@ -1701,12 +1765,15 @@ Pattern: {type}-N where N is a sequential number.
 
 Subtask IDs
 
-Pattern: sub-N where N is a sequential number within the task.
+Pattern: {taskId}-N where N is a sequential number within the parent task.
 
 `
+
+For a task with id: task-1
+
 subtasks:
-  - id: sub-1
-  - id: sub-2
+  - id: task-1-1
+  - id: task-1-2
 `
 
 ---
@@ -2260,7 +2327,9 @@ interface Task {
   subtasks?: Subtask[];
   contract?: Contract;
   parentId?: string;           // v2: parent document ID
+  position?: number;           // v2: sort position within column
   createdAt?: string;
+  updatedAt?: string;          // v2: ISO 8601 timestamp
   completedAt?: string;
 }
 `
@@ -2595,7 +2664,8 @@ Options:
 | -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
 | -c, --column <name> | Filter by column |
 | -t, --tag <name> | Filter by tag |
-| --contract <status> | Filter by contract status (ready, in_progress, delivered, done, failed) |
+| --parent <id> | Filter by parent task ID (parentId) |
+| --contract <status> | Filter by contract status (ready, in_progress, delivered, done, failed, blocked) |
 
 ---
 
@@ -2613,6 +2683,7 @@ Options:
 |--------|-------------|
 | -t, --task <id> | Task ID (required) |
 | -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
+| --json | Output task data as JSON |
 
 Output includes:
   - Task ID, title, column, priority, tags, assignee
@@ -2675,7 +2746,7 @@ Options:
 
 patch
 
-Update specific fields of a task. Use --clear-* options to remove fields.
+Update specific fields of a task. Use --clear- options to remove fields.
 
 `
 brainfile patch --task task-1 --priority critical
@@ -2719,16 +2790,21 @@ Options:
 
 archive
 
-Move a task to the archive section.
+Archive a task locally or to an external service (GitHub Issues, Linear).
 
 `
 brainfile archive --task task-1
+brainfile archive --task task-1 --to github
+brainfile archive --all --to linear --dry-run
 `
 
 Options:
 | Option | Description |
 |--------|-------------|
-| -t, --task <id> | Task ID (required) |
+| -t, --task <id> | Task ID to archive |
+| --to <destination> | Archive destination: local, github, or linear |
+| --all | Archive all tasks from local archive to external service |
+| --dry-run | Preview what would be created without making changes |
 
 ---
 
@@ -2986,6 +3062,24 @@ brainfile log --search "auth"      # Search logs
 
 ---
 
+note
+
+Append a timestamped note to a task's log section.
+
+`
+brainfile note -t task-1 "Started implementation"
+brainfile note -t task-1 "Fixed failing test" --agent codex
+`
+
+Options:
+| Option | Description |
+|--------|-------------|
+| -t, --task <id> | Task ID (required) |
+| --agent <name> | Agent name for attribution |
+| [message] | Log message to append (positional argument) |
+
+---
+
 migrate
 
 Move root brainfile.md to .brainfile/ directory structure.
@@ -3078,21 +3172,67 @@ Options:
 |--------|-------------|
 | -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
 
-Available MCP Tools:
+Available MCP Tools (30):
+
+Task Management:
 
 | Tool | Description |
 |------|-------------|
-| list_tasks | List tasks with optional filtering |
-| add_task | Create a new task |
+| list_tasks | List tasks with optional filtering (column, tag, type, contract status) |
+| get_task | Get detailed information about a specific task |
+| search_tasks | Search tasks by query, column, priority, assignee |
+| add_task | Create a task with title, priority, tags, type, relatedFiles, contracts |
 | move_task | Move task between columns |
 | patch_task | Update task fields |
 | delete_task | Permanently delete a task |
-| archive_task | Archive a task |
+| complete_task | Complete a task (move from board/ to logs/) |
+
+Bulk Operations:
+
+| Tool | Description |
+|------|-------------|
+| bulk_move_tasks | Move multiple tasks to a column |
+| bulk_patch_tasks | Apply same patch to multiple tasks |
+| bulk_delete_tasks | Delete multiple tasks |
+| bulk_archive_tasks | Archive multiple tasks |
+
+Archiving:
+
+| Tool | Description |
+|------|-------------|
+| archive_task | Archive a task (local, GitHub, or Linear) |
 | restore_task | Restore from archive |
+
+Subtasks:
+
+| Tool | Description |
+|------|-------------|
 | add_subtask | Add a subtask |
-| delete_subtask | Delete a subtask |
 | toggle_subtask | Toggle subtask completion |
 | update_subtask | Update subtask title |
+| delete_subtask | Delete a subtask |
+| bulk_set_subtasks | Set multiple subtasks to completed or incomplete |
+| complete_all_subtasks | Mark all subtasks as completed or incomplete |
+
+Agent Contracts:
+
+| Tool | Description |
+|------|-------------|
+| contract_pickup | Claim a contract (status → in_progress) |
+| contract_deliver | Mark contract as delivered |
+| contract_validate | Check deliverables and run validation commands |
+| attach_contract | Add contract to existing task |
+
+Logs, Types, and Rules:*
+
+| Tool | Description |
+|------|-------------|
+| search_logs | Search completed task logs |
+| append_log | Append a timestamped log entry to a task |
+| list_types | List board type configuration |
+| list_rules | List project rules |
+| add_rule | Add a project rule |
+| delete_rule | Delete a project rule |
 
 ---
 
@@ -3175,6 +3315,10 @@ The Contract object is an optional extension to a Brainfile task. It defines the
 
 Source of Truth: contract.json
 
+::: tip See also
+For a field-by-field walkthrough with examples, see Types → Contract.
+:::
+
 Object Structure
 
 | Field | Type | Description | Required |
@@ -3185,18 +3329,18 @@ Object Structure
 | constraints | Array<string> | Implementation rules to follow | No |
 | outOfScope | Array<string> | Explicitly out-of-scope items | No |
 | feedback | string | PM feedback after failed validation | No |
-| version | number | Contract version (incremented on amendment) | No |
+| version | integer | Contract version (incremented on amendment) | No |
 | metrics | Metrics | Auto-tracked timing and rework data | No |
 
 Lifecycle Status (status)
 
 Contracts follow a strict state machine to coordinate between different agents.
-  - draft: Contract is being defined.
   - ready: Work is defined and available for an agent to pick up.
   - in_progress: An agent has claimed the task and is working on it.
   - delivered: Work is completed and submitted for validation.
   - done: Work has passed validation and is finalized.
   - failed: Work failed validation or was abandoned.
+  - blocked: Agent is stuck on an external dependency.
 
 Deliverable Object
 

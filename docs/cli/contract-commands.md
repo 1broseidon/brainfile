@@ -42,7 +42,7 @@ brainfile contract pickup --task task-42
 
 ## deliver
 
-Submit completed work for review. This validates that all deliverables are present and all subtasks are complete before setting status to `delivered`.
+Submit completed work for review. This validates that all deliverables are present before setting status to `delivered`.
 
 ```bash
 brainfile contract deliver --task task-42
@@ -81,18 +81,13 @@ Attach a contract definition to an existing task.
 
 ```bash
 brainfile contract attach --task task-42 \
-  --deliverable "src/main.ts" \
+  --deliverable "file:src/main.ts:Implementation" \
   --validation "npm test" \
   --constraint "Follow style guide"
 ```
 
 **Options:**
 - `-t, --task <id>` - Task ID (required)
-- `--deliverable <path:description>` - Add a deliverable (repeatable)
+- `--deliverable <type:path:description>` - Add a deliverable (repeatable). Type: `file`, `test`, `docs`, `design`, `research`.
 - `--validation <command>` - Add a validation command (repeatable)
 - `--constraint <text>` - Add an implementation constraint (repeatable)
-- `--out-of-scope <text>` - Add an out-of-scope item (repeatable)
-
-
-
-```

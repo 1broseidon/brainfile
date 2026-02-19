@@ -55,7 +55,7 @@ brainfile ./path/to/brainfile.md
 | `q` | Quit |
 
 ::: info Real-time sync
-The TUI watches your file for changes — edits from VSCode or AI assistants appear instantly.
+The TUI watches your file for changes — edits from your editor or AI assistants appear instantly.
 :::
 
 ---

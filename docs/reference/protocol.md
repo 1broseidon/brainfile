@@ -152,14 +152,16 @@ Each task is a standalone `.md` file in `.brainfile/board/`:
 | `subtasks` | array | No | Subtask objects |
 | `contract` | object | No | Agent contract |
 | `createdAt` | string | No | ISO 8601 timestamp |
+| `updatedAt` | string | No | ISO 8601 timestamp, set on mutations |
 | `completedAt` | string | No | Set when moved to logs/ |
 | `parentId` | string | No | Parent document ID |
+| `position` | number | No | Sort position within the column |
 
 ### Subtask Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | string | Yes | Unique ID (e.g., `sub-1`) |
+| `id` | string | Yes | Unique ID (e.g., `task-1-1`) |
 | `title` | string | Yes | Subtask title |
 | `completed` | boolean | Yes | Completion status |
 
@@ -270,12 +272,13 @@ Pattern: `{type}-N` where N is a sequential number.
 
 ### Subtask IDs
 
-Pattern: `sub-N` where N is a sequential number within the task.
+Pattern: `{taskId}-N` where N is a sequential number within the parent task.
 
 ```yaml
+# For a task with id: task-1
 subtasks:
-  - id: sub-1
-  - id: sub-2
+  - id: task-1-1
+  - id: task-1-2
 ```
 
 ---

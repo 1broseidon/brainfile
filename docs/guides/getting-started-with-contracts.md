@@ -24,6 +24,7 @@ When an AI agent sees a task with a contract, it doesn't just "try its best"—i
 Imagine you want an agent to create a new React component. Instead of a vague task, you create a contract:
 
 ```yaml
+---
 id: task-101
 title: "Create UserProfile component"
 contract:
@@ -40,15 +41,17 @@ contract:
   constraints:
     - Use Tailwind CSS for styling
     - Must be a functional component
+---
 ```
 
 ## The Coordination Lifecycle
 
-1. **Draft**: The contract is being defined (usually by you or a PM agent).
-2. **Ready**: The task is ready for a worker agent to pick up.
-3. **In Progress**: A worker agent has started the work.
-4. **Delivered**: The worker has finished and is waiting for validation.
-5. **Done**: The work is validated and complete.
+1. **Ready** (`ready`): The contract is defined and available for a worker agent to pick up.
+2. **In Progress** (`in_progress`): A worker agent has claimed the task and started work.
+3. **Delivered** (`delivered`): The worker has finished and is waiting for PM validation.
+4. **Done** (`done`): The work has been validated and accepted.
+5. **Failed** (`failed`): Validation failed — feedback is provided for rework.
+6. **Blocked** (`blocked`): The agent is stuck on an external dependency and needs PM help.
 
 ## Try it now
 
@@ -57,7 +60,7 @@ You can add a contract to any task using the CLI:
 ```bash
 brainfile add --title "Refactor Auth" \
   --with-contract \
-  --deliverable "src/auth.ts" \
+  --deliverable "file:src/auth.ts:Auth refactor" \
   --validation "npm test"
 ```
 

@@ -20,26 +20,30 @@ The Brainfile contract system provides a structured way for AI agents to coordin
 A contract is an optional property of a task. When present, it formalizes the "handshake" between agents.
 
 ```yaml
-- id: task-101
-  title: Implement rate limiter
-  description: |
-    Implement token bucket rate limiting to prevent API quota exhaustion.
-  assignee: codex
-  relatedFiles:
-    - src/api/middleware.ts
-  contract:
-    status: ready
-    deliverables:
-      - path: src/rateLimiter.ts
-        description: Token bucket implementation
-      - path: src/__tests__/rateLimiter.test.ts
-        description: Unit tests
-    validation:
-      commands:
-        - "npm test -- rateLimiter"
-    constraints:
-      - "Use token bucket algorithm"
-      - "Must be non-blocking (async)"
+---
+id: task-101
+title: Implement rate limiter
+description: |
+  Implement token bucket rate limiting to prevent API quota exhaustion.
+assignee: codex
+relatedFiles:
+  - src/api/middleware.ts
+contract:
+  status: ready
+  deliverables:
+    - type: file
+      path: src/rateLimiter.ts
+      description: Token bucket implementation
+    - type: test
+      path: src/__tests__/rateLimiter.test.ts
+      description: Unit tests
+  validation:
+    commands:
+      - "npm test -- rateLimiter"
+  constraints:
+    - "Use token bucket algorithm"
+    - "Must be non-blocking (async)"
+---
 ```
 
 ### Key Fields
@@ -76,7 +80,7 @@ graph LR
 | `delivered` | Work is complete and awaiting PM review. | PM: `contract validate` |
 | `done` | PM has verified and accepted the work. | PM: `brainfile complete` to move to logs/. |
 | `failed` | Validation failed. Feedback is provided. | PM: Add feedback, reset to `ready` for rework. |
-| `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. |
+| `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
 
 ---
 
@@ -87,10 +91,10 @@ Contracts can be created alongside a task or attached to an existing one.
 
 ```bash
 # Create task with contract
-brainfile add --with-contract --deliverable "src/auth.ts" --validation "npm test"
+brainfile add --with-contract --deliverable "file:src/auth.ts:Implementation" --validation "npm test"
 
 # Attach contract to existing task
-brainfile contract attach -t task-42 --deliverable "docs/api.md"
+brainfile contract attach -t task-42 --deliverable "docs:docs/api.md:API documentation"
 ```
 
 ### For Worker Agents

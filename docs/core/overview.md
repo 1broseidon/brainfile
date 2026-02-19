@@ -181,8 +181,9 @@ if (!result.board) {
 
 ## Used By
 
-- **[@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)** - CLI with TUI and MCP server
-- **[brainfile-vscode](https://github.com/brainfile/vscode)** - VSCode extension
+- **[@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)** — CLI with TUI and MCP server
+- **[Pi Extension](/tools/pi)** — Multi-agent orchestration in [Pi](https://pi.dev/)
+- **VSCode extension** — Deprecated; see [VSCode](/tools/vscode) for migration notes
 
 ## Links
 

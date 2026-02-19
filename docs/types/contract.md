@@ -2,6 +2,10 @@
 
 The contract schema defines an optional `contract` object that can be attached to a task. Contracts are designed for PM-to-agent workflows: they specify what must be produced, how it can be validated, and any constraints to follow.
 
+::: tip See also
+For the formal field table and object structure, see [Reference → Contract Schema](/reference/contract-schema).
+:::
+
 ## Schema URL
 
 ```
@@ -27,7 +31,7 @@ A contract is a structured, machine-friendly agreement attached to a task. It su
 ### `status`
 
 **Type**: `string`
-**Enum**: `draft`, `ready`, `in_progress`, `delivered`, `done`, `failed`
+**Enum**: `ready`, `in_progress`, `delivered`, `done`, `failed`, `blocked`
 **Description**: Contract lifecycle status
 
 ```yaml
@@ -122,7 +126,7 @@ contract:
 
 ### `version`
 
-**Type**: `number`
+**Type**: `integer`
 **Description**: Contract version number. Increment when amending a contract.
 
 ### `metrics`

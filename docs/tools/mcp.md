@@ -66,13 +66,14 @@ Your AI assistant gets access to these operations:
 
 | Tool | Description |
 |------|-------------|
-| `list_tasks` | List all tasks, filter by column, tag, or contract status |
+| `list_tasks` | List all tasks, filter by column, tag, type, or contract status |
 | `get_task` | Get detailed information about a specific task |
 | `search_tasks` | Search tasks by query, column, priority, assignee |
-| `add_task` | Create a task with title, priority, tags, etc. |
+| `add_task` | Create a task with title, priority, tags, type, relatedFiles, etc. |
 | `move_task` | Move a task between columns |
 | `patch_task` | Update specific fields on a task |
 | `delete_task` | Permanently delete a task |
+| `complete_task` | Complete a task (move from `board/` to `logs/`) |
 
 ### Bulk Operations
 
@@ -120,6 +121,27 @@ npx @brainfile/cli config set archive.github.repo myrepo
 | `delete_subtask` | Remove a subtask |
 | `bulk_set_subtasks` | Set multiple subtasks to completed or incomplete at once |
 | `complete_all_subtasks` | Mark all subtasks in a task as completed or incomplete |
+
+### Log Operations
+
+| Tool | Description |
+|------|-------------|
+| `search_logs` | Search completed task logs by query, or list recent completions |
+| `append_log` | Append a timestamped log entry to any task (active or completed) |
+
+### Type Operations
+
+| Tool | Description |
+|------|-------------|
+| `list_types` | List board strict mode setting and custom type configuration |
+
+### Rule Operations
+
+| Tool | Description |
+|------|-------------|
+| `list_rules` | List project rules, optionally filtered by category |
+| `add_rule` | Add a new project rule (always, never, prefer, context) |
+| `delete_rule` | Delete a project rule by category and ID |
 
 ### Agent Contracts
 

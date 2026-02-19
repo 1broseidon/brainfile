@@ -184,13 +184,13 @@ relatedFiles:
   - src/auth/jwt.ts
   - src/middleware/auth.ts
 subtasks:
-  - id: sub-1
+  - id: task-1-1
     title: Implement JWT generation
     completed: false
-  - id: sub-2
+  - id: task-1-2
     title: Create login endpoint
     completed: false
-  - id: sub-3
+  - id: task-1-3
     title: Write tests
     completed: false
 ---
@@ -205,17 +205,17 @@ subtasks:
 
 ```yaml
 subtasks:
-  - id: sub-1
+  - id: task-1-1
     title: Write integration tests
     completed: false
-  - id: sub-2
+  - id: task-1-2
     title: Update documentation
     completed: true
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | `string` | Yes | Unique subtask identifier (e.g., `sub-1`) |
+| `id` | `string` | Yes | Unique subtask identifier (e.g., `task-1-1`) |
 | `title` | `string` | Yes | Subtask title |
 | `completed` | `boolean` | Yes | Whether the subtask is done |
 
@@ -291,10 +291,10 @@ relatedFiles:
   - src/auth/jwt.ts
   - src/middleware/auth.ts
 subtasks:
-  - id: sub-1
+  - id: task-1-1
     title: Implement JWT generation
     completed: false
-  - id: sub-2
+  - id: task-1-2
     title: Create login endpoint
     completed: false
 ---
@@ -324,10 +324,10 @@ tags: [devops]
 createdAt: "2025-11-20T10:00:00Z"
 completedAt: "2025-11-23T16:45:00Z"
 subtasks:
-  - id: sub-1
+  - id: task-2-1
     title: Configure GitHub Actions
     completed: true
-  - id: sub-2
+  - id: task-2-2
     title: Test deployment
     completed: true
 ---

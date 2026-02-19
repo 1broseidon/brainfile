@@ -489,7 +489,7 @@ need to be updated. Each diff entry includes before/after snapshots, indexes, an
 
 > **Migration note:** these utilities ship in `@brainfile/core@0.4.0+`. Replace
 > bespoke hashing/diff logic with the shared helpers to ensure consistent behavior
-> across VS Code, CLI, and future integrations.
+> across Pi extension, CLI, MCP tooling, and future integrations.
 
 ## v2 File Operations
 

@@ -28,13 +28,13 @@ docs/
 ├── quick-start.md      # Quick start guide
 ├── why.md              # Why Brainfile?
 ├── guides/             # In-depth guides
-├── tools/              # CLI, MCP, VSCode, Core docs
+├── tools/              # CLI, MCP, Pi, Core docs
 ├── reference/          # Protocol spec, API ref, CLI commands
 ├── types/              # Schema documentation (base, board, contract)
 ├── cli/                # CLI-specific docs
 ├── core/               # Core library docs
 ├── agents/             # AI agent integration
-└── vscode/             # VSCode extension docs
+└── vscode/             # Legacy VSCode docs (deprecated)
 ```
 
 ## Generating LLM References

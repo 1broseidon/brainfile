@@ -214,7 +214,6 @@ export default defineConfig({
       {
         text: 'Reference',
         items: [
-          { text: 'Protocol Specification', link: '/reference/protocol' },
           { text: 'CLI Commands', link: '/reference/commands' },
           { text: 'API Reference', link: '/reference/api' },
           { text: 'Schema Types', link: '/reference/types' },
@@ -238,7 +237,7 @@ export default defineConfig({
         items: [
           { text: 'CLI & TUI', link: '/tools/cli' },
           { text: 'MCP Server', link: '/tools/mcp' },
-          { text: 'VSCode Extension', link: '/tools/vscode' },
+          { text: 'Pi Extension', link: '/tools/pi' },
           { text: 'Core Library', link: '/tools/core' },
         ],
       },

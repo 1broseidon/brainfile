@@ -7,9 +7,9 @@ description: Guide for integrating AI agents with Brainfile task management
 
 Brainfile is designed for AI agent compatibility. There are three ways to integrate:
 
-1. **MCP Server** — Direct tool access for AI assistants (recommended)
-2. **Agent Hooks** — Automatic reminders during AI-assisted development
-3. **Manual Instructions** — Simple rules in agent config files
+1. **Pi Extension** — Agent-native integration in [Pi](https://pi.dev/) (recommended)
+2. **MCP Server** — Tool access for Claude/Cursor
+3. **Agent Hooks** — Automatic reminders during development
 
 ## MCP Server (Recommended)
 
@@ -280,12 +280,18 @@ brainfile contract deliver -t task-5
 
 ## Integration with Tools
 
-### VSCode Extension
+### Pi Extension
 
-The extension watches `.brainfile/` for changes. AI agents should:
-- Use CLI or MCP tools for modifications (atomic operations)
-- Preserve YAML indentation (2 spaces)
-- Validate before saving
+The [Pi](https://pi.dev/) extension provides full orchestration for multi-agent workflows:
+
+- **Active Task Context** — The current task and contract are injected into every agent turn.
+- **PM / Worker Roles** — `/listen role <pm|worker|auto>` separates orchestration from execution.
+- **Event Log** — All coordination is recorded in `.brainfile/state/pi-events.jsonl`.
+- **Quiet PM Chat** — The PM is only notified when work is blocked or the run completes.
+- **Worker Presence** — Heartbeat tracking; run `/listen status` to see who's online.
+- **Stable Worker IDs** — Workers get numbered identities (`claude-1`, `codex-2`) via lease-based slot claims.
+
+See [Pi Extension](/tools/pi) for setup, commands, and workflow details.
 
 ### CLI
 

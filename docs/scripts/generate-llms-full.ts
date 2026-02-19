@@ -12,28 +12,60 @@ const OUTPUT_FILE = path.join(__dirname, '../public/llms-full.txt');
 const EXAMPLE_ROOT_DIR = path.join(__dirname, '../../example');
 const EXAMPLE_V2_DIR = path.join(EXAMPLE_ROOT_DIR, '.brainfile');
 
+interface DocSectionCandidate {
+  file: string;
+  title: string;
+}
+
+interface DocSectionSpec {
+  candidates: DocSectionCandidate[];
+}
+
 interface DocSection {
   file: string;
   title: string;
 }
 
-// Define sections in order - using new IA structure
-const sections: DocSection[] = [
-  { file: 'quick-start.md', title: 'Quick Start Guide' },
-  { file: 'why.md', title: 'Why Brainfile?' },
-  { file: 'guides/getting-started-with-contracts.md', title: 'Getting Started with Contracts' },
-  { file: 'guides/contracts.md', title: 'Comprehensive Guide to Contracts' },
-  { file: 'guides/agent-workflows.md', title: 'Agent Workflow Patterns' },
-  { file: 'tools/cli.md', title: 'CLI & Terminal UI' },
-  { file: 'tools/mcp.md', title: 'MCP Server Integration' },
-  { file: 'tools/vscode.md', title: 'VSCode Extension' },
-  { file: 'tools/core.md', title: 'Core Library' },
-  { file: 'reference/protocol.md', title: 'Protocol Specification' },
-  { file: 'reference/api.md', title: 'API Reference' },
-  { file: 'reference/commands.md', title: 'CLI Commands Reference' },
-  { file: 'reference/contract-schema.md', title: 'Contract Schema Reference' },
-  { file: 'reference/types.md', title: 'Schema Types' },
+// Define sections in order. Some sections support fallback paths/titles for migration compatibility.
+const sectionSpecs: DocSectionSpec[] = [
+  { candidates: [{ file: 'quick-start.md', title: 'Quick Start Guide' }] },
+  { candidates: [{ file: 'why.md', title: 'Why Brainfile?' }] },
+  { candidates: [{ file: 'guides/getting-started-with-contracts.md', title: 'Getting Started with Contracts' }] },
+  { candidates: [{ file: 'guides/contracts.md', title: 'Comprehensive Guide to Contracts' }] },
+  { candidates: [{ file: 'guides/agent-workflows.md', title: 'Agent Workflow Patterns' }] },
+  { candidates: [{ file: 'tools/cli.md', title: 'CLI & Terminal UI' }] },
+  { candidates: [{ file: 'tools/mcp.md', title: 'MCP Server Integration' }] },
+  {
+    candidates: [
+      { file: 'tools/pi.md', title: 'Pi Extension Integration' },
+      { file: 'tools/vscode.md', title: 'VSCode Extension (Deprecated)' },
+    ],
+  },
+  { candidates: [{ file: 'tools/core.md', title: 'Core Library' }] },
+  { candidates: [{ file: 'reference/protocol.md', title: 'Protocol Specification' }] },
+  { candidates: [{ file: 'reference/api.md', title: 'API Reference' }] },
+  { candidates: [{ file: 'reference/commands.md', title: 'CLI Commands Reference' }] },
+  { candidates: [{ file: 'reference/contract-schema.md', title: 'Contract Schema Reference' }] },
+  { candidates: [{ file: 'reference/types.md', title: 'Schema Types' }] },
 ];
+
+function resolveSections(): DocSection[] {
+  const resolved: DocSection[] = [];
+
+  for (const spec of sectionSpecs) {
+    const match = spec.candidates.find((candidate) => fs.existsSync(path.join(DOCS_DIR, candidate.file)));
+
+    if (!match) {
+      const candidateFiles = spec.candidates.map((candidate) => candidate.file).join(', ');
+      console.warn(`Warning: No section file found for candidates: ${candidateFiles}`);
+      continue;
+    }
+
+    resolved.push(match);
+  }
+
+  return resolved;
+}
 
 function stripMarkdown(markdown: string): string {
   let text = markdown;
@@ -74,7 +106,7 @@ function stripMarkdown(markdown: string): string {
   return text.trim();
 }
 
-function generateHeader(): string {
+function generateHeader(sections: DocSection[]): string {
   const now = new Date().toISOString().split('T')[0];
   return `# Brainfile Protocol - Complete Reference for AI Agents
 
@@ -149,7 +181,12 @@ function readExampleWorkspace(): { tree: string; files: Array<{ relPath: string;
 function generate(): void {
   console.log('Generating llms-full.txt from markdown documentation...\n');
 
-  let output = generateHeader();
+  const sections = resolveSections();
+  if (sections.length === 0) {
+    throw new Error('No documentation sections were resolved.');
+  }
+
+  let output = generateHeader(sections);
 
   // Process each section
   sections.forEach((section, index) => {

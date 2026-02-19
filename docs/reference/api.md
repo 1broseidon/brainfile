@@ -443,7 +443,9 @@ interface Task {
   subtasks?: Subtask[];
   contract?: Contract;
   parentId?: string;           // v2: parent document ID
+  position?: number;           // v2: sort position within column
   createdAt?: string;
+  updatedAt?: string;          // v2: ISO 8601 timestamp
   completedAt?: string;
 }
 ```
