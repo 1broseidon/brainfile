@@ -33,10 +33,18 @@ Last Updated: 2026-02-19
 
 Quick Start
 
+::: tip Bootstrap with an Agent
+Paste this URL into any agent chat and tell it to set up brainfile:
+``
+https://brainfile.md/llms-install.txt
+`
+The agent gets install commands, MCP config, CLI reference, and the contract workflow in one document.
+:::
+
 Get a task board in your project in under a minute.
   Install
 
-``
+`
 npm install -g @brainfile/cli
 `
   Initialize
@@ -125,104 +133,53 @@ Next Steps
 
 ## 2. Why Brainfile?
 
-Why Brainfile?
+The Agentic Coordination Manifesto
 
-The Coordination Gap
+The Context Gap
 
-AI coding agents can read your source code, run your tests, and edit your files. But they have no structured way to understand what work needs to happen, who is responsible for it, or how to verify completion.
+AI agents are remarkably capable at implementation, but they operate in a void of coordination. While they can read your code, they cannot see your intent, your priorities, or your acceptance criteria unless you manually translate them from external tools (Jira, Linear, Notion) into every prompt.
 
-Task management context — priorities, contracts, dependencies, acceptance criteria — lives in external systems (Linear, Jira, Notion) that agents cannot access during a session. The human becomes the integration layer: copying requirements into prompts, manually updating status, and translating between the task board and the codebase.
+This creates an integration tax on the human: copying requirements, updating statuses, and manually verifying that the agent stayed within scope.
 
-Brainfile closes this gap by defining a protocol for task coordination that lives directly in the repository, in a format that both humans and agents can read and operate on.
-
----
-
-Design Principles
-
-Protocol over product
-
-Brainfile is a file format specification, not a SaaS application. The protocol defines the structure; implementations are separate. The CLI, MCP server, core library, and VS Code extension are reference implementations — anyone can build tooling against the same specification.
-
-Files over databases
-
-Tasks are individual markdown files with YAML frontmatter. The board config is a separate file defining columns, types, and rules. This means:
-  - Version control — Task changes appear in diffs and git history
-  - No merge conflicts — Individual files avoid the single-file bottleneck
-  - Offline-first — No server, no network dependency
-  - Portable — Copy the .brainfile/ directory and you have everything
-
-Completion as archival
-
-Active tasks live in .brainfile/board/. When completed, they move to .brainfile/logs/. There is no "done" column. Completion is a file-system operation that sets completedAt and preserves the full task history in the logs directory.
-
-``
-.brainfile/
-├── brainfile.md    # Board config (columns, types, rules)
-├── board/          # Active tasks
-│   ├── task-1.md
-│   └── epic-1.md
-└── logs/           # Completed tasks
-    └── task-2.md
-`
-
-Explicit coordination semantics
-
-The contract system defines a formal lifecycle for delegated work:
-  PM defines deliverables, validation commands, and constraints
-  Worker agent picks up the contract and implements
-  Worker agent delivers; PM validates against the contract
-
-This replaces informal "please implement X" instructions with structured, verifiable agreements. Contract status (ready → in_progress → delivered → done/failed) is tracked in the task file itself.
-
-Type safety at the protocol level
-
-Document types (task, epic, adr) are declared in the board config with idPrefix and completable flags. Strict mode enforces that only declared types can be created. This prevents drift in large projects where multiple agents or humans create documents.
-
-Decisions become rules
-
-Architecture Decision Records (ADRs) are first-class document types. When an ADR is accepted, it can be promoted to a permanent project rule in the board config — with a backlink to the source ADR. Agents read these rules before starting work.
+Brainfile is the solution to the context gap.
 
 ---
 
-What the Protocol Defines
+Principles of Coordination
+  Protocol over Platform
 
-| Concept | Description |
-|---------|-------------|
-| Board config | Columns, document types, strict mode, rules, agent instructions |
-| Task files | Individual markdown files with structured YAML frontmatter |
-| Lifecycle | board/ → logs/ completion model with completedAt timestamps |
-| Contracts | Deliverables, validation commands, constraints, and status lifecycle |
-| Types | task, epic, adr — extensible via config, with optional strict enforcement |
-| Rules | always/never/prefer/context categories with numeric IDs and optional source backlinks |
-| Linking | parentId for any-to-any document relationships |
+Coordination should be an open standard, not a closed SaaS feature. By defining coordination as a file-system protocol, we enable any agent and any tool to participate without a central API or vendor lock-in.
+  Context Locality
 
----
+The source of truth for work should live where the work happens: in the repository. When tasks and contracts are files in the codebase, they are naturally indexed by the agent alongside the source code, providing immediate, high-fidelity context.
+  File-System Semantics
 
-What the Protocol Does Not Define
-  - How to render a kanban board (that's an implementation concern)
-  - Authentication or access control
-  - Notification or webhook systems
-  - Sync mechanisms between multiple repositories
-  - How AI agents should interpret instructions (beyond providing the data)
+Complex state management is replaced by simple file operations. Moving a file from board/ to logs/ is an immutable, searchable, and version-controlled record of completion. This simplicity is the key to scalability and resilience.
+  Explicit Contracts
 
-The protocol is deliberately narrow. It defines the data format, lifecycle semantics, and coordination primitives. Everything else is left to implementations.
+Informal "please do X" requests are replaced by structured agreements. A contract defines exactly what constitutes success (deliverables) and how it will be measured (validation). This formalization reduces agent hallucination and ensures human-aligned outcomes.
+  Architectural Memory
+
+Decisions made today should automatically guide the work of tomorrow. By promoting ADRs to project rules, the protocol ensures that every agent interaction is grounded in the project's established architectural standards.
 
 ---
 
-Schema
+The Infrastructure Advantage
 
-The protocol is backed by JSON schemas for validation:
-  - Board: brainfile.md/v1/board.json
-  - Task: brainfile.md/v1/task.json
-  - Contract: brainfile.md/v1/contract.json`
+By adopting a file-based coordination protocol, you gain:
+  - Bespoke Diffs: See exactly how requirements changed over time in your git history.
+  - Offline Reliability: Your task board works on a plane, in a basement, or during a platform outage.
+  - Zero Latency: No API round-trips to fetch task context.
+  - Agent Interoperability: Use the same board with Claude, GitHub Copilot, Cursor, or your own custom agents.
 
 ---
 
-Next Steps
-  - Protocol Specification — Full format reference
-  - Contract System — Agent coordination semantics
-  - Quick Start — Install and initialize a board
-  - Core Library — Build on the protocol
+Join the Ecosystem
+
+Brainfile is more than a tool; it's a way of thinking about how humans and machines build software together.
+  - Read the Specification
+  - Explore the CLI
+  - Integrate the Core Library
 
 ---
 
