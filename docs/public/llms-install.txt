@@ -1,0 +1,135 @@
+# Brainfile — Agent Bootstrap
+
+You are setting up Brainfile, an open protocol for task coordination between humans and AI agents. Tasks are markdown files that live in the repo. No database, no platform.
+
+## 1. Install
+
+Run these two commands in the project root:
+
+```
+npm install -g @brainfile/cli
+brainfile init
+```
+
+This creates `.brainfile/` with:
+- `brainfile.md` — board config (columns, types, rules)
+- `board/` — active task files
+- `logs/` — completed task archive
+
+## 2. Set Up MCP
+
+Create or add to `.mcp.json` in the project root:
+
+```json
+{
+  "mcpServers": {
+    "brainfile": {
+      "command": "npx",
+      "args": ["@brainfile/cli", "mcp"]
+    }
+  }
+}
+```
+
+This gives you native tool access to the board. Restart your agent after adding this.
+
+## 3. CLI Commands
+
+```
+brainfile list                                    # all tasks
+brainfile list -c todo                            # filter by column
+brainfile add --title "Task name"                 # create task
+brainfile add --title "Fix bug" -p high --tags bug  # with metadata
+brainfile move --task task-1 --column in-progress # move between columns
+brainfile complete --task task-1                  # done (moves to logs/)
+brainfile show --task task-1                      # view details
+brainfile patch --task task-1 -p critical         # update fields
+brainfile subtask --add "Write tests" --task task-1  # add subtask
+brainfile subtask --toggle sub-1 --task task-1    # toggle subtask
+```
+
+## 4. MCP Tools (if connected)
+
+```
+list_tasks       — list/filter tasks by column, tag, priority, contract status
+get_task         — get full task details by ID
+add_task         — create a task (supports with_contract, deliverables, constraints)
+move_task        — move task to a different column
+patch_task       — update specific fields
+delete_task      — remove a task
+add_subtask      — add subtask to a task
+toggle_subtask   — mark subtask complete/incomplete
+search_tasks     — search by query, assignee, priority
+contract_pickup  — claim a contract (sets status to in_progress)
+contract_deliver — mark contract as delivered
+contract_validate — check deliverables and run validation commands
+```
+
+## 5. Contracts
+
+Contracts formalize what an agent must deliver and how to verify it.
+
+Lifecycle: ready → in_progress → delivered → done (or failed → ready for rework)
+
+Create a task with a contract:
+
+```
+brainfile add --title "Add rate limiting" \
+  --assignee codex \
+  --priority high \
+  --with-contract \
+  --deliverable "file:src/rateLimiter.ts:Implementation" \
+  --deliverable "test:src/__tests__/rateLimiter.test.ts:Tests" \
+  --validation "npm test -- rateLimiter" \
+  --validation "npm run build" \
+  --constraint "Use token bucket algorithm" \
+  --constraint "Must be non-blocking"
+```
+
+Agent workflow:
+1. `brainfile contract pickup --task task-1` — claim it
+2. Implement the deliverables listed in the contract
+3. `brainfile contract deliver --task task-1` — mark as delivered
+4. PM runs `brainfile contract validate --task task-1` — checks files exist + runs validation commands
+
+If validation fails, status becomes `failed`. PM adds feedback, resets to `ready`, agent reworks.
+
+## 6. Task File Format
+
+Each task is a markdown file in `.brainfile/board/`:
+
+```yaml
+---
+id: task-1
+type: task
+title: Add rate limiting
+column: in-progress
+priority: high
+assignee: codex
+tags: [backend, api]
+relatedFiles:
+  - src/api/gateway.ts
+contract:
+  status: in_progress
+  deliverables:
+    - path: src/rateLimiter.ts
+    - path: src/__tests__/rateLimiter.test.ts
+  validation:
+    commands:
+      - npm test -- rateLimiter
+  constraints:
+    - Use token bucket algorithm
+---
+
+## Description
+Detailed requirements go here.
+```
+
+## 7. What to Do Next
+
+You are now set up. For ongoing reference:
+
+- Quick reference: https://brainfile.md/llms.txt
+- Full documentation: https://brainfile.md/llms-full.txt
+- Specification: https://brainfile.md/reference/protocol
+- Source: https://github.com/brainfile

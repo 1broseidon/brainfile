@@ -133,6 +133,7 @@ const { site } = useData()
           <span class="footer-license">MIT Licensed</span>
         </div>
         <a href="/reference/protocol" class="footer-cta">Read the specification.</a>
+        <span class="footer-agent">For agents: <a href="/llms-install.txt">brainfile.md/llms-install.txt</a></span>
       </footer>
     </main>
   </div>
@@ -457,6 +458,22 @@ const { site } = useData()
 }
 
 .footer-cta:hover {
+  color: #5cc8ff;
+}
+
+.footer-agent {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #2a2a38;
+}
+
+.footer-agent a {
+  color: #383848;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.footer-agent a:hover {
   color: #5cc8ff;
 }
 

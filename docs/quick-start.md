@@ -5,6 +5,14 @@ description: Get running with Brainfile in 60 seconds
 
 # Quick Start
 
+::: tip Bootstrap with an Agent
+Paste this URL into any agent chat and tell it to set up brainfile:
+```
+https://brainfile.md/llms-install.txt
+```
+The agent gets install commands, MCP config, CLI reference, and the contract workflow in one document.
+:::
+
 Get a task board in your project in under a minute.
 
 ## 1. Install
