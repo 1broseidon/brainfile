@@ -1,118 +1,59 @@
 :root {
   --vp-font-family-base: 'Inter', sans-serif;
   --vp-font-family-mono: 'JetBrains Mono', monospace;
+  --font-display: 'Outfit', sans-serif;
 
-  --vp-c-bg: #0b0d12;
-  --vp-c-bg-alt: #0f1218;
-  --vp-c-bg-soft: #151923;
-  --vp-c-bg-mute: #1a1f2b;
+  --void-bg: #050508;
+  --void-bg-alt: #0a0a0f;
+  --void-surface: #0f111a;
+  --void-text-1: #e8e8ec;
+  --void-text-2: #a0a0b0;
+  --void-text-3: #606070;
+  --void-border: rgba(255, 255, 255, 0.06);
 
-  --vp-c-text-1: #e7ebf3;
-  --vp-c-text-2: #b5bfd3;
-  --vp-c-text-3: #8f99ad;
+  --accent-cyan: #5cc8ff;
 
-  --vp-c-border: rgba(255, 255, 255, 0.1);
-  --vp-c-divider: rgba(255, 255, 255, 0.1);
+  --vp-c-bg: var(--void-bg);
+  --vp-c-bg-alt: var(--void-bg-alt);
+  --vp-c-bg-soft: var(--void-surface);
+  --vp-c-bg-mute: #161925;
+  --vp-c-text-1: var(--void-text-1);
+  --vp-c-text-2: var(--void-text-2);
+  --vp-c-text-3: var(--void-text-3);
+  --vp-c-border: var(--void-border);
+  --vp-c-divider: var(--void-border);
 
-  --vp-c-brand-1: #78b9ff;
-  --vp-c-brand-2: #5f9cdf;
-  --vp-c-brand-3: #4a86c8;
+  --vp-c-brand-1: var(--accent-cyan);
+  --vp-c-brand-2: #2a5a80;
 
-  --vp-button-brand-bg: var(--vp-c-brand-1);
-  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
-  --vp-button-brand-text: #0b0d12;
+  --vp-button-brand-bg: var(--accent-cyan);
+  --vp-button-brand-text: #050508;
+  --vp-button-brand-hover-bg: #80d8ff;
+
+  --vp-nav-bg-color: rgba(5, 5, 8, 0.85);
 }
 
-html,
-body,
-.VPContent {
-  background: var(--vp-c-bg);
+html, body {
+  background-color: var(--void-bg);
+  color: var(--void-text-1);
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
-  font-family: var(--vp-font-family-base);
-}
-
-h1,
-h2,
-h3,
-h4 {
-  letter-spacing: -0.01em;
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .VPNavBar {
-  background: rgba(11, 13, 18, 0.9) !important;
-  border-bottom: 1px solid var(--vp-c-border);
-  backdrop-filter: blur(6px);
-}
-
-/* Docs-native home page styling (minimal) */
-.VPHero {
-  padding-top: 4.5rem !important;
-  padding-bottom: 2rem !important;
-}
-
-.VPHero .name {
-  font-size: clamp(2.2rem, 5vw, 3.25rem) !important;
-  line-height: 1.15;
-}
-
-.VPHero .text {
-  font-size: clamp(1.5rem, 3.2vw, 2.2rem) !important;
-  line-height: 1.2 !important;
-  margin-top: 0.4rem !important;
-}
-
-.VPHero .tagline {
-  max-width: 56ch;
-  color: var(--vp-c-text-2) !important;
-  font-size: 1.02rem !important;
-}
-
-.VPHero .actions {
-  gap: 0.6rem;
-}
-
-.VPButton {
-  border-radius: 8px !important;
-}
-
-.VPButton.alt {
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-}
-
-.VPFeatures {
-  padding-top: 0.5rem !important;
-}
-
-.VPFeature {
-  border-radius: 10px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  background: var(--vp-c-bg-soft) !important;
-}
-
-.VPFeature .title {
-  font-size: 1.02rem !important;
-}
-
-.VPFeature .details {
-  color: var(--vp-c-text-2) !important;
-}
-
-.vp-doc a {
-  text-decoration-thickness: 1px;
-  text-underline-offset: 2px;
+  background-color: var(--vp-nav-bg-color) !important;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--void-border);
 }
 
 .vp-doc div[class*='language-'],
 div[class*='language-'] {
-  border-radius: 10px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  background-color: #0f131b !important;
-}
-
-@media (max-width: 768px) {
-  .VPHero {
-    padding-top: 3.75rem !important;
-  }
+  border: 1px solid var(--void-border) !important;
+  background-color: #0a0a0e !important;
+  border-radius: 8px !important;
 }
