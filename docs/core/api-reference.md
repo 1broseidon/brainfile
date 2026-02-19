@@ -122,7 +122,7 @@ interface Board {
   rules?: Rules;
   statsConfig?: StatsConfig;
   columns: Column[];
-  archive?: Task[];      // v1 compat
+  archive?: Task[];      // legacy compat
   strict?: boolean;      // v2: enforce type validation
   types?: TypesConfig;   // v2: custom document types
 }
@@ -134,13 +134,13 @@ interface Board {
 interface Column {
   id: string;
   title: string;
-  tasks: Task[];              // v1: embedded tasks
+  tasks: Task[];              // legacy: embedded tasks
   completionColumn?: boolean; // v2: auto-complete on move
 }
 ```
 
 ::: info v2 architecture
-In v2, columns are config-only (no embedded tasks). Tasks are standalone files in `.brainfile/board/`. The `tasks` array in `Column` is used for v1 compatibility and in-memory board operations.
+In v2, columns are config-only (no embedded tasks). Tasks are standalone files in `.brainfile/board/`. The `tasks` array in `Column` is used for legacy compatibility and in-memory board operations.
 :::
 
 ### Task
@@ -597,7 +597,7 @@ import type {
   TaskDocument
 } from '@brainfile/core';
 
-// v1 board with embedded tasks
+// legacy single-file board with embedded tasks
 interface Board {
   columns: Column[];
   archive?: Task[];

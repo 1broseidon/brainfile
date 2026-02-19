@@ -13,7 +13,7 @@ Prevents fragmentation between markdown docs and LLM reference by maintaining a 
 1. Reads markdown files from `src/content/docs/` in defined order
 2. Strips markdown formatting to plain text
 3. Combines sections with proper headers
-4. Adds complete example from `protocol/example/brainfile.md`
+4. Adds a complete v2 workspace example from `protocol/example/.brainfile/`
 5. Writes to `public/llms-full.txt`
 
 ### When it Runs
@@ -37,7 +37,7 @@ Prevents fragmentation between markdown docs and LLM reference by maintaining a 
 12. reference/commands.md
 13. reference/contract-schema.md
 14. reference/types.md
-15. ../../example/brainfile.md (complete example)
+15. ../../example/.brainfile/** (complete v2 workspace example)
 
 ### Outputs
 

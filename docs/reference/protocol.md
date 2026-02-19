@@ -26,7 +26,7 @@ Brainfile v2 uses a directory-based structure:
 | Path | Priority | Notes |
 |------|----------|-------|
 | `.brainfile/brainfile.md` | 1 (preferred, v2) | Directory-based architecture |
-| `brainfile.md` | 2 | Root file (v1 compat) |
+| `brainfile.md` | 2 | Root file (legacy compat) |
 | `.brainfile.md` | 3 | Hidden, backward compat |
 | `.bb.md` | 4 | Shorthand, deprecated |
 
@@ -244,7 +244,7 @@ rules:
 | Epic | `https://brainfile.md/v2/epic.json` |
 | ADR | `https://brainfile.md/v2/adr.json` |
 
-Browse all: [brainfile.md/v2/](https://brainfile.md/v2/) · [v1 (legacy)](https://brainfile.md/v1/)
+Browse all: [brainfile.md/v2/](https://brainfile.md/v2/)
 
 ### Type Inference
 
@@ -290,7 +290,7 @@ subtasks:
 - Contract system with lifecycle
 - `parentId` linking model
 
-### v1.0.0
+### 1.0.0 (Legacy)
 
 - Single-file embedded tasks
 - Board-only task management

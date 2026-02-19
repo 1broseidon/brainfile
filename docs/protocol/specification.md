@@ -31,7 +31,7 @@ Brainfile v2 uses a directory-based structure where each task is its own file:
 Tools should check for the board config in this order:
 
 1. `.brainfile/brainfile.md` (preferred, v2)
-2. `brainfile.md` (root, v1 compat)
+2. `brainfile.md` (root, legacy compat)
 3. `.brainfile.md` (hidden, legacy)
 4. `.bb.md` (shorthand, deprecated)
 
@@ -52,7 +52,7 @@ columns: []         # Array of column definitions
 ---
 type: board                 # Document type (default: board)
 schema: string              # JSON schema URL
-protocolVersion: string     # e.g., "1.0.0"
+protocolVersion: string     # e.g., "2.0.0"
 strict: boolean             # Enable strict type validation
 types:                      # Custom document types
   epic:
@@ -278,9 +278,6 @@ rules:
 - **Epic**: [`https://brainfile.md/v2/epic.json`](https://brainfile.md/v2/epic.json)
 - **ADR**: [`https://brainfile.md/v2/adr.json`](https://brainfile.md/v2/adr.json)
 
-::: tip v1 schemas
-v1 schemas remain available at `brainfile.md/v1/` for backward compatibility.
-:::
 
 ## Version History
 
@@ -292,7 +289,7 @@ v1 schemas remain available at `brainfile.md/v1/` for backward compatibility.
 - Contract system with lifecycle
 - `parentId` linking model
 
-### v1.0
+### 1.0 (Legacy)
 
 - Single-file embedded tasks
 - Board-only task management

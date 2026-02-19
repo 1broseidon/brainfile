@@ -8,9 +8,6 @@ The contract schema defines an optional `contract` object that can be attached t
 https://brainfile.md/v2/contract.json
 ```
 
-::: info v1 compatibility
-The v1 schema remains available at `https://brainfile.md/v1/contract.json`.
-:::
 
 ## Used In
 

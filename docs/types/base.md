@@ -8,9 +8,6 @@ The base schema defines fields that are shared across all brainfile types.
 https://brainfile.md/v2/base.json
 ```
 
-::: info v1 compatibility
-The v1 schema remains available at `https://brainfile.md/v1/base.json`.
-:::
 
 ## Overview
 
@@ -58,7 +55,7 @@ schema: https://brainfile.md/v2/board.json
 
 **Type**: `string` (semver pattern)
 **Pattern**: `^[0-9]+\.[0-9]+\.[0-9]+$`
-**Default**: `1.0.0`
+**Default**: `2.0.0`
 **Description**: Version of the Brainfile protocol
 
 ```yaml

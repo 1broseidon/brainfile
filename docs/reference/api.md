@@ -407,7 +407,7 @@ interface Board {
   agent?: AgentInstructions;
   rules?: Rules;
   columns: Column[];
-  archive?: Task[];      // v1 compat
+  archive?: Task[];      // legacy compat
   strict?: boolean;      // v2: enforce type validation
   types?: TypesConfig;   // v2: custom document types
 }
@@ -419,7 +419,7 @@ interface Board {
 interface Column {
   id: string;
   title: string;
-  tasks: Task[];              // v1 compat / in-memory operations
+  tasks: Task[];              // legacy compat / in-memory operations
   completionColumn?: boolean; // v2: auto-complete on move
 }
 ```

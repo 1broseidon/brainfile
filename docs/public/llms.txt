@@ -8,7 +8,7 @@
 - Structure: `.brainfile/brainfile.md` (config), `.brainfile/board/` (active tasks), `.brainfile/logs/` (completed)
 - Document types: task, epic, adr (enforced by strict mode)
 - License: MIT
-- Schema: https://brainfile.md/v1
+- Schema: https://brainfile.md/v2
 
 ## Directory Structure
 

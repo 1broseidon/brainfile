@@ -3,8 +3,8 @@
 > Comprehensive documentation for AI agents integrating with Brainfile
 > Auto-generated from markdown documentation
 
-Version: 1.0
-Schema: https://brainfile.md/v1
+Version: 2.0
+Schema: https://brainfile.md/v2
 Last Updated: 2026-02-19
 
 ---
@@ -1455,7 +1455,7 @@ File Discovery
 | Path | Priority | Notes |
 |------|----------|-------|
 | .brainfile/brainfile.md | 1 (preferred, v2) | Directory-based architecture |
-| brainfile.md | 2 | Root file (v1 compat) |
+| brainfile.md | 2 | Root file (legacy compat) |
 | .brainfile.md | 3 | Hidden, backward compat |
 | .bb.md | 4 | Shorthand, deprecated |
 
@@ -1675,7 +1675,7 @@ Official Schemas
 | Epic | https://brainfile.md/v2/epic.json |
 | ADR | https://brainfile.md/v2/adr.json |
 
-Browse all: brainfile.md/v2/ · v1 (legacy)
+Browse all: brainfile.md/v2/
 
 Type Inference
 
@@ -1720,7 +1720,7 @@ v2.0.0 (Current)
   - Contract system with lifecycle
   - parentId linking model
 
-v1.0.0
+1.0.0 (Legacy)
   - Single-file embedded tasks
   - Board-only task management
   - Full MCP tool support
@@ -2224,7 +2224,7 @@ interface Board {
   agent?: AgentInstructions;
   rules?: Rules;
   columns: Column[];
-  archive?: Task[];      // v1 compat
+  archive?: Task[];      // legacy compat
   strict?: boolean;      // v2: enforce type validation
   types?: TypesConfig;   // v2: custom document types
 }
@@ -2236,7 +2236,7 @@ Column
 interface Column {
   id: string;
   title: string;
-  tasks: Task[];              // v1 compat / in-memory operations
+  tasks: Task[];              // legacy compat / in-memory operations
   completionColumn?: boolean; // v2: auto-complete on move
 }
 `
@@ -3431,7 +3431,6 @@ Schema Directories
 | Version | URL | Status |
 |---------|-----|--------|
 | v2 | brainfile.md/v2/ | Current |
-| v1 | brainfile.md/v1/ | Maintained for backward compatibility |
 
 ---
 
@@ -3444,144 +3443,220 @@ Next Steps
 
 ## 15. Complete Example
 
-Full example from protocol/example/brainfile.md:
+Example v2 workspace from protocol/example/.brainfile/:
 
-```yaml
+Files:
+- .brainfile/brainfile.md
+- .brainfile/board/adr-1.md
+- .brainfile/board/epic-1.md
+- .brainfile/board/task-1.md
+- .brainfile/logs/task-2.md
+
+### .brainfile/brainfile.md
+
+```markdown
 ---
-title: Example Project Board
-schema: https://brainfile.md/v1/board.json
+type: board
+title: Brainfile v2 Example Board
+schema: https://brainfile.md/v2/board.json
+protocolVersion: 2.0.0
+strict: true
 agent:
   instructions:
-    - This is an example board demonstrating Brainfile features
-    - Shows various task metadata fields (priority, assignee, tags)
-    - Demonstrates multi-column workflow
-statsConfig:
-  columns:
-    - todo
-    - in-progress
-    - review
-    - done
+    - Use the CLI or MCP tools for task operations when available
+    - Preserve all IDs and unknown fields
+    - Update task column as you work (todo → in-progress → review → done)
+    - Use contracts when handing work off to another agent
+  llmNotes: |
+    This is an example Brainfile v2 workspace.
+    - Board config lives in .brainfile/brainfile.md
+    - Active docs live in .brainfile/board/
+    - Completed docs live in .brainfile/logs/
 rules:
   always:
     - id: 1
-      rule: write tests for all new features
+      rule: Write tests for bug fixes and new features
     - id: 2
-      rule: update documentation when changing APIs
-    - id: 3
-      rule: run linter before committing code
+      rule: Keep tasks small and independently completable
   never:
     - id: 1
-      rule: deploy without running tests
-    - id: 2
-      rule: commit directly to main branch
+      rule: Change or regenerate existing task IDs
   prefer:
     - id: 1
-      rule: functional components over class components
-    - id: 2
-      rule: TypeScript over JavaScript for new files
-    - id: 3
-      rule: descriptive variable names over comments
+      rule: Store context in task.description and files in task.relatedFiles
+  context:
+    - id: 1
+      rule: This repo uses TypeScript and Node
+
+types:
+  epic:
+    idPrefix: epic
+    completable: false
+    schema: https://brainfile.md/v2/epic.json
+  adr:
+    idPrefix: adr
+    completable: false
+    schema: https://brainfile.md/v2/adr.json
+
 columns:
   - id: todo
     title: To Do
-    tasks:
-      - id: task-2
-        title: Design dashboard UI
-        description: Create responsive dashboard layout with charts and widgets
-        priority: high
-        assignee: bob
-        tags:
-          - frontend
-          - ui
-          - design
-      - id: task-3
-        title: Write API documentation
-        description: Document all REST endpoints with examples
-        priority: medium
-        assignee: charlie
-        tags:
-          - docs
-          - api
-      - id: task-1
-        title: Implement user authentication
-        description: Add JWT-based authentication system with refresh tokens
-        priority: critical
-        assignee: alice
-        tags:
-          - backend
-          - security
-          - auth
+    order: 1
   - id: in-progress
     title: In Progress
-    tasks:
-      - id: task-4
-        title: Database Schema Design for Go
-        description: |-
-          * Define tables and relationships
-          * Document constraints
-          * Create migration scripts
-        priority: high
-        assignee: david
-        tags:
-          - backend
-          - database
+    order: 2
   - id: review
     title: Review
-    tasks:
-      - id: task-6
-        title: Refactor user service
-        description: Clean up user service code and improve error handling
-        priority: low
-        assignee: alice
-        tags:
-          - backend
-          - refactoring
-      - id: task-7
-        title: Update dependencies
-        description: Upgrade all npm packages to latest stable versions
-        priority: low
-        assignee: charlie
-        tags:
-          - maintenance
-          - dependencies
+    order: 3
   - id: done
     title: Done
-    tasks:
-      - id: task-10
-        title: Implement dark mode
-        description: Add dark theme support with system preference detection
-        priority: medium
-        assignee: bob
-        tags:
-          - frontend
-          - ui
-          - theme
-      - id: task-5
-        title: Optimize image loading
-        description: Implement lazy loading for gallery images
-        priority: medium
-        assignee: bob
-        tags:
-          - frontend
-          - performance
-          - optimization
-      - id: task-8
-        title: Project Setup
-        description: Initialize repository and configure development environment
-        priority: high
-        tags:
-          - setup
-          - devops
-      - id: task-9
-        title: CI Pipeline
-        description: Set up continuous integration workflow with GitHub Actions
-        priority: high
-        assignee: david
-        tags:
-          - devops
-          - ci-cd
-          - automation
+    order: 4
+    completionColumn: true
 ---
+
+# Example Workspace
+
+This folder demonstrates the v2 layout:
+
+- `.brainfile/brainfile.md` (this file)
+- `.brainfile/board/` (active task/epic/adr files)
+- `.brainfile/logs/` (completed task files)
+
+```
+
+### .brainfile/board/adr-1.md
+
+```markdown
+---
+id: adr-1
+type: adr
+title: Use token bucket for rate limiting
+column: review
+tags: [architecture, backend]
+status: accepted
+---
+
+## Decision
+
+Use a token bucket algorithm per provider.
+
+## Rationale
+
+- Allows bursts while enforcing an average rate
+- Simple to reason about and test
+
+## Consequences
+
+- Requires tracking bucket state per provider key
+- Needs careful clock/timer handling to avoid drift
+
+```
+
+### .brainfile/board/epic-1.md
+
+```markdown
+---
+id: epic-1
+type: epic
+title: Improve API reliability
+column: todo
+priority: medium
+tags: [backend, reliability]
+status: active
+children:
+  - task-1
+  - adr-1
+---
+
+## Goal
+
+Reduce outages and improve resilience for API traffic spikes.
+
+```
+
+### .brainfile/board/task-1.md
+
+```markdown
+---
+id: task-1
+type: task
+title: Implement rate limiting
+column: in-progress
+priority: high
+effort: medium
+assignee: codex
+tags: [backend, api]
+relatedFiles:
+  - src/api/gateway.ts
+  - src/middleware/rateLimit.ts
+subtasks:
+  - id: sub-1
+    title: Add token bucket implementation
+    completed: true
+  - id: sub-2
+    title: Add unit tests
+    completed: false
+contract:
+  status: in_progress
+  version: 1
+  deliverables:
+    - type: file
+      path: src/rateLimiter.ts
+      description: Token bucket rate limiter
+    - type: test
+      path: src/__tests__/rateLimiter.test.ts
+      description: Unit tests for limiter behavior
+  validation:
+    commands:
+      - npm test -- rateLimiter
+      - npm run build
+  constraints:
+    - Use token bucket algorithm
+    - Keep implementation non-blocking (async)
+  outOfScope:
+    - UI for rate limit settings
+---
+
+## Context
+
+We need to protect upstream providers from bursty traffic and avoid quota exhaustion.
+
+## Notes
+
+- Prefer per-provider buckets
+- Include clear error messages when rejecting requests
+
+```
+
+### .brainfile/logs/task-2.md
+
+```markdown
+---
+id: task-2
+type: task
+title: Add CI validation for brainfile
+priority: medium
+tags: [ci, tooling]
+completedAt: "2026-02-01T12:00:00Z"
+contract:
+  status: done
+  version: 1
+  deliverables:
+    - type: file
+      path: .github/workflows/validate.yml
+      description: CI workflow that runs brainfile lint and tests
+  validation:
+    commands:
+      - npx @brainfile/cli lint --check
+  metrics:
+    pickedUpAt: "2026-02-01T10:00:00Z"
+    deliveredAt: "2026-02-01T11:00:00Z"
+    validatedAt: "2026-02-01T12:00:00Z"
+    duration: 3600
+    reworkCount: 0
+---
+
+Completed and validated.
 
 ```
 
@@ -3591,7 +3666,7 @@ columns:
 
 - **Website**: https://brainfile.md
 - **Quick Reference**: https://brainfile.md/llms.txt
-- **Schema**: https://brainfile.md/v1
+- **Schema**: https://brainfile.md/v2
 - **GitHub**: https://github.com/brainfile
 - **Issues**: https://github.com/brainfile/protocol/issues
 - **Discussions**: https://github.com/brainfile/protocol/discussions

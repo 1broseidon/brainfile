@@ -9,7 +9,8 @@ const __dirname = path.dirname(__filename);
 
 const DOCS_DIR = path.join(__dirname, '..');
 const OUTPUT_FILE = path.join(__dirname, '../public/llms-full.txt');
-const EXAMPLE_FILE = path.join(__dirname, '../../example/brainfile.md');
+const EXAMPLE_ROOT_DIR = path.join(__dirname, '../../example');
+const EXAMPLE_V2_DIR = path.join(EXAMPLE_ROOT_DIR, '.brainfile');
 
 interface DocSection {
   file: string;
@@ -80,8 +81,8 @@ function generateHeader(): string {
 > Comprehensive documentation for AI agents integrating with Brainfile
 > Auto-generated from markdown documentation
 
-Version: 1.0
-Schema: https://brainfile.md/v1
+Version: 2.0
+Schema: https://brainfile.md/v2
 Last Updated: ${now}
 
 ---
@@ -108,14 +109,41 @@ function readDocFile(file: string): string | null {
   return stripMarkdown(content);
 }
 
-function readExampleFile(): string | null {
-  if (!fs.existsSync(EXAMPLE_FILE)) {
-    console.warn('Warning: Example brainfile.md not found');
+function listMarkdownFiles(dir: string): string[] {
+  if (!fs.existsSync(dir)) return [];
+
+  return fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith('.md'))
+    .sort()
+    .map((f) => path.join(dir, f));
+}
+
+function readExampleWorkspace(): { tree: string; files: Array<{ relPath: string; content: string }> } | null {
+  if (!fs.existsSync(EXAMPLE_V2_DIR)) {
+    console.warn('Warning: Example .brainfile/ workspace not found');
     return null;
   }
 
-  const content = fs.readFileSync(EXAMPLE_FILE, 'utf-8');
-  return content;
+  const boardConfig = path.join(EXAMPLE_V2_DIR, 'brainfile.md');
+  const boardDir = path.join(EXAMPLE_V2_DIR, 'board');
+  const logsDir = path.join(EXAMPLE_V2_DIR, 'logs');
+
+  const filePaths = [
+    boardConfig,
+    ...listMarkdownFiles(boardDir),
+    ...listMarkdownFiles(logsDir),
+  ].filter((p) => fs.existsSync(p));
+
+  const files = filePaths.map((absPath) => {
+    const relPath = path.relative(EXAMPLE_ROOT_DIR, absPath).split(path.sep).join('/');
+    const content = fs.readFileSync(absPath, 'utf-8');
+    return { relPath, content };
+  });
+
+  const tree = files.map((f) => `- ${f.relPath}`).join('\n');
+
+  return { tree, files };
 }
 
 function generate(): void {
@@ -138,14 +166,20 @@ function generate(): void {
 
   // Add complete example
   console.log('Adding complete example...');
-  const example = readExampleFile();
+  const example = readExampleWorkspace();
 
   if (example) {
     output += `## ${sections.length + 1}. Complete Example\n\n`;
-    output += 'Full example from protocol/example/brainfile.md:\n\n';
-    output += '```yaml\n';
-    output += example;
-    output += '\n```\n\n';
+    output += 'Example v2 workspace from protocol/example/.brainfile/:\n\n';
+    output += 'Files:\n';
+    output += `${example.tree}\n\n`;
+
+    example.files.forEach((file) => {
+      output += `### ${file.relPath}\n\n`;
+      output += '```markdown\n';
+      output += file.content;
+      output += '\n```\n\n';
+    });
   }
 
   // Add footer
@@ -153,7 +187,7 @@ function generate(): void {
   output += `## Support & Resources\n\n`;
   output += `- **Website**: https://brainfile.md\n`;
   output += `- **Quick Reference**: https://brainfile.md/llms.txt\n`;
-  output += `- **Schema**: https://brainfile.md/v1\n`;
+  output += `- **Schema**: https://brainfile.md/v2\n`;
   output += `- **GitHub**: https://github.com/brainfile\n`;
   output += `- **Issues**: https://github.com/brainfile/protocol/issues\n`;
   output += `- **Discussions**: https://github.com/brainfile/protocol/discussions\n\n`;

@@ -182,7 +182,7 @@ addTaskFile('.brainfile/board/', {
 });
 ```
 
-Or using v1 in-memory board operations:
+Or using legacy in-memory board operations:
 
 ```typescript
 import { addTask } from '@brainfile/core';

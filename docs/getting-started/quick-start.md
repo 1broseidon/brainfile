@@ -316,7 +316,7 @@ jobs:
 
 ## Examples
 
-- [Example Board](https://github.com/brainfile/protocol/blob/main/example/brainfile.md) - Full-featured example
+- [Example v2 Workspace](https://github.com/brainfile/protocol/tree/main/example/.brainfile) - Board config + per-task files + logs
 
 ## Help
 

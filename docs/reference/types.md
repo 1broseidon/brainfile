@@ -43,7 +43,7 @@ types:
 
 **Renderer:** Kanban board with columns
 
-[View Board Schema](https://brainfile.md/v2/board.json) · [Example](https://brainfile.md/example/board.md)
+[View Board Schema](https://brainfile.md/v2/board.json) · [Example](https://brainfile.md/example/.brainfile/brainfile.md)
 
 ---
 
@@ -165,7 +165,6 @@ When `type` is not specified, tools determine the type by:
 | Version | URL | Status |
 |---------|-----|--------|
 | **v2** | [brainfile.md/v2/](https://brainfile.md/v2/) | Current |
-| **v1** | [brainfile.md/v1/](https://brainfile.md/v1/) | Maintained for backward compatibility |
 
 ---
 

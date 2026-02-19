@@ -101,14 +101,31 @@ export default defineConfig({
               }
             }
 
-            // Handle /example/*.md files
-            if (url.startsWith('/example/') && url.endsWith('.md')) {
-              const filename = url.split('/example/')[1]
-              const filePath = path.resolve(__dirname, '../../example', filename)
-              if (fs.existsSync(filePath)) {
-                const content = fs.readFileSync(filePath, 'utf-8')
-                res.setHeader('Content-Type', 'text/markdown; charset=utf-8')
-                res.setHeader('Content-Disposition', `inline; filename="${filename}"`)
+            // Handle /example/** (files under protocol/example/, including nested paths)
+            if (url.startsWith('/example/')) {
+              const rawPath = (url.split('?')[0] || '').trim()
+              const rel = decodeURIComponent(rawPath.replace(/^\/example\//, ''))
+
+              const exampleDir = path.resolve(__dirname, '../../example')
+              const filePath = path.resolve(exampleDir, rel)
+
+              // Prevent path traversal
+              if (filePath.startsWith(exampleDir) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+                const ext = path.extname(filePath).toLowerCase()
+                const contentType =
+                  ext === '.md'
+                    ? 'text/markdown; charset=utf-8'
+                    : ext === '.json'
+                      ? 'application/json; charset=utf-8'
+                      : ext === '.txt'
+                        ? 'text/plain; charset=utf-8'
+                        : ext === '.yml' || ext === '.yaml'
+                          ? 'text/yaml; charset=utf-8'
+                          : 'application/octet-stream'
+
+                const content = fs.readFileSync(filePath)
+                res.setHeader('Content-Type', contentType)
+                res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`)
                 res.end(content)
                 return
               }
@@ -148,20 +165,28 @@ export default defineConfig({
             }
           }
 
-          // Copy example directory files
-          const exampleDir = path.resolve(__dirname, '../../example')
-          const exampleFiles = fs.readdirSync(exampleDir)
-          for (const file of exampleFiles) {
-            const filePath = path.join(exampleDir, file)
-            if (fs.statSync(filePath).isFile()) {
-              const content = fs.readFileSync(filePath, 'utf-8')
-              this.emitFile({
-                type: 'asset',
-                fileName: `example/${file}`,
-                source: content,
-              })
+          // Copy example directory files (recursive, includes nested directories like .brainfile/)
+          const copyDirRecursive = (srcDir: string, outDir: string) => {
+            const entries = fs.readdirSync(srcDir, { withFileTypes: true })
+            for (const entry of entries) {
+              const srcPath = path.join(srcDir, entry.name)
+              const outPath = `${outDir}/${entry.name}`
+
+              if (entry.isDirectory()) {
+                copyDirRecursive(srcPath, outPath)
+              } else if (entry.isFile()) {
+                const content = fs.readFileSync(srcPath)
+                this.emitFile({
+                  type: 'asset',
+                  fileName: outPath,
+                  source: content,
+                })
+              }
             }
           }
+
+          const exampleDir = path.resolve(__dirname, '../../example')
+          copyDirRecursive(exampleDir, 'example')
         },
       },
     ],

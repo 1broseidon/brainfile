@@ -166,7 +166,7 @@ agent:
 AI agents should check for the board config in this order:
 
 1. `.brainfile/brainfile.md` (v2, preferred)
-2. `brainfile.md` (root, v1 compat)
+2. `brainfile.md` (root, legacy compat)
 3. `.brainfile.md` (hidden, backward compat)
 
 ### Directory Structure

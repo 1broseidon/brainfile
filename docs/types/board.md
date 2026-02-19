@@ -451,4 +451,4 @@ agent:
 - [Base Schema](./base.md)
 - [Task Schema](/reference/types)
 - [Contract Schema](./contract.md)
-- [Example Board](../../example/board.md)
+- [Example Board](https://brainfile.md/example/.brainfile/brainfile.md)
