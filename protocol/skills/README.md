@@ -26,6 +26,25 @@ This directory contains custom skills for Claude Code and other AI agents that a
 
 **Package:** `brainfile-cli.zip` (13KB)
 
+### brainfile-qa-pipeline
+
+**Purpose:** Reusable post-delivery QA workflow that runs contract validation + pragmatist/karen review and produces a clear pass/fail verdict.
+
+**Use cases:**
+- Running QA after a contract is delivered
+- Standardizing `@pragmatist` complexity checks
+- Standardizing `@karen` spec/reality checks
+- Producing explicit rework feedback with file-level actions
+
+**Files:**
+- `Skill.md` - Core QA workflow and pass/fail rubric
+- `EXAMPLES.md` - PASS/FAIL pipeline scenarios
+- `README.md` - Usage guide
+- `verify.sh` - Structure validation script
+- `package.sh` - Packaging script for distribution
+
+**Status:** ✅ Ready for use
+
 ## Using Skills in Claude Code
 
 Skills in this directory are automatically discovered by Claude Code when working in this project. No installation needed for local development.
@@ -117,14 +136,21 @@ dependencies: package>=1.0    # Optional, comma-separated
 
 ```
 protocol/skills/
-├── README.md                 # This file
-├── brainfile-cli/            # Brainfile CLI skill
-│   ├── Skill.md             # Core skill file
-│   ├── EXAMPLES.md          # Reference examples
-│   ├── README.md            # Installation guide
-│   ├── verify.sh            # Validation script
-│   └── package.sh           # Packaging script
-└── brainfile-cli.zip        # Packaged skill
+├── README.md                        # This file
+├── brainfile-cli/                   # Brainfile CLI skill
+│   ├── Skill.md
+│   ├── EXAMPLES.md
+│   ├── README.md
+│   ├── verify.sh
+│   └── package.sh
+├── brainfile-qa-pipeline/           # QA pipeline skill
+│   ├── Skill.md
+│   ├── EXAMPLES.md
+│   ├── README.md
+│   ├── verify.sh
+│   └── package.sh
+├── brainfile-cli.zip                # Packaged CLI skill
+└── brainfile-qa-pipeline.zip        # Packaged QA skill (optional)
 ```
 
 ## Testing Skills Locally
@@ -139,7 +165,7 @@ No need to package/install for local testing.
 
 ## Version Control
 
-- **Include:** Source skill directories (`brainfile-cli/`)
+- **Include:** Source skill directories (`brainfile-cli/`, `brainfile-qa-pipeline/`)
 - **Exclude:** Generated packages (`*.zip`) - add to `.gitignore`
 
 Skills are version-controlled as source code. Generate packages on-demand for distribution.

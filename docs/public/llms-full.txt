@@ -127,230 +127,102 @@ Next Steps
 
 Why Brainfile?
 
-The Problem with Current Tools
+The Coordination Gap
 
-Task management is disconnected from code.
+AI coding agents can read your source code, run your tests, and edit your files. But they have no structured way to understand what work needs to happen, who is responsible for it, or how to verify completion.
 
-Your tasks live in Linear, Jira, Notion, or GitHub Issues. Your code lives in git. These systems don't talk to each other in any meaningful way. You're the integration layer — copying task IDs into commit messages, manually updating status, context-switching between browser tabs.
+Task management context — priorities, contracts, dependencies, acceptance criteria — lives in external systems (Linear, Jira, Notion) that agents cannot access during a session. The human becomes the integration layer: copying requirements into prompts, manually updating status, and translating between the task board and the codebase.
 
-AI assistants can't see your tasks.
-
-Claude Code can read your entire codebase. It can see your git history, your test failures, your linter errors. But it has no idea what you're actually working on. You have to explain the task every time, paste in requirements, remind it of the acceptance criteria.
-
-SaaS tools create dependencies.
-
-Offline? Can't access tasks. Team changes? Export headaches. Service goes down? Work stops. Your project metadata lives on someone else's servers, in someone else's format.
+Brainfile closes this gap by defining a protocol for task coordination that lives directly in the repository, in a format that both humans and agents can read and operate on.
 
 ---
 
-The Brainfile Approach
+Design Principles
 
-Anatomy of a Brainfile
+Protocol over product
 
-<div class="anatomy-diagram">
-  <div class="anatomy-row">
-    <div class="anatomy-card">
-      <div class="anatomy-title">Metadata</div>
-      <div class="anatomy-content">title, schema, version</div>
-    </div>
-    <div class="anatomy-card">
-      <div class="anatomy-title">Agent</div>
-      <div class="anatomy-content">instructions, tools</div>
-    </div>
-    <div class="anatomy-card">
-      <div class="anatomy-title">Rules</div>
-      <div class="anatomy-content">always, never, prefer</div>
-    </div>
-  </div>
-  <div class="anatomy-connector">
-    <div class="connector-line"></div>
-    <div class="connector-arrow">▼</div>
-  </div>
-  <div class="anatomy-row">
-    <div class="anatomy-card anatomy-wide">
-      <div class="anatomy-title">Columns & Tasks</div>
-      <div class="anatomy-content">Your kanban board — todo, in-progress</div>
-    </div>
-  </div>
-  <div class="anatomy-connector">
-    <div class="connector-line"></div>
-    <div class="connector-arrow">▼</div>
-  </div>
-  <div class="anatomy-row">
-    <div class="anatomy-card anatomy-result">
-      <div class="anatomy-title">.brainfile/</div>
-      <div class="anatomy-content">Config + individual task files. Human + machine readable.</div>
-    </div>
-  </div>
-</div>
+Brainfile is a file format specification, not a SaaS application. The protocol defines the structure; implementations are separate. The CLI, MCP server, core library, and VS Code extension are reference implementations — anyone can build tooling against the same specification.
 
-<style>
-.anatomy-diagram {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  margin: 2rem 0;
-}
-.anatomy-row {
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-.anatomy-card {
-  background: var(--vp-c-bg-soft);
-  border: 1px solid var(--vp-c-border);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  min-width: 140px;
-  text-align: center;
-}
-.anatomy-card.anatomy-wide {
-  min-width: 300px;
-}
-.anatomy-card.anatomy-result {
-  background: var(--vp-c-brand-soft);
-  border-color: var(--vp-c-brand-2);
-  min-width: 280px;
-}
-.anatomy-title {
-  font-weight: 600;
-  color: var(--vp-c-text-1);
-  margin-bottom: 0.25rem;
-}
-.anatomy-content {
-  font-size: 0.85rem;
-  color: var(--vp-c-text-2);
-}
-.anatomy-connector {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 2rem;
-}
-.connector-line {
-  width: 2px;
-  height: 1rem;
-  background: var(--vp-c-border);
-}
-.connector-arrow {
-  color: var(--vp-c-text-3);
-  font-size: 0.75rem;
-  line-height: 1;
-}
-@media (max-width: 640px) {
-  .anatomy-row {
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-  .anatomy-card {
-    min-width: 200px;
-    width: 100%;
-    max-width: 280px;
-  }
-  .anatomy-card.anatomy-wide,
-  .anatomy-card.anatomy-result {
-    min-width: 200px;
-    max-width: 280px;
-  }
-}
-</style>
+Files over databases
 
-Tasks as code.
+Tasks are individual markdown files with YAML frontmatter. The board config is a separate file defining columns, types, and rules. This means:
+  - Version control — Task changes appear in diffs and git history
+  - No merge conflicts — Individual files avoid the single-file bottleneck
+  - Offline-first — No server, no network dependency
+  - Portable — Copy the .brainfile/ directory and you have everything
 
-A .brainfile/ directory in your repo. Each task is its own markdown file with structured YAML frontmatter. The board config (.brainfile/brainfile.md) defines columns, types, and rules. Task files live in .brainfile/board/ and completed tasks move to .brainfile/logs/.
+Completion as archival
+
+Active tasks live in .brainfile/board/. When completed, they move to .brainfile/logs/. There is no "done" column. Completion is a file-system operation that sets completedAt and preserves the full task history in the logs directory.
 
 ``
 .brainfile/
-├── brainfile.md        # Board config (columns, types, rules)
-├── board/
-│   ├── task-1.md       # Active task
-│   └── epic-1.md       # Active epic
-└── logs/
-    └── task-2.md       # Completed task
+├── brainfile.md    # Board config (columns, types, rules)
+├── board/          # Active tasks
+│   ├── task-1.md
+│   └── epic-1.md
+└── logs/           # Completed tasks
+    └── task-2.md
 `
 
-Git-native workflow.
+Explicit coordination semantics
 
-Branch your tasks with your code. Merge them together. Individual task files prevent merge conflicts. Your task history is your git history.
+The contract system defines a formal lifecycle for delegated work:
+  PM defines deliverables, validation commands, and constraints
+  Worker agent picks up the contract and implements
+  Worker agent delivers; PM validates against the contract
 
-AI-first integration.
+This replaces informal "please implement X" instructions with structured, verifiable agreements. Contract status (ready → in_progress → delivered → done/failed) is tracked in the task file itself.
 
-The MCP server exposes your tasks as tools. AI assistants don't read a file — they call structured operations: list_tasks, add_task, move_task. Type-safe. Error-handled. No YAML corruption.
+Type safety at the protocol level
 
----
+Document types (task, epic, adr) are declared in the board config with idPrefix and completable flags. Strict mode enforces that only declared types can be created. This prevents drift in large projects where multiple agents or humans create documents.
 
-Comparison
+Decisions become rules
 
-| Feature | Brainfile | Linear/Jira | GitHub Issues | Notion |
-|---------|-----------|-------------|---------------|--------|
-| Lives in repo | ✅ | ❌ | ❌ | ❌ |
-| Works offline | ✅ | ❌ | ❌ | ❌ |
-| AI can update directly | ✅ MCP | ❌ | ❌ | ❌ |
-| Version controlled | ✅ git | ❌ | Partial | ❌ |
-| No account required | ✅ | ❌ | ❌ | ❌ |
-| Free forever | ✅ | Freemium | Freemium | Freemium |
-| Kanban UI | ✅ VSCode/TUI | ✅ | ❌ Projects | ✅ |
-| Team collaboration | ✅ git | ✅ | ✅ | ✅ |
+Architecture Decision Records (ADRs) are first-class document types. When an ADR is accepted, it can be promoted to a permanent project rule in the board config — with a backlink to the source ADR. Agents read these rules before starting work.
 
 ---
 
-Who It's For
+What the Protocol Defines
 
-Developers Using AI Tools
-
-You're already using Claude Code, Cursor, or Cline. You want your AI assistant to actually know what you're working on — not just your code, but your tasks. MCP integration means your assistant can list, create, and update tasks without you copy-pasting anything.
-
-Solo Devs Who Want Simplicity
-
-You don't need Jira. You don't want to pay for Linear. You just want a task list that lives in your project, works offline, and doesn't require another account. Open your terminal, run brainfile, and you have a kanban board.
-
-Developers Tired of Freemium Tools
-
-Every project management tool starts free, then slowly gates features behind pricing tiers. Brainfile is a file format — it's yours. No subscription. No "upgrade to unlock." No "your trial has ended."
-
-Builders Who Want a Foundation
-
-The @brainfile/core library gives you parsing, serialization, validation, and operations. Build a custom CLI. Create a web dashboard. Integrate with your existing tools. The protocol is stable; build whatever you want on top.
-
-Anyone Who Wants Local-First Tasks
-
-Maybe you're not a developer. Maybe you just want a personal task list that:
-  - Lives on your machine, not in the cloud
-  - Works without internet
-  - Can be backed up by copying a file
-  - Doesn't require creating yet another account
-
-The TUI works great for personal task management too.
+| Concept | Description |
+|---------|-------------|
+| Board config | Columns, document types, strict mode, rules, agent instructions |
+| Task files | Individual markdown files with structured YAML frontmatter |
+| Lifecycle | board/ → logs/ completion model with completedAt timestamps |
+| Contracts | Deliverables, validation commands, constraints, and status lifecycle |
+| Types | task, epic, adr — extensible via config, with optional strict enforcement |
+| Rules | always/never/prefer/context categories with numeric IDs and optional source backlinks |
+| Linking | parentId for any-to-any document relationships |
 
 ---
 
-Maybe Not For
-  - Large orgs with complex approval workflows
-  - Teams needing enterprise reporting and analytics
-  - Projects where non-technical stakeholders manage tasks
-  - Situations requiring audit trails beyond git history
+What the Protocol Does Not Define
+  - How to render a kanban board (that's an implementation concern)
+  - Authentication or access control
+  - Notification or webhook systems
+  - Sync mechanisms between multiple repositories
+  - How AI agents should interpret instructions (beyond providing the data)
+
+The protocol is deliberately narrow. It defines the data format, lifecycle semantics, and coordination primitives. Everything else is left to implementations.
 
 ---
 
-The Philosophy
+Schema
 
-> The protocol is the product.
-
-Brainfile is a file format first, tools second. You can write brainfile.md` by hand with any text editor. The CLI, VSCode extension, and MCP server are conveniences built on top of a stable specification.
-
-This means:
-  - No vendor lock-in — It's just a markdown file
-  - Ecosystem potential — Anyone can build tools
-  - Future-proof — The format outlasts any single tool
+The protocol is backed by JSON schemas for validation:
+  - Board: brainfile.md/v1/board.json
+  - Task: brainfile.md/v1/task.json
+  - Contract: brainfile.md/v1/contract.json`
 
 ---
 
 Next Steps
-  - Quick Start — Get running in 60 seconds
-  - CLI Commands — Terminal interface
-  - MCP Integration — AI assistant setup
+  - Protocol Specification — Full format reference
+  - Contract System — Agent coordination semantics
+  - Quick Start — Install and initialize a board
+  - Core Library — Build on the protocol
 
 ---
 

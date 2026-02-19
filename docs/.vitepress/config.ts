@@ -4,7 +4,7 @@ import path from 'path'
 
 export default defineConfig({
   title: 'Brainfile',
-  description: 'A protocol-first task management system for the AI era',
+  description: 'An open protocol for structured task coordination between humans and AI agents',
   cleanUrls: true,
   ignoreDeadLinks: true,
   appearance: 'force-dark',
@@ -121,19 +121,43 @@ export default defineConfig({
 
   themeConfig: {
     nav: [
-      { text: 'Quick Start', link: '/quick-start' },
+      { text: 'Specification', link: '/reference/protocol' },
+      { text: 'Reference', link: '/reference/commands' },
+      { text: 'Guides', link: '/guides/contracts' },
       { text: 'Tools', link: '/tools/cli' },
-      { text: 'Reference', link: '/reference/protocol' },
       { text: 'GitHub', link: 'https://github.com/brainfile' },
     ],
 
     sidebar: [
       {
-        text: 'Start Here',
+        text: 'Protocol',
         items: [
           { text: 'Home', link: '/' },
+          { text: 'Why this Protocol?', link: '/why' },
           { text: 'Quick Start', link: '/quick-start' },
-          { text: 'Why Brainfile?', link: '/why' },
+          { text: 'Specification', link: '/reference/protocol' },
+        ],
+      },
+      {
+        text: 'Reference',
+        items: [
+          { text: 'Protocol Specification', link: '/reference/protocol' },
+          { text: 'CLI Commands', link: '/reference/commands' },
+          { text: 'API Reference', link: '/reference/api' },
+          { text: 'Schema Types', link: '/reference/types' },
+          { text: 'Contract Schema', link: '/reference/contract-schema' },
+          { text: 'Base Schema', link: '/types/base' },
+          { text: 'Board Schema', link: '/types/board' },
+        ],
+      },
+      {
+        text: 'Guides',
+        items: [
+          { text: 'Getting Started with Contracts', link: '/guides/getting-started-with-contracts' },
+          { text: 'Contract System', link: '/guides/contracts' },
+          { text: 'Contract Commands', link: '/cli/contract-commands' },
+          { text: 'Agent Workflows', link: '/guides/agent-workflows' },
+          { text: 'Orchestration', link: '/guides/orchestration' },
         ],
       },
       {
@@ -143,29 +167,6 @@ export default defineConfig({
           { text: 'MCP Server', link: '/tools/mcp' },
           { text: 'VSCode Extension', link: '/tools/vscode' },
           { text: 'Core Library', link: '/tools/core' },
-        ],
-      },
-      {
-        text: 'Guides',
-        items: [
-          { text: 'What are Contracts?', link: '/guides/getting-started-with-contracts' },
-          { text: 'Comprehensive Guide', link: '/guides/contracts' },
-          { text: 'Contract Commands', link: '/cli/contract-commands' },
-          { text: 'Workflow Patterns', link: '/guides/agent-workflows' },
-          { text: 'Orchestration', link: '/guides/orchestration' },
-          { text: 'Schema Reference', link: '/reference/contract-schema' },
-        ],
-      },
-      {
-        text: 'Reference',
-        items: [
-          { text: 'Protocol Specification', link: '/reference/protocol' },
-          { text: 'API Reference', link: '/reference/api' },
-          { text: 'CLI Commands', link: '/reference/commands' },
-          { text: 'Schema Types', link: '/reference/types' },
-          { text: 'Base Schema', link: '/types/base' },
-          { text: 'Board Schema', link: '/types/board' },
-          { text: 'Contract Schema Reference', link: '/reference/contract-schema' },
         ],
       },
     ],
