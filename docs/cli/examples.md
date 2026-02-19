@@ -51,8 +51,8 @@ brainfile move --task task-1 --column in-progress
 # Update task priority
 brainfile patch --task task-1 --priority critical
 
-# Complete task
-brainfile move --task task-1 --column done
+# Complete task (moves from board/ to logs/)
+brainfile complete --task task-1
 ```
 
 ### Bug Tracking
@@ -253,9 +253,9 @@ for task in "Setup database" "Configure auth" "Add API routes"; do
   brainfile add --title "$task" --tags "backend"
 done
 
-# Move multiple tasks
+# Complete multiple tasks
 for id in task-1 task-2 task-3; do
-  brainfile move --task $id --column done
+  brainfile complete --task $id
 done
 ```
 

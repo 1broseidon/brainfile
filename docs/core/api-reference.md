@@ -479,6 +479,149 @@ need to be updated. Each diff entry includes before/after snapshots, indexes, an
 > bespoke hashing/diff logic with the shared helpers to ensure consistent behavior
 > across VS Code, CLI, and future integrations.
 
+## v2 File Operations
+
+These functions operate on the per-task file architecture (`.brainfile/board/` and `.brainfile/logs/`):
+
+### `readTaskFile(filePath): TaskDocument`
+
+Read a single task file.
+
+```typescript
+import { readTaskFile } from '@brainfile/core';
+
+const doc = readTaskFile('.brainfile/board/task-1.md');
+console.log(doc.task.title);
+console.log(doc.body);
+```
+
+### `readTasksDir(dirPath): TaskDocument[]`
+
+Read all task files from a directory.
+
+```typescript
+import { readTasksDir } from '@brainfile/core';
+
+const tasks = readTasksDir('.brainfile/board/');
+```
+
+### `addTaskFile(boardDir, input): TaskOperationResult`
+
+Add a new task file (auto-generates ID and filename).
+
+```typescript
+import { addTaskFile } from '@brainfile/core';
+
+addTaskFile('.brainfile/board/', {
+  title: 'New task',
+  column: 'todo',
+  priority: 'high'
+});
+```
+
+### `moveTaskFile(filePath, newColumn): void`
+
+Move a task to a different column (updates frontmatter).
+
+### `completeTaskFile(boardPath, logsDir): void`
+
+Move a task from `board/` to `logs/`, setting `completedAt`.
+
+### `appendLog(filePath, message, agent?): void`
+
+Append a timestamped log entry to a task file.
+
+### `readV2BoardConfig(brainfilePath): Board`
+
+Read and parse the v2 board configuration file.
+
+```typescript
+import { readV2BoardConfig } from '@brainfile/core';
+
+const board = readV2BoardConfig('.brainfile/brainfile.md');
+console.log(board.columns.map(c => c.title));
+```
+
+### `findBrainfile(startDir): FoundBrainfile`
+
+Auto-detect the brainfile location from a starting directory.
+
+```typescript
+import { findBrainfile } from '@brainfile/core';
+
+const found = findBrainfile(process.cwd());
+```
+
+### `generateNextFileTaskId(boardDir, logsDir): string`
+
+Generate the next sequential task ID by scanning existing files.
+
+---
+
+## Board Validation
+
+### `getBoardTypes(config): TypesConfig`
+
+Get available document types from board config.
+
+### `validateType(config, typeName): string | null`
+
+Validate a type name against the board config (returns error message or null).
+
+### `validateColumn(config, columnId): string | null`
+
+Validate a column ID against the board config.
+
+---
+
+## v2 Types
+
+```typescript
+import type {
+  Board,
+  BoardConfig,
+  TypeEntry,
+  TypesConfig,
+  TaskDocument
+} from '@brainfile/core';
+
+// v1 board with embedded tasks
+interface Board {
+  columns: Column[];
+  archive?: Task[];
+  // ... inherits BrainfileBase
+}
+
+// v2 board config (columns + types, no embedded tasks)
+interface BoardConfig {
+  columns: ColumnConfig[];
+  strict?: boolean;
+  types?: TypesConfig;
+  // ... inherits BrainfileBase
+}
+
+// Per-type configuration
+interface TypeEntry {
+  idPrefix: string;
+  completable?: boolean;
+  schema?: string;
+}
+
+// Map of type name -> type configuration
+interface TypesConfig {
+  [typeName: string]: TypeEntry;
+}
+
+// Parsed task file content
+interface TaskDocument {
+  task: Task;
+  body: string;
+  filePath: string;
+}
+```
+
+---
+
 ## Constants
 
 ### RuleType

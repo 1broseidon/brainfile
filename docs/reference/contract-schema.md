@@ -17,7 +17,10 @@ The Contract object is an optional extension to a Brainfile task. It defines the
 | `deliverables` | `Array<Deliverable>` | List of items to be produced | No |
 | `validation` | `Validation` | How to verify the work | No |
 | `constraints` | `Array<string>` | Implementation rules to follow | No |
-| `context` | `Context` | Additional background information | No |
+| `outOfScope` | `Array<string>` | Explicitly out-of-scope items | No |
+| `feedback` | `string` | PM feedback after failed validation | No |
+| `version` | `number` | Contract version (incremented on amendment) | No |
+| `metrics` | `Metrics` | Auto-tracked timing and rework data | No |
 
 ## Lifecycle Status (`status`)
 
@@ -46,27 +49,35 @@ Each item in the `deliverables` array defines a specific output.
 |-------|------|-------------|
 | `commands` | `Array<string>` | Shell commands to execute for validation |
 
-## Context Object
+## Metrics Object
 
-Used to provide deeper understanding to the worker agent.
+Auto-tracked by the CLI. Do not manually edit.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `background` | `string` | High-level "why" and architectural context |
-| `relevantFiles`| `Array<string>`| Paths to existing code for reference |
-| `outOfScope` | `Array<string>`| Explicitly forbidden changes |
+| `pickedUpAt` | `string` | ISO 8601 timestamp when agent picked up |
+| `deliveredAt` | `string` | ISO 8601 timestamp when agent delivered |
+| `duration` | `number` | Seconds between pickup and delivery |
+| `reworkCount` | `number` | Times contract was re-picked up after failure |
 
 ---
 
 ## Example (YAML)
 
-When stored in `brainfile.md`, a contract looks like this:
+In a v2 task file (`.brainfile/board/task-63.md`):
 
 ```yaml
+---
 id: task-63
+type: task
 title: "Update API documentation"
+column: todo
+assignee: codex
+relatedFiles:
+  - src/routes/api.ts
 contract:
   status: ready
+  version: 1
   deliverables:
     - type: docs
       path: docs/api-v2.md
@@ -77,10 +88,14 @@ contract:
   constraints:
     - Use Swagger/OpenAPI 3.0 format
     - Document all error codes
-  context:
-    background: "Preparing for the Q3 mobile app release"
-    relevantFiles:
-      - src/routes/api.ts
-    outOfScope:
-      - Changing the authentication logic
+  outOfScope:
+    - Changing the authentication logic
+---
+
+## Description
+Preparing for the Q3 mobile app release.
 ```
+
+::: info v2 changes
+In v2, `context.background` moved to `task.description` and `context.relevantFiles` moved to `task.relatedFiles`. The `context` object is deprecated.
+:::

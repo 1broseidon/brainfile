@@ -54,7 +54,11 @@ npx @brainfile/cli add --title "New task"
    npm install -g @brainfile/cli
    ```
 
-2. **Create a brainfile.md** in your project (or use an existing one)
+2. **Initialize a project:**
+   ```bash
+   brainfile init
+   ```
+   This creates `.brainfile/` with `brainfile.md`, `board/`, and `logs/`.
 
 3. **List your tasks:**
    ```bash
@@ -66,9 +70,9 @@ npx @brainfile/cli add --title "New task"
    brainfile add --title "My first task" --priority high
    ```
 
-5. **Move a task:**
+5. **Complete a task:**
    ```bash
-   brainfile move --task task-123 --column done
+   brainfile complete --task task-1
    ```
 
 ## Features

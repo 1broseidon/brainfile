@@ -152,6 +152,7 @@ export default defineConfig({
           { text: 'Comprehensive Guide', link: '/guides/contracts' },
           { text: 'Contract Commands', link: '/cli/contract-commands' },
           { text: 'Workflow Patterns', link: '/guides/agent-workflows' },
+          { text: 'Orchestration', link: '/guides/orchestration' },
           { text: 'Schema Reference', link: '/reference/contract-schema' },
         ],
       },

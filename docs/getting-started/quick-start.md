@@ -15,14 +15,20 @@ npm install -g @brainfile/cli
 brainfile init
 ```
 
-This creates a `brainfile.md` file with basic structure.
+This creates the `.brainfile/` directory with:
+- `.brainfile/brainfile.md` — Board configuration (columns, types, rules)
+- `.brainfile/board/` — Active task files
+- `.brainfile/logs/` — Completed task archive
+
+Default columns: `To Do` and `In Progress`.
 
 ## Interactive TUI
 
 Launch the interactive terminal UI:
 
 ```bash
-brainfile
+brainfile          # No arguments launches the TUI
+brainfile tui      # Explicit subcommand also works
 ```
 
 **Keyboard Controls:**
@@ -41,11 +47,17 @@ brainfile list
 # Add a task
 brainfile add --title "Implement auth" --priority high
 
+# Add a parent with children
+brainfile add --title "Auth overhaul" --child "OAuth flow" --child "Session handling"
+
 # Move a task
 brainfile move --task task-1 --column in-progress
 
 # Update a task
 brainfile patch --task task-1 --priority critical
+
+# Complete a task (moves from board/ to logs/)
+brainfile complete --task task-1
 
 # Create from template
 brainfile template --use bug-report --title "Login fails"
@@ -88,7 +100,8 @@ Add to your agent config (`CLAUDE.md`, `.cursorrules`):
 # Task Management
 
 - review and follow rules in @brainfile.md
-- update task status as you work (todo → in-progress → done)
+- update task status as you work
+- use brainfile CLI to manage tasks
 ```
 
 See [AI Agent Integration](/agents/integration) for details.
@@ -98,7 +111,7 @@ See [AI Agent Integration](/agents/integration) for details.
 ## VSCode Extension
 
 1. Install "Brainfile" from VSCode marketplace
-2. Open a project with `brainfile.md`
+2. Open a project with `.brainfile/brainfile.md`
 3. View the kanban board in the sidebar
 4. Drag and drop tasks between columns
 
@@ -106,28 +119,32 @@ See [AI Agent Integration](/agents/integration) for details.
 
 ## File Format
 
+### Board Config (`.brainfile/brainfile.md`)
+
 ```yaml
 ---
-schema: https://brainfile.md/v1
 title: My Project
-agent:
-  instructions:
-    - Modify only the YAML frontmatter
-    - Preserve all IDs
 columns:
   - id: todo
     title: To Do
-    tasks:
-      - id: task-1
-        title: Setup project
-        priority: high
-        tags: [setup]
   - id: in-progress
     title: In Progress
-    tasks: []
-  - id: done
-    title: Done
-    tasks: []
+strict: true
+types:
+  epic:
+    idPrefix: epic
+    completable: true
+  adr:
+    idPrefix: adr
+    completable: false
+agent:
+  instructions:
+    - Update task status as you work
+    - Preserve all IDs
+rules:
+  always:
+    - id: 1
+      rule: write tests for new features
 ---
 
 # My Project
@@ -135,45 +152,59 @@ columns:
 Project documentation goes here.
 ```
 
+### Task Files (`.brainfile/board/task-1.md`)
+
+```yaml
+---
+id: task-1
+type: task
+title: Setup project
+column: todo
+priority: high
+tags: [setup]
+---
+
+## Description
+Project setup details here.
+```
+
 ---
 
 ## Using the Core Library
 
 ```typescript
-import { Brainfile, addTask, moveTask } from '@brainfile/core';
-import fs from 'fs';
+import {
+  readTaskFile,
+  readTasksDir,
+  addTaskFile,
+  moveTaskFile,
+  completeTaskFile,
+  readV2BoardConfig
+} from '@brainfile/core';
 
-// Parse
-const markdown = fs.readFileSync('brainfile.md', 'utf-8');
-let board = Brainfile.parse(markdown);
+// Read board config
+const board = readV2BoardConfig('.brainfile/brainfile.md');
 
-// Add a task (immutable operation)
-const result = addTask(board, 'todo', {
+// Read all active tasks
+const tasks = readTasksDir('.brainfile/board/');
+
+// Add a new task
+addTaskFile('.brainfile/board/', {
   title: 'New task',
+  column: 'todo',
   priority: 'medium',
   tags: ['feature']
 });
 
-if (result.success) {
-  board = result.board!;
-}
-
-// Move a task
-const moveResult = moveTask(board, 'task-1', 'todo', 'in-progress', 0);
-if (moveResult.success) {
-  board = moveResult.board!;
-}
-
-// Serialize and save
-const output = Brainfile.serialize(board);
-fs.writeFileSync('brainfile.md', output);
+// Complete a task (moves to logs/)
+completeTaskFile('.brainfile/board/task-1.md', '.brainfile/logs/');
 ```
 
 ---
 
 ## Project Rules
 
-Define rules for your project:
+Define rules in `.brainfile/brainfile.md`:
 
 ```yaml
 rules:
@@ -193,21 +224,45 @@ rules:
 
 ---
 
+## Document Types
+
+Brainfile supports typed documents via the `types` config:
+
+```yaml
+strict: true
+types:
+  epic:
+    idPrefix: epic
+    completable: true
+  adr:
+    idPrefix: adr
+    completable: false
+```
+
+```bash
+brainfile types list         # See available types
+brainfile add --type epic --title "Auth overhaul"
+brainfile add --type adr --title "Use Postgres for user data"
+```
+
+---
+
 ## Subtasks
 
 Break down complex tasks:
 
 ```yaml
-tasks:
-  - id: task-1
-    title: Implement auth
-    subtasks:
-      - id: task-1-1
-        title: Setup OAuth
-        completed: true
-      - id: task-1-2
-        title: Create login UI
-        completed: false
+---
+id: task-1
+title: Implement auth
+subtasks:
+  - id: task-1-1
+    title: Setup OAuth
+    completed: true
+  - id: task-1-2
+    title: Create login UI
+    completed: false
+---
 ```
 
 Manage via CLI:
@@ -215,6 +270,20 @@ Manage via CLI:
 ```bash
 brainfile subtask --task task-1 --add "Add tests"
 brainfile subtask --task task-1 --toggle task-1-1
+```
+
+---
+
+## ADR Promotion
+
+Architecture Decision Records can be promoted to project rules:
+
+```bash
+# Create an ADR
+brainfile add --type adr --title "Use Postgres for user data" -c todo
+
+# Promote to a permanent rule
+brainfile adr promote -t adr-1 --category always
 ```
 
 ---
@@ -230,7 +299,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Validate
         run: npx @brainfile/cli lint --check
 ```

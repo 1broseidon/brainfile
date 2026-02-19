@@ -11,7 +11,7 @@ As orchestrator, you **plan, delegate, and coordinate** - you don't implement di
 ```
 ┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌──────────────┐
 │  1. Plan    │ ─▶ │ 2. Delegate  │ ─▶ │ 3. Validate │ ─▶ │ 4. Complete  │
-│  Create     │    │ @implementer │    │ @pragmatist │    │ Move to done │
+│  Create     │    │ @implementer │    │ @pragmatist │    │ Complete     │
 │  contract   │    │ picks up     │    │ @karen      │    │              │
 └─────────────┘    └──────────────┘    └─────────────┘    └──────────────┘
 ```
@@ -107,7 +107,7 @@ contract:
 When all validation subtasks pass:
 
 ```bash
-brainfile move -t {task-id} -c done
+brainfile complete -t {task-id}
 ```
 
 ---
@@ -149,7 +149,7 @@ brainfile move -t {task-id} -c done
 | `ready` | You | `brainfile add --with-contract` |
 | `in_progress` | Implementer | `brainfile contract pickup` |
 | `delivered` | Implementer | `brainfile contract deliver` |
-| `done` | You | After validation passes, `brainfile move -c done` |
+| `done` | You | After validation passes, `brainfile complete -t {id}` |
 | `failed` | Validator | `brainfile contract validate` fails |
 | `failed` → `ready` | You | Add feedback, reset status for rework |
 
@@ -184,8 +184,8 @@ brainfile show -t {id}
 brainfile list --contract ready
 brainfile list --contract delivered
 
-# Move to done
-brainfile move -t {id} -c done
+# Complete task (moves to logs/)
+brainfile complete -t {id}
 ```
 
 ---

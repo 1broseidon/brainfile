@@ -1,5 +1,10 @@
 ---
 title: My Project
+columns:
+  - id: todo
+    title: To Do
+  - id: in-progress
+    title: In Progress
 agent:
   instructions:
     - Modify only the YAML frontmatter
@@ -12,14 +17,4 @@ rules:
   never: []
   prefer: []
   context: []
-columns:
-  - id: todo
-    title: To Do
-    tasks: []
-  - id: in-progress
-    title: In Progress
-    tasks: []
-  - id: done
-    title: Done
-    tasks: []
 ---

@@ -102,37 +102,45 @@ contract:
     - Keep backwards compatibility
 ```
 
-### `context`
+### `outOfScope`
 
-**Type**: `object`
-**Description**: Optional additional context
+**Type**: `array` of `string`
+**Description**: Explicitly out-of-scope items
 
 ```yaml
 contract:
   status: ready
-  context:
-    background: This work is part of the v1 protocol stabilization effort.
-    relevantFiles:
-      - protocol/v1/board.json
-      - protocol/docs/types/board.md
-    outOfScope:
-      - Redesigning unrelated schemas
+  outOfScope:
+    - Redesigning unrelated schemas
 ```
 
-#### `context.background`
+### `feedback`
 
 **Type**: `string`
-**Description**: Background notes for the agent
+**Description**: PM feedback after failed validation. Used for rework guidance.
 
-#### `context.relevantFiles`
+### `version`
 
-**Type**: `array` of `string`
-**Description**: Additional file paths or code locations relevant to the contract
+**Type**: `number`
+**Description**: Contract version number. Increment when amending a contract.
 
-#### `context.outOfScope`
+### `metrics`
 
-**Type**: `array` of `string`
-**Description**: Explicitly out-of-scope items
+**Type**: `object`
+**Description**: Auto-tracked timing and rework data (managed by CLI).
+
+```yaml
+contract:
+  metrics:
+    pickedUpAt: "2026-02-18T10:00:00Z"
+    deliveredAt: "2026-02-18T12:30:00Z"
+    duration: 9000
+    reworkCount: 0
+```
+
+::: info v2 migration note
+In v2, `context.background` moved to `task.description` and `context.relevantFiles` moved to `task.relatedFiles`. The `context` object is deprecated.
+:::
 
 ## See Also
 

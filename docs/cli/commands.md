@@ -15,7 +15,7 @@ brainfile mcp           # Start MCP server for AI assistants
 
 | Command | Description |
 |---------|-------------|
-| [`init`](#init) | Create a new brainfile |
+| [`init`](#init) | Create a new .brainfile/ project |
 | [`list`](#list) | Display tasks |
 | [`add`](#add) | Create a new task |
 | [`move`](#move) | Move task between columns |
@@ -30,23 +30,34 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`hooks`](#hooks) | AI agent hook integration |
 | [`auth`](#auth) | Authenticate with GitHub/Linear |
 | [`config`](#config) | Manage CLI configuration |
+| [`complete`](#complete) | Complete a task (move to logs/) |
 | [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Inspect and manage document types |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Migrate to .brainfile/ structure |
 | [`mcp`](#mcp) | MCP server for AI assistants |
 
 ---
 
 ## init
 
-Create a new brainfile in your project.
+Create a new `.brainfile/` project directory.
 
 ```bash
 brainfile init
-brainfile init --file ./tasks.md
 brainfile init --force  # Overwrite existing
 ```
 
+This creates:
+- `.brainfile/brainfile.md` — Board config with `todo` and `in-progress` columns
+- `.brainfile/board/` — Directory for active task files
+- `.brainfile/logs/` — Directory for completed task files
+
 **Options:**
-- `-f, --file <path>` - Output path (default: `brainfile.md`)
+- `-f, --file <path>` - Output path (default: `.brainfile/brainfile.md`)
 - `--force` - Overwrite if file exists
 
 ---
@@ -77,7 +88,9 @@ brainfile add --title "Implement auth"
 brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
 brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
 brainfile add --title "Fix auth bug" --files "src/auth.ts,src/login.tsx"
-brainfile add --title "Implement API" --with-contract --deliverable "src/api.ts"
+brainfile add --title "Auth overhaul" --child "OAuth flow" --child "Session handling"
+brainfile add --title "Implement API" --with-contract --deliverable "file:src/api.ts:Implementation"
+brainfile add --title "Design doc" --type adr --column todo
 ```
 
 **Options:**
@@ -85,15 +98,18 @@ brainfile add --title "Implement API" --with-contract --deliverable "src/api.ts"
 - `-c, --column <name>` - Target column (default: `todo`)
 - `-d, --description <text>` - Task description
 - `-p, --priority <level>` - `low`, `medium`, `high`, or `critical`
+- `--type <type>` - Document type (e.g., `epic`, `adr`; default: `task`)
+- `--parent <id>` - Parent task/epic ID
+- `--child <title>` - Create child task(s) under the new parent (repeatable)
 - `--tags <list>` - Comma-separated tags
 - `--assignee <name>` - Assignee name
 - `--due-date <date>` - Due date (YYYY-MM-DD)
 - `--subtasks <list>` - Comma-separated subtask titles
 - `--files <list>` - Comma-separated related file paths
-- `--with-contract` - Initialize with an empty contract
-- `--deliverable <path:desc>` - Add deliverable (repeatable)
-- `--validation <command>` - Add validation command (repeatable)
-- `--constraint <text>` - Add constraint (repeatable)
+- `--with-contract` - Attach a contract (status=ready)
+- `--deliverable <spec>` - Contract deliverable: `type:path:description` (repeatable)
+- `--validation <command>` - Contract validation command (repeatable)
+- `--constraint <text>` - Contract constraint (repeatable)
 
 ---
 
@@ -285,13 +301,27 @@ brainfile template --use feature-request --title "Dark mode"
 
 ---
 
+## complete
+
+Complete a task — moves it from `.brainfile/board/` to `.brainfile/logs/`.
+
+```bash
+brainfile complete --task task-1
+brainfile complete -t epic-1 --force  # Force complete even with active children
+```
+
+**Options:**
+- `-t, --task <id>` - Task ID (required)
+- `--force` - Force epic completion even if child tasks are still active
+
+---
+
 ## tui
 
 Launch interactive terminal UI. This is the default when running `brainfile` without arguments.
 
 ```bash
-brainfile              # Opens TUI with brainfile.md
-brainfile ./tasks.md   # Opens TUI with specific file
+brainfile              # Opens TUI (no arguments)
 brainfile tui          # Explicit TUI command
 ```
 
@@ -440,6 +470,76 @@ brainfile contract validate --task task-1
 ```
 
 See the [Contract Commands Reference](./contract-commands) for detailed documentation of all contract subcommands.
+
+---
+
+## adr
+
+Manage Architecture Decision Records.
+
+```bash
+brainfile adr promote -t adr-1 --category always
+```
+
+**Subcommands:**
+- `promote` - Promote an ADR to a project rule and move it to logs/
+
+**Options:**
+- `-t, --task <id>` - ADR task ID (required)
+- `--category <cat>` - Rule category: `prefer`, `always`, `never`, `context`
+
+---
+
+## rules
+
+Manage project rules (always, never, prefer, context).
+
+```bash
+brainfile rules                          # List all rules
+brainfile rules list --category always   # Filter by category
+brainfile rules add always "Write tests" # Add a rule
+brainfile rules delete always 1          # Delete rule by ID
+```
+
+---
+
+## types
+
+Inspect and manage board document types.
+
+```bash
+brainfile types list              # List available types
+brainfile types add epic          # Add a custom type
+brainfile types add adr --completable false --id-prefix adr
+```
+
+**Options for add:**
+- `--id-prefix <prefix>` - ID prefix (default: type name)
+- `--completable <bool>` - Whether the type can be completed (default: true)
+- `--schema <url>` - Optional schema URL
+
+---
+
+## search
+
+Search across active tasks and completed logs.
+
+```bash
+brainfile search "auth"
+brainfile search "bug" --column todo
+```
+
+---
+
+## log
+
+View and search completed task logs (v2 only).
+
+```bash
+brainfile log                      # List recently completed tasks
+brainfile log -t task-10           # View specific completed task
+brainfile log --search "auth"      # Search across logs
+```
 
 ---
 

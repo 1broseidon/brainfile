@@ -63,10 +63,9 @@ graph LR
   pickup --> in_progress(in_progress)
   in_progress --> deliver[deliver]
   deliver --> delivered(delivered)
-  delivered --> validate[validate / approve]
+  delivered --> validate[validate]
   validate --> done(done)
-  delivered --> reject[reject]
-  reject --> failed(failed)
+  validate --> failed(failed)
   failed --> pickup
 ```
 
@@ -74,10 +73,10 @@ graph LR
 |-------|---------|-------------|
 | `ready` | Contract is available for an agent to claim. | Agent: `contract pickup` |
 | `in_progress` | Agent is currently working on the deliverables. | Agent: `contract deliver` |
-| `delivered` | Work is complete and awaiting PM review. | PM: `contract validate` or `approve` |
-| `done` | PM has verified and accepted the work. | PM: Move task to completion column. |
-| `failed` | PM rejected the work. Feedback is provided. | Agent: Re-`pickup` for rework. |
-| `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and `reset` status. |
+| `delivered` | Work is complete and awaiting PM review. | PM: `contract validate` |
+| `done` | PM has verified and accepted the work. | PM: `brainfile complete` to move to logs/. |
+| `failed` | Validation failed. Feedback is provided. | PM: Add feedback, reset to `ready` for rework. |
+| `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. |
 
 ---
 
@@ -109,14 +108,12 @@ PM agents (usually humans or advanced LLMs) manage the lifecycle:
 1.  **Define**: Create tasks with clear contracts.
 2.  **Assign**: Set the `assignee` to the appropriate worker agent.
 3.  **Validate**: Once delivered, run `brainfile contract validate -t task-X`.
-4.  **Approval/Rejection**: 
-    - If successful: `contract approve` (if not auto-completed by validate).
-    - If issues found: `contract reject --feedback "..."`.
+4.  **Result**:
+    - If successful: Status becomes `done`. Run `brainfile complete` to move to logs/.
+    - If issues found: Status becomes `failed`. Edit task to add feedback and reset status to `ready`.
 
 ### State Tracking
-The contract system maintains internal state in `.brainfile/state.json`. This file is typically git-ignored and tracks:
-- **Pickup version**: Ensures agents don't work on stale versions of a contract.
-- **Agent state**: Tracks local progress that hasn't been delivered yet.
+Contract metrics are tracked directly within the contract object in each task file:
 
 ### Metrics and Performance
 The system automatically tracks metrics to help evaluate agent performance and task complexity:

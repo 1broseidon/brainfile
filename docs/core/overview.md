@@ -15,14 +15,16 @@ npm install @brainfile/core
 
 ## Features
 
-- **Parse** - Convert markdown files into structured Board objects
-- **Serialize** - Convert Board objects back to markdown
-- **Validate** - Validate against the Brainfile schema
-- **Board Operations** - Immutable operations for tasks (add, patch, move, delete, archive, restore)
+- **v2 File Operations** - Read, write, add, move, and complete individual task files in `board/` and `logs/`
+- **Board Config** - Parse `brainfile.md` configuration (columns, types, rules)
+- **Type Validation** - Strict mode type/column validation via `getBoardTypes`, `validateType`, `validateColumn`
+- **Parse & Serialize** - Convert markdown files into structured Board objects and back
+- **Board Operations** - Immutable in-memory operations for tasks (add, patch, move, delete, archive, restore)
 - **Subtask Operations** - Manage subtasks (add, delete, toggle, update)
 - **Templates** - Built-in task templates (Bug Report, Feature Request, Refactor)
 - **Realtime Sync** - Hash-based change detection and structural diffing
 - **Linting** - Syntax validation with auto-fix
+- **Discovery** - Auto-detect `.brainfile/brainfile.md` or fallback paths
 
 ## Quick Start
 

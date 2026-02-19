@@ -16,7 +16,7 @@ titleTemplate: Task management for the AI era
     <div class="hero-copy">
       <div class="hero-badge"><span class="pulse"></span>AI-Native Task Management</div>
       <h1 class="hero-title">Task management<br /><span class="highlight">in your repo</span></h1>
-      <p class="hero-subtitle"><strong>One markdown file. Full kanban board.</strong><br />Built for AI agents to read, write, and coordinate tasks directly in your codebase.</p>
+      <p class="hero-subtitle"><strong>A file-based kanban board. Individual task files.</strong><br />Built for AI agents to read, write, and coordinate tasks directly in your codebase.</p>
     </div>
     <div class="hero-visual" aria-hidden="true">
       <div class="code-window">
@@ -98,7 +98,7 @@ titleTemplate: Task management for the AI era
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3" /><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83" /></svg></div>
         <h3 class="feature-title">Agent Coordination</h3>
-        <p class="feature-desc">First-class support for agent-to-agent contracts. Assign work to other AI assistants with clear deliverables.</p>
+        <p class="feature-desc">First-class support for agent-to-agent contracts. Assign work to AI assistants with clear deliverables and validation.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" /></svg></div>
@@ -108,7 +108,7 @@ titleTemplate: Task management for the AI era
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg></div>
         <h3 class="feature-title">Lives in Your Repo</h3>
-        <p class="feature-desc">A single brainfile.md file. Version control friendly. Branch it, merge it, diff it.</p>
+        <p class="feature-desc">A `.brainfile/` directory with individual task files. Version control friendly. Branch it, merge it, diff it.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" /></svg></div>
@@ -127,7 +127,7 @@ titleTemplate: Task management for the AI era
       <div class="ps-card solution">
         <span class="ps-label"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>The Solution</span>
         <h3 class="ps-title">Put your board in your repo</h3>
-        <p class="ps-text">Brainfile puts your task board in a brainfile.md file right in your repo. It's structured YAML that tools can parse, but it's also just markdown you can read and edit. AI assistants update it directly via MCP — no manual syncing.</p>
+        <p class="ps-text">Brainfile puts your task board in a `.brainfile/` directory right in your repo. Each task is its own markdown file with structured YAML frontmatter. AI assistants update tasks directly via MCP — no manual syncing.</p>
       </div>
     </div>
   </section>

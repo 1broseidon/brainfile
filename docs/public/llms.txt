@@ -4,9 +4,9 @@
 
 ## Quick Facts
 
-- **Format**: YAML frontmatter + Markdown
+- **Format**: YAML frontmatter + Markdown (per-task files)
 - **Schema**: https://brainfile.md/v1
-- **File**: brainfile.md (or .brainfile.md)
+- **Structure**: `.brainfile/brainfile.md` (config), `.brainfile/board/` (active), `.brainfile/logs/` (completed)
 - **Philosophy**: Protocol-first. No database, no backend. Tools are optional.
 
 ## Quick Start for AI Agents
@@ -27,8 +27,9 @@ Add these instructions to your `AGENTS.md`, `CLAUDE.md`, or `.cursorrules`:
 ### Step 2: Look for brainfile.md
 
 Check for these files in order:
-1. `brainfile.md` (preferred)
-2. `.brainfile.md` (legacy)
+1. `.brainfile/brainfile.md` (preferred, v2)
+2. `brainfile.md` (root, v1 compat)
+3. `.brainfile.md` (legacy)
 
 ### Step 3: Look for README Tag
 
@@ -36,31 +37,46 @@ If README contains `<!-- load:brainfile.md -->`, automatically load the file.
 
 ## Essential Structure
 
-Minimal valid brainfile:
+v2 uses a directory-based structure:
+
+```
+.brainfile/
+├── brainfile.md        # Board config (columns, types, rules)
+├── board/              # Active task files
+│   └── task-1.md
+└── logs/               # Completed task files
+```
+
+### Board Config (`.brainfile/brainfile.md`)
 
 ```yaml
 ---
-schema: https://brainfile.md/v1
 title: My Project
-agent:
-  instructions:
-    - Modify only the YAML frontmatter
-    - Preserve all IDs
-    - Keep ordering
 columns:
   - id: todo
     title: To Do
-    tasks:
-      - id: task-1
-        title: Implement feature
-        priority: high
   - id: in-progress
     title: In Progress
-    tasks: []
-  - id: done
-    title: Done
-    tasks: []
+agent:
+  instructions:
+    - Update task status as you work
+    - Preserve all IDs
 ---
+```
+
+### Task File (`.brainfile/board/task-1.md`)
+
+```yaml
+---
+id: task-1
+type: task
+title: Implement feature
+column: todo
+priority: high
+---
+
+## Description
+Details here.
 ```
 
 ## Core Fields
@@ -72,21 +88,24 @@ columns:
 - `rules`: Project rules (always, never, prefer, context)
 - `columns` (required): Array of column objects
 
-### Column Level
+### Column Level (config only in v2)
 - `id` (required): Unique identifier
 - `title` (required): Display name
-- `tasks`: Array of task objects
+- `completionColumn`: Optional boolean for auto-completion
 
-### Task Level
+### Task Level (individual files in v2)
 - `id` (required): Unique identifier (e.g., "task-1")
+- `type`: Document type (task, epic, adr)
 - `title` (required): Task name
+- `column` (required): Column ID
 - `description`: Detailed description
 - `priority`: low, medium, high, critical
-- `status`: todo, in-progress, done, blocked
 - `tags`: Array of strings
 - `assignee`: Person assigned
+- `parentId`: Parent document ID
 - `subtasks`: Array of subtask objects
 - `relatedFiles`: Array of file paths
+- `contract`: Optional agent contract
 
 ### Subtask Level
 - `id` (required): Unique identifier (e.g., "task-1-1")
@@ -113,41 +132,30 @@ columns:
 
 ### Creating a Task
 
-Generate a unique ID and add to a column:
+Use CLI to add tasks (creates individual files in `board/`):
 
-```yaml
-columns:
-  - id: todo
-    tasks:
-      - id: task-2
-        title: New task
-        priority: medium
-        tags:
-          - feature
+```bash
+brainfile add --title "New task" --priority medium --tags "feature"
 ```
 
 ### Moving a Task
 
-Move entire task object to different column:
-
-```yaml
-# Find task in source column, remove it
-# Add same task object to target column
-# Preserve all fields including ID
+```bash
+brainfile move --task task-1 --column in-progress
 ```
 
-### Updating Task Status
+### Completing a Task
 
-Mark subtasks as completed:
+Moves from `board/` to `logs/`:
 
-```yaml
-subtasks:
-  - id: task-1-1
-    title: Write tests
-    completed: true
-  - id: task-1-2
-    title: Update docs
-    completed: false
+```bash
+brainfile complete --task task-1
+```
+
+### Updating Subtasks
+
+```bash
+brainfile subtask --task task-1 --toggle task-1-1
 ```
 
 ## Rules System

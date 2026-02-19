@@ -47,7 +47,7 @@ Offline? Can't access tasks. Team changes? Export headaches. Service goes down? 
   <div class="anatomy-row">
     <div class="anatomy-card anatomy-wide">
       <div class="anatomy-title">Columns & Tasks</div>
-      <div class="anatomy-content">Your kanban board — todo, in-progress, done</div>
+      <div class="anatomy-content">Your kanban board — todo, in-progress</div>
     </div>
   </div>
   <div class="anatomy-connector">
@@ -56,8 +56,8 @@ Offline? Can't access tasks. Team changes? Export headaches. Service goes down? 
   </div>
   <div class="anatomy-row">
     <div class="anatomy-card anatomy-result">
-      <div class="anatomy-title">brainfile.md</div>
-      <div class="anatomy-content">One file. Human + machine readable.</div>
+      <div class="anatomy-title">.brainfile/</div>
+      <div class="anatomy-content">Config + individual task files. Human + machine readable.</div>
     </div>
   </div>
 </div>
@@ -137,23 +137,21 @@ Offline? Can't access tasks. Team changes? Export headaches. Service goes down? 
 
 **Tasks as code.**
 
-A `brainfile.md` file in your repo. Structured YAML frontmatter that tools can parse. Human-readable markdown you can edit directly. It's data and documentation in one file.
+A `.brainfile/` directory in your repo. Each task is its own markdown file with structured YAML frontmatter. The board config (`.brainfile/brainfile.md`) defines columns, types, and rules. Task files live in `.brainfile/board/` and completed tasks move to `.brainfile/logs/`.
 
-```yaml
----
-title: My Project
-columns:
-  - id: todo
-    tasks:
-      - id: task-1
-        title: Implement authentication
-        priority: high
----
+```
+.brainfile/
+├── brainfile.md        # Board config (columns, types, rules)
+├── board/
+│   ├── task-1.md       # Active task
+│   └── epic-1.md       # Active epic
+└── logs/
+    └── task-2.md       # Completed task
 ```
 
 **Git-native workflow.**
 
-Branch your tasks with your code. Merge them together. See task changes in your diff. Roll back if needed. Your task history is your git history.
+Branch your tasks with your code. Merge them together. Individual task files prevent merge conflicts. Your task history is your git history.
 
 **AI-first integration.**
 

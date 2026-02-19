@@ -68,7 +68,7 @@ The TUI watches your file for changes — edits from VSCode or AI assistants app
 brainfile init
 ```
 
-Creates a `brainfile.md` with default structure: three columns (To Do, In Progress, Done) and agent instructions.
+Creates `.brainfile/` directory with `brainfile.md` config, `board/`, and `logs/`. Default columns: `To Do` and `In Progress`.
 
 ### List Tasks
 
@@ -90,7 +90,12 @@ brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
 
 ```bash
 brainfile move --task task-1 --column in-progress
-brainfile move --task task-1 --column done
+```
+
+### Complete Tasks
+
+```bash
+brainfile complete --task task-1   # Moves from board/ to logs/
 ```
 
 ### Update Tasks
@@ -131,9 +136,8 @@ brainfile add --title "Implement API" \
 
 ### PM Agent Lifecycle
 
-1. **Validate**: `brainfile contract validate -t task-1` (Auto)
-2. **Approve**: `brainfile contract approve -t task-1` (Manual)
-3. **Reject**: `brainfile contract reject -t task-1 --feedback "..."`
+1. **Validate**: `brainfile contract validate -t task-1` (auto-checks deliverables and runs commands)
+2. **Complete**: `brainfile complete -t task-1` (after validation passes)
 
 See the [Agent Contracts Guide](/guides/contracts) for more details.
 

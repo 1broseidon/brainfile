@@ -19,13 +19,19 @@ npm install -g @brainfile/cli
 brainfile init
 ```
 
-This creates a `brainfile.md` file with a basic board structure.
+This creates the `.brainfile/` directory with:
+- `.brainfile/brainfile.md` — Board configuration (columns, types, rules)
+- `.brainfile/board/` — Active task files
+- `.brainfile/logs/` — Completed task archive
+
+Default columns are `To Do` and `In Progress`.
 
 ## 3. Use It
 
 **Option A: Interactive TUI**
 ```bash
-brainfile
+brainfile          # No arguments launches the TUI
+brainfile tui      # Explicit subcommand also works
 ```
 Navigate with keyboard: `TAB` for columns, `j`/`k` for tasks, `Enter` to expand, `q` to quit.
 
@@ -33,7 +39,8 @@ Navigate with keyboard: `TAB` for columns, `j`/`k` for tasks, `Enter` to expand,
 ```bash
 brainfile list                              # See all tasks
 brainfile add --title "My first task"       # Add a task
-brainfile move --task task-1 --column done  # Move to done
+brainfile move --task task-1 --column in-progress  # Move columns
+brainfile complete --task task-1            # Complete (moves to logs/)
 ```
 
 **Option C: VSCode Extension**

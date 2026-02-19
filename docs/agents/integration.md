@@ -167,22 +167,18 @@ agent:
 - Modify content outside YAML frontmatter
 - Change or regenerate task IDs
 - Remove fields you don't understand
-- Create hidden files (use `brainfile.md`, not `.brainfile.md`)
+- Directly edit task files unless necessary (prefer CLI or MCP operations)
 
 ---
 
 ## File Discovery
 
-AI agents should check for board files in this order:
+AI agents should check for the board config in this order:
 
-1. `brainfile.md` (preferred)
-2. `.brainfile.md` (backward compatibility)
-
-Or look for the load tag in README files:
-
-```html
-<!-- load:brainfile.md -->
-```
+1. `.brainfile/brainfile.md` (preferred, v2)
+2. `brainfile.md` (root, v1 compat)
+3. `.brainfile.md` (hidden, backward compat)
+4. `.bb.md` (shorthand, deprecated)
 
 ---
 

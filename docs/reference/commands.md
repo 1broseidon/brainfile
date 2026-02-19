@@ -33,7 +33,13 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`template`](#template) | Create from templates |
 | [`tui`](#tui) | Interactive terminal UI |
 | [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (move to logs/) |
 | [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
 | [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
 | [`config`](#config) | Manage user configuration |
 | [`auth`](#auth) | Authenticate with external services |
@@ -43,18 +49,17 @@ brainfile mcp           # Start MCP server for AI assistants
 
 ## init
 
-Create a new brainfile in your project.
+Create a new `.brainfile/` project directory with board config, `board/`, and `logs/`.
 
 ```bash
 brainfile init
-brainfile init --file ./tasks.md
 brainfile init --force  # Overwrite existing
 ```
 
 **Options:**
 | Option | Description |
 |--------|-------------|
-| `-f, --file <path>` | Output path (default: `brainfile.md`) |
+| `-f, --file <path>` | Output path (default: `.brainfile/brainfile.md`) |
 | `--force` | Overwrite if file exists |
 
 ---
@@ -111,7 +116,8 @@ Create a new task with all available fields.
 ```bash
 brainfile add --title "Implement auth"
 brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
-brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
+brainfile add --title "Auth overhaul" --child "OAuth flow" --child "Session handling"
+brainfile add --title "Design doc" --type adr --column todo
 ```
 
 **Options:**
@@ -121,14 +127,18 @@ brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
 | `-c, --column <name>` | Target column (default: `todo`) |
 | `-d, --description <text>` | Task description |
 | `-p, --priority <level>` | `low`, `medium`, `high`, or `critical` |
+| `--type <type>` | Document type (e.g., `epic`, `adr`; default: `task`) |
+| `--parent <id>` | Parent task/epic ID |
+| `--child <title>` | Create child task(s) under the new parent (repeatable) |
 | `--tags <list>` | Comma-separated tags |
 | `--assignee <name>` | Assignee name |
 | `--due-date <date>` | Due date (YYYY-MM-DD) |
 | `--subtasks <list>` | Comma-separated subtask titles |
-| `--with-contract` | Initialize with an empty contract |
-| `--deliverable <path:desc>` | Add deliverable (repeatable) |
-| `--validation <command>` | Add validation command (repeatable) |
-| `--constraint <text>` | Add constraint (repeatable) |
+| `--files <list>` | Comma-separated related file paths |
+| `--with-contract` | Attach a contract (status=ready) |
+| `--deliverable <spec>` | Contract deliverable: `type:path:description` (repeatable) |
+| `--validation <command>` | Contract validation command (repeatable) |
+| `--constraint <text>` | Contract constraint (repeatable) |
 
 ---
 
@@ -346,6 +356,23 @@ brainfile hooks uninstall claude-code --scope all
 
 ---
 
+## complete
+
+Complete a task — moves it from `board/` to `logs/`.
+
+```bash
+brainfile complete --task task-1
+brainfile complete -t epic-1 --force
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `-t, --task <id>` | Task ID (required) |
+| `--force` | Force epic completion even if child tasks are still active |
+
+---
+
 ## contract
 
 Manage the lifecycle of agent-to-agent contracts.
@@ -379,6 +406,69 @@ brainfile contract attach --task task-1 --deliverable "file:src/feature.ts:Imple
 | `--constraint <text>` | Add constraint (repeatable) |
 
 See the [Contract Commands Reference](/cli/contract-commands) for detailed documentation.
+
+---
+
+## adr
+
+Manage Architecture Decision Records.
+
+```bash
+brainfile adr promote -t adr-1 --category always
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `-t, --task <id>` | ADR task ID (required) |
+| `--category <cat>` | Rule category: `prefer`, `always`, `never`, `context` |
+
+---
+
+## rules
+
+Manage project rules.
+
+```bash
+brainfile rules                          # List all rules
+brainfile rules list --category always   # Filter by category
+brainfile rules add always "Write tests" # Add a rule
+brainfile rules delete always 1          # Delete rule by ID
+```
+
+---
+
+## types
+
+Inspect and manage board document types.
+
+```bash
+brainfile types list
+brainfile types add epic --completable true --id-prefix epic
+```
+
+---
+
+## search
+
+Search across active tasks and completed logs.
+
+```bash
+brainfile search "auth"
+brainfile search "bug" --column todo
+```
+
+---
+
+## log
+
+View and search completed task logs.
+
+```bash
+brainfile log                      # List recent completions
+brainfile log -t task-10           # View specific log
+brainfile log --search "auth"      # Search logs
+```
 
 ---
 

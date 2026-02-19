@@ -13,12 +13,13 @@ Contract commands facilitate the lifecycle of agent-to-agent coordination. Most 
 |---------|------|-------------|
 | [`pickup`](#pickup) | Worker | Claim a task and set status to `in_progress` |
 | [`deliver`](#deliver) | Worker | Submit completed work and set status to `delivered` |
-| [`validate`](#validate) | PM | Automatically run validation commands |
-| [`approve`](#approve) | PM | Manually accept work and set status to `done` |
-| [`reject`](#reject) | PM | Reject work and set status to `failed` |
+| [`validate`](#validate) | PM | Check deliverables and run validation commands |
 | [`attach`](#attach) | PM | Add a contract to an existing task |
-| [`blocked`](#blocked) | Worker | Mark a contract as blocked with a reason |
-| [`reset`](#reset) | PM | Reset contract status (e.g., after unblocking) |
+
+::: tip Rework and blocking
+To reject work: edit the task file to set `contract.status` back to `ready` and add feedback to `contract.feedback`.
+To mark as blocked: edit the task file to set `contract.status` to `blocked`.
+:::
 
 ---
 
@@ -69,43 +70,8 @@ brainfile contract validate --task task-42
 - `-t, --task <id>` - Task ID (required)
 
 **Outcomes:**
-- **Success**: Sets status to `done`, moves task to completion column (if configured).
+- **Success**: Sets status to `done`. Use `brainfile complete -t task-42` to move to logs/.
 - **Failure**: Sets status to `failed`, adds command output to `contract.feedback`.
-
----
-
-## approve
-
-Manually approve a delivered contract, skipping automated validation.
-
-```bash
-brainfile contract approve --task task-42
-```
-
-**Options:**
-- `-t, --task <id>` - Task ID (required)
-
-**Side Effects:**
-- Sets `contract.status` to `done`.
-- Moves task to completion column.
-
----
-
-## reject
-
-Reject a delivered contract and provide feedback for rework.
-
-```bash
-brainfile contract reject --task task-42 --feedback "Missing unit tests for edge cases."
-```
-
-**Options:**
-- `-t, --task <id>` - Task ID (required)
-- `-f, --feedback <text>` - Explanation of why the work was rejected (required)
-
-**Side Effects:**
-- Sets `contract.status` to `failed`.
-- Increments `contract.metrics.reworkCount`.
 
 ---
 
@@ -127,35 +93,6 @@ brainfile contract attach --task task-42 \
 - `--constraint <text>` - Add an implementation constraint (repeatable)
 - `--out-of-scope <text>` - Add an out-of-scope item (repeatable)
 
----
 
-## blocked
-
-Mark a contract as blocked due to external dependencies.
-
-```bash
-brainfile contract blocked --task task-42 --reason "Upstream API is down"
-```
-
-**Options:**
-- `-t, --task <id>` - Task ID (required)
-- `-r, --reason <text>` - Why the task is blocked (required)
-
-**Side Effects:**
-- Sets `contract.status` to `blocked`.
-
----
-
-## reset
-
-Reset a contract to a specific status. Useful for clearing blocked or failed states.
-
-```bash
-brainfile contract reset --task task-42 --status ready
-```
-
-**Options:**
-- `-t, --task <id>` - Task ID (required)
-- `-s, --status <name>` - Target status (default: `ready`)
 
 ```

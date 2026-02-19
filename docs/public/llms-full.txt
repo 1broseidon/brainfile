@@ -5,7 +5,7 @@
 
 Version: 1.0
 Schema: https://brainfile.md/v1
-Last Updated: 2025-12-18
+Last Updated: 2026-02-19
 
 ---
 
@@ -45,12 +45,18 @@ npm install -g @brainfile/cli
 brainfile init
 `
 
-This creates a brainfile.md file with a basic board structure.
+This creates the .brainfile/ directory with:
+  - .brainfile/brainfile.md — Board configuration (columns, types, rules)
+  - .brainfile/board/ — Active task files
+  - .brainfile/logs/ — Completed task archive
+
+Default columns are To Do and In Progress.
   Use It
 
 Option A: Interactive TUI
 `
-brainfile
+brainfile          # No arguments launches the TUI
+brainfile tui      # Explicit subcommand also works
 `
 Navigate with keyboard: TAB for columns, j/k for tasks, Enter to expand, q to quit.
 
@@ -58,7 +64,8 @@ Option B: CLI Commands
 `
 brainfile list                              # See all tasks
 brainfile add --title "My first task"       # Add a task
-brainfile move --task task-1 --column done  # Move to done
+brainfile move --task task-1 --column in-progress  # Move columns
+brainfile complete --task task-1            # Complete (moves to logs/)
 `
 
 Option C: VSCode Extension
@@ -162,7 +169,7 @@ Anatomy of a Brainfile
   <div class="anatomy-row">
     <div class="anatomy-card anatomy-wide">
       <div class="anatomy-title">Columns & Tasks</div>
-      <div class="anatomy-content">Your kanban board — todo, in-progress, done</div>
+      <div class="anatomy-content">Your kanban board — todo, in-progress</div>
     </div>
   </div>
   <div class="anatomy-connector">
@@ -171,8 +178,8 @@ Anatomy of a Brainfile
   </div>
   <div class="anatomy-row">
     <div class="anatomy-card anatomy-result">
-      <div class="anatomy-title">brainfile.md</div>
-      <div class="anatomy-content">One file. Human + machine readable.</div>
+      <div class="anatomy-title">.brainfile/</div>
+      <div class="anatomy-content">Config + individual task files. Human + machine readable.</div>
     </div>
   </div>
 </div>
@@ -252,23 +259,21 @@ Anatomy of a Brainfile
 
 Tasks as code.
 
-A brainfile.md file in your repo. Structured YAML frontmatter that tools can parse. Human-readable markdown you can edit directly. It's data and documentation in one file.
+A .brainfile/ directory in your repo. Each task is its own markdown file with structured YAML frontmatter. The board config (.brainfile/brainfile.md) defines columns, types, and rules. Task files live in .brainfile/board/ and completed tasks move to .brainfile/logs/.
 
 ``
----
-title: My Project
-columns:
-  - id: todo
-    tasks:
-  - id: task-1
-        title: Implement authentication
-        priority: high
----
+.brainfile/
+├── brainfile.md        # Board config (columns, types, rules)
+├── board/
+│   ├── task-1.md       # Active task
+│   └── epic-1.md       # Active epic
+└── logs/
+    └── task-2.md       # Completed task
 `
 
 Git-native workflow.
 
-Branch your tasks with your code. Merge them together. See task changes in your diff. Roll back if needed. Your task history is your git history.
+Branch your tasks with your code. Merge them together. Individual task files prevent merge conflicts. Your task history is your git history.
 
 AI-first integration.
 
@@ -471,10 +476,9 @@ graph LR
   pickup --> in_progress(in_progress)
   in_progress --> deliver[deliver]
   deliver --> delivered(delivered)
-  delivered --> validate[validate / approve]
+  delivered --> validate[validate]
   validate --> done(done)
-  delivered --> reject[reject]
-  reject --> failed(failed)
+  validate --> failed(failed)
   failed --> pickup
 `
 
@@ -482,10 +486,10 @@ graph LR
 |-------|---------|-------------|
 | ready | Contract is available for an agent to claim. | Agent: contract pickup |
 | in_progress | Agent is currently working on the deliverables. | Agent: contract deliver |
-| delivered | Work is complete and awaiting PM review. | PM: contract validate or approve |
-| done | PM has verified and accepted the work. | PM: Move task to completion column. |
-| failed | PM rejected the work. Feedback is provided. | Agent: Re-pickup for rework. |
-| blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status. |
+| delivered | Work is complete and awaiting PM review. | PM: contract validate |
+| done | PM has verified and accepted the work. | PM: brainfile complete to move to logs/. |
+| failed | Validation failed. Feedback is provided. | PM: Add feedback, reset to ready for rework. |
+| blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to ready. |
 
 ---
 
@@ -521,15 +525,13 @@ PM agents (usually humans or advanced LLMs) manage the lifecycle:
   Define: Create tasks with clear contracts.
   Assign: Set the assignee to the appropriate worker agent.
   Validate: Once delivered, run brainfile contract validate -t task-X.
-  Approval/Rejection: 
-  - If successful: contract approve (if not auto-completed by validate).
-  - If issues found: contract reject --feedback "...".
+  Result:
+  - If successful: Status becomes done. Run brainfile complete to move to logs/.
+  - If issues found: Status becomes failed. Edit task to add feedback and reset status to ready.
 
 State Tracking
 
-The contract system maintains internal state in .brainfile/state.json. This file is typically git-ignored and tracks:
-  - Pickup version: Ensures agents don't work on stale versions of a contract.
-  - Agent state: Tracks local progress that hasn't been delivered yet.
+Contract metrics are tracked directly within the contract object in each task file:
 
 Metrics and Performance
 
@@ -563,7 +565,7 @@ Roles
 PM Agent (Project Manager)
 
 The PM agent is responsible for the "What" and "Why". They break down high-level goals into actionable tasks, define contracts, and verify results.
-  - Primary tools: add, patch, contract attach, contract validate, contract approve, contract reject.
+  - Primary tools: add, patch, contract attach, contract validate.
   - Key responsibility: Ensure task descriptions are comprehensive and validation criteria are objective.
 
 Worker Agent (The Doer)
@@ -621,7 +623,7 @@ brainfile contract deliver -t task-105
 `
   Verification (PM)
 
-The PM agent reviews the work and closes the task.
+The PM agent reviews the work and completes the task.
 
 `
 
@@ -633,9 +635,9 @@ PM runs automated validation
 
 brainfile contract validate -t task-105
 
-If all good, PM moves task to Done
+If all good, PM completes the task (moves to logs/)
 
-brainfile move -t task-105 -c Done
+brainfile complete -t task-105
 `
 
 ---
@@ -643,9 +645,10 @@ brainfile move -t task-105 -c Done
 Handling Rework
 
 If the PM agent finds issues during validation or manual review, the rework flow is triggered.
-  PM Rejects: brainfile contract reject -t task-105 --feedback "Tests are passing, but the redirect URL is hardcoded. It should use the config."
-  State Change: Contract status returns to failed.
-  Worker Re-pickup: The worker sees the failed status, reads the feedback field via brainfile show, and runs contract pickup again.
+  Validation Fails: brainfile contract validate fails — status becomes failed, feedback is added automatically.
+  PM Adds Guidance: PM edits the task file to add or update contract.feedback with specific rework instructions.
+  PM Resets Status: PM edits contract.status back to ready for rework.
+  Worker Re-pickup: The worker sees the ready status, reads the feedback field via brainfile show, and runs contract pickup again.
   Fix & Re-deliver: Worker fixes the issue and runs contract deliver.
 
 ---
@@ -653,10 +656,10 @@ If the PM agent finds issues during validation or manual review, the rework flow
 Blocked Agents
 
 Sometimes a worker agent cannot proceed due to external factors (missing API keys, ambiguous requirements, upstream bugs).
-  Agent Marks Blocked: brainfile contract blocked -t task-105 --reason "Need Google Client ID and Secret to complete tests."
-  PM Notification: The PM sees the blocked status in the TUI or via list.
+  Agent Reports Blocked: The agent edits the task file to set contract.status to blocked and adds a note to the task log explaining the blocker.
+  PM Notification: The PM sees the blocked status in the TUI or via brainfile list.
   Resolution: The PM provides the missing info or fixes the dependency.
-  Reset: The PM runs brainfile contract reset -t task-105 to return it to ready or in_progress.
+  Reset: The PM edits contract.status back to ready or in_progress.
 
 ---
 
@@ -747,7 +750,7 @@ Initialize a New Board
 brainfile init
 `
 
-Creates a brainfile.md with default structure: three columns (To Do, In Progress, Done) and agent instructions.
+Creates .brainfile/ directory with brainfile.md config, board/, and logs/. Default columns: To Do and In Progress.
 
 List Tasks
 
@@ -769,7 +772,12 @@ Move Tasks
 
 `
 brainfile move --task task-1 --column in-progress
-brainfile move --task task-1 --column done
+`
+
+Complete Tasks
+
+`
+brainfile complete --task task-1   # Moves from board/ to logs/
 `
 
 Update Tasks
@@ -808,9 +816,8 @@ Worker Agent Lifecycle
   Deliver: brainfile contract deliver -t task-1
 
 PM Agent Lifecycle
-  Validate: brainfile contract validate -t task-1 (Auto)
-  Approve: brainfile contract approve -t task-1 (Manual)
-  Reject: brainfile contract reject -t task-1 --feedback "..."
+  Validate: brainfile contract validate -t task-1 (auto-checks deliverables and runs commands)
+  Complete: brainfile complete -t task-1 (after validation passes)
 
 See the Agent Contracts Guide for more details.
 
@@ -981,11 +988,22 @@ Task Management
 
 | Tool | Description |
 |------|-------------|
-| list_tasks | List all tasks, filter by column or tag |
+| list_tasks | List all tasks, filter by column, tag, or contract status |
+| get_task | Get detailed information about a specific task |
+| search_tasks | Search tasks by query, column, priority, assignee |
 | add_task | Create a task with title, priority, tags, etc. |
 | move_task | Move a task between columns |
 | patch_task | Update specific fields on a task |
 | delete_task | Permanently delete a task |
+
+Bulk Operations
+
+| Tool | Description |
+|------|-------------|
+| bulk_move_tasks | Move multiple tasks to a column in one operation |
+| bulk_patch_tasks | Apply same patch to multiple tasks |
+| bulk_delete_tasks | Delete multiple tasks |
+| bulk_archive_tasks | Archive multiple tasks to local file |
 
 Archiving
 
@@ -1022,6 +1040,24 @@ Subtasks
 | toggle_subtask | Mark a subtask complete/incomplete |
 | update_subtask | Change a subtask's title |
 | delete_subtask | Remove a subtask |
+| bulk_set_subtasks | Set multiple subtasks to completed or incomplete at once |
+| complete_all_subtasks | Mark all subtasks in a task as completed or incomplete |
+
+Agent Contracts
+
+| Tool | Description |
+|------|-------------|
+| contract_pickup | Claim a contract and set status to in_progress |
+| contract_deliver | Mark contract as delivered (ready for validation) |
+| contract_validate | Check deliverables exist and run validation commands |
+| attach_contract | Add contract to existing task with deliverables and validation |
+
+Contract workflow:
+  PM creates task with contract using add_task (with with_contract, deliverables, validation_commands, constraints parameters)
+  Worker agent calls contract_pickup to claim the work
+  Worker implements the deliverables
+  Worker calls contract_deliver when done
+  PM calls contract_validate to check work
 
 ---
 
@@ -1571,78 +1607,101 @@ Protocol Specification
 
 The Brainfile protocol defines a structured format for project tasks stored in markdown files with YAML frontmatter.
 
-File Format
+v2 Architecture
 
-Primary File
+Brainfile v2 uses a directory-based structure:
 
-| Filename | Priority | Notes |
-|----------|----------|-------|
-| brainfile.md | 1 (preferred) | Non-hidden, visible in file browsers |
-| .brainfile.md | 2 | Hidden, backward compatibility |
+``
+.brainfile/
+├── brainfile.md        # Board Configuration
+├── board/              # Active task files
+│   ├── task-1.md
+│   └── epic-1.md
+└── logs/               # Completed task files
+    └── task-2.md
+`
 
-Archive File
+File Discovery
 
-Completed tasks can be moved to brainfile-archive.md.
+| Path | Priority | Notes |
+|------|----------|-------|
+| .brainfile/brainfile.md | 1 (preferred, v2) | Directory-based architecture |
+| brainfile.md | 2 | Root file (v1 compat) |
+| .brainfile.md | 3 | Hidden, backward compat |
+| .bb.md | 4 | Shorthand, deprecated |
+
+Completion
+
+Completed tasks are moved from board/ to logs/ via brainfile complete.
 
 ---
 
 YAML Structure
 
-Minimal Valid File
-
-``
----
-title: My Project
-columns:
-  - id: todo
-    title: To Do
-    tasks: []
----
-`
-
-Complete Structure
+Board Config (brainfile.md)
 
 `
 ---
 title: string              # Required: Project title
-type: board                # Optional: defaults to board
-schema: string             # Optional: URL or path to JSON schema
-protocolVersion: string    # Optional: e.g., "1.0.0"
+columns:                   # Required: Column definitions
+  - id: string             # Unique kebab-case identifier
+    title: string          # Display title
+    completionColumn: boolean  # Optional: auto-complete on move
 
-agent:                     # Optional: AI agent instructions
-  instructions:
-  - string
+Optional fields
+
+type: board
+schema: string
+protocolVersion: string
+strict: boolean            # Enforce type validation
+types:                     # Custom document types
+  epic:
+    idPrefix: epic
+    completable: true
+  adr:
+    idPrefix: adr
+    completable: false
+agent:
+  instructions: []
   llmNotes: string
-
-rules:                     # Optional: Project rules
-  always:
-  - id: number
-      rule: string
+rules:
+  always: []
   never: []
   prefer: []
   context: []
-
-columns:                   # Required: Array of columns
-  - id: string             # Unique kebab-case identifier
-    title: string          # Display title
-    tasks:                 # Array of tasks
-  - id: string         # Pattern: task-N
-        title: string      # Required
-        description: string
-        priority: string   # low|medium|high|critical
-        effort: string     # trivial|small|medium|large|xlarge
-        assignee: string
-        dueDate: string    # ISO 8601 (YYYY-MM-DD)
-        tags: []
-        relatedFiles: []
-        blockedBy: []      # Array of task IDs
-        subtasks:
-  - id: string     # Pattern: task-N-M
-            title: string
-            completed: boolean
-
-archive: []                # Optional: Archived tasks
 ---
+`
+
+Task File (board/task-1.md)
+
+`
+---
+id: task-1
+type: task
+title: Implement feature
+column: todo
+priority: high
+assignee: codex
+tags: [backend]
+relatedFiles: [src/main.ts]
+parentId: epic-1
+dueDate: "2026-03-01"
+subtasks:
+  - id: task-1-1
+    title: Write tests
+    completed: false
+contract:
+  status: ready
+  deliverables:
+  - path: src/feature.ts
+---
+
+Description
+
+Task details here.
+
+Log
+  - 2026-02-18T10:00:00Z: Created
 `
 
 ---
@@ -1699,7 +1758,7 @@ Subtask Fields
 
 Standard Column IDs
 
-These IDs are conventional but not required:
+These IDs are conventional but not required. The default brainfile init creates todo and in-progress:
 
 | ID | Purpose |
 |----|---------|
@@ -1707,7 +1766,10 @@ These IDs are conventional but not required:
 | todo | Tasks to be started |
 | in-progress | Tasks being worked on |
 | review | Tasks pending review |
-| done | Completed tasks |
+
+::: info No default "done" column
+In v2, task completion is handled by moving files from board/ to logs/ via brainfile complete. A "done" column is not created by default. You can optionally add one with completionColumn: true if you want auto-completion behavior.
+:::
 
 ---
 
@@ -1839,44 +1901,60 @@ Best Practices
 
 Example
 
+Board Config (.brainfile/brainfile.md)
+
 `
 ---
 title: My Project
 type: board
 schema: https://brainfile.md/v1/board.json
-agent:
-  instructions:
-  - Modify only the YAML frontmatter
-  - Preserve all IDs
 columns:
   - id: todo
     title: To Do
-    tasks:
-  - id: task-1
-        title: Implement user authentication
-        description: Add OAuth2 support for Google and GitHub
-        priority: high
-        effort: large
-        tags: [backend, security]
-        subtasks:
-  - id: task-1-1
-            title: Setup OAuth provider
-            completed: false
-  - id: task-1-2
-            title: Create login UI
-            completed: false
   - id: in-progress
     title: In Progress
-    tasks: []
-  - id: done
-    title: Done
-    tasks: []
+strict: true
+types:
+  epic:
+    idPrefix: epic
+    completable: true
+agent:
+  instructions:
+  - Update task status as you work
+  - Preserve all IDs
+rules:
+  always:
+  - id: 1
+      rule: write tests for new features
 ---
 
 My Project
 
-Project documentation can go here. This content is preserved
-but not parsed by tools.
+Project documentation can go here.
+`
+
+Task File (.brainfile/board/task-1.md)
+
+`
+---
+id: task-1
+type: task
+title: Implement user authentication
+column: todo
+priority: high
+tags: [backend, security]
+subtasks:
+  - id: task-1-1
+    title: Setup OAuth provider
+    completed: false
+  - id: task-1-2
+    title: Create login UI
+    completed: false
+---
+
+Description
+
+Add OAuth2 support for Google and GitHub.
 ``
 
 ---
@@ -2082,6 +2160,148 @@ restoreTask(board, "task-5", "todo");
 
 ---
 
+Contract Operations
+
+All contract operations return BoardOperationResult and are immutable.
+
+setTaskContract(board, taskId, contract): BoardOperationResult
+
+Set or replace the complete contract for a task.
+
+`
+import { setTaskContract, type Contract } from "@brainfile/core";
+
+const contract: Contract = {
+  status: "ready",
+  deliverables: [
+    { type: "file", path: "src/feature.ts", description: "Implementation" },
+    { type: "test", path: "src/__tests__/feature.test.ts" },
+  ],
+  validation: {
+    commands: ["npm test"],
+  },
+  constraints: ["Follow existing patterns"],
+};
+
+const result = setTaskContract(board, "task-1", contract);
+`
+
+clearTaskContract(board, taskId): BoardOperationResult
+
+Remove the contract from a task.
+
+setTaskContractStatus(board, taskId, status): BoardOperationResult
+
+Update just the contract status.
+
+`
+import { setTaskContractStatus } from "@brainfile/core";
+
+setTaskContractStatus(board, "task-1", "in_progress");
+`
+
+patchTaskContract(board, taskId, patch): BoardOperationResult
+
+Update specific contract fields. Set fields to null to remove them.
+
+`
+import { patchTaskContract } from "@brainfile/core";
+
+// Update fields
+patchTaskContract(board, "task-1", {
+  status: "delivered",
+  constraints: ["New constraint"],
+});
+
+// Remove fields
+patchTaskContract(board, "task-1", {
+  validation: null,
+});
+`
+
+addTaskContractDeliverable(board, taskId, deliverable): BoardOperationResult
+
+Add a deliverable to the contract.
+
+`
+import { addTaskContractDeliverable } from "@brainfile/core";
+
+addTaskContractDeliverable(board, "task-1", {
+  type: "docs",
+  path: "docs/api.md",
+  description: "API documentation",
+});
+`
+
+removeTaskContractDeliverable(board, taskId, path): BoardOperationResult
+
+Remove a deliverable by path.
+
+addTaskContractValidationCommand(board, taskId, command): BoardOperationResult
+
+Add a validation command.
+
+removeTaskContractValidationCommand(board, taskId, command): BoardOperationResult
+
+Remove a validation command.
+
+addTaskContractConstraint(board, taskId, constraint): BoardOperationResult
+
+Add a constraint.
+
+removeTaskContractConstraint(board, taskId, constraint): BoardOperationResult
+
+Remove a constraint.
+
+---
+
+Bulk Operations
+
+Process multiple tasks in a single operation. All bulk operations return BulkOperationResult.
+
+moveTasks(board, taskIds, toColumnId): BulkOperationResult
+
+Move multiple tasks to a column.
+
+`
+import { moveTasks } from "@brainfile/core";
+
+const result = moveTasks(board, ["task-1", "task-2", "task-3"], "done");
+
+console.log(Success: ${result.successCount}, Failed: ${result.failureCount});
+result.results.forEach((r) => {
+  if (!r.success) {
+    console.log(Failed to move ${r.id}: ${r.error});
+  }
+});
+`
+
+patchTasks(board, taskIds, patch): BulkOperationResult
+
+Apply the same patch to multiple tasks.
+
+`
+import { patchTasks } from "@brainfile/core";
+
+patchTasks(board, ["task-1", "task-2"], { priority: "high", assignee: "john" });
+`
+
+deleteTasks(board, taskIds): BulkOperationResult
+
+Delete multiple tasks.
+
+archiveTasks(board, taskIds): BulkOperationResult
+
+Archive multiple tasks.
+
+`
+import { archiveTasks } from "@brainfile/core";
+
+archiveTasks(board, ["task-10", "task-11", "task-12"]);
+`
+
+---
+
 Subtask Operations
 
 addSubtask(board, taskId, title): BoardOperationResult
@@ -2182,6 +2402,44 @@ interface Task {
   dueDate?: string;
   subtasks?: Subtask[];
   template?: "bug" | "feature" | "refactor";
+  contract?: Contract;
+}
+`
+
+Contract
+
+`
+interface Contract {
+  status: ContractStatus;
+  deliverables?: Deliverable[];
+  validation?: ValidationConfig;
+  constraints?: string[];
+  context?: ContractContext;
+}
+
+type ContractStatus =
+  | "draft"
+  | "ready"
+  | "in_progress"
+  | "delivered"
+  | "done"
+  | "failed";
+
+interface Deliverable {
+  type: string; // "file", "test", "docs", "design", "research"
+  path: string;
+  description?: string;
+}
+
+interface ValidationConfig {
+  commands?: string[];
+}
+
+interface ContractContext {
+  relevantFiles?: string[];
+  background?: string;
+  feedback?: string;
+  outOfScope?: string[];
 }
 `
 
@@ -2230,6 +2488,20 @@ interface TaskPatch {
 }
 `
 
+ContractPatch
+
+For patchTaskContract(). Use null to remove fields.
+
+`
+interface ContractPatch {
+  status?: ContractStatus;
+  deliverables?: Deliverable[] | null;
+  validation?: ValidationConfig | null;
+  constraints?: string[] | null;
+  context?: ContractContext | null;
+}
+`
+
 BoardOperationResult
 
 `
@@ -2237,6 +2509,26 @@ interface BoardOperationResult {
   success: boolean;
   board?: Board;  // New board if success
   error?: string; // Error message if failed
+}
+`
+
+BulkOperationResult
+
+For bulk operations (moveTasks, patchTasks, deleteTasks, archiveTasks).
+
+`
+interface BulkOperationResult {
+  success: boolean; // True if all operations succeeded
+  board?: Board;    // New board if at least one operation succeeded
+  results: BulkItemResult[];
+  successCount: number;
+  failureCount: number;
+}
+
+interface BulkItemResult {
+  id: string;       // Task ID
+  success: boolean;
+  error?: string;   // Error message if failed
 }
 `
 
@@ -2375,6 +2667,7 @@ Commands
 |---------|-------------|
 | init | Create a new brainfile |
 | list | Display tasks |
+| show | Display single task details |
 | add | Create a new task |
 | move | Move task between columns |
 | patch | Update task fields |
@@ -2386,25 +2679,33 @@ Commands
 | template | Create from templates |
 | tui | Interactive terminal UI |
 | hooks | AI agent hook integration |
+| complete | Complete a task (move to logs/) |
 | contract | Manage agent-to-agent contracts |
+| adr | ADR lifecycle management |
+| rules | Manage project rules |
+| types | Document type management |
+| search | Search tasks and logs |
+| log | View completed task logs |
+| migrate | Move brainfile to .brainfile/ directory |
+| config | Manage user configuration |
+| auth | Authenticate with external services |
 | mcp | MCP server for AI assistants |
 
 ---
 
 init
 
-Create a new brainfile in your project.
+Create a new .brainfile/ project directory with board config, board/, and logs/.
 
 `
 brainfile init
-brainfile init --file ./tasks.md
 brainfile init --force  # Overwrite existing
 `
 
 Options:
 | Option | Description |
 |--------|-------------|
-| -f, --file <path> | Output path (default: brainfile.md) |
+| -f, --file <path> | Output path (default: .brainfile/brainfile.md) |
 | --force | Overwrite if file exists |
 
 ---
@@ -2417,6 +2718,7 @@ Display all tasks with optional filtering.
 brainfile list
 brainfile list --column "In Progress"
 brainfile list --tag bug
+brainfile list --contract ready
 `
 
 Options:
@@ -2425,6 +2727,31 @@ Options:
 | -f, --file <path> | Path to brainfile (default: brainfile.md) |
 | -c, --column <name> | Filter by column |
 | -t, --tag <name> | Filter by tag |
+| --contract <status> | Filter by contract status (ready, in_progress, delivered, done, failed) |
+
+---
+
+show
+
+Display full details of a single task.
+
+`
+brainfile show --task task-1
+brainfile show -t task-42
+`
+
+Options:
+| Option | Description |
+|--------|-------------|
+| -t, --task <id> | Task ID (required) |
+| -f, --file <path> | Path to brainfile (default: brainfile.md) |
+
+Output includes:
+  - Task ID, title, column, priority, tags, assignee
+  - Full description
+  - Subtasks with completion status
+  - Related files
+  - Contract details (if present)
 
 ---
 
@@ -2435,7 +2762,8 @@ Create a new task with all available fields.
 `
 brainfile add --title "Implement auth"
 brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
-brainfile add --title "Review PR" --assignee john --due-date 2025-02-01
+brainfile add --title "Auth overhaul" --child "OAuth flow" --child "Session handling"
+brainfile add --title "Design doc" --type adr --column todo
 `
 
 Options:
@@ -2445,14 +2773,18 @@ Options:
 | -c, --column <name> | Target column (default: todo) |
 | -d, --description <text> | Task description |
 | -p, --priority <level> | low, medium, high, or critical |
+| --type <type> | Document type (e.g., epic, adr; default: task) |
+| --parent <id> | Parent task/epic ID |
+| --child <title> | Create child task(s) under the new parent (repeatable) |
 | --tags <list> | Comma-separated tags |
 | --assignee <name> | Assignee name |
 | --due-date <date> | Due date (YYYY-MM-DD) |
 | --subtasks <list> | Comma-separated subtask titles |
-| --with-contract | Initialize with an empty contract |
-| --deliverable <path:desc> | Add deliverable (repeatable) |
-| --validation <command> | Add validation command (repeatable) |
-| --constraint <text> | Add constraint (repeatable) |
+| --files <list> | Comma-separated related file paths |
+| --with-contract | Attach a contract (status=ready) |
+| --deliverable <spec> | Contract deliverable: type:path:description (repeatable) |
+| --validation <command> | Contract validation command (repeatable) |
+| --constraint <text> | Contract constraint (repeatable) |
 
 ---
 
@@ -2670,6 +3002,23 @@ Options:
 
 ---
 
+complete
+
+Complete a task — moves it from board/ to logs/.
+
+`
+brainfile complete --task task-1
+brainfile complete -t epic-1 --force
+`
+
+Options:
+| Option | Description |
+|--------|-------------|
+| -t, --task <id> | Task ID (required) |
+| --force | Force epic completion even if child tasks are still active |
+
+---
+
 contract
 
 Manage the lifecycle of agent-to-agent contracts.
@@ -2678,21 +3027,172 @@ Manage the lifecycle of agent-to-agent contracts.
 brainfile contract pickup --task task-1
 brainfile contract deliver --task task-1
 brainfile contract validate --task task-1
+brainfile contract attach --task task-1 --deliverable "file:src/feature.ts:Implementation"
 `
 
 Subcommands:
 | Command | Description |
 |---------|-------------|
-| pickup | Claim a task for implementation |
-| deliver | Submit completed work for review |
-| validate | Run automated validation commands |
-| approve | Manually approve work |
-| reject | Reject work with feedback |
+| pickup | Claim a contract and set status to in_progress |
+| deliver | Mark contract as delivered (ready for validation) |
+| validate | Check deliverables and run validation commands |
 | attach | Add contract to existing task |
-| blocked | Mark as blocked |
-| reset | Reset status |
+
+Common Options:
+| Option | Description |
+|--------|-------------|
+| -t, --task <id> | Task ID (required) |
+| -f, --file <path> | Path to brainfile (default: brainfile.md) |
+
+Attach Options:
+| Option | Description |
+|--------|-------------|
+| --deliverable <spec> | Add deliverable (format: type:path:description) |
+| --validation <command> | Add validation command (repeatable) |
+| --constraint <text> | Add constraint (repeatable) |
 
 See the Contract Commands Reference for detailed documentation.
+
+---
+
+adr
+
+Manage Architecture Decision Records.
+
+`
+brainfile adr promote -t adr-1 --category always
+`
+
+Options:
+| Option | Description |
+|--------|-------------|
+| -t, --task <id> | ADR task ID (required) |
+| --category <cat> | Rule category: prefer, always, never, context |
+
+---
+
+rules
+
+Manage project rules.
+
+`
+brainfile rules                          # List all rules
+brainfile rules list --category always   # Filter by category
+brainfile rules add always "Write tests" # Add a rule
+brainfile rules delete always 1          # Delete rule by ID
+`
+
+---
+
+types
+
+Inspect and manage board document types.
+
+`
+brainfile types list
+brainfile types add epic --completable true --id-prefix epic
+`
+
+---
+
+search
+
+Search across active tasks and completed logs.
+
+`
+brainfile search "auth"
+brainfile search "bug" --column todo
+`
+
+---
+
+log
+
+View and search completed task logs.
+
+`
+brainfile log                      # List recent completions
+brainfile log -t task-10           # View specific log
+brainfile log --search "auth"      # Search logs
+`
+
+---
+
+migrate
+
+Move root brainfile.md to .brainfile/ directory structure.
+
+`
+brainfile migrate
+brainfile migrate --dir ./project
+brainfile migrate --force
+`
+
+Options:
+| Option | Description |
+|--------|-------------|
+| --dir <path> | Project directory (default: current directory) |
+| --force | Overwrite existing .brainfile/brainfile.md |
+
+What it does:
+  - Creates .brainfile/ directory
+  - Moves brainfile.md → .brainfile/brainfile.md
+  - Creates .brainfile/.gitignore (ignores state.json)
+  - Preserves all content exactly
+
+---
+
+config
+
+Manage user configuration stored in ~/.config/brainfile/config.json.
+
+`
+brainfile config list
+brainfile config get archive.default
+brainfile config set archive.default github
+brainfile config path
+`
+
+Subcommands:
+| Command | Description |
+|---------|-------------|
+| list | Show all configuration values |
+| get <key> | Get specific config value |
+| set <key> <value> | Set config value |
+| path | Show config file path |
+
+Common Config Keys:
+  - archive.default — Default archive destination (local, github, linear)
+  - archive.github.owner — GitHub repository owner
+  - archive.github.repo — GitHub repository name
+  - archive.linear.teamId — Linear team ID
+
+---
+
+auth
+
+Authenticate with external services for archive functionality.
+
+`
+brainfile auth github
+brainfile auth linear --token <api-key>
+brainfile auth status
+brainfile auth logout github
+`
+
+Subcommands:
+| Command | Description |
+|---------|-------------|
+| github [--token <token>] | Authenticate with GitHub (auto-detects gh CLI or uses OAuth) |
+| linear --token <token> | Authenticate with Linear API |
+| status | Show authentication status for all services |
+| logout [provider] [--all] | Log out from service(s) |
+
+Options:
+| Option | Description |
+|--------|-------------|
+| --token <token> | API token (required for Linear, optional for GitHub) |
+| --all | Log out from all services |
 
 ---
 
@@ -2815,7 +3315,10 @@ Object Structure
 | deliverables | Array<Deliverable> | List of items to be produced | No |
 | validation | Validation | How to verify the work | No |
 | constraints | Array<string> | Implementation rules to follow | No |
-| context | Context | Additional background information | No |
+| outOfScope | Array<string> | Explicitly out-of-scope items | No |
+| feedback | string | PM feedback after failed validation | No |
+| version | number | Contract version (incremented on amendment) | No |
+| metrics | Metrics | Auto-tracked timing and rework data | No |
 
 Lifecycle Status (status)
 
@@ -2843,27 +3346,35 @@ Validation Object
 |-------|------|-------------|
 | commands | Array<string> | Shell commands to execute for validation |
 
-Context Object
+Metrics Object
 
-Used to provide deeper understanding to the worker agent.
+Auto-tracked by the CLI. Do not manually edit.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| background | string | High-level "why" and architectural context |
-| relevantFiles| Array<string>| Paths to existing code for reference |
-| outOfScope | Array<string>| Explicitly forbidden changes |
+| pickedUpAt | string | ISO 8601 timestamp when agent picked up |
+| deliveredAt | string | ISO 8601 timestamp when agent delivered |
+| duration | number | Seconds between pickup and delivery |
+| reworkCount | number | Times contract was re-picked up after failure |
 
 ---
 
 Example (YAML)
 
-When stored in brainfile.md, a contract looks like this:
+In a v2 task file (.brainfile/board/task-63.md):
 
 ``
+---
 id: task-63
+type: task
 title: "Update API documentation"
+column: todo
+assignee: codex
+relatedFiles:
+  - src/routes/api.ts
 contract:
   status: ready
+  version: 1
   deliverables:
   - type: docs
       path: docs/api-v2.md
@@ -2874,13 +3385,18 @@ contract:
   constraints:
   - Use Swagger/OpenAPI 3.0 format
   - Document all error codes
-  context:
-    background: "Preparing for the Q3 mobile app release"
-    relevantFiles:
-  - src/routes/api.ts
-    outOfScope:
+  outOfScope:
   - Changing the authentication logic
-``
+---
+
+Description
+
+Preparing for the Q3 mobile app release.
+`
+
+::: info v2 changes
+In v2, context.background moved to task.description and context.relevantFiles moved to task.relatedFiles. The context` object is deprecated.
+:::
 
 ---
 

@@ -23,17 +23,21 @@ Prevents fragmentation between markdown docs and LLM reference by maintaining a 
 
 ### Source Files (in order)
 
-1. getting-started/quick-start.md
-2. protocol/specification.md
-3. agents/integration.md
-4. cli/installation.md
-5. cli/commands.md
-6. cli/examples.md
-7. core/overview.md
-8. core/api-reference.md
-9. core/templates.md
-10. vscode/extension.md
-11. ../../example/brainfile.md (complete example)
+1. quick-start.md
+2. why.md
+3. guides/getting-started-with-contracts.md
+4. guides/contracts.md
+5. guides/agent-workflows.md
+6. tools/cli.md
+7. tools/mcp.md
+8. tools/vscode.md
+9. tools/core.md
+10. reference/protocol.md
+11. reference/api.md
+12. reference/commands.md
+13. reference/contract-schema.md
+14. reference/types.md
+15. ../../example/brainfile.md (complete example)
 
 ### Outputs
 

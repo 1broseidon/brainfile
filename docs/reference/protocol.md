@@ -7,78 +7,99 @@ description: Complete specification of the Brainfile file format
 
 The Brainfile protocol defines a structured format for project tasks stored in markdown files with YAML frontmatter.
 
-## File Format
+## v2 Architecture
 
-### Primary File
+Brainfile v2 uses a directory-based structure:
 
-| Filename | Priority | Notes |
-|----------|----------|-------|
-| `brainfile.md` | 1 (preferred) | Non-hidden, visible in file browsers |
-| `.brainfile.md` | 2 | Hidden, backward compatibility |
+```
+.brainfile/
+├── brainfile.md        # Board Configuration
+├── board/              # Active task files
+│   ├── task-1.md
+│   └── epic-1.md
+└── logs/               # Completed task files
+    └── task-2.md
+```
 
-### Archive File
+### File Discovery
 
-Completed tasks can be moved to `brainfile-archive.md`.
+| Path | Priority | Notes |
+|------|----------|-------|
+| `.brainfile/brainfile.md` | 1 (preferred, v2) | Directory-based architecture |
+| `brainfile.md` | 2 | Root file (v1 compat) |
+| `.brainfile.md` | 3 | Hidden, backward compat |
+| `.bb.md` | 4 | Shorthand, deprecated |
+
+### Completion
+
+Completed tasks are moved from `board/` to `logs/` via `brainfile complete`.
 
 ---
 
 ## YAML Structure
 
-### Minimal Valid File
-
-```yaml
----
-title: My Project
-columns:
-  - id: todo
-    title: To Do
-    tasks: []
----
-```
-
-### Complete Structure
+### Board Config (`brainfile.md`)
 
 ```yaml
 ---
 title: string              # Required: Project title
-type: board                # Optional: defaults to board
-schema: string             # Optional: URL or path to JSON schema
-protocolVersion: string    # Optional: e.g., "1.0.0"
+columns:                   # Required: Column definitions
+  - id: string             # Unique kebab-case identifier
+    title: string          # Display title
+    completionColumn: boolean  # Optional: auto-complete on move
 
-agent:                     # Optional: AI agent instructions
-  instructions:
-    - string
+# Optional fields
+type: board
+schema: string
+protocolVersion: string
+strict: boolean            # Enforce type validation
+types:                     # Custom document types
+  epic:
+    idPrefix: epic
+    completable: true
+  adr:
+    idPrefix: adr
+    completable: false
+agent:
+  instructions: []
   llmNotes: string
-
-rules:                     # Optional: Project rules
-  always:
-    - id: number
-      rule: string
+rules:
+  always: []
   never: []
   prefer: []
   context: []
-
-columns:                   # Required: Array of columns
-  - id: string             # Unique kebab-case identifier
-    title: string          # Display title
-    tasks:                 # Array of tasks
-      - id: string         # Pattern: task-N
-        title: string      # Required
-        description: string
-        priority: string   # low|medium|high|critical
-        effort: string     # trivial|small|medium|large|xlarge
-        assignee: string
-        dueDate: string    # ISO 8601 (YYYY-MM-DD)
-        tags: []
-        relatedFiles: []
-        blockedBy: []      # Array of task IDs
-        subtasks:
-          - id: string     # Pattern: task-N-M
-            title: string
-            completed: boolean
-
-archive: []                # Optional: Archived tasks
 ---
+```
+
+### Task File (`board/task-1.md`)
+
+```yaml
+---
+id: task-1
+type: task
+title: Implement feature
+column: todo
+priority: high
+assignee: codex
+tags: [backend]
+relatedFiles: [src/main.ts]
+parentId: epic-1
+dueDate: "2026-03-01"
+subtasks:
+  - id: task-1-1
+    title: Write tests
+    completed: false
+contract:
+  status: ready
+  deliverables:
+    - path: src/feature.ts
+---
+
+## Description
+Task details here.
+
+## Log
+- 2026-02-18T10:00:00Z: Created
 ```
 
 ---
@@ -135,7 +156,7 @@ archive: []                # Optional: Archived tasks
 
 ## Standard Column IDs
 
-These IDs are conventional but not required:
+These IDs are conventional but not required. The default `brainfile init` creates `todo` and `in-progress`:
 
 | ID | Purpose |
 |----|---------|
@@ -143,7 +164,10 @@ These IDs are conventional but not required:
 | `todo` | Tasks to be started |
 | `in-progress` | Tasks being worked on |
 | `review` | Tasks pending review |
-| `done` | Completed tasks |
+
+::: info No default "done" column
+In v2, task completion is handled by moving files from `board/` to `logs/` via `brainfile complete`. A "done" column is not created by default. You can optionally add one with `completionColumn: true` if you want auto-completion behavior.
+:::
 
 ---
 
@@ -280,44 +304,59 @@ subtasks:
 
 ## Example
 
+### Board Config (`.brainfile/brainfile.md`)
+
 ```yaml
 ---
 title: My Project
 type: board
 schema: https://brainfile.md/v1/board.json
-agent:
-  instructions:
-    - Modify only the YAML frontmatter
-    - Preserve all IDs
 columns:
   - id: todo
     title: To Do
-    tasks:
-      - id: task-1
-        title: Implement user authentication
-        description: Add OAuth2 support for Google and GitHub
-        priority: high
-        effort: large
-        tags: [backend, security]
-        subtasks:
-          - id: task-1-1
-            title: Setup OAuth provider
-            completed: false
-          - id: task-1-2
-            title: Create login UI
-            completed: false
   - id: in-progress
     title: In Progress
-    tasks: []
-  - id: done
-    title: Done
-    tasks: []
+strict: true
+types:
+  epic:
+    idPrefix: epic
+    completable: true
+agent:
+  instructions:
+    - Update task status as you work
+    - Preserve all IDs
+rules:
+  always:
+    - id: 1
+      rule: write tests for new features
 ---
 
 # My Project
 
-Project documentation can go here. This content is preserved
-but not parsed by tools.
+Project documentation can go here.
+```
+
+### Task File (`.brainfile/board/task-1.md`)
+
+```yaml
+---
+id: task-1
+type: task
+title: Implement user authentication
+column: todo
+priority: high
+tags: [backend, security]
+subtasks:
+  - id: task-1-1
+    title: Setup OAuth provider
+    completed: false
+  - id: task-1-2
+    title: Create login UI
+    completed: false
+---
+
+## Description
+Add OAuth2 support for Google and GitHub.
 ```
 
 ---

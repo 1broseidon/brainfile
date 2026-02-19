@@ -12,7 +12,7 @@ The contract system enables powerful coordination patterns between different typ
 ### PM Agent (Project Manager)
 The PM agent is responsible for the "What" and "Why". They break down high-level goals into actionable tasks, define contracts, and verify results.
 
-- **Primary tools**: `add`, `patch`, `contract attach`, `contract validate`, `contract approve`, `contract reject`.
+- **Primary tools**: `add`, `patch`, `contract attach`, `contract validate`.
 - **Key responsibility**: Ensure task descriptions are comprehensive and validation criteria are objective.
 
 ### Worker Agent (The Doer)
@@ -64,7 +64,7 @@ brainfile contract deliver -t task-105
 ```
 
 ### 3. Verification (PM)
-The PM agent reviews the work and closes the task.
+The PM agent reviews the work and completes the task.
 
 ```bash
 # PM sees delivered tasks
@@ -73,8 +73,8 @@ brainfile list --contract delivered
 # PM runs automated validation
 brainfile contract validate -t task-105
 
-# If all good, PM moves task to Done
-brainfile move -t task-105 -c Done
+# If all good, PM completes the task (moves to logs/)
+brainfile complete -t task-105
 ```
 
 ---
@@ -83,10 +83,11 @@ brainfile move -t task-105 -c Done
 
 If the PM agent finds issues during validation or manual review, the rework flow is triggered.
 
-1.  **PM Rejects**: `brainfile contract reject -t task-105 --feedback "Tests are passing, but the redirect URL is hardcoded. It should use the config."`
-2.  **State Change**: Contract status returns to `failed`.
-3.  **Worker Re-pickup**: The worker sees the `failed` status, reads the `feedback` field via `brainfile show`, and runs `contract pickup` again.
-4.  **Fix & Re-deliver**: Worker fixes the issue and runs `contract deliver`.
+1.  **Validation Fails**: `brainfile contract validate` fails — status becomes `failed`, feedback is added automatically.
+2.  **PM Adds Guidance**: PM edits the task file to add or update `contract.feedback` with specific rework instructions.
+3.  **PM Resets Status**: PM edits `contract.status` back to `ready` for rework.
+4.  **Worker Re-pickup**: The worker sees the `ready` status, reads the `feedback` field via `brainfile show`, and runs `contract pickup` again.
+5.  **Fix & Re-deliver**: Worker fixes the issue and runs `contract deliver`.
 
 ---
 
@@ -94,10 +95,10 @@ If the PM agent finds issues during validation or manual review, the rework flow
 
 Sometimes a worker agent cannot proceed due to external factors (missing API keys, ambiguous requirements, upstream bugs).
 
-1.  **Agent Marks Blocked**: `brainfile contract blocked -t task-105 --reason "Need Google Client ID and Secret to complete tests."`
-2.  **PM Notification**: The PM sees the `blocked` status in the TUI or via `list`.
+1.  **Agent Reports Blocked**: The agent edits the task file to set `contract.status` to `blocked` and adds a note to the task log explaining the blocker.
+2.  **PM Notification**: The PM sees the `blocked` status in the TUI or via `brainfile list`.
 3.  **Resolution**: The PM provides the missing info or fixes the dependency.
-4.  **Reset**: The PM runs `brainfile contract reset -t task-105` to return it to `ready` or `in_progress`.
+4.  **Reset**: The PM edits `contract.status` back to `ready` or `in_progress`.
 
 ---
 
