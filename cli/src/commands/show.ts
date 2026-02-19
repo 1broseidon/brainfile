@@ -271,14 +271,15 @@ function formatPriority(priority: string): string {
 }
 
 /**
- * Show one-time v2 migration hint after v1 command output.
+ * Show one-time migration hint after legacy command output.
  */
 function showV2MigrationHint(filePath: string, logger: Logger): void {
   if (shouldSuggestV2Migration(filePath)) {
     logger.log(
-      chalk.gray('Tip: Run ') +
-      chalk.cyan('brainfile migrate --v2') +
-      chalk.gray(' to upgrade to per-task files for better agent workflows and task history.')
+      chalk.yellow('⚠ Legacy brainfile layout detected. ') +
+      chalk.gray('Run ') +
+      chalk.cyan('brainfile migrate') +
+      chalk.gray(' to upgrade to the v2 board/logs structure.')
     );
     markV2MigrationHintShown(filePath);
   }

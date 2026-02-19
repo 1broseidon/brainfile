@@ -106,25 +106,25 @@ describe('list command', () => {
     expect(output).toContain('1/2'); // 1 of 2 subtasks completed
   });
 
-  it('should show v2 migration hint for v1 boards with tasks', () => {
+  it('should show migration hint for legacy layouts', () => {
     const result = listCommand({ file: testBoardPath }, logger);
 
     expect(result.success).toBe(true);
     const output = logger.getOutput();
-    expect(output).toContain('brainfile migrate --v2');
+    expect(output).toContain('brainfile migrate');
   });
 
-  it('should not show v2 migration hint after it has been shown once', () => {
+  it('should not show migration hint after it has been shown once', () => {
     // First run shows the hint
     listCommand({ file: testBoardPath }, logger);
     const firstOutput = logger.getOutput();
-    expect(firstOutput).toContain('brainfile migrate --v2');
+    expect(firstOutput).toContain('brainfile migrate');
 
     // Second run should not show the hint
     logger.clear();
     listCommand({ file: testBoardPath }, logger);
     const secondOutput = logger.getOutput();
-    expect(secondOutput).not.toContain('brainfile migrate --v2');
+    expect(secondOutput).not.toContain('brainfile migrate');
   });
 });
 

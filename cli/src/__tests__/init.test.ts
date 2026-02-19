@@ -44,4 +44,17 @@ describe('init command', () => {
     const gitignore = fs.readFileSync(gitignorePath, 'utf-8');
     expect(gitignore).not.toContain('state.json');
   });
+
+  it('refuses to init when legacy brainfile exists and suggests migrate', () => {
+    fs.writeFileSync(path.join(tempDir, 'brainfile.md'), 'legacy', 'utf-8');
+
+    const exitSpy = jest
+      .spyOn(process, 'exit')
+      .mockImplementation((code?: string | number | null) => { throw new Error(`EXIT:${code}`); });
+
+    expect(() => initCommand({})).toThrow('EXIT:1');
+    expect(fs.existsSync(path.join(tempDir, '.brainfile', 'brainfile.md'))).toBe(false);
+
+    exitSpy.mockRestore();
+  });
 });

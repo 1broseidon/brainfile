@@ -131,7 +131,7 @@ export function adrPromoteCommand(
   const { board, resolvedPath } = readBoard(options.file);
 
   if (!isV2(resolvedPath)) {
-    throw operationFailed('adr promote requires v2 per-task file architecture. Run: brainfile migrate --v2');
+    throw operationFailed('adr promote requires v2 per-task file architecture. Run: brainfile migrate');
   }
 
   const dirs = getV2Dirs(resolvedPath);

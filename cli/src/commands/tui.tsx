@@ -1,8 +1,10 @@
 import React from 'react';
 import { render } from 'ink';
 import * as fs from 'fs';
+import chalk from 'chalk';
 import { BrainfileTUI } from '../tui/index.js';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { shouldSuggestV2Migration, markV2MigrationHintShown } from '../utils/v2-detect';
 
 interface TuiOptions {
   file: string;
@@ -25,6 +27,17 @@ export async function tuiCommand(options: TuiOptions) {
     console.log('The TUI cannot run in non-interactive environments.');
     console.log('Please run this command in a standard terminal (not piped or in a non-TTY context).');
     process.exit(1);
+  }
+
+  if (shouldSuggestV2Migration(filePath)) {
+    console.log(
+      chalk.yellow('⚠ Legacy brainfile layout detected. ') +
+      chalk.gray('Run ') +
+      chalk.cyan('brainfile migrate') +
+      chalk.gray(' to upgrade to the v2 board/logs structure.')
+    );
+    console.log('');
+    markV2MigrationHintShown(filePath);
   }
 
   const { waitUntilExit } = render(<BrainfileTUI filePath={filePath} />);

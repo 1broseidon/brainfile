@@ -1,6 +1,6 @@
 {
   "name": "@brainfile/cli",
-  "version": "0.14.0",
+  "version": "0.15.1",
   "description": "Command-line interface for Brainfile task management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -34,14 +34,14 @@
     "access": "public"
   },
   "dependencies": {
-    "@brainfile/core": "^0.10.0",
+    "@brainfile/core": "^0.12.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "chalk": "^4.1.2",
     "chokidar": "^4.0.3",
     "commander": "^12.1.0",
     "ink": "^3.2.0",
-    "open": "^10.1.0",
     "js-yaml": "^4.1.0",
+    "open": "^10.1.0",
     "react": "^17.0.2",
     "zod": "^3.25.76"
   },

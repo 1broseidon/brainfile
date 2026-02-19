@@ -43,6 +43,7 @@ function writeV2Brainfile(dir: string): string {
   const dotDir = path.join(dir, '.brainfile');
   fs.mkdirSync(dotDir, { recursive: true });
   fs.mkdirSync(path.join(dotDir, 'board'), { recursive: true });
+  fs.mkdirSync(path.join(dotDir, 'logs'), { recursive: true });
   const filePath = path.join(dotDir, 'brainfile.md');
   fs.writeFileSync(
     filePath,
@@ -76,14 +77,20 @@ describe('v2 migration hint', () => {
       expect(shouldSuggestV2Migration(filePath)).toBe(true);
     });
 
-    it('returns false for v1 brainfile with no tasks', () => {
+    it('returns true for v1 brainfile with no tasks (legacy layout still needs migration)', () => {
       const filePath = writeV1Brainfile(tempDir, false);
+      expect(shouldSuggestV2Migration(filePath)).toBe(true);
+    });
+
+    it('returns false for clean v2 brainfile', () => {
+      const filePath = writeV2Brainfile(tempDir);
       expect(shouldSuggestV2Migration(filePath)).toBe(false);
     });
 
-    it('returns false for v2 brainfile', () => {
+    it('returns true for mixed layouts (v2 + legacy root file)', () => {
       const filePath = writeV2Brainfile(tempDir);
-      expect(shouldSuggestV2Migration(filePath)).toBe(false);
+      writeV1Brainfile(tempDir, true);
+      expect(shouldSuggestV2Migration(filePath)).toBe(true);
     });
 
     it('returns false after hint has been shown in-process', () => {

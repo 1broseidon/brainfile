@@ -2,120 +2,159 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { Brainfile } from '@brainfile/core';
-import { ensureDotBrainfileGitignore, removeLegacyStateFile } from '../utils/dot-brainfile';
 import { writeTaskFile, taskFileName, type Task } from '@brainfile/core';
+import { ensureDotBrainfileGitignore, removeLegacyStateFile } from '../utils/dot-brainfile';
 import { ensureV2Dirs } from '../utils/v2-detect';
+import { probeWorkspaceFormat, type WorkspaceProbe } from '../utils/workspace-format';
 
 interface MigrateOptions {
   /** Migration root directory (defaults to cwd) */
   dir?: string;
+  /** Overwrite existing migration outputs (task files, backups) */
   force?: boolean;
-  /** Convert v1 embedded tasks to v2 per-task files */
+  /** Deprecated alias; migration always targets v2 now */
   v2?: boolean;
 }
 
 /**
- * Migrate a legacy `brainfile.md` in the project root to `.brainfile/brainfile.md`,
- * or convert v1 embedded tasks to v2 per-task file architecture.
+ * Migrate legacy workspace layouts to v2 (.brainfile/brainfile.md + board/ + logs/).
  */
 export function migrateCommand(options: MigrateOptions = {}) {
   try {
-    if (options.v2) {
-      migrateToV2(options);
+    const rootDir = path.resolve(options.dir || process.cwd());
+    const probe = probeWorkspaceFormat(rootDir);
+
+    if (probe.format === 'empty') {
+      console.error(chalk.red('Error: No brainfile found to migrate.'));
+      console.log(chalk.gray(`Checked: ${probe.paths.rootBrainfilePath}`));
+      console.log(chalk.gray(`Checked: ${probe.paths.dotBrainfilePath}`));
+      process.exit(1);
       return;
     }
 
-    // Original migration: root brainfile.md -> .brainfile/brainfile.md
-    migrateToDirectory(options);
+    if (probe.format === 'v2') {
+      console.log(chalk.green('Workspace is already using v2 layout.'));
+      console.log(chalk.gray(`  Config: ${probe.paths.dotBrainfilePath}`));
+      console.log(chalk.gray(`  Tasks:  ${probe.paths.boardDir}/`));
+      console.log(chalk.gray(`  Logs:   ${probe.paths.logsDir}/`));
+      return;
+    }
+
+    if (probe.format === 'legacy-root') {
+      migrateRootBrainfileToDotDir(probe, options);
+      migrateBrainfileToV2(probe.paths.dotBrainfilePath, options);
+      return;
+    }
+
+    if (probe.format === 'legacy-dotbrainfile') {
+      migrateBrainfileToV2(probe.paths.dotBrainfilePath, options);
+      return;
+    }
+
+    // mixed workspace
+    migrateMixedWorkspace(probe, options);
   } catch (error) {
     console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
 
-/**
- * Original migration: move root brainfile.md into .brainfile/ directory.
- */
-function migrateToDirectory(options: MigrateOptions) {
-  const rootDir = path.resolve(options.dir || process.cwd());
-  const legacyPath = path.join(rootDir, 'brainfile.md');
-  const dotDir = path.join(rootDir, '.brainfile');
-  const targetPath = path.join(dotDir, 'brainfile.md');
+function migrateMixedWorkspace(probe: WorkspaceProbe, options: MigrateOptions): void {
+  const { presence, paths } = probe;
+  const hasFullV2 = presence.dotBrainfile && presence.boardDir && presence.logsDir;
 
-  if (!fs.existsSync(legacyPath)) {
-    console.error(chalk.red(`Error: File not found: ${legacyPath}`));
-    console.log(chalk.gray('Nothing to migrate.'));
-    process.exit(1);
+  if (hasFullV2) {
+    if (presence.rootBrainfile) {
+      const backupPath = backupAndRemoveLegacyRoot(paths.rootBrainfilePath, paths.dotDir);
+      console.log(chalk.yellow('Legacy root brainfile detected alongside v2 workspace.'));
+      console.log(chalk.gray(`  Backed up root file to: ${backupPath}`));
+    }
+
+    ensureDotBrainfileGitignore(paths.dotBrainfilePath);
+    removeLegacyStateFile(paths.dotBrainfilePath);
+
+    console.log(chalk.green('Workspace is already v2. No task migration needed.'));
+    return;
   }
 
-  if (fs.existsSync(targetPath) && !options.force) {
-    console.error(chalk.red(`Error: Target already exists: ${targetPath}`));
-    console.log(chalk.gray('Use --force to overwrite'));
-    process.exit(1);
+  if (presence.rootBrainfile && !presence.dotBrainfile) {
+    migrateRootBrainfileToDotDir(probe, options);
+    migrateBrainfileToV2(paths.dotBrainfilePath, options);
+    return;
+  }
+
+  if (presence.rootBrainfile && presence.dotBrainfile) {
+    const backupPath = backupAndRemoveLegacyRoot(paths.rootBrainfilePath, paths.dotDir);
+    console.log(chalk.yellow('Found both root and .brainfile brainfiles; using .brainfile/brainfile.md as source.'));
+    console.log(chalk.gray(`  Backed up root file to: ${backupPath}`));
+
+    migrateBrainfileToV2(paths.dotBrainfilePath, options);
+    return;
+  }
+
+  if (presence.dotBrainfile) {
+    migrateBrainfileToV2(paths.dotBrainfilePath, options);
+    return;
+  }
+
+  throw new Error('Mixed workspace detected, but no migratable brainfile.md was found.');
+}
+
+function migrateRootBrainfileToDotDir(probe: WorkspaceProbe, options: MigrateOptions): void {
+  const { rootBrainfilePath, dotDir, dotBrainfilePath } = probe.paths;
+
+  if (!fs.existsSync(rootBrainfilePath)) {
+    throw new Error(`File not found: ${rootBrainfilePath}`);
+  }
+
+  if (fs.existsSync(dotBrainfilePath) && !options.force) {
+    throw new Error(
+      `Target already exists: ${dotBrainfilePath}. ` +
+      'Run `brainfile migrate` again after resolving conflicts, or use --force.'
+    );
   }
 
   fs.mkdirSync(dotDir, { recursive: true });
-  ensureDotBrainfileGitignore(targetPath);
-  removeLegacyStateFile(targetPath);
 
-  if (fs.existsSync(targetPath) && options.force) {
-    fs.rmSync(targetPath, { force: true });
+  if (fs.existsSync(dotBrainfilePath) && options.force) {
+    fs.rmSync(dotBrainfilePath, { force: true });
   }
 
   // Prefer rename for exact preservation; fall back to copy+unlink on failure.
   try {
-    fs.renameSync(legacyPath, targetPath);
+    fs.renameSync(rootBrainfilePath, dotBrainfilePath);
   } catch {
-    const contents = fs.readFileSync(legacyPath);
-    fs.writeFileSync(targetPath, contents);
-    fs.rmSync(legacyPath, { force: true });
+    const contents = fs.readFileSync(rootBrainfilePath);
+    fs.writeFileSync(dotBrainfilePath, contents);
+    fs.rmSync(rootBrainfilePath, { force: true });
   }
 
-  console.log(chalk.green('Brainfile migrated successfully!'));
-  console.log('');
-  console.log(chalk.gray(`  Moved:   ${legacyPath}`));
-  console.log(chalk.gray(`  To:      ${targetPath}`));
-  console.log('');
-  console.log(chalk.gray('Next steps:'));
-  console.log(chalk.gray('  - Your CLI/MCP commands will auto-detect the new location'));
-  console.log(chalk.gray('  - Optionally commit `.brainfile/brainfile.md` to git'));
+  ensureDotBrainfileGitignore(dotBrainfilePath);
+  removeLegacyStateFile(dotBrainfilePath);
+
+  console.log(chalk.gray(`Moved: ${rootBrainfilePath} -> ${dotBrainfilePath}`));
 }
 
 /**
- * V2 migration: convert v1 board (embedded tasks in YAML) to v2 per-task files.
- *
- * - Reads all tasks from columns + archive in brainfile.md
- * - Writes each as an individual file in board/ (active) or logs/ (done/archived)
- * - Rewrites brainfile.md as config-only (columns without tasks)
- * - Non-destructive: backs up original brainfile.md first
+ * Convert a single legacy board file into v2 per-task files.
  */
-function migrateToV2(options: MigrateOptions) {
-  const rootDir = path.resolve(options.dir || process.cwd());
-
-  // Find the brainfile
-  let brainfilePath: string;
-  const dotPath = path.join(rootDir, '.brainfile', 'brainfile.md');
-  const rootPath = path.join(rootDir, 'brainfile.md');
-
-  if (fs.existsSync(dotPath)) {
-    brainfilePath = dotPath;
-  } else if (fs.existsSync(rootPath)) {
-    brainfilePath = rootPath;
-  } else {
-    console.error(chalk.red('Error: No brainfile found to migrate.'));
-    console.log(chalk.gray(`Checked: ${dotPath}`));
-    console.log(chalk.gray(`Checked: ${rootPath}`));
-    process.exit(1);
-    return; // unreachable but for TS
+function migrateBrainfileToV2(brainfilePath: string, options: MigrateOptions): void {
+  if (!fs.existsSync(brainfilePath)) {
+    throw new Error(`File not found: ${brainfilePath}`);
   }
 
-  // Parse the current brainfile
+  const dotDir = path.dirname(path.resolve(brainfilePath));
+  const hasBoardDir = fs.existsSync(path.join(dotDir, 'board'));
+  const hasLogsDir = fs.existsSync(path.join(dotDir, 'logs'));
+  if (hasBoardDir && hasLogsDir) {
+    console.log(chalk.green('Already using v2 per-task file architecture.'));
+    return;
+  }
+
   const content = fs.readFileSync(brainfilePath, 'utf-8');
   const parsed = Brainfile.parseWithErrors(content);
   if (!parsed.board) {
-    console.error(chalk.red(`Error: Failed to parse brainfile: ${parsed.error}`));
-    process.exit(1);
-    return;
+    throw new Error(`Failed to parse brainfile: ${parsed.error}`);
   }
 
   const board = parsed.board;
@@ -132,25 +171,33 @@ function migrateToV2(options: MigrateOptions) {
   // Ensure v2 directory structure
   const dirs = ensureV2Dirs(brainfilePath);
 
-  let activeCount = 0;
-  let logCount = 0;
-
-  // Check for existing board/ files to avoid clobbering
+  // Validate/clear existing task files
   const existingTaskFiles = fs.existsSync(dirs.boardDir)
-    ? fs.readdirSync(dirs.boardDir).filter(f => f.endsWith('.md'))
+    ? fs.readdirSync(dirs.boardDir).filter((f) => f.endsWith('.md'))
     : [];
   const existingLogFiles = fs.existsSync(dirs.logsDir)
-    ? fs.readdirSync(dirs.logsDir).filter(f => f.endsWith('.md'))
+    ? fs.readdirSync(dirs.logsDir).filter((f) => f.endsWith('.md'))
     : [];
 
   if ((existingTaskFiles.length > 0 || existingLogFiles.length > 0) && !options.force) {
-    console.error(chalk.red('Error: board/ or logs/ directory already contains files.'));
-    console.log(chalk.gray('Use --force to overwrite.'));
-    process.exit(1);
-    return;
+    throw new Error(
+      'board/ or logs/ already contains task files. ' +
+      'Use --force to replace existing .md files in those directories.'
+    );
   }
 
-  // Determine which column IDs are "done"-like
+  if (options.force) {
+    for (const name of existingTaskFiles) {
+      fs.rmSync(path.join(dirs.boardDir, name), { force: true });
+    }
+    for (const name of existingLogFiles) {
+      fs.rmSync(path.join(dirs.logsDir, name), { force: true });
+    }
+  }
+
+  let activeCount = 0;
+  let logCount = 0;
+
   const doneColumnIds = new Set<string>();
   for (const col of board.columns) {
     if (
@@ -162,7 +209,6 @@ function migrateToV2(options: MigrateOptions) {
     }
   }
 
-  // Write active tasks and done tasks to files
   for (const col of board.columns) {
     const isDone = doneColumnIds.has(col.id);
 
@@ -170,7 +216,6 @@ function migrateToV2(options: MigrateOptions) {
       const task = col.tasks[i];
 
       if (isDone) {
-        // Move to logs - remove column/position, add completedAt
         const logTask: Task = {
           ...task,
           completedAt: task.completedAt || new Date().toISOString(),
@@ -182,7 +227,6 @@ function migrateToV2(options: MigrateOptions) {
         writeTaskFile(logPath, logTask);
         logCount++;
       } else {
-        // Active task - add column and position
         const activeTask: Task = {
           ...task,
           column: col.id,
@@ -196,7 +240,6 @@ function migrateToV2(options: MigrateOptions) {
     }
   }
 
-  // Write archived tasks to logs
   if (board.archive && board.archive.length > 0) {
     for (const task of board.archive) {
       const logTask: Task = {
@@ -212,24 +255,20 @@ function migrateToV2(options: MigrateOptions) {
     }
   }
 
-  // Rewrite brainfile.md as config-only (strip tasks from columns, remove archive)
   const configBoard = { ...board };
-  configBoard.columns = board.columns.map(col => ({
+  configBoard.columns = board.columns.map((col) => ({
     id: col.id,
     title: col.title,
     ...(col.order !== undefined && { order: col.order }),
     ...(col.completionColumn && { completionColumn: col.completionColumn }),
-    tasks: [], // empty tasks array for serialization compatibility
+    tasks: [],
   }));
   delete configBoard.archive;
-
-  // Update schema to v2
   configBoard.schema = 'https://brainfile.md/v2/board.json';
 
   const configContent = Brainfile.serialize(configBoard);
   fs.writeFileSync(brainfilePath, configContent, 'utf-8');
 
-  // Ensure .gitignore and remove legacy state file
   ensureDotBrainfileGitignore(brainfilePath);
   removeLegacyStateFile(brainfilePath);
 
@@ -239,6 +278,26 @@ function migrateToV2(options: MigrateOptions) {
   console.log(chalk.gray(`  Completed/logs:  ${logCount} files in logs/`));
   console.log(chalk.gray(`  Board config:    ${brainfilePath} (config-only)`));
   console.log(chalk.gray(`  Backup:          ${backupPath}`));
-  console.log('');
-  console.log(chalk.gray('All CLI commands now work with the per-task file architecture.'));
+}
+
+function backupAndRemoveLegacyRoot(rootBrainfilePath: string, dotDir: string): string {
+  const backupPath = uniquePath(path.join(dotDir, 'brainfile.root.legacy.bak'));
+  fs.mkdirSync(dotDir, { recursive: true });
+  fs.copyFileSync(rootBrainfilePath, backupPath);
+  fs.rmSync(rootBrainfilePath, { force: true });
+  return backupPath;
+}
+
+function uniquePath(basePath: string): string {
+  if (!fs.existsSync(basePath)) return basePath;
+
+  const ext = path.extname(basePath);
+  const stem = basePath.slice(0, basePath.length - ext.length);
+
+  let i = 1;
+  while (true) {
+    const candidate = `${stem}.${i}${ext}`;
+    if (!fs.existsSync(candidate)) return candidate;
+    i++;
+  }
 }

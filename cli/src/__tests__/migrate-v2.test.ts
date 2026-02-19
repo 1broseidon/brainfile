@@ -4,7 +4,7 @@ import * as path from 'path';
 import { migrateCommand } from '../commands/migrate';
 import { readTaskFile } from '@brainfile/core';
 
-describe('migrate --v2 command', () => {
+describe('migrate command (legacy .brainfile source)', () => {
   let tempDir: string;
   let originalCwd: string;
 
@@ -157,14 +157,38 @@ archive:
     expect(archivedTask).not.toBeNull();
     expect(archivedTask!.task.completedAt).toBeDefined();
   });
+
+  it('migrates when only board/ exists (partial v2 scaffold)', () => {
+    const dotDir = path.join(tempDir, '.brainfile');
+    fs.mkdirSync(path.join(dotDir, 'board'), { recursive: true });
+
+    const v1Content = `---
+title: Partial Scaffold
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+      - id: task-7
+        title: Needs migration
+---
+`;
+
+    const brainfilePath = path.join(dotDir, 'brainfile.md');
+    fs.writeFileSync(brainfilePath, v1Content, 'utf-8');
+
+    migrateCommand({});
+
+    expect(fs.existsSync(path.join(dotDir, 'board', 'task-7.md'))).toBe(true);
+    expect(fs.existsSync(path.join(dotDir, 'logs'))).toBe(true);
+  });
 });
 
-describe('migrate (directory) command', () => {
+describe('migrate mixed workspace handling', () => {
   let tempDir: string;
   let originalCwd: string;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-migrate-dir-test-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-migrate-mixed-test-'));
     originalCwd = process.cwd();
     process.chdir(tempDir);
   });
@@ -174,17 +198,27 @@ describe('migrate (directory) command', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('moves brainfile.md to .brainfile/brainfile.md preserving content', () => {
-    const original = 'original-content\nline2\n';
-    fs.writeFileSync(path.join(tempDir, 'brainfile.md'), original, 'utf-8');
+  it('backs up root brainfile.md when workspace is already v2', () => {
+    const dotDir = path.join(tempDir, '.brainfile');
+    fs.mkdirSync(path.join(dotDir, 'board'), { recursive: true });
+    fs.mkdirSync(path.join(dotDir, 'logs'), { recursive: true });
+
+    const v2Config = `---
+title: V2 Board
+columns:
+  - id: todo
+    title: To Do
+---
+`;
+    fs.writeFileSync(path.join(dotDir, 'brainfile.md'), v2Config, 'utf-8');
+    fs.writeFileSync(path.join(tempDir, 'brainfile.md'), 'legacy root file', 'utf-8');
 
     migrateCommand({});
 
-    const legacyPath = path.join(tempDir, 'brainfile.md');
-    const targetPath = path.join(tempDir, '.brainfile', 'brainfile.md');
+    expect(fs.existsSync(path.join(tempDir, 'brainfile.md'))).toBe(false);
 
-    expect(fs.existsSync(legacyPath)).toBe(false);
-    expect(fs.existsSync(targetPath)).toBe(true);
-    expect(fs.readFileSync(targetPath, 'utf-8')).toBe(original);
+    const backups = fs.readdirSync(dotDir).filter((name) => name.startsWith('brainfile.root.legacy') && name.endsWith('.bak'));
+    expect(backups.length).toBe(1);
+    expect(fs.readFileSync(path.join(dotDir, backups[0]), 'utf-8')).toBe('legacy root file');
   });
 });

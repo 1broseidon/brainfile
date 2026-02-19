@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-02-19
+
+### Added
+- **Workspace format probe for migration readiness**
+  - New shared detector classifies workspaces as `v2`, `legacy-root`, `legacy-dotbrainfile`, `mixed`, or `empty`
+  - Used consistently by init/migrate/hint flows to avoid command drift
+- **Soft migration warnings in TUI read path**
+  - Launching `brainfile tui` in legacy/mixed workspaces now shows a non-blocking upgrade hint
+
+### Changed
+- **`brainfile migrate` is now the primary v2 upgrade path**
+  - Migration now handles legacy root and legacy `.brainfile/brainfile.md` layouts in one command
+  - Mixed workspaces are handled safely (including backup of stray legacy root files)
+  - Existing `board/`/`logs/` partial states are recognized and migrated more robustly
+- **Migration guidance text now points to `brainfile migrate` (without `--v2`)**
+  - Updated CLI hints and relevant command errors/messages
+
+### Fixed
+- **`brainfile init` legacy detection behavior**
+  - `init` now refuses to initialize over detected legacy/mixed layouts and suggests running `brainfile migrate`
+  - Already-v2 workspaces are treated idempotently (no destructive re-init path)
+- **List/TUI migration nudges**
+  - `brainfile list` and `brainfile tui` now provide soft warnings when legacy layout is detected, improving discoverability for required migration
+
 ## [0.14.0] - 2026-02-18
 
 ### Added

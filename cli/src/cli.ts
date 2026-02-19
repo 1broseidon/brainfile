@@ -115,7 +115,7 @@ Common workflows:
   # Create a board
   brainfile init
 
-  # Move an existing root brainfile.md into .brainfile/
+  # Migrate legacy layouts to v2 (.brainfile + board/logs)
   brainfile migrate
 
   # Daily usage
@@ -151,10 +151,10 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('migrate')
-    .description('Migrate root brainfile.md to .brainfile/brainfile.md, or convert to v2 per-task files')
-    .option('--dir <path>', 'Directory containing brainfile.md (default: cwd)')
-    .option('--force', 'Overwrite existing .brainfile/brainfile.md')
-    .option('--v2', 'Convert v1 embedded tasks to v2 per-task file architecture')
+    .description('Migrate legacy brainfile layouts to v2 (.brainfile/brainfile.md + board/ + logs/)')
+    .option('--dir <path>', 'Directory containing legacy brainfile files (default: cwd)')
+    .option('--force', 'Overwrite existing migration outputs (task files/backups)')
+    .option('--v2', 'Deprecated alias; migration now targets v2 by default')
     .action(migrateCommand);
 
   const listCmd = program

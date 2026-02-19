@@ -114,13 +114,14 @@ export function listCommand(options: ListOptions, logger: Logger = defaultLogger
   const totalTasks = board.columns.reduce((sum, col) => sum + col.tasks.length, 0);
   logger.log(chalk.gray(`Total tasks: ${totalTasks}`));
 
-  // Show one-time v2 migration hint for v1 boards
+  // Show one-time migration hint for legacy/mixed layouts
   if (shouldSuggestV2Migration(filePath)) {
     logger.log('');
     logger.log(
-      chalk.gray('Tip: Run ') +
-      chalk.cyan('brainfile migrate --v2') +
-      chalk.gray(' to upgrade to per-task files for better agent workflows and task history.')
+      chalk.yellow('⚠ Legacy brainfile layout detected. ') +
+      chalk.gray('Run ') +
+      chalk.cyan('brainfile migrate') +
+      chalk.gray(' to upgrade to the v2 board/logs structure.')
     );
     markV2MigrationHintShown(filePath);
   }

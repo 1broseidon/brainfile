@@ -2443,7 +2443,7 @@ export async function mcpCommand(options: McpOptions) {
       const filePath = file || defaultFile;
 
       if (!isV2(filePath)) {
-        return { content: [{ type: 'text' as const, text: 'Error: search_logs requires v2 per-task file architecture. Run: brainfile migrate --v2' }], isError: true };
+        return { content: [{ type: 'text' as const, text: 'Error: search_logs requires v2 per-task file architecture. Run: brainfile migrate' }], isError: true };
       }
 
       const dirs = getV2Dirs(filePath);
@@ -2513,7 +2513,7 @@ export async function mcpCommand(options: McpOptions) {
       const filePath = file || defaultFile;
 
       if (!isV2(filePath)) {
-        return { content: [{ type: 'text' as const, text: 'Error: append_log requires v2 per-task file architecture. Run: brainfile migrate --v2' }], isError: true };
+        return { content: [{ type: 'text' as const, text: 'Error: append_log requires v2 per-task file architecture. Run: brainfile migrate' }], isError: true };
       }
 
       const dirs = getV2Dirs(filePath);

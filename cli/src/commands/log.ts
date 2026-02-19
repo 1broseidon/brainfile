@@ -63,7 +63,7 @@ export function logCommand(options: LogOptions, logger: Logger = defaultLogger):
   }
 
   if (!isV2(filePath)) {
-    throw operationFailed('Log command requires v2 per-task file architecture. Run: brainfile migrate --v2');
+    throw operationFailed('Log command requires v2 per-task file architecture. Run: brainfile migrate');
   }
 
   const dirs = getV2Dirs(filePath);
@@ -100,7 +100,7 @@ export function logNoteCommand(options: LogNoteOptions, logger: Logger = default
   }
 
   if (!isV2(filePath)) {
-    throw operationFailed('Log note command requires v2 per-task file architecture. Run: brainfile migrate --v2');
+    throw operationFailed('Log note command requires v2 per-task file architecture. Run: brainfile migrate');
   }
 
   const dirs = getV2Dirs(filePath);

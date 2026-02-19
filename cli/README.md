@@ -25,6 +25,16 @@ This creates the standard v2 structure:
 
 The board comes pre-configured with `To Do` and `In Progress` columns.
 
+### Migrating older layouts
+
+If your repo still has a legacy `brainfile.md` layout, run:
+
+```bash
+brainfile migrate
+```
+
+This upgrades your workspace to v2 (`.brainfile/brainfile.md` + `board/` + `logs/`).
+
 ## Core Workflow
 
 ### Add Tasks
