@@ -10,7 +10,7 @@ Complete documentation for all `@brainfile/cli` commands.
 ## Command Overview
 
 ```bash
-brainfile [file]        # Open TUI (default: brainfile.md)
+brainfile [file]        # Open TUI (auto-detects .brainfile/brainfile.md)
 brainfile <command>     # Run CLI command
 brainfile mcp           # Start MCP server for AI assistants
 ```
@@ -78,7 +78,7 @@ brainfile list --contract ready
 **Options:**
 | Option | Description |
 |--------|-------------|
-| `-f, --file <path>` | Path to brainfile (default: `brainfile.md`) |
+| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
 | `-c, --column <name>` | Filter by column |
 | `-t, --tag <name>` | Filter by tag |
 | `--contract <status>` | Filter by contract status (`ready`, `in_progress`, `delivered`, `done`, `failed`) |
@@ -98,7 +98,7 @@ brainfile show -t task-42
 | Option | Description |
 |--------|-------------|
 | `-t, --task <id>` | Task ID (required) |
-| `-f, --file <path>` | Path to brainfile (default: `brainfile.md`) |
+| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
 
 **Output includes:**
 - Task ID, title, column, priority, tags, assignee
@@ -270,7 +270,7 @@ brainfile lint --check      # Exit with error (for CI)
 **Options:**
 | Option | Description |
 |--------|-------------|
-| `-f, --file <path>` | Path to brainfile (default: `brainfile.md`) |
+| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
 | `--fix` | Automatically fix issues |
 | `--check` | Exit with error code if issues found |
 
@@ -313,7 +313,7 @@ brainfile template --use feature-request --title "Dark mode"
 Launch interactive terminal UI. This is the default when running `brainfile` without arguments.
 
 ```bash
-brainfile              # Opens TUI with brainfile.md
+brainfile              # Opens TUI (auto-detects .brainfile/brainfile.md)
 brainfile ./tasks.md   # Opens TUI with specific file
 brainfile tui          # Explicit TUI command
 ```
@@ -396,7 +396,7 @@ brainfile contract attach --task task-1 --deliverable "file:src/feature.ts:Imple
 | Option | Description |
 |--------|-------------|
 | `-t, --task <id>` | Task ID (required) |
-| `-f, --file <path>` | Path to brainfile (default: `brainfile.md`) |
+| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
 
 **Attach Options:**
 | Option | Description |
@@ -562,7 +562,7 @@ brainfile mcp --file ./project/brainfile.md
 **Options:**
 | Option | Description |
 |--------|-------------|
-| `-f, --file <path>` | Path to brainfile (default: `brainfile.md`) |
+| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
 
 **Available MCP Tools:**
 

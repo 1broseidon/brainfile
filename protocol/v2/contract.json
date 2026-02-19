@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v2/contract.json",
+  "title": "Brainfile Contract Schema",
+  "description": "Schema for task contracts. Contracts formalize what an agent must deliver and how to verify it. Context lives in task.description and task.relatedFiles, not in the contract.",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "Contract lifecycle status.",
+      "enum": ["ready", "in_progress", "delivered", "done", "failed", "blocked"]
+    },
+    "version": {
+      "type": "integer",
+      "description": "Contract version number. Increment when amending so agents can detect changes.",
+      "minimum": 1,
+      "default": 1
+    },
+    "deliverables": {
+      "type": "array",
+      "description": "Files or artifacts the agent must produce",
+      "items": { "$ref": "#/definitions/deliverable" }
+    },
+    "validation": {
+      "$ref": "#/definitions/validation"
+    },
+    "constraints": {
+      "type": "array",
+      "description": "Implementation constraints the agent must follow",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "outOfScope": {
+      "type": "array",
+      "description": "Items explicitly out of scope. Agents must not implement these.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "feedback": {
+      "type": "string",
+      "description": "Rework guidance from the PM after failed validation. Contains specific instructions for what needs fixing."
+    },
+    "metrics": {
+      "$ref": "#/definitions/metrics"
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "deliverable": {
+      "type": "object",
+      "description": "A single deliverable required by the contract",
+      "required": ["path"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Optional deliverable category.",
+          "minLength": 1,
+          "examples": ["file", "test", "docs", "design", "research"]
+        },
+        "path": {
+          "type": "string",
+          "description": "Path relative to project root",
+          "minLength": 1,
+          "examples": ["src/rateLimiter.ts", "docs/api.md"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the deliverable"
+        }
+      },
+      "additionalProperties": true
+    },
+    "validation": {
+      "type": "object",
+      "description": "Automated validation. When commands are defined, 'contract validate' runs them automatically.",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "description": "Shell commands to validate deliverables. Run sequentially; any failure marks the contract as failed.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [["npm test", "npm run build"]]
+        }
+      },
+      "additionalProperties": true
+    },
+    "metrics": {
+      "type": "object",
+      "description": "Automatically tracked contract metrics. Managed by CLI/MCP tools.",
+      "properties": {
+        "pickedUpAt": {
+          "type": "string",
+          "description": "When the agent claimed the contract",
+          "format": "date-time"
+        },
+        "deliveredAt": {
+          "type": "string",
+          "description": "When the agent marked as delivered",
+          "format": "date-time"
+        },
+        "validatedAt": {
+          "type": "string",
+          "description": "When the PM validated the contract",
+          "format": "date-time"
+        },
+        "duration": {
+          "type": "integer",
+          "description": "Time between pickup and delivery in seconds",
+          "minimum": 0
+        },
+        "reworkCount": {
+          "type": "integer",
+          "description": "Number of re-pickups after failure",
+          "minimum": 0,
+          "default": 0
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

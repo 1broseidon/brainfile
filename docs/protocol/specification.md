@@ -272,9 +272,15 @@ rules:
 
 ## Schema Reference
 
-- **Board**: [`https://brainfile.md/v1/board.json`](https://brainfile.md/v1/board.json)
-- **Task**: [`https://brainfile.md/v1/task.json`](https://brainfile.md/v1/task.json)
-- **Contract**: [`https://brainfile.md/v1/contract.json`](https://brainfile.md/v1/contract.json)
+- **Board**: [`https://brainfile.md/v2/board.json`](https://brainfile.md/v2/board.json)
+- **Task**: [`https://brainfile.md/v2/task.json`](https://brainfile.md/v2/task.json)
+- **Contract**: [`https://brainfile.md/v2/contract.json`](https://brainfile.md/v2/contract.json)
+- **Epic**: [`https://brainfile.md/v2/epic.json`](https://brainfile.md/v2/epic.json)
+- **ADR**: [`https://brainfile.md/v2/adr.json`](https://brainfile.md/v2/adr.json)
+
+::: tip v1 schemas
+v1 schemas remain available at `brainfile.md/v1/` for backward compatibility.
+:::
 
 ## Version History
 

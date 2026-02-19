@@ -5,8 +5,12 @@ The base schema defines fields that are shared across all brainfile types.
 ## Schema URL
 
 ```
-https://brainfile.md/v1/base.json
+https://brainfile.md/v2/base.json
 ```
+
+::: info v1 compatibility
+The v1 schema remains available at `https://brainfile.md/v1/base.json`.
+:::
 
 ## Overview
 
@@ -47,7 +51,7 @@ type: board
 **Description**: Reference to the specific schema for validation
 
 ```yaml
-schema: https://brainfile.md/v1/board.json
+schema: https://brainfile.md/v2/board.json
 ```
 
 ### `protocolVersion`
@@ -58,7 +62,7 @@ schema: https://brainfile.md/v1/board.json
 **Description**: Version of the Brainfile protocol
 
 ```yaml
-protocolVersion: 1.0.0
+protocolVersion: 2.0.0
 ```
 
 ### `agent`
@@ -154,9 +158,9 @@ Used by type-specific schemas for `createdAt` and `updatedAt` fields.
 ```yaml
 ---
 type: board
-schema: https://brainfile.md/v1/board.json
+schema: https://brainfile.md/v2/board.json
 title: Production Project
-protocolVersion: 1.0.0
+protocolVersion: 2.0.0
 agent:
   instructions:
     - Modify only YAML frontmatter

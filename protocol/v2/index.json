@@ -1,0 +1,70 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Brainfile v2 Schema Directory",
+  "description": "Official v2 schemas hosted at brainfile.md/v2/",
+  "version": "2.0.0",
+  "baseUrl": "https://brainfile.md/v2",
+  "schemas": {
+    "base": {
+      "id": "base",
+      "title": "Base Schema",
+      "description": "Shared fields across all brainfile config files",
+      "url": "https://brainfile.md/v2/base.json",
+      "status": "stable",
+      "requiredFields": ["title"],
+      "optionalFields": ["type", "schema", "protocolVersion", "agent", "rules"]
+    },
+    "board": {
+      "id": "board",
+      "title": "Board Schema",
+      "description": "Board configuration file. Defines columns, document types, rules, and project metadata. Tasks are standalone files validated against task.json.",
+      "url": "https://brainfile.md/v2/board.json",
+      "status": "stable",
+      "extends": "base",
+      "renderer": "kanban",
+      "requiredFields": ["columns"]
+    },
+    "task": {
+      "id": "task",
+      "title": "Task Schema",
+      "description": "Standalone task document. Each task is an individual .md file with YAML frontmatter and optional markdown body.",
+      "url": "https://brainfile.md/v2/task.json",
+      "status": "stable",
+      "requiredFields": ["id", "title"],
+      "conditionallyRequired": ["column (required for active tasks in board/, omitted for completed tasks in logs/)"],
+      "filePattern": ".brainfile/board/*.md",
+      "completedFilePattern": ".brainfile/logs/*.md"
+    },
+    "contract": {
+      "id": "contract",
+      "title": "Contract Schema",
+      "description": "Task contract for PM-to-agent workflows. Attached to tasks via the contract field.",
+      "url": "https://brainfile.md/v2/contract.json",
+      "status": "stable",
+      "requiredFields": ["status"]
+    },
+    "epic": {
+      "id": "epic",
+      "title": "Epic Schema",
+      "description": "Epic document. Groups related tasks and tracks collective progress.",
+      "url": "https://brainfile.md/v2/epic.json",
+      "status": "stable",
+      "extends": "task",
+      "additionalFields": ["children", "status"]
+    },
+    "adr": {
+      "id": "adr",
+      "title": "ADR Schema",
+      "description": "Architecture Decision Record. Captures decisions with lifecycle status and supersession tracking.",
+      "url": "https://brainfile.md/v2/adr.json",
+      "status": "stable",
+      "extends": "task",
+      "additionalFields": ["status", "supersededBy"]
+    }
+  },
+  "links": {
+    "documentation": "https://brainfile.md",
+    "repository": "https://github.com/brainfile/protocol",
+    "npm": "https://www.npmjs.com/package/@brainfile/core"
+  }
+}

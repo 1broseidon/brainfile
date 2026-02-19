@@ -7,7 +7,7 @@ description: Formal specification of the Brainfile Contract object
 
 The Contract object is an optional extension to a Brainfile task. It defines the formal agreement between a requester (PM) and a worker (Agent).
 
-**Source of Truth**: [contract.json](https://brainfile.md/v1/contract.json)
+**Source of Truth**: [contract.json](https://brainfile.md/v2/contract.json)
 
 ## Object Structure
 

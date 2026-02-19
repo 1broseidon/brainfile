@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v2/task.json",
+  "title": "Brainfile Task Schema",
+  "description": "Schema for standalone task documents. Each task is an individual .md file with YAML frontmatter and an optional markdown body. Active tasks live in .brainfile/board/, completed tasks in .brainfile/logs/.",
+  "type": "object",
+  "required": ["id", "title"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier following pattern '{type}-N' (e.g., task-1, epic-1, adr-1)",
+      "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
+    },
+    "title": {
+      "type": "string",
+      "description": "Task title",
+      "minLength": 1
+    },
+    "column": {
+      "type": "string",
+      "description": "Column ID this task belongs to. References a column.id in the board config. Required for active tasks in board/. Omitted for completed tasks in logs/.",
+      "pattern": "^[a-z]+(-[a-z]+)*$",
+      "minLength": 1
+    },
+    "position": {
+      "type": "integer",
+      "description": "Sort order within the column. Lower numbers appear first.",
+      "minimum": 0
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed task description (supports Markdown). Single source of truth for context and background."
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Task assignee. Convention: external agents use plain names (codex, cursor, gemini, claude, human), internal subagents use @ prefix (@research, @review)."
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tags for filtering and categorization",
+      "items": { "type": "string" }
+    },
+    "priority": {
+      "type": "string",
+      "description": "Task priority level",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "effort": {
+      "type": "string",
+      "description": "Effort estimation for planning",
+      "enum": ["trivial", "small", "medium", "large", "xlarge"]
+    },
+    "blockedBy": {
+      "type": "array",
+      "description": "List of item IDs that block this task",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
+      }
+    },
+    "dueDate": {
+      "type": "string",
+      "description": "Due date in ISO 8601 format",
+      "format": "date"
+    },
+    "createdAt": {
+      "$ref": "https://brainfile.md/v2/base.json#/definitions/timestamp",
+      "description": "When the task was created"
+    },
+    "updatedAt": {
+      "$ref": "https://brainfile.md/v2/base.json#/definitions/timestamp",
+      "description": "When the task was last updated"
+    },
+    "completedAt": {
+      "$ref": "https://brainfile.md/v2/base.json#/definitions/timestamp",
+      "description": "When the task was completed. Set when moved from board/ to logs/."
+    },
+    "relatedFiles": {
+      "type": "array",
+      "description": "Related file paths or code locations. Single source of truth for relevant files.",
+      "items": { "type": "string" }
+    },
+    "subtasks": {
+      "type": "array",
+      "description": "Subtasks for tracking granular progress",
+      "items": { "$ref": "#/definitions/subtask" }
+    },
+    "type": {
+      "type": "string",
+      "description": "Document type identifier. When omitted, the item is a standard task. Custom types (e.g., 'epic', 'adr') are defined in the board's types map.",
+      "minLength": 1,
+      "examples": ["epic", "adr"]
+    },
+    "contract": {
+      "$ref": "https://brainfile.md/v2/contract.json"
+    }
+  },
+  "if": {
+    "not": { "required": ["completedAt"] }
+  },
+  "then": {
+    "required": ["column"]
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "subtask": {
+      "type": "object",
+      "required": ["id", "title", "completed"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique subtask identifier (e.g., 'sub-1')",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "description": "Subtask title",
+          "minLength": 1
+        },
+        "completed": {
+          "type": "boolean",
+          "description": "Whether the subtask is completed"
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -122,7 +122,9 @@ interface Board {
   rules?: Rules;
   statsConfig?: StatsConfig;
   columns: Column[];
-  archive?: Task[];
+  archive?: Task[];      // v1 compat
+  strict?: boolean;      // v2: enforce type validation
+  types?: TypesConfig;   // v2: custom document types
 }
 ```
 
@@ -132,9 +134,14 @@ interface Board {
 interface Column {
   id: string;
   title: string;
-  tasks: Task[];
+  tasks: Task[];              // v1: embedded tasks
+  completionColumn?: boolean; // v2: auto-complete on move
 }
 ```
+
+::: info v2 architecture
+In v2, columns are config-only (no embedded tasks). Tasks are standalone files in `.brainfile/board/`. The `tasks` array in `Column` is used for v1 compatibility and in-memory board operations.
+:::
 
 ### Task
 
@@ -142,6 +149,8 @@ interface Column {
 interface Task {
   id: string;
   title: string;
+  column?: string;             // v2: column ID reference
+  type?: string;               // v2: document type (e.g., "epic", "adr")
   description?: string;
   relatedFiles?: string[];
   assignee?: string;
@@ -151,7 +160,10 @@ interface Task {
   blockedBy?: string[];
   dueDate?: string;
   subtasks?: Subtask[];
-  template?: "bug" | "feature" | "refactor";
+  contract?: Contract;
+  parentId?: string;           // v2: parent document ID
+  createdAt?: string;
+  completedAt?: string;
 }
 ```
 

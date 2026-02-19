@@ -164,9 +164,10 @@ const task = Brainfile.createFromTemplate('feature-request', {
 
 ### Add Template Task to Board
 
+Using v2 per-task file operations:
+
 ```typescript
-// Parse existing board
-const board = Brainfile.parse(markdownContent);
+import { addTaskFile } from '@brainfile/core';
 
 // Create task from template
 const newTask = Brainfile.createFromTemplate('bug-report', {
@@ -174,22 +175,29 @@ const newTask = Brainfile.createFromTemplate('bug-report', {
   description: 'System crash on startup'
 });
 
-// Generate unique ID
-const maxId = Math.max(
-  ...board.columns
-    .flatMap(col => col.tasks)
-    .map(task => parseInt(task.id.replace('task-', '')) || 0)
-);
-newTask.id = `task-${maxId + 1}`;
+// Write as a standalone task file
+addTaskFile('.brainfile/board/', {
+  ...newTask,
+  column: 'todo'
+});
+```
 
-// Add to appropriate column
-const todoColumn = board.columns.find(col => col.id === 'todo');
-if (todoColumn) {
-  todoColumn.tasks.push(newTask as Task);
+Or using v1 in-memory board operations:
+
+```typescript
+import { addTask } from '@brainfile/core';
+
+const board = Brainfile.parse(markdownContent);
+
+const newTask = Brainfile.createFromTemplate('bug-report', {
+  title: 'Critical bug',
+  description: 'System crash on startup'
+});
+
+const result = addTask(board, 'todo', newTask);
+if (result.success) {
+  const updatedMarkdown = Brainfile.serialize(result.board!);
 }
-
-// Serialize back
-const updatedMarkdown = Brainfile.serialize(board);
 ```
 
 ## Template Structure

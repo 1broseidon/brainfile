@@ -407,7 +407,9 @@ interface Board {
   agent?: AgentInstructions;
   rules?: Rules;
   columns: Column[];
-  archive?: Task[];
+  archive?: Task[];      // v1 compat
+  strict?: boolean;      // v2: enforce type validation
+  types?: TypesConfig;   // v2: custom document types
 }
 ```
 
@@ -417,7 +419,8 @@ interface Board {
 interface Column {
   id: string;
   title: string;
-  tasks: Task[];
+  tasks: Task[];              // v1 compat / in-memory operations
+  completionColumn?: boolean; // v2: auto-complete on move
 }
 ```
 
@@ -427,6 +430,8 @@ interface Column {
 interface Task {
   id: string;
   title: string;
+  column?: string;             // v2: column ID reference
+  type?: string;               // v2: document type
   description?: string;
   relatedFiles?: string[];
   assignee?: string;
@@ -436,8 +441,10 @@ interface Task {
   blockedBy?: string[];
   dueDate?: string;
   subtasks?: Subtask[];
-  template?: "bug" | "feature" | "refactor";
   contract?: Contract;
+  parentId?: string;           // v2: parent document ID
+  createdAt?: string;
+  completedAt?: string;
 }
 ```
 
@@ -446,22 +453,25 @@ interface Task {
 ```typescript
 interface Contract {
   status: ContractStatus;
+  version?: number;
   deliverables?: Deliverable[];
   validation?: ValidationConfig;
   constraints?: string[];
-  context?: ContractContext;
+  outOfScope?: string[];
+  feedback?: string;
+  metrics?: ContractMetrics;
 }
 
 type ContractStatus =
-  | "draft"
   | "ready"
   | "in_progress"
   | "delivered"
   | "done"
-  | "failed";
+  | "failed"
+  | "blocked";
 
 interface Deliverable {
-  type: string; // "file", "test", "docs", "design", "research"
+  type?: string; // "file", "test", "docs", "design", "research"
   path: string;
   description?: string;
 }
@@ -470,13 +480,17 @@ interface ValidationConfig {
   commands?: string[];
 }
 
-interface ContractContext {
-  relevantFiles?: string[];
-  background?: string;
-  feedback?: string;
-  outOfScope?: string[];
+interface ContractMetrics {
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  duration?: number;
+  reworkCount?: number;
 }
 ```
+
+::: info v2 migration
+`ContractContext` is deprecated. Use `task.description` for background and `task.relatedFiles` for relevant files instead.
+:::
 
 ### Subtask
 
@@ -530,10 +544,12 @@ For `patchTaskContract()`. Use `null` to remove fields.
 ```typescript
 interface ContractPatch {
   status?: ContractStatus;
+  version?: number;
   deliverables?: Deliverable[] | null;
   validation?: ValidationConfig | null;
   constraints?: string[] | null;
-  context?: ContractContext | null;
+  outOfScope?: string[] | null;
+  feedback?: string | null;
 }
 ```
 

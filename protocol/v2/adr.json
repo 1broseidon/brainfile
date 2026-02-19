@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v2/adr.json",
+  "title": "Brainfile ADR Schema",
+  "description": "Schema for Architecture Decision Record documents. Captures architectural decisions with lifecycle status and supersession tracking. Extends the task schema.",
+  "allOf": [
+    {
+      "$ref": "https://brainfile.md/v2/task.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "adr"
+        },
+        "status": {
+          "type": "string",
+          "description": "ADR lifecycle status.",
+          "enum": ["proposed", "accepted", "deprecated", "superseded"]
+        },
+        "supersededBy": {
+          "type": "string",
+          "description": "ID of the ADR that supersedes this one. Only relevant when status is 'superseded'.",
+          "minLength": 1,
+          "examples": ["adr-5"]
+        }
+      }
+    }
+  ]
+}

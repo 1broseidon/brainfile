@@ -114,41 +114,52 @@ Task details here.
 | `type` | string | No | Document type (default: `board`) |
 | `schema` | string | No | JSON schema URL for validation |
 | `protocolVersion` | string | No | Protocol version |
+| `strict` | boolean | No | Enforce type validation |
+| `types` | object | No | Custom document types |
 | `agent` | object | No | AI agent instructions |
 | `rules` | object | No | Project rules |
 | `columns` | array | Yes | Workflow columns |
-| `archive` | array | No | Archived tasks |
+| `statsConfig` | object | No | Statistics configuration |
 
 ### Column Fields
+
+Columns are config-only in v2 (no embedded tasks):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `id` | string | Yes | Unique identifier (kebab-case) |
 | `title` | string | Yes | Display title |
-| `tasks` | array | Yes | Tasks in this column |
+| `completionColumn` | boolean | No | Auto-complete on move |
 
 ### Task Fields
 
+Each task is a standalone `.md` file in `.brainfile/board/`:
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | string | Yes | Unique ID (pattern: `task-N`) |
+| `id` | string | Yes | Unique ID (pattern: `{type}-N`, e.g., `task-1`, `epic-2`) |
+| `type` | string | No | Document type (default: `task`) |
 | `title` | string | Yes | Task title |
+| `column` | string | Yes* | Column ID (*required for active tasks, omitted in logs/) |
 | `description` | string | No | Detailed description (markdown) |
 | `priority` | string | No | `low`, `medium`, `high`, `critical` |
 | `effort` | string | No | `trivial`, `small`, `medium`, `large`, `xlarge` |
-| `assignee` | string | No | Person responsible |
+| `assignee` | string | No | Person/agent responsible |
 | `dueDate` | string | No | ISO 8601 date |
 | `tags` | array | No | String tags for filtering |
 | `relatedFiles` | array | No | File paths |
 | `blockedBy` | array | No | Task IDs that block this task |
 | `subtasks` | array | No | Subtask objects |
-| `template` | string | No | `bug`, `feature`, `refactor` |
+| `contract` | object | No | Agent contract |
+| `createdAt` | string | No | ISO 8601 timestamp |
+| `completedAt` | string | No | Set when moved to logs/ |
+| `parentId` | string | No | Parent document ID |
 
 ### Subtask Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `id` | string | Yes | Unique ID (pattern: `task-N-M`) |
+| `id` | string | Yes | Unique ID (e.g., `sub-1`) |
 | `title` | string | Yes | Subtask title |
 | `completed` | boolean | Yes | Completion status |
 
@@ -226,15 +237,19 @@ rules:
 
 | Type | URL |
 |------|-----|
-| Base | `https://brainfile.md/v1/base.json` |
-| Board | `https://brainfile.md/v1/board.json` |
+| Base | `https://brainfile.md/v2/base.json` |
+| Board | `https://brainfile.md/v2/board.json` |
+| Task | `https://brainfile.md/v2/task.json` |
+| Contract | `https://brainfile.md/v2/contract.json` |
+| Epic | `https://brainfile.md/v2/epic.json` |
+| ADR | `https://brainfile.md/v2/adr.json` |
 
-Browse all: [brainfile.md/v1/](https://brainfile.md/v1/)
+Browse all: [brainfile.md/v2/](https://brainfile.md/v2/) · [v1 (legacy)](https://brainfile.md/v1/)
 
 ### Type Inference
 
 When `type` is omitted, tools detect by:
-1. Schema URL pattern (`/v1/board.json` → board)
+1. Schema URL pattern (`/v2/board.json` → board)
 2. Structural analysis (`columns[]` → board)
 3. Default: `board`
 
@@ -242,34 +257,43 @@ When `type` is omitted, tools detect by:
 
 ## ID Patterns
 
-### Task IDs
+### Document IDs
 
-Pattern: `task-N` where N is a sequential number.
+Pattern: `{type}-N` where N is a sequential number.
 
 ```yaml
-- id: task-1
-- id: task-2
+- id: task-1    # Standard task
 - id: task-15
+- id: epic-1    # Epic
+- id: adr-3     # Architecture Decision Record
 ```
 
 ### Subtask IDs
 
-Pattern: `task-N-M` where N is parent task number, M is subtask number.
+Pattern: `sub-N` where N is a sequential number within the task.
 
 ```yaml
 subtasks:
-  - id: task-1-1
-  - id: task-1-2
+  - id: sub-1
+  - id: sub-2
 ```
 
 ---
 
 ## Version History
 
-### v1.0.0 (Current)
+### v2.0.0 (Current)
 
-- Stable release: board-only task management
-- Simplified protocol focus
+- Per-task file architecture (`board/`, `logs/`)
+- Custom document types with strict mode
+- Epic and ADR as first-class types
+- Contract system with lifecycle
+- `parentId` linking model
+
+### v1.0.0
+
+- Single-file embedded tasks
+- Board-only task management
 - Full MCP tool support
 
 ### v0.5.0
@@ -310,7 +334,7 @@ subtasks:
 ---
 title: My Project
 type: board
-schema: https://brainfile.md/v1/board.json
+schema: https://brainfile.md/v2/board.json
 columns:
   - id: todo
     title: To Do

@@ -68,6 +68,39 @@ export default defineConfig({
               }
             }
 
+            // Handle /v2 or /v2/
+            if (url === '/v2' || url === '/v2/') {
+              const htmlPath = path.resolve(__dirname, '../../v2/index.html')
+              const content = fs.readFileSync(htmlPath, 'utf-8')
+              res.setHeader('Content-Type', 'text/html')
+              res.end(content)
+              return
+            }
+
+            // Handle /v2/*.json files
+            if (url.startsWith('/v2/') && url.endsWith('.json')) {
+              const filename = url.split('/v2/')[1]
+              const jsonPath = path.resolve(__dirname, '../../v2', filename)
+              if (fs.existsSync(jsonPath)) {
+                const content = fs.readFileSync(jsonPath, 'utf-8')
+                res.setHeader('Content-Type', 'application/json')
+                res.end(content)
+                return
+              }
+            }
+
+            // Handle /v2/*.html or /v2/*.md files
+            if (url.startsWith('/v2/') && (url.endsWith('.html') || url.endsWith('.md'))) {
+              const filename = url.split('/v2/')[1]
+              const filePath = path.resolve(__dirname, '../../v2', filename)
+              if (fs.existsSync(filePath)) {
+                const content = fs.readFileSync(filePath, 'utf-8')
+                res.setHeader('Content-Type', url.endsWith('.md') ? 'text/markdown' : 'text/html')
+                res.end(content)
+                return
+              }
+            }
+
             // Handle /example/*.md files
             if (url.startsWith('/example/') && url.endsWith('.md')) {
               const filename = url.split('/example/')[1]
@@ -95,6 +128,21 @@ export default defineConfig({
               this.emitFile({
                 type: 'asset',
                 fileName: `v1/${file}`,
+                source: content,
+              })
+            }
+          }
+
+          // Copy v2 directory files
+          const v2Dir = path.resolve(__dirname, '../../v2')
+          const v2Files = fs.readdirSync(v2Dir)
+          for (const file of v2Files) {
+            const filePath = path.join(v2Dir, file)
+            if (fs.statSync(filePath).isFile()) {
+              const content = fs.readFileSync(filePath, 'utf-8')
+              this.emitFile({
+                type: 'asset',
+                fileName: `v2/${file}`,
                 source: content,
               })
             }

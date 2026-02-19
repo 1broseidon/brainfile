@@ -1545,41 +1545,52 @@ Board Fields
 | type | string | No | Document type (default: board) |
 | schema | string | No | JSON schema URL for validation |
 | protocolVersion | string | No | Protocol version |
+| strict | boolean | No | Enforce type validation |
+| types | object | No | Custom document types |
 | agent | object | No | AI agent instructions |
 | rules | object | No | Project rules |
 | columns | array | Yes | Workflow columns |
-| archive | array | No | Archived tasks |
+| statsConfig | object | No | Statistics configuration |
 
 Column Fields
+
+Columns are config-only in v2 (no embedded tasks):
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | id | string | Yes | Unique identifier (kebab-case) |
 | title | string | Yes | Display title |
-| tasks | array | Yes | Tasks in this column |
+| completionColumn | boolean | No | Auto-complete on move |
 
 Task Fields
 
+Each task is a standalone .md file in .brainfile/board/:
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| id | string | Yes | Unique ID (pattern: task-N) |
+| id | string | Yes | Unique ID (pattern: {type}-N, e.g., task-1, epic-2) |
+| type | string | No | Document type (default: task) |
 | title | string | Yes | Task title |
+| column | string | Yes | Column ID (required for active tasks, omitted in logs/) |
 | description | string | No | Detailed description (markdown) |
 | priority | string | No | low, medium, high, critical |
 | effort | string | No | trivial, small, medium, large, xlarge |
-| assignee | string | No | Person responsible |
+| assignee | string | No | Person/agent responsible |
 | dueDate | string | No | ISO 8601 date |
 | tags | array | No | String tags for filtering |
 | relatedFiles | array | No | File paths |
 | blockedBy | array | No | Task IDs that block this task |
 | subtasks | array | No | Subtask objects |
-| template | string | No | bug, feature, refactor |
+| contract | object | No | Agent contract |
+| createdAt | string | No | ISO 8601 timestamp |
+| completedAt | string | No | Set when moved to logs/ |
+| parentId | string | No | Parent document ID |
 
 Subtask Fields
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| id | string | Yes | Unique ID (pattern: task-N-M) |
+| id | string | Yes | Unique ID (e.g., sub-1) |
 | title | string | Yes | Subtask title |
 | completed | boolean | Yes | Completion status |
 
@@ -1657,15 +1668,19 @@ Official Schemas
 
 | Type | URL |
 |------|-----|
-| Base | https://brainfile.md/v1/base.json |
-| Board | https://brainfile.md/v1/board.json |
+| Base | https://brainfile.md/v2/base.json |
+| Board | https://brainfile.md/v2/board.json |
+| Task | https://brainfile.md/v2/task.json |
+| Contract | https://brainfile.md/v2/contract.json |
+| Epic | https://brainfile.md/v2/epic.json |
+| ADR | https://brainfile.md/v2/adr.json |
 
-Browse all: brainfile.md/v1/
+Browse all: brainfile.md/v2/ · v1 (legacy)
 
 Type Inference
 
 When type is omitted, tools detect by:
-  Schema URL pattern (/v1/board.json → board)
+  Schema URL pattern (/v2/board.json → board)
   Structural analysis (columns[] → board)
   Default: board
 
@@ -1673,33 +1688,41 @@ When type is omitted, tools detect by:
 
 ID Patterns
 
-Task IDs
+Document IDs
 
-Pattern: task-N where N is a sequential number.
+Pattern: {type}-N where N is a sequential number.
 
 `
-  - id: task-1
-  - id: task-2
+  - id: task-1    # Standard task
   - id: task-15
+  - id: epic-1    # Epic
+  - id: adr-3     # Architecture Decision Record
 `
 
 Subtask IDs
 
-Pattern: task-N-M where N is parent task number, M is subtask number.
+Pattern: sub-N where N is a sequential number within the task.
 
 `
 subtasks:
-  - id: task-1-1
-  - id: task-1-2
+  - id: sub-1
+  - id: sub-2
 `
 
 ---
 
 Version History
 
-v1.0.0 (Current)
-  - Stable release: board-only task management
-  - Simplified protocol focus
+v2.0.0 (Current)
+  - Per-task file architecture (board/, logs/)
+  - Custom document types with strict mode
+  - Epic and ADR as first-class types
+  - Contract system with lifecycle
+  - parentId linking model
+
+v1.0.0
+  - Single-file embedded tasks
+  - Board-only task management
   - Full MCP tool support
 
 v0.5.0
@@ -1736,7 +1759,7 @@ Board Config (.brainfile/brainfile.md)
 ---
 title: My Project
 type: board
-schema: https://brainfile.md/v1/board.json
+schema: https://brainfile.md/v2/board.json
 columns:
   - id: todo
     title: To Do
@@ -2201,7 +2224,9 @@ interface Board {
   agent?: AgentInstructions;
   rules?: Rules;
   columns: Column[];
-  archive?: Task[];
+  archive?: Task[];      // v1 compat
+  strict?: boolean;      // v2: enforce type validation
+  types?: TypesConfig;   // v2: custom document types
 }
 `
 
@@ -2211,7 +2236,8 @@ Column
 interface Column {
   id: string;
   title: string;
-  tasks: Task[];
+  tasks: Task[];              // v1 compat / in-memory operations
+  completionColumn?: boolean; // v2: auto-complete on move
 }
 `
 
@@ -2221,6 +2247,8 @@ Task
 interface Task {
   id: string;
   title: string;
+  column?: string;             // v2: column ID reference
+  type?: string;               // v2: document type
   description?: string;
   relatedFiles?: string[];
   assignee?: string;
@@ -2230,8 +2258,10 @@ interface Task {
   blockedBy?: string[];
   dueDate?: string;
   subtasks?: Subtask[];
-  template?: "bug" | "feature" | "refactor";
   contract?: Contract;
+  parentId?: string;           // v2: parent document ID
+  createdAt?: string;
+  completedAt?: string;
 }
 `
 
@@ -2240,22 +2270,25 @@ Contract
 `
 interface Contract {
   status: ContractStatus;
+  version?: number;
   deliverables?: Deliverable[];
   validation?: ValidationConfig;
   constraints?: string[];
-  context?: ContractContext;
+  outOfScope?: string[];
+  feedback?: string;
+  metrics?: ContractMetrics;
 }
 
 type ContractStatus =
-  | "draft"
   | "ready"
   | "in_progress"
   | "delivered"
   | "done"
-  | "failed";
+  | "failed"
+  | "blocked";
 
 interface Deliverable {
-  type: string; // "file", "test", "docs", "design", "research"
+  type?: string; // "file", "test", "docs", "design", "research"
   path: string;
   description?: string;
 }
@@ -2264,13 +2297,17 @@ interface ValidationConfig {
   commands?: string[];
 }
 
-interface ContractContext {
-  relevantFiles?: string[];
-  background?: string;
-  feedback?: string;
-  outOfScope?: string[];
+interface ContractMetrics {
+  pickedUpAt?: string;
+  deliveredAt?: string;
+  duration?: number;
+  reworkCount?: number;
 }
 `
+
+::: info v2 migration
+ContractContext is deprecated. Use task.description for background and task.relatedFiles for relevant files instead.
+:::
 
 Subtask
 
@@ -2324,10 +2361,12 @@ For patchTaskContract(). Use null to remove fields.
 `
 interface ContractPatch {
   status?: ContractStatus;
+  version?: number;
   deliverables?: Deliverable[] | null;
   validation?: ValidationConfig | null;
   constraints?: string[] | null;
-  context?: ContractContext | null;
+  outOfScope?: string[] | null;
+  feedback?: string | null;
 }
 `
 
@@ -2485,7 +2524,7 @@ Complete documentation for all @brainfile/cli commands.
 Command Overview
 
 ``
-brainfile [file]        # Open TUI (default: brainfile.md)
+brainfile [file]        # Open TUI (auto-detects .brainfile/brainfile.md)
 brainfile <command>     # Run CLI command
 brainfile mcp           # Start MCP server for AI assistants
 `
@@ -2553,7 +2592,7 @@ brainfile list --contract ready
 Options:
 | Option | Description |
 |--------|-------------|
-| -f, --file <path> | Path to brainfile (default: brainfile.md) |
+| -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
 | -c, --column <name> | Filter by column |
 | -t, --tag <name> | Filter by tag |
 | --contract <status> | Filter by contract status (ready, in_progress, delivered, done, failed) |
@@ -2573,7 +2612,7 @@ Options:
 | Option | Description |
 |--------|-------------|
 | -t, --task <id> | Task ID (required) |
-| -f, --file <path> | Path to brainfile (default: brainfile.md) |
+| -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
 
 Output includes:
   - Task ID, title, column, priority, tags, assignee
@@ -2745,7 +2784,7 @@ brainfile lint --check      # Exit with error (for CI)
 Options:
 | Option | Description |
 |--------|-------------|
-| -f, --file <path> | Path to brainfile (default: brainfile.md) |
+| -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
 | --fix | Automatically fix issues |
 | --check | Exit with error code if issues found |
 
@@ -2788,7 +2827,7 @@ tui
 Launch interactive terminal UI. This is the default when running brainfile without arguments.
 
 `
-brainfile              # Opens TUI with brainfile.md
+brainfile              # Opens TUI (auto-detects .brainfile/brainfile.md)
 brainfile ./tasks.md   # Opens TUI with specific file
 brainfile tui          # Explicit TUI command
 `
@@ -2871,7 +2910,7 @@ Common Options:
 | Option | Description |
 |--------|-------------|
 | -t, --task <id> | Task ID (required) |
-| -f, --file <path> | Path to brainfile (default: brainfile.md) |
+| -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
 
 Attach Options:
 | Option | Description |
@@ -3037,7 +3076,7 @@ brainfile mcp --file ./project/brainfile.md
 Options:
 | Option | Description |
 |--------|-------------|
-| -f, --file <path> | Path to brainfile (default: brainfile.md) |
+| -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
 
 Available MCP Tools:
 
@@ -3233,38 +3272,41 @@ In v2, context.background moved to task.description and context.relevantFiles mo
 
 Schema Types
 
-Brainfile uses JSON Schema to define the structure of task boards.
+Brainfile uses JSON Schema to define the structure of board configuration and task files.
 
 Available Schemas
 
-| Schema | URL | Purpose |
-|--------|-----|---------|
-| Base | /v1/base.json | Shared fields (title, agent, rules) |
-| Board | /v1/board.json | Kanban task management |
-| Contract | /v1/contract.json | Task contract object (task.contract) |
+| Schema | v2 URL | Purpose |
+|--------|--------|---------|
+| Base | /v2/base.json | Shared fields (title, agent, rules) |
+| Board | /v2/board.json | Board configuration (columns, types) |
+| Task | /v2/task.json | Standalone task documents |
+| Contract | /v2/contract.json | Task contract object (task.contract) |
+| Epic | /v2/epic.json | Epic documents (groups related tasks) |
+| ADR | /v2/adr.json | Architecture Decision Records |
 
 ---
 
 Board (Default)
 
-Kanban-style task boards with columns and draggable tasks.
+Board configuration defines columns, document types, and project rules. Tasks are standalone files in .brainfile/board/.
 
 ``
 ---
 type: board
-schema: https://brainfile.md/v1/board.json
+schema: https://brainfile.md/v2/board.json
 title: My Project
 columns:
   - id: todo
     title: To Do
-    tasks:
-  - id: task-1
-        title: Implement feature
-        priority: high
+  - id: in-progress
+    title: In Progress
+types:
+  epic:
+    idPrefix: epic
+    completable: false
 ---
 `
-
-Structure: columns[] containing tasks[]
 
 Renderer: Kanban board with columns
 
@@ -3272,9 +3314,28 @@ View Board Schema · Example
 
 ---
 
+Task
+
+Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual .md file in .brainfile/board/ (active) or .brainfile/logs/ (completed).
+
+`
+---
+id: task-1
+title: Implement feature
+column: todo
+priority: high
+tags: [backend]
+assignee: codex
+---
+`
+
+View Task Schema · Docs
+
+---
+
 Contract (Task Extension)
 
-Task contracts define structured deliverables, validation commands, and constraints for PM-to-agent workflows.
+Task contracts define structured deliverables, validation commands, and constraints for PM-to-agent workflows. Embedded in the contract field of a task file.
 
 `
 contract:
@@ -3292,9 +3353,46 @@ View Contract Schema · Docs
 
 ---
 
+Epic
+
+Groups related tasks and tracks collective progress. Extends the task schema with children and status fields.
+
+`
+---
+id: epic-1
+type: epic
+title: Authentication System
+column: in-progress
+children: [task-1, task-3, task-4]
+status: active
+---
+`
+
+View Epic Schema
+
+---
+
+ADR
+
+Architecture Decision Records with lifecycle status and supersession tracking. Extends the task schema.
+
+`
+---
+id: adr-1
+type: adr
+title: Use Postgres for user data
+column: todo
+status: proposed
+---
+`
+
+View ADR Schema
+
+---
+
 Base Schema
 
-All brainfiles inherit from the base schema which defines shared fields:
+All brainfile config files inherit from the base schema which defines shared fields:
 
 `
 ---
@@ -3321,25 +3419,19 @@ View Base Schema
 Type Inference
 
 When type is not specified, tools determine the type by:
-  Schema URL — /v1/board.json → board
+  Schema URL — /v2/board.json → board
   Filename suffix — project.board.md → board
-  Structural analysis — columns[] present → board
+  Structural analysis — columns[]` present → board
   Default → board
 
 ---
 
-Schema Directory
+Schema Directories
 
-Browse all schemas at brainfile.md/v1/
-
-`
-{
-  "schemas": {
-    "base": { "url": "https://brainfile.md/v1/base.json" },
-    "board": { "url": "https://brainfile.md/v1/board.json" }
-  }
-}
-``
+| Version | URL | Status |
+|---------|-----|--------|
+| v2 | brainfile.md/v2/ | Current |
+| v1 | brainfile.md/v1/ | Maintained for backward compatibility |
 
 ---
 

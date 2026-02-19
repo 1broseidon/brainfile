@@ -255,11 +255,12 @@ Break down complex tasks:
 ---
 id: task-1
 title: Implement auth
+column: in-progress
 subtasks:
-  - id: task-1-1
+  - id: sub-1
     title: Setup OAuth
     completed: true
-  - id: task-1-2
+  - id: sub-2
     title: Create login UI
     completed: false
 ---
@@ -269,7 +270,7 @@ Manage via CLI:
 
 ```bash
 brainfile subtask --task task-1 --add "Add tests"
-brainfile subtask --task task-1 --toggle task-1-1
+brainfile subtask --task task-1 --toggle sub-1
 ```
 
 ---

@@ -1,26 +1,25 @@
 # Board Schema
 
-The board schema defines Kanban-style task boards with columns and tasks. This is the original and most mature brainfile type.
+The board schema defines the project configuration file (`.brainfile/brainfile.md`). It declares columns, document types, rules, and metadata. Tasks are standalone `.md` files in `.brainfile/board/`, each validated against [task.json](/reference/types).
 
 ## Schema URL
 
 ```
-https://brainfile.md/v1/board.json
+https://brainfile.md/v2/board.json
 ```
 
 ## Overview
 
-Board files organize tasks into columns, typically representing workflow stages (To Do, In Progress, Done). They're ideal for:
+The board file is **config-only** — it does not contain tasks. Tasks are individual files in `.brainfile/board/` (active) and `.brainfile/logs/` (completed). The board defines:
 
-- Sprint planning
-- Feature development tracking
-- Bug triage boards
-- Personal task management
-- Team project coordination
+- Workflow columns (stages tasks move through)
+- Document types (task, epic, adr, custom)
+- Project rules for agents
+- Statistics configuration
 
 ## Extends
 
-[Base Schema](./base.md) - Inherits all base fields
+[Base Schema](./base.md) — Inherits all base fields
 
 ## Type Identifier
 
@@ -34,26 +33,54 @@ type: board
 
 **Type**: `array` of `column` objects
 **Min Items**: 1
-**Description**: Task columns representing workflow stages
+**Description**: Workflow columns. Task membership is declared via the `column` field in each task file's frontmatter.
 
 ```yaml
 columns:
   - id: todo
     title: To Do
     order: 1
-    tasks: []
   - id: in-progress
     title: In Progress
     order: 2
-    tasks: []
   - id: done
     title: Done
     order: 3
     completionColumn: true
-    tasks: []
 ```
 
 ## Optional Fields
+
+### `types`
+
+**Type**: `object` (map of type definitions)
+**Description**: Document type definitions. Keys are type identifiers that match the `type` field in task files. The built-in `task` type is always valid.
+
+```yaml
+types:
+  epic:
+    idPrefix: epic
+    completable: false
+    schema: https://brainfile.md/v2/epic.json
+  adr:
+    idPrefix: adr
+    completable: false
+    schema: https://brainfile.md/v2/adr.json
+```
+
+Each type entry supports:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `idPrefix` | `string` (required) | Prefix for auto-generated IDs (e.g., `epic` → `epic-1`) |
+| `completable` | `boolean` | Whether items can be completed (moved to `logs/`). Default: `true` |
+| `schema` | `string` | JSON Schema URL for validating extended fields |
+
+### `strict`
+
+**Type**: `boolean`
+**Default**: `false`
+**Description**: Enables strict validation. When `true`, `add` rejects unknown task types and `move` rejects unknown columns.
 
 ### `statsConfig`
 
@@ -68,25 +95,7 @@ statsConfig:
     - done
 ```
 
-The `columns` array specifies which column IDs to include in progress calculations. Typically excludes archive or backlog columns.
-
-### `archive`
-
-**Type**: `array` of `task` objects
-**Description**: Archived tasks removed from active columns
-
-```yaml
-archive:
-  - id: task-100
-    title: Old completed task
-    ...
-```
-
-Use for:
-- Keeping completed work history
-- Reducing active task clutter
-- Historical reference
-- Reporting and analytics
+The `columns` array specifies which column IDs to include in progress calculations. Typically excludes backlog or archive columns.
 
 ## Column Structure
 
@@ -96,17 +105,11 @@ Use for:
 
 **Type**: `string`
 **Pattern**: `^[a-z]+(-[a-z]+)*$` (kebab-case)
-**Description**: Unique column identifier
+**Description**: Unique column identifier. Referenced by `task.column` in per-task files.
 
 ```yaml
 id: in-progress
 ```
-
-Rules:
-- Lowercase only
-- Hyphen-separated words
-- No spaces or special characters
-- Must be unique across columns
 
 #### `title`
 
@@ -115,17 +118,6 @@ Rules:
 
 ```yaml
 title: In Progress
-```
-
-#### `tasks`
-
-**Type**: `array` of `task` objects
-**Description**: Tasks in this column
-
-```yaml
-tasks:
-  - id: task-1
-    title: First task
 ```
 
 ### Optional Column Fields
@@ -157,267 +149,91 @@ When `true`, tasks moved to this column are considered complete. This enables:
 - **Custom semantics**: "Deployed", "Verified", "Archived" as completion
 - **Explicit configuration**: No reliance on name-based pattern matching
 
-**Backward Compatibility**: If not specified, implementations may fall back to name-based detection (matching "done", "complete", "finished", "closed" patterns) or use the last column as the default completion column.
+## Task File Structure
 
-## Task Structure
+Tasks are standalone `.md` files in `.brainfile/board/`. Each file has YAML frontmatter and an optional markdown body. See the [Task Schema](/reference/types) for the full specification.
 
-### Required Task Fields
+### Task ID Patterns
 
-#### `id`
+| Type | Pattern | Example |
+|------|---------|---------|
+| task | `task-N` | `task-42` |
+| epic | `epic-N` | `epic-3` |
+| adr | `adr-N` | `adr-7` |
+| custom | `{idPrefix}-N` | `spike-1` |
 
-**Type**: `string`
-**Pattern**: `^task-[0-9]+$`
-**Description**: Unique task identifier
+IDs must be unique across all board files and logs.
 
-```yaml
-id: task-42
-```
+### Example Task File
 
-Format: `task-` followed by numbers. IDs must be unique across all columns and archive.
-
-#### `title`
-
-**Type**: `string`
-**Description**: Task title
+File: `.brainfile/board/task-1.md`
 
 ```yaml
-title: Implement user authentication
-```
-
-### Optional Task Fields
-
-#### `description`
-
-**Type**: `string`
-**Supports**: Markdown
-**Description**: Detailed task description
-
-```yaml
-description: |
-  ## Requirements
-  - JWT-based authentication
-  - Login/logout endpoints
-  - Token refresh mechanism
-
-  ## Acceptance Criteria
-  - [ ] User can log in
-  - [ ] User can log out
-  - [ ] Tokens expire after 1 hour
-```
-
-#### `assignee`
-
-**Type**: `string`
-**Description**: Person assigned to the task
-
-```yaml
-assignee: alice
-```
-
-#### `tags`
-
-**Type**: `array` of `string`
-**Description**: Task categorization tags
-
-```yaml
+---
+id: task-1
+title: Add user authentication
+column: todo
+priority: high
+effort: large
 tags:
   - backend
   - security
-  - urgent
-```
-
-#### `priority`
-
-**Type**: `string`
-**Enum**: `low`, `medium`, `high`, `critical`
-**Description**: Task priority level
-
-```yaml
-priority: high
-```
-
-Visual representation:
-- `low`: 🔵 Blue
-- `medium`: 🟡 Yellow
-- `high`: 🟠 Orange
-- `critical`: 🔴 Red
-
-#### `effort`
-
-**Type**: `string`
-**Enum**: `trivial`, `small`, `medium`, `large`, `xlarge`
-**Description**: Estimated effort for AI planning
-
-```yaml
-effort: medium
-```
-
-Use for:
-- Sprint planning
-- Resource allocation
-- AI-assisted task breakdown
-- Velocity tracking
-
-#### `blockedBy`
-
-**Type**: `array` of task IDs
-**Pattern**: `^task-[0-9]+$`
-**Description**: Tasks that must complete first
-
-```yaml
-blockedBy:
-  - task-10
-  - task-15
-```
-
-#### `dueDate`
-
-**Type**: `string` (ISO 8601 date)
-**Format**: `date` (YYYY-MM-DD)
-**Description**: Task deadline
-
-```yaml
-dueDate: "2025-12-31"
-```
-
-#### `createdAt`
-
-**Type**: `string` (ISO 8601 timestamp)
-**Format**: `date-time`
-**Description**: When the task was created
-
-```yaml
-createdAt: "2025-11-24T10:30:00Z"
-```
-
-**New in v0.5.0**: Enables creation time tracking and analytics.
-
-#### `updatedAt`
-
-**Type**: `string` (ISO 8601 timestamp)
-**Format**: `date-time`
-**Description**: When the task was last modified
-
-```yaml
-updatedAt: "2025-11-24T16:45:00Z"
-```
-
-**New in v0.5.0**: Tracks last modification for staleness detection.
-
-#### `relatedFiles`
-
-**Type**: `array` of `string`
-**Description**: File paths or code locations
-
-```yaml
+assignee: alice
+createdAt: "2025-11-24T10:00:00Z"
 relatedFiles:
   - src/auth/jwt.ts
   - src/middleware/auth.ts
-  - tests/auth.test.ts
+subtasks:
+  - id: sub-1
+    title: Implement JWT generation
+    completed: false
+  - id: sub-2
+    title: Create login endpoint
+    completed: false
+  - id: sub-3
+    title: Write tests
+    completed: false
+---
+
+## Requirements
+- JWT-based authentication
+- Login/logout endpoints
+- Token refresh mechanism
 ```
 
-Supports:
-- File paths: `src/components/Button.tsx`
-- Line numbers: `src/utils/helpers.ts:42`
-- Line ranges: `src/api/users.ts:10-25`
-
-#### `subtasks`
-
-**Type**: `array` of `subtask` objects
-**Description**: Granular progress tracking
+### Subtask Structure
 
 ```yaml
 subtasks:
-  - id: task-1-1
-    title: Design authentication flow
+  - id: sub-1
+    title: Write integration tests
+    completed: false
+  - id: sub-2
+    title: Update documentation
     completed: true
-  - id: task-1-2
-    title: Implement JWT generation
-    completed: false
-  - id: task-1-3
-    title: Write tests
-    completed: false
 ```
 
-#### `template`
-
-**Type**: `string`
-**Enum**: `bug`, `feature`, `refactor`
-**Description**: Task template type
-
-```yaml
-template: feature
-```
-
-Templates provide default structures:
-- **bug**: Reproduction steps, environment, fix verification
-- **feature**: Requirements, design, implementation, testing
-- **refactor**: Analysis, design, implementation, performance
-
-#### `contract`
-
-**Type**: `contract` object
-**Description**: Optional PM-to-agent contract metadata (deliverables, validation, constraints)
-
-```yaml
-contract:
-  status: ready
-  deliverables:
-    - type: file
-      path: protocol/v1/contract.json
-      description: New contract schema file
-  validation:
-    commands:
-      - npm test
-```
-
-See: [Contract Schema](./contract.md)
-
-## Subtask Structure
-
-### Required Subtask Fields
-
-#### `id`
-
-**Type**: `string`
-**Pattern**: Typically `task-N-M`
-**Description**: Unique subtask identifier
-
-```yaml
-id: task-1-3
-```
-
-#### `title`
-
-**Type**: `string`
-**Description**: Subtask title
-
-```yaml
-title: Write integration tests
-```
-
-#### `completed`
-
-**Type**: `boolean`
-**Description**: Whether subtask is done
-
-```yaml
-completed: false
-```
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | `string` | Yes | Unique subtask identifier (e.g., `sub-1`) |
+| `title` | `string` | Yes | Subtask title |
+| `completed` | `boolean` | Yes | Whether the subtask is done |
 
 ## Complete Example
+
+### Board Config (`.brainfile/brainfile.md`)
 
 ```yaml
 ---
 type: board
-schema: https://brainfile.md/v1/board.json
+schema: https://brainfile.md/v2/board.json
 title: Product Development
-protocolVersion: 1.0.0
+protocolVersion: 2.0.0
 agent:
   instructions:
-    - Modify only the YAML frontmatter
     - Update task status as work progresses
     - Preserve all task IDs
+    - Use the CLI or MCP tools for task operations
 rules:
   always:
     - id: 1
@@ -430,67 +246,90 @@ rules:
   prefer:
     - id: 1
       rule: small focused tasks over large epics
+types:
+  epic:
+    idPrefix: epic
+    completable: false
+    schema: https://brainfile.md/v2/epic.json
+  adr:
+    idPrefix: adr
+    completable: false
+    schema: https://brainfile.md/v2/adr.json
 columns:
   - id: todo
     title: To Do
     order: 1
-    tasks:
-      - id: task-1
-        title: Add user authentication
-        description: |
-          Implement JWT-based authentication with:
-          - Login/logout endpoints
-          - Token refresh
-          - Protected routes
-        priority: high
-        effort: large
-        tags:
-          - backend
-          - security
-        template: feature
-        assignee: alice
-        createdAt: "2025-11-24T10:00:00Z"
-        relatedFiles:
-          - src/auth/jwt.ts
-          - src/middleware/auth.ts
-        subtasks:
-          - id: task-1-1
-            title: Implement JWT generation
-            completed: false
-          - id: task-1-2
-            title: Create login endpoint
-            completed: false
-          - id: task-1-3
-            title: Write tests
-            completed: false
   - id: in-progress
     title: In Progress
     order: 2
-    tasks: []
   - id: done
     title: Done
     order: 3
     completionColumn: true
-    tasks:
-      - id: task-2
-        title: Set up CI/CD pipeline
-        priority: medium
-        tags:
-          - devops
-        createdAt: "2025-11-20T10:00:00Z"
-        updatedAt: "2025-11-23T16:45:00Z"
-        subtasks:
-          - id: task-2-1
-            title: Configure GitHub Actions
-            completed: true
-          - id: task-2-2
-            title: Test deployment
-            completed: true
 statsConfig:
   columns:
     - todo
     - in-progress
     - done
+---
+```
+
+### Task Files (`.brainfile/board/`)
+
+**`.brainfile/board/task-1.md`** — Active task:
+```yaml
+---
+id: task-1
+title: Add user authentication
+column: todo
+priority: high
+effort: large
+tags: [backend, security]
+assignee: alice
+createdAt: "2025-11-24T10:00:00Z"
+relatedFiles:
+  - src/auth/jwt.ts
+  - src/middleware/auth.ts
+subtasks:
+  - id: sub-1
+    title: Implement JWT generation
+    completed: false
+  - id: sub-2
+    title: Create login endpoint
+    completed: false
+---
+```
+
+**`.brainfile/board/epic-1.md`** — Epic grouping tasks:
+```yaml
+---
+id: epic-1
+type: epic
+title: Authentication System
+column: in-progress
+children: [task-1, task-3, task-4]
+status: active
+---
+```
+
+### Completed Task (`.brainfile/logs/`)
+
+**`.brainfile/logs/task-2.md`**:
+```yaml
+---
+id: task-2
+title: Set up CI/CD pipeline
+priority: medium
+tags: [devops]
+createdAt: "2025-11-20T10:00:00Z"
+completedAt: "2025-11-23T16:45:00Z"
+subtasks:
+  - id: sub-1
+    title: Configure GitHub Actions
+    completed: true
+  - id: sub-2
+    title: Test deployment
+    completed: true
 ---
 ```
 
@@ -515,6 +354,7 @@ columns:
   - id: done
     title: Done
     order: 5
+    completionColumn: true
 ```
 
 ### Bug Triage
@@ -536,7 +376,7 @@ columns:
   - id: verified
     title: Verified
     order: 5
-    completionColumn: true  # Bugs are complete when verified
+    completionColumn: true
 ```
 
 ### Personal GTD
@@ -574,26 +414,7 @@ columns:
   - id: termine
     title: Terminé
     order: 3
-    completionColumn: true  # Explicit marking for non-English column names
-```
-
-### DevOps Pipeline
-
-```yaml
-columns:
-  - id: todo
-    title: To Do
-    order: 1
-  - id: in-progress
-    title: In Progress
-    order: 2
-  - id: deployed
-    title: Deployed
-    order: 3
-    completionColumn: true  # Custom semantic: "Deployed" means done
-  - id: archived
-    title: Archived
-    order: 4
+    completionColumn: true
 ```
 
 ## Best Practices
@@ -619,71 +440,15 @@ columns:
 ```yaml
 agent:
   instructions:
+    - Use CLI or MCP tools for task operations
     - Move tasks to in-progress when starting work
-    - Update task status before committing code
     - Mark subtasks complete as you finish them
     - Add timestamps when creating or updating tasks
 ```
 
-## Migration from Legacy
-
-Old files without `type`:
-```yaml
----
-title: My Project
-columns: [...]
----
-```
-
-Migrate by adding `type: board`:
-```yaml
----
-type: board
-title: My Project
-columns: [...]
----
-```
-
-Optionally add timestamps to existing tasks:
-```yaml
-tasks:
-  - id: task-1
-    title: Existing task
-    createdAt: "2025-11-24T10:00:00Z"  # Add creation time
-```
-
-### Adding Explicit Completion Column
-
-If your workflow uses non-English column names or custom completion semantics, add the `completionColumn` property:
-
-**Before** (relies on name-based detection):
-```yaml
-columns:
-  - id: termine
-    title: Terminé
-    order: 3
-    tasks: []
-```
-
-**After** (explicit marking):
-```yaml
-columns:
-  - id: termine
-    title: Terminé
-    order: 3
-    completionColumn: true  # Explicit completion column
-    tasks: []
-```
-
-**Benefits of explicit marking:**
-- Works with any language ("Terminé", "Fertig", "完了", etc.)
-- Supports custom semantics ("Deployed", "Verified", "Archived")
-- No reliance on pattern matching
-- Machine-readable for third-party tools
-
-**Backward compatibility:** Boards without `completionColumn` continue to work using name-based detection (matching "done", "complete", "finished", "closed") or defaulting to the last column.
-
 ## See Also
 
 - [Base Schema](./base.md)
+- [Task Schema](/reference/types)
+- [Contract Schema](./contract.md)
 - [Example Board](../../example/board.md)

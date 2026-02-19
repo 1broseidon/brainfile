@@ -1,0 +1,129 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v2/board.json",
+  "title": "Brainfile Board Schema",
+  "description": "Schema for board configuration files. The board file (.brainfile/brainfile.md) defines columns, document types, rules, and project metadata. Tasks are standalone .md files in .brainfile/board/ (active) and .brainfile/logs/ (completed), each validated against task.json.",
+  "x-brainfile-renderer": "kanban",
+  "x-brainfile-columns-path": "$.columns",
+  "x-brainfile-title-field": "title",
+  "x-brainfile-status-field": "priority",
+  "allOf": [
+    {
+      "$ref": "https://brainfile.md/v2/base.json"
+    },
+    {
+      "type": "object",
+      "required": ["columns"],
+      "properties": {
+        "type": {
+          "const": "board"
+        },
+        "columns": {
+          "type": "array",
+          "description": "Board columns defining workflow stages. Task membership is declared via the column field in each task file's frontmatter.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/column"
+          }
+        },
+        "types": {
+          "type": "object",
+          "description": "Map of document type definitions. Keys are type identifiers (e.g., 'epic', 'adr') that match the type field in task files. In strict mode, this map is the allowlist; the built-in task type is always implicitly valid.",
+          "additionalProperties": {
+            "$ref": "#/definitions/typeEntry"
+          },
+          "examples": [
+            {
+              "epic": {
+                "idPrefix": "epic",
+                "completable": false,
+                "schema": "https://brainfile.md/v2/epic.json"
+              },
+              "adr": {
+                "idPrefix": "adr",
+                "completable": false,
+                "schema": "https://brainfile.md/v2/adr.json"
+              }
+            }
+          ]
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Enables strict validation. When true, add rejects unknown task types and move rejects unknown columns.",
+          "default": false
+        },
+        "statsConfig": {
+          "type": "object",
+          "description": "Configuration for statistics calculation",
+          "properties": {
+            "columns": {
+              "type": "array",
+              "description": "Column IDs to include in progress statistics",
+              "items": { "type": "string" }
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    }
+  ],
+  "definitions": {
+    "typeEntry": {
+      "type": "object",
+      "description": "Configuration for a custom document type.",
+      "required": ["idPrefix"],
+      "properties": {
+        "idPrefix": {
+          "type": "string",
+          "description": "Prefix for auto-generated IDs (e.g., 'epic' produces 'epic-1', 'epic-2'). Must be unique across all type entries.",
+          "pattern": "^[a-z]+(-[a-z]+)*$",
+          "minLength": 1
+        },
+        "completable": {
+          "type": "boolean",
+          "description": "Whether items of this type can be completed (moved to logs/). Set to false for reference documents like ADRs or epics.",
+          "default": true
+        },
+        "schema": {
+          "type": "string",
+          "description": "JSON Schema URL for validating extended fields of this type.",
+          "format": "uri-reference",
+          "examples": [
+            "https://brainfile.md/v2/epic.json",
+            "https://brainfile.md/v2/adr.json"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "column": {
+      "type": "object",
+      "required": ["id", "title"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique column identifier in kebab-case. Referenced by task.column in per-task files.",
+          "pattern": "^[a-z]+(-[a-z]+)*$",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "description": "Display title for the column",
+          "minLength": 1
+        },
+        "order": {
+          "type": "integer",
+          "description": "Display order. Lower numbers appear first.",
+          "minimum": 0
+        },
+        "completionColumn": {
+          "type": "boolean",
+          "description": "Marks this as a completion column. Tasks moved here are considered complete.",
+          "default": false
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}

@@ -29,25 +29,25 @@ npm install @brainfile/core
 ## Quick Start
 
 ```typescript
-import { Brainfile } from '@brainfile/core';
+import { Brainfile, readV2BoardConfig, readTasksDir } from '@brainfile/core';
 
-// Parse a brainfile
+// Parse a board config
 const markdown = `---
 title: My Project
 columns:
   - id: todo
     title: To Do
-    tasks:
-      - id: task-1
-        title: My First Task
+  - id: in-progress
+    title: In Progress
 ---
 `;
 
 const board = Brainfile.parse(markdown);
 console.log(board.title); // "My Project"
 
-// Serialize back to markdown
-const output = Brainfile.serialize(board);
+// v2: Read board config and task files separately
+const config = readV2BoardConfig('.brainfile/brainfile.md');
+const tasks = readTasksDir('.brainfile/board/');
 ```
 
 ## Board Operations
