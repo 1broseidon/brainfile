@@ -22,14 +22,7 @@ export default defineConfig({
     // Open Graph
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'Brainfile' }],
-    ['meta', { property: 'og:title', content: 'Brainfile — An open protocol for agent-to-agent task coordination' }],
-    ['meta', { property: 'og:description', content: 'Human-in-the-loop compatible. File-system native. MIT licensed. Define contracts, delegate to AI agents, validate deliverables.' }],
     ['meta', { property: 'og:url', content: 'https://brainfile.md' }],
-
-    // Twitter Card
-    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'Brainfile — An open protocol for agent-to-agent task coordination' }],
-    ['meta', { name: 'twitter:description', content: 'Human-in-the-loop compatible. File-system native. MIT licensed. Define contracts, delegate to AI agents, validate deliverables.' }],
   ],
 
   // Fix EMFILE error on systems with low file watcher limits
@@ -216,6 +209,22 @@ export default defineConfig({
         ]
       }
     })(siteConfig)
+  },
+
+  // Dynamically add OG URL/Title/Description and Twitter tags for each page if not present
+  transformPageData(pageData) {
+    pageData.frontmatter ??= {}
+    pageData.frontmatter.head ??= []
+    
+    const title = pageData.frontmatter.title || pageData.title || 'Brainfile'
+    const description = pageData.frontmatter.description || pageData.description || 'An open protocol for structured task coordination'
+    const relativePath = pageData.relativePath.replace(/\.md$/, '')
+    const url = `https://brainfile.md/${relativePath === 'index' ? '' : relativePath}`
+    
+    pageData.frontmatter.head.push(['meta', { name: 'twitter:card', content: 'summary_large_image' }])
+    pageData.frontmatter.head.push(['meta', { name: 'twitter:title', content: title }])
+    pageData.frontmatter.head.push(['meta', { name: 'twitter:description', content: description }])
+    pageData.frontmatter.head.push(['meta', { property: 'og:url', content: url }])
   },
 
   themeConfig: {
