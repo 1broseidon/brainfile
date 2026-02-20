@@ -634,7 +634,7 @@ Core Features
   - Interactive TUI: A full-featured terminal kanban board.
   - Agent Coordination: Built-in support for Agent Contracts to coordinate work between AI assistants.
   - Rich Task Metadata: Support for priorities, tags, assignees, due dates, and subtasks.
-  - Multi-Destination Archive: Move completed tasks to GitHub Issues or Linear.
+  - Task Archival: Complete and archive tasks to searchable logs.
 
 ---
 
@@ -780,51 +780,13 @@ Archive & Restore
 
 `
 
-Local archive
+Archive a task
 
 brainfile archive --task task-5
-
-Archive to GitHub Issues (creates closed issue)
-
-brainfile archive --task task-5 --to=github
-
-Archive to Linear (creates completed issue)
-
-brainfile archive --task task-5 --to=linear
 
 Restore from archive
 
 brainfile restore --task task-5 --column todo
-`
-
-Authentication
-
-Archive to external services requires authentication:
-
-`
-
-GitHub (auto-detects gh CLI, or uses OAuth device flow)
-
-brainfile auth github
-
-Linear (requires API key)
-
-brainfile auth linear --token <api-key>
-
-Check status
-
-brainfile auth status
-`
-
-Configuration
-
-`
-
-Set default archive destination
-
-brainfile config set archive.default github
-brainfile config set archive.github.owner myorg
-brainfile config set archive.github.repo myrepo
 `
 
 Validate
@@ -971,28 +933,8 @@ Archiving
 
 | Tool | Description |
 |------|-------------|
-| archive_task | Archive a task locally or to GitHub/Linear |
+| archive_task | Archive a task to the local archive |
 | restore_task | Restore an archived task to a column |
-
-The archive_task tool supports an optional destination parameter:
-  - "local" — Move to local archive section (default)
-  - "github" — Create a closed GitHub Issue
-  - "linear" — Create a completed Linear issue
-
-If not specified, uses your project default (archive.destination in brainfile.md) or user default (~/.config/brainfile/config.json).
-
-::: tip External Archive Setup
-To archive to GitHub or Linear, first authenticate:
-`
-npx @brainfile/cli auth github
-npx @brainfile/cli auth linear --token <api-key>
-`
-Then configure your repository:
-`
-npx @brainfile/cli config set archive.github.owner myorg
-npx @brainfile/cli config set archive.github.repo myrepo
-`
-:::
 
 Subtasks
 

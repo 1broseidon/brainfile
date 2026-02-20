@@ -24,7 +24,7 @@ brainfile --version
 - **Interactive TUI**: A full-featured terminal kanban board.
 - **Agent Coordination**: Built-in support for [Agent Contracts](#agent-contracts) to coordinate work between AI assistants.
 - **Rich Task Metadata**: Support for priorities, tags, assignees, due dates, and subtasks.
-- **Multi-Destination Archive**: Move completed tasks to GitHub Issues or Linear.
+- **Task Archival**: Complete and archive tasks to searchable logs.
 
 ---
 
@@ -171,41 +171,11 @@ See the [Agent Contracts Guide](/guides/contracts) for the full lifecycle and be
 ## Archive & Restore
 
 ```bash
-# Local archive
+# Archive a task
 brainfile archive --task task-5
-
-# Archive to GitHub Issues (creates closed issue)
-brainfile archive --task task-5 --to=github
-
-# Archive to Linear (creates completed issue)
-brainfile archive --task task-5 --to=linear
 
 # Restore from archive
 brainfile restore --task task-5 --column todo
-```
-
-### Authentication
-
-Archive to external services requires authentication:
-
-```bash
-# GitHub (auto-detects gh CLI, or uses OAuth device flow)
-brainfile auth github
-
-# Linear (requires API key)
-brainfile auth linear --token <api-key>
-
-# Check status
-brainfile auth status
-```
-
-### Configuration
-
-```bash
-# Set default archive destination
-brainfile config set archive.default github
-brainfile config set archive.github.owner myorg
-brainfile config set archive.github.repo myrepo
 ```
 
 ### Validate
