@@ -26,6 +26,16 @@ A contract is a structured, machine-friendly agreement attached to a task. It su
 - Optional validation commands that can be run by a PM or tool
 - Optional implementation constraints and context
 
+::: tip Quick Reference — CLI Commands
+| Action | Command |
+|--------|---------|
+| Create task with contract | `brainfile add --title "..." --with-contract --deliverable "file:path:desc"` |
+| Pick up contract | `brainfile contract pickup -t task-123` |
+| Deliver work | `brainfile contract deliver -t task-123` |
+| Validate delivery | `brainfile contract validate -t task-123` |
+| List by status | `brainfile list --contract ready` |
+:::
+
 ## Required Fields
 
 ### `status`
@@ -33,6 +43,13 @@ A contract is a structured, machine-friendly agreement attached to a task. It su
 **Type**: `string`
 **Enum**: `ready`, `in_progress`, `delivered`, `done`, `failed`, `blocked`
 **Description**: Contract lifecycle status
+
+- 🔵 `ready` — Available for pickup
+- 🟡 `in_progress` — Agent is working
+- 📦 `delivered` — Submitted for review
+- ✅ `done` — Validated and approved
+- ❌ `failed` — Rejected, needs rework
+- 🚫 `blocked` — Waiting on external dependency
 
 ```yaml
 contract:
@@ -50,9 +67,9 @@ contract:
 contract:
   status: in_progress
   deliverables:
-    - type: file
-      path: src/rateLimiter.ts
-      description: Token bucket implementation
+    - type: file                    # Optional — category for tooling
+      path: src/rateLimiter.ts      # Required — file path or identifier
+      description: Token bucket implementation  # Optional — human-readable
     - type: test
       path: src/__tests__/rateLimiter.test.ts
       description: Unit tests
@@ -84,7 +101,7 @@ Common values include: `file`, `test`, `docs`, `design`, `research`.
 contract:
   status: delivered
   validation:
-    commands:
+    commands:                       # Run sequentially during validate
       - npm test
       - npm run build
 ```
@@ -102,7 +119,7 @@ contract:
 ```yaml
 contract:
   status: in_progress
-  constraints:
+  constraints:                      # Not validated automatically
     - Make minimal changes
     - Keep backwards compatibility
 ```
@@ -137,10 +154,10 @@ contract:
 ```yaml
 contract:
   metrics:
-    pickedUpAt: "2026-02-18T10:00:00Z"
-    deliveredAt: "2026-02-18T12:30:00Z"
-    duration: 9000
-    reworkCount: 0
+    pickedUpAt: "2026-02-18T10:00:00Z"   # Auto-set on pickup
+    deliveredAt: "2026-02-18T12:30:00Z"  # Auto-set on deliver
+    duration: 9000                        # Seconds (auto-calculated)
+    reworkCount: 0                        # Incremented on re-pickup
 ```
 
 ::: info v2 migration note

@@ -7,6 +7,40 @@ description: Complete API reference for @brainfile/core
 
 Complete documentation for `@brainfile/core` TypeScript library.
 
+## Getting Started
+
+Install the core library:
+
+```bash
+npm install @brainfile/core
+```
+
+Minimal usage example:
+
+```typescript
+import { Brainfile, addTask, moveTask } from "@brainfile/core";
+import { readFileSync, writeFileSync } from "fs";
+
+// Parse a brainfile
+const content = readFileSync(".brainfile/brainfile.md", "utf-8");
+const board = Brainfile.parse(content);
+
+// Add a task
+const result = addTask(board!, "todo", { title: "My first task" });
+
+// Serialize and save
+if (result.success) {
+  const markdown = Brainfile.serialize(result.board!);
+  writeFileSync(".brainfile/brainfile.md", markdown);
+}
+```
+
+::: info All operations are immutable
+Board operations return a new `Board` object — the original is never modified. Always check `result.success` before using `result.board`.
+:::
+
+---
+
 ## Brainfile Class
 
 The main class provides static methods for all core operations.
@@ -127,6 +161,10 @@ Find line number of a rule in source.
 
 All operations are immutable and return `BoardOperationResult`.
 
+::: info Error Handling Pattern
+Every operation returns `{ success, board?, error? }`. Always check `success` before accessing `board` — a failed operation returns `error` with a descriptive message and `board` will be undefined.
+:::
+
 ### `addTask(board, columnId, input): BoardOperationResult`
 
 ```typescript
@@ -198,6 +236,10 @@ restoreTask(board, "task-5", "todo");
 ## Contract Operations
 
 All contract operations return `BoardOperationResult` and are immutable.
+
+::: info Contract Status Transitions
+Status changes are validated — you can't move from `ready` to `done` directly. Use the lifecycle: `ready` → `in_progress` → `delivered` → `done`. See `setTaskContractStatus` for status updates.
+:::
 
 ### `setTaskContract(board, taskId, contract): BoardOperationResult`
 
@@ -294,6 +336,10 @@ Remove a constraint.
 
 Process multiple tasks in a single operation. All bulk operations return `BulkOperationResult`.
 
+::: info Partial Success
+Bulk operations can partially succeed — some tasks may fail while others succeed. Always check `results` for per-task status, and use `successCount`/`failureCount` for summary.
+:::
+
 ### `moveTasks(board, taskIds, toColumnId): BulkOperationResult`
 
 Move multiple tasks to a column.
@@ -366,6 +412,10 @@ deleteSubtask(board, "task-1", "task-1-2");
 ---
 
 ## Realtime Sync Utilities
+
+::: info TUI Integration
+These utilities power the TUI's real-time file watching. Use `hashBoardContent` to detect file changes and `diffBoards` to compute minimal UI updates.
+:::
 
 ### `hashBoardContent(content: string): string`
 

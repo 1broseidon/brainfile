@@ -411,6 +411,10 @@ brainfile complete -t epic-1 --force
 
 Manage the lifecycle of agent-to-agent contracts.
 
+::: tip Agent Coordination
+The `contract` command drives the full agent-to-agent workflow: `pickup` → `deliver` → `validate`. See the [Contracts Guide](/guides/contracts) for lifecycle details.
+:::
+
 ```bash
 brainfile contract pickup --task task-1
 brainfile contract deliver --task task-1

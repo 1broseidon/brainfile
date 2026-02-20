@@ -30,12 +30,12 @@ For a field-by-field walkthrough with examples, see [Types → Contract](/types/
 
 Contracts follow a strict state machine to coordinate between different agents.
 
-- `ready`: Work is defined and available for an agent to pick up.
-- `in_progress`: An agent has claimed the task and is working on it.
-- `delivered`: Work is completed and submitted for validation.
-- `done`: Work has passed validation and is finalized.
-- `failed`: Work failed validation or was abandoned.
-- `blocked`: Agent is stuck on an external dependency.
+- 🔵 `ready`: Work is defined and available for an agent to pick up.
+- 🟡 `in_progress`: An agent has claimed the task and is working on it.
+- 📦 `delivered`: Work is completed and submitted for validation.
+- ✅ `done`: Work has passed validation and is finalized.
+- ❌ `failed`: Work failed validation or was abandoned.
+- 🚫 `blocked`: Agent is stuck on an external dependency.
 
 ## Deliverable Object
 
@@ -70,6 +70,10 @@ Auto-tracked by the CLI. Do not manually edit.
 
 In a v2 task file (`.brainfile/board/task-63.md`):
 
+::: info Task metadata
+The task's own fields (`description`, `relatedFiles`, `assignee`) provide context. The contract focuses on deliverables and validation.
+:::
+
 ```yaml
 ---
 id: task-63
@@ -99,6 +103,17 @@ contract:
 ## Description
 Preparing for the Q3 mobile app release.
 ```
+
+::: info Key fields explained
+- **`deliverables`** — Exact file paths the agent must produce. The PM validates these exist.
+- **`validation.commands`** — Shell commands run automatically during `contract validate`.
+- **`constraints`** — Implementation rules the agent must follow (not validated automatically).
+- **`outOfScope`** — Prevents scope creep by explicitly excluding items.
+:::
+
+::: tip Full walkthrough
+For a step-by-step guide to creating, assigning, and validating contracts, see the [Contracts Guide](/guides/contracts).
+:::
 
 ::: info v2 changes
 In v2, `context.background` moved to `task.description` and `context.relevantFiles` moved to `task.relatedFiles`. The `context` object is deprecated.

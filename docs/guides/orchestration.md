@@ -12,15 +12,19 @@ As orchestrator, you **plan, delegate, and coordinate** - you don't implement di
 
 ## Workflow Overview
 
-```
-┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌──────────────┐
-│  1. Plan    │ ─▶ │ 2. Delegate  │ ─▶ │ 3. Validate │ ─▶ │ 4. Complete  │
-│  Create     │    │ @implementer │    │ QA agents   │    │ Complete     │
-│  contract   │    │ picks up     │    │ review      │    │              │
-└─────────────┘    └──────────────┘    └─────────────┘    └──────────────┘
+```mermaid
+flowchart LR
+    Plan["1. Plan<br/>Create contract"] --> Delegate["2. Delegate<br/>@implementer picks up"]
+    Delegate --> Validate["3. Validate<br/>QA agents review"]
+    Validate --> Complete["4. Complete<br/>Move to logs/"]
+    Validate -->|failed| Delegate
 ```
 
 ## Step-by-Step
+
+::: tip Core Principle
+As orchestrator, your job is to **decompose, delegate, and verify** — not to implement. The more precise your contracts, the less rework you'll need.
+:::
 
 ### 1. Receive Request
 
@@ -63,6 +67,10 @@ Delegate to `@brainfile-researcher` before planning when you need:
 - Technical approach options
 
 Researcher returns concise findings. You decide architecture.
+
+::: tip Research First
+When you're unsure about technical approach, always delegate to `@brainfile-researcher` before creating implementation contracts. Better specs upfront means fewer rework cycles.
+:::
 
 ### 4. Delegate Implementation
 
@@ -118,6 +126,9 @@ brainfile complete -t {task-id}
 
 ## Agent Delegation Reference
 
+::: info Agent Roster
+Match agent strengths to task types for optimal results.
+
 | Need | Agent | Model |
 |------|-------|-------|
 | External docs, APIs, best practices | `@brainfile-researcher` | Sonnet |
@@ -126,6 +137,7 @@ brainfile complete -t {task-id}
 | Spec compliance + reality check | `@brainfile-qa-compliance` | Opus |
 | Deep debugging | `@brainfile-debugger` | Opus |
 | Codebase exploration | `@explore` (built-in) | - |
+:::
 
 ---
 

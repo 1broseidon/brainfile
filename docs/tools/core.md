@@ -13,6 +13,17 @@ description: TypeScript/JavaScript library for Brainfile operations
 npm install @brainfile/core
 ```
 
+::: tip Quick Start
+```typescript
+import { Brainfile, addTask } from '@brainfile/core';
+import fs from 'fs';
+
+const board = Brainfile.parse(fs.readFileSync('.brainfile/brainfile.md', 'utf-8'));
+const result = addTask(board, 'todo', { title: 'My task', priority: 'high' });
+if (result.success) fs.writeFileSync('.brainfile/brainfile.md', Brainfile.serialize(result.board!));
+```
+:::
+
 ## Quick Example
 
 ```typescript
@@ -87,6 +98,10 @@ if (!result.success) {
 ```
 
 ---
+
+::: info Immutable Pattern
+All board operations follow the same pattern: call the function, check `result.success`, then use `result.board!` for the updated state. The original board is never mutated.
+:::
 
 ## Board Operations
 
@@ -305,6 +320,8 @@ See [API Reference](/reference/api) for complete type definitions.
 
 ## Next Steps
 
-- [API Reference](/reference/api) — Complete method documentation
-- [Protocol Specification](/reference/protocol) — File format details
-- [CLI Source](https://github.com/brainfile/cli) — See how CLI uses core
+- [API Reference](/reference/api) — Complete method signatures, parameters, and return types
+- [Protocol Specification](/reference/protocol) — Full YAML structure and field reference
+- [Schema Types](/reference/types) — JSON schema definitions for all document types
+- [MCP Server](/tools/mcp) — AI assistant integration using `@brainfile/core` under the hood
+- [CLI Source](https://github.com/brainfile/cli) — See how the CLI uses the core library

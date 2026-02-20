@@ -9,23 +9,26 @@ The Brainfile CLI includes a built-in MCP (Model Context Protocol) server. This 
 
 ## Why MCP?
 
-Without MCP, your AI assistant can read your code but doesn't know what you're working on. You have to:
+::: info The Before & After
+**Without MCP**, your AI assistant can read your code but doesn't know what you're working on. You have to:
 - Explain the current task every conversation
 - Copy task descriptions into prompts
 - Manually update task status after work is done
 
-With MCP, your assistant:
+**With MCP**, your assistant:
 - Sees all your tasks and their status
 - Creates new tasks as work is identified
 - Moves tasks to "done" when complete
 - Updates priorities and metadata automatically
 
 **It's the difference between "update my task board" and just having it happen.**
+:::
 
 ---
 
 ## Setup
 
+::: tip Basic Setup
 Add to `.mcp.json` in your project root:
 
 ```json
@@ -38,7 +41,9 @@ Add to `.mcp.json` in your project root:
   }
 }
 ```
+:::
 
+::: tip Custom Path Setup
 For a specific brainfile path:
 
 ```json
@@ -51,6 +56,7 @@ For a specific brainfile path:
   }
 }
 ```
+:::
 
 ::: warning
 Restart your AI assistant after adding or changing MCP configuration.
@@ -259,6 +265,8 @@ Hooks provide gentle reminders but don't give the assistant direct control.
 
 ## Next Steps
 
-- [CLI Commands](/tools/cli) — Manual task management
-- [Protocol Specification](/reference/protocol) — File format details
-- [Core Library](/tools/core) — Programmatic access
+- [CLI Commands](/tools/cli) — Full command reference for manual task management
+- [Protocol Specification](/reference/protocol) — Complete file format and YAML structure specification
+- [Core Library](/tools/core) — Build custom integrations with `@brainfile/core`
+- [Pi Extension](/tools/pi) — Automated multi-agent orchestration with event-sourced coordination
+- [Contract Guide](/guides/contracts) — Deep dive into the contract lifecycle and best practices

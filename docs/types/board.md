@@ -17,6 +17,21 @@ The board file is **config-only** — it does not contain tasks. Tasks are indiv
 - Project rules for agents
 - Statistics configuration
 
+::: tip Minimal Example
+```yaml
+---
+type: board
+title: My Project
+columns:
+  - id: todo
+    title: To Do
+  - id: in-progress
+    title: In Progress
+---
+```
+This is the smallest valid board config — just a title and columns.
+:::
+
 ## Extends
 
 [Base Schema](./base.md) — Inherits all base fields
@@ -36,17 +51,17 @@ type: board
 **Description**: Workflow columns. Task membership is declared via the `column` field in each task file's frontmatter.
 
 ```yaml
-columns:
-  - id: todo
-    title: To Do
-    order: 1
+columns:                         # Required — at least one column
+  - id: todo                     # Required — kebab-case identifier
+    title: To Do                 # Required — display name
+    order: 1                     # Optional — sort order
   - id: in-progress
     title: In Progress
     order: 2
   - id: done
     title: Done
     order: 3
-    completionColumn: true
+    completionColumn: true       # Optional — marks as completion column
 ```
 
 ## Optional Fields
@@ -57,11 +72,11 @@ columns:
 **Description**: Document type definitions. Keys are type identifiers that match the `type` field in task files. The built-in `task` type is always valid.
 
 ```yaml
-types:
+types:                           # Optional — custom document types
   epic:
-    idPrefix: epic
-    completable: false
-    schema: https://brainfile.md/v2/epic.json
+    idPrefix: epic               # Required — ID prefix for this type
+    completable: false           # Optional — can items be completed?
+    schema: https://brainfile.md/v2/epic.json  # Optional — validation schema
   adr:
     idPrefix: adr
     completable: false
@@ -82,14 +97,18 @@ Each type entry supports:
 **Default**: `false`
 **Description**: Enables strict validation. When `true`, `add` rejects unknown task types and `move` rejects unknown columns.
 
+::: info Strict Mode
+When `strict: true`, the CLI will reject any `type` not declared in `types` and any `column` not declared in `columns`. This prevents typos and ensures consistency across agents.
+:::
+
 ### `statsConfig`
 
 **Type**: `object`
 **Description**: Configuration for progress statistics
 
 ```yaml
-statsConfig:
-  columns:
+statsConfig:                     # Optional — progress tracking
+  columns:                       # Optional — which columns count
     - todo
     - in-progress
     - done
@@ -144,14 +163,27 @@ Columns without `order` appear after ordered columns, in definition order.
 completionColumn: true
 ```
 
+::: info Completion Columns
 When `true`, tasks moved to this column are considered complete. This enables:
 - **Non-English workflows**: "Terminé", "Fertig", "完了" are recognized
 - **Custom semantics**: "Deployed", "Verified", "Archived" as completion
 - **Explicit configuration**: No reliance on name-based pattern matching
+:::
 
 ## Task File Structure
 
 Tasks are standalone `.md` files in `.brainfile/board/`. Each file has YAML frontmatter and an optional markdown body. See the [Task Schema](/reference/types) for the full specification.
+
+::: tip Minimal Task File
+```yaml
+---
+id: task-1
+title: My first task
+column: todo
+---
+```
+Only `id`, `title`, and `column` are required. Everything else is optional.
+:::
 
 ### Task ID Patterns
 
@@ -170,20 +202,20 @@ File: `.brainfile/board/task-1.md`
 
 ```yaml
 ---
-id: task-1
-title: Add user authentication
-column: todo
-priority: high
-effort: large
-tags:
+id: task-1                          # Required — unique task ID
+title: Add user authentication      # Required — task title
+column: todo                        # Required — current column
+priority: high                      # Optional — low|medium|high|critical
+effort: large                       # Optional — small|medium|large
+tags:                               # Optional — categorization
   - backend
   - security
-assignee: alice
-createdAt: "2025-11-24T10:00:00Z"
-relatedFiles:
+assignee: alice                     # Optional — who's working on it
+createdAt: "2025-11-24T10:00:00Z"   # Optional — auto-set by CLI
+relatedFiles:                       # Optional — files for context
   - src/auth/jwt.ts
   - src/middleware/auth.ts
-subtasks:
+subtasks:                           # Optional — trackable sub-items
   - id: task-1-1
     title: Implement JWT generation
     completed: false

@@ -164,40 +164,49 @@ Brainfile is the solution to the context gap.
 ---
 
 Principles of Coordination
-  Protocol over Platform
 
+::: info 1. Protocol over Platform
 Coordination should be an open standard, not a closed SaaS feature. By defining coordination as a file-system protocol, we enable any agent and any tool to participate without a central API or vendor lock-in.
-  Context Locality
+:::
 
+::: info 2. Context Locality
 The source of truth for work should live where the work happens: in the repository. When tasks and contracts are files in the codebase, they are naturally indexed by the agent alongside the source code, providing immediate, high-fidelity context.
-  File-System Semantics
+:::
 
+::: info 3. File-System Semantics
 Complex state management is replaced by simple file operations. Moving a file from board/ to logs/ is an immutable, searchable, and version-controlled record of completion. This simplicity is the key to scalability and resilience.
-  Explicit Contracts
+:::
 
+::: info 4. Explicit Contracts
 Informal "please do X" requests are replaced by structured agreements. A contract defines exactly what constitutes success (deliverables) and how it will be measured (validation). This formalization reduces agent hallucination and ensures human-aligned outcomes.
-  Architectural Memory
+:::
 
+::: info 5. Architectural Memory
 Decisions made today should automatically guide the work of tomorrow. By promoting ADRs to project rules, the protocol ensures that every agent interaction is grounded in the project's established architectural standards.
+:::
 
 ---
 
 The Infrastructure Advantage
 
+::: tip What You Gain
 By adopting a file-based coordination protocol, you gain:
   - Bespoke Diffs: See exactly how requirements changed over time in your git history.
   - Offline Reliability: Your task board works on a plane, in a basement, or during a platform outage.
   - Zero Latency: No API round-trips to fetch task context.
   - Agent Interoperability: Use the same board with Claude, GitHub Copilot, Cursor, or your own custom agents.
+:::
 
 ---
 
 Join the Ecosystem
 
 Brainfile is more than a tool; it's a way of thinking about how humans and machines build software together.
-  - Read the Specification
-  - Explore the CLI
-  - Integrate the Core Library
+  - Read the Specification — The complete file format and YAML structure reference
+  - Explore the CLI — Install in 30 seconds and start managing tasks from your terminal
+  - Integrate the Core Library — Build custom tooling with @brainfile/core
+  - Set Up MCP — Give your AI assistant direct access to your task board
+  - Contract Guide — Learn how agents coordinate through structured agreements
 
 ---
 
@@ -453,28 +462,41 @@ The contract system enables powerful coordination patterns between different typ
 
 Roles
 
-PM Agent (Project Manager)
-
+::: info PM Agent (Project Manager)
 The PM agent is responsible for the "What" and "Why". They break down high-level goals into actionable tasks, define contracts, and verify results.
   - Primary tools: add, patch, contract attach, contract validate.
   - Key responsibility: Ensure task descriptions are comprehensive and validation criteria are objective.
+:::
 
-Worker Agent (The Doer)
-
+::: info Worker Agent (The Doer)
 Worker agents (like codex, cursor, gemini) focus on the "How". They pick up contracts, implement code, and deliver artifacts.
   - Primary tools: list, contract pickup, contract deliver, show.
   - Key responsibility: Meet the deliverables and constraints defined in the contract.
+:::
 
 ---
 
 The Standard Loop
 
 A typical feature implementation follows this cycle:
+
+``
+sequenceDiagram
+    participant PM
+    participant Board as .brainfile/
+    participant Worker
+    PM->>Board: Create task + contract
+    Worker->>Board: contract pickup
+    Worker->>Worker: Implement
+    Worker->>Board: contract deliver
+    PM->>Board: contract validate
+    Board-->>PM: ✓ done
+`
   Planning (PM)
 
 The PM agent analyzes the requirement and creates a task with a contract.
 
-``
+`
 brainfile add --title "Add OAuth2 Support" \
   --description "Implement Google OAuth2 login flow. See design docs for details." \
   --assignee codex \
@@ -536,6 +558,21 @@ brainfile complete -t task-105
 Handling Rework
 
 If the PM agent finds issues during validation or manual review, the rework flow is triggered.
+
+`
+sequenceDiagram
+    participant PM
+    participant Board as .brainfile/
+    participant Worker
+    PM->>Board: contract validate
+    Board-->>PM: ✗ failed
+    PM->>Board: Add feedback, reset to ready
+    Worker->>Board: contract pickup (rework)
+    Worker->>Worker: Fix issues
+    Worker->>Board: contract deliver
+    PM->>Board: contract validate
+    Board-->>PM: ✓ done
+`
   Validation Fails: brainfile contract validate fails — status becomes failed, feedback is added automatically.
   PM Adds Guidance: PM edits the task file to add or update contract.feedback with specific rework instructions.
   PM Resets Status: PM edits contract.status back to ready for rework.
@@ -615,8 +652,20 @@ Or open a specific file:
 brainfile ./path/to/brainfile.md
 `
 
+TUI Layout
+
+The interactive board displays your columns side by side, with tasks flowing through your workflow:
+
+`
+graph LR
+    subgraph TUI
+        A[To Do] --> B[In Progress] --> C[Done]
+    end
+`
+
 Keyboard Controls
 
+::: tip Keyboard Quick Reference
 | Key | Action |
 |-----|--------|
 | TAB / Shift+TAB | Navigate between columns |
@@ -626,6 +675,7 @@ Keyboard Controls
 | ? | Show help |
 | r | Refresh |
 | q | Quit |
+:::
 
 ::: info Real-time sync
 The TUI watches your file for changes — edits from your editor or AI assistants appear instantly.
@@ -691,7 +741,8 @@ brainfile subtask --task task-1 --delete task-1-2
 
 Agent Contracts
 
-The CLI facilitates structured coordination between agents through the contract system.
+::: info Agent-to-Agent Coordination
+The CLI facilitates structured coordination between agents through the contract system. Contracts define deliverables, validation commands, and constraints — enabling autonomous agent work with automated verification.
 
 Create Task with Contract
 
@@ -710,7 +761,8 @@ PM Agent Lifecycle
   Validate: brainfile contract validate -t task-1 (auto-checks deliverables and runs commands)
   Complete: brainfile complete -t task-1 (after validation passes)
 
-See the Agent Contracts Guide for more details.
+See the Agent Contracts Guide for the full lifecycle and best practices.
+:::
 
 ---
 
@@ -803,14 +855,16 @@ alias bf="brainfile"
 alias bfl="brainfile list"
 alias bfa="brainfile add"
 alias bfm="brainfile move"
-``
+`
 
 ---
 
 Next Steps
-  - Full Command Reference — All options and flags
-  - MCP Server — AI assistant integration
-  - CI/CD Examples — Automation workflows
+  - Full Command Reference — Complete documentation for every command, option, and flag
+  - MCP Server — Expose Brainfile as an MCP server for AI assistant integration
+  - Agent Contracts Guide — Deep dive into the contract lifecycle and PM/worker coordination
+  - CI/CD Examples — GitHub Actions, pre-commit hooks, and npm script automation
+  - Core Library — Use @brainfile/core` programmatically in your own tools
 
 ---
 
@@ -822,6 +876,7 @@ The Brainfile CLI includes a built-in MCP (Model Context Protocol) server. This 
 
 Why MCP?
 
+::: info The Before & After
 Without MCP, your AI assistant can read your code but doesn't know what you're working on. You have to:
   - Explain the current task every conversation
   - Copy task descriptions into prompts
@@ -834,11 +889,13 @@ With MCP, your assistant:
   - Updates priorities and metadata automatically
 
 It's the difference between "update my task board" and just having it happen.
+:::
 
 ---
 
 Setup
 
+::: tip Basic Setup
 Add to .mcp.json in your project root:
 
 ``
@@ -851,7 +908,9 @@ Add to .mcp.json in your project root:
   }
 }
 `
+:::
 
+::: tip Custom Path Setup
 For a specific brainfile path:
 
 `
@@ -864,6 +923,7 @@ For a specific brainfile path:
   }
 }
 `
+:::
 
 ::: warning
 Restart your AI assistant after adding or changing MCP configuration.
@@ -1062,16 +1122,18 @@ If your assistant doesn't support MCP, you can install hooks that remind you to 
 brainfile hooks install claude-code
 brainfile hooks install cursor --scope project
 brainfile hooks install cline
-``
+`
 
 Hooks provide gentle reminders but don't give the assistant direct control.
 
 ---
 
 Next Steps
-  - CLI Commands — Manual task management
-  - Protocol Specification — File format details
-  - Core Library — Programmatic access
+  - CLI Commands — Full command reference for manual task management
+  - Protocol Specification — Complete file format and YAML structure specification
+  - Core Library — Build custom integrations with @brainfile/core`
+  - Pi Extension — Automated multi-agent orchestration with event-sourced coordination
+  - Contract Guide — Deep dive into the contract lifecycle and best practices
 
 ---
 
@@ -1248,6 +1310,17 @@ Installation
 npm install @brainfile/core
 `
 
+::: tip Quick Start
+`
+import { Brainfile, addTask } from '@brainfile/core';
+import fs from 'fs';
+
+const board = Brainfile.parse(fs.readFileSync('.brainfile/brainfile.md', 'utf-8'));
+const result = addTask(board, 'todo', { title: 'My task', priority: 'high' });
+if (result.success) fs.writeFileSync('.brainfile/brainfile.md', Brainfile.serialize(result.board!));
+`
+:::
+
 Quick Example
 
 `
@@ -1322,6 +1395,10 @@ if (!result.success) {
 `
 
 ---
+
+::: info Immutable Pattern
+All board operations follow the same pattern: call the function, check result.success, then use result.board! for the updated state. The original board is never mutated.
+:::
 
 Board Operations
 
@@ -1532,16 +1609,18 @@ import type {
   TaskPatch,
   BoardOperationResult
 } from '@brainfile/core';
-``
+`
 
 See API Reference for complete type definitions.
 
 ---
 
 Next Steps
-  - API Reference — Complete method documentation
-  - Protocol Specification — File format details
-  - CLI Source — See how CLI uses core
+  - API Reference — Complete method signatures, parameters, and return types
+  - Protocol Specification — Full YAML structure and field reference
+  - Schema Types — JSON schema definitions for all document types
+  - MCP Server — AI assistant integration using @brainfile/core` under the hood
+  - CLI Source — See how the CLI uses the core library
 
 ---
 
@@ -1995,6 +2074,40 @@ API Reference
 
 Complete documentation for @brainfile/core TypeScript library.
 
+Getting Started
+
+Install the core library:
+
+``
+npm install @brainfile/core
+`
+
+Minimal usage example:
+
+`
+import { Brainfile, addTask, moveTask } from "@brainfile/core";
+import { readFileSync, writeFileSync } from "fs";
+
+// Parse a brainfile
+const content = readFileSync(".brainfile/brainfile.md", "utf-8");
+const board = Brainfile.parse(content);
+
+// Add a task
+const result = addTask(board!, "todo", { title: "My first task" });
+
+// Serialize and save
+if (result.success) {
+  const markdown = Brainfile.serialize(result.board!);
+  writeFileSync(".brainfile/brainfile.md", markdown);
+}
+`
+
+::: info All operations are immutable
+Board operations return a new Board object — the original is never modified. Always check result.success before using result.board.
+:::
+
+---
+
 Brainfile Class
 
 The main class provides static methods for all core operations.
@@ -2005,7 +2118,7 @@ Brainfile.parse(content: string): Board | null
 
 Parse markdown content into a Board object.
 
-``
+`
 const board = Brainfile.parse(markdownString);
 if (board) {
   console.log(board.title);
@@ -2115,6 +2228,10 @@ Board Operations
 
 All operations are immutable and return BoardOperationResult.
 
+::: info Error Handling Pattern
+Every operation returns { success, board?, error? }. Always check success before accessing board — a failed operation returns error with a descriptive message and board will be undefined.
+:::
+
 addTask(board, columnId, input): BoardOperationResult
 
 `
@@ -2186,6 +2303,10 @@ restoreTask(board, "task-5", "todo");
 Contract Operations
 
 All contract operations return BoardOperationResult and are immutable.
+
+::: info Contract Status Transitions
+Status changes are validated — you can't move from ready to done directly. Use the lifecycle: ready → in_progress → delivered → done. See setTaskContractStatus for status updates.
+:::
 
 setTaskContract(board, taskId, contract): BoardOperationResult
 
@@ -2282,6 +2403,10 @@ Bulk Operations
 
 Process multiple tasks in a single operation. All bulk operations return BulkOperationResult.
 
+::: info Partial Success
+Bulk operations can partially succeed — some tasks may fail while others succeed. Always check results for per-task status, and use successCount/failureCount for summary.
+:::
+
 moveTasks(board, taskIds, toColumnId): BulkOperationResult
 
 Move multiple tasks to a column.
@@ -2354,6 +2479,10 @@ deleteSubtask(board, "task-1", "task-1-2");
 ---
 
 Realtime Sync Utilities
+
+::: info TUI Integration
+These utilities power the TUI's real-time file watching. Use hashBoardContent to detect file changes and diffBoards to compute minimal UI updates.
+:::
 
 hashBoardContent(content: string): string
 
@@ -2766,6 +2895,10 @@ list
 
 Display all tasks with optional filtering.
 
+::: tip Essential Command
+list is the go-to command for finding tasks. Combine filters like --column and --tag to narrow results. Use --contract ready to find work waiting for agents.
+:::
+
 `
 brainfile list
 brainfile list --column "In Progress"
@@ -2813,6 +2946,10 @@ add
 
 Create a new task with all available fields.
 
+::: tip Power Command
+add supports one-shot creation of tasks with contracts, subtasks, and full metadata. Use --with-contract along with --deliverable and --validation to create ready-to-assign work items.
+:::
+
 `
 brainfile add --title "Implement auth"
 brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
@@ -2845,6 +2982,10 @@ Options:
 move
 
 Move a task to a different column.
+
+::: tip Workflow Progression
+Use move to progress tasks through your workflow. Moving to a completion column (if configured) can auto-complete the task.
+:::
 
 `
 brainfile move --task task-1 --column "In Progress"
@@ -3065,6 +3206,10 @@ complete
 
 Complete a task — moves it from board/ to logs/.
 
+::: tip Board Hygiene
+complete archives finished work to logs/, keeping your active board clean. Use --force for epics with remaining child tasks.
+:::
+
 `
 brainfile complete --task task-1
 brainfile complete -t epic-1 --force
@@ -3081,6 +3226,10 @@ Options:
 contract
 
 Manage the lifecycle of agent-to-agent contracts.
+
+::: tip Agent Coordination
+The contract command drives the full agent-to-agent workflow: pickup → deliver → validate. See the Contracts Guide for lifecycle details.
+:::
 
 `
 brainfile contract pickup --task task-1
@@ -3450,12 +3599,12 @@ Object Structure
 Lifecycle Status (status)
 
 Contracts follow a strict state machine to coordinate between different agents.
-  - ready: Work is defined and available for an agent to pick up.
-  - in_progress: An agent has claimed the task and is working on it.
-  - delivered: Work is completed and submitted for validation.
-  - done: Work has passed validation and is finalized.
-  - failed: Work failed validation or was abandoned.
-  - blocked: Agent is stuck on an external dependency.
+  - 🔵 ready: Work is defined and available for an agent to pick up.
+  - 🟡 in_progress: An agent has claimed the task and is working on it.
+  - 📦 delivered: Work is completed and submitted for validation.
+  - ✅ done: Work has passed validation and is finalized.
+  - ❌ failed: Work failed validation or was abandoned.
+  - 🚫 blocked: Agent is stuck on an external dependency.
 
 Deliverable Object
 
@@ -3490,6 +3639,10 @@ Example (YAML)
 
 In a v2 task file (.brainfile/board/task-63.md):
 
+::: info Task metadata
+The task's own fields (description, relatedFiles, assignee) provide context. The contract focuses on deliverables and validation.
+:::
+
 ``
 ---
 id: task-63
@@ -3520,6 +3673,17 @@ Description
 
 Preparing for the Q3 mobile app release.
 `
+
+::: info Key fields explained
+  - deliverables — Exact file paths the agent must produce. The PM validates these exist.
+  - validation.commands — Shell commands run automatically during contract validate.
+  - constraints — Implementation rules the agent must follow (not validated automatically).
+  - outOfScope — Prevents scope creep by explicitly excluding items.
+:::
+
+::: tip Full walkthrough
+For a step-by-step guide to creating, assigning, and validating contracts, see the Contracts Guide.
+:::
 
 ::: info v2 changes
 In v2, context.background moved to task.description and context.relevantFiles moved to task.relatedFiles. The context` object is deprecated.
@@ -3586,7 +3750,7 @@ View Board Schema · Example
 
 ---
 
-Task
+📋 Task
 
 Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual .md file in .brainfile/board/ (active) or .brainfile/logs/ (completed).
 
@@ -3601,11 +3765,22 @@ assignee: codex
 ---
 `
 
+::: tip Minimal Task
+`
+---
+id: task-1
+title: Fix login bug
+column: todo
+---
+`
+Only id, title, and column are required.
+:::
+
 View Task Schema · Docs
 
 ---
 
-Contract (Task Extension)
+📦 Contract (Task Extension)
 
 Task contracts define structured deliverables, validation commands, and constraints for PM-to-agent workflows. Embedded in the contract field of a task file.
 
@@ -3621,11 +3796,19 @@ contract:
   - npm test
 `
 
+::: tip Minimal Contract
+`
+contract:
+  status: ready
+`
+Only status is required — deliverables and validation are optional.
+:::
+
 View Contract Schema · Docs
 
 ---
 
-Epic
+🏗 Epic
 
 Groups related tasks and tracks collective progress. Extends the task schema with children and status fields.
 
@@ -3640,11 +3823,23 @@ status: active
 ---
 `
 
+::: tip Minimal Epic
+`
+---
+id: epic-1
+type: epic
+title: Authentication System
+column: todo
+---
+`
+children and status are optional — add them as tasks are created.
+:::
+
 View Epic Schema
 
 ---
 
-ADR
+📝 ADR
 
 Architecture Decision Records with lifecycle status and supersession tracking. Extends the task schema.
 
@@ -3658,11 +3853,23 @@ status: proposed
 ---
 `
 
+::: tip Minimal ADR
+`
+---
+id: adr-1
+type: adr
+title: Use Postgres for user data
+column: todo
+---
+`
+status defaults to proposed if omitted.
+:::
+
 View ADR Schema
 
 ---
 
-Base Schema
+🧱 Base Schema
 
 All brainfile config files inherit from the base schema which defines shared fields:
 
@@ -3684,6 +3891,15 @@ rules:
 ---
 `
 
+::: tip Minimal Base
+`
+---
+title: My Project
+---
+`
+Only title is required — everything else has sensible defaults.
+:::
+
 View Base Schema
 
 ---
@@ -3693,8 +3909,21 @@ Type Inference
 When type is not specified, tools determine the type by:
   Schema URL — /v2/board.json → board
   Filename suffix — project.board.md → board
-  Structural analysis — columns[]` present → board
+  Structural analysis — columns[] present → board
   Default → board
+
+`
+flowchart TD
+    A[File loaded] --> B{Has type field?}
+    B -->|Yes| C[Use declared type]
+    B -->|No| D{Has schema URL?}
+    D -->|Yes| E[Infer from URL]
+    D -->|No| F{Filename suffix?}
+    F -->|Yes| G[Infer from suffix]
+    F -->|No| H{Has columns array?}
+    H -->|Yes| I[⚙️ Board]
+    H -->|No| J[⚙️ Default: Board]
+``
 
 ---
 

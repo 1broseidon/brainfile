@@ -2,6 +2,10 @@
 
 The base schema defines fields that are shared across all brainfile types.
 
+::: info Inherited by All Types
+The base schema is the foundation — every brainfile type (Board, Task, Epic, ADR) inherits these fields. You don't need to declare `type: board` in most cases, as it's the default.
+:::
+
 ## Schema URL
 
 ```
@@ -27,7 +31,7 @@ The base schema establishes the foundational structure for the Brainfile protoco
 **Description**: Human-readable title for the brainfile
 
 ```yaml
-title: My Project Board
+title: My Project Board              # Required — must be non-empty
 ```
 
 ## Optional Fields
@@ -39,7 +43,7 @@ title: My Project Board
 **Description**: Type identifier
 
 ```yaml
-type: board
+type: board                           # Optional — defaults to "board"
 ```
 
 ### `schema`
@@ -48,7 +52,7 @@ type: board
 **Description**: Reference to the specific schema for validation
 
 ```yaml
-schema: https://brainfile.md/v2/board.json
+schema: https://brainfile.md/v2/board.json  # Optional — enables schema validation
 ```
 
 ### `protocolVersion`
@@ -59,7 +63,7 @@ schema: https://brainfile.md/v2/board.json
 **Description**: Version of the Brainfile protocol
 
 ```yaml
-protocolVersion: 2.0.0
+protocolVersion: 2.0.0               # Optional — defaults to 2.0.0
 ```
 
 ### `agent`
@@ -68,12 +72,12 @@ protocolVersion: 2.0.0
 **Description**: Instructions for AI agents interacting with the brainfile
 
 ```yaml
-agent:
-  instructions:
+agent:                              # Optional — AI agent configuration
+  instructions:                     # Optional — behavioral rules
     - Modify only the YAML frontmatter
     - Preserve all IDs
-  llmNotes: This project uses TypeScript and React
-  tools:
+  llmNotes: This project uses TypeScript and React  # Optional — free-form context
+  tools:                            # Optional — available CLI tools
     brainfile:
       prefer: true
       commands:
@@ -102,17 +106,17 @@ agent:
 **Description**: Project rules organized by category
 
 ```yaml
-rules:
-  always:
+rules:                              # Optional — project rules
+  always:                           # Optional — must always follow
     - id: 1
       rule: test all features before moving to done
-  never:
+  never:                            # Optional — must never violate
     - id: 1
       rule: skip code review
-  prefer:
+  prefer:                           # Optional — preferred approaches
     - id: 1
       rule: small focused tasks over large epics
-  context:
+  context:                          # Optional — contextual info
     - id: 1
       rule: this is a TypeScript project
 ```
@@ -179,4 +183,6 @@ columns: [...]
 
 ## See Also
 
-- [Board Schema](./board.md)
+- [Board Schema](./board.md) — Board configuration (columns, types, rules)
+- [Task Schema](/reference/types) — All schema types including Task, Epic, ADR
+- [Contract Schema](./contract.md) — Contract object for PM-to-agent workflows

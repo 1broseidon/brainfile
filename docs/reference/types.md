@@ -179,7 +179,7 @@ column: todo
 
 ---
 
-## Base Schema
+## 🧱 Base Schema
 
 All brainfile config files inherit from the base schema which defines shared fields:
 
@@ -201,6 +201,15 @@ rules:
 ---
 ```
 
+::: tip Minimal Base
+```yaml
+---
+title: My Project
+---
+```
+Only `title` is required — everything else has sensible defaults.
+:::
+
 [View Base Schema](https://brainfile.md/v2/base.json)
 
 ---
@@ -213,6 +222,19 @@ When `type` is not specified, tools determine the type by:
 2. **Filename suffix** — `project.board.md` → board
 3. **Structural analysis** — `columns[]` present → board
 4. **Default** → board
+
+```mermaid
+flowchart TD
+    A[File loaded] --> B{Has type field?}
+    B -->|Yes| C[Use declared type]
+    B -->|No| D{Has schema URL?}
+    D -->|Yes| E[Infer from URL]
+    D -->|No| F{Filename suffix?}
+    F -->|Yes| G[Infer from suffix]
+    F -->|No| H{Has columns array?}
+    H -->|Yes| I[⚙️ Board]
+    H -->|No| J[⚙️ Default: Board]
+```
 
 ---
 

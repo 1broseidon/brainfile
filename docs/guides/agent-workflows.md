@@ -9,23 +9,38 @@ The contract system enables powerful coordination patterns between different typ
 
 ## Roles
 
-### PM Agent (Project Manager)
+::: info PM Agent (Project Manager)
 The PM agent is responsible for the "What" and "Why". They break down high-level goals into actionable tasks, define contracts, and verify results.
 
 - **Primary tools**: `add`, `patch`, `contract attach`, `contract validate`.
 - **Key responsibility**: Ensure task descriptions are comprehensive and validation criteria are objective.
+:::
 
-### Worker Agent (The Doer)
+::: info Worker Agent (The Doer)
 Worker agents (like `codex`, `cursor`, `gemini`) focus on the "How". They pick up contracts, implement code, and deliver artifacts.
 
 - **Primary tools**: `list`, `contract pickup`, `contract deliver`, `show`.
 - **Key responsibility**: Meet the deliverables and constraints defined in the contract.
+:::
 
 ---
 
 ## The Standard Loop
 
 A typical feature implementation follows this cycle:
+
+```mermaid
+sequenceDiagram
+    participant PM
+    participant Board as .brainfile/
+    participant Worker
+    PM->>Board: Create task + contract
+    Worker->>Board: contract pickup
+    Worker->>Worker: Implement
+    Worker->>Board: contract deliver
+    PM->>Board: contract validate
+    Board-->>PM: ✓ done
+```
 
 ### 1. Planning (PM)
 The PM agent analyzes the requirement and creates a task with a contract.
@@ -82,6 +97,21 @@ brainfile complete -t task-105
 ## Handling Rework
 
 If the PM agent finds issues during validation or manual review, the rework flow is triggered.
+
+```mermaid
+sequenceDiagram
+    participant PM
+    participant Board as .brainfile/
+    participant Worker
+    PM->>Board: contract validate
+    Board-->>PM: ✗ failed
+    PM->>Board: Add feedback, reset to ready
+    Worker->>Board: contract pickup (rework)
+    Worker->>Worker: Fix issues
+    Worker->>Board: contract deliver
+    PM->>Board: contract validate
+    Board-->>PM: ✓ done
+```
 
 1.  **Validation Fails**: `brainfile contract validate` fails — status becomes `failed`, feedback is added automatically.
 2.  **PM Adds Guidance**: PM edits the task file to add or update `contract.feedback` with specific rework instructions.

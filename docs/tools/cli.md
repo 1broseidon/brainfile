@@ -42,8 +42,20 @@ Or open a specific file:
 brainfile ./path/to/brainfile.md
 ```
 
+### TUI Layout
+
+The interactive board displays your columns side by side, with tasks flowing through your workflow:
+
+```mermaid
+graph LR
+    subgraph TUI
+        A[To Do] --> B[In Progress] --> C[Done]
+    end
+```
+
 ### Keyboard Controls
 
+::: tip Keyboard Quick Reference
 | Key | Action |
 |-----|--------|
 | `TAB` / `Shift+TAB` | Navigate between columns |
@@ -53,6 +65,7 @@ brainfile ./path/to/brainfile.md
 | `?` | Show help |
 | `r` | Refresh |
 | `q` | Quit |
+:::
 
 ::: info Real-time sync
 The TUI watches your file for changes — edits from your editor or AI assistants appear instantly.
@@ -118,7 +131,8 @@ brainfile subtask --task task-1 --delete task-1-2
 
 ## Agent Contracts
 
-The CLI facilitates structured coordination between agents through the contract system.
+::: info Agent-to-Agent Coordination
+The CLI facilitates structured coordination between agents through the contract system. Contracts define deliverables, validation commands, and constraints — enabling autonomous agent work with automated verification.
 
 ### Create Task with Contract
 
@@ -139,7 +153,8 @@ brainfile add --title "Implement API" \
 1. **Validate**: `brainfile contract validate -t task-1` (auto-checks deliverables and runs commands)
 2. **Complete**: `brainfile complete -t task-1` (after validation passes)
 
-See the [Agent Contracts Guide](/guides/contracts) for more details.
+See the [Agent Contracts Guide](/guides/contracts) for the full lifecycle and best practices.
+:::
 
 ---
 
@@ -227,6 +242,8 @@ alias bfm="brainfile move"
 
 ## Next Steps
 
-- [Full Command Reference](/reference/commands) — All options and flags
-- [MCP Server](/tools/mcp) — AI assistant integration
-- [CI/CD Examples](/reference/commands#cicd-integration) — Automation workflows
+- [Full Command Reference](/reference/commands) — Complete documentation for every command, option, and flag
+- [MCP Server](/tools/mcp) — Expose Brainfile as an MCP server for AI assistant integration
+- [Agent Contracts Guide](/guides/contracts) — Deep dive into the contract lifecycle and PM/worker coordination
+- [CI/CD Examples](/reference/commands#cicd-integration) — GitHub Actions, pre-commit hooks, and npm script automation
+- [Core Library](/tools/core) — Use `@brainfile/core` programmatically in your own tools
