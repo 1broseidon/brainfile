@@ -14,10 +14,10 @@ As orchestrator, you **plan, delegate, and coordinate** - you don't implement di
 
 ```mermaid
 flowchart LR
-    Plan["1. Plan<br/>Create contract"] --> Delegate["2. Delegate<br/>@implementer picks up"]
-    Delegate --> Validate["3. Validate<br/>QA agents review"]
-    Validate --> Complete["4. Complete<br/>Move to logs/"]
-    Validate -->|failed| Delegate
+    Plan["📝 Plan<br/>Create contract"] --> Delegate["🤖 Delegate<br/>Agent picks up"]
+    Delegate --> Validate["🔍 Validate<br/>QA review"]
+    Validate --> Complete["✅ Complete<br/>Move to logs/"]
+    Validate -->|"rework"| Delegate
 ```
 
 ## Step-by-Step

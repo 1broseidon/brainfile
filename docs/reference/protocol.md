@@ -33,16 +33,16 @@ Brainfile v2 uses a directory-based structure:
 | `.bb.md` | 4 | Shorthand, deprecated |
 
 ```mermaid
-flowchart TD
-    Start([Discover brainfile]) --> A{.brainfile/brainfile.md?}
-    A -->|exists| Found1[✓ v2 directory mode]
-    A -->|no| B{brainfile.md in root?}
-    B -->|exists| Found2[✓ root file mode]
-    B -->|no| C{.brainfile.md?}
-    C -->|exists| Found3[✓ hidden file mode]
-    C -->|no| D{.bb.md?}
-    D -->|exists| Found4[⚠ deprecated shorthand]
-    D -->|no| NotFound[✗ No brainfile found]
+flowchart LR
+    Start(["🔍 Discover"]) --> A{".brainfile/<br/>brainfile.md"}
+    A -->|"✓"| F1["v2 directory mode"]
+    A -->|"✗"| B{"brainfile.md<br/>in root"}
+    B -->|"✓"| F2["root file mode"]
+    B -->|"✗"| C{".brainfile.md"}
+    C -->|"✓"| F3["hidden file mode"]
+    C -->|"✗"| D{".bb.md"}
+    D -->|"✓"| F4["⚠ deprecated"]
+    D -->|"✗"| NF["not found"]
 ```
 
 ### Completion

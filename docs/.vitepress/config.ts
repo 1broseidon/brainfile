@@ -235,40 +235,50 @@ export default withMermaid(defineConfig({
   mermaid: {
     theme: 'base',
     themeVariables: {
-      primaryColor: '#0f111a',
-      primaryBorderColor: 'rgba(255, 255, 255, 0.12)',
+      // Node colors — cyan-tinted surface for primary nodes
+      primaryColor: '#0d1520',
+      primaryBorderColor: 'rgba(92, 200, 255, 0.3)',
       primaryTextColor: '#e8e8ec',
-      secondaryColor: '#161925',
-      secondaryBorderColor: 'rgba(255, 255, 255, 0.08)',
-      secondaryTextColor: '#a0a0b0',
+      // Secondary — subtle blue-tinted for decision nodes / alt paths
+      secondaryColor: '#111428',
+      secondaryBorderColor: 'rgba(107, 138, 255, 0.25)',
+      secondaryTextColor: '#e8e8ec',
+      // Tertiary — muted for backgrounds / clusters
       tertiaryColor: '#0a0a0f',
-      tertiaryBorderColor: 'rgba(255, 255, 255, 0.06)',
+      tertiaryBorderColor: 'rgba(255, 255, 255, 0.08)',
       tertiaryTextColor: '#a0a0b0',
-      lineColor: '#585868',
+      // Lines and edges — visible but not harsh
+      lineColor: 'rgba(92, 200, 255, 0.4)',
       textColor: '#e8e8ec',
+      // Notes
       noteBkgColor: '#0f111a',
       noteTextColor: '#a0a0b0',
-      noteBorderColor: 'rgba(255, 255, 255, 0.08)',
-      nodeBorder: 'rgba(255, 255, 255, 0.12)',
-      mainBkg: '#0f111a',
-      clusterBkg: '#0a0a0f',
-      clusterBorder: 'rgba(255, 255, 255, 0.06)',
-      actorBkg: '#0f111a',
-      actorBorder: 'rgba(255, 255, 255, 0.12)',
+      noteBorderColor: 'rgba(92, 200, 255, 0.15)',
+      // Nodes
+      nodeBorder: 'rgba(92, 200, 255, 0.3)',
+      mainBkg: '#0d1520',
+      // Clusters / subgraphs
+      clusterBkg: 'rgba(92, 200, 255, 0.04)',
+      clusterBorder: 'rgba(92, 200, 255, 0.15)',
+      // Sequence diagrams
+      actorBkg: '#0d1520',
+      actorBorder: 'rgba(92, 200, 255, 0.3)',
       actorTextColor: '#e8e8ec',
       signalColor: '#5cc8ff',
       signalTextColor: '#e8e8ec',
-      activationBkgColor: '#161925',
-      activationBorderColor: '#5cc8ff',
+      activationBkgColor: 'rgba(92, 200, 255, 0.08)',
+      activationBorderColor: 'rgba(92, 200, 255, 0.3)',
       sequenceNumberColor: '#050508',
-      labelBoxBkgColor: '#0f111a',
-      labelBoxBorderColor: 'rgba(255, 255, 255, 0.08)',
+      // Labels
+      labelBoxBkgColor: '#0d1520',
+      labelBoxBorderColor: 'rgba(92, 200, 255, 0.2)',
       labelTextColor: '#e8e8ec',
       edgeLabelBackground: '#0a0a0f',
       labelColor: '#e8e8ec',
-      altBackground: '#0a0a0f',
-      fontFamily: '"JetBrains Mono", monospace',
-      fontSize: '14px',
+      altBackground: 'rgba(92, 200, 255, 0.03)',
+      // Typography
+      fontFamily: '"Inter", sans-serif',
+      fontSize: '13px',
     },
   },
 

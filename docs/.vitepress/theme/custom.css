@@ -268,15 +268,88 @@ div[class*='language-'] {
 /* --- 8. Mermaid Diagrams --- */
 .vp-doc .mermaid-diagram,
 .vp-doc .mermaid {
-  background: transparent;
+  background: rgba(92, 200, 255, 0.02);
+  border: 1px solid rgba(92, 200, 255, 0.08);
+  border-radius: 12px;
+  padding: 1.5rem 1rem;
   margin: 1.5em 0;
   text-align: center;
+  overflow-x: auto;
 }
 
 .vp-doc .mermaid-diagram svg,
 .vp-doc .mermaid svg {
   max-width: 100%;
   height: auto;
+}
+
+/* Flowchart nodes */
+.vp-doc .mermaid .node rect,
+.vp-doc .mermaid .node polygon,
+.vp-doc .mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+
+/* Flowchart node labels */
+.vp-doc .mermaid .nodeLabel {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Edge labels */
+.vp-doc .mermaid .edgeLabel {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  background: #0a0a0f !important;
+  color: var(--void-text-2) !important;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Sequence diagram actors */
+.vp-doc .mermaid .actor {
+  rx: 8px;
+  ry: 8px;
+}
+
+/* Sequence diagram messages */
+.vp-doc .mermaid .messageText {
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* State diagram states */
+.vp-doc .mermaid .state-node rect {
+  rx: 8px;
+  ry: 8px;
+}
+
+/* Cluster / subgraph labels */
+.vp-doc .mermaid .cluster-label .nodeLabel {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Arrowheads */
+.vp-doc .mermaid .arrowheadPath {
+  fill: rgba(92, 200, 255, 0.5);
+}
+
+/* Flow lines */
+.vp-doc .mermaid .flowchart-link {
+  stroke: rgba(92, 200, 255, 0.35) !important;
+}
+
+/* Sequence diagram lifelines */
+.vp-doc .mermaid line.loopLine {
+  stroke: rgba(92, 200, 255, 0.15) !important;
 }
 
 /* --- 9. Misc --- */

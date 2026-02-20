@@ -224,16 +224,16 @@ When `type` is not specified, tools determine the type by:
 4. **Default** → board
 
 ```mermaid
-flowchart TD
-    A[File loaded] --> B{Has type field?}
-    B -->|Yes| C[Use declared type]
-    B -->|No| D{Has schema URL?}
-    D -->|Yes| E[Infer from URL]
-    D -->|No| F{Filename suffix?}
-    F -->|Yes| G[Infer from suffix]
-    F -->|No| H{Has columns array?}
-    H -->|Yes| I[⚙️ Board]
-    H -->|No| J[⚙️ Default: Board]
+flowchart LR
+    A(["📄 File loaded"]) --> B{"type field?"}
+    B -->|"✓"| C["Use declared type"]
+    B -->|"✗"| D{"schema URL?"}
+    D -->|"✓"| E["Infer from URL"]
+    D -->|"✗"| F{"filename<br/>suffix?"}
+    F -->|"✓"| G["Infer from suffix"]
+    F -->|"✗"| H{"columns<br/>array?"}
+    H -->|"✓"| I["⚙️ Board"]
+    H -->|"✗"| J["⚙️ Default: Board"]
 ```
 
 ---

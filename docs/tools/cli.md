@@ -48,8 +48,9 @@ The interactive board displays your columns side by side, with tasks flowing thr
 
 ```mermaid
 graph LR
-    subgraph TUI
-        A[To Do] --> B[In Progress] --> C[Done]
+    subgraph TUI["brainfile TUI"]
+        A["📋 To Do<br/><small>task-1, task-2</small>"] -->|move| B["🔧 In Progress<br/><small>task-3</small>"]
+        B -->|move| C["✅ Done<br/><small>task-4</small>"]
     end
 ```
 

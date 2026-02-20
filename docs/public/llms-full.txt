@@ -658,8 +658,9 @@ The interactive board displays your columns side by side, with tasks flowing thr
 
 `
 graph LR
-    subgraph TUI
-        A[To Do] --> B[In Progress] --> C[Done]
+    subgraph TUI["brainfile TUI"]
+        A["📋 To Do<br/><small>task-1, task-2</small>"] -->|move| B["🔧 In Progress<br/><small>task-3</small>"]
+        B -->|move| C["✅ Done<br/><small>task-4</small>"]
     end
 `
 
@@ -1656,16 +1657,16 @@ File Discovery
 | .bb.md | 4 | Shorthand, deprecated |
 
 `
-flowchart TD
-    Start([Discover brainfile]) --> A{.brainfile/brainfile.md?}
-    A -->|exists| Found1[✓ v2 directory mode]
-    A -->|no| B{brainfile.md in root?}
-    B -->|exists| Found2[✓ root file mode]
-    B -->|no| C{.brainfile.md?}
-    C -->|exists| Found3[✓ hidden file mode]
-    C -->|no| D{.bb.md?}
-    D -->|exists| Found4[⚠ deprecated shorthand]
-    D -->|no| NotFound[✗ No brainfile found]
+flowchart LR
+    Start(["🔍 Discover"]) --> A{".brainfile/<br/>brainfile.md"}
+    A -->|"✓"| F1["v2 directory mode"]
+    A -->|"✗"| B{"brainfile.md<br/>in root"}
+    B -->|"✓"| F2["root file mode"]
+    B -->|"✗"| C{".brainfile.md"}
+    C -->|"✓"| F3["hidden file mode"]
+    C -->|"✗"| D{".bb.md"}
+    D -->|"✓"| F4["⚠ deprecated"]
+    D -->|"✗"| NF["not found"]
 `
 
 Completion
@@ -3917,16 +3918,16 @@ When type is not specified, tools determine the type by:
   Default → board
 
 `
-flowchart TD
-    A[File loaded] --> B{Has type field?}
-    B -->|Yes| C[Use declared type]
-    B -->|No| D{Has schema URL?}
-    D -->|Yes| E[Infer from URL]
-    D -->|No| F{Filename suffix?}
-    F -->|Yes| G[Infer from suffix]
-    F -->|No| H{Has columns array?}
-    H -->|Yes| I[⚙️ Board]
-    H -->|No| J[⚙️ Default: Board]
+flowchart LR
+    A(["📄 File loaded"]) --> B{"type field?"}
+    B -->|"✓"| C["Use declared type"]
+    B -->|"✗"| D{"schema URL?"}
+    D -->|"✓"| E["Infer from URL"]
+    D -->|"✗"| F{"filename<br/>suffix?"}
+    F -->|"✓"| G["Infer from suffix"]
+    F -->|"✗"| H{"columns<br/>array?"}
+    H -->|"✓"| I["⚙️ Board"]
+    H -->|"✗"| J["⚙️ Default: Board"]
 ``
 
 ---
