@@ -1,7 +1,40 @@
 <script setup lang="ts">
 import { useData } from 'vitepress'
+import { ref } from 'vue'
+import ArchitectureDiagram from './components/ArchitectureDiagram.vue'
+import ComparisonTable from './components/ComparisonTable.vue'
 
 const { site } = useData()
+
+const copySuccess = ref(false)
+
+const quickStartCommands = `npm install -g @brainfile/cli
+brainfile init
+brainfile add -c todo --title "My first task" --with-contract \\
+  --deliverable "file:src/feature.ts:Implementation" \\
+  --validation "npm test"
+brainfile contract pickup -t task-1
+brainfile contract deliver -t task-1`
+
+async function copyToClipboard() {
+  try {
+    await navigator.clipboard.writeText(quickStartCommands)
+    copySuccess.value = true
+    setTimeout(() => { copySuccess.value = false }, 2000)
+  } catch {
+    // Fallback for older browsers
+    const textarea = document.createElement('textarea')
+    textarea.value = quickStartCommands
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    copySuccess.value = true
+    setTimeout(() => { copySuccess.value = false }, 2000)
+  }
+}
 </script>
 
 <template>
@@ -20,8 +53,9 @@ const { site } = useData()
     </nav>
 
     <main class="home-content">
-      <!-- Section 1: Opening -->
+      <!-- Section 1: Opening (with dot grid background) -->
       <section class="opening">
+        <div class="dot-grid-bg"></div>
         <h1 class="wordmark">brainfile</h1>
         <p class="headline">The missing coordination layer for AI agents.</p>
         <p class="subline">Tasks as files. Contracts as code. Validation as proof.<br>Git-native. Vendor-agnostic. MIT licensed.</p>
@@ -173,7 +207,13 @@ const { site } = useData()
         </div>
       </section>
 
-      <!-- Section 4: Design decisions -->
+      <!-- Section 4: Architecture -->
+      <section class="architecture">
+        <span class="section-label">How it fits together.</span>
+        <ArchitectureDiagram />
+      </section>
+
+      <!-- Section 5: Design decisions -->
       <section class="decisions">
         <div class="decision">
           <h3>Why files?</h3>
@@ -189,41 +229,117 @@ const { site } = useData()
         </div>
       </section>
 
-      <!-- Section 5: Ecosystem -->
+      <!-- Section 6: Comparison -->
+      <ComparisonTable />
+
+      <!-- Section 7: Ecosystem (Card-based) -->
       <section class="ecosystem">
         <span class="section-label">Ecosystem</span>
         <p class="ecosystem-note">Integrations are optional adapters. The protocol comes first.</p>
-        <div class="eco-list">
-          <a href="/tools/cli" class="eco-item">
-            <span class="eco-name">CLI &amp; TUI</span>
-            <span class="eco-desc">The reference implementation.</span>
+        <div class="eco-grid">
+          <a href="/tools/cli" class="eco-card">
+            <div class="eco-card-header">
+              <span class="eco-icon">⌘</span>
+              <span class="eco-badge eco-badge-stable">stable</span>
+            </div>
+            <span class="eco-card-name">CLI &amp; TUI</span>
+            <span class="eco-card-desc">The reference implementation. Manage boards, contracts, and validation from the terminal.</span>
           </a>
-          <a href="/tools/mcp" class="eco-item">
-            <span class="eco-name">MCP Server</span>
-            <span class="eco-desc">Expose your board to any LLM.</span>
+          <a href="/tools/mcp" class="eco-card">
+            <div class="eco-card-header">
+              <span class="eco-icon">◈</span>
+              <span class="eco-badge eco-badge-stable">stable</span>
+            </div>
+            <span class="eco-card-name">MCP Server</span>
+            <span class="eco-card-desc">Expose your board to any LLM. Model Context Protocol bridge for agent integration.</span>
           </a>
-          <a href="/tools/core" class="eco-item">
-            <span class="eco-name">Core Library</span>
-            <span class="eco-desc">Build your own integrations.</span>
+          <a href="/tools/core" class="eco-card">
+            <div class="eco-card-header">
+              <span class="eco-icon">◻</span>
+              <span class="eco-badge eco-badge-stable">stable</span>
+            </div>
+            <span class="eco-card-name">Core Library</span>
+            <span class="eco-card-desc">Build your own integrations. TypeScript SDK for parsing, validating, and manipulating boards.</span>
           </a>
-          <a href="/tools/pi" class="eco-item">
-            <span class="eco-name">Pi Extension</span>
-            <span class="eco-desc">Showcase orchestrator integration for multi-agent runs.</span>
+          <a href="/tools/pi" class="eco-card">
+            <div class="eco-card-header">
+              <span class="eco-icon">π</span>
+              <span class="eco-badge eco-badge-beta">beta</span>
+            </div>
+            <span class="eco-card-name">Pi Extension</span>
+            <span class="eco-card-desc">Showcase orchestrator integration for multi-agent runs with contract coordination.</span>
           </a>
         </div>
       </section>
 
-      <!-- Section 6: Footer -->
-      <footer class="home-footer">
-        <div class="footer-links">
-          <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
-          <span class="footer-sep">/</span>
-          <a href="https://www.npmjs.com/package/@brainfile/cli" target="_blank" rel="noopener">npm</a>
-          <span class="footer-sep">/</span>
-          <span class="footer-license">MIT Licensed</span>
+      <!-- Section 6: Quick Start Terminal -->
+      <section class="quick-start">
+        <span class="section-label">Get started in 30 seconds.</span>
+        <div class="terminal">
+          <div class="terminal-header">
+            <div class="terminal-dots">
+              <span class="terminal-dot dot-red"></span>
+              <span class="terminal-dot dot-yellow"></span>
+              <span class="terminal-dot dot-green"></span>
+            </div>
+            <span class="terminal-title">terminal</span>
+            <button class="terminal-copy" @click="copyToClipboard" :title="copySuccess ? 'Copied!' : 'Copy to clipboard'">
+              <svg v-if="!copySuccess" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                <path d="M3 11V3C3 2.44772 3.44772 2 4 2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 8.5L6.5 12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="terminal-body">
+            <pre><code><span class="t-prompt">$</span> <span class="t-cmd">npm install -g</span> @brainfile/cli
+
+<span class="t-prompt">$</span> <span class="t-cmd">brainfile init</span>
+<span class="t-output">✓ Created .brainfile/brainfile.md</span>
+
+<span class="t-prompt">$</span> <span class="t-cmd">brainfile add</span> -c todo --title <span class="t-string">"My first task"</span> --with-contract \
+  --deliverable <span class="t-string">"file:src/feature.ts:Implementation"</span> \
+  --validation <span class="t-string">"npm test"</span>
+<span class="t-output">✓ Created task-1</span>
+
+<span class="t-prompt">$</span> <span class="t-cmd">brainfile contract pickup</span> -t task-1
+<span class="t-output">✓ Contract status: in_progress</span>
+
+<span class="t-prompt">$</span> <span class="t-cmd">brainfile contract deliver</span> -t task-1
+<span class="t-output">✓ Contract status: delivered</span></code></pre>
+          </div>
         </div>
-        <a href="/reference/protocol" class="footer-cta">Read the specification.</a>
-        <span class="footer-agent">For agents: <a href="/llms-install.txt">brainfile.md/llms-install.txt</a></span>
+        <a href="/quick-start" class="quick-start-link">Full Quick Start guide <span class="arrow">&rarr;</span></a>
+      </section>
+
+      <!-- Section 7: Footer -->
+      <footer class="home-footer">
+        <div class="footer-columns">
+          <div class="footer-col">
+            <h4 class="footer-col-title">Protocol</h4>
+            <a href="/reference/protocol">Specification</a>
+            <a href="/quick-start">Quick Start</a>
+            <a href="/guides/contracts">Guides</a>
+          </div>
+          <div class="footer-col">
+            <h4 class="footer-col-title">Tools</h4>
+            <a href="/tools/cli">CLI</a>
+            <a href="/tools/mcp">MCP Server</a>
+            <a href="/tools/core">Core Library</a>
+          </div>
+          <div class="footer-col">
+            <h4 class="footer-col-title">Community</h4>
+            <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/brainfile/brainfile/discussions" target="_blank" rel="noopener">Discussions</a>
+            <a href="https://github.com/brainfile/brainfile/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+          </div>
+        </div>
+        <div class="footer-bottom">
+          <span class="footer-version">Brainfile v2.0 · Protocol Stable · MIT License</span>
+          <span class="footer-agent">For agents: <a href="/llms-install.txt">brainfile.md/llms-install.txt</a></span>
+        </div>
       </footer>
     </main>
   </div>
@@ -280,13 +396,28 @@ const { site } = useData()
   padding: 0 1.5rem;
 }
 
-/* ---- Section 1: Opening ---- */
+/* ---- Section 1: Opening (with dot grid) ---- */
 .opening {
+  position: relative;
   padding-top: 10rem;
   padding-bottom: 8rem;
 }
 
+.dot-grid-bg {
+  position: absolute;
+  top: 0;
+  left: -50%;
+  right: -50%;
+  bottom: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  pointer-events: none;
+  mask-image: radial-gradient(ellipse 60% 70% at 50% 40%, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 60% 70% at 50% 40%, black 20%, transparent 70%);
+}
+
 .wordmark {
+  position: relative;
   font-family: 'Outfit', sans-serif;
   font-weight: 600;
   font-size: clamp(3rem, 7vw, 4.5rem);
@@ -297,6 +428,7 @@ const { site } = useData()
 }
 
 .headline {
+  position: relative;
   font-size: clamp(1.15rem, 2.5vw, 1.35rem);
   line-height: 1.5;
   color: #c0c0c8;
@@ -305,6 +437,7 @@ const { site } = useData()
 }
 
 .subline {
+  position: relative;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
   color: #585868;
@@ -312,6 +445,7 @@ const { site } = useData()
 }
 
 .opening-links {
+  position: relative;
   display: flex;
   gap: 2rem;
   align-items: center;
@@ -442,7 +576,12 @@ const { site } = useData()
   line-height: 1.5;
 }
 
-/* ---- Section 4: Design decisions ---- */
+/* ---- Section 4: Architecture ---- */
+.architecture {
+  padding-bottom: 8rem;
+}
+
+/* ---- Section 5: Design decisions ---- */
 .decisions {
   padding-bottom: 8rem;
   display: flex;
@@ -467,99 +606,282 @@ const { site } = useData()
   max-width: 52ch;
 }
 
-/* ---- Section 5: Ecosystem ---- */
+/* ---- Section 5: Ecosystem (Card Grid) ---- */
 .ecosystem {
   padding-bottom: 8rem;
 }
 
 .ecosystem-note {
-  margin: 0 0 1rem;
+  margin: 0 0 1.5rem;
   font-size: 0.88rem;
   color: #585868;
 }
 
-.eco-list {
+.eco-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.eco-card {
   display: flex;
   flex-direction: column;
-}
-
-.eco-item {
-  display: flex;
-  align-items: baseline;
-  gap: 2rem;
-  padding: 1rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  gap: 0.5rem;
+  padding: 1.25rem 1.5rem;
+  background: rgba(10, 10, 14, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
   text-decoration: none;
-  transition: background 0.15s;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
 }
 
-.eco-item:first-child {
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+.eco-card:hover {
+  border-color: rgba(92, 200, 255, 0.25);
+  box-shadow: 0 0 20px rgba(92, 200, 255, 0.06);
+  transform: translateY(-2px);
 }
 
-.eco-item:hover .eco-name {
-  color: #5cc8ff;
+.eco-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.eco-name {
+.eco-icon {
+  font-size: 1.25rem;
+  color: #585868;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.eco-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.eco-badge-stable {
+  color: #43d08a;
+  background: rgba(67, 208, 138, 0.1);
+  border: 1px solid rgba(67, 208, 138, 0.2);
+}
+
+.eco-badge-beta {
+  color: #ffb86c;
+  background: rgba(255, 184, 108, 0.1);
+  border: 1px solid rgba(255, 184, 108, 0.2);
+}
+
+.eco-card-name {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
   font-weight: 500;
   color: #e8e8ec;
-  min-width: 180px;
-  flex-shrink: 0;
   transition: color 0.15s;
 }
 
-.eco-desc {
-  font-size: 0.9rem;
-  color: #585868;
+.eco-card:hover .eco-card-name {
+  color: #5cc8ff;
 }
 
-/* ---- Section 6: Footer ---- */
+.eco-card-desc {
+  font-size: 0.82rem;
+  color: #585868;
+  line-height: 1.5;
+}
+
+/* ---- Section 6: Quick Start Terminal ---- */
+.quick-start {
+  padding-bottom: 8rem;
+}
+
+.terminal {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 1.25rem;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: #0c0c12;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot-red {
+  background: #ff5f57;
+  opacity: 0.6;
+}
+
+.dot-yellow {
+  background: #febc2e;
+  opacity: 0.6;
+}
+
+.dot-green {
+  background: #28c840;
+  opacity: 0.6;
+}
+
+.terminal-title {
+  flex: 1;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: #383848;
+}
+
+.terminal-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
+  color: #505060;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  padding: 0;
+}
+
+.terminal-copy:hover {
+  color: #a0a0b0;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.terminal-body {
+  background: #08080c;
+  padding: 1.5rem;
+  overflow-x: auto;
+}
+
+.terminal-body pre {
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.7;
+  color: #a0a0b0;
+}
+
+.terminal-body code {
+  font-family: inherit;
+}
+
+.t-prompt {
+  color: #43d08a;
+  user-select: none;
+}
+
+.t-cmd {
+  color: #5cc8ff;
+}
+
+.t-string {
+  color: #ffb86c;
+}
+
+.t-output {
+  color: #43d08a;
+  opacity: 0.7;
+}
+
+.quick-start-link {
+  display: inline-block;
+  margin-top: 1.25rem;
+  font-size: 0.9rem;
+  color: #707080;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.quick-start-link:hover {
+  color: #5cc8ff;
+}
+
+.quick-start-link:hover .arrow {
+  transform: translateX(3px);
+}
+
+/* ---- Section 7: Footer (Column Layout) ---- */
 .home-footer {
   padding: 4rem 0 6rem;
   border-top: 1px solid rgba(255, 255, 255, 0.04);
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 1.5rem;
+  gap: 3rem;
 }
 
-.footer-links {
+.footer-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 2rem;
+}
+
+.footer-col {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.footer-col-title {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #707080;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.5rem;
+}
+
+.footer-col a {
   font-size: 0.85rem;
-}
-
-.footer-links a {
-  color: #585868;
-  text-decoration: none;
-  transition: color 0.15s;
-}
-
-.footer-links a:hover {
-  color: #a0a0b0;
-}
-
-.footer-sep {
-  color: #2a2a38;
-}
-
-.footer-license {
-  color: #383848;
-}
-
-.footer-cta {
-  font-size: 0.9rem;
   color: #505060;
   text-decoration: none;
   transition: color 0.15s;
 }
 
-.footer-cta:hover {
-  color: #5cc8ff;
+.footer-col a:hover {
+  color: #e8e8ec;
+}
+
+.footer-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.footer-version {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #383848;
 }
 
 .footer-agent {
@@ -678,20 +1000,17 @@ const { site } = useData()
     padding: 1.5rem 0.5rem;
   }
 
-  .eco-item {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .eco-name {
-    min-width: unset;
+  .eco-grid {
+    grid-template-columns: 1fr;
   }
 
   .protocol-hero,
   .lifecycle,
   .how-it-works,
+  .architecture,
   .decisions,
-  .ecosystem {
+  .ecosystem,
+  .quick-start {
     padding-bottom: 5rem;
   }
 
@@ -701,6 +1020,15 @@ const { site } = useData()
 
   .code-block pre {
     font-size: 0.72rem;
+  }
+
+  .terminal-body pre {
+    font-size: 0.72rem;
+  }
+
+  .footer-columns {
+    grid-template-columns: 1fr;
+    gap: 2rem;
   }
 }
 </style>
