@@ -5,13 +5,13 @@ import ArchitectureDiagram from './components/ArchitectureDiagram.vue'
 import ComparisonTable from './components/ComparisonTable.vue'
 import CodeShowcase from './components/CodeShowcase.vue'
 import StateMachine from './components/StateMachine.vue'
+import HowItWorks from './components/HowItWorks.vue'
+import EcosystemCards from './components/EcosystemCards.vue'
+import QuickStartTerminal from './components/QuickStartTerminal.vue'
 
 const { site } = useData()
 
-const copySuccess = ref(false)
-const codeBlockCopySuccess = ref(false)
 const homeRef = ref<HTMLElement | null>(null)
-const codeBlockRef = ref<HTMLElement | null>(null)
 
 // IntersectionObserver for scroll-triggered fade-in animations
 let observer: IntersectionObserver | null = null
@@ -39,54 +39,6 @@ onUnmounted(() => {
   observer?.disconnect()
   observer = null
 })
-
-async function copyCodeBlock() {
-  const text = codeBlockRef.value?.textContent || ''
-  try {
-    await navigator.clipboard.writeText(text)
-    codeBlockCopySuccess.value = true
-    setTimeout(() => { codeBlockCopySuccess.value = false }, 2000)
-  } catch {
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-    codeBlockCopySuccess.value = true
-    setTimeout(() => { codeBlockCopySuccess.value = false }, 2000)
-  }
-}
-
-const quickStartCommands = `npm install -g @brainfile/cli
-brainfile init
-brainfile add -c todo --title "My first task" --with-contract \\
-  --deliverable "file:src/feature.ts:Implementation" \\
-  --validation "npm test"
-brainfile contract pickup -t task-1
-brainfile contract deliver -t task-1`
-
-async function copyToClipboard() {
-  try {
-    await navigator.clipboard.writeText(quickStartCommands)
-    copySuccess.value = true
-    setTimeout(() => { copySuccess.value = false }, 2000)
-  } catch {
-    // Fallback for older browsers
-    const textarea = document.createElement('textarea')
-    textarea.value = quickStartCommands
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textarea)
-    copySuccess.value = true
-    setTimeout(() => { copySuccess.value = false }, 2000)
-  }
-}
 </script>
 
 <template>
@@ -130,38 +82,7 @@ async function copyToClipboard() {
       </section>
 
       <!-- Section 3: How it works -->
-      <section class="how-it-works fade-section">
-        <div class="step">
-          <div class="step-left">
-            <span class="step-number">01</span>
-            <span class="step-keyword">define</span>
-          </div>
-          <div class="step-content">
-            <p class="step-desc">Write a contract as a markdown file in your repo.</p>
-            <p class="step-details">Create a <code>.brainfile/brainfile.md</code> containing task constraints and validation parameters. Since it's just a file, you get full version control, branch-based workflows, and pull request reviews out-of-the-box.</p>
-          </div>
-        </div>
-        <div class="step">
-          <div class="step-left">
-            <span class="step-number">02</span>
-            <span class="step-keyword">delegate</span>
-          </div>
-          <div class="step-content">
-            <p class="step-desc">An agent picks it up, implements, and delivers.</p>
-            <p class="step-details">The agent reads the task constraints, claims the contract by switching its status to <code>in_progress</code>, and starts creating code. Once the implementation matches the requirements, the agent commits the files and sets the status to <code>delivered</code>.</p>
-          </div>
-        </div>
-        <div class="step">
-          <div class="step-left">
-            <span class="step-number">03</span>
-            <span class="step-keyword">validate</span>
-          </div>
-          <div class="step-content">
-            <p class="step-desc">Automated commands verify the deliverables. Done.</p>
-            <p class="step-details">The protocol runs your defined validation shell commands against the delivered files. If the tests pass, the task progresses to <code>done</code>. If they fail, the agent receives the error logs directly and refactors the code.</p>
-          </div>
-        </div>
-      </section>
+      <HowItWorks />
 
       <!-- Section 4: Architecture -->
       <section class="architecture fade-section">
@@ -189,100 +110,9 @@ async function copyToClipboard() {
       <ComparisonTable />
 
       <!-- Section 7: Ecosystem (Card-based) -->
-      <section class="ecosystem fade-section">
-        <span class="section-label">Ecosystem</span>
-        <p class="ecosystem-note">Integrations are optional adapters. The protocol comes first.</p>
-        <div class="eco-grid">
-          <a href="/tools/cli" class="eco-card">
-            <div class="eco-card-header">
-              <span class="eco-icon">⌘</span>
-              <span class="eco-badge eco-badge-stable">stable</span>
-            </div>
-            <span class="eco-card-name">CLI &amp; TUI</span>
-            <span class="eco-card-desc">The reference implementation. Manage boards, contracts, and validation from the terminal.</span>
-          </a>
-          <a href="/tools/mcp" class="eco-card">
-            <div class="eco-card-header">
-              <span class="eco-icon">◈</span>
-              <span class="eco-badge eco-badge-stable">stable</span>
-            </div>
-            <span class="eco-card-name">MCP Server</span>
-            <span class="eco-card-desc">Expose your board to any LLM. Model Context Protocol bridge for agent integration.</span>
-          </a>
-          <a href="/tools/core" class="eco-card">
-            <div class="eco-card-header">
-              <span class="eco-icon">◻</span>
-              <span class="eco-badge eco-badge-stable">stable</span>
-            </div>
-            <span class="eco-card-name">Core Library</span>
-            <span class="eco-card-desc">Build your own integrations. TypeScript SDK for parsing, validating, and manipulating boards.</span>
-          </a>
-          <a href="/tools/pi" class="eco-card">
-            <div class="eco-card-header">
-              <span class="eco-icon">π</span>
-              <span class="eco-badge eco-badge-beta">beta</span>
-            </div>
-            <span class="eco-card-name">Pi Extension</span>
-            <span class="eco-card-desc">Showcase orchestrator integration for multi-agent runs with contract coordination.</span>
-          </a>
-        </div>
-      </section>
+      <EcosystemCards />
 
-      <!-- Section 6: Quick Start Terminal -->
-      <section class="quick-start fade-section">
-        <span class="section-label">Get started in 30 seconds.</span>
-        <div class="terminal">
-          <div class="terminal-header">
-            <div class="terminal-dots">
-              <span class="terminal-dot dot-red"></span>
-              <span class="terminal-dot dot-yellow"></span>
-              <span class="terminal-dot dot-green"></span>
-            </div>
-            <span class="terminal-title">terminal</span>
-            <button class="terminal-copy" @click="copyToClipboard" :title="copySuccess ? 'Copied!' : 'Copy to clipboard'">
-              <svg v-if="!copySuccess" width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                <path d="M3 11V3C3 2.44772 3.44772 2 4 2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 8.5L6.5 12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>
-          <div class="terminal-body">
-            <button class="copy-overlay" @click="copyToClipboard" :title="copySuccess ? 'Copied!' : 'Copy to clipboard'">
-              <template v-if="!copySuccess">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                  <path d="M3 11V3C3 2.44772 3.44772 2 4 2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              </template>
-              <template v-else>
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M3 8.5L6.5 12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <span class="copy-overlay-text">Copied!</span>
-              </template>
-            </button>
-            <pre><code><span class="t-prompt">$</span> <span class="t-cmd">npm install -g</span> @brainfile/cli
-
-<span class="t-prompt">$</span> <span class="t-cmd">brainfile init</span>
-<span class="t-output">✓ Created .brainfile/brainfile.md</span>
-
-<span class="t-prompt">$</span> <span class="t-cmd">brainfile add</span> -c todo --title <span class="t-string">"My first task"</span> --with-contract \
-  --deliverable <span class="t-string">"file:src/feature.ts:Implementation"</span> \
-  --validation <span class="t-string">"npm test"</span>
-<span class="t-output">✓ Created task-1</span>
-
-<span class="t-prompt">$</span> <span class="t-cmd">brainfile contract pickup</span> -t task-1
-<span class="t-output">✓ Contract status: in_progress</span>
-
-<span class="t-prompt">$</span> <span class="t-cmd">brainfile contract deliver</span> -t task-1
-<span class="t-output">✓ Contract status: delivered</span></code></pre>
-          </div>
-        </div>
-        <a href="/quick-start" class="quick-start-link">Full Quick Start guide <span class="arrow">&rarr;</span></a>
-      </section>
+      <QuickStartTerminal />
 
       <!-- Section 7: Footer -->
       <footer class="home-footer">
