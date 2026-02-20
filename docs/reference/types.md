@@ -11,16 +11,16 @@ Brainfile uses JSON Schema to define the structure of board configuration and ta
 
 | Schema | v2 URL | Purpose |
 |--------|--------|---------|
-| 🧱 **Base** | `/v2/base.json` | Shared fields (title, agent, rules) |
-| ⚙️ **Board** | `/v2/board.json` | Board configuration (columns, types) |
-| 📋 **Task** | `/v2/task.json` | Standalone task documents |
-| 📦 **Contract** | `/v2/contract.json` | Task contract object (`task.contract`) |
-| 🏗 **Epic** | `/v2/epic.json` | Epic documents (groups related tasks) |
-| 📝 **ADR** | `/v2/adr.json` | Architecture Decision Records |
+| **Base** | `/v2/base.json` | Shared fields (title, agent, rules) |
+| **Board** | `/v2/board.json` | Board configuration (columns, types) |
+| **Task** | `/v2/task.json` | Standalone task documents |
+| **Contract** | `/v2/contract.json` | Task contract object (`task.contract`) |
+| **Epic** | `/v2/epic.json` | Epic documents (groups related tasks) |
+| **ADR** | `/v2/adr.json` | Architecture Decision Records |
 
 ---
 
-## ⚙️ Board (Default)
+## Board (Default)
 
 Board configuration defines columns, document types, and project rules. Tasks are standalone files in `.brainfile/board/`.
 
@@ -60,7 +60,7 @@ Only `title` and one `column` are required.
 
 ---
 
-## 📋 Task
+## Task
 
 Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual `.md` file in `.brainfile/board/` (active) or `.brainfile/logs/` (completed).
 
@@ -90,7 +90,7 @@ Only `id`, `title`, and `column` are required.
 
 ---
 
-## 📦 Contract (Task Extension)
+## Contract (Task Extension)
 
 Task contracts define structured deliverables, validation commands, and constraints for PM-to-agent workflows. Embedded in the `contract` field of a task file.
 
@@ -118,7 +118,7 @@ Only `status` is required — deliverables and validation are optional.
 
 ---
 
-## 🏗 Epic
+## Epic
 
 Groups related tasks and tracks collective progress. Extends the task schema with `children` and `status` fields.
 
@@ -149,7 +149,7 @@ column: todo
 
 ---
 
-## 📝 ADR
+## ADR
 
 Architecture Decision Records with lifecycle status and supersession tracking. Extends the task schema.
 
@@ -179,7 +179,7 @@ column: todo
 
 ---
 
-## 🧱 Base Schema
+## Base Schema
 
 All brainfile config files inherit from the base schema which defines shared fields:
 
