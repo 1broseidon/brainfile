@@ -33,7 +33,6 @@ Tools should check for the board config in this order:
 1. `.brainfile/brainfile.md` (preferred, v2)
 2. `brainfile.md` (root, legacy compat)
 3. `.brainfile.md` (hidden, legacy)
-4. `.bb.md` (shorthand, deprecated)
 
 ## Board Configuration (`brainfile.md`)
 

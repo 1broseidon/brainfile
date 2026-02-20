@@ -30,7 +30,6 @@ Brainfile v2 uses a directory-based structure:
 | `.brainfile/brainfile.md` | 1 (preferred, v2) | Directory-based architecture |
 | `brainfile.md` | 2 | Root file (legacy compat) |
 | `.brainfile.md` | 3 | Hidden, backward compat |
-| `.bb.md` | 4 | Shorthand, deprecated |
 
 ```mermaid
 flowchart LR
@@ -40,9 +39,7 @@ flowchart LR
     B -->|"✓"| F2["root file mode"]
     B -->|"✗"| C{".brainfile.md"}
     C -->|"✓"| F3["hidden file mode"]
-    C -->|"✗"| D{".bb.md"}
-    D -->|"✓"| F4["⚠ deprecated"]
-    D -->|"✗"| NF["not found"]
+    C -->|"✗"| NF["not found"]
 ```
 
 ### Completion
