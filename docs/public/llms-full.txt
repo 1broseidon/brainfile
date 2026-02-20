@@ -357,17 +357,7 @@ Contract Lifecycle
 
 The lifecycle ensures that work is properly claimed, implemented, and verified.
 
-`
-stateDiagram-v2
-    [*] --> ready
-    ready --> in_progress: pickup
-    in_progress --> delivered: deliver
-    delivered --> done: validate ✓
-    delivered --> failed: validate ✗
-    failed --> ready: rework
-    in_progress --> blocked: stuck
-    blocked --> ready: resolved
-`
+<StateMachine />
 
 | State | Meaning | Next Action |
 |-------|---------|-------------|
@@ -2704,6 +2694,17 @@ CLI Command Reference
 
 Complete documentation for all @brainfile/cli commands.
 
+::: tip Most Used Commands
+| Command | Jump to |
+|---------|---------|
+| brainfile add | Create tasks with contracts, subtasks, and metadata |
+| brainfile list | Filter and display tasks by column, tag, or contract status |
+| brainfile move | Move tasks between columns |
+| brainfile complete | Complete tasks — move from board/ to logs/ |
+| brainfile contract | Manage contracts — pickup, deliver, validate |
+| brainfile patch | Update fields on existing tasks |
+:::
+
 Command Overview
 
 ``
@@ -3536,16 +3537,16 @@ Available Schemas
 
 | Schema | v2 URL | Purpose |
 |--------|--------|---------|
-| Base | /v2/base.json | Shared fields (title, agent, rules) |
-| Board | /v2/board.json | Board configuration (columns, types) |
-| Task | /v2/task.json | Standalone task documents |
-| Contract | /v2/contract.json | Task contract object (task.contract) |
-| Epic | /v2/epic.json | Epic documents (groups related tasks) |
-| ADR | /v2/adr.json | Architecture Decision Records |
+| 🧱 Base | /v2/base.json | Shared fields (title, agent, rules) |
+| ⚙️ Board | /v2/board.json | Board configuration (columns, types) |
+| 📋 Task | /v2/task.json | Standalone task documents |
+| 📦 Contract | /v2/contract.json | Task contract object (task.contract) |
+| 🏗 Epic | /v2/epic.json | Epic documents (groups related tasks) |
+| 📝 ADR | /v2/adr.json | Architecture Decision Records |
 
 ---
 
-Board (Default)
+⚙️ Board (Default)
 
 Board configuration defines columns, document types, and project rules. Tasks are standalone files in .brainfile/board/.
 
@@ -3565,6 +3566,19 @@ types:
     completable: false
 ---
 `
+
+::: tip Minimal Board
+`
+---
+type: board
+title: My Project
+columns:
+  - id: todo
+    title: To Do
+---
+`
+Only title and one column are required.
+:::
 
 Renderer: Kanban board with columns
 

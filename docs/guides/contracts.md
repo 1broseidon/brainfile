@@ -94,17 +94,7 @@ Keep constraints focused — 3–5 key requirements, not an exhaustive spec. The
 
 The lifecycle ensures that work is properly claimed, implemented, and verified.
 
-```mermaid
-stateDiagram-v2
-    [*] --> ready
-    ready --> in_progress: pickup
-    in_progress --> delivered: deliver
-    delivered --> done: validate ✓
-    delivered --> failed: validate ✗
-    failed --> ready: rework
-    in_progress --> blocked: stuck
-    blocked --> ready: resolved
-```
+<StateMachine />
 
 | State | Meaning | Next Action |
 |-------|---------|-------------|

@@ -7,6 +7,17 @@ description: Complete reference of all Brainfile CLI commands
 
 Complete documentation for all `@brainfile/cli` commands.
 
+::: tip Most Used Commands
+| Command | Jump to |
+|---------|---------|
+| `brainfile add` | [Create tasks](#add) with contracts, subtasks, and metadata |
+| `brainfile list` | [Filter and display](#list) tasks by column, tag, or contract status |
+| `brainfile move` | [Move tasks](#move) between columns |
+| `brainfile complete` | [Complete tasks](#complete) — move from board/ to logs/ |
+| `brainfile contract` | [Manage contracts](#contract) — pickup, deliver, validate |
+| `brainfile patch` | [Update fields](#patch) on existing tasks |
+:::
+
 ## Command Overview
 
 ```bash
@@ -68,6 +79,10 @@ brainfile init --force  # Overwrite existing
 
 Display all tasks with optional filtering.
 
+::: tip Essential Command
+`list` is the go-to command for finding tasks. Combine filters like `--column` and `--tag` to narrow results. Use `--contract ready` to find work waiting for agents.
+:::
+
 ```bash
 brainfile list
 brainfile list --column "In Progress"
@@ -115,6 +130,10 @@ brainfile show -t task-42
 
 Create a new task with all available fields.
 
+::: tip Power Command
+`add` supports one-shot creation of tasks with contracts, subtasks, and full metadata. Use `--with-contract` along with `--deliverable` and `--validation` to create ready-to-assign work items.
+:::
+
 ```bash
 brainfile add --title "Implement auth"
 brainfile add --title "Fix bug" --priority high --tags "bug,urgent"
@@ -147,6 +166,10 @@ brainfile add --title "Design doc" --type adr --column todo
 ## move
 
 Move a task to a different column.
+
+::: tip Workflow Progression
+Use `move` to progress tasks through your workflow. Moving to a completion column (if configured) can auto-complete the task.
+:::
 
 ```bash
 brainfile move --task task-1 --column "In Progress"
@@ -366,6 +389,10 @@ brainfile hooks uninstall claude-code --scope all
 ## complete
 
 Complete a task — moves it from `board/` to `logs/`.
+
+::: tip Board Hygiene
+`complete` archives finished work to `logs/`, keeping your active board clean. Use `--force` for epics with remaining child tasks.
+:::
 
 ```bash
 brainfile complete --task task-1

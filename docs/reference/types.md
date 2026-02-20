@@ -11,16 +11,16 @@ Brainfile uses JSON Schema to define the structure of board configuration and ta
 
 | Schema | v2 URL | Purpose |
 |--------|--------|---------|
-| **Base** | `/v2/base.json` | Shared fields (title, agent, rules) |
-| **Board** | `/v2/board.json` | Board configuration (columns, types) |
-| **Task** | `/v2/task.json` | Standalone task documents |
-| **Contract** | `/v2/contract.json` | Task contract object (`task.contract`) |
-| **Epic** | `/v2/epic.json` | Epic documents (groups related tasks) |
-| **ADR** | `/v2/adr.json` | Architecture Decision Records |
+| 🧱 **Base** | `/v2/base.json` | Shared fields (title, agent, rules) |
+| ⚙️ **Board** | `/v2/board.json` | Board configuration (columns, types) |
+| 📋 **Task** | `/v2/task.json` | Standalone task documents |
+| 📦 **Contract** | `/v2/contract.json` | Task contract object (`task.contract`) |
+| 🏗 **Epic** | `/v2/epic.json` | Epic documents (groups related tasks) |
+| 📝 **ADR** | `/v2/adr.json` | Architecture Decision Records |
 
 ---
 
-## Board (Default)
+## ⚙️ Board (Default)
 
 Board configuration defines columns, document types, and project rules. Tasks are standalone files in `.brainfile/board/`.
 
@@ -41,13 +41,26 @@ types:
 ---
 ```
 
+::: tip Minimal Board
+```yaml
+---
+type: board
+title: My Project
+columns:
+  - id: todo
+    title: To Do
+---
+```
+Only `title` and one `column` are required.
+:::
+
 **Renderer:** Kanban board with columns
 
 [View Board Schema](https://brainfile.md/v2/board.json) · [Example](https://brainfile.md/example/.brainfile/brainfile.md)
 
 ---
 
-## Task
+## 📋 Task
 
 Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual `.md` file in `.brainfile/board/` (active) or `.brainfile/logs/` (completed).
 
@@ -62,11 +75,22 @@ assignee: codex
 ---
 ```
 
+::: tip Minimal Task
+```yaml
+---
+id: task-1
+title: Fix login bug
+column: todo
+---
+```
+Only `id`, `title`, and `column` are required.
+:::
+
 [View Task Schema](https://brainfile.md/v2/task.json) · [Docs](/types/board#task-file-structure)
 
 ---
 
-## Contract (Task Extension)
+## 📦 Contract (Task Extension)
 
 Task contracts define structured deliverables, validation commands, and constraints for PM-to-agent workflows. Embedded in the `contract` field of a task file.
 
@@ -82,11 +106,19 @@ contract:
       - npm test
 ```
 
+::: tip Minimal Contract
+```yaml
+contract:
+  status: ready
+```
+Only `status` is required — deliverables and validation are optional.
+:::
+
 [View Contract Schema](https://brainfile.md/v2/contract.json) · [Docs](/types/contract)
 
 ---
 
-## Epic
+## 🏗 Epic
 
 Groups related tasks and tracks collective progress. Extends the task schema with `children` and `status` fields.
 
@@ -101,11 +133,23 @@ status: active
 ---
 ```
 
+::: tip Minimal Epic
+```yaml
+---
+id: epic-1
+type: epic
+title: Authentication System
+column: todo
+---
+```
+`children` and `status` are optional — add them as tasks are created.
+:::
+
 [View Epic Schema](https://brainfile.md/v2/epic.json)
 
 ---
 
-## ADR
+## 📝 ADR
 
 Architecture Decision Records with lifecycle status and supersession tracking. Extends the task schema.
 
@@ -118,6 +162,18 @@ column: todo
 status: proposed
 ---
 ```
+
+::: tip Minimal ADR
+```yaml
+---
+id: adr-1
+type: adr
+title: Use Postgres for user data
+column: todo
+---
+```
+`status` defaults to `proposed` if omitted.
+:::
 
 [View ADR Schema](https://brainfile.md/v2/adr.json)
 
