@@ -46,10 +46,10 @@ A contract is a structured, machine-friendly agreement attached to a task. It su
 
 - 🔵 `ready` — Available for pickup
 - 🟡 `in_progress` — Agent is working
-- 📦 `delivered` — Submitted for review
-- ✅ `done` — Validated and approved
-- ❌ `failed` — Rejected, needs rework
-- 🚫 `blocked` — Waiting on external dependency
+- 🟣 `delivered` — Submitted for review
+- 🟢 `done` — Validated and approved
+- 🔴 `failed` — Rejected, needs rework
+- ⚠️ `blocked` — Waiting on external dependency
 
 ```yaml
 contract:

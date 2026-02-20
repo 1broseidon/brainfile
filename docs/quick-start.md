@@ -39,6 +39,8 @@ This creates the `.brainfile/` directory with:
 └── logs/           ← Completed tasks archived here
 ```
 
+<ArchitectureDiagram />
+
 Default columns are `To Do` and `In Progress`.
 
 ## 3. Use It

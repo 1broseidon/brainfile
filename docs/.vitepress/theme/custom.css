@@ -371,3 +371,38 @@ div[class*='language-'] {
   border-color: var(--accent-cyan);
   background-color: var(--accent-cyan-dim);
 }
+
+/* ═══════════════════════════════════════════════════════
+   Scroll Progress Indicator — Phase 4c
+   Doc pages only (scoped to .VPDoc)
+   ═══════════════════════════════════════════════════════ */
+
+.VPDoc {
+  animation: scroll-progress linear;
+  animation-timeline: scroll(root);
+}
+
+.VPDoc::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent-cyan);
+  transform-origin: left;
+  scale: var(--scroll-pct, 0) 1;
+  z-index: 100;
+  pointer-events: none;
+}
+
+@keyframes scroll-progress {
+  from { --scroll-pct: 0; }
+  to { --scroll-pct: 1; }
+}
+
+@property --scroll-pct {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}

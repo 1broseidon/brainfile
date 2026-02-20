@@ -32,10 +32,12 @@ Contracts follow a strict state machine to coordinate between different agents.
 
 - 🔵 `ready`: Work is defined and available for an agent to pick up.
 - 🟡 `in_progress`: An agent has claimed the task and is working on it.
-- 📦 `delivered`: Work is completed and submitted for validation.
-- ✅ `done`: Work has passed validation and is finalized.
-- ❌ `failed`: Work failed validation or was abandoned.
-- 🚫 `blocked`: Agent is stuck on an external dependency.
+- 🟣 `delivered`: Work is completed and submitted for validation.
+- 🟢 `done`: Work has passed validation and is finalized.
+- 🔴 `failed`: Work failed validation or was abandoned.
+- ⚠️ `blocked`: Agent is stuck on an external dependency.
+
+<StateMachine />
 
 ## Deliverable Object
 

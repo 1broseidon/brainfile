@@ -100,10 +100,10 @@ The lifecycle ensures that work is properly claimed, implemented, and verified.
 |-------|---------|-------------|
 | 🔵 `ready` | Contract is available for an agent to claim. | Agent: `contract pickup` |
 | 🟡 `in_progress` | Agent is currently working on the deliverables. | Agent: `contract deliver` |
-| 📦 `delivered` | Work is complete and awaiting PM review. | PM: `contract validate` |
-| ✅ `done` | PM has verified and accepted the work. | PM: `brainfile complete` to move to logs/. |
-| ❌ `failed` | Validation failed. Feedback is provided. | PM: Add feedback, reset to `ready` for rework. |
-| 🚫 `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
+| 🟣 `delivered` | Work is complete and awaiting PM review. | PM: `contract validate` |
+| 🟢 `done` | PM has verified and accepted the work. | PM: `brainfile complete` to move to logs/. |
+| 🔴 `failed` | Validation failed. Feedback is provided. | PM: Add feedback, reset to `ready` for rework. |
+| ⚠️ `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
 
 ---
 

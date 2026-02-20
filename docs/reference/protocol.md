@@ -11,6 +11,8 @@ The Brainfile protocol defines a structured format for project tasks stored in m
 
 Brainfile v2 uses a directory-based structure:
 
+<ArchitectureDiagram />
+
 ```
 .brainfile/
 ├── brainfile.md        # Board Configuration

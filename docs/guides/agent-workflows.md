@@ -144,6 +144,4 @@ Break a large feature into a sequence of contracts:
 A specialized `triage` agent can monitor incoming bug reports (tasks without contracts), research the cause, and then `attach` a contract with specific `relatedFiles` and `validation` commands for a `codex` agent to fix.
 
 ### Self-Referential Tasks
-When implementing new Brainfile features, agents often use the system to build the system. For example, `task-58` was used to implement the very contract creation commands you are using now.
-
-```
+Brainfile can manage its own development. Use contracts to coordinate work on the protocol itself — the same task board that tracks your features can track improvements to the coordination layer.

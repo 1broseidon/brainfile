@@ -65,6 +65,8 @@ This creates the .brainfile/ directory with:
 └── logs/           ← Completed tasks archived here
 `
 
+<ArchitectureDiagram />
+
 Default columns are To Do and In Progress.
   Use It
 
@@ -372,10 +374,10 @@ The lifecycle ensures that work is properly claimed, implemented, and verified.
 |-------|---------|-------------|
 | 🔵 ready | Contract is available for an agent to claim. | Agent: contract pickup |
 | 🟡 in_progress | Agent is currently working on the deliverables. | Agent: contract deliver |
-| 📦 delivered | Work is complete and awaiting PM review. | PM: contract validate |
-| ✅ done | PM has verified and accepted the work. | PM: brainfile complete to move to logs/. |
-| ❌ failed | Validation failed. Feedback is provided. | PM: Add feedback, reset to ready for rework. |
-| 🚫 blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to ready. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
+| 🟣 delivered | Work is complete and awaiting PM review. | PM: contract validate |
+| 🟢 done | PM has verified and accepted the work. | PM: brainfile complete to move to logs/. |
+| 🔴 failed | Validation failed. Feedback is provided. | PM: Add feedback, reset to ready for rework. |
+| ⚠️ blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to ready. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
 
 ---
 
@@ -602,13 +604,11 @@ Break a large feature into a sequence of contracts:
 
 Automated Triage
 
-A specialized triage agent can monitor incoming bug reports (tasks without contracts), research the cause, and then attach a contract with specific relatedFiles and validation commands for a codex agent to fix.
+A specialized triage agent can monitor incoming bug reports (tasks without contracts), research the cause, and then attach a contract with specific relatedFiles and validation commands for a codex` agent to fix.
 
 Self-Referential Tasks
 
-When implementing new Brainfile features, agents often use the system to build the system. For example, task-58 was used to implement the very contract creation commands you are using now.
-
-``
+Brainfile can manage its own development. Use contracts to coordinate work on the protocol itself — the same task board that tracks your features can track improvements to the coordination layer.
 
 ---
 
@@ -1633,6 +1633,8 @@ The Brainfile protocol defines a structured format for project tasks stored in m
 v2 Architecture
 
 Brainfile v2 uses a directory-based structure:
+
+<ArchitectureDiagram />
 
 ``
 .brainfile/
@@ -3601,10 +3603,12 @@ Lifecycle Status (status)
 Contracts follow a strict state machine to coordinate between different agents.
   - 🔵 ready: Work is defined and available for an agent to pick up.
   - 🟡 in_progress: An agent has claimed the task and is working on it.
-  - 📦 delivered: Work is completed and submitted for validation.
-  - ✅ done: Work has passed validation and is finalized.
-  - ❌ failed: Work failed validation or was abandoned.
-  - 🚫 blocked: Agent is stuck on an external dependency.
+  - 🟣 delivered: Work is completed and submitted for validation.
+  - 🟢 done: Work has passed validation and is finalized.
+  - 🔴 failed: Work failed validation or was abandoned.
+  - ⚠️ blocked: Agent is stuck on an external dependency.
+
+<StateMachine />
 
 Deliverable Object
 
