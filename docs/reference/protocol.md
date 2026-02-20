@@ -190,7 +190,7 @@ Each task is a standalone `.md` file in `.brainfile/board/`:
 | `createdAt` | string | No | ISO 8601 timestamp |
 | `updatedAt` | string | No | ISO 8601 timestamp, set on mutations |
 | `completedAt` | string | No | Set when moved to logs/ |
-| `parentId` | string | No | Parent document ID |
+| `parentId` | string | No | Parent document ID (any type) |
 | `position` | number | No | Sort position within the column |
 
 ### Subtask Fields

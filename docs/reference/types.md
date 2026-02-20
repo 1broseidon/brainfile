@@ -70,6 +70,7 @@ column: todo
 priority: high
 tags: [backend]
 assignee: codex
+parentId: epic-1
 ---
 ```
 
@@ -112,9 +113,31 @@ Only `status` is required — deliverables and validation are optional.
 
 [View Contract Schema](https://brainfile.md/v2/contract.json) · [Docs](/types/contract)
 
+## Parent-Child Relationships
+
+Any document can be a parent or child of any other document using `parentId`. The parent tracks its children with a `children` array, and each child points back with `parentId`. This is not limited to epics — you can nest tasks under tasks, ADRs under epics, or any combination that fits your workflow.
+
+```yaml
+# Parent: a regular task
+---
+id: task-10
+title: Refactor auth module
+column: in-progress
+children: [task-11, task-12, task-13]
+---
+
+# Child: points back to parent
+---
+id: task-11
+title: Extract token validation
+column: todo
+parentId: task-10
+---
+```
+
 ## Epic
 
-Groups related tasks and tracks collective progress. Extends the task schema with `children` and `status` fields.
+A common pattern for grouping related work. Epics extend the task schema with `children` and `status` fields, but any type can serve as a parent.
 
 ```yaml
 ---
