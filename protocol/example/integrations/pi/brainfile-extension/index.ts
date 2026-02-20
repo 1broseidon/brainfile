@@ -88,6 +88,12 @@ type WorkerClaimRecord = {
   updatedAt: string;
 };
 
+type PmLockRecord = {
+  token: string;
+  acquiredAt: string;
+  updatedAt: string;
+};
+
 type EventProjection = {
   cursor: number;
   delegatedByRun: Record<string, string[]>;
@@ -117,6 +123,9 @@ const WORKER_CLAIM_LEASE_SECONDS = 90;
 const WORKER_CLAIM_MAX_SLOT = 256;
 const PI_EVENTS_BASENAME = 'pi-events.jsonl';
 const WORKER_CLAIMS_DIRNAME = 'worker-claims';
+const PM_LOCK_DIRNAME = 'pm.lock';
+const PM_LOCK_LEASE_SECONDS = 120;
+const PM_LOCK_REFRESH_INTERVAL_MS = 30_000;
 
 const BF_LIST_TOOL = 'brainfile_list_tasks';
 const BF_GET_TOOL = 'brainfile_get_task';
@@ -527,6 +536,12 @@ export default function brainfileExtension(pi: ExtensionAPI) {
   let workerClaimBase: string | null = null;
   let workerClaimSlot: number | null = null;
   let lastWorkerClaimRefreshAtMs = 0;
+
+  // PM lock: ensures only one PM agent exists at a time across all sessions
+  const pmLockToken = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  let pmLockHeld = false;
+  let lastPmLockRefreshAtMs = 0;
+  let pmLockTimer: ReturnType<typeof setInterval> | null = null;
 
   function persistState() {
     pi.appendEntry(STATE_ENTRY_TYPE, {
@@ -1012,6 +1027,205 @@ export default function brainfileExtension(pi: ExtensionAPI) {
     } catch {
       // best effort release
     }
+  }
+
+  // ── PM Lock ──────────────────────────────────────────────────────────
+  // Ensures only one PM agent exists at a time. Uses the same mkdir-based
+  // atomic locking pattern as worker claims. The lock is acquired on
+  // session_start when the agent resolves to PM mode and refreshed
+  // periodically. Other agents check this lock before assuming PM role.
+
+  function pmLockDir(): string | null {
+    if (!boardContext) return null;
+    return path.join(boardContext.stateDir, PM_LOCK_DIRNAME);
+  }
+
+  function pmLockOwnerPath(lockDir: string): string {
+    return path.join(lockDir, 'owner.json');
+  }
+
+  function readPmLockRecord(lockDir: string): PmLockRecord | null {
+    try {
+      const ownerPath = pmLockOwnerPath(lockDir);
+      if (!fs.existsSync(ownerPath)) return null;
+      const raw = fs.readFileSync(ownerPath, 'utf-8');
+      const parsed = JSON.parse(raw) as Partial<PmLockRecord>;
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (typeof parsed.token !== 'string' || !parsed.token) return null;
+      if (typeof parsed.acquiredAt !== 'string' || typeof parsed.updatedAt !== 'string') return null;
+      return {
+        token: parsed.token,
+        acquiredAt: parsed.acquiredAt,
+        updatedAt: parsed.updatedAt,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function isPmLockFresh(record: PmLockRecord | null, nowMs = Date.now()): boolean {
+    if (!record) return false;
+    const updatedMs = Date.parse(record.updatedAt);
+    if (!Number.isFinite(updatedMs)) return false;
+    const ageSeconds = Math.max(0, Math.floor((nowMs - updatedMs) / 1000));
+    return ageSeconds <= PM_LOCK_LEASE_SECONDS;
+  }
+
+  function writePmLockRecord(lockDir: string, record: PmLockRecord): boolean {
+    try {
+      fs.writeFileSync(pmLockOwnerPath(lockDir), `${JSON.stringify(record, null, 2)}\n`, 'utf-8');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function tryAcquirePmLock(): boolean {
+    const dir = pmLockDir();
+    if (!dir) return false;
+
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+
+    // Already held by us — refresh
+    if (pmLockHeld) {
+      const existing = readPmLockRecord(dir);
+      if (existing?.token === pmLockToken) {
+        const refreshed: PmLockRecord = { ...existing, updatedAt: nowIso };
+        writePmLockRecord(dir, refreshed);
+        lastPmLockRefreshAtMs = nowMs;
+        return true;
+      }
+      // Lost the lock (stale cleanup by another agent?)
+      pmLockHeld = false;
+    }
+
+    // Check if lock directory exists
+    if (fs.existsSync(dir)) {
+      const existing = readPmLockRecord(dir);
+      if (existing?.token === pmLockToken) {
+        // We own it (recovering from crash/restart?)
+        pmLockHeld = true;
+        const refreshed: PmLockRecord = { ...existing, updatedAt: nowIso };
+        writePmLockRecord(dir, refreshed);
+        lastPmLockRefreshAtMs = nowMs;
+        return true;
+      }
+      if (isPmLockFresh(existing, nowMs)) {
+        // Another PM holds a fresh lock
+        return false;
+      }
+      // Stale lock — remove it
+      try {
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch {
+        return false;
+      }
+    }
+
+    // Acquire: atomic mkdir
+    try {
+      fs.mkdirSync(dir);
+    } catch {
+      // Race: another agent got it first
+      const existing = readPmLockRecord(dir);
+      if (existing?.token === pmLockToken) {
+        pmLockHeld = true;
+        return true;
+      }
+      return false;
+    }
+
+    const record: PmLockRecord = {
+      token: pmLockToken,
+      acquiredAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    if (!writePmLockRecord(dir, record)) {
+      try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+      return false;
+    }
+
+    pmLockHeld = true;
+    lastPmLockRefreshAtMs = nowMs;
+    return true;
+  }
+
+  function refreshPmLock(): void {
+    if (!pmLockHeld) return;
+    const dir = pmLockDir();
+    if (!dir) return;
+
+    const nowMs = Date.now();
+    if (nowMs - lastPmLockRefreshAtMs < PM_LOCK_REFRESH_INTERVAL_MS) return;
+
+    const existing = readPmLockRecord(dir);
+    if (!existing || existing.token !== pmLockToken) {
+      pmLockHeld = false;
+      return;
+    }
+
+    const refreshed: PmLockRecord = { ...existing, updatedAt: new Date(nowMs).toISOString() };
+    writePmLockRecord(dir, refreshed);
+    lastPmLockRefreshAtMs = nowMs;
+  }
+
+  function releasePmLock(): void {
+    const wasHeld = pmLockHeld;
+    pmLockHeld = false;
+    lastPmLockRefreshAtMs = 0;
+
+    if (!wasHeld) return;
+
+    const dir = pmLockDir();
+    if (!dir || !fs.existsSync(dir)) return;
+
+    const existing = readPmLockRecord(dir);
+    if (existing && existing.token !== pmLockToken) return;
+
+    try {
+      fs.rmSync(dir, { recursive: true, force: true });
+    } catch {
+      // best effort release
+    }
+  }
+
+  function startPmLockRefreshTimer(): void {
+    stopPmLockRefreshTimer();
+    pmLockTimer = setInterval(() => {
+      if (pmLockHeld) refreshPmLock();
+    }, PM_LOCK_REFRESH_INTERVAL_MS);
+  }
+
+  function stopPmLockRefreshTimer(): void {
+    if (pmLockTimer) {
+      clearInterval(pmLockTimer);
+      pmLockTimer = null;
+    }
+  }
+
+  /**
+   * Check if another PM has the lock OR has an open run in the events log.
+   * Combines file-based lock detection with event log detection for robustness.
+   */
+  function isPmClaimedByOther(): { claimed: boolean; holder?: string } {
+    // Check PM lock file first (immediate, works before any run is started)
+    const dir = pmLockDir();
+    if (dir && fs.existsSync(dir)) {
+      const record = readPmLockRecord(dir);
+      if (record && record.token !== pmLockToken && isPmLockFresh(record)) {
+        return { claimed: true, holder: `pm-lock (acquired ${record.acquiredAt})` };
+      }
+    }
+
+    // Fall back to event log detection (catches PMs that hold runs but lost their lock file)
+    const probe = probeOpenPmRuns(activeRunId ? [activeRunId] : []);
+    if (probe.hasConflict) {
+      return { claimed: true, holder: `pm-run ${probe.latestRunId}` };
+    }
+
+    return { claimed: false };
   }
 
   function ensureAutoWorkerAssignee(ctx: ExtensionContext): string {
@@ -2026,6 +2240,8 @@ export default function brainfileExtension(pi: ExtensionAPI) {
       processEventLog(ctx);
 
       if (operatingMode === 'pm') {
+        // Keep PM lock fresh while the listener is active
+        if (pmLockHeld) refreshPmLock();
         maybeEvaluateActiveRun(ctx, `listener:${source}`);
         updateStatus(ctx);
         if (source === 'manual') {
@@ -2115,6 +2331,10 @@ export default function brainfileExtension(pi: ExtensionAPI) {
 
     if (enabled) {
       if (operatingMode === 'pm') {
+        // Ensure we hold the PM lock before creating a run
+        if (!pmLockHeld) tryAcquirePmLock();
+        if (pmLockHeld) startPmLockRefreshTimer();
+
         const hadRun = Boolean(activeRunId && !isRunClosed(activeRunId));
         if (!activeRunId || isRunClosed(activeRunId)) {
           activeRunId = createRunId();
@@ -2832,17 +3052,28 @@ export default function brainfileExtension(pi: ExtensionAPI) {
     eventProjection = normalizeEventProjection(stateEntry?.data?.eventProjection);
     listenerPausedForUserInput = false;
 
-    let autoDemotedPmRunId: string | null = null;
+    let autoDemotedPmHolder: string | null = null;
     if (!operatingModeOverride && operatingMode === 'pm') {
-      const probe = probeOpenPmRuns(activeRunId ? [activeRunId] : []);
-      if (probe.hasConflict) {
+      const pmCheck = isPmClaimedByOther();
+      if (pmCheck.claimed) {
         operatingMode = 'worker';
-        autoDemotedPmRunId = probe.latestRunId;
+        autoDemotedPmHolder = pmCheck.holder || 'unknown';
+      } else {
+        // Claim the PM lock so other agents detect us immediately
+        if (!tryAcquirePmLock()) {
+          // Lost the race between check and acquire
+          operatingMode = 'worker';
+          autoDemotedPmHolder = 'pm-lock (race)';
+        } else {
+          startPmLockRefreshTimer();
+        }
       }
     }
 
     if (operatingMode !== 'pm') {
       activeRunId = null;
+      releasePmLock();
+      stopPmLockRefreshTimer();
     }
 
     const shouldEnablePlanMode = stateEntry?.data?.planMode === true;
@@ -2871,9 +3102,9 @@ export default function brainfileExtension(pi: ExtensionAPI) {
     const overrideNotice = operatingModeOverride ? ` Role override active: ${operatingModeOverride.toUpperCase()}.` : '';
     ctx.ui.notify(`${modeNotice}${overrideNotice}`, 'info');
 
-    if (autoDemotedPmRunId) {
+    if (autoDemotedPmHolder) {
       ctx.ui.notify(
-        `Detected active PM run ${autoDemotedPmRunId}. Auto-switching this session to Worker mode to avoid PM conflicts. Use /listen role pm to override.`,
+        `Detected active PM (${autoDemotedPmHolder}). Auto-switching this session to Worker mode to avoid PM conflicts. Use /listen role pm to override.`,
         'info'
       );
     }
@@ -2887,18 +3118,21 @@ export default function brainfileExtension(pi: ExtensionAPI) {
     } else if (operatingMode === 'worker') {
       releaseWorkerAssigneeClaim();
     }
+    // Release PM lock on shutdown so other agents can claim PM immediately
+    releasePmLock();
+    stopPmLockRefreshTimer();
     stopListener();
   });
 
   pi.on('model_select', async (_event, ctx) => {
     let nextMode = resolveOperatingMode(ctx);
-    let autoDemotedPmRunId: string | null = null;
+    let autoDemotedPmHolder: string | null = null;
 
     if (!operatingModeOverride && nextMode === 'pm') {
-      const probe = probeOpenPmRuns(activeRunId ? [activeRunId] : []);
-      if (probe.hasConflict) {
+      const pmCheck = isPmClaimedByOther();
+      if (pmCheck.claimed) {
         nextMode = 'worker';
-        autoDemotedPmRunId = probe.latestRunId;
+        autoDemotedPmHolder = pmCheck.holder || 'unknown';
       }
     }
 
@@ -2910,26 +3144,41 @@ export default function brainfileExtension(pi: ExtensionAPI) {
         releaseWorkerAssigneeClaim();
       }
 
+      // Release PM lock when leaving PM mode
+      if (previousMode === 'pm' && nextMode !== 'pm') {
+        releasePmLock();
+        stopPmLockRefreshTimer();
+      }
+
       operatingMode = nextMode;
 
       if (operatingMode !== 'pm') {
         activeRunId = null;
-      } else if (listenMode && (!activeRunId || isRunClosed(activeRunId))) {
-        activeRunId = createRunId();
-        emitEvent('run.started', ctx, 'model_select', {
-          runId: activeRunId,
-          data: { mode: operatingMode },
-        });
-        adoptOrphanedTasksForRun(ctx, activeRunId, 'model_select:adopt');
+      } else {
+        // Acquire PM lock when entering PM mode
+        if (!tryAcquirePmLock()) {
+          operatingMode = 'worker';
+          autoDemotedPmHolder = 'pm-lock (race)';
+        } else {
+          startPmLockRefreshTimer();
+          if (listenMode && (!activeRunId || isRunClosed(activeRunId))) {
+            activeRunId = createRunId();
+            emitEvent('run.started', ctx, 'model_select', {
+              runId: activeRunId,
+              data: { mode: operatingMode },
+            });
+            adoptOrphanedTasksForRun(ctx, activeRunId, 'model_select:adopt');
+          }
+        }
       }
 
       if (!listenerConfiguredExplicitly) {
         setListenMode(operatingMode === 'worker', ctx, 'startup');
       }
 
-      if (autoDemotedPmRunId) {
+      if (autoDemotedPmHolder) {
         ctx.ui.notify(
-          `Detected active PM run ${autoDemotedPmRunId}. Keeping this session in Worker mode to avoid PM conflicts. Use /listen role pm to override.`,
+          `Detected active PM (${autoDemotedPmHolder}). Keeping this session in Worker mode to avoid PM conflicts. Use /listen role pm to override.`,
           'info'
         );
       }
@@ -3103,12 +3352,21 @@ export default function brainfileExtension(pi: ExtensionAPI) {
       operatingModeOverride = nextOverride;
       operatingMode = resolveOperatingMode(ctx);
 
-      let autoDemotedPmRunId: string | null = null;
-      if (!operatingModeOverride && operatingMode === 'pm') {
-        const probe = probeOpenPmRuns(activeRunId ? [activeRunId] : []);
-        if (probe.hasConflict) {
+      let autoDemotedPmHolder: string | null = null;
+      if (operatingMode === 'pm') {
+        // For auto mode, check for PM conflicts; for explicit override, try to acquire
+        const pmCheck = isPmClaimedByOther();
+        if (pmCheck.claimed && !operatingModeOverride) {
           operatingMode = 'worker';
-          autoDemotedPmRunId = probe.latestRunId;
+          autoDemotedPmHolder = pmCheck.holder || 'unknown';
+        } else if (!tryAcquirePmLock()) {
+          if (!operatingModeOverride) {
+            operatingMode = 'worker';
+            autoDemotedPmHolder = 'pm-lock (race)';
+          }
+          // If explicit override to PM, proceed even without lock (forced)
+        } else {
+          startPmLockRefreshTimer();
         }
       }
 
@@ -3116,6 +3374,12 @@ export default function brainfileExtension(pi: ExtensionAPI) {
         emitWorkerOffline(ctx, 'listen.role');
       } else if (previousMode === 'worker' && operatingMode !== 'worker') {
         releaseWorkerAssigneeClaim();
+      }
+
+      // Release PM lock when leaving PM mode
+      if (previousMode === 'pm' && operatingMode !== 'pm') {
+        releasePmLock();
+        stopPmLockRefreshTimer();
       }
 
       if (operatingMode !== 'pm') {
@@ -3145,9 +3409,9 @@ export default function brainfileExtension(pi: ExtensionAPI) {
         ? `override (${operatingModeOverride.toUpperCase()})`
         : `auto (${inferOperatingModeFromModel(ctx).toUpperCase()} from model)`;
       ctx.ui.notify(`Operating mode set to ${operatingMode.toUpperCase()} (${sourceText}).`, 'success');
-      if (autoDemotedPmRunId) {
+      if (autoDemotedPmHolder) {
         ctx.ui.notify(
-          `Detected active PM run ${autoDemotedPmRunId}. Auto-switching this session to Worker mode to avoid PM conflicts. Use /listen role pm to override.`,
+          `Detected active PM (${autoDemotedPmHolder}). Auto-switching this session to Worker mode to avoid PM conflicts. Use /listen role pm to override.`,
           'info'
         );
       }
