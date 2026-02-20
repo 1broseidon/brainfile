@@ -3,6 +3,8 @@ import { useData } from 'vitepress'
 import { ref, onMounted, onUnmounted } from 'vue'
 import ArchitectureDiagram from './components/ArchitectureDiagram.vue'
 import ComparisonTable from './components/ComparisonTable.vue'
+import CodeShowcase from './components/CodeShowcase.vue'
+import StateMachine from './components/StateMachine.vue'
 
 const { site } = useData()
 
@@ -118,123 +120,13 @@ async function copyToClipboard() {
       <!-- Section 2: The Protocol -->
       <section class="protocol-hero fade-section">
         <span class="section-label">A contract is a file.</span>
-        <div class="code-block" ref="codeBlockRef">
-          <button class="copy-overlay" @click="copyCodeBlock" :title="codeBlockCopySuccess ? 'Copied!' : 'Copy to clipboard'">
-            <template v-if="!codeBlockCopySuccess">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                <path d="M3 11V3C3 2.44772 3.44772 2 4 2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </template>
-            <template v-else>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M3 8.5L6.5 12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span class="copy-overlay-text">Copied!</span>
-            </template>
-          </button>
-          <pre><code><span class="hl-key">id:</span> task-12
-<span class="hl-key">title:</span> Add rate limiting to API gateway
-<span class="hl-key">column:</span> in-progress
-<span class="hl-key">assignee:</span> codex
-<span class="hl-key">priority:</span> high
-<span class="hl-key">relatedFiles:</span>
-  - src/api/gateway.ts
-  - src/middleware/auth.ts
-
-<span class="hl-key">contract:</span>
-  <span class="hl-key">status:</span> in_progress
-
-  <span class="hl-key">deliverables:</span>
-    - <span class="hl-key">path:</span> src/middleware/rateLimiter.ts
-    - <span class="hl-key">path:</span> src/__tests__/rateLimiter.test.ts
-
-  <span class="hl-key">validation:</span>
-    <span class="hl-key">commands:</span>
-      - npm test -- rateLimiter
-      - npm run build
-
-  <span class="hl-key">constraints:</span>
-    - Token bucket algorithm
-    - Non-blocking async implementation</code></pre>
-        </div>
+        <CodeShowcase />
       </section>
 
       <!-- Section 2b: Contract Lifecycle -->
       <section class="lifecycle fade-section">
         <span class="section-label">A contract has a lifecycle.</span>
-        <div class="state-machine">
-          <svg viewBox="0 0 750 240" xmlns="http://www.w3.org/2000/svg" class="contract-state-diagram">
-            <defs>
-              <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#2a2a38" />
-              </marker>
-              <marker id="arrow-success" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#5cc8ff" />
-              </marker>
-            </defs>
-
-            <!-- Ready -> In Progress -->
-            <line x1="150" y1="60" x2="200" y2="60" class="line success" marker-end="url(#arrow-success)" />
-            
-            <!-- In Progress -> Delivered -->
-            <line x1="340" y1="60" x2="400" y2="60" class="line success" marker-end="url(#arrow-success)" />
-            
-            <!-- Delivered -> Done -->
-            <line x1="540" y1="60" x2="600" y2="60" class="line success" marker-end="url(#arrow-success)" />
-            
-            <!-- Delivered -> Failed -->
-            <line x1="470" y1="80" x2="470" y2="140" class="line" marker-end="url(#arrow)" />
-            
-            <!-- In Progress -> Failed -->
-            <path d="M 340 70 L 370 70 L 370 160 L 400 160" class="line" marker-end="url(#arrow)" />
-            
-            <!-- In Progress -> Blocked -->
-            <line x1="270" y1="80" x2="270" y2="140" class="line" marker-end="url(#arrow)" />
-            
-            <!-- Blocked -> Ready -->
-            <path d="M 200 160 L 80 160 L 80 80" class="line" marker-end="url(#arrow)" />
-
-            <!-- Failed -> Ready -->
-            <path d="M 470 180 L 470 210 L 120 210 L 120 80" class="line" marker-end="url(#arrow)" />
-
-            <!-- Box: Ready -->
-            <g transform="translate(50, 40)">
-              <rect x="0" y="0" width="100" height="40" class="box" />
-              <text x="50" y="20" class="text">ready</text>
-            </g>
-            
-            <!-- Box: In Progress -->
-            <g transform="translate(200, 40)">
-              <rect x="0" y="0" width="140" height="40" class="box success" />
-              <text x="70" y="20" class="text success">in_progress</text>
-            </g>
-            
-            <!-- Box: Delivered -->
-            <g transform="translate(400, 40)">
-              <rect x="0" y="0" width="140" height="40" class="box success" />
-              <text x="70" y="20" class="text success">delivered</text>
-            </g>
-            
-            <!-- Box: Done -->
-            <g transform="translate(600, 40)">
-              <rect x="0" y="0" width="100" height="40" class="box success" />
-              <text x="50" y="20" class="text success">done</text>
-            </g>
-            
-            <!-- Box: Blocked -->
-            <g transform="translate(200, 140)">
-              <rect x="0" y="0" width="140" height="40" class="box blocked" />
-              <text x="70" y="20" class="text blocked">blocked</text>
-            </g>
-
-            <!-- Box: Failed -->
-            <g transform="translate(400, 140)">
-              <rect x="0" y="0" width="140" height="40" class="box failed" />
-              <text x="70" y="20" class="text failed">failed</text>
-            </g>
-          </svg>
-        </div>
+        <StateMachine />
       </section>
 
       <!-- Section 3: How it works -->
