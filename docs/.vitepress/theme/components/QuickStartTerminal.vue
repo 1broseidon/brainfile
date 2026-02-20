@@ -103,6 +103,7 @@ async function copyToClipboard() {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: 1.25rem;
+  text-align: center;
 }
 
 .terminal {
@@ -213,12 +214,13 @@ async function copyToClipboard() {
 }
 
 .quick-start-link {
-  display: inline-block;
+  display: block;
   margin-top: 1.25rem;
   font-size: 0.9rem;
   color: #707080;
   text-decoration: none;
   transition: color 0.15s;
+  text-align: center;
 }
 
 .quick-start-link:hover {

@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { useData } from 'vitepress'
 import { ref, onMounted, onUnmounted } from 'vue'
-import ArchitectureDiagram from './components/ArchitectureDiagram.vue'
-import ComparisonTable from './components/ComparisonTable.vue'
 import CodeShowcase from './components/CodeShowcase.vue'
 import StateMachine from './components/StateMachine.vue'
 import HowItWorks from './components/HowItWorks.vue'
@@ -75,43 +73,38 @@ onUnmounted(() => {
       </section>
 
       <div class="home-inner">
-      <!-- Section 2b: Contract Lifecycle -->
+      <!-- Contract Lifecycle -->
       <section class="lifecycle fade-section">
         <span class="section-label">A contract has a lifecycle.</span>
         <StateMachine />
       </section>
 
-      <!-- Section 3: How it works -->
+      <!-- How it works -->
       <HowItWorks />
 
-      <!-- Section 4: Architecture -->
-      <section class="architecture fade-section">
-        <span class="section-label">How it fits together.</span>
-        <ArchitectureDiagram />
-      </section>
-
-      <!-- Section 5: Design decisions -->
+      <!-- Design decisions -->
       <section class="decisions fade-section">
-        <div class="decision">
-          <h3>Why files?</h3>
-          <p>Tasks live in your repo. Git history is your audit trail. No database, no API, no vendor lock-in.</p>
-        </div>
-        <div class="decision">
-          <h3>Why contracts?</h3>
-          <p>Informal "please do X" breaks down at scale. Structured deliverables and validation commands make agent output verifiable.</p>
-        </div>
-        <div class="decision">
-          <h3>Why a protocol?</h3>
-          <p>Tools change. Claude, Cursor, Copilot, the next thing. A protocol survives all of them.</p>
+        <span class="section-label">Design decisions.</span>
+        <div class="decisions-grid">
+          <div class="decision-card">
+            <h3>Why files?</h3>
+            <p>Tasks live in your repo. Git history is your audit trail. No database, no API, no vendor lock-in.</p>
+          </div>
+          <div class="decision-card">
+            <h3>Why contracts?</h3>
+            <p>Informal "please do X" breaks down at scale. Structured deliverables and validation commands make agent output verifiable.</p>
+          </div>
+          <div class="decision-card">
+            <h3>Why a protocol?</h3>
+            <p>Tools change. Claude, Cursor, Copilot, the next thing. A protocol survives all of them.</p>
+          </div>
         </div>
       </section>
 
-      <!-- Section 6: Comparison -->
-      <ComparisonTable />
-
-      <!-- Section 7: Ecosystem (Card-based) -->
+      <!-- Ecosystem -->
       <EcosystemCards />
 
+      <!-- Quick Start CTA -->
       <QuickStartTerminal />
 
       <!-- Section 7: Footer -->
@@ -310,6 +303,7 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: 1.25rem;
+  text-align: center;
 }
 
 .code-block {
@@ -389,34 +383,43 @@ onUnmounted(() => {
   line-height: 1.5;
 }
 
-/* ---- Section 4: Architecture ---- */
-.architecture {
-  padding-bottom: 8rem;
-}
-
-/* ---- Section 5: Design decisions ---- */
+/* ---- Design decisions (3-column cards) ---- */
 .decisions {
   padding-bottom: 8rem;
-  display: flex;
-  flex-direction: column;
-  gap: 3rem;
 }
 
-.decision h3 {
+.decisions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.decision-card {
+  padding: 1.5rem;
+  background: rgba(10, 10, 14, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+
+.decision-card:hover {
+  border-color: rgba(92, 200, 255, 0.15);
+}
+
+.decision-card h3 {
   font-family: 'Outfit', sans-serif;
-  font-size: 1.1rem;
+  font-size: 1rem;
   font-weight: 500;
-  color: #c0c0c8;
-  margin: 0 0 0.5rem;
+  color: #e8e8ec;
+  margin: 0 0 0.6rem;
   letter-spacing: -0.01em;
 }
 
-.decision p {
-  font-size: 0.95rem;
-  color: #707080;
+.decision-card p {
+  font-size: 0.85rem;
+  color: #585868;
   margin: 0;
   line-height: 1.6;
-  max-width: 52ch;
 }
 
 /* ---- Section 5: Ecosystem (Card Grid) ---- */
@@ -876,11 +879,14 @@ onUnmounted(() => {
 
   .lifecycle,
   .how-it-works,
-  .architecture,
   .decisions,
   .ecosystem,
   .quick-start {
     padding-bottom: 5rem;
+  }
+
+  .decisions-grid {
+    grid-template-columns: 1fr;
   }
 
   .code-block {

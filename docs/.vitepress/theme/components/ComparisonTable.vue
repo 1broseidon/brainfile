@@ -100,6 +100,7 @@ function iconClass(icon: string): string {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   margin-bottom: 1.25rem;
+  text-align: center;
 }
 
 .table-wrapper {
