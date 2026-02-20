@@ -13,6 +13,7 @@
     "vue": "^3.5.13"
   },
   "devDependencies": {
+    "@nolebase/vitepress-plugin-og-image": "^2.18.2",
     "tsx": "^4.19.2"
   }
 }

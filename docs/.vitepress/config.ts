@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitepress'
 import fs from 'fs'
 import path from 'path'
+import { buildEndGenerateOpenGraphImages } from '@nolebase/vitepress-plugin-og-image/vitepress'
 
 export default defineConfig({
   title: 'Brainfile',
@@ -23,16 +24,12 @@ export default defineConfig({
     ['meta', { property: 'og:site_name', content: 'Brainfile' }],
     ['meta', { property: 'og:title', content: 'Brainfile — An open protocol for agent-to-agent task coordination' }],
     ['meta', { property: 'og:description', content: 'Human-in-the-loop compatible. File-system native. MIT licensed. Define contracts, delegate to AI agents, validate deliverables.' }],
-    ['meta', { property: 'og:image', content: 'https://brainfile.md/og-banner.jpg' }],
-    ['meta', { property: 'og:image:width', content: '1200' }],
-    ['meta', { property: 'og:image:height', content: '630' }],
     ['meta', { property: 'og:url', content: 'https://brainfile.md' }],
 
     // Twitter Card
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
     ['meta', { name: 'twitter:title', content: 'Brainfile — An open protocol for agent-to-agent task coordination' }],
     ['meta', { name: 'twitter:description', content: 'Human-in-the-loop compatible. File-system native. MIT licensed. Define contracts, delegate to AI agents, validate deliverables.' }],
-    ['meta', { name: 'twitter:image', content: 'https://brainfile.md/og-banner.jpg' }],
   ],
 
   // Fix EMFILE error on systems with low file watcher limits
@@ -206,6 +203,19 @@ export default defineConfig({
         },
       },
     ],
+  },
+
+  buildEnd: async (siteConfig) => {
+    await buildEndGenerateOpenGraphImages({
+      domain: 'https://brainfile.md',
+      category: {
+        byPath: [
+          { path: '/reference/', name: 'Specification & Reference' },
+          { path: '/guides/', name: 'Guides' },
+          { path: '/tools/', name: 'Tools' },
+        ]
+      }
+    })(siteConfig)
   },
 
   themeConfig: {
