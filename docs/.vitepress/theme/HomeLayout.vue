@@ -57,22 +57,21 @@ onUnmounted(() => {
     </nav>
 
     <main class="home-content">
-      <!-- Section 1: Opening (with dot grid background) -->
-      <section class="opening fade-section">
+      <!-- Section 1: Hero split — text left, code right -->
+      <section class="hero-split fade-section">
         <div class="dot-grid-bg"></div>
-        <h1 class="wordmark">brainfile</h1>
-        <p class="headline">An open protocol for agent-to-agent task coordination.</p>
-        <p class="subline">Human-in-the-loop compatible. File-system native. MIT licensed.</p>
-        <div class="opening-links">
-          <a href="/reference/protocol" class="link-primary">Read the Specification <span class="arrow">&rarr;</span></a>
-          <a href="/quick-start" class="link-secondary">Quick Start <span class="arrow">&rarr;</span></a>
+        <div class="hero-left">
+          <h1 class="wordmark">brainfile</h1>
+          <p class="headline">An open protocol for agent-to-agent task coordination.</p>
+          <p class="subline">Human-in-the-loop compatible. File-system native. MIT licensed.</p>
+          <div class="opening-links">
+            <a href="/reference/protocol" class="link-primary">Read the Specification <span class="arrow">&rarr;</span></a>
+            <a href="/quick-start" class="link-secondary">Quick Start <span class="arrow">&rarr;</span></a>
+          </div>
         </div>
-      </section>
-
-      <!-- Section 2: The Protocol -->
-      <section class="protocol-hero fade-section">
-        <span class="section-label">A contract is a file.</span>
-        <CodeShowcase />
+        <div class="hero-right">
+          <CodeShowcase />
+        </div>
       </section>
 
       <!-- Section 2b: Contract Lifecycle -->
@@ -159,7 +158,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  max-width: 800px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 2rem 1.5rem 0;
 }
@@ -191,16 +190,28 @@ onUnmounted(() => {
 
 /* ---- Content container ---- */
 .home-content {
-  max-width: 800px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 0 1.5rem;
 }
 
-/* ---- Section 1: Opening (with dot grid) ---- */
-.opening {
+/* ---- Section 1: Hero split ---- */
+.hero-split {
   position: relative;
-  padding-top: 10rem;
-  padding-bottom: 8rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: center;
+  padding-top: 8rem;
+  padding-bottom: 6rem;
+}
+
+.hero-left {
+  position: relative;
+}
+
+.hero-right {
+  position: relative;
 }
 
 .dot-grid-bg {
@@ -282,11 +293,6 @@ onUnmounted(() => {
 .link-primary:hover .arrow,
 .link-secondary:hover .arrow {
   transform: translateX(3px);
-}
-
-/* ---- Section 2: Protocol hero ---- */
-.protocol-hero {
-  padding-bottom: 8rem;
 }
 
 .section-label {
@@ -839,7 +845,8 @@ onUnmounted(() => {
     gap: 1rem;
   }
 
-  .opening {
+  .hero-split {
+    grid-template-columns: 1fr;
     padding-top: 6rem;
     padding-bottom: 5rem;
   }
@@ -860,7 +867,6 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .protocol-hero,
   .lifecycle,
   .how-it-works,
   .architecture,
