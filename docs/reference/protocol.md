@@ -31,25 +31,21 @@ Brainfile v2 uses a directory-based structure:
 | `brainfile.md` | 2 | Root file (legacy compat) |
 | `.brainfile.md` | 3 | Hidden, backward compat |
 
-<FileDiscovery />
-
 ### Completion
 
 ::: info Completion Model
 Completed tasks are moved from `board/` to `logs/` via `brainfile complete`. There is no "done" column by default — completion is a file-level operation that archives the task.
 :::
 
-<div style="text-align: center; margin: 1.5em 0;">
-<svg viewBox="0 0 420 60" xmlns="http://www.w3.org/2000/svg" style="max-width: 400px; width: 100%;">
+<svg viewBox="0 0 420 60" xmlns="http://www.w3.org/2000/svg" style="max-width: 400px; width: 100%; display: block; margin: 1.5em auto;">
+  <defs><marker id="comp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5cc8ff" /></marker></defs>
   <rect x="10" y="10" width="140" height="40" rx="6" fill="#0a0a0e" stroke="#5cc8ff" stroke-width="2" />
   <text x="80" y="34" fill="#5cc8ff" font-family="JetBrains Mono, monospace" font-size="13" text-anchor="middle" dominant-baseline="middle">board/</text>
   <line x1="150" y1="30" x2="260" y2="30" stroke="rgba(92,200,255,0.4)" stroke-width="2" marker-end="url(#comp-arrow)" />
   <text x="205" y="22" fill="#585868" font-family="JetBrains Mono, monospace" font-size="9" text-anchor="middle">brainfile complete</text>
   <rect x="265" y="10" width="140" height="40" rx="6" fill="#0a0a0e" stroke="#2a2a38" stroke-width="2" />
   <text x="335" y="34" fill="#a0a0b0" font-family="JetBrains Mono, monospace" font-size="13" text-anchor="middle" dominant-baseline="middle">logs/</text>
-  <defs><marker id="comp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="#5cc8ff" /></marker></defs>
 </svg>
-</div>
 
 ---
 
