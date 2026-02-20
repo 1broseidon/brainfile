@@ -7,12 +7,13 @@ interface Tab {
 }
 
 const tabs: Tab[] = [
-  { id: 'contract', label: 'Contract' },
   { id: 'board', label: 'Board' },
+  { id: 'task', label: 'Task' },
+  { id: 'contract', label: 'Contract' },
   { id: 'validation', label: 'Validation' },
 ]
 
-const activeTab = ref('contract')
+const activeTab = ref('board')
 const tabRefs = ref<HTMLButtonElement[]>([])
 
 const activeIndex = computed(() => tabs.findIndex(t => t.id === activeTab.value))
@@ -67,42 +68,9 @@ function onKeydown(e: KeyboardEvent, index: number) {
     <!-- Tab panels -->
     <div class="showcase-panels">
       <Transition name="showcase-fade" mode="out-in">
-        <!-- Contract tab -->
-        <div
-          v-if="activeTab === 'contract'"
-          key="contract"
-          role="tabpanel"
-          id="panel-contract"
-          aria-labelledby="tab-contract"
-          class="showcase-panel"
-        >
-          <div class="code-block">
-            <pre><code><span class="hl-key">id:</span> task-12
-<span class="hl-key">title:</span> Add rate limiting to API gateway
-<span class="hl-key">column:</span> in-progress
-<span class="hl-key">assignee:</span> codex
-<span class="hl-key">priority:</span> high
-<span class="hl-key">relatedFiles:</span>
-  - src/api/gateway.ts
-
-<span class="hl-key">contract:</span>
-  <span class="hl-key">status:</span> <span class="hl-status">in_progress</span>
-  <span class="hl-key">deliverables:</span>
-    - <span class="hl-key">path:</span> src/middleware/rateLimiter.ts
-    - <span class="hl-key">path:</span> src/__tests__/rateLimiter.test.ts
-  <span class="hl-key">validation:</span>
-    <span class="hl-key">commands:</span>
-      - npm test -- rateLimiter
-      - npm run build
-  <span class="hl-key">constraints:</span>
-    - Token bucket algorithm
-    - Non-blocking async implementation</code></pre>
-          </div>
-        </div>
-
         <!-- Board tab -->
         <div
-          v-else-if="activeTab === 'board'"
+          v-if="activeTab === 'board'"
           key="board"
           role="tabpanel"
           id="panel-board"
@@ -121,11 +89,63 @@ function onKeydown(e: KeyboardEvent, index: number) {
   <span class="hl-key">task:</span> { <span class="hl-key">idPrefix:</span> task, <span class="hl-key">completable:</span> <span class="hl-bool">true</span> }
   <span class="hl-key">epic:</span> { <span class="hl-key">idPrefix:</span> epic, <span class="hl-key">completable:</span> <span class="hl-bool">true</span> }
   <span class="hl-key">adr:</span> { <span class="hl-key">idPrefix:</span> adr, <span class="hl-key">completable:</span> <span class="hl-bool">false</span> }
-<span class="hl-key">rules:</span>
-  <span class="hl-key">always:</span>
-    - <span class="hl-key">id:</span> 1
-      <span class="hl-key">rule:</span> Run tests before delivering
 <span class="hl-fence">---</span></code></pre>
+          </div>
+        </div>
+
+        <!-- Task tab -->
+        <div
+          v-else-if="activeTab === 'task'"
+          key="task"
+          role="tabpanel"
+          id="panel-task"
+          aria-labelledby="tab-task"
+          class="showcase-panel"
+        >
+          <div class="code-block">
+            <pre><code><span class="hl-fence">---</span>
+<span class="hl-key">id:</span> task-12
+<span class="hl-key">title:</span> Add rate limiting to API gateway
+<span class="hl-key">column:</span> in-progress
+<span class="hl-key">assignee:</span> codex
+<span class="hl-key">priority:</span> high
+<span class="hl-key">parentId:</span> epic-3
+<span class="hl-key">tags:</span> [backend, performance]
+<span class="hl-key">relatedFiles:</span>
+  - src/api/gateway.ts
+<span class="hl-key">subtasks:</span>
+  - <span class="hl-key">id:</span> task-12-1
+    <span class="hl-key">title:</span> Write unit tests
+    <span class="hl-key">completed:</span> <span class="hl-bool">false</span>
+<span class="hl-fence">---</span></code></pre>
+          </div>
+        </div>
+
+        <!-- Contract tab -->
+        <div
+          v-else-if="activeTab === 'contract'"
+          key="contract"
+          role="tabpanel"
+          id="panel-contract"
+          aria-labelledby="tab-contract"
+          class="showcase-panel"
+        >
+          <div class="code-block">
+            <pre><code><span class="hl-comment"># added to task-12 frontmatter</span>
+<span class="hl-key">contract:</span>
+  <span class="hl-key">status:</span> <span class="hl-status">in_progress</span>
+  <span class="hl-key">deliverables:</span>
+    - <span class="hl-key">path:</span> src/middleware/rateLimiter.ts
+      <span class="hl-key">description:</span> Token bucket implementation
+    - <span class="hl-key">path:</span> src/__tests__/rateLimiter.test.ts
+      <span class="hl-key">description:</span> Unit tests
+  <span class="hl-key">validation:</span>
+    <span class="hl-key">commands:</span>
+      - npm test -- rateLimiter
+      - npm run build
+  <span class="hl-key">constraints:</span>
+    - Token bucket algorithm
+    - Non-blocking async implementation</code></pre>
           </div>
         </div>
 
@@ -263,6 +283,11 @@ function onKeydown(e: KeyboardEvent, index: number) {
 
 .hl-fence {
   color: #383848;
+}
+
+.hl-comment {
+  color: #505060;
+  font-style: italic;
 }
 
 /* ---- Terminal highlighting ---- */
