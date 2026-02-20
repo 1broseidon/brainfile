@@ -343,11 +343,6 @@ div[class*='language-'] {
   font-weight: 500;
 }
 
-.VPSidebarItem.level-1.is-active > .item {
-  border-left: 2px solid var(--accent-cyan);
-  margin-left: -1px;
-}
-
 .VPSidebarItem.level-1.is-active > .item > .indicator {
   background-color: var(--accent-cyan) !important;
 }
