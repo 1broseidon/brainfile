@@ -201,6 +201,7 @@ export default defineConfig({
   buildEnd: async (siteConfig) => {
     await buildEndGenerateOpenGraphImages({
       domain: 'https://brainfile.md',
+      baseUrl: 'https://brainfile.md',
       category: {
         byPath: [
           { path: '/reference/', name: 'Specification & Reference' },
@@ -220,11 +221,17 @@ export default defineConfig({
     const description = pageData.frontmatter.description || pageData.description || 'An open protocol for structured task coordination'
     const relativePath = pageData.relativePath.replace(/\.md$/, '')
     const url = `https://brainfile.md/${relativePath === 'index' ? '' : relativePath}`
+    const ogFileName = relativePath === 'index' ? 'og-index.png' : `og-${relativePath.replace(/\//g, '-')}.png`
+    const ogUrl = `https://brainfile.md/${ogFileName}`
     
     pageData.frontmatter.head.push(['meta', { name: 'twitter:card', content: 'summary_large_image' }])
     pageData.frontmatter.head.push(['meta', { name: 'twitter:title', content: title }])
     pageData.frontmatter.head.push(['meta', { name: 'twitter:description', content: description }])
+    pageData.frontmatter.head.push(['meta', { name: 'twitter:image', content: ogUrl }])
+    pageData.frontmatter.head.push(['meta', { property: 'og:title', content: title }])
+    pageData.frontmatter.head.push(['meta', { property: 'og:description', content: description }])
     pageData.frontmatter.head.push(['meta', { property: 'og:url', content: url }])
+    pageData.frontmatter.head.push(['meta', { property: 'og:image', content: ogUrl }])
   },
 
   themeConfig: {
