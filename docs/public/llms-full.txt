@@ -3703,16 +3703,18 @@ Available Schemas
 
 | Schema | v2 URL | Purpose |
 |--------|--------|---------|
-| 🧱 Base | /v2/base.json | Shared fields (title, agent, rules) |
-| ⚙️ Board | /v2/board.json | Board configuration (columns, types) |
-| 📋 Task | /v2/task.json | Standalone task documents |
-| 📦 Contract | /v2/contract.json | Task contract object (task.contract) |
-| 🏗 Epic | /v2/epic.json | Epic documents (groups related tasks) |
-| 📝 ADR | /v2/adr.json | Architecture Decision Records |
+| Base | /v2/base.json | Shared fields (title, agent, rules) |
+| Board | /v2/board.json | Board configuration (columns, types) |
+| Task | /v2/task.json | Standalone task documents |
+| Contract | /v2/contract.json | Task contract object (task.contract) |
+| Epic | /v2/epic.json | Epic documents (groups related tasks) |
+| ADR | /v2/adr.json | Architecture Decision Records |
 
----
+::: tip Extensible by design
+These are the built-in types, but Brainfile is not limited to them. You can define your own schema types for any use case — bug, rfc, spike, incident, whatever fits your workflow. Just set type: your-type in the frontmatter and optionally point schema: to your own JSON Schema URL.
+:::
 
-⚙️ Board (Default)
+Board (Default)
 
 Board configuration defines columns, document types, and project rules. Tasks are standalone files in .brainfile/board/.
 
@@ -3746,13 +3748,9 @@ columns:
 Only title and one column are required.
 :::
 
-Renderer: Kanban board with columns
-
 View Board Schema · Example
 
----
-
-📋 Task
+Task
 
 Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual .md file in .brainfile/board/ (active) or .brainfile/logs/ (completed).
 
@@ -3780,9 +3778,7 @@ Only id, title, and column are required.
 
 View Task Schema · Docs
 
----
-
-📦 Contract (Task Extension)
+Contract (Task Extension)
 
 Task contracts define structured deliverables, validation commands, and constraints for PM-to-agent workflows. Embedded in the contract field of a task file.
 
@@ -3808,9 +3804,7 @@ Only status is required — deliverables and validation are optional.
 
 View Contract Schema · Docs
 
----
-
-🏗 Epic
+Epic
 
 Groups related tasks and tracks collective progress. Extends the task schema with children and status fields.
 
@@ -3839,9 +3833,7 @@ children and status are optional — add them as tasks are created.
 
 View Epic Schema
 
----
-
-📝 ADR
+ADR
 
 Architecture Decision Records with lifecycle status and supersession tracking. Extends the task schema.
 
@@ -3869,9 +3861,7 @@ status defaults to proposed if omitted.
 
 View ADR Schema
 
----
-
-🧱 Base Schema
+Base Schema
 
 All brainfile config files inherit from the base schema which defines shared fields:
 
@@ -3904,8 +3894,6 @@ Only title is required — everything else has sensible defaults.
 
 View Base Schema
 
----
-
 Type Inference
 
 When type is not specified, tools determine the type by:
@@ -3916,15 +3904,11 @@ When type is not specified, tools determine the type by:
 
 <TypeInference />
 
----
-
 Schema Directories
 
 | Version | URL | Status |
 |---------|-----|--------|
 | v2 | brainfile.md/v2/ | Current |
-
----
 
 Next Steps
   - Protocol Specification — File format details

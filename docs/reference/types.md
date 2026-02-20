@@ -56,11 +56,7 @@ columns:
 Only `title` and one `column` are required.
 :::
 
-**Renderer:** Kanban board with columns
-
 [View Board Schema](https://brainfile.md/v2/board.json) · [Example](https://brainfile.md/example/.brainfile/brainfile.md)
-
----
 
 ## Task
 
@@ -90,8 +86,6 @@ Only `id`, `title`, and `column` are required.
 
 [View Task Schema](https://brainfile.md/v2/task.json) · [Docs](/types/board#task-file-structure)
 
----
-
 ## Contract (Task Extension)
 
 Task contracts define structured deliverables, validation commands, and constraints for PM-to-agent workflows. Embedded in the `contract` field of a task file.
@@ -117,8 +111,6 @@ Only `status` is required — deliverables and validation are optional.
 :::
 
 [View Contract Schema](https://brainfile.md/v2/contract.json) · [Docs](/types/contract)
-
----
 
 ## Epic
 
@@ -149,8 +141,6 @@ column: todo
 
 [View Epic Schema](https://brainfile.md/v2/epic.json)
 
----
-
 ## ADR
 
 Architecture Decision Records with lifecycle status and supersession tracking. Extends the task schema.
@@ -178,8 +168,6 @@ column: todo
 :::
 
 [View ADR Schema](https://brainfile.md/v2/adr.json)
-
----
 
 ## Base Schema
 
@@ -214,8 +202,6 @@ Only `title` is required — everything else has sensible defaults.
 
 [View Base Schema](https://brainfile.md/v2/base.json)
 
----
-
 ## Type Inference
 
 When `type` is not specified, tools determine the type by:
@@ -227,15 +213,11 @@ When `type` is not specified, tools determine the type by:
 
 <TypeInference />
 
----
-
 ## Schema Directories
 
 | Version | URL | Status |
 |---------|-----|--------|
 | **v2** | [brainfile.md/v2/](https://brainfile.md/v2/) | Current |
-
----
 
 ## Next Steps
 
