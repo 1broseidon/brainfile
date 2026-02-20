@@ -58,29 +58,32 @@ This creates the .brainfile/ directory with:
   - .brainfile/board/ — Active task files
   - .brainfile/logs/ — Completed task archive
 
+`
+.brainfile/
+├── brainfile.md    ← Board config (columns, types, rules)
+├── board/          ← Active task files go here
+└── logs/           ← Completed tasks archived here
+`
+
 Default columns are To Do and In Progress.
   Use It
 
-Option A: Interactive TUI
+::: tip Interactive TUI
 `
 brainfile          # No arguments launches the TUI
 brainfile tui      # Explicit subcommand also works
 `
 Navigate with keyboard: TAB for columns, j/k for tasks, Enter to expand, q to quit.
+:::
 
-Option B: CLI Commands
+::: tip CLI Commands
 `
 brainfile list                              # See all tasks
 brainfile add --title "My first task"       # Add a task
 brainfile move --task task-1 --column in-progress  # Move columns
 brainfile complete --task task-1            # Complete (moves to logs/)
 `
-
-Option C: AI Agent (Pi)
-  PM session: /listen role pm → /listen on
-  Worker sessions: /listen role worker → /listen on
-  Create tasks with contracts — workers pick them up automatically
-  Run /listen status to see active workers and progress
+:::
 
 ---
 
@@ -120,16 +123,29 @@ brainfile add --title "Create API docs" \
 `
   How agents use it
 
-When an AI agent (like Claude or Cursor) picks up this task, it will see the structured deliverables and validation` commands. This ensures the agent produces exactly what you need.
+When an AI agent (like Claude or Cursor) picks up this task, it will see the structured deliverables and validation commands. This ensures the agent produces exactly what you need.
+
+`
+sequenceDiagram
+    participant PM as PM Agent
+    participant Board as .brainfile/
+    participant Worker as Worker Agent
+    PM->>Board: brainfile add --with-contract
+    Worker->>Board: brainfile contract pickup
+    Worker->>Worker: Implement deliverables
+    Worker->>Board: brainfile contract deliver
+    PM->>Board: brainfile contract validate
+    Board-->>PM: ✓ done
+``
 
 ---
 
 Next Steps
-  - Why Brainfile? — The full story
-  - Getting Started with Contracts — 2-minute intro
-  - CLI Commands — All available commands
-  - MCP Integration — AI assistant setup
-  - Protocol Specification — File format details
+  - Why Brainfile? — The philosophy behind file-based coordination
+  - Getting Started with Contracts — Define deliverables for AI agents
+  - CLI Commands — Full command reference and TUI guide
+  - MCP Integration — Connect your AI assistant directly
+  - Protocol Specification — File format and schema details
 
 ---
 
@@ -267,6 +283,8 @@ The Contract Schema
 
 A contract is an optional property of a task. When present, it formalizes the "handshake" between agents.
 
+Task metadata:
+
 ``
 ---
 id: task-101
@@ -276,6 +294,15 @@ description: |
 assignee: codex
 relatedFiles:
   - src/api/middleware.ts
+`
+
+::: info Task fields provide context
+The description and relatedFiles are the single source of truth for the agent. Write clear, specific requirements here — this is what the worker agent reads first to understand the job.
+:::
+
+Contract definition:
+
+`
 contract:
   status: ready
   deliverables:
@@ -285,14 +312,36 @@ contract:
   - type: test
       path: src/__tests__/rateLimiter.test.ts
       description: Unit tests
+`
+
+::: tip Deliverables define "done"
+Each deliverable specifies an exact file path. The agent knows exactly what to produce, and the PM knows exactly what to check.
+:::
+
+Validation rules:
+
+`
   validation:
     commands:
   - "npm test -- rateLimiter"
+`
+
+::: tip Automated verification
+Validation commands run sequentially during contract validate. If any command exits non-zero, the contract is marked failed and the output is captured as feedback.
+:::
+
+Implementation constraints:
+
+`
   constraints:
   - "Use token bucket algorithm"
   - "Must be non-blocking (async)"
 ---
 `
+
+::: info Constraints guide, not restrict
+Keep constraints focused — 3–5 key requirements, not an exhaustive spec. The agent has autonomy within these guardrails.
+:::
 
 Key Fields
   - status: The current state of the contract (ready, in_progress, delivered, done, failed, blocked).
@@ -309,25 +358,25 @@ Contract Lifecycle
 The lifecycle ensures that work is properly claimed, implemented, and verified.
 
 `
-graph LR
-  ready(ready) --> pickup[pickup]
-  pickup --> in_progress(in_progress)
-  in_progress --> deliver[deliver]
-  deliver --> delivered(delivered)
-  delivered --> validate[validate]
-  validate --> done(done)
-  validate --> failed(failed)
-  failed --> pickup
+stateDiagram-v2
+    [*] --> ready
+    ready --> in_progress: pickup
+    in_progress --> delivered: deliver
+    delivered --> done: validate ✓
+    delivered --> failed: validate ✗
+    failed --> ready: rework
+    in_progress --> blocked: stuck
+    blocked --> ready: resolved
 `
 
 | State | Meaning | Next Action |
 |-------|---------|-------------|
-| ready | Contract is available for an agent to claim. | Agent: contract pickup |
-| in_progress | Agent is currently working on the deliverables. | Agent: contract deliver |
-| delivered | Work is complete and awaiting PM review. | PM: contract validate |
-| done | PM has verified and accepted the work. | PM: brainfile complete to move to logs/. |
-| failed | Validation failed. Feedback is provided. | PM: Add feedback, reset to ready for rework. |
-| blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to ready. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
+| 🔵 ready | Contract is available for an agent to claim. | Agent: contract pickup |
+| 🟡 in_progress | Agent is currently working on the deliverables. | Agent: contract deliver |
+| 📦 delivered | Work is complete and awaiting PM review. | PM: contract validate |
+| ✅ done | PM has verified and accepted the work. | PM: brainfile complete to move to logs/. |
+| ❌ failed | Validation failed. Feedback is provided. | PM: Add feedback, reset to ready for rework. |
+| 🚫 blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to ready. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
 
 ---
 
@@ -367,6 +416,16 @@ PM agents (usually humans or advanced LLMs) manage the lifecycle:
   - If successful: Status becomes done. Run brainfile complete to move to logs/.
   - If issues found: Status becomes failed. Edit task to add feedback and reset status to ready.
 
+::: tip Quick Reference
+| Action | Command |
+|--------|---------|
+| Create with contract | brainfile add --with-contract --deliverable "file:path" --validation "cmd" |
+| Attach to existing | brainfile contract attach -t task-42 --deliverable "path" |
+| Pick up | brainfile contract pickup -t task-X |
+| Deliver | brainfile contract deliver -t task-X |
+| Validate | brainfile contract validate -t task-X |
+:::
+
 State Tracking
 
 Contract metrics are tracked directly within the contract object in each task file:
@@ -388,7 +447,11 @@ Benefits of the System
   - Automated Verification: Integration tests can be part of the contract, ensuring that agents don't break existing functionality.
   - Traceability: Each state transition is tracked, providing a clear history of how a feature was implemented.
 
-See the Agent Workflows Guide for practical patterns and CLI Reference for all available commands.
+Related Pages
+  - Agent Workflows — PM and worker coordination patterns
+  - Contract Commands — Full CLI reference for contract operations
+  - Contract Schema — Formal field-by-field specification
+  - Getting Started — 2-minute intro
 
 ---
 

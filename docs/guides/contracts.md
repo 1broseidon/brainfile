@@ -19,6 +19,8 @@ The Brainfile contract system provides a structured way for AI agents to coordin
 
 A contract is an optional property of a task. When present, it formalizes the "handshake" between agents.
 
+**Task metadata:**
+
 ```yaml
 ---
 id: task-101
@@ -28,6 +30,15 @@ description: |
 assignee: codex
 relatedFiles:
   - src/api/middleware.ts
+```
+
+::: info Task fields provide context
+The `description` and `relatedFiles` are the single source of truth for the agent. Write clear, specific requirements here — this is what the worker agent reads first to understand the job.
+:::
+
+**Contract definition:**
+
+```yaml
 contract:
   status: ready
   deliverables:
@@ -37,14 +48,36 @@ contract:
     - type: test
       path: src/__tests__/rateLimiter.test.ts
       description: Unit tests
+```
+
+::: tip Deliverables define "done"
+Each deliverable specifies an exact file path. The agent knows exactly what to produce, and the PM knows exactly what to check.
+:::
+
+**Validation rules:**
+
+```yaml
   validation:
     commands:
       - "npm test -- rateLimiter"
+```
+
+::: tip Automated verification
+Validation commands run sequentially during `contract validate`. If any command exits non-zero, the contract is marked `failed` and the output is captured as feedback.
+:::
+
+**Implementation constraints:**
+
+```yaml
   constraints:
     - "Use token bucket algorithm"
     - "Must be non-blocking (async)"
 ---
 ```
+
+::: info Constraints guide, not restrict
+Keep constraints focused — 3–5 key requirements, not an exhaustive spec. The agent has autonomy within these guardrails.
+:::
 
 ### Key Fields
 
@@ -62,25 +95,25 @@ contract:
 The lifecycle ensures that work is properly claimed, implemented, and verified.
 
 ```mermaid
-graph LR
-  ready(ready) --> pickup[pickup]
-  pickup --> in_progress(in_progress)
-  in_progress --> deliver[deliver]
-  deliver --> delivered(delivered)
-  delivered --> validate[validate]
-  validate --> done(done)
-  validate --> failed(failed)
-  failed --> pickup
+stateDiagram-v2
+    [*] --> ready
+    ready --> in_progress: pickup
+    in_progress --> delivered: deliver
+    delivered --> done: validate ✓
+    delivered --> failed: validate ✗
+    failed --> ready: rework
+    in_progress --> blocked: stuck
+    blocked --> ready: resolved
 ```
 
 | State | Meaning | Next Action |
 |-------|---------|-------------|
-| `ready` | Contract is available for an agent to claim. | Agent: `contract pickup` |
-| `in_progress` | Agent is currently working on the deliverables. | Agent: `contract deliver` |
-| `delivered` | Work is complete and awaiting PM review. | PM: `contract validate` |
-| `done` | PM has verified and accepted the work. | PM: `brainfile complete` to move to logs/. |
-| `failed` | Validation failed. Feedback is provided. | PM: Add feedback, reset to `ready` for rework. |
-| `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
+| 🔵 `ready` | Contract is available for an agent to claim. | Agent: `contract pickup` |
+| 🟡 `in_progress` | Agent is currently working on the deliverables. | Agent: `contract deliver` |
+| 📦 `delivered` | Work is complete and awaiting PM review. | PM: `contract validate` |
+| ✅ `done` | PM has verified and accepted the work. | PM: `brainfile complete` to move to logs/. |
+| ❌ `failed` | Validation failed. Feedback is provided. | PM: Add feedback, reset to `ready` for rework. |
+| 🚫 `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
 
 ---
 
@@ -116,6 +149,16 @@ PM agents (usually humans or advanced LLMs) manage the lifecycle:
     - If successful: Status becomes `done`. Run `brainfile complete` to move to logs/.
     - If issues found: Status becomes `failed`. Edit task to add feedback and reset status to `ready`.
 
+::: tip Quick Reference
+| Action | Command |
+|--------|---------|
+| Create with contract | `brainfile add --with-contract --deliverable "file:path" --validation "cmd"` |
+| Attach to existing | `brainfile contract attach -t task-42 --deliverable "path"` |
+| Pick up | `brainfile contract pickup -t task-X` |
+| Deliver | `brainfile contract deliver -t task-X` |
+| Validate | `brainfile contract validate -t task-X` |
+:::
+
 ### State Tracking
 Contract metrics are tracked directly within the contract object in each task file:
 
@@ -136,4 +179,9 @@ These metrics are stored within the contract object in your `brainfile.md`.
 -   **Automated Verification**: Integration tests can be part of the contract, ensuring that agents don't break existing functionality.
 -   **Traceability**: Each state transition is tracked, providing a clear history of how a feature was implemented.
 
-See the [Agent Workflows Guide](./agent-workflows) for practical patterns and [CLI Reference](../cli/contract-commands) for all available commands.
+## Related Pages
+
+- [Agent Workflows](/guides/agent-workflows) — PM and worker coordination patterns
+- [Contract Commands](/cli/contract-commands) — Full CLI reference for contract operations
+- [Contract Schema](/reference/contract-schema) — Formal field-by-field specification
+- [Getting Started](/guides/getting-started-with-contracts) — 2-minute intro

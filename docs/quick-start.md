@@ -32,30 +32,33 @@ This creates the `.brainfile/` directory with:
 - `.brainfile/board/` — Active task files
 - `.brainfile/logs/` — Completed task archive
 
+```
+.brainfile/
+├── brainfile.md    ← Board config (columns, types, rules)
+├── board/          ← Active task files go here
+└── logs/           ← Completed tasks archived here
+```
+
 Default columns are `To Do` and `In Progress`.
 
 ## 3. Use It
 
-**Option A: Interactive TUI**
+::: tip Interactive TUI
 ```bash
 brainfile          # No arguments launches the TUI
 brainfile tui      # Explicit subcommand also works
 ```
 Navigate with keyboard: `TAB` for columns, `j`/`k` for tasks, `Enter` to expand, `q` to quit.
+:::
 
-**Option B: CLI Commands**
+::: tip CLI Commands
 ```bash
 brainfile list                              # See all tasks
 brainfile add --title "My first task"       # Add a task
 brainfile move --task task-1 --column in-progress  # Move columns
 brainfile complete --task task-1            # Complete (moves to logs/)
 ```
-
-**Option C: AI Agent ([Pi](https://pi.dev/))**
-1.  PM session: `/listen role pm` → `/listen on`
-2.  Worker sessions: `/listen role worker` → `/listen on`
-3.  Create tasks with contracts — workers pick them up automatically
-4.  Run `/listen status` to see active workers and progress
+:::
 
 ---
 
@@ -97,12 +100,25 @@ brainfile add --title "Create API docs" \
 ### 2. How agents use it
 When an AI agent (like Claude or Cursor) picks up this task, it will see the structured `deliverables` and `validation` commands. This ensures the agent produces exactly what you need.
 
+```mermaid
+sequenceDiagram
+    participant PM as PM Agent
+    participant Board as .brainfile/
+    participant Worker as Worker Agent
+    PM->>Board: brainfile add --with-contract
+    Worker->>Board: brainfile contract pickup
+    Worker->>Worker: Implement deliverables
+    Worker->>Board: brainfile contract deliver
+    PM->>Board: brainfile contract validate
+    Board-->>PM: ✓ done
+```
+
 ---
 
 ## Next Steps
 
-- [Why Brainfile?](/why) — The full story
-- [Getting Started with Contracts](/guides/getting-started-with-contracts) — 2-minute intro
-- [CLI Commands](/tools/cli) — All available commands
-- [MCP Integration](/tools/mcp) — AI assistant setup
-- [Protocol Specification](/reference/protocol) — File format details
+- [Why Brainfile?](/why) — The philosophy behind file-based coordination
+- [Getting Started with Contracts](/guides/getting-started-with-contracts) — Define deliverables for AI agents
+- [CLI Commands](/tools/cli) — Full command reference and TUI guide
+- [MCP Integration](/tools/mcp) — Connect your AI assistant directly
+- [Protocol Specification](/reference/protocol) — File format and schema details
