@@ -200,6 +200,7 @@ export default defineConfig({
   buildEnd: async (siteConfig) => {
     await buildEndGenerateOpenGraphImages({
       baseUrl: 'https://brainfile.md',
+      templateSvgPath: path.resolve(__dirname, '../public/og-template.svg'),
       category: {
         byCustomGetter: (page) => {
           const p = page.sourceFilePath
