@@ -103,6 +103,7 @@ const { site } = useData()
       <!-- Section 5: Ecosystem -->
       <section class="ecosystem">
         <span class="section-label">Ecosystem</span>
+        <p class="ecosystem-note">Integrations are optional adapters. The protocol comes first.</p>
         <div class="eco-list">
           <a href="/tools/cli" class="eco-item">
             <span class="eco-name">CLI &amp; TUI</span>
@@ -116,9 +117,9 @@ const { site } = useData()
             <span class="eco-name">Core Library</span>
             <span class="eco-desc">Build your own integrations.</span>
           </a>
-          <a href="/tools/vscode" class="eco-item">
-            <span class="eco-name">VSCode Extension</span>
-            <span class="eco-desc">Kanban board in your editor.</span>
+          <a href="/tools/pi" class="eco-item">
+            <span class="eco-name">Pi Extension</span>
+            <span class="eco-desc">Showcase orchestrator integration for multi-agent runs.</span>
           </a>
         </div>
       </section>
@@ -375,6 +376,12 @@ const { site } = useData()
 /* ---- Section 5: Ecosystem ---- */
 .ecosystem {
   padding-bottom: 8rem;
+}
+
+.ecosystem-note {
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  color: #585868;
 }
 
 .eco-list {
