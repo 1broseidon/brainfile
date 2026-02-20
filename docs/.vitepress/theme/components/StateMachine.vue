@@ -178,12 +178,11 @@ function tooltipY(s: StateInfo): number {
 <style scoped>
 .state-machine-wrapper {
   width: 100%;
-  overflow-x: auto;
 }
 
 .contract-state-diagram {
-  min-width: 700px;
   max-width: 100%;
+  width: 100%;
   display: block;
 }
 

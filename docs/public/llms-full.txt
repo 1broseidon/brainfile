@@ -3902,8 +3902,6 @@ When type is not specified, tools determine the type by:
   Structural analysis — columns[]` present → board
   Default → board
 
-<TypeInference />
-
 Schema Directories
 
 | Version | URL | Status |
