@@ -1,0 +1,41 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#050508"/>
+
+  <!-- Subtle radial glow -->
+  <radialGradient id="glow" cx="0.7" cy="0.4" r="0.6">
+    <stop offset="0%" stop-color="#0d1525" stop-opacity="1"/>
+    <stop offset="100%" stop-color="#050508" stop-opacity="1"/>
+  </radialGradient>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- Starburst logo (from favicon) — top-right, faint cyan -->
+  <g transform="translate(1020, 40) scale(0.9)" opacity="0.12">
+    <path fill-rule="evenodd" d="M81 36 64 0 47 36l-1 2-9-10a6 6 0 0 0-9 9l10 10h-2L0 64l36 17h2L28 91a6 6 0 1 0 9 9l9-10 1 2 17 36 17-36v-2l9 10a6 6 0 1 0 9-9l-9-9 2-1 36-17-36-17-2-1 9-9a6 6 0 1 0-9-9l-9 10v-2Zm-17 2-2 5c-4 8-11 15-19 19l-5 2 5 2c8 4 15 11 19 19l2 5 2-5c4-8 11-15 19-19l5-2-5-2c-8-4-15-11-19-19l-2-5Z" clip-rule="evenodd" fill="#5cc8ff"/>
+    <path d="M118 19a6 6 0 0 0-9-9l-3 3a6 6 0 1 0 9 9l3-3Zm-96 4c-2 2-6 2-9 0l-3-3a6 6 0 1 1 9-9l3 3c3 2 3 6 0 9Zm0 82c-2-2-6-2-9 0l-3 3a6 6 0 1 0 9 9l3-3c3-2 3-6 0-9Zm96 4a6 6 0 0 1-9 9l-3-3a6 6 0 1 1 9-9l3 3Z" fill="#5cc8ff"/>
+  </g>
+
+  <!-- Category label -->
+  <text fill="#5cc8ff" fill-opacity="0.7" xml:space="preserve" style="white-space: pre" font-family="Inter, -apple-system, sans-serif" font-size="24" font-weight="500" letter-spacing="0.08em"><tspan x="72" y="200">{{category}}</tspan></text>
+
+  <!-- Title lines -->
+  <text fill="#e8e8ec" xml:space="preserve" style="white-space: pre" font-family="Inter, -apple-system, sans-serif" font-size="58" font-weight="600" letter-spacing="-0.02em"><tspan x="72" y="276">{{line1}}</tspan></text>
+  <text fill="#e8e8ec" xml:space="preserve" style="white-space: pre" font-family="Inter, -apple-system, sans-serif" font-size="58" font-weight="600" letter-spacing="-0.02em"><tspan x="72" y="348">{{line2}}</tspan></text>
+  <text fill="#e8e8ec" xml:space="preserve" style="white-space: pre" font-family="Inter, -apple-system, sans-serif" font-size="58" font-weight="600" letter-spacing="-0.02em"><tspan x="72" y="420">{{line3}}</tspan></text>
+
+  <!-- Site name -->
+  <text fill="#585868" xml:space="preserve" style="white-space: pre" font-family="Inter, -apple-system, sans-serif" font-size="22" font-weight="400" letter-spacing="0em"><tspan x="72" y="560">{{siteName}}</tspan></text>
+
+  <!-- Site description (right-aligned) -->
+  <text fill="#383848" xml:space="preserve" style="white-space: pre; text-anchor: end;" font-family="Inter, -apple-system, sans-serif" font-size="20" letter-spacing="0em"><tspan x="1128" y="560">{{siteDescription}}</tspan></text>
+
+  <!-- Bottom accent line -->
+  <linearGradient id="accentLine" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#5cc8ff" stop-opacity="0.6"/>
+    <stop offset="100%" stop-color="#5cc8ff" stop-opacity="0"/>
+  </linearGradient>
+  <rect x="0" y="618" width="1200" height="2" fill="url(#accentLine)"/>
+
+  <!-- Top border line -->
+  <rect x="0" y="0" width="1200" height="1" fill="rgba(255,255,255,0.06)"/>
+</svg>

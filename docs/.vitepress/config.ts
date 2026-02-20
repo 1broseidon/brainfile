@@ -19,10 +19,9 @@ export default defineConfig({
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     ['link', { href: 'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap', rel: 'stylesheet' }],
 
-    // Open Graph
+    // Open Graph (per-page og:image injected by nolebase plugin at buildEnd)
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { property: 'og:site_name', content: 'Brainfile' }],
-    ['meta', { property: 'og:url', content: 'https://brainfile.md' }],
   ],
 
   // Fix EMFILE error on systems with low file watcher limits
@@ -200,38 +199,35 @@ export default defineConfig({
 
   buildEnd: async (siteConfig) => {
     await buildEndGenerateOpenGraphImages({
-      domain: 'https://brainfile.md',
       baseUrl: 'https://brainfile.md',
       category: {
-        byPath: [
-          { path: '/reference/', name: 'Specification & Reference' },
-          { path: '/guides/', name: 'Guides' },
-          { path: '/tools/', name: 'Tools' },
-        ]
-      }
+        byCustomGetter: (page) => {
+          const p = page.sourceFilePath
+          if (p.startsWith('/reference/') || p.startsWith('/types/')) return 'REFERENCE'
+          if (p.startsWith('/guides/') || p.startsWith('/cli/')) return 'GUIDE'
+          if (p.startsWith('/tools/')) return 'TOOLS'
+          return 'PROTOCOL'
+        },
+      },
     })(siteConfig)
   },
 
-  // Dynamically add OG URL/Title/Description and Twitter tags for each page if not present
+  // Per-page OG title/description/url (og:image handled by nolebase plugin)
   transformPageData(pageData) {
     pageData.frontmatter ??= {}
     pageData.frontmatter.head ??= []
-    
+
     const title = pageData.frontmatter.title || pageData.title || 'Brainfile'
-    const description = pageData.frontmatter.description || pageData.description || 'An open protocol for structured task coordination'
-    const relativePath = pageData.relativePath.replace(/\.md$/, '')
+    const description = pageData.frontmatter.description || pageData.description || 'An open protocol for structured task coordination between humans and AI agents'
+    const relativePath = pageData.relativePath.replace(/\.md$/, '').replace(/\/index$/, '')
     const url = `https://brainfile.md/${relativePath === 'index' ? '' : relativePath}`
-    const ogFileName = relativePath === 'index' ? 'og-index.png' : `og-${relativePath.replace(/\//g, '-')}.png`
-    const ogUrl = `https://brainfile.md/${ogFileName}`
-    
+
     pageData.frontmatter.head.push(['meta', { name: 'twitter:card', content: 'summary_large_image' }])
     pageData.frontmatter.head.push(['meta', { name: 'twitter:title', content: title }])
     pageData.frontmatter.head.push(['meta', { name: 'twitter:description', content: description }])
-    pageData.frontmatter.head.push(['meta', { name: 'twitter:image', content: ogUrl }])
     pageData.frontmatter.head.push(['meta', { property: 'og:title', content: title }])
     pageData.frontmatter.head.push(['meta', { property: 'og:description', content: description }])
     pageData.frontmatter.head.push(['meta', { property: 'og:url', content: url }])
-    pageData.frontmatter.head.push(['meta', { property: 'og:image', content: ogUrl }])
   },
 
   themeConfig: {
