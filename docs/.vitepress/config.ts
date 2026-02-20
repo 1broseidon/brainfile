@@ -17,6 +17,22 @@ export default defineConfig({
     ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
     ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
     ['link', { href: 'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap', rel: 'stylesheet' }],
+
+    // Open Graph
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:site_name', content: 'Brainfile' }],
+    ['meta', { property: 'og:title', content: 'Brainfile — An open protocol for agent-to-agent task coordination' }],
+    ['meta', { property: 'og:description', content: 'Human-in-the-loop compatible. File-system native. MIT licensed. Define contracts, delegate to AI agents, validate deliverables.' }],
+    ['meta', { property: 'og:image', content: 'https://brainfile.md/og-banner.jpg' }],
+    ['meta', { property: 'og:image:width', content: '1200' }],
+    ['meta', { property: 'og:image:height', content: '630' }],
+    ['meta', { property: 'og:url', content: 'https://brainfile.md' }],
+
+    // Twitter Card
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:title', content: 'Brainfile — An open protocol for agent-to-agent task coordination' }],
+    ['meta', { name: 'twitter:description', content: 'Human-in-the-loop compatible. File-system native. MIT licensed. Define contracts, delegate to AI agents, validate deliverables.' }],
+    ['meta', { name: 'twitter:image', content: 'https://brainfile.md/og-banner.jpg' }],
   ],
 
   // Fix EMFILE error on systems with low file watcher limits
