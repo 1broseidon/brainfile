@@ -328,7 +328,6 @@ div[class*='language-'] {
 .VPSidebarItem.level-1 > .item > .link,
 .VPSidebarItem .item .link {
   border-radius: 4px;
-  padding-block: 0.25em;
   transition: background-color 0.15s, color 0.15s;
 }
 
