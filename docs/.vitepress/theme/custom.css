@@ -336,19 +336,19 @@ div[class*='language-'] {
   color: var(--void-text-1);
 }
 
-/* 4. Active Sidebar Item */
-.VPSidebarItem.is-active > .item > .link,
-.VPSidebarItem.is-active > .item > .link > .text {
+/* 4. Active Sidebar Item — level-1 only (leaf links, not group headers) */
+.VPSidebarItem.level-1.is-active > .item > .link,
+.VPSidebarItem.level-1.is-active > .item > .link > .text {
   color: var(--accent-cyan) !important;
   font-weight: 500;
 }
 
-.VPSidebarItem.is-active > .item {
+.VPSidebarItem.level-1.is-active > .item {
   border-left: 2px solid var(--accent-cyan);
   margin-left: -1px;
 }
 
-.VPSidebarItem.is-active > .item > .indicator {
+.VPSidebarItem.level-1.is-active > .item > .indicator {
   background-color: var(--accent-cyan) !important;
 }
 
