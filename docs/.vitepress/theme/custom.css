@@ -333,25 +333,10 @@ div[class*='language-'] {
   color: var(--void-text-1);
 }
 
-.VPSidebarItem.level-1 > .item {
-  position: relative;
-}
-
-.VPSidebarItem.level-1 > .item::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 2px;
-  height: 60%;
-  background-color: var(--accent-cyan);
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.VPSidebarItem.level-1 > .item:hover::before {
-  opacity: 1;
+/* Show the native indicator bar on hover (same position as active) */
+.VPSidebarItem.level-1 > .item:hover > .indicator {
+  background-color: var(--accent-cyan) !important;
+  opacity: 0.5;
 }
 
 /* 4. Active Sidebar Item — level-1 only (leaf links, not group headers) */
