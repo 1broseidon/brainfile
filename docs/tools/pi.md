@@ -5,11 +5,11 @@ description: Agent-native orchestration for Brainfile in Pi
 
 <!-- Validation compatibility: Pi|pi extension|run.closed|stale|worker -->
 
-# Pi Extension
+# Pi Extension <Badge type="warning" text="beta" />
 
 The Brainfile extension for [Pi](https://pi.dev/) is the primary way to run multi-agent orchestration against a Brainfile board.
 
-Source code: `protocol/example/integrations/pi/brainfile-extension/`
+[Source code on GitHub](https://github.com/brainfile/protocol/tree/main/example/integrations/pi/brainfile-extension)
 
 ## Features
 
@@ -137,10 +137,11 @@ Role aliases: `main`, `planner`, `orchestrator` → pm; `agent` → worker.
 
 ## Setup
 
-1. Copy the extension into your workspace:
+1. Clone the extension into your workspace:
 
 ```bash
-cp -r protocol/example/integrations/pi/brainfile-extension/ .pi/extensions/brainfile-extension/
+git clone https://github.com/brainfile/protocol.git /tmp/brainfile-protocol
+cp -r /tmp/brainfile-protocol/example/integrations/pi/brainfile-extension/ .pi/extensions/brainfile-extension/
 ```
 
 2. Install dependencies:

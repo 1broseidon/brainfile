@@ -1091,11 +1091,11 @@ Next Steps
 
 ## 8. Pi Extension Integration
 
-Pi Extension
+Pi Extension <Badge type="warning" text="beta" />
 
 The Brainfile extension for Pi is the primary way to run multi-agent orchestration against a Brainfile board.
 
-Source code: protocol/example/integrations/pi/brainfile-extension/
+Source code on GitHub
 
 Features
 
@@ -1219,10 +1219,11 @@ Top-Level
 | /plan | Toggle plan mode (mutations disabled) |
 
 Setup
-  Copy the extension into your workspace:
+  Clone the extension into your workspace:
 
 `
-cp -r protocol/example/integrations/pi/brainfile-extension/ .pi/extensions/brainfile-extension/
+git clone https://github.com/brainfile/protocol.git /tmp/brainfile-protocol
+cp -r /tmp/brainfile-protocol/example/integrations/pi/brainfile-extension/ .pi/extensions/brainfile-extension/
 `
   Install dependencies:
 
