@@ -280,6 +280,12 @@ export default defineConfig({
           { text: 'Core Library', link: '/tools/core' },
         ],
       },
+      {
+        text: 'Community',
+        items: [
+          { text: 'Contributing', link: '/contributing' },
+        ],
+      },
     ],
 
     socialLinks: [

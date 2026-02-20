@@ -132,8 +132,8 @@ onUnmounted(() => {
           <div class="footer-col">
             <h4 class="footer-col-title">Community</h4>
             <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
-            <a href="https://github.com/brainfile/brainfile/discussions" target="_blank" rel="noopener">Discussions</a>
-            <a href="https://github.com/brainfile/brainfile/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+            <a href="https://github.com/orgs/brainfile/discussions" target="_blank" rel="noopener">Discussions</a>
+            <a href="/contributing">Contributing</a>
           </div>
         </div>
         <div class="footer-bottom">
