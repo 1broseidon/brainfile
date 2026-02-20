@@ -18,6 +18,10 @@ Brainfile uses JSON Schema to define the structure of board configuration and ta
 | **Epic** | `/v2/epic.json` | Epic documents (groups related tasks) |
 | **ADR** | `/v2/adr.json` | Architecture Decision Records |
 
+::: tip Extensible by design
+These are the built-in types, but Brainfile is not limited to them. You can define your own schema types for any use case — `bug`, `rfc`, `spike`, `incident`, whatever fits your workflow. Just set `type: your-type` in the frontmatter and optionally point `schema:` to your own JSON Schema URL.
+:::
+
 ---
 
 ## Board (Default)
