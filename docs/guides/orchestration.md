@@ -108,8 +108,7 @@ brainfile complete -t {task-id}
 
 ## Agent Delegation Reference
 
-::: info Agent Roles
-Match agent strengths to task types for optimal results. These are example roles — name and configure them to fit your workflow.
+Match agent strengths to task types. These are example roles — name and configure them to fit your workflow.
 
 | Need | Example Role |
 |------|-------------|
@@ -119,7 +118,6 @@ Match agent strengths to task types for optimal results. These are example roles
 | Spec compliance verification | Compliance agent |
 | Deep debugging | Debugging agent |
 | Codebase exploration | Explorer agent |
-:::
 
 ## You vs Agents
 
