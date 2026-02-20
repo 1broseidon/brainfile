@@ -65,17 +65,15 @@ function onKeydown(e: KeyboardEvent, index: number) {
       </button>
     </div>
 
-    <!-- Tab panels -->
+    <!-- Tab panels — all rendered, stacked via grid, only active visible -->
     <div class="showcase-panels">
-      <Transition name="showcase-fade" mode="out-in">
         <!-- Board tab -->
         <div
-          v-if="activeTab === 'board'"
           key="board"
           role="tabpanel"
           id="panel-board"
           aria-labelledby="tab-board"
-          class="showcase-panel"
+          :class="['showcase-panel', { active: activeTab === 'board' }]"
         >
           <div class="code-block">
             <pre><code><span class="hl-fence">---</span>
@@ -95,12 +93,11 @@ function onKeydown(e: KeyboardEvent, index: number) {
 
         <!-- Task tab -->
         <div
-          v-else-if="activeTab === 'task'"
           key="task"
           role="tabpanel"
           id="panel-task"
           aria-labelledby="tab-task"
-          class="showcase-panel"
+          :class="['showcase-panel', { active: activeTab === 'task' }]"
         >
           <div class="code-block">
             <pre><code><span class="hl-fence">---</span>
@@ -123,12 +120,11 @@ function onKeydown(e: KeyboardEvent, index: number) {
 
         <!-- Contract tab -->
         <div
-          v-else-if="activeTab === 'contract'"
           key="contract"
           role="tabpanel"
           id="panel-contract"
           aria-labelledby="tab-contract"
-          class="showcase-panel"
+          :class="['showcase-panel', { active: activeTab === 'contract' }]"
         >
           <div class="code-block">
             <pre><code><span class="hl-comment"># added to task-12 frontmatter</span>
@@ -151,12 +147,11 @@ function onKeydown(e: KeyboardEvent, index: number) {
 
         <!-- Validation tab -->
         <div
-          v-else
           key="validation"
           role="tabpanel"
           id="panel-validation"
           aria-labelledby="tab-validation"
-          class="showcase-panel"
+          :class="['showcase-panel', { active: activeTab === 'validation' }]"
         >
           <div class="code-block terminal">
             <pre><code><span class="t-prompt">$</span> <span class="t-cmd">brainfile contract validate</span> -t task-12
@@ -170,7 +165,6 @@ function onKeydown(e: KeyboardEvent, index: number) {
 <span class="t-pass">✓ Contract validated. Status: done</span></code></pre>
           </div>
         </div>
-      </Transition>
     </div>
   </div>
 </template>
@@ -237,13 +231,24 @@ function onKeydown(e: KeyboardEvent, index: number) {
   transform: scaleX(1);
 }
 
-/* ---- Panels ---- */
+/* ---- Panels (grid-stacked so tallest sets height) ---- */
 .showcase-panels {
-  min-height: 0;
+  display: grid;
 }
 
 .showcase-panel {
+  grid-area: 1 / 1;
   width: 100%;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.showcase-panel.active {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ---- Code block ---- */
@@ -312,21 +317,9 @@ function onKeydown(e: KeyboardEvent, index: number) {
   color: #505060;
 }
 
-/* ---- Transition ---- */
-.showcase-fade-enter-active,
-.showcase-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.showcase-fade-enter-from,
-.showcase-fade-leave-to {
-  opacity: 0;
-}
-
 /* ---- Reduced motion ---- */
 @media (prefers-reduced-motion: reduce) {
-  .showcase-fade-enter-active,
-  .showcase-fade-leave-active {
+  .showcase-panel {
     transition: none;
   }
 

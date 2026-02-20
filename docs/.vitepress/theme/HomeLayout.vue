@@ -74,6 +74,7 @@ onUnmounted(() => {
         </div>
       </section>
 
+      <div class="home-inner">
       <!-- Section 2b: Contract Lifecycle -->
       <section class="lifecycle fade-section">
         <span class="section-label">A contract has a lifecycle.</span>
@@ -140,6 +141,7 @@ onUnmounted(() => {
           <span class="footer-agent">For agents: <a href="/llms-install.txt">brainfile.md/llms-install.txt</a></span>
         </div>
       </footer>
+      </div>
     </main>
   </div>
 </template>
@@ -193,6 +195,11 @@ onUnmounted(() => {
   max-width: 1100px;
   margin: 0 auto;
   padding: 0 1.5rem;
+}
+
+.home-inner {
+  max-width: 860px;
+  margin: 0 auto;
 }
 
 /* ---- Section 1: Hero split ---- */
