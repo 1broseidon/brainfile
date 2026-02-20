@@ -1,12 +1,62 @@
 <script setup lang="ts">
 import { useData } from 'vitepress'
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import ArchitectureDiagram from './components/ArchitectureDiagram.vue'
 import ComparisonTable from './components/ComparisonTable.vue'
 
 const { site } = useData()
 
 const copySuccess = ref(false)
+const codeBlockCopySuccess = ref(false)
+const homeRef = ref<HTMLElement | null>(null)
+const codeBlockRef = ref<HTMLElement | null>(null)
+
+// IntersectionObserver for scroll-triggered fade-in animations
+let observer: IntersectionObserver | null = null
+
+onMounted(() => {
+  if (!homeRef.value) return
+  const sections = homeRef.value.querySelectorAll('.fade-section')
+
+  observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible')
+          observer?.unobserve(entry.target)
+        }
+      })
+    },
+    { threshold: 0.1 }
+  )
+
+  sections.forEach((section) => observer?.observe(section))
+})
+
+onUnmounted(() => {
+  observer?.disconnect()
+  observer = null
+})
+
+async function copyCodeBlock() {
+  const text = codeBlockRef.value?.textContent || ''
+  try {
+    await navigator.clipboard.writeText(text)
+    codeBlockCopySuccess.value = true
+    setTimeout(() => { codeBlockCopySuccess.value = false }, 2000)
+  } catch {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    codeBlockCopySuccess.value = true
+    setTimeout(() => { codeBlockCopySuccess.value = false }, 2000)
+  }
+}
 
 const quickStartCommands = `npm install -g @brainfile/cli
 brainfile init
@@ -38,7 +88,7 @@ async function copyToClipboard() {
 </script>
 
 <template>
-  <div class="home-root">
+  <div class="home-root" ref="homeRef">
     <nav class="home-nav">
       <div class="nav-brand">
         <a href="/" class="nav-wordmark">brainfile</a>
@@ -54,11 +104,11 @@ async function copyToClipboard() {
 
     <main class="home-content">
       <!-- Section 1: Opening (with dot grid background) -->
-      <section class="opening">
+      <section class="opening fade-section">
         <div class="dot-grid-bg"></div>
         <h1 class="wordmark">brainfile</h1>
-        <p class="headline">The missing coordination layer for AI agents.</p>
-        <p class="subline">Tasks as files. Contracts as code. Validation as proof.<br>Git-native. Vendor-agnostic. MIT licensed.</p>
+        <p class="headline">An open protocol for agent-to-agent task coordination.</p>
+        <p class="subline">Human-in-the-loop compatible. File-system native. MIT licensed.</p>
         <div class="opening-links">
           <a href="/reference/protocol" class="link-primary">Read the Specification <span class="arrow">&rarr;</span></a>
           <a href="/quick-start" class="link-secondary">Quick Start <span class="arrow">&rarr;</span></a>
@@ -66,9 +116,23 @@ async function copyToClipboard() {
       </section>
 
       <!-- Section 2: The Protocol -->
-      <section class="protocol-hero">
+      <section class="protocol-hero fade-section">
         <span class="section-label">A contract is a file.</span>
-        <div class="code-block">
+        <div class="code-block" ref="codeBlockRef">
+          <button class="copy-overlay" @click="copyCodeBlock" :title="codeBlockCopySuccess ? 'Copied!' : 'Copy to clipboard'">
+            <template v-if="!codeBlockCopySuccess">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                <path d="M3 11V3C3 2.44772 3.44772 2 4 2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </template>
+            <template v-else>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M3 8.5L6.5 12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="copy-overlay-text">Copied!</span>
+            </template>
+          </button>
           <pre><code><span class="hl-key">id:</span> task-12
 <span class="hl-key">title:</span> Add rate limiting to API gateway
 <span class="hl-key">column:</span> in-progress
@@ -97,7 +161,7 @@ async function copyToClipboard() {
       </section>
 
       <!-- Section 2b: Contract Lifecycle -->
-      <section class="lifecycle">
+      <section class="lifecycle fade-section">
         <span class="section-label">A contract has a lifecycle.</span>
         <div class="state-machine">
           <svg viewBox="0 0 750 240" xmlns="http://www.w3.org/2000/svg" class="contract-state-diagram">
@@ -174,7 +238,7 @@ async function copyToClipboard() {
       </section>
 
       <!-- Section 3: How it works -->
-      <section class="how-it-works">
+      <section class="how-it-works fade-section">
         <div class="step">
           <div class="step-left">
             <span class="step-number">01</span>
@@ -208,13 +272,13 @@ async function copyToClipboard() {
       </section>
 
       <!-- Section 4: Architecture -->
-      <section class="architecture">
+      <section class="architecture fade-section">
         <span class="section-label">How it fits together.</span>
         <ArchitectureDiagram />
       </section>
 
       <!-- Section 5: Design decisions -->
-      <section class="decisions">
+      <section class="decisions fade-section">
         <div class="decision">
           <h3>Why files?</h3>
           <p>Tasks live in your repo. Git history is your audit trail. No database, no API, no vendor lock-in.</p>
@@ -233,7 +297,7 @@ async function copyToClipboard() {
       <ComparisonTable />
 
       <!-- Section 7: Ecosystem (Card-based) -->
-      <section class="ecosystem">
+      <section class="ecosystem fade-section">
         <span class="section-label">Ecosystem</span>
         <p class="ecosystem-note">Integrations are optional adapters. The protocol comes first.</p>
         <div class="eco-grid">
@@ -273,7 +337,7 @@ async function copyToClipboard() {
       </section>
 
       <!-- Section 6: Quick Start Terminal -->
-      <section class="quick-start">
+      <section class="quick-start fade-section">
         <span class="section-label">Get started in 30 seconds.</span>
         <div class="terminal">
           <div class="terminal-header">
@@ -294,6 +358,20 @@ async function copyToClipboard() {
             </button>
           </div>
           <div class="terminal-body">
+            <button class="copy-overlay" @click="copyToClipboard" :title="copySuccess ? 'Copied!' : 'Copy to clipboard'">
+              <template v-if="!copySuccess">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="5" y="5" width="9" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  <path d="M3 11V3C3 2.44772 3.44772 2 4 2H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </template>
+              <template v-else>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M3 8.5L6.5 12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span class="copy-overlay-text">Copied!</span>
+              </template>
+            </button>
             <pre><code><span class="t-prompt">$</span> <span class="t-cmd">npm install -g</span> @brainfile/cli
 
 <span class="t-prompt">$</span> <span class="t-cmd">brainfile init</span>
@@ -972,6 +1050,62 @@ async function copyToClipboard() {
 .contract-state-diagram .text.failed { fill: #ff5555; }
 
 .contract-state-diagram .line.success { stroke: #5cc8ff; }
+
+/* ---- Scroll fade-in animations ---- */
+@media (prefers-reduced-motion: no-preference) {
+  .fade-section {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 300ms ease-out, transform 300ms ease-out;
+  }
+
+  .fade-section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ---- Copy overlay buttons ---- */
+.code-block,
+.terminal-body {
+  position: relative;
+}
+
+.copy-overlay {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  background: rgba(10, 10, 14, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 5px;
+  color: #505060;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+  z-index: 1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.code-block:hover .copy-overlay,
+.terminal-body:hover .copy-overlay {
+  opacity: 1;
+}
+
+.copy-overlay:hover {
+  color: #a0a0b0;
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(10, 10, 14, 0.95);
+}
+
+.copy-overlay-text {
+  color: #43d08a;
+}
 
 /* ---- Responsive ---- */
 @media (max-width: 640px) {
