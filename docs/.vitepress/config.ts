@@ -1,9 +1,10 @@
 import { defineConfig } from 'vitepress'
+import { withMermaid } from 'vitepress-plugin-mermaid'
 import fs from 'fs'
 import path from 'path'
 import { buildEndGenerateOpenGraphImages } from '@nolebase/vitepress-plugin-og-image/vitepress'
 
-export default defineConfig({
+export default withMermaid(defineConfig({
   title: 'Brainfile',
   description: 'An open protocol for structured task coordination between humans and AI agents',
   cleanUrls: true,
@@ -231,6 +232,50 @@ export default defineConfig({
     pageData.frontmatter.head.push(['meta', { property: 'og:url', content: url }])
   },
 
+  mermaid: {
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#0f111a',
+      primaryBorderColor: 'rgba(255, 255, 255, 0.12)',
+      primaryTextColor: '#e8e8ec',
+      secondaryColor: '#161925',
+      secondaryBorderColor: 'rgba(255, 255, 255, 0.08)',
+      secondaryTextColor: '#a0a0b0',
+      tertiaryColor: '#0a0a0f',
+      tertiaryBorderColor: 'rgba(255, 255, 255, 0.06)',
+      tertiaryTextColor: '#a0a0b0',
+      lineColor: '#585868',
+      textColor: '#e8e8ec',
+      noteBkgColor: '#0f111a',
+      noteTextColor: '#a0a0b0',
+      noteBorderColor: 'rgba(255, 255, 255, 0.08)',
+      nodeBorder: 'rgba(255, 255, 255, 0.12)',
+      mainBkg: '#0f111a',
+      clusterBkg: '#0a0a0f',
+      clusterBorder: 'rgba(255, 255, 255, 0.06)',
+      actorBkg: '#0f111a',
+      actorBorder: 'rgba(255, 255, 255, 0.12)',
+      actorTextColor: '#e8e8ec',
+      signalColor: '#5cc8ff',
+      signalTextColor: '#e8e8ec',
+      activationBkgColor: '#161925',
+      activationBorderColor: '#5cc8ff',
+      sequenceNumberColor: '#050508',
+      labelBoxBkgColor: '#0f111a',
+      labelBoxBorderColor: 'rgba(255, 255, 255, 0.08)',
+      labelTextColor: '#e8e8ec',
+      edgeLabelBackground: '#0a0a0f',
+      labelColor: '#e8e8ec',
+      altBackground: '#0a0a0f',
+      fontFamily: '"JetBrains Mono", monospace',
+      fontSize: '14px',
+    },
+  },
+
+  mermaidPlugin: {
+    class: 'mermaid-diagram',
+  },
+
   themeConfig: {
     nav: [
       { text: 'Specification', link: '/reference/protocol' },
@@ -302,4 +347,4 @@ export default defineConfig({
       copyright: 'Copyright © 2025 Brainfile',
     },
   },
-})
+}))

@@ -9,7 +9,9 @@
     "generate-llms": "tsx scripts/generate-llms-full.ts"
   },
   "dependencies": {
+    "mermaid": "^11.12.3",
     "vitepress": "^1.5.0",
+    "vitepress-plugin-mermaid": "^2.0.17",
     "vue": "^3.5.13"
   },
   "devDependencies": {

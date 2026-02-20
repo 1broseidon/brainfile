@@ -12,6 +12,37 @@
   --void-border: rgba(255, 255, 255, 0.06);
 
   --accent-cyan: #5cc8ff;
+  --void-border-strong: rgba(255, 255, 255, 0.12);
+  --accent-cyan-dim: rgba(92, 200, 255, 0.15);
+  --accent-amber: #ffb347;
+  --accent-amber-dim: rgba(255, 179, 71, 0.12);
+  --accent-red: #ff6b6b;
+  --accent-red-dim: rgba(255, 107, 107, 0.12);
+  --accent-blue: #6b8aff;
+  --accent-blue-dim: rgba(107, 138, 255, 0.12);
+
+  /* VitePress custom block overrides */
+  --vp-custom-block-tip-border: var(--accent-cyan);
+  --vp-custom-block-tip-bg: var(--accent-cyan-dim);
+  --vp-custom-block-tip-text: var(--void-text-1);
+  --vp-custom-block-info-border: var(--accent-blue);
+  --vp-custom-block-info-bg: var(--accent-blue-dim);
+  --vp-custom-block-info-text: var(--void-text-1);
+  --vp-custom-block-warning-border: var(--accent-amber);
+  --vp-custom-block-warning-bg: var(--accent-amber-dim);
+  --vp-custom-block-warning-text: var(--void-text-1);
+  --vp-custom-block-danger-border: var(--accent-red);
+  --vp-custom-block-danger-bg: var(--accent-red-dim);
+  --vp-custom-block-danger-text: var(--void-text-1);
+  --vp-custom-block-details-border: var(--void-border-strong);
+  --vp-custom-block-details-bg: var(--void-surface);
+  --vp-custom-block-details-text: var(--void-text-1);
+
+  /* Code block overrides */
+  --vp-code-block-bg: #0a0a0e;
+  --vp-code-copy-code-bg: var(--void-surface);
+  --vp-code-copy-code-hover-bg: var(--void-bg-alt);
+  --vp-code-copy-code-active-text: var(--accent-cyan);
 
   --vp-c-bg: var(--void-bg);
   --vp-c-bg-alt: var(--void-bg-alt);
@@ -56,4 +87,289 @@ div[class*='language-'] {
   border: 1px solid var(--void-border) !important;
   background-color: #0a0a0e !important;
   border-radius: 8px !important;
+}
+
+/* =============================================
+   Phase 1b: Global CSS polish
+   Tables, containers, typography, code blocks
+   ============================================= */
+
+/* --- 1. Tables --- */
+.vp-doc table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--void-border-strong);
+  border-radius: 8px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.vp-doc table th {
+  background-color: var(--void-surface);
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.8em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--void-text-2);
+  padding: 0.75em 1em;
+}
+
+.vp-doc table td {
+  padding: 0.65em 1em;
+  border-bottom: 1px solid var(--void-border);
+  font-size: 0.9em;
+}
+
+.vp-doc table tr:last-child td {
+  border-bottom: none;
+}
+
+.vp-doc table tr:nth-child(even) td {
+  background-color: var(--void-bg-alt);
+}
+
+.vp-doc table tr:hover td {
+  background-color: var(--void-surface);
+}
+
+.vp-doc table td:first-child {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.85em;
+  color: var(--accent-cyan);
+  white-space: nowrap;
+}
+
+/* --- 2. Custom Containers --- */
+.vp-doc .custom-block {
+  border: 1px solid transparent;
+  border-left-width: 3px;
+  border-radius: 0 6px 6px 0;
+  padding: 1em 1.2em;
+  margin: 1.5em 0;
+}
+
+.vp-doc .custom-block .custom-block-title {
+  font-family: var(--vp-font-family-mono);
+  font-size: 0.85em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.vp-doc .custom-block.tip {
+  border-color: var(--accent-cyan);
+}
+
+.vp-doc .custom-block.tip .custom-block-title {
+  color: var(--accent-cyan);
+}
+
+.vp-doc .custom-block.info {
+  border-color: var(--accent-blue);
+}
+
+.vp-doc .custom-block.info .custom-block-title {
+  color: var(--accent-blue);
+}
+
+.vp-doc .custom-block.warning {
+  border-color: var(--accent-amber);
+}
+
+.vp-doc .custom-block.warning .custom-block-title {
+  color: var(--accent-amber);
+}
+
+.vp-doc .custom-block.danger {
+  border-color: var(--accent-red);
+}
+
+.vp-doc .custom-block.danger .custom-block-title {
+  color: var(--accent-red);
+}
+
+.vp-doc .custom-block.details summary {
+  font-family: var(--vp-font-family-mono);
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.vp-doc .custom-block.details summary:hover {
+  color: var(--accent-cyan);
+}
+
+/* --- 3. Headings --- */
+.vp-doc h2 {
+  padding-bottom: 0.6em;
+  border-bottom: 1px solid var(--void-border);
+}
+
+.vp-doc h3,
+.vp-doc h4 {
+  letter-spacing: -0.01em;
+}
+
+/* --- 4. Inline Code --- */
+.vp-doc :not(pre) > code {
+  background-color: var(--void-surface);
+  border: 1px solid var(--void-border-strong);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-size: 0.875em;
+  color: var(--accent-cyan);
+}
+
+/* --- 5. Links --- */
+.vp-doc a {
+  color: var(--accent-cyan);
+  text-decoration: none;
+  transition: color 0.2s ease, text-decoration-color 0.2s ease;
+}
+
+.vp-doc a:hover {
+  text-decoration: underline;
+  text-decoration-color: rgba(92, 200, 255, 0.4);
+  text-underline-offset: 3px;
+}
+
+.vp-doc a[href^="http"]:not([href*="brainfile.md"])::after {
+  content: ' ↗';
+  font-size: 0.75em;
+  opacity: 0.5;
+  vertical-align: super;
+}
+
+/* --- 6. Blockquotes --- */
+.vp-doc blockquote {
+  border-left: 3px solid var(--accent-cyan);
+  background-color: var(--accent-cyan-dim);
+  padding: 0.8em 1.2em;
+  border-radius: 0 6px 6px 0;
+}
+
+/* --- 7. Code Block Copy Button --- */
+.vp-doc div[class*='language-'] button.copy {
+  border: 1px solid var(--void-border);
+  background-color: var(--void-surface);
+  border-radius: 6px;
+}
+
+.vp-doc div[class*='language-'] button.copy:hover {
+  border-color: var(--accent-cyan);
+  background-color: var(--void-bg-alt);
+}
+
+.vp-doc div[class*='language-'] button.copy.copied {
+  border-color: var(--accent-cyan);
+  background-color: var(--accent-cyan-dim);
+}
+
+/* --- 8. Mermaid Diagrams --- */
+.vp-doc .mermaid-diagram,
+.vp-doc .mermaid {
+  background: transparent;
+  margin: 1.5em 0;
+  text-align: center;
+}
+
+.vp-doc .mermaid-diagram svg,
+.vp-doc .mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* --- 9. Misc --- */
+.vp-doc hr {
+  border: none;
+  border-top: 1px solid var(--void-border);
+  margin: 2em 0;
+}
+
+.vp-doc li::marker {
+  color: var(--void-text-3);
+}
+
+.VPFooter {
+  border-top: 1px solid var(--void-border);
+  background-color: var(--void-bg);
+}
+
+/* --- Responsive: Tables --- */
+@media (max-width: 768px) {
+  .vp-doc table {
+    display: block;
+    overflow-x: auto;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   Sidebar, TOC & Search — Phase 1c
+   ═══════════════════════════════════════════════════════ */
+
+/* 1. Sidebar Base */
+.VPSidebar {
+  background-color: var(--void-bg) !important;
+}
+
+/* 2. Sidebar Group Titles */
+.VPSidebarItem.level-0 > .item > .text,
+.VPSidebar .group > .VPSidebarItem > .item > .text {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--void-text-3);
+  padding: 0.25em 0;
+}
+
+/* 3. Sidebar Links */
+.VPSidebarItem.level-1 > .item > .link,
+.VPSidebarItem .item .link {
+  border-radius: 4px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.VPSidebarItem .item .link:hover {
+  background-color: var(--void-surface);
+  color: var(--void-text-1);
+}
+
+/* 4. Active Sidebar Item */
+.VPSidebarItem.is-active > .item > .link,
+.VPSidebarItem.is-active > .item > .link > .text {
+  color: var(--accent-cyan) !important;
+  font-weight: 500;
+}
+
+.VPSidebarItem.is-active > .item {
+  border-left: 2px solid var(--accent-cyan);
+  margin-left: -1px;
+}
+
+.VPSidebarItem.is-active > .item > .indicator {
+  background-color: var(--accent-cyan) !important;
+}
+
+/* 5. Right Sidebar TOC */
+.VPDocAsideOutline .outline-link.active {
+  color: var(--accent-cyan);
+  font-weight: 500;
+  transition: color 0.15s;
+}
+
+.VPDocAsideOutline .outline-link:hover {
+  color: var(--void-text-1);
+}
+
+/* 6. Search */
+.VPLocalSearchBox .search-input {
+  background-color: var(--void-surface);
+  border: 1px solid var(--void-border-strong);
+}
+
+.VPLocalSearchBox .result.selected {
+  border-color: var(--accent-cyan);
+  background-color: var(--accent-cyan-dim);
 }
