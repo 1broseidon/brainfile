@@ -102,6 +102,11 @@ div[class*='language-'] {
   border-radius: 8px;
   overflow: hidden;
   width: 100%;
+  display: table;
+}
+
+.vp-doc .vp-table {
+  width: 100%;
 }
 
 .vp-doc table th {
