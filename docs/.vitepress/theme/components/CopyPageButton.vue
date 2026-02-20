@@ -49,7 +49,7 @@ async function copyPage() {
     <svg v-else width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 8.5L6.5 12L13 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    <span>{{ copied ? 'Copied!' : 'Copy page' }}</span>
+    <span class="copy-page-label">{{ copied ? 'Copied!' : 'Copy page' }}</span>
   </button>
 </template>
 
@@ -77,5 +77,15 @@ async function copyPage() {
 
 .copy-page-btn svg {
   flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .copy-page-label {
+    display: none;
+  }
+
+  .copy-page-btn {
+    padding: 0.3rem;
+  }
 }
 </style>
