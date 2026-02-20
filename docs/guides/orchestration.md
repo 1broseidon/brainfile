@@ -2,13 +2,9 @@
 
 This guide explains how to act as an orchestrator (PM) coordinating work across multiple AI agents using brainfile contracts.
 
-::: tip Multi-Agent Orchestration in Pi
-For a fully automated PM/Worker workflow with event-sourced coordination, worker presence, stale detection, and lease-based identity assignment, see the **[Pi Extension](/tools/pi)**.
-:::
-
 ## Role
 
-As orchestrator, you **plan, delegate, and coordinate** - you don't implement directly unless explicitly asked.
+As orchestrator, you **plan, delegate, and coordinate** — you don't implement directly unless explicitly asked.
 
 ## Workflow Overview
 
@@ -35,7 +31,7 @@ For non-trivial work, create a task with contract:
 brainfile add -c todo \
   --title "Task title" \
   --description "Detailed requirements and context" \
-  --assignee @brainfile-implementer \
+  --assignee worker-agent \
   --priority high \
   --with-contract \
   --deliverable "file:src/feature.ts:Implementation" \
@@ -47,57 +43,51 @@ brainfile add -c todo \
 Add validation subtasks:
 
 ```bash
-brainfile subtask --add "@qa-agent complexity review" -t {task-id}
-brainfile subtask --add "@qa-compliance spec compliance" -t {task-id}
+brainfile subtask --add "QA complexity review" -t {task-id}
+brainfile subtask --add "Spec compliance check" -t {task-id}
 ```
 
 For complex features, write PRD to `.brainfile/plans/{task-id}.md` and add to task's `relatedFiles`.
 
 ### 3. Research (if needed)
 
-Delegate to `@brainfile-researcher` before planning when you need:
+Delegate to a research agent before planning when you need:
 - External API documentation
 - Library best practices
 - Technical approach options
 
-Researcher returns concise findings. You decide architecture.
+The research agent returns concise findings. You decide architecture.
 
 ::: tip Research First
-When you're unsure about technical approach, always delegate to `@brainfile-researcher` before creating implementation contracts. Better specs upfront means fewer rework cycles.
+When you're unsure about technical approach, always research before creating implementation contracts. Better specs upfront means fewer rework cycles.
 :::
 
 ### 4. Delegate Implementation
 
-Invoke `@brainfile-implementer` with task ID:
-
-```
-Implement task-{id}
-```
-
-Implementer will:
-1. Pick up contract (`brainfile contract pickup`)
-2. Implement according to deliverables/constraints
+Assign the task to a worker agent. The worker will:
+1. Pick up the contract (`brainfile contract pickup`)
+2. Implement according to deliverables and constraints
 3. Deliver (`brainfile contract deliver`)
-4. Return brief status
+4. Return a brief status summary
 
 ### 5. Validate
 
-After delivery, run validation sequence:
+After delivery, run your validation sequence:
 
-**Step 1: `@brainfile-qa-agent`** - complexity review
-- Pass: toggles `sub-qa-agent` subtask
-- Fail: reports issues, subtask remains incomplete
+**Step 1: Complexity review** — does the implementation match the scope?
+- Pass: toggle the QA subtask
+- Fail: report issues, subtask remains incomplete
 
-**Step 2: `@brainfile-qa-compliance`** - spec compliance + reality check
-- Runs `brainfile contract validate` if validation commands exist
-- Pass: toggles `sub-qa-compliance` subtask
-- Fail: reports issues, subtask remains incomplete
+**Step 2: Spec compliance** — does it meet the contract?
+- Run `brainfile contract validate` if validation commands exist
+- Pass: toggle the compliance subtask
+- Fail: report issues, subtask remains incomplete
 
 ### 6. Handle Failures
 
 When validation fails:
 
-**Minor issues** - Add feedback, send back to implementer:
+**Minor issues** — add feedback and send back to the worker:
 ```yaml
 # Edit task YAML
 contract:
@@ -106,7 +96,7 @@ contract:
   status: ready  # Reset from failed/delivered
 ```
 
-**Complex bugs** - Invoke `@brainfile-debugger` (Opus) for root cause analysis. After fix, route back through validation.
+**Complex bugs** — delegate to a debugging agent for root cause analysis. After the fix, route back through validation.
 
 ### 7. Complete
 
@@ -116,24 +106,20 @@ When all validation subtasks pass:
 brainfile complete -t {task-id}
 ```
 
----
-
 ## Agent Delegation Reference
 
-::: info Agent Roster
-Match agent strengths to task types for optimal results.
+::: info Agent Roles
+Match agent strengths to task types for optimal results. These are example roles — name and configure them to fit your workflow.
 
-| Need | Agent | Model |
-|------|-------|-------|
-| External docs, APIs, best practices | `@brainfile-researcher` | Sonnet |
-| Any implementation work | `@brainfile-implementer` | Opus |
-| Complexity/over-engineering check | `@brainfile-qa-agent` | Opus |
-| Spec compliance + reality check | `@brainfile-qa-compliance` | Opus |
-| Deep debugging | `@brainfile-debugger` | Opus |
-| Codebase exploration | `@explore` (built-in) | - |
+| Need | Example Role |
+|------|-------------|
+| External docs, APIs, best practices | Research agent |
+| Any implementation work | Worker / implementer agent |
+| Complexity and scope review | QA agent |
+| Spec compliance verification | Compliance agent |
+| Deep debugging | Debugging agent |
+| Codebase exploration | Explorer agent |
 :::
-
----
 
 ## You vs Agents
 
@@ -142,39 +128,33 @@ Match agent strengths to task types for optimal results.
 - Architectural decisions
 - Contract management (create, reset status, add feedback)
 - Agent coordination
-- Final approval and moving to done
+- Final approval and completion
 
 **Agents handle:**
-- Implementation (`@brainfile-implementer`)
-- External research (`@brainfile-researcher`)
-- Validation (`@brainfile-qa-agent`, `@brainfile-qa-compliance`)
-- Debugging (`@brainfile-debugger`)
-
----
+- Implementation
+- External research
+- Validation and QA
+- Debugging
 
 ## Contract Lifecycle
 
 | Status | Who Sets | How |
 |--------|----------|-----|
-| `ready` | You | `brainfile add --with-contract` |
-| `in_progress` | Implementer | `brainfile contract pickup` |
-| `delivered` | Implementer | `brainfile contract deliver` |
-| `done` | You | After validation passes, `brainfile complete -t {id}` |
+| `ready` | PM | `brainfile add --with-contract` |
+| `in_progress` | Worker | `brainfile contract pickup` |
+| `delivered` | Worker | `brainfile contract deliver` |
+| `done` | PM | After validation passes, `brainfile complete -t {id}` |
 | `failed` | Validator | `brainfile contract validate` fails |
-| `failed` → `ready` | You | Add feedback, reset status for rework |
-
----
+| `failed` → `ready` | PM | Add feedback, reset status for rework |
 
 ## Context Preservation
 
-Goal: Minimize context pollution, maximize working time before compaction.
+Goal: minimize context pollution, maximize working time before compaction.
 
 - Agents return **concise summaries**, not full implementation details
 - Task state lives in **brainfile**, not conversation
 - Reference **task IDs**, not full descriptions
 - Brainfile is **source of truth**
-
----
 
 ## Quick Reference
 
@@ -184,8 +164,8 @@ brainfile add -c todo --title "..." --with-contract \
   --deliverable "file:path:desc" --validation "cmd" --constraint "rule"
 
 # Add validation subtasks
-brainfile subtask --add "@qa-agent complexity review" -t {id}
-brainfile subtask --add "@qa-compliance spec compliance" -t {id}
+brainfile subtask --add "QA review" -t {id}
+brainfile subtask --add "Spec compliance" -t {id}
 
 # View task
 brainfile show -t {id}
@@ -198,8 +178,6 @@ brainfile list --contract delivered
 brainfile complete -t {id}
 ```
 
----
-
 ## Standard Task Template
 
 ```yaml
@@ -209,11 +187,11 @@ brainfile complete -t {id}
     Detailed requirements and context.
     Include the "why" and acceptance criteria.
   priority: high
-  assignee: @brainfile-implementer
+  assignee: worker-agent
   tags: [backend, feature]
   relatedFiles:
-    - .brainfile/plans/task-{N}.md  # PRD if complex
-    - src/existing/code.ts           # Reference code
+    - .brainfile/plans/task-{N}.md
+    - src/existing/code.ts
   contract:
     status: ready
     deliverables:
@@ -229,10 +207,10 @@ brainfile complete -t {id}
       - Follow existing patterns
       - Include error handling
   subtasks:
-    - id: sub-qa-agent
-      title: "@qa-agent complexity review"
+    - id: sub-qa
+      title: "QA complexity review"
       completed: false
-    - id: sub-qa-compliance
-      title: "@qa-compliance spec compliance"
+    - id: sub-compliance
+      title: "Spec compliance check"
       completed: false
 ```
