@@ -46,13 +46,22 @@ brainfile ./path/to/brainfile.md
 
 The interactive board displays your columns side by side, with tasks flowing through your workflow:
 
-```mermaid
-graph LR
-    subgraph TUI["brainfile TUI"]
-        A["📋 To Do<br/><small>task-1, task-2</small>"] -->|move| B["🔧 In Progress<br/><small>task-3</small>"]
-        B -->|move| C["✅ Done<br/><small>task-4</small>"]
-    end
-```
+<div style="text-align: center; margin: 1.5em 0;">
+<svg viewBox="0 0 560 90" xmlns="http://www.w3.org/2000/svg" style="max-width: 540px; width: 100%;">
+  <defs><marker id="tui-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(92,200,255,0.4)" /></marker></defs>
+  <rect x="10" y="10" width="150" height="70" rx="6" fill="#0a0a0e" stroke="#2a2a38" stroke-width="2" />
+  <text x="85" y="35" fill="#a0a0b0" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="middle">To Do</text>
+  <text x="85" y="56" fill="#585868" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" dominant-baseline="middle">task-1, task-2</text>
+  <line x1="160" y1="45" x2="195" y2="45" stroke="rgba(92,200,255,0.4)" stroke-width="2" marker-end="url(#tui-arrow)" />
+  <rect x="200" y="10" width="150" height="70" rx="6" fill="#0a0a0e" stroke="#5cc8ff" stroke-width="2" />
+  <text x="275" y="35" fill="#5cc8ff" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="middle">In Progress</text>
+  <text x="275" y="56" fill="#585868" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" dominant-baseline="middle">task-3</text>
+  <line x1="350" y1="45" x2="385" y2="45" stroke="rgba(92,200,255,0.4)" stroke-width="2" marker-end="url(#tui-arrow)" />
+  <rect x="390" y="10" width="150" height="70" rx="6" fill="#0a0a0e" stroke="#2a2a38" stroke-width="2" />
+  <text x="465" y="35" fill="#a0a0b0" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="middle">Done</text>
+  <text x="465" y="56" fill="#585868" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" dominant-baseline="middle">task-4</text>
+</svg>
+</div>
 
 ### Keyboard Controls
 

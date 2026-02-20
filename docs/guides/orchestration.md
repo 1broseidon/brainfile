@@ -12,13 +12,7 @@ As orchestrator, you **plan, delegate, and coordinate** - you don't implement di
 
 ## Workflow Overview
 
-```mermaid
-flowchart LR
-    Plan["📝 Plan<br/>Create contract"] --> Delegate["🤖 Delegate<br/>Agent picks up"]
-    Delegate --> Validate["🔍 Validate<br/>QA review"]
-    Validate --> Complete["✅ Complete<br/>Move to logs/"]
-    Validate -->|"rework"| Delegate
-```
+<PipelineFlow />
 
 ## Step-by-Step
 

@@ -223,18 +223,7 @@ When `type` is not specified, tools determine the type by:
 3. **Structural analysis** — `columns[]` present → board
 4. **Default** → board
 
-```mermaid
-flowchart LR
-    A(["📄 File loaded"]) --> B{"type field?"}
-    B -->|"✓"| C["Use declared type"]
-    B -->|"✗"| D{"schema URL?"}
-    D -->|"✓"| E["Infer from URL"]
-    D -->|"✗"| F{"filename<br/>suffix?"}
-    F -->|"✓"| G["Infer from suffix"]
-    F -->|"✗"| H{"columns<br/>array?"}
-    H -->|"✓"| I["⚙️ Board"]
-    H -->|"✗"| J["⚙️ Default: Board"]
-```
+<TypeInference />
 
 ---
 
