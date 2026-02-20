@@ -8,7 +8,6 @@ import StatusBadge from './components/StatusBadge.vue'
 import SchemaViewer from './components/SchemaViewer.vue'
 import CommandCard from './components/CommandCard.vue'
 import RelatedPages from './components/RelatedPages.vue'
-import TypeInference from './components/TypeInference.vue'
 import PipelineFlow from './components/PipelineFlow.vue'
 import './custom.css'
 
@@ -24,7 +23,6 @@ export default {
     app.component('SchemaViewer', SchemaViewer)
     app.component('CommandCard', CommandCard)
     app.component('RelatedPages', RelatedPages)
-    app.component('TypeInference', TypeInference)
     app.component('PipelineFlow', PipelineFlow)
   },
 } satisfies Theme

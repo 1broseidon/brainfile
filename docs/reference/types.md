@@ -211,8 +211,6 @@ When `type` is not specified, tools determine the type by:
 3. **Structural analysis** — `columns[]` present → board
 4. **Default** → board
 
-<TypeInference />
-
 ## Schema Directories
 
 | Version | URL | Status |
