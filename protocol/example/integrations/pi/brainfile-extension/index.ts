@@ -101,6 +101,7 @@ type EventProjection = {
   closedNotifiedRuns: string[];
   runClosedByRun: Record<string, string>;
   workerPresence: Record<string, WorkerPresence>;
+  taskAdoptedAt: Record<string, string>; // taskId → ISO timestamp of when the task was adopted into the current run
 };
 
 const STATE_ENTRY_TYPE = 'brainfile-extension-state';
@@ -408,6 +409,7 @@ function createEmptyEventProjection(): EventProjection {
     closedNotifiedRuns: [],
     runClosedByRun: {},
     workerPresence: {},
+    taskAdoptedAt: {},
   };
 }
 
@@ -487,6 +489,15 @@ function normalizeEventProjection(value: unknown): EventProjection {
     closedNotifiedRuns: coerceStringArray(raw.closedNotifiedRuns),
     runClosedByRun,
     workerPresence,
+    taskAdoptedAt: (() => {
+      const out: Record<string, string> = {};
+      if (raw.taskAdoptedAt && typeof raw.taskAdoptedAt === 'object') {
+        for (const [k, v] of Object.entries(raw.taskAdoptedAt as Record<string, unknown>)) {
+          if (typeof v === 'string') out[k] = v;
+        }
+      }
+      return out;
+    })(),
   };
 }
 
@@ -1276,6 +1287,11 @@ export default function brainfileExtension(pi: ExtensionAPI) {
       );
       eventProjection.taskRun[doc.task.id] = runId;
 
+      // Record adoption timestamp so stale detection uses this as the
+      // baseline for tasks that have no prior progress timestamp, instead
+      // of falling back to MAX_SAFE_INTEGER and immediately flagging them.
+      eventProjection.taskAdoptedAt[doc.task.id] = new Date().toISOString();
+
       adopted.push({
         taskId: doc.task.id,
         status: contractStatus,
@@ -1330,9 +1346,18 @@ export default function brainfileExtension(pi: ExtensionAPI) {
     return activeRunId;
   }
 
+  // Guard against the race where pi.sendUserMessage() is async internally:
+  // ctx.isIdle() may still return true for subsequent synchronous calls
+  // in the same tick before the agent enters non-idle state.
+  let sentMessageThisTick = false;
+
   function sendOrchestrationMessage(ctx: ExtensionContext, lines: string[]): void {
     const message = ['[BRAINFILE ORCHESTRATION]', ...lines].join('\n');
-    if (ctx.isIdle()) {
+    if (!sentMessageThisTick && ctx.isIdle()) {
+      sentMessageThisTick = true;
+      // Reset after the current synchronous execution completes so that
+      // future event loop iterations can send fresh messages normally.
+      setTimeout(() => { sentMessageThisTick = false; }, 0);
       pi.sendUserMessage(message);
     } else {
       pi.sendUserMessage(message, { deliverAs: 'followUp' });
@@ -1533,7 +1558,13 @@ export default function brainfileExtension(pi: ExtensionAPI) {
       if (status === 'in_progress') {
         counts.in_progress += 1;
         const lastProgressAt = getTaskProgressTimestamp(located.task);
-        const progressMs = lastProgressAt ? Date.parse(lastProgressAt) : NaN;
+        // Fall back to the adoption timestamp for tasks adopted from prior
+        // runs that have no progress history. Without this, ageSeconds would
+        // be MAX_SAFE_INTEGER, instantly flagging the task as stale and
+        // blocking/closing the run before the PM can act.
+        const adoptedAt = eventProjection.taskAdoptedAt[taskId];
+        const effectiveProgressAt = lastProgressAt || adoptedAt;
+        const progressMs = effectiveProgressAt ? Date.parse(effectiveProgressAt) : NaN;
         const ageSeconds = Number.isFinite(progressMs)
           ? Math.max(0, Math.floor((nowMs - progressMs) / 1000))
           : Number.MAX_SAFE_INTEGER;
