@@ -15,8 +15,8 @@ As orchestrator, you **plan, delegate, and coordinate** - you don't implement di
 ```
 ┌─────────────┐    ┌──────────────┐    ┌─────────────┐    ┌──────────────┐
 │  1. Plan    │ ─▶ │ 2. Delegate  │ ─▶ │ 3. Validate │ ─▶ │ 4. Complete  │
-│  Create     │    │ @implementer │    │ @pragmatist │    │ Complete     │
-│  contract   │    │ picks up     │    │ @karen      │    │              │
+│  Create     │    │ @implementer │    │ QA agents   │    │ Complete     │
+│  contract   │    │ picks up     │    │ review      │    │              │
 └─────────────┘    └──────────────┘    └─────────────┘    └──────────────┘
 ```
 
@@ -49,8 +49,8 @@ brainfile add -c todo \
 Add validation subtasks:
 
 ```bash
-brainfile subtask --add "@pragmatist complexity review" -t {task-id}
-brainfile subtask --add "@karen spec compliance" -t {task-id}
+brainfile subtask --add "@qa-agent complexity review" -t {task-id}
+brainfile subtask --add "@qa-compliance spec compliance" -t {task-id}
 ```
 
 For complex features, write PRD to `.brainfile/plans/{task-id}.md` and add to task's `relatedFiles`.
@@ -82,13 +82,13 @@ Implementer will:
 
 After delivery, run validation sequence:
 
-**Step 1: `@brainfile-pragmatist`** - complexity review
-- Pass: toggles `sub-pragmatist` subtask
+**Step 1: `@brainfile-qa-agent`** - complexity review
+- Pass: toggles `sub-qa-agent` subtask
 - Fail: reports issues, subtask remains incomplete
 
-**Step 2: `@brainfile-karen`** - spec compliance + reality check
+**Step 2: `@brainfile-qa-compliance`** - spec compliance + reality check
 - Runs `brainfile contract validate` if validation commands exist
-- Pass: toggles `sub-karen` subtask
+- Pass: toggles `sub-qa-compliance` subtask
 - Fail: reports issues, subtask remains incomplete
 
 ### 6. Handle Failures
@@ -122,8 +122,8 @@ brainfile complete -t {task-id}
 |------|-------|-------|
 | External docs, APIs, best practices | `@brainfile-researcher` | Sonnet |
 | Any implementation work | `@brainfile-implementer` | Opus |
-| Complexity/over-engineering check | `@brainfile-pragmatist` | Opus |
-| Spec compliance + reality check | `@brainfile-karen` | Opus |
+| Complexity/over-engineering check | `@brainfile-qa-agent` | Opus |
+| Spec compliance + reality check | `@brainfile-qa-compliance` | Opus |
 | Deep debugging | `@brainfile-debugger` | Opus |
 | Codebase exploration | `@explore` (built-in) | - |
 
@@ -141,7 +141,7 @@ brainfile complete -t {task-id}
 **Agents handle:**
 - Implementation (`@brainfile-implementer`)
 - External research (`@brainfile-researcher`)
-- Validation (`@brainfile-pragmatist`, `@brainfile-karen`)
+- Validation (`@brainfile-qa-agent`, `@brainfile-qa-compliance`)
 - Debugging (`@brainfile-debugger`)
 
 ---
@@ -178,8 +178,8 @@ brainfile add -c todo --title "..." --with-contract \
   --deliverable "file:path:desc" --validation "cmd" --constraint "rule"
 
 # Add validation subtasks
-brainfile subtask --add "@pragmatist complexity review" -t {id}
-brainfile subtask --add "@karen spec compliance" -t {id}
+brainfile subtask --add "@qa-agent complexity review" -t {id}
+brainfile subtask --add "@qa-compliance spec compliance" -t {id}
 
 # View task
 brainfile show -t {id}
@@ -223,10 +223,10 @@ brainfile complete -t {id}
       - Follow existing patterns
       - Include error handling
   subtasks:
-    - id: sub-pragmatist
-      title: "@pragmatist complexity review"
+    - id: sub-qa-agent
+      title: "@qa-agent complexity review"
       completed: false
-    - id: sub-karen
-      title: "@karen spec compliance"
+    - id: sub-qa-compliance
+      title: "@qa-compliance spec compliance"
       completed: false
 ```
