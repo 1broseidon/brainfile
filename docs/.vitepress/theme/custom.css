@@ -325,15 +325,33 @@ div[class*='language-'] {
 }
 
 /* 3. Sidebar Links */
-.VPSidebarItem.level-1 > .item > .link,
 .VPSidebarItem .item .link {
-  border-radius: 4px;
-  transition: background-color 0.15s, color 0.15s;
+  transition: color 0.15s;
 }
 
 .VPSidebarItem .item .link:hover {
-  background-color: var(--void-surface);
   color: var(--void-text-1);
+}
+
+.VPSidebarItem.level-1 > .item {
+  position: relative;
+}
+
+.VPSidebarItem.level-1 > .item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 60%;
+  background-color: var(--accent-cyan);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.VPSidebarItem.level-1 > .item:hover::before {
+  opacity: 1;
 }
 
 /* 4. Active Sidebar Item — level-1 only (leaf links, not group headers) */
