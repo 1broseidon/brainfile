@@ -10,7 +10,7 @@ import { refreshBoardContext, locateTask } from './board';
 import { normalizeAssignee, assigneeMatches, getEffectiveListenerAssignee, getWorkerAvailabilitySnapshot, formatWorkerLoad, maybeEmitWorkerPresenceHeartbeat, emitWorkerOffline, releaseWorkerAssigneeClaim } from './worker';
 import { ensureEventsLogExists, processEventLog, emitEvent, isRunClosed } from './events';
 import { refreshPmLock, maybeEvaluateActiveRun, createRunId, tryAcquirePmLock, startPmLockRefreshTimer, adoptOrphanedTasksForRun } from './pm';
-import { getContractStatus, pickupContract } from './contract';
+import { pickupContract } from './contract';
 
 // ── Pure helpers ───────────────────────────────────────────────────────
 

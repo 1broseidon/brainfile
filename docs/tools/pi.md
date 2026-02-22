@@ -165,6 +165,164 @@ cd .pi/extensions/brainfile-extension && npm install
 
 Existing `/listen`, `/bf`, and `brainfile_*` tool workflows continue to work unchanged.
 
+---
+
+## A2A Messaging <Badge type="warning" text="Beta" />
+
+The A2A (Agent-to-Agent) messaging protocol extends the event-sourced coordination layer with structured conversational messaging, near-realtime event detection, message deduplication, and worker load awareness. These features are **beta** and may evolve in future releases.
+
+### Envelope-Based Messaging
+
+All events now use a unified **Envelope** format that is a backward-compatible superset of the original `PiEventRecord`. Existing JSONL rows remain valid without migration.
+
+An Envelope adds these fields on top of the base event record:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `messageId` | `string` | Unique message identifier (defaults to event `id`) |
+| `threadId` | `string` | Groups related messages (defaults to `task:<taskId>` or `runId`) |
+| `inReplyTo` | `string?` | `messageId` of the message being replied to |
+| `from` | `string?` | Sender identity (e.g. `pm`, `codex-2`) |
+| `to` | `string?` | Recipient identity (e.g. `pm`, `codex-1`) |
+| `kind` | `EnvelopeKind` | Event or message type |
+| `requiresAck` | `boolean?` | Whether the recipient should auto-acknowledge |
+| `priority` | `string?` | `low`, `normal`, `high`, or `urgent` |
+| `expiresAt` | `string?` | ISO timestamp after which the message is stale |
+
+**EnvelopeKind** includes all existing `PiEventType` values plus conversational message kinds:
+
+| Kind | Purpose |
+|------|---------|
+| `message.question` | Ask a question to another agent |
+| `message.answer` | Reply to a question |
+| `message.ack` | Acknowledge receipt of a message |
+| `message.status` | Report status or progress |
+| `message.blocker` | Signal a blocking issue |
+| `message.decision` | Communicate an architectural or process decision |
+
+### Near-Realtime Event Detection
+
+The listener uses `fs.watch` on `pi-events.jsonl` as the **primary trigger** for processing new events. This replaces the previous 10-second polling interval as the main detection mechanism.
+
+- **`fs.watch`** fires on file change, triggering a listener cycle immediately
+- **30-second `setInterval`** is retained as a safety-net fallback for environments where `fs.watch` is unreliable (NFS, WSL1, etc.)
+- **Byte-offset tailing** replaces the old line-count cursor — the extension tracks `lastByteOffset` in the event projection and reads only new bytes appended since the last cycle, correctly handling coalesced writes
+
+On platforms where `fs.watch` is not available or throws, the extension degrades gracefully to interval-only polling.
+
+### Message Deduplication
+
+Each listener session maintains an **ephemeral in-memory dedup set** (`seenMessageIds`) to prevent duplicate processing of the same envelope:
+
+| Parameter | Value |
+|-----------|-------|
+| Max tracked IDs | 1,000 |
+| TTL per entry | 5 minutes |
+| Persistence | None — per session only |
+
+When a message is seen, its `messageId` is recorded with a timestamp. On subsequent encounters within the TTL window, the message is silently skipped. The set is pruned on every cycle to stay within the size cap.
+
+### Conversational Messages
+
+Agents can exchange structured messages using the `brainfile_send_message` tool. Messages are written to the shared `pi-events.jsonl` event log and processed by recipient sessions during their next listener cycle.
+
+#### Message Flow
+
+```mermaid
+sequenceDiagram
+    participant W as Worker (codex-2)
+    participant E as pi-events.jsonl
+    participant PM as PM Session
+
+    W->>E: brainfile_send_message (message.blocker)
+    Note over E: Envelope appended with<br/>messageId, threadId, from, to, kind
+    E-->>PM: fs.watch triggers listener cycle
+    PM->>PM: Dedup check → new message
+    PM->>PM: Address check → to:"pm" matches
+    Note over PM: Batched orchestration notification:<br/>[BRAINFILE ORCHESTRATION]<br/>Received 1 conversational message(s)
+    PM->>E: brainfile_send_message (message.answer)
+    E-->>W: fs.watch triggers listener cycle
+    W->>W: Dedup + address check
+    Note over W: Notification delivered to agent
+```
+
+#### Tool: `brainfile_send_message`
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `to` | ✅ | Recipient (e.g. `pm`, `codex-2`, `worker`) |
+| `taskId` | ✅ | Related task ID |
+| `kind` | ✅ | One of: `message.question`, `message.answer`, `message.ack`, `message.status`, `message.blocker`, `message.decision` |
+| `body` | ✅ | Message body text |
+| `threadId` | ❌ | Thread ID for grouping (defaults to `task:<taskId>`) |
+| `inReplyTo` | ❌ | `messageId` of the message being replied to |
+| `requiresAck` | ❌ | If `true`, recipient auto-sends a `message.ack` |
+
+**Example — Worker reports a blocker:**
+
+```json
+{
+  "to": "pm",
+  "taskId": "task-42",
+  "kind": "message.blocker",
+  "body": "Cannot proceed: API key for staging environment is expired.",
+  "threadId": "task:task-42"
+}
+```
+
+**Example — PM answers a question:**
+
+```json
+{
+  "to": "codex-2",
+  "taskId": "task-42",
+  "kind": "message.answer",
+  "body": "Use the test API key from .env.test for now.",
+  "inReplyTo": "1740000000000-abc123",
+  "threadId": "task:task-42"
+}
+```
+
+#### Delivery and Batching
+
+- Messages addressed to a session are **batched per listener cycle** and delivered as a single `[BRAINFILE ORCHESTRATION]` notification
+- `message.ack` messages are **not batched** — they are only sent, never surfaced as notifications
+- Messages with `requiresAck: true` trigger an automatic `message.ack` reply from the recipient
+- Address matching uses the same wildcard rules as task assignment: `pm` targets PM sessions, bare names like `codex` match any `codex-*` worker, numbered names like `codex-2` require an exact match
+
+#### Thread Tracking
+
+Use `threadId` and `inReplyTo` to maintain coherent conversation threads:
+
+- `threadId` defaults to `task:<taskId>` — all messages about a task share the same thread
+- `inReplyTo` links a reply to the specific `messageId` it responds to
+- Recipients see thread context in the orchestration notification
+
+### Worker Load Awareness
+
+Workers now emit `worker.ready` events alongside `worker.online` and `worker.heartbeat`, reporting their current load:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `maxConcurrency` | `number` | Maximum tasks this worker can handle (typically `1`) |
+| `activeCount` | `number` | Tasks currently `in_progress` for this worker |
+| `idle` | `boolean` | `true` when `activeCount < maxConcurrency` |
+
+The PM `/listen status` output now shows worker load details:
+
+```
+Available workers: codex-1 (0/1, idle, 5s), codex-2 (1/1, at-max, 12s)
+```
+
+**Backward compatibility:** Workers that only emit `worker.online`/`worker.heartbeat` (without `worker.ready`) continue to work. The PM infers load by counting `in_progress` tasks on the board and defaults `maxConcurrency` to `1`.
+
+| Event | Workers |
+|-------|---------|
+| `worker.online` | First heartbeat — presence only |
+| `worker.heartbeat` | Periodic — presence only |
+| `worker.ready` | Emitted alongside online/heartbeat — includes load data |
+| `worker.offline` | Best-effort teardown |
+
 ## See Also
 
 - [Orchestration Guide](/guides/orchestration) — General orchestration patterns

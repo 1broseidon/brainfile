@@ -194,6 +194,7 @@ const ORCHESTRATION_BATCH_KINDS = new Set<string>([
   'message.answer',
   'message.blocker',
   'message.status',
+  'message.decision',
 ]);
 
 function resolveLocalWorkerIdentity(rt: Rt, ctx: ExtensionContext): string {
@@ -202,27 +203,36 @@ function resolveLocalWorkerIdentity(rt: Rt, ctx: ExtensionContext): string {
   return normalizeAssignee(getEffectiveListenerAssignee(rt, ctx));
 }
 
+// PM-role canonical keywords. A message addressed to any of these is always
+// destined for the PM and never for a worker, regardless of assignee naming.
+const PM_ROLE_KEYWORDS = new Set(['pm', 'main', 'planner', 'orchestrator']);
+
 function isEnvelopeAddressedToSession(rt: Rt, ctx: ExtensionContext, parsed: Envelope): boolean {
   const to = typeof parsed.to === 'string' ? parsed.to.trim() : '';
   if (!to) return true;
 
   const normalizedTo = normalizeAssignee(to) || to.toLowerCase();
 
-  if (normalizedTo === 'pm' || normalizedTo === 'main') {
+  // Keyword aliases for the PM role.
+  if (PM_ROLE_KEYWORDS.has(normalizedTo)) {
     return rt.operatingMode === 'pm';
   }
 
+  // Bare 'worker' targets any worker session.
   if (normalizedTo === 'worker') {
     return rt.operatingMode === 'worker';
   }
 
   if (rt.operatingMode === 'worker') {
+    // Workers use wildcard family matching (e.g. "codex" matches "codex-1").
     const localWorker = resolveLocalWorkerIdentity(rt, ctx);
     return localWorker ? assigneeMatches(normalizedTo, localWorker) : false;
   }
 
+  // PM mode: require EXACT match with the PM's own assignee identity —
+  // never wildcard-match against worker family prefixes (fixes over-matching bug).
   const localPm = normalizeAssignee(getEffectiveListenerAssignee(rt, ctx));
-  return localPm ? assigneeMatches(normalizedTo, localPm) : false;
+  return localPm ? normalizedTo === localPm : false;
 }
 
 function extractMessageBody(parsed: Envelope): string {
