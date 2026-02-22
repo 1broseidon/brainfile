@@ -1,13 +1,14 @@
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
+import * as fs from 'fs';
 import * as path from 'path';
 import { readTasksDir, taskFileName } from '@brainfile/core';
 
 import type { Rt, LocatedTask } from './types';
-import { LISTENER_POLL_INTERVAL_MS } from './constants';
+import { LISTENER_SAFETY_POLL_INTERVAL_MS } from './constants';
 import { persistState } from './state';
 import { refreshBoardContext, locateTask } from './board';
-import { normalizeAssignee, assigneeMatches, getEffectiveListenerAssignee, getWorkerAvailabilitySnapshot, maybeEmitWorkerPresenceHeartbeat, emitWorkerOffline, releaseWorkerAssigneeClaim } from './worker';
-import { processEventLog, emitEvent, isRunClosed } from './events';
+import { normalizeAssignee, assigneeMatches, getEffectiveListenerAssignee, getWorkerAvailabilitySnapshot, formatWorkerLoad, maybeEmitWorkerPresenceHeartbeat, emitWorkerOffline, releaseWorkerAssigneeClaim } from './worker';
+import { ensureEventsLogExists, processEventLog, emitEvent, isRunClosed } from './events';
 import { refreshPmLock, maybeEvaluateActiveRun, createRunId, tryAcquirePmLock, startPmLockRefreshTimer, adoptOrphanedTasksForRun } from './pm';
 import { getContractStatus, pickupContract } from './contract';
 
@@ -172,7 +173,7 @@ export function autoStartPickedTask(
 
 // ── Listener cycle ─────────────────────────────────────────────────────
 
-export function runListenerCycle(rt: Rt, ctx: ExtensionContext, source: 'interval' | 'manual' | 'startup') {
+export function runListenerCycle(rt: Rt, ctx: ExtensionContext, source: 'watch' | 'interval' | 'manual' | 'startup') {
   if (!rt.listenMode) return;
   if (rt.listenerPausedForUserInput) {
     if (source === 'manual') {
@@ -196,7 +197,7 @@ export function runListenerCycle(rt: Rt, ctx: ExtensionContext, source: 'interva
         const tracked = rt.activeRunId ? (rt.eventProjection.delegatedByRun[rt.activeRunId] || []).length : 0;
         const workers = getWorkerAvailabilitySnapshot(rt);
         const available = workers.available.length > 0
-          ? workers.available.map((worker) => `${worker.worker} (${worker.ageSeconds}s)`).join(', ')
+          ? workers.available.map((worker) => formatWorkerLoad(worker)).join(', ')
           : 'none';
         ctx.ui.notify(
           rt.activeRunId
@@ -233,7 +234,7 @@ export function runListenerCycle(rt: Rt, ctx: ExtensionContext, source: 'interva
       ctx.ui.notify(listenerNoopMessage(result.reason, result.assignee, rt.activeTaskId), 'info');
     }
   } catch (error) {
-    if (source !== 'interval') {
+    if (source !== 'interval' && source !== 'watch') {
       ctx.ui.notify(`Listener error: ${error instanceof Error ? error.message : String(error)}`, 'error');
     }
   } finally {
@@ -244,10 +245,20 @@ export function runListenerCycle(rt: Rt, ctx: ExtensionContext, source: 'interva
 // ── Listener start/stop ────────────────────────────────────────────────
 
 export function stopListener(rt: Rt) {
+  if (rt.listenerWatcher) {
+    try {
+      rt.listenerWatcher.close();
+    } catch {
+      // best-effort cleanup
+    }
+    rt.listenerWatcher = null;
+  }
+
   if (rt.listenerTimer) {
     clearInterval(rt.listenerTimer);
     rt.listenerTimer = null;
   }
+
   rt.listenerBusy = false;
   rt.listenerPausedForUserInput = false;
 }
@@ -255,9 +266,25 @@ export function stopListener(rt: Rt) {
 export function startListener(rt: Rt, ctx: ExtensionContext) {
   stopListener(rt);
 
+  if (rt.boardContext) {
+    ensureEventsLogExists(rt);
+    try {
+      rt.listenerWatcher = fs.watch(rt.boardContext.eventsLogPath, (eventType) => {
+        if (eventType !== 'change') return;
+        runListenerCycle(rt, ctx, 'watch');
+      });
+      rt.listenerWatcher.on('error', () => {
+        // fs.watch can be unreliable on some filesystems; the safety poll remains active.
+      });
+    } catch {
+      rt.listenerWatcher = null;
+    }
+  }
+
+  // Safety net for environments where fs.watch misses events (e.g. NFS/WSL1).
   rt.listenerTimer = setInterval(() => {
     runListenerCycle(rt, ctx, 'interval');
-  }, LISTENER_POLL_INTERVAL_MS);
+  }, LISTENER_SAFETY_POLL_INTERVAL_MS);
 }
 
 // ── Listen mode toggle ─────────────────────────────────────────────────

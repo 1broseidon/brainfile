@@ -1,6 +1,7 @@
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import * as fs from 'fs';
 import * as path from 'path';
+import { readTasksDir } from '@brainfile/core';
 
 import type { Rt, WorkerClaimRecord } from './types';
 import {
@@ -321,6 +322,73 @@ export function getEffectiveListenerAssignee(rt: Rt, ctx: ExtensionContext): str
 
 // ── Worker presence / heartbeat ────────────────────────────────────────
 
+const DEFAULT_WORKER_MAX_CONCURRENCY = 1;
+
+function normalizeMaxConcurrency(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DEFAULT_WORKER_MAX_CONCURRENCY;
+  return Math.max(1, Math.floor(value));
+}
+
+function normalizeActiveCount(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
+function countInProgressTasksForWorker(rt: Rt, workerAssignee: string): number {
+  if (!rt.boardContext) return 0;
+  let count = 0;
+  for (const doc of readTasksDir(rt.boardContext.boardDir)) {
+    const contractStatus = (doc.task.contract as any)?.status;
+    if (contractStatus !== 'in_progress') continue;
+    if (!assigneeMatches(doc.task.assignee, workerAssignee)) continue;
+    count += 1;
+  }
+  return count;
+}
+
+function buildWorkerLoad(rt: Rt, workerAssignee: string, maxConcurrency: number): {
+  maxConcurrency: number;
+  activeCount: number;
+  idle: boolean;
+} {
+  const normalizedMaxConcurrency = normalizeMaxConcurrency(maxConcurrency);
+  const activeCount = countInProgressTasksForWorker(rt, workerAssignee);
+  return {
+    maxConcurrency: normalizedMaxConcurrency,
+    activeCount,
+    idle: activeCount < normalizedMaxConcurrency,
+  };
+}
+
+export function updateWorkerReadiness(
+  rt: Rt,
+  worker: string,
+  readiness: { maxConcurrency: number; activeCount: number; idle: boolean },
+  at: string
+): void {
+  const maxConcurrency = normalizeMaxConcurrency(readiness.maxConcurrency);
+  const activeCount = normalizeActiveCount(readiness.activeCount);
+  const idle = typeof readiness.idle === 'boolean' ? readiness.idle : activeCount < maxConcurrency;
+
+  rt.eventProjection.workerReadiness[worker] = {
+    maxConcurrency,
+    activeCount,
+    idle,
+    lastReportedAt: at,
+  };
+}
+
+export function formatWorkerLoad(worker: {
+  worker: string;
+  ageSeconds: number;
+  maxConcurrency: number;
+  activeCount: number;
+  idle: boolean;
+}): string {
+  const state = worker.idle ? 'idle' : 'at-max';
+  return `${worker.worker} (${worker.activeCount}/${worker.maxConcurrency}, ${state}, ${worker.ageSeconds}s)`;
+}
+
 export function updateWorkerPresence(rt: Rt, worker: string, status: 'online' | 'offline', at: string): void {
   rt.eventProjection.workerPresence[worker] = {
     status,
@@ -330,10 +398,24 @@ export function updateWorkerPresence(rt: Rt, worker: string, status: 'online' | 
 }
 
 export function getWorkerAvailabilitySnapshot(rt: Rt, nowMs = Date.now()): {
-  available: Array<{ worker: string; ageSeconds: number; lastSeenAt: string }>;
+  available: Array<{
+    worker: string;
+    ageSeconds: number;
+    lastSeenAt: string;
+    maxConcurrency: number;
+    activeCount: number;
+    idle: boolean;
+  }>;
   unavailable: Array<{ worker: string; reason: 'offline' | 'expired'; ageSeconds: number; lastSeenAt: string }>;
 } {
-  const available: Array<{ worker: string; ageSeconds: number; lastSeenAt: string }> = [];
+  const available: Array<{
+    worker: string;
+    ageSeconds: number;
+    lastSeenAt: string;
+    maxConcurrency: number;
+    activeCount: number;
+    idle: boolean;
+  }> = [];
   const unavailable: Array<{ worker: string; reason: 'offline' | 'expired'; ageSeconds: number; lastSeenAt: string }> = [];
 
   for (const [worker, presence] of Object.entries(rt.eventProjection.workerPresence)) {
@@ -342,7 +424,20 @@ export function getWorkerAvailabilitySnapshot(rt: Rt, nowMs = Date.now()): {
     const expired = !Number.isFinite(seenMs) || ageSeconds > DEFAULT_WORKER_PRESENCE_TTL_SECONDS;
 
     if (presence.status === 'online' && !expired) {
-      available.push({ worker, ageSeconds, lastSeenAt: presence.lastSeenAt });
+      const readiness = rt.eventProjection.workerReadiness[worker];
+      const maxConcurrency = normalizeMaxConcurrency(readiness?.maxConcurrency);
+      const fallbackActiveCount = countInProgressTasksForWorker(rt, worker);
+      const activeCount = readiness ? normalizeActiveCount(readiness.activeCount) : fallbackActiveCount;
+      const idle = readiness ? (typeof readiness.idle === 'boolean' ? readiness.idle : activeCount < maxConcurrency) : activeCount < maxConcurrency;
+
+      available.push({
+        worker,
+        ageSeconds,
+        lastSeenAt: presence.lastSeenAt,
+        maxConcurrency,
+        activeCount,
+        idle,
+      });
     } else {
       unavailable.push({
         worker,
@@ -368,6 +463,7 @@ export function maybeEmitWorkerPresenceHeartbeat(rt: Rt, ctx: ExtensionContext, 
 
   const nowIso = new Date().toISOString();
   const nowMs = Date.now();
+  const load = buildWorkerLoad(rt, assignee, DEFAULT_WORKER_MAX_CONCURRENCY);
 
   if (!rt.workerOnlineEmitted) {
     emitEvent(rt, 'worker.online', ctx, source, {
@@ -376,7 +472,16 @@ export function maybeEmitWorkerPresenceHeartbeat(rt: Rt, ctx: ExtensionContext, 
         ttlSeconds: DEFAULT_WORKER_PRESENCE_TTL_SECONDS,
       },
     });
+    emitEvent(rt, 'worker.ready', ctx, source, {
+      assignee,
+      data: {
+        maxConcurrency: load.maxConcurrency,
+        activeCount: load.activeCount,
+        idle: load.idle,
+      },
+    });
     updateWorkerPresence(rt, assignee, 'online', nowIso);
+    updateWorkerReadiness(rt, assignee, load, nowIso);
     rt.workerOnlineEmitted = true;
     rt.lastWorkerHeartbeatAtMs = nowMs;
     persistState(rt);
@@ -393,7 +498,16 @@ export function maybeEmitWorkerPresenceHeartbeat(rt: Rt, ctx: ExtensionContext, 
       ttlSeconds: DEFAULT_WORKER_PRESENCE_TTL_SECONDS,
     },
   });
+  emitEvent(rt, 'worker.ready', ctx, source, {
+    assignee,
+    data: {
+      maxConcurrency: load.maxConcurrency,
+      activeCount: load.activeCount,
+      idle: load.idle,
+    },
+  });
   updateWorkerPresence(rt, assignee, 'online', nowIso);
+  updateWorkerReadiness(rt, assignee, load, nowIso);
   rt.lastWorkerHeartbeatAtMs = nowMs;
   persistState(rt);
 }

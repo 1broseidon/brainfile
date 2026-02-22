@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { readTasksDir, type Task } from '@brainfile/core';
 
-import type { Rt, PiEventRecord, PmLockRecord } from './types';
+import type { Rt, Envelope, PmLockRecord } from './types';
+import { normalizeEnvelope } from './types';
 import {
   PM_LOCK_DIRNAME,
   PM_LOCK_LEASE_SECONDS,
@@ -241,16 +242,19 @@ export function probeOpenPmRuns(rt: Rt, excludeRunIds: string[] = []): { hasConf
       .filter((line) => line.length > 0);
 
     for (const line of lines) {
-      let parsed: PiEventRecord | null = null;
+      let parsed: Envelope | null = null;
       try {
-        parsed = JSON.parse(line) as PiEventRecord;
+        parsed = normalizeEnvelope(JSON.parse(line));
       } catch {
         continue;
       }
 
       if (!parsed.runId) continue;
 
-      if (parsed.type === 'run.started' && parsed.actorMode === 'pm') {
+      const kind = parsed.kind || parsed.type;
+      const mode = parsed.actorMode || (parsed.from === 'pm' || parsed.from === 'worker' ? parsed.from : undefined);
+
+      if (kind === 'run.started' && mode === 'pm') {
         const runId = parsed.runId;
         const at = typeof parsed.at === 'string' ? parsed.at : '';
         const existing = startedAtByRun.get(runId);
@@ -260,7 +264,7 @@ export function probeOpenPmRuns(rt: Rt, excludeRunIds: string[] = []): { hasConf
         continue;
       }
 
-      if (parsed.type === 'run.closed') {
+      if (kind === 'run.closed') {
         closedRuns.add(parsed.runId);
       }
     }

@@ -1,7 +1,7 @@
 export const STATE_ENTRY_TYPE = 'brainfile-extension-state';
 export const STATUS_KEY = 'brainfile';
 export const WIDGET_KEY = 'brainfile-task';
-export const LISTENER_POLL_INTERVAL_MS = 10_000;
+export const LISTENER_SAFETY_POLL_INTERVAL_MS = 30_000;
 export const DEFAULT_LISTENER_ASSIGNEE = 'codex';
 export const DEFAULT_STALE_TIMEOUT_SECONDS = 3600;
 export const DEFAULT_WORKER_PRESENCE_TTL_SECONDS = 45;
@@ -27,6 +27,7 @@ export const BF_CONTRACT_PICKUP_TOOL = 'brainfile_contract_pickup';
 export const BF_CONTRACT_DELIVER_TOOL = 'brainfile_contract_deliver';
 export const BF_CONTRACT_VALIDATE_TOOL = 'brainfile_contract_validate';
 export const BF_ADR_PROMOTE_TOOL = 'brainfile_adr_promote';
+export const BF_SEND_MESSAGE_TOOL = 'brainfile_send_message';
 
 export const BF_READ_ONLY_TOOLS = new Set<string>([
   BF_LIST_TOOL,
@@ -40,6 +41,7 @@ export const BF_MUTATING_TOOLS = new Set<string>([
   BF_COMPLETE_TOOL,
   BF_SUBTASK_TOOL,
   BF_LOG_TOOL,
+  BF_SEND_MESSAGE_TOOL,
   BF_CONTRACT_PICKUP_TOOL,
   BF_CONTRACT_DELIVER_TOOL,
   BF_CONTRACT_VALIDATE_TOOL,

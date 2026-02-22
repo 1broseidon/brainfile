@@ -31,6 +31,7 @@ import {
   assigneeMatches,
   getEffectiveListenerAssignee,
   getWorkerAvailabilitySnapshot,
+  formatWorkerLoad,
   inferOperatingModeFromModel,
   resolveOperatingMode,
   releaseWorkerAssigneeClaim,
@@ -185,7 +186,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
     if (rt.operatingMode === 'pm') {
       const workers = getWorkerAvailabilitySnapshot(rt);
       const availableWorkers = workers.available.length > 0
-        ? workers.available.map((worker) => `${worker.worker} (${worker.ageSeconds}s)`).join(', ')
+        ? workers.available.map((worker) => formatWorkerLoad(worker)).join(', ')
         : 'none';
       lines.push(`Workers: ${availableWorkers}`);
       lines.push(`Stale timeout: ${rt.staleTimeoutSeconds}s`);
@@ -312,7 +313,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
         ? (() => {
             const workers = getWorkerAvailabilitySnapshot(rt);
             const availableWorkers = workers.available.length > 0
-              ? workers.available.map((worker) => `${worker.worker} (${worker.ageSeconds}s)`).join(', ')
+              ? workers.available.map((worker) => formatWorkerLoad(worker)).join(', ')
               : 'none';
             return `Run: ${rt.activeRunId || 'none'}\nTracked delegations: ${rt.activeRunId ? (rt.eventProjection.delegatedByRun[rt.activeRunId] || []).length : 0}\nAvailable workers: ${availableWorkers}\nStale timeout: ${rt.staleTimeoutSeconds}s\nOrchestration: event-driven (no sleep/poll waits)`;
           })()
@@ -810,7 +811,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
             ? (() => {
                 const workers = getWorkerAvailabilitySnapshot(rt);
                 const availableWorkers = workers.available.length > 0
-                  ? workers.available.map((worker) => `${worker.worker} (${worker.ageSeconds}s)`).join(', ')
+                  ? workers.available.map((worker) => formatWorkerLoad(worker)).join(', ')
                   : 'none';
                 return ` Tracked delegations: ${rt.activeRunId ? (rt.eventProjection.delegatedByRun[rt.activeRunId] || []).length : 0}. Available workers: ${availableWorkers}. Stale timeout: ${rt.staleTimeoutSeconds}s.`;
               })()
@@ -1059,6 +1060,10 @@ export default function brainfileExtension(pi: ExtensionAPI) {
     set activeTaskId(value: string | null) { rt.activeTaskId = value; },
     get activeTaskPath() { return rt.activeTaskPath; },
     set activeTaskPath(value: string | null) { rt.activeTaskPath = value; },
+    get operatingMode() { return rt.operatingMode; },
+    get lastWorkerAssignee() { return rt.lastWorkerAssignee; },
+    get autoWorkerAssignee() { return rt.autoWorkerAssignee; },
+    get listenerAssigneeOverride() { return rt.listenerAssigneeOverride; },
   };
 
   registerBrainfileTools(pi, {

@@ -1,10 +1,10 @@
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import type { EventProjection, Rt, WorkerPresence } from './types';
+import type { EventProjection, Rt, WorkerPresence, WorkerReadiness } from './types';
 import { STATE_ENTRY_TYPE, DEFAULT_STALE_TIMEOUT_SECONDS } from './constants';
 
 export function createEmptyEventProjection(): EventProjection {
   return {
-    cursor: 0,
+    lastByteOffset: 0,
     delegatedByRun: {},
     taskRun: {},
     deliveredNotifiedByRun: {},
@@ -16,6 +16,7 @@ export function createEmptyEventProjection(): EventProjection {
     closedNotifiedRuns: [],
     runClosedByRun: {},
     workerPresence: {},
+    workerReadiness: {},
     taskAdoptedAt: {},
   };
 }
@@ -25,8 +26,8 @@ export function normalizeEventProjection(value: unknown): EventProjection {
   if (!value || typeof value !== 'object') return base;
   const raw = value as Record<string, unknown>;
 
-  const cursor = typeof raw.cursor === 'number' && Number.isFinite(raw.cursor)
-    ? Math.max(0, Math.floor(raw.cursor))
+  const lastByteOffset = typeof raw.lastByteOffset === 'number' && Number.isFinite(raw.lastByteOffset)
+    ? Math.max(0, Math.floor(raw.lastByteOffset))
     : 0;
 
   const coerceStringArrayRecord = (input: unknown): Record<string, string[]> => {
@@ -76,9 +77,39 @@ export function normalizeEventProjection(value: unknown): EventProjection {
     }
   }
 
+  const workerReadiness: Record<string, WorkerReadiness> = {};
+  if (raw.workerReadiness && typeof raw.workerReadiness === 'object') {
+    for (const [worker, value] of Object.entries(raw.workerReadiness as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object') continue;
+      const readiness = value as Record<string, unknown>;
+      const maxConcurrencyRaw = readiness.maxConcurrency;
+      const activeCountRaw = readiness.activeCount;
+      const idleRaw = readiness.idle;
+      const lastReportedAt = typeof readiness.lastReportedAt === 'string' ? readiness.lastReportedAt : null;
+      if (!lastReportedAt) continue;
+
+      const maxConcurrency = typeof maxConcurrencyRaw === 'number' && Number.isFinite(maxConcurrencyRaw)
+        ? Math.max(1, Math.floor(maxConcurrencyRaw))
+        : null;
+      const activeCount = typeof activeCountRaw === 'number' && Number.isFinite(activeCountRaw)
+        ? Math.max(0, Math.floor(activeCountRaw))
+        : null;
+      if (maxConcurrency === null || activeCount === null) continue;
+
+      const idle = typeof idleRaw === 'boolean' ? idleRaw : activeCount < maxConcurrency;
+
+      workerReadiness[worker] = {
+        maxConcurrency,
+        activeCount,
+        idle,
+        lastReportedAt,
+      };
+    }
+  }
+
   return {
     ...base,
-    cursor,
+    lastByteOffset,
     delegatedByRun: coerceStringArrayRecord(raw.delegatedByRun),
     taskRun,
     deliveredNotifiedByRun: coerceStringArrayRecord(raw.deliveredNotifiedByRun),
@@ -96,6 +127,7 @@ export function normalizeEventProjection(value: unknown): EventProjection {
     closedNotifiedRuns: coerceStringArray(raw.closedNotifiedRuns),
     runClosedByRun,
     workerPresence,
+    workerReadiness,
     taskAdoptedAt: (() => {
       const out: Record<string, string> = {};
       if (raw.taskAdoptedAt && typeof raw.taskAdoptedAt === 'object') {
@@ -123,6 +155,7 @@ export function createRt(pi: ExtensionAPI): Rt {
     listenerAssigneeOverride: null,
     listenerAutoStart: true,
     listenerTimer: null,
+    listenerWatcher: null,
     listenerBusy: false,
     listenerPausedForUserInput: false,
     operatingMode: 'pm',

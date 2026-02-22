@@ -1,5 +1,116 @@
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
-import type { Rt } from './types';
+import type { Envelope, EnvelopeKind, Rt } from './types';
+import { getEffectiveListenerAssignee, normalizeAssignee } from './worker';
+
+export const CONVERSATIONAL_MESSAGE_KINDS = [
+  'message.question',
+  'message.answer',
+  'message.ack',
+  'message.status',
+  'message.blocker',
+  'message.decision',
+] as const;
+
+export type ConversationalMessageKind = (typeof CONVERSATIONAL_MESSAGE_KINDS)[number];
+
+export function isConversationalMessageKind(value: unknown): value is ConversationalMessageKind {
+  return typeof value === 'string' && (CONVERSATIONAL_MESSAGE_KINDS as readonly string[]).includes(value);
+}
+
+function normalizeAddress(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (trimmed.toLowerCase() === 'pm') return 'pm';
+  if (trimmed.toLowerCase() === 'worker') return 'worker';
+
+  const normalized = normalizeAssignee(trimmed);
+  return normalized || trimmed.toLowerCase();
+}
+
+type MessageRuntime = Pick<Rt, 'operatingMode' | 'lastWorkerAssignee' | 'autoWorkerAssignee' | 'listenerAssigneeOverride'>;
+
+export function emitMessage(
+  rt: MessageRuntime,
+  ctx: ExtensionContext,
+  emitEvent: (
+    kind: EnvelopeKind,
+    ctx: ExtensionContext,
+    source: string,
+    options?: {
+      taskId?: string;
+      runId?: string;
+      assignee?: string;
+      data?: Record<string, unknown>;
+      messageId?: string;
+      threadId?: string;
+      inReplyTo?: string;
+      from?: string;
+      to?: string;
+      priority?: Envelope['priority'];
+      requiresAck?: boolean;
+      expiresAt?: string;
+    }
+  ) => void,
+  kind: ConversationalMessageKind,
+  source: string,
+  options: {
+    to?: string;
+    from?: string;
+    taskId?: string;
+    runId?: string;
+    threadId?: string;
+    inReplyTo?: string;
+    body: string;
+    requiresAck?: boolean;
+    assignee?: string;
+    messageId?: string;
+    priority?: Envelope['priority'];
+    expiresAt?: string;
+  }
+): { messageId: string; threadId: string; from: string; to?: string; kind: ConversationalMessageKind } {
+  const defaultFrom = rt.operatingMode === 'pm'
+    ? 'pm'
+    : normalizeAssignee(
+        options.assignee ||
+        rt.lastWorkerAssignee ||
+        rt.autoWorkerAssignee ||
+        rt.listenerAssigneeOverride ||
+        getEffectiveListenerAssignee(rt as Rt, ctx) ||
+        'worker'
+      );
+
+  const from = normalizeAddress(options.from) || defaultFrom || (rt.operatingMode === 'pm' ? 'pm' : 'worker');
+  const to = normalizeAddress(options.to);
+  const threadId = (options.threadId || '').trim() || (options.taskId ? `task:${options.taskId}` : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const messageId = (options.messageId || '').trim() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  emitEvent(kind, ctx, source, {
+    ...(options.taskId ? { taskId: options.taskId } : {}),
+    ...(options.runId ? { runId: options.runId } : {}),
+    ...(from && from !== 'pm' && from !== 'worker' ? { assignee: from } : {}),
+    data: {
+      body: options.body,
+    },
+    messageId,
+    threadId,
+    ...(options.inReplyTo ? { inReplyTo: options.inReplyTo } : {}),
+    from,
+    ...(to ? { to } : {}),
+    ...(options.priority ? { priority: options.priority } : {}),
+    ...(typeof options.requiresAck === 'boolean' ? { requiresAck: options.requiresAck } : {}),
+    ...(options.expiresAt ? { expiresAt: options.expiresAt } : {}),
+  });
+
+  return {
+    messageId,
+    threadId,
+    from,
+    ...(to ? { to } : {}),
+    kind,
+  };
+}
 
 // Guard against the race where pi.sendUserMessage() is async internally:
 // ctx.isIdle() may still return true for subsequent synchronous calls

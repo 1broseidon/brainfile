@@ -1,12 +1,60 @@
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import * as fs from 'fs';
 
-import type { Rt, PiEventType, PiEventRecord } from './types';
+import type { Rt, Envelope, EnvelopeKind } from './types';
+import { normalizeEnvelope, isPiEventType } from './types';
 import { persistState } from './state';
-import { normalizeAssignee } from './worker';
-import { updateWorkerPresence } from './worker';
-import { sendOrchestrationMessage } from './messaging';
+import { normalizeAssignee, assigneeMatches, getEffectiveListenerAssignee } from './worker';
+import { updateWorkerPresence, updateWorkerReadiness } from './worker';
+import { sendOrchestrationMessage, emitMessage, isConversationalMessageKind } from './messaging';
 import { createRunId, adoptOrphanedTasksForRun } from './pm';
+
+const SEEN_MESSAGE_TTL_MS = 5 * 60 * 1000;
+const MAX_SEEN_MESSAGE_IDS = 1000;
+const seenMessageIdsByRt = new WeakMap<Rt, Map<string, number>>();
+
+function getSeenMessageIds(rt: Rt): Map<string, number> {
+  let seen = seenMessageIdsByRt.get(rt);
+  if (!seen) {
+    seen = new Map<string, number>();
+    seenMessageIdsByRt.set(rt, seen);
+  }
+  return seen;
+}
+
+function pruneSeenMessageIds(seen: Map<string, number>, nowMs: number): void {
+  const minSeenAt = nowMs - SEEN_MESSAGE_TTL_MS;
+
+  for (const [messageId, seenAt] of seen.entries()) {
+    if (seenAt < minSeenAt) {
+      seen.delete(messageId);
+    }
+  }
+
+  while (seen.size > MAX_SEEN_MESSAGE_IDS) {
+    const oldestMessageId = seen.keys().next().value;
+    if (typeof oldestMessageId !== 'string') break;
+    seen.delete(oldestMessageId);
+  }
+}
+
+function isDuplicateMessage(rt: Rt, messageId: string, nowMs: number): boolean {
+  const seen = getSeenMessageIds(rt);
+  pruneSeenMessageIds(seen, nowMs);
+
+  const seenAt = seen.get(messageId);
+  if (typeof seenAt === 'number' && nowMs - seenAt <= SEEN_MESSAGE_TTL_MS) {
+    return true;
+  }
+
+  // Refresh insertion order so size trimming evicts oldest entries first.
+  if (typeof seenAt === 'number') {
+    seen.delete(messageId);
+  }
+  seen.set(messageId, nowMs);
+  pruneSeenMessageIds(seen, nowMs);
+  return false;
+}
 
 // ── Pure helpers ───────────────────────────────────────────────────────
 
@@ -56,7 +104,7 @@ export function inferRunIdForTask(rt: Rt, taskId: string | undefined): string | 
         .map((line) => line.trim())
         .filter((line) => line.length > 0);
       for (let i = lines.length - 1; i >= 0; i -= 1) {
-        const parsed = JSON.parse(lines[i]) as PiEventRecord;
+        const parsed = normalizeEnvelope(JSON.parse(lines[i]));
         if (parsed.taskId === taskId && parsed.runId) {
           rt.eventProjection.taskRun[taskId] = parsed.runId;
           return parsed.runId;
@@ -74,7 +122,7 @@ export function inferRunIdForTask(rt: Rt, taskId: string | undefined): string | 
 
 export function emitEvent(
   rt: Rt,
-  type: PiEventType,
+  kind: EnvelopeKind,
   ctx: ExtensionContext,
   source: string,
   options?: {
@@ -82,6 +130,14 @@ export function emitEvent(
     runId?: string;
     assignee?: string;
     data?: Record<string, unknown>;
+    messageId?: string;
+    threadId?: string;
+    inReplyTo?: string;
+    from?: string;
+    to?: string;
+    priority?: Envelope['priority'];
+    requiresAck?: boolean;
+    expiresAt?: string;
   }
 ): void {
   if (!rt.boardContext) return;
@@ -89,124 +145,388 @@ export function emitEvent(
   ensureEventsLogExists(rt);
 
   const runId = options?.runId || inferRunIdForTask(rt, options?.taskId) || (rt.operatingMode === 'pm' ? rt.activeRunId || undefined : undefined);
-  const event: PiEventRecord = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  const event = normalizeEnvelope({
+    id: options?.messageId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     at: new Date().toISOString(),
-    type,
+    kind,
+    ...(isPiEventType(kind) ? { type: kind } : {}),
     ...(runId ? { runId } : {}),
     ...(options?.taskId ? { taskId: options.taskId } : {}),
     actorMode: rt.operatingMode,
     ...(options?.assignee ? { actorAssignee: options.assignee } : {}),
     source,
     ...(options?.data ? { data: options.data } : {}),
-  };
+    ...(options?.threadId ? { threadId: options.threadId } : {}),
+    ...(options?.inReplyTo ? { inReplyTo: options.inReplyTo } : {}),
+    ...(options?.from ? { from: options.from } : {}),
+    ...(options?.to ? { to: options.to } : {}),
+    ...(options?.priority ? { priority: options.priority } : {}),
+    ...(typeof options?.requiresAck === 'boolean' ? { requiresAck: options.requiresAck } : {}),
+    ...(options?.expiresAt ? { expiresAt: options.expiresAt } : {}),
+  });
 
   fs.appendFileSync(rt.boardContext.eventsLogPath, `${JSON.stringify(event)}\n`, 'utf-8');
 }
 
+type PendingConversationMessage = {
+  kind: string;
+  messageId: string;
+  threadId: string;
+  inReplyTo?: string;
+  from?: string;
+  to?: string;
+  taskId?: string;
+  runId?: string;
+  body: string;
+};
+
+type PendingAckMessage = {
+  to: string;
+  taskId?: string;
+  runId?: string;
+  threadId?: string;
+  inReplyTo: string;
+  kind: string;
+};
+
+const ORCHESTRATION_BATCH_KINDS = new Set<string>([
+  'message.question',
+  'message.answer',
+  'message.blocker',
+  'message.status',
+]);
+
+function resolveLocalWorkerIdentity(rt: Rt, ctx: ExtensionContext): string {
+  const explicit = normalizeAssignee(rt.lastWorkerAssignee || rt.autoWorkerAssignee || rt.listenerAssigneeOverride);
+  if (explicit) return explicit;
+  return normalizeAssignee(getEffectiveListenerAssignee(rt, ctx));
+}
+
+function isEnvelopeAddressedToSession(rt: Rt, ctx: ExtensionContext, parsed: Envelope): boolean {
+  const to = typeof parsed.to === 'string' ? parsed.to.trim() : '';
+  if (!to) return true;
+
+  const normalizedTo = normalizeAssignee(to) || to.toLowerCase();
+
+  if (normalizedTo === 'pm' || normalizedTo === 'main') {
+    return rt.operatingMode === 'pm';
+  }
+
+  if (normalizedTo === 'worker') {
+    return rt.operatingMode === 'worker';
+  }
+
+  if (rt.operatingMode === 'worker') {
+    const localWorker = resolveLocalWorkerIdentity(rt, ctx);
+    return localWorker ? assigneeMatches(normalizedTo, localWorker) : false;
+  }
+
+  const localPm = normalizeAssignee(getEffectiveListenerAssignee(rt, ctx));
+  return localPm ? assigneeMatches(normalizedTo, localPm) : false;
+}
+
+function extractMessageBody(parsed: Envelope): string {
+  const body = (parsed.data && typeof parsed.data === 'object')
+    ? (parsed.data as Record<string, unknown>).body
+    : undefined;
+
+  if (typeof body === 'string') return body.trim();
+  if (body == null) return '';
+  return String(body).trim();
+}
+
+function truncateMessageBody(body: string, maxChars = 300): string {
+  if (body.length <= maxChars) return body;
+  return `${body.slice(0, maxChars)}…`;
+}
+
+function formatConversationBatch(messages: PendingConversationMessage[]): string[] {
+  const lines: string[] = [`Received ${messages.length} conversational message(s):`];
+
+  for (const message of messages) {
+    const route = `${message.from || 'unknown'}${message.to ? ` → ${message.to}` : ''}`;
+    const taskPart = message.taskId ? ` task:${message.taskId}` : '';
+    lines.push(`- [${message.kind}] ${route} | thread:${message.threadId} | id:${message.messageId}${taskPart}`);
+    if (message.inReplyTo) {
+      lines.push(`  inReplyTo: ${message.inReplyTo}`);
+    }
+    if (message.body) {
+      lines.push(`  ${truncateMessageBody(message.body)}`);
+    }
+  }
+
+  lines.push('Reply with brainfile_send_message and include threadId + inReplyTo when continuing a thread.');
+  return lines;
+}
+
 // ── Event log processing ───────────────────────────────────────────────
+
+function applyEnvelopeToProjection(rt: Rt, ctx: ExtensionContext, parsed: Envelope): void {
+  const kind = parsed.kind || parsed.type;
+  if (!kind) return;
+
+  const taskId = parsed.taskId;
+  const runId = parsed.runId || inferRunIdForTask(rt, taskId);
+
+  if (runId && taskId && kind === 'contract.delegated') {
+    rt.eventProjection.delegatedByRun[runId] = pushUnique(rt.eventProjection.delegatedByRun[runId], taskId);
+    rt.eventProjection.taskRun[taskId] = runId;
+  }
+
+  if (runId && taskId && !rt.eventProjection.taskRun[taskId]) {
+    rt.eventProjection.taskRun[taskId] = runId;
+  }
+
+  const actorAssignee = normalizeAssignee(parsed.actorAssignee || (typeof parsed.from === 'string' ? parsed.from : undefined));
+  if (actorAssignee && (kind === 'worker.online' || kind === 'worker.heartbeat' || kind === 'worker.ready' || kind === 'worker.busy')) {
+    updateWorkerPresence(rt, actorAssignee, 'online', parsed.at || new Date().toISOString());
+  }
+  if (actorAssignee && kind === 'worker.ready') {
+    const data = (parsed.data && typeof parsed.data === 'object') ? parsed.data as Record<string, unknown> : {};
+    const maxConcurrency = typeof data.maxConcurrency === 'number' && Number.isFinite(data.maxConcurrency)
+      ? Math.max(1, Math.floor(data.maxConcurrency))
+      : 1;
+    const activeCount = typeof data.activeCount === 'number' && Number.isFinite(data.activeCount)
+      ? Math.max(0, Math.floor(data.activeCount))
+      : 0;
+    const idle = typeof data.idle === 'boolean' ? data.idle : activeCount < maxConcurrency;
+    updateWorkerReadiness(rt, actorAssignee, { maxConcurrency, activeCount, idle }, parsed.at || new Date().toISOString());
+  }
+  if (actorAssignee && kind === 'worker.offline') {
+    updateWorkerPresence(rt, actorAssignee, 'offline', parsed.at || new Date().toISOString());
+  }
+
+  if (runId && taskId && kind === 'contract.delivered' && projectionHasDelegation(rt, runId, taskId)) {
+    const notified = rt.eventProjection.deliveredNotifiedByRun[runId] || [];
+    if (!notified.includes(taskId)) {
+      rt.eventProjection.deliveredNotifiedByRun[runId] = pushUnique(notified, taskId);
+    }
+  }
+
+  if (runId && taskId && kind === 'contract.validated' && projectionHasDelegation(rt, runId, taskId)) {
+    const notified = rt.eventProjection.validatedNotifiedByRun[runId] || [];
+    if (!notified.includes(taskId)) {
+      rt.eventProjection.validatedNotifiedByRun[runId] = pushUnique(notified, taskId);
+    }
+  }
+
+  if (runId && taskId && kind === 'task.completed' && projectionHasDelegation(rt, runId, taskId)) {
+    const notified = rt.eventProjection.completedNotifiedByRun[runId] || [];
+    if (!notified.includes(taskId)) {
+      rt.eventProjection.completedNotifiedByRun[runId] = pushUnique(notified, taskId);
+    }
+  }
+
+  if (rt.operatingMode === 'pm' && rt.listenMode && runId && kind === 'run.blocked') {
+    if (!rt.eventProjection.blockedNotifiedRuns.includes(runId)) {
+      rt.eventProjection.blockedNotifiedRuns = pushUnique(rt.eventProjection.blockedNotifiedRuns, runId);
+      const reasons = Array.isArray((parsed.data as any)?.reasons)
+        ? ((parsed.data as any).reasons as unknown[]).filter((item): item is string => typeof item === 'string')
+        : [];
+      sendOrchestrationMessage(rt, ctx, [
+        `Run ${runId} is BLOCKED${reasons.length > 0 ? ` (${reasons.join(', ')})` : ''}.`,
+        'Review stale/failed tasks and re-delegate as needed.',
+      ]);
+    }
+  }
+
+  if (rt.operatingMode === 'pm' && rt.listenMode && runId && kind === 'run.closed') {
+    const result = String((parsed.data || {}).result || 'unknown');
+    rt.eventProjection.runClosedByRun[runId] = result;
+
+    if (!rt.eventProjection.closedNotifiedRuns.includes(runId)) {
+      rt.eventProjection.closedNotifiedRuns = pushUnique(rt.eventProjection.closedNotifiedRuns, runId);
+      const openTasks = Array.isArray((parsed.data as any)?.openTasks) ? (parsed.data as any).openTasks as unknown[] : [];
+      sendOrchestrationMessage(rt, ctx, [
+        `Run ${runId} closed with result: ${result}.`,
+        result === 'success' ? 'All delegated tasks reached terminal success states.' : `Remaining/open tasks: ${openTasks.length}.`,
+      ]);
+    }
+
+    if (rt.activeRunId === runId) {
+      rt.activeRunId = null;
+    }
+  }
+}
 
 export function processEventLog(rt: Rt, ctx: ExtensionContext): void {
   if (!rt.boardContext) return;
   ensureEventsLogExists(rt);
 
-  const raw = fs.readFileSync(rt.boardContext.eventsLogPath, 'utf-8');
-  const lines = raw
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+  let changed = false;
 
-  if (rt.eventProjection.cursor > lines.length) {
-    rt.eventProjection.cursor = 0;
+  let lastByteOffset = Number.isFinite(rt.eventProjection.lastByteOffset)
+    ? Math.max(0, Math.floor(rt.eventProjection.lastByteOffset))
+    : 0;
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(rt.boardContext.eventsLogPath);
+  } catch {
+    return;
   }
 
-  if (rt.eventProjection.cursor >= lines.length) return;
-
-  const start = rt.eventProjection.cursor;
-  for (let index = start; index < lines.length; index += 1) {
-    const line = lines[index];
-    let parsed: PiEventRecord | null = null;
-    try {
-      parsed = JSON.parse(line) as PiEventRecord;
-    } catch {
-      continue;
-    }
-
-    const taskId = parsed.taskId;
-    const runId = parsed.runId || inferRunIdForTask(rt, taskId);
-
-    if (runId && taskId && parsed.type === 'contract.delegated') {
-      rt.eventProjection.delegatedByRun[runId] = pushUnique(rt.eventProjection.delegatedByRun[runId], taskId);
-      rt.eventProjection.taskRun[taskId] = runId;
-    }
-
-    if (runId && taskId && !rt.eventProjection.taskRun[taskId]) {
-      rt.eventProjection.taskRun[taskId] = runId;
-    }
-
-    const actorAssignee = normalizeAssignee(parsed.actorAssignee);
-    if (actorAssignee && (parsed.type === 'worker.online' || parsed.type === 'worker.heartbeat')) {
-      updateWorkerPresence(rt, actorAssignee, 'online', parsed.at || new Date().toISOString());
-    }
-    if (actorAssignee && parsed.type === 'worker.offline') {
-      updateWorkerPresence(rt, actorAssignee, 'offline', parsed.at || new Date().toISOString());
-    }
-
-    if (runId && taskId && parsed.type === 'contract.delivered' && projectionHasDelegation(rt, runId, taskId)) {
-      const notified = rt.eventProjection.deliveredNotifiedByRun[runId] || [];
-      if (!notified.includes(taskId)) {
-        rt.eventProjection.deliveredNotifiedByRun[runId] = pushUnique(notified, taskId);
-      }
-    }
-
-    if (runId && taskId && parsed.type === 'contract.validated' && projectionHasDelegation(rt, runId, taskId)) {
-      const notified = rt.eventProjection.validatedNotifiedByRun[runId] || [];
-      if (!notified.includes(taskId)) {
-        rt.eventProjection.validatedNotifiedByRun[runId] = pushUnique(notified, taskId);
-      }
-    }
-
-    if (runId && taskId && parsed.type === 'task.completed' && projectionHasDelegation(rt, runId, taskId)) {
-      const notified = rt.eventProjection.completedNotifiedByRun[runId] || [];
-      if (!notified.includes(taskId)) {
-        rt.eventProjection.completedNotifiedByRun[runId] = pushUnique(notified, taskId);
-      }
-    }
-
-    if (rt.operatingMode === 'pm' && rt.listenMode && runId && parsed.type === 'run.blocked') {
-      if (!rt.eventProjection.blockedNotifiedRuns.includes(runId)) {
-        rt.eventProjection.blockedNotifiedRuns = pushUnique(rt.eventProjection.blockedNotifiedRuns, runId);
-        const reasons = Array.isArray((parsed.data as any)?.reasons)
-          ? ((parsed.data as any).reasons as unknown[]).filter((item): item is string => typeof item === 'string')
-          : [];
-        sendOrchestrationMessage(rt, ctx, [
-          `Run ${runId} is BLOCKED${reasons.length > 0 ? ` (${reasons.join(', ')})` : ''}.`,
-          'Review stale/failed tasks and re-delegate as needed.',
-        ]);
-      }
-    }
-
-    if (rt.operatingMode === 'pm' && rt.listenMode && runId && parsed.type === 'run.closed') {
-      const result = String((parsed.data || {}).result || 'unknown');
-      rt.eventProjection.runClosedByRun[runId] = result;
-
-      if (!rt.eventProjection.closedNotifiedRuns.includes(runId)) {
-        rt.eventProjection.closedNotifiedRuns = pushUnique(rt.eventProjection.closedNotifiedRuns, runId);
-        const openTasks = Array.isArray((parsed.data as any)?.openTasks) ? (parsed.data as any).openTasks as unknown[] : [];
-        sendOrchestrationMessage(rt, ctx, [
-          `Run ${runId} closed with result: ${result}.`,
-          result === 'success' ? 'All delegated tasks reached terminal success states.' : `Remaining/open tasks: ${openTasks.length}.`,
-        ]);
-      }
-
-      if (rt.activeRunId === runId) {
-        rt.activeRunId = null;
-      }
-    }
+  if (stat.size < lastByteOffset) {
+    // File truncated/rotated; start over from beginning.
+    lastByteOffset = 0;
+    rt.eventProjection.lastByteOffset = 0;
+    changed = true;
   }
 
-  rt.eventProjection.cursor = lines.length;
-  persistState(rt);
+  if (stat.size === lastByteOffset) {
+    if (changed) persistState(rt);
+    return;
+  }
+
+  const bytesToRead = stat.size - lastByteOffset;
+  if (bytesToRead <= 0) {
+    if (changed) persistState(rt);
+    return;
+  }
+
+  const pendingMessages: PendingConversationMessage[] = [];
+  const pendingAcks: PendingAckMessage[] = [];
+
+  const fd = fs.openSync(rt.boardContext.eventsLogPath, 'r');
+  try {
+    const buffer = Buffer.alloc(bytesToRead);
+    const bytesRead = fs.readSync(fd, buffer, 0, bytesToRead, lastByteOffset);
+    if (bytesRead <= 0) {
+      if (changed) persistState(rt);
+      return;
+    }
+
+    const chunk = buffer.subarray(0, bytesRead).toString('utf-8');
+    const lastNewlineIndex = chunk.lastIndexOf('\n');
+
+    let consumable = '';
+    let consumedBytes = 0;
+
+    if (lastNewlineIndex >= 0) {
+      consumable = chunk.slice(0, lastNewlineIndex + 1);
+      consumedBytes = Buffer.byteLength(consumable, 'utf-8');
+    } else {
+      // No newline yet: only process if this chunk is a full JSON row.
+      const maybeLine = chunk.trim();
+      if (maybeLine.length > 0) {
+        try {
+          JSON.parse(maybeLine);
+          consumable = chunk;
+          consumedBytes = bytesRead;
+        } catch {
+          // Partial write; wait for next append.
+        }
+      }
+    }
+
+    if (consumable.length > 0 && consumedBytes > 0) {
+      const lines = consumable
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+
+      for (const line of lines) {
+        try {
+          const parsed = normalizeEnvelope(JSON.parse(line));
+          const nowMs = Date.now();
+          const messageId = typeof parsed.messageId === 'string' ? parsed.messageId.trim() : '';
+          if (messageId.length > 0 && isDuplicateMessage(rt, messageId, nowMs)) {
+            continue;
+          }
+
+          applyEnvelopeToProjection(rt, ctx, parsed);
+
+          const kind = parsed.kind || parsed.type;
+          if (!kind || !isConversationalMessageKind(kind)) {
+            continue;
+          }
+
+          if (!isEnvelopeAddressedToSession(rt, ctx, parsed)) {
+            continue;
+          }
+
+          const resolvedMessageId = messageId || parsed.id;
+          const resolvedThreadId = (typeof parsed.threadId === 'string' && parsed.threadId.trim().length > 0)
+            ? parsed.threadId.trim()
+            : (parsed.taskId ? `task:${parsed.taskId}` : resolvedMessageId);
+          const body = extractMessageBody(parsed);
+
+          if (parsed.requiresAck === true && kind !== 'message.ack') {
+            const recipient = typeof parsed.from === 'string' ? parsed.from.trim() : '';
+            if (recipient) {
+              pendingAcks.push({
+                to: recipient,
+                ...(parsed.taskId ? { taskId: parsed.taskId } : {}),
+                ...(parsed.runId ? { runId: parsed.runId } : {}),
+                threadId: resolvedThreadId,
+                inReplyTo: resolvedMessageId,
+                kind,
+              });
+            }
+          }
+
+          if (ORCHESTRATION_BATCH_KINDS.has(kind)) {
+            pendingMessages.push({
+              kind,
+              messageId: resolvedMessageId,
+              threadId: resolvedThreadId,
+              ...(typeof parsed.inReplyTo === 'string' && parsed.inReplyTo.trim().length > 0
+                ? { inReplyTo: parsed.inReplyTo.trim() }
+                : {}),
+              ...(typeof parsed.from === 'string' && parsed.from.trim().length > 0
+                ? { from: parsed.from.trim() }
+                : {}),
+              ...(typeof parsed.to === 'string' && parsed.to.trim().length > 0
+                ? { to: parsed.to.trim() }
+                : {}),
+              ...(parsed.taskId ? { taskId: parsed.taskId } : {}),
+              ...(parsed.runId ? { runId: parsed.runId } : {}),
+              body,
+            });
+          }
+        } catch {
+          // Skip malformed rows, preserve prior behavior.
+        }
+      }
+
+      const nextOffset = lastByteOffset + consumedBytes;
+      if (nextOffset !== rt.eventProjection.lastByteOffset) {
+        rt.eventProjection.lastByteOffset = nextOffset;
+        changed = true;
+      }
+    }
+
+    if (pendingAcks.length > 0) {
+      for (const ack of pendingAcks) {
+        emitMessage(
+          rt,
+          ctx,
+          (kind, emitCtx, source, options) => emitEvent(rt, kind, emitCtx, source, options),
+          'message.ack',
+          'listener:auto-ack',
+          {
+            to: ack.to,
+            ...(ack.taskId ? { taskId: ack.taskId } : {}),
+            ...(ack.runId ? { runId: ack.runId } : {}),
+            ...(ack.threadId ? { threadId: ack.threadId } : {}),
+            inReplyTo: ack.inReplyTo,
+            body: `Acknowledged ${ack.kind}`,
+            requiresAck: false,
+          }
+        );
+      }
+    }
+
+    if (pendingMessages.length > 0) {
+      sendOrchestrationMessage(rt, ctx, formatConversationBatch(pendingMessages));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  if (changed) {
+    persistState(rt);
+  }
 }
 
 // ── Delegation event emission ──────────────────────────────────────────

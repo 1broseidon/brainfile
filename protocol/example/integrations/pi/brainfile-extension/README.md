@@ -12,7 +12,7 @@ This directory contains the canonical public Pi extension integration for Brainf
 - Delegation and handoff events:
   - `contract.delegated`, `contract.picked_up`, `contract.delivered`, `contract.validated`
 - Stale detection for delegated `in_progress` contracts
-- Worker presence tracking (`worker.online`, `worker.heartbeat`, best-effort `worker.offline`)
+- Worker presence + readiness tracking (`worker.online`, `worker.heartbeat`, `worker.ready`, best-effort `worker.offline`)
 
 ## PM notification policy (quiet orchestration mode)
 
@@ -62,13 +62,14 @@ User explicit role overrides still win (`/listen role pm`).
 
 ## Worker availability awareness
 
-Worker sessions emit presence events while listener is active:
+Worker sessions emit presence/readiness events while listener is active:
 
 - `worker.online` on first heartbeat
 - `worker.heartbeat` periodically
+- `worker.ready` alongside online/heartbeat with `{ maxConcurrency, activeCount, idle }`
 - `worker.offline` best-effort on listener disable, role/model switch away from worker mode, or session shutdown
 
-PM projection applies heartbeat TTL and surfaces currently available workers in `/listen status`.
+PM projection applies heartbeat TTL and surfaces currently available workers (including load) in `/listen status`.
 
 ## Delivery behavior
 

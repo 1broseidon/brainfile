@@ -28,8 +28,10 @@ import {
   BF_CONTRACT_DELIVER_TOOL,
   BF_CONTRACT_VALIDATE_TOOL,
   BF_ADR_PROMOTE_TOOL,
+  BF_SEND_MESSAGE_TOOL,
 } from './constants';
 import type { LocatedTask } from './types';
+import { emitMessage, isConversationalMessageKind } from './messaging';
 
 export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
   const {
@@ -570,6 +572,75 @@ export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
       return makeToolResponse({
         success: true,
         task: updated ? taskSummary(updated, board) : { id: params.task },
+      });
+    },
+  });
+
+  pi.registerTool({
+    name: BF_SEND_MESSAGE_TOOL,
+    label: 'Brainfile Send Message',
+    description: 'Send a conversational message envelope to another agent.',
+    parameters: Type.Object({
+      to: Type.String({ description: 'Recipient (e.g. pm, codex-2)' }),
+      taskId: Type.String({ description: 'Related task ID' }),
+      kind: Type.String({ description: 'message.question | message.answer | message.status | message.blocker | message.decision | message.ack' }),
+      body: Type.String({ description: 'Message body' }),
+      requiresAck: Type.Optional(Type.Boolean({ description: 'Whether recipient should auto-ack this message' })),
+      threadId: Type.Optional(Type.String({ description: 'Optional thread ID (defaults to task:<taskId>)' })),
+      inReplyTo: Type.Optional(Type.String({ description: 'Optional messageId this message replies to' })),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      const refreshed = refreshBoardContext(ctx.cwd);
+      if (!refreshed.ok || !runtime.boardContext) {
+        return makeToolResponse({ error: refreshed.ok ? 'No board context.' : refreshed.error }, true);
+      }
+
+      const kind = String(params.kind || '').trim();
+      if (!isConversationalMessageKind(kind)) {
+        return makeToolResponse({
+          error: `Invalid message kind: ${params.kind}`,
+          allowedKinds: [
+            'message.question',
+            'message.answer',
+            'message.status',
+            'message.blocker',
+            'message.decision',
+            'message.ack',
+          ],
+        }, true);
+      }
+
+      const to = String(params.to || '').trim();
+      const taskId = String(params.taskId || '').trim();
+      const body = String(params.body || '').trim();
+
+      if (!to || !taskId || !body) {
+        return makeToolResponse({
+          error: 'Fields to, taskId, and body are required.',
+        }, true);
+      }
+
+      const assignee = getEffectiveListenerAssignee(ctx);
+      const sent = emitMessage(
+        runtime,
+        ctx,
+        emitEvent,
+        kind,
+        'tool:send-message',
+        {
+          to,
+          taskId,
+          body,
+          requiresAck: params.requiresAck,
+          ...(params.threadId ? { threadId: String(params.threadId).trim() } : {}),
+          ...(params.inReplyTo ? { inReplyTo: String(params.inReplyTo).trim() } : {}),
+          assignee,
+        }
+      );
+
+      return makeToolResponse({
+        success: true,
+        message: sent,
       });
     },
   });
