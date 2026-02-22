@@ -27,12 +27,10 @@ import {
 } from './board';
 import {
   normalizeAssignee,
-  inferAssigneeFromModel,
   assigneeMatches,
   getEffectiveListenerAssignee,
   getWorkerAvailabilitySnapshot,
   formatWorkerLoad,
-  inferOperatingModeFromModel,
   resolveOperatingMode,
   releaseWorkerAssigneeClaim,
   emitWorkerOffline,
@@ -103,9 +101,13 @@ export default function brainfileExtension(pi: ExtensionAPI) {
 
   function updateStatus(ctx: ExtensionContext) {
     const segments: string[] = ['bf'];
+    const rawModelId = ctx.model ? ((ctx.model as any).id || '').split('/').pop() : 'unknown';
+    // Model string like (claude-sonnet)
+    const modelStr = `(${rawModelId})`;
+
     const listenIdentity = rt.operatingMode === 'pm'
-      ? `main:${rt.activeRunId || 'none'}`
-      : getEffectiveListenerAssignee(rt, ctx);
+      ? `pm ${modelStr}`
+      : `${getEffectiveListenerAssignee(rt, ctx)} ${modelStr}`;
     const listenState = rt.listenMode
       ? `on:${listenIdentity}:${rt.listenerAutoStart ? 'start' : 'wait'}${rt.listenerPausedForUserInput ? ':paused' : ''}`
       : `off:${listenIdentity}:${rt.listenerAutoStart ? 'start' : 'wait'}`;
@@ -308,7 +310,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
       const pauseText = rt.listenerPausedForUserInput ? 'paused by user input' : 'active';
       const roleSource = rt.operatingModeOverride
         ? `override (${rt.operatingModeOverride.toUpperCase()})`
-        : `auto (${inferOperatingModeFromModel(ctx).toUpperCase()} from model)`;
+        : `auto`;
       const runInfo = rt.operatingMode === 'pm'
         ? (() => {
             const workers = getWorkerAvailabilitySnapshot(rt);
@@ -332,7 +334,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
       if (!value || value === 'status') {
         const sourceText = rt.operatingModeOverride
           ? `override (${rt.operatingModeOverride.toUpperCase()})`
-          : `auto (${inferOperatingModeFromModel(ctx).toUpperCase()} from model)`;
+          : `auto`;
         ctx.ui.notify(`Role source: ${sourceText}\nEffective mode: ${rt.operatingMode.toUpperCase()}`, 'info');
         return;
       }
@@ -405,7 +407,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
 
       const sourceText = rt.operatingModeOverride
         ? `override (${rt.operatingModeOverride.toUpperCase()})`
-        : `auto (${inferOperatingModeFromModel(ctx).toUpperCase()} from model)`;
+        : `auto`;
       ctx.ui.notify(`Operating mode set to ${rt.operatingMode.toUpperCase()} (${sourceText}).`, 'success');
       if (autoDemotedPmHolder) {
         ctx.ui.notify(
@@ -494,7 +496,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
 
   pi.on('session_start', async (_event, ctx) => {
     stopListener(rt);
-    rt.operatingMode = inferOperatingModeFromModel(ctx);
+    rt.operatingMode = resolveOperatingMode(rt, ctx);
 
     const refreshed = refreshBoardContext(rt, ctx.cwd);
     if (!refreshed.ok) {
@@ -542,7 +544,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
       stateEntry?.data?.operatingModeOverride === 'pm' || stateEntry?.data?.operatingModeOverride === 'worker'
         ? stateEntry.data.operatingModeOverride
         : null;
-    rt.operatingMode = resolveOperatingMode(rt, ctx);
+
     rt.listenerConfiguredExplicitly = stateEntry?.data?.listenerConfiguredExplicitly === true;
     rt.listenerAssigneeOverride = stateEntry?.data?.listenerAssigneeOverride || null;
     rt.listenerAutoStart = stateEntry?.data?.listenerAutoStart !== false;
@@ -552,7 +554,10 @@ export default function brainfileExtension(pi: ExtensionAPI) {
     rt.listenerPausedForUserInput = false;
 
     let autoDemotedPmHolder: string | null = null;
-    if (!rt.operatingModeOverride && rt.operatingMode === 'pm') {
+    
+    if (rt.operatingModeOverride) {
+      rt.operatingMode = rt.operatingModeOverride;
+    } else {
       const pmCheck = isPmClaimedByOther(rt);
       if (pmCheck.claimed) {
         rt.operatingMode = 'worker';
@@ -562,6 +567,7 @@ export default function brainfileExtension(pi: ExtensionAPI) {
           rt.operatingMode = 'worker';
           autoDemotedPmHolder = 'pm-lock (race)';
         } else {
+          rt.operatingMode = 'pm';
           startPmLockRefreshTimer(rt);
         }
       }
@@ -621,67 +627,15 @@ export default function brainfileExtension(pi: ExtensionAPI) {
   });
 
   pi.on('model_select', async (_event, ctx) => {
-    let nextMode = resolveOperatingMode(rt, ctx);
-    let autoDemotedPmHolder: string | null = null;
-
-    if (!rt.operatingModeOverride && nextMode === 'pm') {
-      const pmCheck = isPmClaimedByOther(rt);
-      if (pmCheck.claimed) {
-        nextMode = 'worker';
-        autoDemotedPmHolder = pmCheck.holder || 'unknown';
-      }
+    const rawModelId = ctx.model ? ((ctx.model as any).id || '').split('/').pop() : 'unknown';
+    ctx.ui.notify(
+      `Model changed to ${rawModelId}. Identity and operating mode remain unchanged.`,
+      'info'
+    );
+    
+    if (rt.operatingMode === 'worker' && rt.listenMode) {
+      maybeEmitWorkerPresenceHeartbeat(rt, ctx, 'model_select', true);
     }
-
-    if (nextMode !== rt.operatingMode) {
-      const previousMode = rt.operatingMode;
-      if (previousMode === 'worker' && nextMode !== 'worker' && rt.workerOnlineEmitted) {
-        emitWorkerOffline(rt, ctx, 'model_select');
-      } else if (previousMode === 'worker' && nextMode !== 'worker') {
-        releaseWorkerAssigneeClaim(rt);
-      }
-
-      if (previousMode === 'pm' && nextMode !== 'pm') {
-        releasePmLock(rt);
-        stopPmLockRefreshTimer(rt);
-      }
-
-      rt.operatingMode = nextMode;
-
-      if (rt.operatingMode !== 'pm') {
-        rt.activeRunId = null;
-      } else {
-        if (!tryAcquirePmLock(rt)) {
-          rt.operatingMode = 'worker';
-          autoDemotedPmHolder = 'pm-lock (race)';
-        } else {
-          startPmLockRefreshTimer(rt);
-          if (rt.listenMode && (!rt.activeRunId || isRunClosed(rt, rt.activeRunId))) {
-            rt.activeRunId = createRunId();
-            emitEvent(rt, 'run.started', ctx, 'model_select', {
-              runId: rt.activeRunId,
-              data: { mode: rt.operatingMode },
-            });
-            adoptOrphanedTasksForRun(rt, ctx, rt.activeRunId, 'model_select:adopt');
-          }
-        }
-      }
-
-      if (!rt.listenerConfiguredExplicitly) {
-        setListenMode(rt, rt.operatingMode === 'worker', ctx, 'startup');
-      }
-
-      if (autoDemotedPmHolder) {
-        ctx.ui.notify(
-          `Detected active PM (${autoDemotedPmHolder}). Keeping this session in Worker mode to avoid PM conflicts. Use /listen role pm to override.`,
-          'info'
-        );
-      }
-
-      updateStatus(ctx);
-      return;
-    }
-
-    if (!rt.listenMode || rt.listenerAssigneeOverride) return;
     updateStatus(ctx);
   });
 

@@ -120,6 +120,15 @@ export function inferRunIdForTask(rt: Rt, taskId: string | undefined): string | 
 
 // ── Event emission ─────────────────────────────────────────────────────
 
+/**
+ * Resolves the local worker identity (worker-N format).
+ */
+export function resolveLocalWorkerIdentity(rt: Rt, ctx: ExtensionContext): string {
+  const explicit = normalizeAssignee(rt.lastWorkerAssignee || rt.autoWorkerAssignee || rt.listenerAssigneeOverride);
+  if (explicit) return explicit;
+  return normalizeAssignee(getEffectiveListenerAssignee(rt, ctx));
+}
+
 export function emitEvent(
   rt: Rt,
   kind: EnvelopeKind,
@@ -145,6 +154,10 @@ export function emitEvent(
   ensureEventsLogExists(rt);
 
   const runId = options?.runId || inferRunIdForTask(rt, options?.taskId) || (rt.operatingMode === 'pm' ? rt.activeRunId || undefined : undefined);
+  
+  // Resolve the "from" identity if not explicitly provided
+  const from = options?.from || (rt.operatingMode === 'worker' ? resolveLocalWorkerIdentity(rt, ctx) : normalizeAssignee(getEffectiveListenerAssignee(rt, ctx)));
+
   const event = normalizeEnvelope({
     id: options?.messageId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     at: new Date().toISOString(),
@@ -158,7 +171,7 @@ export function emitEvent(
     ...(options?.data ? { data: options.data } : {}),
     ...(options?.threadId ? { threadId: options.threadId } : {}),
     ...(options?.inReplyTo ? { inReplyTo: options.inReplyTo } : {}),
-    ...(options?.from ? { from: options.from } : {}),
+    ...(from ? { from } : {}),
     ...(options?.to ? { to: options.to } : {}),
     ...(options?.priority ? { priority: options.priority } : {}),
     ...(typeof options?.requiresAck === 'boolean' ? { requiresAck: options.requiresAck } : {}),
@@ -197,11 +210,6 @@ const ORCHESTRATION_BATCH_KINDS = new Set<string>([
   'message.decision',
 ]);
 
-function resolveLocalWorkerIdentity(rt: Rt, ctx: ExtensionContext): string {
-  const explicit = normalizeAssignee(rt.lastWorkerAssignee || rt.autoWorkerAssignee || rt.listenerAssigneeOverride);
-  if (explicit) return explicit;
-  return normalizeAssignee(getEffectiveListenerAssignee(rt, ctx));
-}
 
 // PM-role canonical keywords. A message addressed to any of these is always
 // destined for the PM and never for a worker, regardless of assignee naming.
@@ -218,13 +226,13 @@ function isEnvelopeAddressedToSession(rt: Rt, ctx: ExtensionContext, parsed: Env
     return rt.operatingMode === 'pm';
   }
 
-  // Bare 'worker' targets any worker session.
-  if (normalizedTo === 'worker') {
+  // Bare 'worker' or 'pool' targets any worker session, as does empty/null.
+  if (normalizedTo === 'worker' || normalizedTo === 'pool') {
     return rt.operatingMode === 'worker';
   }
 
   if (rt.operatingMode === 'worker') {
-    // Workers use wildcard family matching (e.g. "codex" matches "codex-1").
+    // Exact match or pool matching handled by assigneeMatches
     const localWorker = resolveLocalWorkerIdentity(rt, ctx);
     return localWorker ? assigneeMatches(normalizedTo, localWorker) : false;
   }
@@ -289,7 +297,9 @@ function applyEnvelopeToProjection(rt: Rt, ctx: ExtensionContext, parsed: Envelo
 
   const actorAssignee = normalizeAssignee(parsed.actorAssignee || (typeof parsed.from === 'string' ? parsed.from : undefined));
   if (actorAssignee && (kind === 'worker.online' || kind === 'worker.heartbeat' || kind === 'worker.ready' || kind === 'worker.busy')) {
-    updateWorkerPresence(rt, actorAssignee, 'online', parsed.at || new Date().toISOString());
+    const data = (parsed.data && typeof parsed.data === 'object') ? parsed.data as Record<string, unknown> : {};
+    const model = (data.model && typeof data.model === 'object') ? data.model as { provider: string; id: string; name: string } : undefined;
+    updateWorkerPresence(rt, actorAssignee, 'online', parsed.at || new Date().toISOString(), model);
   }
   if (actorAssignee && kind === 'worker.ready') {
     const data = (parsed.data && typeof parsed.data === 'object') ? parsed.data as Record<string, unknown> : {};

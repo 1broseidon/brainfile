@@ -7,7 +7,7 @@ import type { Rt, LocatedTask } from './types';
 import { LISTENER_SAFETY_POLL_INTERVAL_MS } from './constants';
 import { persistState } from './state';
 import { refreshBoardContext, locateTask } from './board';
-import { normalizeAssignee, assigneeMatches, getEffectiveListenerAssignee, getWorkerAvailabilitySnapshot, formatWorkerLoad, maybeEmitWorkerPresenceHeartbeat, emitWorkerOffline, releaseWorkerAssigneeClaim } from './worker';
+import { normalizeAssignee, assigneeBase, isPoolAssignee, getEffectiveListenerAssignee, getWorkerAvailabilitySnapshot, formatWorkerLoad, maybeEmitWorkerPresenceHeartbeat, emitWorkerOffline, releaseWorkerAssigneeClaim } from './worker';
 import { ensureEventsLogExists, processEventLog, emitEvent, isRunClosed } from './events';
 import { refreshPmLock, maybeEvaluateActiveRun, createRunId, tryAcquirePmLock, startPmLockRefreshTimer, adoptOrphanedTasksForRun } from './pm';
 import { pickupContract } from './contract';
@@ -45,7 +45,14 @@ export function getReadyContractsForAssignee(rt: Rt, assignee: string): LocatedT
   for (const doc of readTasksDir(rt.boardContext.boardDir)) {
     const contractStatus = (doc.task.contract as any)?.status;
     if (contractStatus !== 'ready') continue;
-    if (!assigneeMatches(doc.task.assignee, normalizedAssignee)) continue;
+    if (isPoolAssignee(doc.task.assignee)) {
+      // any idle worker can claim
+    } else {
+      const taskNorm = normalizeAssignee(doc.task.assignee);
+      if (taskNorm !== normalizedAssignee && !(taskNorm === 'worker' && assigneeBase(normalizedAssignee) === 'worker')) {
+        continue; // specific worker-N only
+      }
+    }
 
     matches.push({
       task: doc.task,

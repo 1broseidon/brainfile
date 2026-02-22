@@ -164,6 +164,11 @@ export type WorkerPresence = {
   status: 'online' | 'offline';
   lastSeenAt: string;
   lastEventAt: string;
+  model?: {
+    provider: string;
+    id: string;
+    name: string;
+  };
 };
 
 export type WorkerReadiness = {
@@ -237,7 +242,6 @@ export type Rt = {
   lastWorkerAssignee: string | null;
   autoWorkerAssignee: string | null;
   workerClaimToken: string;
-  workerClaimBase: string | null;
   workerClaimSlot: number | null;
   lastWorkerClaimRefreshAtMs: number;
   pmLockToken: string;
