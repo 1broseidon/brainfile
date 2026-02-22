@@ -22,7 +22,7 @@ Every Pi session runs as either a **PM** (project manager) or a **Worker**:
 | PM | Off | Creates contracts, delegates work, validates deliveries |
 | Worker | On | Picks up assigned contracts, implements, delivers |
 
-Set the role with `/listen role <pm|worker|auto>`. In `auto` mode the extension checks for an existing open PM run on startup — if one exists, the session demotes itself to worker to avoid conflicts. The same check runs on model switch.
+Set the role with `/listen role <pm|worker|auto>`. In `auto` mode (default), the session defaults to `worker` unless it successfully acquires the PM lock — in which case it becomes `pm`. If another PM already holds the lock, the session stays as a worker. Model name is **not** used to infer operating mode — swapping models mid-session does not change the session's role.
 
 ### Event-Sourced Coordination
 
@@ -78,19 +78,30 @@ The default timeout is **1 hour**. Override per workspace in `.pi/settings.json`
 
 ### Worker Presence and Identity
 
-Workers are auto-assigned numbered identities based on their model family — `claude-1`, `codex-2`, `gemini-1`, etc. Slot assignment uses filesystem lease locks under `.brainfile/state/worker-claims/` so that multiple workers starting at the same time never collide on the same identity.
+Workers are auto-assigned **slot-based identities** — `worker-1`, `worker-2`, `worker-3`, etc. — regardless of which model is running. This means you can swap models mid-session (e.g. due to rate limits) without breaking task assignment or delivery.
+
+Slot assignment uses filesystem lease locks under `.brainfile/state/worker-claims/` so that multiple workers starting at the same time never collide on the same identity.
 
 Presence is tracked via periodic heartbeats:
 
 | Event | When |
 |-------|------|
-| `worker.online` | First heartbeat after listener starts |
-| `worker.heartbeat` | Every 20 seconds while active |
+| `worker.online` | First heartbeat after listener starts (includes model metadata) |
+| `worker.heartbeat` | Every 20 seconds while active (includes model metadata) |
+| `worker.ready` | Alongside online/heartbeat with load data |
 | `worker.offline` | Listener stops, role changes, or session exits |
 
-A worker is considered unavailable if no heartbeat arrives within the 45-second TTL. From the PM session, `/listen status` shows the current run ID, online workers, and stale timeout.
+A worker is considered unavailable if no heartbeat arrives within the 45-second TTL. From the PM session, `/listen status` shows the current run ID, online workers (with model info), and stale timeout.
 
-**Assignee matching:** Numbered identities match exactly — `codex-1` only picks up tasks assigned to `codex-1`. Bare family names like `codex` act as wildcards for backward compatibility.
+**Task assignment:**
+
+| Assignee on task | Who picks it up |
+|------------------|-----------------|
+| `pool` or empty | Any idle worker |
+| `worker-2` | Only worker-2 |
+| `codex`, `claude`, `gemini` | Any idle worker (legacy compat) |
+
+**Model metadata:** Model info (provider, id, name) is included in heartbeat events as metadata for observability — the PM displays `worker-1 (sonnet-4)` — but is never used for routing or identity.
 
 ### Delivery Verification
 
@@ -165,6 +176,41 @@ cd .pi/extensions/brainfile-extension && npm install
 
 Existing `/listen`, `/bf`, and `brainfile_*` tool workflows continue to work unchanged.
 
+### Status Footer and Widget
+
+The extension uses `setFooter` for a clean single-line status bar and a minimal contextual widget above the editor.
+
+**Footer** — single line with left/right layout:
+
+```
+🟢 PM  task-112 [delivering]              2↑ workers · sonnet-4 · main
+🔵 worker-1  task-115 [working]                        sonnet-4 · idle after
+```
+
+| Icon | Meaning |
+|------|---------|
+| 🟢 | Listener active |
+| 🟡 | Listener paused for user input |
+| ⏸ | Listener off |
+| 📋 | Plan mode active |
+
+Left side shows role, active task, and contract status. Right side (dimmed) shows supplementary info: worker count, model short name, and git branch.
+
+**Widget** — 2 lines max, hidden when no active task:
+
+```
+task-112: Core identity...  In Progress → in_progress
+⬡ worker-1 (sonnet) idle  ⬡ worker-2 (gemini) task-116
+```
+
+Workers see subtask progress instead of the worker list:
+```
+task-115: Extension wiring  [working]
+☑ 3/5 subtasks
+```
+
+The footer and widget follow a **show-only-deviations** principle — plan mode, listener state, stale timeout, and run ID are only shown when they deviate from defaults. Detailed info is always available via `/listen status`.
+
 ---
 
 ## A2A Messaging <Badge type="warning" text="Beta" />
@@ -182,8 +228,8 @@ An Envelope adds these fields on top of the base event record:
 | `messageId` | `string` | Unique message identifier (defaults to event `id`) |
 | `threadId` | `string` | Groups related messages (defaults to `task:<taskId>` or `runId`) |
 | `inReplyTo` | `string?` | `messageId` of the message being replied to |
-| `from` | `string?` | Sender identity (e.g. `pm`, `codex-2`) |
-| `to` | `string?` | Recipient identity (e.g. `pm`, `codex-1`) |
+| `from` | `string?` | Sender identity (e.g. `pm`, `worker-2`) |
+| `to` | `string?` | Recipient identity (e.g. `pm`, `worker-1`, `pool`) |
 | `kind` | `EnvelopeKind` | Event or message type |
 | `requiresAck` | `boolean?` | Whether the recipient should auto-acknowledge |
 | `priority` | `string?` | `low`, `normal`, `high`, or `urgent` |
@@ -230,7 +276,7 @@ Agents can exchange structured messages using the `brainfile_send_message` tool.
 
 ```mermaid
 sequenceDiagram
-    participant W as Worker (codex-2)
+    participant W as Worker (worker-2)
     participant E as pi-events.jsonl
     participant PM as PM Session
 
@@ -250,7 +296,7 @@ sequenceDiagram
 
 | Parameter | Required | Description |
 |-----------|----------|-------------|
-| `to` | ✅ | Recipient (e.g. `pm`, `codex-2`, `worker`) |
+| `to` | ✅ | Recipient (e.g. `pm`, `worker-2`, `worker`, `pool`) |
 | `taskId` | ✅ | Related task ID |
 | `kind` | ✅ | One of: `message.question`, `message.answer`, `message.ack`, `message.status`, `message.blocker`, `message.decision` |
 | `body` | ✅ | Message body text |
@@ -274,7 +320,7 @@ sequenceDiagram
 
 ```json
 {
-  "to": "codex-2",
+  "to": "worker-2",
   "taskId": "task-42",
   "kind": "message.answer",
   "body": "Use the test API key from .env.test for now.",
@@ -288,7 +334,7 @@ sequenceDiagram
 - Messages addressed to a session are **batched per listener cycle** and delivered as a single `[BRAINFILE ORCHESTRATION]` notification
 - `message.ack` messages are **not batched** — they are only sent, never surfaced as notifications
 - Messages with `requiresAck: true` trigger an automatic `message.ack` reply from the recipient
-- Address matching uses the same wildcard rules as task assignment: `pm` targets PM sessions, bare names like `codex` match any `codex-*` worker, numbered names like `codex-2` require an exact match
+- Address matching uses the same rules as task assignment: `pm` targets PM sessions, `worker` or `pool` targets any worker, `worker-2` requires an exact match. Legacy model names (`codex`, `claude`, etc.) are treated as pool targets
 
 #### Thread Tracking
 
@@ -308,19 +354,19 @@ Workers now emit `worker.ready` events alongside `worker.online` and `worker.hea
 | `activeCount` | `number` | Tasks currently `in_progress` for this worker |
 | `idle` | `boolean` | `true` when `activeCount < maxConcurrency` |
 
-The PM `/listen status` output now shows worker load details:
+The PM `/listen status` output shows worker load details with model info:
 
 ```
-Available workers: codex-1 (0/1, idle, 5s), codex-2 (1/1, at-max, 12s)
+Available workers: worker-1 (sonnet-4) [idle], worker-2 (gemini-flash) [at-max]
 ```
 
 **Backward compatibility:** Workers that only emit `worker.online`/`worker.heartbeat` (without `worker.ready`) continue to work. The PM infers load by counting `in_progress` tasks on the board and defaults `maxConcurrency` to `1`.
 
 | Event | Workers |
 |-------|---------|
-| `worker.online` | First heartbeat — presence only |
-| `worker.heartbeat` | Periodic — presence only |
-| `worker.ready` | Emitted alongside online/heartbeat — includes load data |
+| `worker.online` | First heartbeat — presence + model metadata |
+| `worker.heartbeat` | Periodic — presence + model metadata |
+| `worker.ready` | Emitted alongside online/heartbeat — includes load + model data |
 | `worker.offline` | Best-effort teardown |
 
 ## See Also
