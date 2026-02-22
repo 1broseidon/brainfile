@@ -12,7 +12,7 @@
     "protocol"
   ],
   "files": [
-    "index.ts",
+    "*.ts",
     "README.md"
   ],
   "dependencies": {
