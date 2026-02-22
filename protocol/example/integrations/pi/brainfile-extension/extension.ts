@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from '@mariozechner/pi-coding-agent';
+import { truncateToWidth, visibleWidth } from '@mariozechner/pi-tui';
 import * as path from 'path';
 
 import type { EventProjection, Rt } from './types';
@@ -82,6 +83,29 @@ import { moveTaskFile, readTasksDir as readTasksDirFn } from '@brainfile/core';
 export default function brainfileExtension(pi: ExtensionAPI) {
   const rt: Rt = createRt(pi);
 
+function getShortModelName(modelId: string): string {
+  if (!modelId) return 'unknown';
+  const parts = modelId.split('/');
+  let name = parts[parts.length - 1];
+  
+  const prefixes = ['claude-3-5-', 'claude-3-', 'claude-', 'gpt-4o-', 'gpt-4-', 'gemini-1.5-', 'gemini-'];
+  for (const p of prefixes) {
+    if (name.startsWith(p)) {
+      name = name.slice(p.length);
+      break;
+    }
+  }
+  
+  const suffixes = ['-latest', '-20250514', '-20241022', '-20240229', '-0125', '-1106', '-0613'];
+  for (const s of suffixes) {
+    if (name.endsWith(s)) name = name.slice(0, -s.length);
+  }
+  return name;
+}
+
+let tuiRef: any = null;
+
+
   // ── UI state ───────────────────────────────────────────────────────
 
   function autoClearCompletedActiveTask(ctx: ExtensionContext): boolean {
@@ -100,112 +124,56 @@ export default function brainfileExtension(pi: ExtensionAPI) {
   }
 
   function updateStatus(ctx: ExtensionContext) {
-    const segments: string[] = ['bf'];
-    const rawModelId = ctx.model ? ((ctx.model as any).id || '').split('/').pop() : 'unknown';
-    // Model string like (claude-sonnet)
-    const modelStr = `(${rawModelId})`;
-
-    const listenIdentity = rt.operatingMode === 'pm'
-      ? `pm ${modelStr}`
-      : `${getEffectiveListenerAssignee(rt, ctx)} ${modelStr}`;
-    const listenState = rt.listenMode
-      ? `on:${listenIdentity}:${rt.listenerAutoStart ? 'start' : 'wait'}${rt.listenerPausedForUserInput ? ':paused' : ''}`
-      : `off:${listenIdentity}:${rt.listenerAutoStart ? 'start' : 'wait'}`;
-
-    if (!rt.boardContext) {
-      segments.push('board:missing');
-      segments.push(`mode:${rt.operatingMode}`);
-      if (rt.operatingMode === 'pm') {
-        const workers = getWorkerAvailabilitySnapshot(rt);
-        segments.push(`run:${rt.activeRunId || 'none'}`);
-        segments.push(`workers:${workers.available.length}`);
-      }
-      segments.push(`plan:${rt.planMode ? 'on' : 'off'}`);
-      segments.push(`listen:${listenState}`);
-      ctx.ui.setStatus(STATUS_KEY, segments.join(' · '));
-      ctx.ui.setWidget(WIDGET_KEY, undefined);
-      return;
-    }
-
-    const board = readBoardConfig(rt);
-
     autoClearCompletedActiveTask(ctx);
 
-    if (rt.activeTaskId) {
-      const located = locateTask(rt, rt.activeTaskId, true);
-      if (located) {
-        rt.activeTaskPath = located.filePath;
-        const contractStatus = (located.task.contract as any)?.status;
-        const taskSegment = contractStatus
-          ? `task:${located.task.id}[${contractStatus}]`
-          : `task:${located.task.id}`;
-        segments.push(taskSegment);
-      } else {
-        segments.push(`task:${rt.activeTaskId}[missing]`);
-      }
-    } else {
-      segments.push('task:none');
+    if (tuiRef) {
+      tuiRef.requestRender();
     }
 
-    segments.push(`mode:${rt.operatingMode}`);
-    if (rt.operatingMode === 'pm') {
-      const workers = getWorkerAvailabilitySnapshot(rt);
-      segments.push(`run:${rt.activeRunId || 'none'}`);
-      segments.push(`workers:${workers.available.length}`);
-      segments.push(`stale:${rt.staleTimeoutSeconds}s`);
-    }
-    segments.push(`plan:${rt.planMode ? 'on' : 'off'}`);
-    segments.push(`listen:${listenState}`);
-
-    ctx.ui.setStatus(STATUS_KEY, segments.join(' · '));
-
-    if (!rt.activeTaskId) {
+    if (!rt.boardContext || !rt.activeTaskId) {
       ctx.ui.setWidget(WIDGET_KEY, undefined);
       return;
     }
 
     const located = locateTask(rt, rt.activeTaskId, true);
     if (!located) {
-      ctx.ui.setWidget(WIDGET_KEY, [`Active task ${rt.activeTaskId} not found.`]);
+      ctx.ui.setWidget(WIDGET_KEY, undefined);
       return;
     }
 
+    const board = readBoardConfig(rt);
     const summary = taskSummary(rt, located, board);
+
     const lines: string[] = [];
-    lines.push(`${summary.id}: ${summary.title}`);
-    lines.push(`Mode: ${rt.operatingMode.toUpperCase()}`);
-    lines.push(`Column: ${summary.column}`);
-    if (summary.contract && (summary.contract as any).status) {
-      lines.push(`Contract: ${(summary.contract as any).status}`);
-    }
-    if (rt.listenMode) {
-      const pauseText = rt.listenerPausedForUserInput ? ', paused by user input' : '';
-      const listenerLabel = rt.operatingMode === 'pm'
-        ? `main run ${rt.activeRunId || 'none'}`
-        : getEffectiveListenerAssignee(rt, ctx);
-      lines.push(`Listener: ON (${listenerLabel}, ${rt.listenerAutoStart ? 'start' : 'wait'}${pauseText})`);
-    }
+    
+    // Line 1
+    const titleTruncated = summary.title.length > 50 ? summary.title.slice(0, 49) + '…' : summary.title;
+    const contractStatus = (summary.contract as any)?.status || 'none';
+    lines.push(`${summary.id}: ${titleTruncated}  ${summary.column} → ${contractStatus}`);
+
+    // Line 2
     if (rt.operatingMode === 'pm') {
       const workers = getWorkerAvailabilitySnapshot(rt);
-      const availableWorkers = workers.available.length > 0
-        ? workers.available.map((worker) => formatWorkerLoad(worker)).join(', ')
-        : 'none';
-      lines.push(`Workers: ${availableWorkers}`);
-      lines.push(`Stale timeout: ${rt.staleTimeoutSeconds}s`);
+      const activeDocs = readTasksDirFn(rt.boardContext.boardDir).filter(d => (d.task.contract as any)?.status === 'in_progress');
+      if (workers.available.length > 0) {
+        const workerInfos = workers.available.map((w: any) => {
+          const wModel = (w.model || '').split('/').pop() || 'unknown';
+          const shortModel = getShortModelName(wModel);
+          const assigned = activeDocs.find(d => assigneeMatches(d.task.assignee, w.worker));
+          const stateStr = assigned ? assigned.task.id : 'idle';
+          return `⬡ ${w.worker} (${shortModel}) ${stateStr}`;
+        });
+        lines.push(workerInfos.join('  '));
+      }
+    } else {
+      const subtasks = summary.subtasks || [];
+      if (subtasks.length > 0) {
+        const completed = subtasks.filter((s: any) => s.completed).length;
+        lines.push(`☑ ${completed}/${subtasks.length} subtasks`);
+      }
     }
 
-    const subtasks = summary.subtasks || [];
-    if (subtasks.length > 0) {
-      lines.push('Subtasks:');
-      for (const subtask of subtasks.slice(0, 8)) {
-        lines.push(`${subtask.completed ? '☑' : '☐'} ${subtask.title}`);
-      }
-      if (subtasks.length > 8) {
-        lines.push(`... (${subtasks.length - 8} more)`);
-      }
-    }
-
-    ctx.ui.setWidget(WIDGET_KEY, lines);
+    ctx.ui.setWidget(WIDGET_KEY, lines.length > 1 ? lines : lines.slice(0, 1));
   }
 
   // Wire updateStatus into rt so modules can call it
@@ -497,6 +465,66 @@ export default function brainfileExtension(pi: ExtensionAPI) {
   pi.on('session_start', async (_event, ctx) => {
     stopListener(rt);
     rt.operatingMode = resolveOperatingMode(rt, ctx);
+    ctx.ui.setFooter((tui, theme, footerData) => {
+      tuiRef = tui;
+      const unsub = footerData.onBranchChange(() => tui.requestRender());
+      return {
+        dispose: () => {
+          unsub();
+          tuiRef = null;
+        },
+        invalidate() {},
+        render(width: number): string[] {
+          const icon = rt.listenMode ? (rt.listenerPausedForUserInput ? '🟡' : '🟢') : '⏸';
+          const role = rt.operatingMode === 'pm' ? 'PM' : getEffectiveListenerAssignee(rt, ctx);
+          let taskStr = 'no task';
+          let planStr = rt.planMode ? '  📋 plan' : '';
+          
+          if (rt.activeTaskId) {
+            const contractStatus = (locateTask(rt, rt.activeTaskId, true)?.task?.contract as any)?.status || 'working';
+            taskStr = `${rt.activeTaskId} [${contractStatus}]`;
+          } else if (rt.operatingMode === 'worker') {
+            taskStr = 'idle';
+          }
+          
+          let fmtIcon = icon;
+          if (icon === '🟡' || icon === '⏸' || planStr) {
+            fmtIcon = theme.fg('warning', icon);
+            if (planStr) planStr = theme.fg('warning', planStr);
+          }
+          
+          let fmtTaskStr = taskStr;
+          if (rt.activeTaskId && taskStr.startsWith(rt.activeTaskId)) {
+            fmtTaskStr = taskStr.replace(rt.activeTaskId, theme.fg('accent', rt.activeTaskId));
+          }
+          
+          const left = `${fmtIcon} ${role}  ${fmtTaskStr}${planStr}`;
+          
+          const branch = footerData.getGitBranch() || 'main';
+          const rawModelId = ctx.model ? ((ctx.model as any).id || '').split('/').pop() : 'unknown';
+          const shortModel = getShortModelName(rawModelId);
+          
+          let rightStr = '';
+          if (rt.operatingMode === 'pm') {
+            const workers = getWorkerAvailabilitySnapshot(rt);
+            rightStr = `${workers.available.length}↑ workers · ${shortModel} · ${branch}`;
+          } else {
+            const activeDocs = rt.boardContext ? readTasksDirFn(rt.boardContext.boardDir).filter(d => (d.task.contract as any)?.status === 'in_progress') : [];
+            const inProgressCount = activeDocs.filter(d => assigneeMatches(d.task.assignee, role)).length;
+            if (inProgressCount === 1) {
+              rightStr = `${shortModel} · idle after`;
+            } else {
+              rightStr = `${shortModel}`;
+            }
+          }
+          const right = theme.fg('dim', rightStr);
+          
+          const pad = ' '.repeat(Math.max(1, width - visibleWidth(left) - visibleWidth(right)));
+          return [truncateToWidth(left + pad + right, width)];
+        }
+      };
+    });
+
 
     const refreshed = refreshBoardContext(rt, ctx.cwd);
     if (!refreshed.ok) {
