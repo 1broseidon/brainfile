@@ -33,10 +33,7 @@ export function migrateCommand(options: MigrateOptions = {}) {
     }
 
     if (probe.format === 'v2') {
-      console.log(chalk.green('Workspace is already using v2 layout.'));
-      console.log(chalk.gray(`  Config: ${probe.paths.dotBrainfilePath}`));
-      console.log(chalk.gray(`  Tasks:  ${probe.paths.boardDir}/`));
-      console.log(chalk.gray(`  Logs:   ${probe.paths.logsDir}/`));
+      migrateBrainfileToV2(probe.paths.dotBrainfilePath, options);
       return;
     }
 
@@ -143,14 +140,6 @@ function migrateBrainfileToV2(brainfilePath: string, options: MigrateOptions): v
     throw new Error(`File not found: ${brainfilePath}`);
   }
 
-  const dotDir = path.dirname(path.resolve(brainfilePath));
-  const hasBoardDir = fs.existsSync(path.join(dotDir, 'board'));
-  const hasLogsDir = fs.existsSync(path.join(dotDir, 'logs'));
-  if (hasBoardDir && hasLogsDir) {
-    console.log(chalk.green('Already using v2 per-task file architecture.'));
-    return;
-  }
-
   const content = fs.readFileSync(brainfilePath, 'utf-8');
   const parsed = Brainfile.parseWithErrors(content);
   if (!parsed.board) {
@@ -158,6 +147,17 @@ function migrateBrainfileToV2(brainfilePath: string, options: MigrateOptions): v
   }
 
   const board = parsed.board;
+  const dotDir = path.dirname(path.resolve(brainfilePath));
+  const hasBoardDir = fs.existsSync(path.join(dotDir, 'board'));
+  const hasLogsDir = fs.existsSync(path.join(dotDir, 'logs'));
+  const hasEmbeddedColumnTasks = board.columns.some((column) => column.tasks.length > 0);
+  const hasEmbeddedArchiveTasks = Array.isArray((board as { archive?: unknown }).archive)
+    && ((board as { archive?: unknown[] }).archive?.length ?? 0) > 0;
+
+  if (hasBoardDir && hasLogsDir && !hasEmbeddedColumnTasks && !hasEmbeddedArchiveTasks) {
+    console.log(chalk.green('Already using v2 per-task file architecture.'));
+    return;
+  }
 
   // Back up original file
   const backupPath = brainfilePath + '.v1.bak';

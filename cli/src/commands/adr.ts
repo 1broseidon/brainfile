@@ -1,12 +1,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { Brainfile, readTaskFile, taskFileName, writeTaskFile, type Task } from '@brainfile/core';
+import { Brainfile, taskFileName, writeTaskFile, type Task } from '@brainfile/core';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { ExitCode } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { getV2Dirs, isV2 } from '../utils/v2-detect';
+import { getV2Dirs, isV2, findV2Task } from '../utils/v2-detect';
 
 export type AdrRuleCategory = 'prefer' | 'always' | 'never' | 'context';
 
@@ -37,6 +37,21 @@ Examples:
   brainfile adr promote -t adr-1 --category prefer
   brainfile adr promote -t adr-12 --category always -f .brainfile/brainfile.md
 `.trimEnd();
+
+function assertSafeTaskId(taskId: string): void {
+  const trimmed = taskId.trim();
+  if (!trimmed || trimmed !== taskId) {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
+
+  if (taskId === '.' || taskId === '..') {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
+
+  if (path.isAbsolute(taskId) || /[\\/]/.test(taskId)) {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
+}
 
 function validateCategory(category: string | undefined): AdrRuleCategory {
   if (!category) {
@@ -134,14 +149,15 @@ export function adrPromoteCommand(
     throw operationFailed('adr promote requires v2 per-task file architecture. Run: brainfile migrate');
   }
 
-  const dirs = getV2Dirs(resolvedPath);
-  const taskPath = path.join(dirs.boardDir, taskFileName(options.task));
+  assertSafeTaskId(options.task);
 
-  const doc = readTaskFile(taskPath);
-  if (!doc) {
+  const dirs = getV2Dirs(resolvedPath);
+  const found = findV2Task(dirs, options.task, false);
+  if (!found || found.isLog) {
     throw taskNotFound(options.task);
   }
 
+  const { doc, filePath: taskPath } = found;
   const task = doc.task;
   if ((task.type || '').toLowerCase() !== 'adr') {
     throw operationFailed(

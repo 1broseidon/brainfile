@@ -19,8 +19,8 @@ import { Brainfile, findTaskById, moveTask, findCompletionColumn } from '@brainf
 import { type Logger, defaultLogger } from '../utils/logger';
 import { fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, type Task } from '@brainfile/core';
-import { isV2, getV2Dirs } from '../utils/v2-detect';
+import { writeTaskFile, readTasksDir, taskFileName, type Task } from '@brainfile/core';
+import { isV2, getV2Dirs, findV2Task } from '../utils/v2-detect';
 
 export interface CompleteOptions {
   file: string;
@@ -40,6 +40,21 @@ interface ChildTaskState {
   id: string;
   title: string;
   status: ChildTaskStateStatus;
+}
+
+function assertSafeTaskId(taskId: string): void {
+  const trimmed = taskId.trim();
+  if (!trimmed || trimmed !== taskId) {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
+
+  if (taskId === '.' || taskId === '..') {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
+
+  if (path.isAbsolute(taskId) || /[\\/]/.test(taskId)) {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
 }
 
 function appendBodySection(body: string, section: string): string {
@@ -186,14 +201,15 @@ export function completeCommand(options: CompleteOptions, logger: Logger = defau
 }
 
 function completeV2(filePath: string, taskId: string, force: boolean, logger: Logger): CompleteResult {
-  const dirs = getV2Dirs(filePath);
-  const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
+  assertSafeTaskId(taskId);
 
-  const doc = readTaskFile(taskPath);
-  if (!doc) {
+  const dirs = getV2Dirs(filePath);
+  const found = findV2Task(dirs, taskId, false);
+  if (!found || found.isLog) {
     throw taskNotFound(taskId);
   }
 
+  const { doc, filePath: taskPath } = found;
   const task = doc.task;
   const completedAt = new Date().toISOString();
 

@@ -1,10 +1,11 @@
 import { pickupContract, deliverContract, validateContract } from '../lib/contractRunner';
 import { defaultLogger, type Logger } from '../utils/logger';
 import * as fs from 'fs';
-import { Brainfile, findTaskById, setTaskContract } from '@brainfile/core';
+import { Brainfile, findTaskById, setTaskContract, writeTaskFile } from '@brainfile/core';
 import { missingRequired, operationFailed, validationError } from '../utils/cli-error';
 import { buildContract } from '../utils/contractSpec';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { isV2, getV2Dirs, findV2Task } from '../utils/v2-detect';
 
 export const CONTRACT_COMMAND_HELP = `
 Workflow (PM → Agent → PM):
@@ -78,6 +79,19 @@ export interface ContractValidateCommandResult {
 
 export interface ContractAttachCommandResult {
   success: true;
+}
+
+function isUnsafeTaskId(taskId: string): boolean {
+  const trimmed = taskId.trim();
+  if (!trimmed || trimmed !== taskId) {
+    return true;
+  }
+
+  if (taskId === '.' || taskId === '..') {
+    return true;
+  }
+
+  return /[\\/]/.test(taskId);
 }
 
 export function contractPickupCommand(options: ContractOptions, logger: Logger = defaultLogger): ContractPickupCommandResult {
@@ -173,17 +187,6 @@ export function contractAttachCommand(options: ContractAttachOptions, logger: Lo
     throw operationFailed(`File not found: ${filePath}`);
   }
 
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const parsed = Brainfile.parseWithErrors(content);
-  if (!parsed.board) {
-    throw operationFailed(parsed.error || 'Failed to parse brainfile');
-  }
-
-  const taskInfo = findTaskById(parsed.board, options.task);
-  if (!taskInfo) {
-    throw operationFailed(`Task not found: ${options.task}`);
-  }
-
   let contract;
   try {
     contract = buildContract({
@@ -193,6 +196,34 @@ export function contractAttachCommand(options: ContractAttachOptions, logger: Lo
     });
   } catch (e) {
     throw validationError((e as Error).message);
+  }
+
+  if (isV2(filePath)) {
+    if (isUnsafeTaskId(options.task)) {
+      throw operationFailed(`Invalid task ID: ${options.task}`);
+    }
+
+    const dirs = getV2Dirs(filePath);
+    const found = findV2Task(dirs, options.task, false);
+    if (!found || found.isLog) {
+      throw operationFailed(`Task not found: ${options.task}`);
+    }
+
+    found.doc.task.contract = contract;
+    writeTaskFile(found.filePath, found.doc.task, found.doc.body);
+    logger.log(`Contract attached: ${options.task}`);
+    return { success: true };
+  }
+
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const parsed = Brainfile.parseWithErrors(content);
+  if (!parsed.board) {
+    throw operationFailed(parsed.error || 'Failed to parse brainfile');
+  }
+
+  const taskInfo = findTaskById(parsed.board, options.task);
+  if (!taskInfo) {
+    throw operationFailed(`Task not found: ${options.task}`);
   }
 
   const result = setTaskContract(parsed.board, options.task, contract);

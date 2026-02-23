@@ -421,7 +421,7 @@ export function validateContract(ctx: ContractRunContext): ContractValidateResul
     return { error: statusResult.error || 'Failed to update contract status' };
   }
 
-  writeBoardToFile(ctx.filePath, statusResult.board);
+  writeBoardToFile(resolvedFilePath, statusResult.board);
 
   return {
     action: 'validate',

@@ -12,8 +12,8 @@ import {
   handleError,
 } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { readTaskFile, writeTaskFile, taskFileName } from '@brainfile/core';
-import { isV2, getV2Dirs } from '../utils/v2-detect';
+import { writeTaskFile } from '@brainfile/core';
+import { isV2, getV2Dirs, findV2Task } from '../utils/v2-detect';
 
 interface PatchOptions {
   file: string;
@@ -28,6 +28,23 @@ interface PatchOptions {
   clearAssignee?: boolean;
   clearDueDate?: boolean;
   clearPriority?: boolean;
+}
+
+function isUnsafeTaskId(taskId: string): boolean {
+  const trimmed = taskId.trim();
+  if (!trimmed || trimmed !== taskId) {
+    return true;
+  }
+
+  if (taskId === '.' || taskId === '..') {
+    return true;
+  }
+
+  if (path.isAbsolute(taskId)) {
+    return true;
+  }
+
+  return /[\\/]/.test(taskId);
 }
 
 export function patchCommand(options: PatchOptions) {
@@ -106,20 +123,17 @@ export function patchCommand(options: PatchOptions) {
 
     // V2 per-task file architecture
     if (isV2(filePath)) {
-      const dirs = getV2Dirs(filePath);
-      const taskPath = path.join(dirs.boardDir, taskFileName(options.task));
-      const doc = readTaskFile(taskPath);
-      if (!doc) {
-        // Try to provide error using board for context
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const result = Brainfile.parseWithErrors(content);
-        if (result.board) {
-          taskNotFoundError(options.task, result.board);
-        }
-        operationError(`Task not found: ${options.task}`);
-        return; // unreachable but for TS
+      if (isUnsafeTaskId(options.task)) {
+        operationError(`Invalid task ID: ${options.task}`);
       }
 
+      const dirs = getV2Dirs(filePath);
+      const found = findV2Task(dirs, options.task, false);
+      if (!found || found.isLog) {
+        operationError(`Task not found: ${options.task}`);
+      }
+
+      const { doc, filePath: taskPath } = found;
       const task = doc.task;
 
       // Apply patch fields

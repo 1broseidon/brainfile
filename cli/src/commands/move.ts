@@ -7,16 +7,15 @@ import { getIncompleteSubtasksWarning } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { validateColumn } from '../utils/strict-validation';
 import {
-  readTaskFile,
   readTasksDir,
   writeTaskFile,
   completeTaskFile,
-  taskFileName,
 } from '@brainfile/core';
 import {
   isV2,
   getV2Dirs,
   readV2BoardConfig,
+  findV2Task,
 } from '../utils/v2-detect';
 
 interface MoveOptions {
@@ -51,6 +50,21 @@ export interface MoveResult {
   movedTask: Task;
   sourceColumn: Column;
   targetColumn: Column;
+}
+
+function assertSafeTaskId(taskId: string): void {
+  const trimmed = taskId.trim();
+  if (!trimmed || trimmed !== taskId) {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
+
+  if (taskId === '.' || taskId === '..') {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
+
+  if (path.isAbsolute(taskId) || /[\\/]/.test(taskId)) {
+    throw operationFailed(`Invalid task ID: ${taskId}`);
+  }
 }
 
 export function moveCommand(options: MoveOptions, logger: Logger = defaultLogger): MoveResult {
@@ -161,15 +175,16 @@ export function moveCommand(options: MoveOptions, logger: Logger = defaultLogger
 }
 
 function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): MoveResult {
+  assertSafeTaskId(options.task);
+
   const dirs = getV2Dirs(filePath);
   const board = readV2BoardConfig(filePath);
-  const taskPath = path.join(dirs.boardDir, taskFileName(options.task));
-
-  const doc = readTaskFile(taskPath);
-  if (!doc) {
+  const found = findV2Task(dirs, options.task, false);
+  if (!found || found.isLog) {
     throw taskNotFound(options.task);
   }
 
+  const { doc, filePath: taskPath } = found;
   const task = doc.task;
   const sourceColumnId = task.column || '';
 
