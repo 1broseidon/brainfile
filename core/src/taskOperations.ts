@@ -11,7 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Task, TaskDocument } from './types';
-import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, parseTaskContent, serializeTaskContent } from './taskFile';
+import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, serializeTaskContent } from './taskFile';
 
 /**
  * Result of a file-based task operation
@@ -139,6 +139,13 @@ function buildChildTasksSection(childTasks: ChildTaskSummary[]): string {
   return `## Child Tasks\n${lines.join('\n')}`;
 }
 
+function writeTaskFileExclusive(filePath: string, task: Task, body: string): void {
+  const dir = path.dirname(filePath);
+  fs.mkdirSync(dir, { recursive: true });
+  const content = serializeTaskContent(task, body);
+  fs.writeFileSync(filePath, content, { encoding: 'utf-8', flag: 'wx' });
+}
+
 /**
  * Generate the next task ID by scanning an existing tasks directory.
  *
@@ -197,44 +204,62 @@ export function addTaskFile(
     return { success: false, error: 'Task column is required' };
   }
 
-  // Determine ID prefix from type (e.g., type="epic" -> prefix "epic" -> "epic-1")
   const typePrefix = input.type || 'task';
-  const taskId = input.id || generateNextFileTaskId(boardDir, logsDir, typePrefix);
-  const now = new Date().toISOString();
+  const maxAttempts = input.id ? 1 : 25;
 
-  // Build subtasks if provided
-  const subtasks = input.subtasks?.map((title, index) => ({
-    id: `${taskId}-${index + 1}`,
-    title: title.trim(),
-    completed: false,
-  }));
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const taskId = input.id || generateNextFileTaskId(boardDir, logsDir, typePrefix);
+    const now = new Date().toISOString();
 
-  const task: Task = {
-    id: taskId,
-    title: input.title.trim(),
-    ...(input.type && { type: input.type }),
-    column: input.column.trim(),
-    ...(input.position !== undefined && { position: input.position }),
-    ...(input.description && { description: input.description.trim() }),
-    ...(input.priority && { priority: input.priority }),
-    ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
-    ...(input.assignee && { assignee: input.assignee }),
-    ...(input.dueDate && { dueDate: input.dueDate }),
-    ...(input.relatedFiles && input.relatedFiles.length > 0 && { relatedFiles: input.relatedFiles }),
-    ...(input.template && { template: input.template }),
-    ...(input.parentId && input.parentId.trim().length > 0 && { parentId: input.parentId.trim() }),
-    ...(subtasks && subtasks.length > 0 && { subtasks }),
-    createdAt: now,
-  };
+    // Build subtasks if provided
+    const subtasks = input.subtasks?.map((title, index) => ({
+      id: `${taskId}-${index + 1}`,
+      title: title.trim(),
+      completed: false,
+    }));
 
-  const filePath = path.join(boardDir, taskFileName(taskId));
+    const task: Task = {
+      id: taskId,
+      title: input.title.trim(),
+      ...(input.type && { type: input.type }),
+      column: input.column.trim(),
+      ...(input.position !== undefined && { position: input.position }),
+      ...(input.description && { description: input.description.trim() }),
+      ...(input.priority && { priority: input.priority }),
+      ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
+      ...(input.assignee && { assignee: input.assignee }),
+      ...(input.dueDate && { dueDate: input.dueDate }),
+      ...(input.relatedFiles && input.relatedFiles.length > 0 && { relatedFiles: input.relatedFiles }),
+      ...(input.template && { template: input.template }),
+      ...(input.parentId && input.parentId.trim().length > 0 && { parentId: input.parentId.trim() }),
+      ...(subtasks && subtasks.length > 0 && { subtasks }),
+      createdAt: now,
+    };
 
-  try {
-    writeTaskFile(filePath, task, body);
-    return { success: true, task, filePath };
-  } catch (err) {
-    return { success: false, error: `Failed to write task file: ${err}` };
+    let filePath: string;
+    try {
+      filePath = path.join(boardDir, taskFileName(taskId));
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+
+    try {
+      writeTaskFileExclusive(filePath, task, body);
+      return { success: true, task, filePath };
+    } catch (err: any) {
+      if (err?.code === 'EEXIST' && !input.id) {
+        continue; // retry with next generated ID if we raced
+      }
+
+      if (err?.code === 'EEXIST') {
+        return { success: false, error: `Task already exists: ${taskId}` };
+      }
+
+      return { success: false, error: `Failed to write task file: ${err}` };
+    }
   }
+
+  return { success: false, error: 'Failed to allocate unique task ID' };
 }
 
 /**
@@ -299,7 +324,8 @@ export function completeTaskFile(
     updatedAt: now,
   };
 
-  const destPath = path.join(logsDir, path.basename(taskPath));
+  const baseName = path.basename(taskPath);
+  const destPath = path.join(logsDir, baseName);
   let completedBody = doc.body;
 
   if (doc.task.type === 'epic') {
@@ -310,13 +336,28 @@ export function completeTaskFile(
     completedBody = appendBodySection(doc.body, childTasksSection);
   }
 
+  if (fs.existsSync(destPath)) {
+    return { success: false, error: `Task already exists in logs: ${doc.task.id}` };
+  }
+
   try {
     fs.mkdirSync(logsDir, { recursive: true });
-    writeTaskFile(destPath, completedTask, completedBody);
+    writeTaskFileExclusive(destPath, completedTask, completedBody);
+  } catch (err) {
+    return { success: false, error: `Failed to complete task: ${err}` };
+  }
+
+  try {
     fs.unlinkSync(taskPath);
     return { success: true, task: completedTask, filePath: destPath };
   } catch (err) {
-    return { success: false, error: `Failed to complete task: ${err}` };
+    // Roll back the new log file to avoid duplicated active/completed copies.
+    try {
+      fs.unlinkSync(destPath);
+    } catch {
+      // Best effort rollback.
+    }
+    return { success: false, error: `Failed to finalize completion: ${err}` };
   }
 }
 
@@ -459,10 +500,14 @@ export function findTask(
   taskId: string,
 ): TaskDocument | null {
   // Fast path: try convention-based filename
-  const directPath = path.join(boardDir, taskFileName(taskId));
-  const directDoc = readTaskFile(directPath);
-  if (directDoc && directDoc.task.id === taskId) {
-    return directDoc;
+  try {
+    const directPath = path.join(boardDir, taskFileName(taskId));
+    const directDoc = readTaskFile(directPath);
+    if (directDoc && directDoc.task.id === taskId) {
+      return directDoc;
+    }
+  } catch {
+    // Fall through to full scan for malformed IDs.
   }
 
   // Slow path: scan all files

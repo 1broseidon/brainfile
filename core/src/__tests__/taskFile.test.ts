@@ -33,6 +33,14 @@ describe('taskFile', () => {
     it('generates filename from task ID', () => {
       expect(taskFileName('task-42')).toBe('task-42.md');
     });
+
+    it('rejects task IDs with path traversal or separators', () => {
+      expect(() => taskFileName('../task-42')).toThrow('Invalid task ID');
+      expect(() => taskFileName('..\\task-42')).toThrow('Invalid task ID');
+      expect(() => taskFileName('task/42')).toThrow('Invalid task ID');
+      expect(() => taskFileName('task\\42')).toThrow('Invalid task ID');
+      expect(() => taskFileName('task..42')).toThrow('Invalid task ID');
+    });
   });
 
   describe('parseTaskContent', () => {

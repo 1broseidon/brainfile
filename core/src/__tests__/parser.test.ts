@@ -169,6 +169,18 @@ describe("BrainfileParser duplicate column handling", () => {
     expect(result.warnings?.[0]).toContain("[Brainfile Parser]");
   });
 
+  it("captures parseWithErrors warnings without writing to console.warn", () => {
+    const consoleWarnSpy = jest.spyOn(console, "warn").mockImplementation();
+
+    const result = BrainfileParser.parseWithErrors(markdown);
+
+    expect(result.warnings).toBeDefined();
+    expect(result.warnings?.length).toBeGreaterThan(0);
+    expect(consoleWarnSpy).not.toHaveBeenCalled();
+
+    consoleWarnSpy.mockRestore();
+  });
+
   it("handles board with no duplicate columns", () => {
     const simpleMarkdown = loadFixture("valid-simple.md");
     const result = BrainfileParser.parseWithErrors(simpleMarkdown);

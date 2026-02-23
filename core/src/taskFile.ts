@@ -27,6 +27,27 @@ import * as yaml from 'js-yaml';
 import type { Task, TaskDocument } from './types';
 
 /**
+ * Validate task IDs before using them as path components.
+ * Rejects path traversal and path separator characters.
+ */
+function isUnsafeTaskId(taskId: string): boolean {
+  if (!taskId || taskId.trim() === '') {
+    return true;
+  }
+
+  const trimmed = taskId.trim();
+  if (trimmed.includes('/') || trimmed.includes('\\') || trimmed.includes('..')) {
+    return true;
+  }
+
+  if (path.isAbsolute(trimmed)) {
+    return true;
+  }
+
+  return path.basename(trimmed) !== trimmed;
+}
+
+/**
  * Parse YAML frontmatter and markdown body from a task file's content string.
  *
  * @param content - Raw file content (string)
@@ -192,5 +213,9 @@ export function readTasksDir(dirPath: string): TaskDocument[] {
  * Convention: `{task-id}.md` (e.g., `task-42.md`)
  */
 export function taskFileName(taskId: string): string {
-  return `${taskId}.md`;
+  if (isUnsafeTaskId(taskId)) {
+    throw new Error(`Invalid task ID: ${taskId}`);
+  }
+
+  return `${taskId.trim()}.md`;
 }

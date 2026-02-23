@@ -131,6 +131,35 @@ describe('taskOperations', () => {
       expect(result.task!.id).toBe('task-99');
     });
 
+    it('fails when explicit ID already exists (no silent overwrite)', () => {
+      seedTask('task-99', 'todo', { title: 'Original title' });
+
+      const result = addTaskFile(tasksDir, {
+        id: 'task-99',
+        title: 'Should not overwrite',
+        column: 'todo',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already exists');
+
+      const existing = readTaskFile(path.join(tasksDir, 'task-99.md'));
+      expect(existing).not.toBeNull();
+      expect(existing!.task.title).toBe('Original title');
+    });
+
+    it('fails for unsafe task ID values', () => {
+      const result = addTaskFile(tasksDir, {
+        id: '../escape',
+        title: 'Unsafe',
+        column: 'todo',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Invalid task ID');
+      expect(fs.existsSync(path.join(testDir, 'escape.md'))).toBe(false);
+    });
+
     it('auto-increments ID based on existing tasks', () => {
       seedTask('task-5', 'todo');
       const result = addTaskFile(tasksDir, { title: 'Auto ID', column: 'todo' });
@@ -388,6 +417,24 @@ describe('taskOperations', () => {
       const doc = readTaskFile(path.join(logsDir, 'task-1.md'));
       expect(doc!.body).toContain('## Log');
       expect(doc!.body).toContain('Started work');
+    });
+
+    it('fails when destination log file already exists and does not overwrite it', () => {
+      const filePath = seedTask('task-1', 'done', { title: 'Active task' });
+      seedLogTask('task-1', { title: 'Existing log entry' });
+
+      const result = completeTaskFile(filePath, logsDir);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('already exists in logs');
+
+      const activeDoc = readTaskFile(filePath);
+      expect(activeDoc).not.toBeNull();
+      expect(activeDoc!.task.title).toBe('Active task');
+
+      const logDoc = readTaskFile(path.join(logsDir, 'task-1.md'));
+      expect(logDoc).not.toBeNull();
+      expect(logDoc!.task.title).toBe('Existing log entry');
     });
 
     it('prefers parentId-linked children in epic completion summary', () => {
