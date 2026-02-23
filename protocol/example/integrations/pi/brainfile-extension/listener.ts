@@ -4,13 +4,18 @@ import * as path from 'path';
 import { readTasksDir, taskFileName } from '@brainfile/core';
 
 import type { Rt, LocatedTask } from './types';
-import { LISTENER_SAFETY_POLL_INTERVAL_MS } from './constants';
 import { persistState } from './state';
 import { refreshBoardContext, locateTask } from './board';
-import { normalizeAssignee, assigneeBase, isPoolAssignee, getEffectiveListenerAssignee, getWorkerAvailabilitySnapshot, formatWorkerLoad, maybeEmitWorkerPresenceHeartbeat, emitWorkerOffline, releaseWorkerAssigneeClaim } from './worker';
+import { normalizeAssignee, assigneeMatches, getEffectiveListenerAssignee, getWorkerAvailabilitySnapshot, formatWorkerLoad, maybeEmitWorkerPresenceHeartbeat, emitWorkerOffline, releaseWorkerAssigneeClaim } from './worker';
 import { ensureEventsLogExists, processEventLog, emitEvent, isRunClosed } from './events';
-import { refreshPmLock, maybeEvaluateActiveRun, createRunId, tryAcquirePmLock, startPmLockRefreshTimer, adoptOrphanedTasksForRun } from './pm';
+import { refreshPmLock, maybeEvaluateActiveRun, createRunId, tryAcquirePmLock, startPmLockRefreshTimer, adoptOrphanedTasksForRun, tryPromoteAutoWorkerToPm } from './pm';
 import { pickupContract } from './contract';
+import {
+  requestTaskPickupAuthorization,
+  buildClaimDecisionOrchestration,
+  resolveSchedulerDispatch,
+  evaluateTaskOrchestrationReadiness,
+} from './scheduler';
 
 // ── Pure helpers ───────────────────────────────────────────────────────
 
@@ -20,6 +25,7 @@ export function listenerNoopMessage(reason: string | undefined, assignee: string
   if (reason === 'active_task') return `Listener is idle: active task ${activeTaskId} already selected.`;
   if (reason === 'no_contracts') return `No ready contracts assigned to "${assignee}".`;
   if (reason === 'paused') return 'Listener paused while user input is being processed.';
+  if (reason === 'claim_rejected') return 'Listener claim was rejected by scheduler policy.';
   if (reason === 'pickup_failed') return 'Listener found a contract but pickup failed due to status race.';
   return 'Listener did not pick up any task.';
 }
@@ -45,21 +51,25 @@ export function getReadyContractsForAssignee(rt: Rt, assignee: string): LocatedT
   for (const doc of readTasksDir(rt.boardContext.boardDir)) {
     const contractStatus = (doc.task.contract as any)?.status;
     if (contractStatus !== 'ready') continue;
-    if (isPoolAssignee(doc.task.assignee)) {
-      // any idle worker can claim
-    } else {
-      const taskNorm = normalizeAssignee(doc.task.assignee);
-      if (taskNorm !== normalizedAssignee && !(taskNorm === 'worker' && assigneeBase(normalizedAssignee) === 'worker')) {
-        continue; // specific worker-N only
-      }
+
+    const dispatch = resolveSchedulerDispatch(doc.task);
+    if (dispatch.mode === 'direct' && dispatch.target && !assigneeMatches(dispatch.target, normalizedAssignee)) {
+      continue;
     }
 
-    matches.push({
+    const candidate: LocatedTask = {
       task: doc.task,
       body: doc.body,
       filePath: doc.filePath || path.join(rt.boardContext.boardDir, taskFileName(doc.task.id)),
       isLog: false,
-    });
+    };
+
+    const readiness = evaluateTaskOrchestrationReadiness(rt, candidate);
+    if (!readiness.ready) {
+      continue;
+    }
+
+    matches.push(candidate);
   }
 
   matches.sort((a, b) => {
@@ -117,28 +127,50 @@ export function attemptAutoPickupAssignedContract(rt: Rt, ctx: ExtensionContext)
     return { picked: false, assignee, reason: 'no_contracts' };
   }
 
-  const chosen = candidates[0];
-  const pickup = pickupContract(chosen, assignee, 'listener');
-  if (!pickup.ok) {
+  let sawClaimRejection = false;
+  let sawPickupFailure = false;
+
+  for (const candidate of candidates) {
+    const decision = requestTaskPickupAuthorization(rt, ctx, candidate, assignee, 'listener');
+    if (!decision.accepted || !decision.lease) {
+      sawClaimRejection = true;
+      continue;
+    }
+
+    const pickup = pickupContract(candidate, assignee, 'listener', rt, decision.lease);
+    if (!pickup.ok) {
+      sawPickupFailure = true;
+      continue;
+    }
+
+    rt.activeTaskId = pickup.task.task.id;
+    rt.activeTaskPath = pickup.task.filePath;
+    emitEvent(rt, 'contract.picked_up', ctx, 'listener', {
+      taskId: pickup.task.task.id,
+      assignee,
+      data: {
+        status: 'in_progress',
+        orchestration: buildClaimDecisionOrchestration(decision),
+      },
+    });
+    persistState(rt);
+
+    return {
+      picked: true,
+      assignee,
+      task: pickup.task,
+    };
+  }
+
+  if (sawPickupFailure) {
     return { picked: false, assignee, reason: 'pickup_failed' };
   }
 
-  rt.activeTaskId = pickup.task.task.id;
-  rt.activeTaskPath = pickup.task.filePath;
-  emitEvent(rt, 'contract.picked_up', ctx, 'listener', {
-    taskId: pickup.task.task.id,
-    assignee,
-    data: {
-      status: 'in_progress',
-    },
-  });
-  persistState(rt);
+  if (sawClaimRejection) {
+    return { picked: false, assignee, reason: 'claim_rejected' };
+  }
 
-  return {
-    picked: true,
-    assignee,
-    task: pickup.task,
-  };
+  return { picked: false, assignee, reason: 'no_contracts' };
 }
 
 // ── Auto-start ─────────────────────────────────────────────────────────
@@ -194,6 +226,8 @@ export function runListenerCycle(rt: Rt, ctx: ExtensionContext, source: 'watch' 
   rt.listenerBusy = true;
   try {
     processEventLog(rt, ctx);
+
+    tryPromoteAutoWorkerToPm(rt, ctx, `listener:${source}`);
 
     if (rt.operatingMode === 'pm') {
       // Keep PM lock fresh while the listener is active
@@ -281,17 +315,12 @@ export function startListener(rt: Rt, ctx: ExtensionContext) {
         runListenerCycle(rt, ctx, 'watch');
       });
       rt.listenerWatcher.on('error', () => {
-        // fs.watch can be unreliable on some filesystems; the safety poll remains active.
+        // Best effort only. Local MessageBus remains the primary realtime path.
       });
     } catch {
       rt.listenerWatcher = null;
     }
   }
-
-  // Safety net for environments where fs.watch misses events (e.g. NFS/WSL1).
-  rt.listenerTimer = setInterval(() => {
-    runListenerCycle(rt, ctx, 'interval');
-  }, LISTENER_SAFETY_POLL_INTERVAL_MS);
 }
 
 // ── Listen mode toggle ─────────────────────────────────────────────────
@@ -302,7 +331,7 @@ export function setListenMode(rt: Rt, enabled: boolean, ctx: ExtensionContext, s
   }
 
   if (enabled === rt.listenMode) {
-    if (enabled && !rt.listenerTimer) {
+    if (enabled && !rt.listenerWatcher && !rt.listenerTimer) {
       startListener(rt, ctx);
     }
     if (source === 'manual') {

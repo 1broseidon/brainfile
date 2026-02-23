@@ -1,7 +1,7 @@
 import type { ExtensionContext } from '@mariozechner/pi-coding-agent';
 import * as fs from 'fs';
 import * as path from 'path';
-import { readTasksDir } from '@brainfile/core';
+import { readTasksDir, type Task } from '@brainfile/core';
 
 import type { Rt, WorkerClaimRecord } from './types';
 import {
@@ -12,6 +12,7 @@ import {
   WORKER_CLAIM_LEASE_SECONDS,
   WORKER_CLAIM_MAX_SLOT,
   WORKER_CLAIMS_DIRNAME,
+  WORKER_IN_PROGRESS_CACHE_TTL_MS,
 } from './constants';
 import { persistState } from './state';
 import { emitEvent } from './events';
@@ -33,6 +34,17 @@ function getModelMetadata(ctx: ExtensionContext): { provider: string; id: string
     id: model?.id || 'unknown',
     name: model?.name || 'unknown',
   };
+}
+
+function isProcessAlive(pid: unknown): boolean {
+  if (typeof pid !== 'number' || !Number.isFinite(pid) || pid <= 0) return false;
+  const normalizedPid = Math.floor(pid);
+  try {
+    process.kill(normalizedPid, 0);
+    return true;
+  } catch (error: any) {
+    return error?.code === 'EPERM';
+  }
 }
 
 export function inferAssigneeFromSlot(slotNumber: number): string {
@@ -69,7 +81,7 @@ export function assigneeMatches(taskAssignee: string | null | undefined, workerA
 
   const task = normalizeAssignee(taskAssignee);
   const worker = normalizeAssignee(workerAssignee);
-  
+
   if (!task || !worker) return false;
   if (task === worker) return true;
 
@@ -77,6 +89,64 @@ export function assigneeMatches(taskAssignee: string | null | undefined, workerA
   if (task === 'worker' && assigneeBase(worker) === 'worker') return true;
 
   return false;
+}
+
+export function getInProgressTaskOwner(task: Task): string | undefined {
+  const contract = task.contract as any;
+  const pickedUpBy = normalizeAssignee(contract?.pickedUpBy);
+  if (pickedUpBy) return pickedUpBy;
+
+  const explicitAssignee = normalizeAssignee(task.assignee);
+  if (!explicitAssignee) return undefined;
+  if (isPoolAssignee(explicitAssignee)) return undefined;
+  return explicitAssignee;
+}
+
+type InProgressTaskOwnerSnapshot = Record<string, { count: number; activeTaskId: string | null }>;
+
+const inProgressTaskOwnerCache = new WeakMap<Rt, { expiresAt: number; owners: InProgressTaskOwnerSnapshot }>();
+
+export function getInProgressTaskOwnersSnapshot(rt: Rt, forceRefresh = false): InProgressTaskOwnerSnapshot {
+  const nowMs = Date.now();
+  const cached = inProgressTaskOwnerCache.get(rt);
+  if (!forceRefresh && cached && cached.expiresAt > nowMs) {
+    return cached.owners;
+  }
+
+  const owners: InProgressTaskOwnerSnapshot = {};
+  if (rt.boardContext) {
+    for (const doc of readTasksDir(rt.boardContext.boardDir)) {
+      const contractStatus = (doc.task.contract as any)?.status;
+      if (contractStatus !== 'in_progress') continue;
+
+      const owner = getInProgressTaskOwner(doc.task);
+      if (!owner) continue;
+
+      const normalizedOwner = normalizeAssignee(owner);
+      if (!normalizedOwner) continue;
+
+      if (!owners[normalizedOwner]) {
+        owners[normalizedOwner] = { count: 0, activeTaskId: null };
+      }
+
+      owners[normalizedOwner].count += 1;
+      if (!owners[normalizedOwner].activeTaskId) {
+        owners[normalizedOwner].activeTaskId = doc.task.id;
+      }
+    }
+  }
+
+  const next: { expiresAt: number; owners: InProgressTaskOwnerSnapshot } = {
+    expiresAt: nowMs + WORKER_IN_PROGRESS_CACHE_TTL_MS,
+    owners,
+  };
+
+  inProgressTaskOwnerCache.set(rt, next);
+  return owners;
+}
+
+export function invalidateInProgressTaskOwnerSnapshot(rt: Rt): void {
+  inProgressTaskOwnerCache.delete(rt);
 }
 
 // ── Worker claim functions ─────────────────────────────────────────────
@@ -117,6 +187,9 @@ function readWorkerClaimRecord(lockDir: string): WorkerClaimRecord | null {
       slot: parsed.slot,
       claimedAt: parsed.claimedAt,
       updatedAt: parsed.updatedAt,
+      ...(typeof parsed.pid === 'number' && Number.isFinite(parsed.pid) && parsed.pid > 0
+        ? { pid: Math.floor(parsed.pid) }
+        : {}),
     };
   } catch {
     return null;
@@ -125,6 +198,13 @@ function readWorkerClaimRecord(lockDir: string): WorkerClaimRecord | null {
 
 function isWorkerClaimFresh(record: WorkerClaimRecord | null, nowMs = Date.now()): boolean {
   if (!record) return false;
+
+  // If the lock owner process is gone, treat the lease as stale immediately
+  // (fixes stale worker slots after Ctrl-C / abrupt shutdown).
+  if (typeof record.pid === 'number' && !isProcessAlive(record.pid)) {
+    return false;
+  }
+
   const updatedMs = Date.parse(record.updatedAt);
   if (!Number.isFinite(updatedMs)) return false;
   const ageSeconds = Math.max(0, Math.floor((nowMs - updatedMs) / 1000));
@@ -143,6 +223,46 @@ function writeWorkerClaimRecord(lockDir: string, record: WorkerClaimRecord): boo
 function clearWorkerClaimMemory(rt: Rt): void {
   rt.workerClaimSlot = null;
   rt.lastWorkerClaimRefreshAtMs = 0;
+}
+
+export function cleanupStaleWorkerClaims(rt: Rt): { removed: number } {
+  const claimsDir = getWorkerClaimsDir(rt);
+  if (!claimsDir || !fs.existsSync(claimsDir)) return { removed: 0 };
+
+  let removed = 0;
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(claimsDir);
+  } catch {
+    return { removed: 0 };
+  }
+
+  const nowMs = Date.now();
+
+  for (const entry of entries) {
+    if (!entry.startsWith('worker-') || !entry.endsWith('.lock')) continue;
+    const lockDir = path.join(claimsDir, entry);
+    let stats: fs.Stats;
+    try {
+      stats = fs.statSync(lockDir);
+    } catch {
+      continue;
+    }
+    if (!stats.isDirectory()) continue;
+
+    const record = readWorkerClaimRecord(lockDir);
+    const fresh = isWorkerClaimFresh(record, nowMs);
+    if (fresh) continue;
+
+    try {
+      fs.rmSync(lockDir, { recursive: true, force: true });
+      removed += 1;
+    } catch {
+      // best-effort cleanup
+    }
+  }
+
+  return { removed };
 }
 
 export function tryAcquireWorkerSlotClaim(rt: Rt, slot: number): boolean {
@@ -167,6 +287,7 @@ export function tryAcquireWorkerSlotClaim(rt: Rt, slot: number): boolean {
       base,
       slot,
       updatedAt: nowIso,
+      pid: process.pid,
     };
     if (!writeWorkerClaimRecord(lockDir, refreshed)) return false;
     rt.workerClaimSlot = slot;
@@ -206,6 +327,7 @@ export function tryAcquireWorkerSlotClaim(rt: Rt, slot: number): boolean {
     slot,
     claimedAt: nowIso,
     updatedAt: nowIso,
+    pid: process.pid,
   };
 
   if (!writeWorkerClaimRecord(lockDir, created)) {
@@ -254,6 +376,9 @@ export function resolveOperatingMode(rt: Rt, ctx: ExtensionContext): 'pm' | 'wor
 
 export function ensureAutoWorkerAssignee(rt: Rt): string {
   const base = 'worker';
+
+  // Proactively clean stale crash leftovers before slot selection.
+  cleanupStaleWorkerClaims(rt);
 
   const preferred = normalizeAssignee(rt.autoWorkerAssignee);
   const preferredSlot = preferred && assigneeBase(preferred) === base ? assigneeSlot(preferred) : null;
@@ -322,15 +447,11 @@ function normalizeActiveCount(value: unknown): number {
 }
 
 function countInProgressTasksForWorker(rt: Rt, workerAssignee: string): number {
-  if (!rt.boardContext) return 0;
-  let count = 0;
-  for (const doc of readTasksDir(rt.boardContext.boardDir)) {
-    const contractStatus = (doc.task.contract as any)?.status;
-    if (contractStatus !== 'in_progress') continue;
-    if (!assigneeMatches(doc.task.assignee, workerAssignee)) continue;
-    count += 1;
-  }
-  return count;
+  const normalizedWorkerAssignee = normalizeAssignee(workerAssignee);
+  if (!normalizedWorkerAssignee) return 0;
+
+  const owners = getInProgressTaskOwnersSnapshot(rt);
+  return owners[normalizedWorkerAssignee]?.count || 0;
 }
 
 function buildWorkerLoad(rt: Rt, workerAssignee: string, maxConcurrency: number): {

@@ -9,12 +9,14 @@ import {
   PM_LOCK_DIRNAME,
   PM_LOCK_LEASE_SECONDS,
   PM_LOCK_REFRESH_INTERVAL_MS,
+  PM_RUN_CONFLICT_MAX_AGE_SECONDS,
 } from './constants';
 import { persistState } from './state';
 import { emitEvent, projectionHasDelegation, isRunClosed, pushUnique } from './events';
 import { sendOrchestrationMessage } from './messaging';
 import { locateTask } from './board';
 import { getContractStatus } from './contract';
+import { emitWorkerOffline, releaseWorkerAssigneeClaim } from './worker';
 
 // ── Run ID ─────────────────────────────────────────────────────────────
 
@@ -22,6 +24,66 @@ export function createRunId(): string {
   const stamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 14);
   const random = Math.random().toString(36).slice(2, 10);
   return `run-${stamp}-${random}`;
+}
+
+function hasActiveInProgressContract(rt: Rt): boolean {
+  if (!rt.activeTaskId) return false;
+
+  const located = locateTask(rt, rt.activeTaskId, false);
+  if (!located || located.isLog) return false;
+
+  const status = String((located.task.contract as any)?.status || 'none');
+  return status === 'in_progress';
+}
+
+export function tryPromoteAutoWorkerToPm(rt: Rt, ctx: ExtensionContext, source: string): { promoted: boolean; blocked?: boolean } {
+  if (rt.operatingModeOverride) {
+    return { promoted: false, blocked: false };
+  }
+
+  if (rt.operatingMode !== 'worker') {
+    return { promoted: false, blocked: false };
+  }
+
+  if (hasActiveInProgressContract(rt)) {
+    return { promoted: false, blocked: true };
+  }
+
+  const pmCheck = isPmClaimedByOther(rt);
+  if (pmCheck.claimed) {
+    return { promoted: false, blocked: false };
+  }
+
+  if (!tryAcquirePmLock(rt)) {
+    return { promoted: false, blocked: false };
+  }
+
+  rt.operatingMode = 'pm';
+  startPmLockRefreshTimer(rt);
+
+  if (rt.operatingModeOverride === 'worker') {
+    rt.operatingModeOverride = null;
+  }
+
+  if (rt.workerOnlineEmitted) {
+    emitWorkerOffline(rt, ctx, source);
+  } else {
+    releaseWorkerAssigneeClaim(rt);
+  }
+
+  if (!rt.activeRunId || isRunClosed(rt, rt.activeRunId)) {
+    rt.activeRunId = createRunId();
+    emitEvent(rt, 'run.started', ctx, source, {
+      runId: rt.activeRunId,
+      data: {
+        mode: rt.operatingMode,
+      },
+    });
+    adoptOrphanedTasksForRun(rt, ctx, rt.activeRunId, `${source}:auto-pm`);
+  }
+
+  persistState(rt);
+  return { promoted: true, blocked: false };
 }
 
 // ── PM lock ────────────────────────────────────────────────────────────
@@ -33,6 +95,17 @@ function pmLockDir(rt: Rt): string | null {
 
 function pmLockOwnerPath(lockDir: string): string {
   return path.join(lockDir, 'owner.json');
+}
+
+function isProcessAlive(pid: unknown): boolean {
+  if (typeof pid !== 'number' || !Number.isFinite(pid) || pid <= 0) return false;
+  const normalizedPid = Math.floor(pid);
+  try {
+    process.kill(normalizedPid, 0);
+    return true;
+  } catch (error: any) {
+    return error?.code === 'EPERM';
+  }
 }
 
 function readPmLockRecord(lockDir: string): PmLockRecord | null {
@@ -48,6 +121,9 @@ function readPmLockRecord(lockDir: string): PmLockRecord | null {
       token: parsed.token,
       acquiredAt: parsed.acquiredAt,
       updatedAt: parsed.updatedAt,
+      ...(typeof parsed.pid === 'number' && Number.isFinite(parsed.pid) && parsed.pid > 0
+        ? { pid: Math.floor(parsed.pid) }
+        : {}),
     };
   } catch {
     return null;
@@ -56,6 +132,12 @@ function readPmLockRecord(lockDir: string): PmLockRecord | null {
 
 function isPmLockFresh(record: PmLockRecord | null, nowMs = Date.now()): boolean {
   if (!record) return false;
+
+  // If owner process is gone, treat lock as stale immediately.
+  if (typeof record.pid === 'number' && !isProcessAlive(record.pid)) {
+    return false;
+  }
+
   const updatedMs = Date.parse(record.updatedAt);
   if (!Number.isFinite(updatedMs)) return false;
   const ageSeconds = Math.max(0, Math.floor((nowMs - updatedMs) / 1000));
@@ -82,7 +164,7 @@ export function tryAcquirePmLock(rt: Rt): boolean {
   if (rt.pmLockHeld) {
     const existing = readPmLockRecord(dir);
     if (existing?.token === rt.pmLockToken) {
-      const refreshed: PmLockRecord = { ...existing, updatedAt: nowIso };
+      const refreshed: PmLockRecord = { ...existing, updatedAt: nowIso, pid: process.pid };
       writePmLockRecord(dir, refreshed);
       rt.lastPmLockRefreshAtMs = nowMs;
       return true;
@@ -97,7 +179,7 @@ export function tryAcquirePmLock(rt: Rt): boolean {
     if (existing?.token === rt.pmLockToken) {
       // We own it (recovering from crash/restart?)
       rt.pmLockHeld = true;
-      const refreshed: PmLockRecord = { ...existing, updatedAt: nowIso };
+      const refreshed: PmLockRecord = { ...existing, updatedAt: nowIso, pid: process.pid };
       writePmLockRecord(dir, refreshed);
       rt.lastPmLockRefreshAtMs = nowMs;
       return true;
@@ -131,6 +213,7 @@ export function tryAcquirePmLock(rt: Rt): boolean {
     token: rt.pmLockToken,
     acquiredAt: nowIso,
     updatedAt: nowIso,
+    pid: process.pid,
   };
 
   if (!writePmLockRecord(dir, record)) {
@@ -157,7 +240,7 @@ export function refreshPmLock(rt: Rt): void {
     return;
   }
 
-  const refreshed: PmLockRecord = { ...existing, updatedAt: new Date(nowMs).toISOString() };
+  const refreshed: PmLockRecord = { ...existing, updatedAt: new Date(nowMs).toISOString(), pid: process.pid };
   writePmLockRecord(dir, refreshed);
   rt.lastPmLockRefreshAtMs = nowMs;
 }
@@ -208,9 +291,14 @@ export function isPmClaimedByOther(rt: Rt): { claimed: boolean; holder?: string 
     if (record && record.token !== rt.pmLockToken && isPmLockFresh(record)) {
       return { claimed: true, holder: `pm-lock (acquired ${record.acquiredAt})` };
     }
+
+    // If the lock directory exists but is stale/corrupt, allow takeover and
+    // avoid event-log ghost runs forcing an unnecessary worker demotion.
+    return { claimed: false };
   }
 
-  // Fall back to event log detection (catches PMs that hold runs but lost their lock file)
+  // Fall back to event-log detection for very recent runs only.
+  // This avoids ghost runs from abrupt shutdowns blocking clean relaunches.
   const probe = probeOpenPmRuns(rt, rt.activeRunId ? [rt.activeRunId] : []);
   if (probe.hasConflict) {
     return { claimed: true, holder: `pm-run ${probe.latestRunId}` };
@@ -232,6 +320,7 @@ export function probeOpenPmRuns(rt: Rt, excludeRunIds: string[] = []): { hasConf
 
   const excluded = new Set(excludeRunIds.map((id) => id.trim()).filter((id) => id.length > 0));
   const startedAtByRun = new Map<string, string>();
+  const latestAtByRun = new Map<string, string>();
   const closedRuns = new Set<string>();
 
   try {
@@ -251,12 +340,17 @@ export function probeOpenPmRuns(rt: Rt, excludeRunIds: string[] = []): { hasConf
 
       if (!parsed.runId) continue;
 
+      const runId = parsed.runId;
+      const at = typeof parsed.at === 'string' ? parsed.at : '';
       const kind = parsed.kind || parsed.type;
       const mode = parsed.actorMode || (parsed.from === 'pm' || parsed.from === 'worker' ? parsed.from : undefined);
 
+      const existingLatest = latestAtByRun.get(runId);
+      if (!existingLatest || (Number.isFinite(Date.parse(at)) && Date.parse(at) >= Date.parse(existingLatest))) {
+        latestAtByRun.set(runId, at);
+      }
+
       if (kind === 'run.started' && mode === 'pm') {
-        const runId = parsed.runId;
-        const at = typeof parsed.at === 'string' ? parsed.at : '';
         const existing = startedAtByRun.get(runId);
         if (!existing || (Number.isFinite(Date.parse(at)) && Date.parse(at) >= Date.parse(existing))) {
           startedAtByRun.set(runId, at);
@@ -265,7 +359,7 @@ export function probeOpenPmRuns(rt: Rt, excludeRunIds: string[] = []): { hasConf
       }
 
       if (kind === 'run.closed') {
-        closedRuns.add(parsed.runId);
+        closedRuns.add(runId);
       }
     }
   } catch {
@@ -276,11 +370,25 @@ export function probeOpenPmRuns(rt: Rt, excludeRunIds: string[] = []): { hasConf
     };
   }
 
+  const nowMs = Date.now();
+  const maxAgeSeconds = Math.max(1, PM_RUN_CONFLICT_MAX_AGE_SECONDS);
+
   const openRuns = [...startedAtByRun.entries()]
-    .filter(([runId]) => !closedRuns.has(runId) && !excluded.has(runId))
+    .filter(([runId, startedAt]) => {
+      if (closedRuns.has(runId) || excluded.has(runId)) return false;
+
+      // Ignore ghost/stale runs after a short grace period so abrupt shutdowns
+      // don't strand future sessions in worker mode.
+      const latestAt = latestAtByRun.get(runId) || startedAt;
+      const latestMs = Date.parse(latestAt);
+      if (!Number.isFinite(latestMs)) return true;
+
+      const ageSeconds = Math.max(0, Math.floor((nowMs - latestMs) / 1000));
+      return ageSeconds <= maxAgeSeconds;
+    })
     .sort((a, b) => {
-      const aMs = Date.parse(a[1]);
-      const bMs = Date.parse(b[1]);
+      const aMs = Date.parse(latestAtByRun.get(a[0]) || a[1]);
+      const bMs = Date.parse(latestAtByRun.get(b[0]) || b[1]);
       if (Number.isFinite(aMs) && Number.isFinite(bMs)) return bMs - aMs;
       if (Number.isFinite(aMs)) return -1;
       if (Number.isFinite(bMs)) return 1;
@@ -315,7 +423,6 @@ export function adoptOrphanedTasksForRun(rt: Rt, ctx: ExtensionContext, runId: s
     // Check if the task belongs to an active (non-closed) run that is NOT this run
     const priorRunId = rt.eventProjection.taskRun[doc.task.id];
     if (priorRunId && priorRunId === runId) continue;
-    if (priorRunId && !isRunClosed(rt, priorRunId)) continue; // prior run still active, don't steal
 
     // Adopt: register the task under the new run
     rt.eventProjection.delegatedByRun[runId] = pushUnique(

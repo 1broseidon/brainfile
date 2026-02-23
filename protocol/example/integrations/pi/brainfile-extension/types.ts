@@ -160,6 +160,12 @@ export function normalizeEnvelope(value: unknown): Envelope {
   return normalized;
 }
 
+export type AuditAppendNotice = {
+  logPath: string;
+  emittedAt: string;
+  eventId?: string;
+};
+
 export type WorkerPresence = {
   status: 'online' | 'offline';
   lastSeenAt: string;
@@ -185,12 +191,78 @@ export type WorkerClaimRecord = {
   slot: number;
   claimedAt: string;
   updatedAt: string;
+  pid?: number;
+};
+
+export const SCHEDULER_REASON_CODES = [
+  'dispatch_target_mismatch',
+  'lease_conflict',
+  'dependency_unmet',
+  'dependency_failed',
+  'join_waiting',
+  'resource_conflict',
+  'task_not_ready',
+  'authority_violation',
+  'run_not_active',
+] as const;
+
+export type SchedulerClaimReasonCode = (typeof SCHEDULER_REASON_CODES)[number];
+
+export type SchedulerDispatchSnapshot = {
+  mode: 'direct' | 'pool';
+  target?: string;
+  source: 'orchestration' | 'assignee' | 'default';
+};
+
+export type SchedulerClaimLease = {
+  id: string;
+  token: string;
+  owner: string;
+  expiresAt: string;
+};
+
+export type SchedulerDependencySnapshot = {
+  required: string[];
+  satisfied: string[];
+  pending: string[];
+  failed: string[];
+  policy: 'all_success' | 'all_delivered' | 'quorum';
+  quorum?: number;
+  successState?: 'done' | 'delivered';
+};
+
+export type SchedulerJoinSnapshot = {
+  mode: 'none' | 'barrier';
+  required: string[];
+  satisfied: string[];
+  pending: string[];
+  failed: string[];
+  policy: 'all_success' | 'all_delivered' | 'quorum';
+  quorum?: number;
+};
+
+export type SchedulerClaimDecision = {
+  taskId: string;
+  claimant: string;
+  dispatch: SchedulerDispatchSnapshot;
+  accepted: boolean;
+  reasonCode?: SchedulerClaimReasonCode;
+  reasonDetails?: string;
+  lease?: SchedulerClaimLease;
+  dependencies?: SchedulerDependencySnapshot;
+  join?: SchedulerJoinSnapshot;
+};
+
+export type InProgressWorkerSnapshot = {
+  lastUpdatedAtMs: number;
+  byWorker: Record<string, { activeCount: number; activeTaskId?: string }>;
 };
 
 export type PmLockRecord = {
   token: string;
   acquiredAt: string;
   updatedAt: string;
+  pid?: number;
 };
 
 export type EventProjection = {
@@ -208,6 +280,8 @@ export type EventProjection = {
   workerPresence: Record<string, WorkerPresence>;
   workerReadiness: Record<string, WorkerReadiness>;
   taskAdoptedAt: Record<string, string>; // taskId → ISO timestamp of when the task was adopted into the current run
+  taskContractStatus: Record<string, string>; // projected latest known contract/task status
+  taskLastEventAt: Record<string, string>; // taskId → timestamp of latest status-driving event
 };
 
 /**
@@ -241,6 +315,7 @@ export type Rt = {
   workerOnlineEmitted: boolean;
   lastWorkerAssignee: string | null;
   autoWorkerAssignee: string | null;
+  workerInProgressCache: InProgressWorkerSnapshot | null;
   workerClaimToken: string;
   workerClaimSlot: number | null;
   lastWorkerClaimRefreshAtMs: number;
@@ -248,6 +323,7 @@ export type Rt = {
   pmLockHeld: boolean;
   lastPmLockRefreshAtMs: number;
   pmLockTimer: ReturnType<typeof setInterval> | null;
+  publishAuditAppendNotice: ((notice: AuditAppendNotice) => void) | null;
 
   /**
    * Callback defined in extension.ts that updates the pi status bar and widget.

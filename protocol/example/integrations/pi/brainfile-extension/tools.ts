@@ -53,6 +53,8 @@ export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
     ensureTaskHasContract,
     getEffectiveListenerAssignee,
     pickupContract,
+    requestTaskPickupAuthorization,
+    buildClaimDecisionOrchestration,
     emitEvent,
     persistState,
     buildContractContextPayload,
@@ -393,6 +395,43 @@ export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
         return makeToolResponse({ error: `Task not found: ${params.task}` }, true);
       }
 
+      const hasContract = Boolean(located.task.contract && typeof located.task.contract === 'object');
+      const contractStatus = String((located.task.contract as any)?.status || '').toLowerCase();
+      if (resolvedColumn.completionColumn && hasContract) {
+        const actor = getEffectiveListenerAssignee(ctx);
+
+        if (runtime.operatingMode !== 'pm') {
+          emitEvent('message.decision', ctx, 'tool:move', {
+            taskId: params.task,
+            to: 'pm',
+            threadId: `task:${params.task}`,
+            data: {
+              body: `Rejected completion move for ${params.task}: PM authority required.`,
+              orchestration: {
+                action: 'terminal_transition',
+                decision: 'rejected',
+                reasonCode: 'authority_violation',
+                reasonDetails: 'Only PM sessions can complete contracted tasks.',
+                authority: {
+                  required: 'pm',
+                  enforced: true,
+                  actor,
+                },
+              },
+            },
+          });
+          return makeToolResponse({
+            error: 'Only PM sessions can move contracted tasks into completion columns.',
+          }, true);
+        }
+
+        if (contractStatus !== 'done') {
+          return makeToolResponse({
+            error: `Contracted task ${params.task} must be done before completion (current: ${contractStatus || 'none'}).`,
+          }, true);
+        }
+      }
+
       const moveResult = moveTaskFile(located.filePath, resolvedColumn.id, params.position);
       if (!moveResult.success) {
         return makeToolResponse({ error: moveResult.error || 'Failed to move task.' }, true);
@@ -447,6 +486,43 @@ export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
       const located = locateTask(params.task, false);
       if (!located) {
         return makeToolResponse({ error: `Task not found: ${params.task}` }, true);
+      }
+
+      const hasContract = Boolean(located.task.contract && typeof located.task.contract === 'object');
+      const contractStatus = String((located.task.contract as any)?.status || '').toLowerCase();
+      if (hasContract) {
+        const actor = getEffectiveListenerAssignee(ctx);
+
+        if (runtime.operatingMode !== 'pm') {
+          emitEvent('message.decision', ctx, 'tool:complete', {
+            taskId: params.task,
+            to: 'pm',
+            threadId: `task:${params.task}`,
+            data: {
+              body: `Rejected completion for ${params.task}: PM authority required.`,
+              orchestration: {
+                action: 'terminal_transition',
+                decision: 'rejected',
+                reasonCode: 'authority_violation',
+                reasonDetails: 'Only PM sessions can complete contracted tasks.',
+                authority: {
+                  required: 'pm',
+                  enforced: true,
+                  actor,
+                },
+              },
+            },
+          });
+          return makeToolResponse({
+            error: 'Only PM sessions can complete contracted tasks.',
+          }, true);
+        }
+
+        if (contractStatus !== 'done') {
+          return makeToolResponse({
+            error: `Contracted task ${params.task} must be done before completion (current: ${contractStatus || 'none'}).`,
+          }, true);
+        }
       }
 
       const completion = completeTaskFile(located.filePath, runtime.boardContext.logsDir);
@@ -669,7 +745,19 @@ export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
       }
 
       const assignee = getEffectiveListenerAssignee(ctx);
-      const pickup = pickupContract(located, assignee, 'tool');
+      const decision = requestTaskPickupAuthorization(runtime, ctx, located, assignee, 'tool');
+      if (!decision.accepted || !decision.lease) {
+        return makeToolResponse({
+          error:
+            decision.reasonDetails ||
+            (decision.reasonCode
+              ? `Claim rejected (${decision.reasonCode}).`
+              : 'Claim rejected by scheduler.'),
+          decision,
+        }, true);
+      }
+
+      const pickup = pickupContract(located, assignee, 'tool', runtime, decision.lease);
       if (!pickup.ok) {
         return makeToolResponse({ error: pickup.error }, true);
       }
@@ -681,6 +769,7 @@ export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
         assignee,
         data: {
           status: 'in_progress',
+          orchestration: buildClaimDecisionOrchestration(decision),
         },
       });
       persistState();
@@ -852,6 +941,14 @@ export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
         return makeToolResponse({ error: contractResult.error }, true);
       }
 
+      if (runtime.operatingMode !== 'pm') {
+        // Security/authority guard: contract validation transitions ownership-critical
+        // statuses (done/failed) and must only be executed by PM sessions.
+        return makeToolResponse({
+          error: 'Only PM sessions can run contract.validate. Switch to PM mode or delegate this step to PM.',
+        }, true);
+      }
+
       const validation = runContractValidation(located);
       if (!('ok' in validation)) {
         return makeToolResponse({ error: validation.error }, true);
@@ -861,7 +958,12 @@ export function registerBrainfileTools(pi: ExtensionAPI, deps: any): void {
       const updated = setContractStatus(
         located,
         validation.ok ? 'done' : 'failed',
-        validation.ok ? undefined : { feedback }
+        validation.ok
+          ? { runtime }
+          : {
+              runtime,
+              feedback,
+            }
       );
       emitEvent('contract.validated', ctx, 'tool', {
         taskId: params.task,

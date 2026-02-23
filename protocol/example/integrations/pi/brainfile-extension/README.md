@@ -5,6 +5,7 @@ This directory contains the canonical public Pi extension integration for Brainf
 ## Orchestration hardening highlights
 
 - Event-sourced coordination using `.brainfile/state/pi-events.jsonl`
+- Local realtime MessageBus transport (UDS / named pipe) for same-machine notifications
 - Explicit run lifecycle events:
   - `run.started`
   - `run.blocked`
@@ -13,6 +14,23 @@ This directory contains the canonical public Pi extension integration for Brainf
   - `contract.delegated`, `contract.picked_up`, `contract.delivered`, `contract.validated`
 - Stale detection for delegated `in_progress` contracts
 - Worker presence + readiness tracking (`worker.online`, `worker.heartbeat`, `worker.ready`, best-effort `worker.offline`)
+
+## Transport vs audit planes
+
+The extension now uses a split architecture:
+
+- **Data plane (realtime):** local MessageBus over UDS (or Windows named pipe) at `.brainfile/state/pi-events.bus.sock` (path may fall back to `/tmp` on long socket paths)
+- **Audit plane (durable):** append-only JSONL log at `.brainfile/state/pi-events.jsonl`
+
+### Write path (single source of truth)
+
+All events are still written exactly once to `pi-events.jsonl`. The realtime bus only emits an `audit.appended` notification after append succeeds. Consumers then process the new rows from the JSONL log.
+
+This preserves full replay/audit compatibility and avoids split-brain state between transports.
+
+### Startup / reconnect catch-up
+
+Listener sessions persist `eventProjection.lastByteOffset` and always resume reads from that offset. On MessageBus connect/reconnect, the listener runs an immediate catch-up cycle against `pi-events.jsonl` so missed realtime notifications do not lose events.
 
 ## PM notification policy (quiet orchestration mode)
 
@@ -24,6 +42,16 @@ PM chat is notified only when:
 - the run is closed (`run.closed`)
 
 Non-terminal progress stays visible in the footer and widget.
+
+## PM-only authority + late-completion noise control
+
+Contract validation is PM-only. Worker sessions may still emit `contract.delivered` and submit status pings, but only PM sessions can transition contracts to `done` or `failed` via the validation path. This prevents worker sessions from directly asserting final authority (`contract.validated`) in automation workflows.
+
+Status messages for already-completed tasks are intentionally kept out of PM chat if they arrive late/delayed, while the underlying event payloads are still persisted to `pi-events.jsonl` for auditability.
+
+### Message thread/task guardrail
+
+When `task` is set on `brainfile_send_message`, the extension enforces task-thread consistency for `threadId` values. If a caller passes `thread:task:X` where `X` differs from the provided task, the thread is normalized safely to `task:<taskId>` to prevent mis-threaded PM follow-ups.
 
 ## Stale timeout configuration
 

@@ -8,6 +8,8 @@ import { normalizeAssignee, assigneeMatches, getEffectiveListenerAssignee } from
 import { updateWorkerPresence, updateWorkerReadiness } from './worker';
 import { sendOrchestrationMessage, emitMessage, isConversationalMessageKind } from './messaging';
 import { createRunId, adoptOrphanedTasksForRun } from './pm';
+import { locateTask } from './board';
+import { PI_EVENT_READ_CHUNK_BYTES } from './constants';
 
 const SEEN_MESSAGE_TTL_MS = 5 * 60 * 1000;
 const MAX_SEEN_MESSAGE_IDS = 1000;
@@ -54,6 +56,46 @@ function isDuplicateMessage(rt: Rt, messageId: string, nowMs: number): boolean {
   seen.set(messageId, nowMs);
   pruneSeenMessageIds(seen, nowMs);
   return false;
+}
+
+const PROJECTED_TASK_STATUSES = new Set([
+  'ready',
+  'in_progress',
+  'delivered',
+  'done',
+  'failed',
+  'blocked',
+  'completed',
+]);
+
+function normalizeProjectedTaskStatus(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return undefined;
+
+  if (normalized === 'in-progress') return 'in_progress';
+  if (normalized === 'complete') return 'completed';
+
+  if (PROJECTED_TASK_STATUSES.has(normalized)) return normalized;
+  return undefined;
+}
+
+function setProjectedTaskStatus(rt: Rt, taskId: string, status: string, at?: string): void {
+  if (!taskId) return;
+
+  rt.eventProjection.taskContractStatus[taskId] = status;
+
+  const timestamp = typeof at === 'string' && at.trim().length > 0
+    ? at
+    : new Date().toISOString();
+  rt.eventProjection.taskLastEventAt[taskId] = timestamp;
+}
+
+export function getProjectedTaskContractStatus(rt: Rt, taskId: string): string | undefined {
+  if (!taskId) return undefined;
+
+  const status = rt.eventProjection.taskContractStatus[taskId];
+  return normalizeProjectedTaskStatus(status);
 }
 
 // ── Pure helpers ───────────────────────────────────────────────────────
@@ -154,7 +196,7 @@ export function emitEvent(
   ensureEventsLogExists(rt);
 
   const runId = options?.runId || inferRunIdForTask(rt, options?.taskId) || (rt.operatingMode === 'pm' ? rt.activeRunId || undefined : undefined);
-  
+
   // Resolve the "from" identity if not explicitly provided
   const from = options?.from || (rt.operatingMode === 'worker' ? resolveLocalWorkerIdentity(rt, ctx) : normalizeAssignee(getEffectiveListenerAssignee(rt, ctx)));
 
@@ -178,7 +220,20 @@ export function emitEvent(
     ...(options?.expiresAt ? { expiresAt: options.expiresAt } : {}),
   });
 
-  fs.appendFileSync(rt.boardContext.eventsLogPath, `${JSON.stringify(event)}\n`, 'utf-8');
+  const serialized = `${JSON.stringify(event)}\n`;
+  fs.appendFileSync(rt.boardContext.eventsLogPath, serialized, 'utf-8');
+
+  if (rt.publishAuditAppendNotice) {
+    try {
+      rt.publishAuditAppendNotice({
+        logPath: rt.boardContext.eventsLogPath,
+        emittedAt: event.at,
+        eventId: event.messageId || event.id,
+      });
+    } catch {
+      // Best-effort optimization only. JSONL append remains source of truth.
+    }
+  }
 }
 
 type PendingConversationMessage = {
@@ -237,7 +292,7 @@ function isEnvelopeAddressedToSession(rt: Rt, ctx: ExtensionContext, parsed: Env
     return localWorker ? assigneeMatches(normalizedTo, localWorker) : false;
   }
 
-  // PM mode: require EXACT match with the PM's own assignee identity —
+  // PM mode: require EXACT match with the PM's own assignee identity -
   // never wildcard-match against worker family prefixes (fixes over-matching bug).
   const localPm = normalizeAssignee(getEffectiveListenerAssignee(rt, ctx));
   return localPm ? normalizedTo === localPm : false;
@@ -256,6 +311,30 @@ function extractMessageBody(parsed: Envelope): string {
 function truncateMessageBody(body: string, maxChars = 300): string {
   if (body.length <= maxChars) return body;
   return `${body.slice(0, maxChars)}…`;
+}
+
+function shouldSuppressCompletedTaskStatusNotification(rt: Rt, parsed: Envelope): boolean {
+  // Prevent noisy PM orchestrations from stale/late worker callbacks on tasks
+  // already in terminal state while preserving raw JSONL audit rows.
+  if (rt.operatingMode !== 'pm') return false;
+
+  const kind = parsed.kind || parsed.type;
+  if (kind !== 'message.status' && kind !== 'message.answer' && kind !== 'message.blocker') {
+    return false;
+  }
+
+  const from = normalizeAssignee(typeof parsed.from === 'string' ? parsed.from : '');
+  if (from === 'pm') return false;
+
+  const taskId = typeof parsed.taskId === 'string' ? parsed.taskId.trim() : '';
+  if (!taskId) return false;
+
+  const located = locateTask(rt, taskId, true);
+  if (!located) return false;
+  if (located.isLog) return true;
+
+  const status = String((located.task.contract as any)?.status || '').toLowerCase();
+  return status === 'done' || status === 'completed';
 }
 
 function formatConversationBatch(messages: PendingConversationMessage[]): string[] {
@@ -285,6 +364,38 @@ function applyEnvelopeToProjection(rt: Rt, ctx: ExtensionContext, parsed: Envelo
 
   const taskId = parsed.taskId;
   const runId = parsed.runId || inferRunIdForTask(rt, taskId);
+  const eventData = (parsed.data && typeof parsed.data === 'object')
+    ? parsed.data as Record<string, unknown>
+    : {};
+
+  if (taskId) {
+    let projectedStatus: string | undefined;
+
+    if (kind === 'contract.delegated') {
+      projectedStatus = 'ready';
+    } else if (kind === 'contract.picked_up') {
+      projectedStatus = 'in_progress';
+    } else if (kind === 'contract.delivered') {
+      projectedStatus = 'delivered';
+    } else if (kind === 'contract.validated') {
+      const result = normalizeProjectedTaskStatus(eventData.result);
+      projectedStatus = result === 'done' || result === 'failed' ? result : undefined;
+    } else if (kind === 'task.completed') {
+      projectedStatus = 'done';
+    }
+
+    if (!projectedStatus) {
+      const statusFromData = normalizeProjectedTaskStatus(eventData.contractStatus)
+        || normalizeProjectedTaskStatus(eventData.status);
+      if (statusFromData) {
+        projectedStatus = statusFromData;
+      }
+    }
+
+    if (projectedStatus) {
+      setProjectedTaskStatus(rt, taskId, projectedStatus, parsed.at);
+    }
+  }
 
   if (runId && taskId && kind === 'contract.delegated') {
     rt.eventProjection.delegatedByRun[runId] = pushUnique(rt.eventProjection.delegatedByRun[runId], taskId);
@@ -352,15 +463,22 @@ function applyEnvelopeToProjection(rt: Rt, ctx: ExtensionContext, parsed: Envelo
 
   if (rt.operatingMode === 'pm' && rt.listenMode && runId && kind === 'run.closed') {
     const result = String((parsed.data || {}).result || 'unknown');
+    const reason = typeof (parsed.data as any)?.reason === 'string'
+      ? String((parsed.data as any).reason)
+      : '';
+    const suppressShutdownAbortNotice = result === 'aborted' && reason === 'session_shutdown';
+
     rt.eventProjection.runClosedByRun[runId] = result;
 
     if (!rt.eventProjection.closedNotifiedRuns.includes(runId)) {
       rt.eventProjection.closedNotifiedRuns = pushUnique(rt.eventProjection.closedNotifiedRuns, runId);
-      const openTasks = Array.isArray((parsed.data as any)?.openTasks) ? (parsed.data as any).openTasks as unknown[] : [];
-      sendOrchestrationMessage(rt, ctx, [
-        `Run ${runId} closed with result: ${result}.`,
-        result === 'success' ? 'All delegated tasks reached terminal success states.' : `Remaining/open tasks: ${openTasks.length}.`,
-      ]);
+      if (!suppressShutdownAbortNotice) {
+        const openTasks = Array.isArray((parsed.data as any)?.openTasks) ? (parsed.data as any).openTasks as unknown[] : [];
+        sendOrchestrationMessage(rt, ctx, [
+          `Run ${runId} closed with result: ${result}.`,
+          result === 'success' ? 'All delegated tasks reached terminal success states.' : `Remaining/open tasks: ${openTasks.length}.`,
+        ]);
+      }
     }
 
     if (rt.activeRunId === runId) {
@@ -393,13 +511,7 @@ export function processEventLog(rt: Rt, ctx: ExtensionContext): void {
     changed = true;
   }
 
-  if (stat.size === lastByteOffset) {
-    if (changed) persistState(rt);
-    return;
-  }
-
-  const bytesToRead = stat.size - lastByteOffset;
-  if (bytesToRead <= 0) {
+  if (stat.size <= lastByteOffset) {
     if (changed) persistState(rt);
     return;
   }
@@ -409,111 +521,134 @@ export function processEventLog(rt: Rt, ctx: ExtensionContext): void {
 
   const fd = fs.openSync(rt.boardContext.eventsLogPath, 'r');
   try {
-    const buffer = Buffer.alloc(bytesToRead);
-    const bytesRead = fs.readSync(fd, buffer, 0, bytesToRead, lastByteOffset);
-    if (bytesRead <= 0) {
-      if (changed) persistState(rt);
-      return;
-    }
+    let readOffset = lastByteOffset;
+    let carryBuffer = Buffer.alloc(0);
+    let carryStartOffset = lastByteOffset;
+    let nextPersistOffset = lastByteOffset;
 
-    const chunk = buffer.subarray(0, bytesRead).toString('utf-8');
-    const lastNewlineIndex = chunk.lastIndexOf('\n');
-
-    let consumable = '';
-    let consumedBytes = 0;
-
-    if (lastNewlineIndex >= 0) {
-      consumable = chunk.slice(0, lastNewlineIndex + 1);
-      consumedBytes = Buffer.byteLength(consumable, 'utf-8');
-    } else {
-      // No newline yet: only process if this chunk is a full JSON row.
-      const maybeLine = chunk.trim();
-      if (maybeLine.length > 0) {
-        try {
-          JSON.parse(maybeLine);
-          consumable = chunk;
-          consumedBytes = bytesRead;
-        } catch {
-          // Partial write; wait for next append.
-        }
+    while (readOffset < stat.size) {
+      const bytesToRead = Math.min(PI_EVENT_READ_CHUNK_BYTES, stat.size - readOffset);
+      const chunk = Buffer.alloc(bytesToRead);
+      const bytesRead = fs.readSync(fd, chunk, 0, bytesToRead, readOffset);
+      if (bytesRead <= 0) {
+        break;
       }
-    }
 
-    if (consumable.length > 0 && consumedBytes > 0) {
-      const lines = consumable
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0);
+      const chunkBuffer = bytesRead === bytesToRead ? chunk : chunk.subarray(0, bytesRead);
+      const combined = carryBuffer.length > 0
+        ? Buffer.concat([carryBuffer, chunkBuffer], carryBuffer.length + chunkBuffer.length)
+        : chunkBuffer;
 
-      for (const line of lines) {
-        try {
-          const parsed = normalizeEnvelope(JSON.parse(line));
-          const nowMs = Date.now();
-          const messageId = typeof parsed.messageId === 'string' ? parsed.messageId.trim() : '';
-          if (messageId.length > 0 && isDuplicateMessage(rt, messageId, nowMs)) {
-            continue;
+      readOffset += bytesRead;
+
+      const combinedText = combined.toString('utf-8');
+      const hasMoreData = readOffset < stat.size;
+      const lastNewlineIndex = combinedText.lastIndexOf('\n');
+
+      let consumableText = '';
+      let carryText = '';
+
+      if (lastNewlineIndex >= 0) {
+        consumableText = combinedText.slice(0, lastNewlineIndex + 1);
+        carryText = combinedText.slice(lastNewlineIndex + 1);
+      } else if (!hasMoreData) {
+        const maybeLine = combinedText.trim();
+        if (maybeLine.length > 0) {
+          try {
+            JSON.parse(combinedText);
+            consumableText = combinedText;
+          } catch {
+            carryText = combinedText;
           }
+        }
+      } else {
+        carryText = combinedText;
+      }
 
-          applyEnvelopeToProjection(rt, ctx, parsed);
+      if (consumableText.length > 0) {
+        const lines = consumableText
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0);
 
-          const kind = parsed.kind || parsed.type;
-          if (!kind || !isConversationalMessageKind(kind)) {
-            continue;
-          }
+        for (const line of lines) {
+          try {
+            const parsed = normalizeEnvelope(JSON.parse(line));
+            const nowMs = Date.now();
+            const messageId = typeof parsed.messageId === 'string' ? parsed.messageId.trim() : '';
+            if (messageId.length > 0 && isDuplicateMessage(rt, messageId, nowMs)) {
+              continue;
+            }
 
-          if (!isEnvelopeAddressedToSession(rt, ctx, parsed)) {
-            continue;
-          }
+            applyEnvelopeToProjection(rt, ctx, parsed);
 
-          const resolvedMessageId = messageId || parsed.id;
-          const resolvedThreadId = (typeof parsed.threadId === 'string' && parsed.threadId.trim().length > 0)
-            ? parsed.threadId.trim()
-            : (parsed.taskId ? `task:${parsed.taskId}` : resolvedMessageId);
-          const body = extractMessageBody(parsed);
+            const kind = parsed.kind || parsed.type;
+            if (!kind || !isConversationalMessageKind(kind)) {
+              continue;
+            }
 
-          if (parsed.requiresAck === true && kind !== 'message.ack') {
-            const recipient = typeof parsed.from === 'string' ? parsed.from.trim() : '';
-            if (recipient) {
-              pendingAcks.push({
-                to: recipient,
+            if (!isEnvelopeAddressedToSession(rt, ctx, parsed)) {
+              continue;
+            }
+
+            const resolvedMessageId = messageId || parsed.id;
+            const resolvedThreadId = (typeof parsed.threadId === 'string' && parsed.threadId.trim().length > 0)
+              ? parsed.threadId.trim()
+              : (parsed.taskId ? `task:${parsed.taskId}` : resolvedMessageId);
+            const body = extractMessageBody(parsed);
+
+            if (parsed.requiresAck === true && kind !== 'message.ack') {
+              const recipient = typeof parsed.from === 'string' ? parsed.from.trim() : '';
+              if (recipient) {
+                pendingAcks.push({
+                  to: recipient,
+                  ...(parsed.taskId ? { taskId: parsed.taskId } : {}),
+                  ...(parsed.runId ? { runId: parsed.runId } : {}),
+                  threadId: resolvedThreadId,
+                  inReplyTo: resolvedMessageId,
+                  kind,
+                });
+              }
+            }
+
+            if (ORCHESTRATION_BATCH_KINDS.has(kind)) {
+              if (shouldSuppressCompletedTaskStatusNotification(rt, parsed)) {
+                continue;
+              }
+
+              pendingMessages.push({
+                kind,
+                messageId: resolvedMessageId,
+                threadId: resolvedThreadId,
+                ...(typeof parsed.inReplyTo === 'string' && parsed.inReplyTo.trim().length > 0
+                  ? { inReplyTo: parsed.inReplyTo.trim() }
+                  : {}),
+                ...(typeof parsed.from === 'string' && parsed.from.trim().length > 0
+                  ? { from: parsed.from.trim() }
+                  : {}),
+                ...(typeof parsed.to === 'string' && parsed.to.trim().length > 0
+                  ? { to: parsed.to.trim() }
+                  : {}),
                 ...(parsed.taskId ? { taskId: parsed.taskId } : {}),
                 ...(parsed.runId ? { runId: parsed.runId } : {}),
-                threadId: resolvedThreadId,
-                inReplyTo: resolvedMessageId,
-                kind,
+                body,
               });
             }
+          } catch {
+            // Skip malformed rows, preserve prior behavior.
           }
-
-          if (ORCHESTRATION_BATCH_KINDS.has(kind)) {
-            pendingMessages.push({
-              kind,
-              messageId: resolvedMessageId,
-              threadId: resolvedThreadId,
-              ...(typeof parsed.inReplyTo === 'string' && parsed.inReplyTo.trim().length > 0
-                ? { inReplyTo: parsed.inReplyTo.trim() }
-                : {}),
-              ...(typeof parsed.from === 'string' && parsed.from.trim().length > 0
-                ? { from: parsed.from.trim() }
-                : {}),
-              ...(typeof parsed.to === 'string' && parsed.to.trim().length > 0
-                ? { to: parsed.to.trim() }
-                : {}),
-              ...(parsed.taskId ? { taskId: parsed.taskId } : {}),
-              ...(parsed.runId ? { runId: parsed.runId } : {}),
-              body,
-            });
-          }
-        } catch {
-          // Skip malformed rows, preserve prior behavior.
         }
       }
 
-      const nextOffset = lastByteOffset + consumedBytes;
-      if (nextOffset !== rt.eventProjection.lastByteOffset) {
-        rt.eventProjection.lastByteOffset = nextOffset;
-        changed = true;
-      }
+      const carryBytes = Buffer.byteLength(carryText, 'utf-8');
+      nextPersistOffset = carryStartOffset + (combined.length - carryBytes);
+      carryBuffer = Buffer.from(carryText, 'utf-8');
+      carryStartOffset = nextPersistOffset;
+    }
+
+    if (nextPersistOffset !== rt.eventProjection.lastByteOffset) {
+      rt.eventProjection.lastByteOffset = nextPersistOffset;
+      changed = true;
     }
 
     if (pendingAcks.length > 0) {

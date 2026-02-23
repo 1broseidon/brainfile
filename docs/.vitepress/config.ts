@@ -324,6 +324,9 @@ export default withMermaid(defineConfig({
           { text: 'Contract Commands', link: '/cli/contract-commands' },
           { text: 'Agent Workflows', link: '/guides/agent-workflows' },
           { text: 'Orchestration', link: '/guides/orchestration' },
+          { text: 'Orchestration Workflows', link: '/guides/orchestration-workflows' },
+          { text: 'Orchestration Showcase Plan', link: '/guides/orchestration-showcase-plan' },
+          { text: 'Orchestration Acceptance Harness', link: '/guides/orchestration-acceptance' },
         ],
       },
       {

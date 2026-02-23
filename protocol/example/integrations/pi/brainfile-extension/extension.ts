@@ -31,11 +31,13 @@ import {
   assigneeMatches,
   getEffectiveListenerAssignee,
   getWorkerAvailabilitySnapshot,
+  getInProgressTaskOwnersSnapshot,
   formatWorkerLoad,
   resolveOperatingMode,
   releaseWorkerAssigneeClaim,
   emitWorkerOffline,
   maybeEmitWorkerPresenceHeartbeat,
+  cleanupStaleWorkerClaims,
 } from './worker';
 import {
   emitEvent,
@@ -50,6 +52,7 @@ import {
   stopPmLockRefreshTimer,
   isPmClaimedByOther,
   adoptOrphanedTasksForRun,
+  tryPromoteAutoWorkerToPm,
 } from './pm';
 import {
   asJson,
@@ -71,10 +74,14 @@ import {
 } from './contract';
 import {
   stopListener,
-  startListener,
   setListenMode,
   runListenerCycle,
 } from './listener';
+import {
+  requestTaskPickupAuthorization,
+  buildClaimDecisionOrchestration,
+} from './scheduler';
+import { createLocalMessageBus, type MessageBus } from './bus';
 import { registerBrainfileTools } from './tools';
 import { moveTaskFile, readTasksDir as readTasksDirFn } from '@brainfile/core';
 
@@ -104,6 +111,66 @@ function getShortModelName(modelId: string): string {
 }
 
 let tuiRef: any = null;
+let messageBus: MessageBus | null = null;
+let disposeMessageBusSubscriptions: Array<() => void> = [];
+
+function teardownMessageBus() {
+  for (const dispose of disposeMessageBusSubscriptions) {
+    try {
+      dispose();
+    } catch {
+      // best effort
+    }
+  }
+  disposeMessageBusSubscriptions = [];
+
+  if (messageBus) {
+    messageBus.stop();
+    messageBus = null;
+  }
+
+  rt.publishAuditAppendNotice = null;
+}
+
+function setupMessageBus(ctx: ExtensionContext) {
+  teardownMessageBus();
+
+  if (!rt.boardContext) {
+    return;
+  }
+
+  messageBus = createLocalMessageBus(rt.boardContext.stateDir);
+
+  disposeMessageBusSubscriptions.push(
+    messageBus.subscribe((notice) => {
+      if (!rt.boardContext) return;
+
+      const localLogPath = path.resolve(rt.boardContext.eventsLogPath);
+      const remoteLogPath = path.resolve(notice.logPath);
+      if (localLogPath !== remoteLogPath) return;
+      if (!rt.listenMode) return;
+
+      runListenerCycle(rt, ctx, 'watch');
+    })
+  );
+
+  disposeMessageBusSubscriptions.push(
+    messageBus.onLifecycle((event) => {
+      if (!rt.listenMode) return;
+      if (event.state !== 'connected' && event.state !== 'reconnected') return;
+
+      // Catch up any missed audit rows after transport reconnect.
+      runListenerCycle(rt, ctx, 'startup');
+    })
+  );
+
+  rt.publishAuditAppendNotice = (notice) => {
+    if (!messageBus) return;
+    messageBus.publishAuditAppend(notice);
+  };
+
+  messageBus.start();
+}
 
 
   // ── UI state ───────────────────────────────────────────────────────
@@ -154,13 +221,13 @@ let tuiRef: any = null;
     // Line 2
     if (rt.operatingMode === 'pm') {
       const workers = getWorkerAvailabilitySnapshot(rt);
-      const activeDocs = readTasksDirFn(rt.boardContext.boardDir).filter(d => (d.task.contract as any)?.status === 'in_progress');
+      const taskOwners = getInProgressTaskOwnersSnapshot(rt);
       if (workers.available.length > 0) {
         const workerInfos = workers.available.map((w: any) => {
           const wModel = (w.model || '').split('/').pop() || 'unknown';
           const shortModel = getShortModelName(wModel);
-          const assigned = activeDocs.find(d => assigneeMatches(d.task.assignee, w.worker));
-          const stateStr = assigned ? assigned.task.id : 'idle';
+          const snapshot = taskOwners[normalizeAssignee(w.worker) || w.worker];
+          const stateStr = snapshot?.activeTaskId || 'idle';
           return `⬡ ${w.worker} (${shortModel}) ${stateStr}`;
         });
         lines.push(workerInfos.join('  '));
@@ -339,6 +406,13 @@ let tuiRef: any = null;
         }
       }
 
+      if (!rt.operatingModeOverride && rt.operatingMode === 'worker') {
+        const autoPromoted = tryPromoteAutoWorkerToPm(rt, ctx, 'listen.role');
+        if (autoPromoted.promoted) {
+          autoDemotedPmHolder = null;
+        }
+      }
+
       if (previousMode === 'worker' && rt.operatingMode !== 'worker' && rt.workerOnlineEmitted) {
         emitWorkerOffline(rt, ctx, 'listen.role');
       } else if (previousMode === 'worker' && rt.operatingMode !== 'worker') {
@@ -448,6 +522,15 @@ let tuiRef: any = null;
     if (action === 'auto') {
       rt.listenerConfiguredExplicitly = true;
       rt.listenerAssigneeOverride = null;
+      rt.operatingMode = resolveOperatingMode(rt, ctx);
+
+      if (!rt.operatingModeOverride && rt.operatingMode === 'worker') {
+        const autoPromoted = tryPromoteAutoWorkerToPm(rt, ctx, 'listen.role');
+        if (autoPromoted.promoted) {
+          ctx.ui.notify('Listener role auto-promoted to PM after lock arbitration.', 'info');
+        }
+      }
+
       persistState(rt);
       updateStatus(ctx);
       ctx.ui.notify(`Listener assignee reset to auto (${getEffectiveListenerAssignee(rt, ctx)}).`, 'info');
@@ -464,6 +547,7 @@ let tuiRef: any = null;
 
   pi.on('session_start', async (_event, ctx) => {
     stopListener(rt);
+    teardownMessageBus();
     rt.operatingMode = resolveOperatingMode(rt, ctx);
     ctx.ui.setFooter((tui, theme, footerData) => {
       tuiRef = tui;
@@ -509,10 +593,13 @@ let tuiRef: any = null;
             const workers = getWorkerAvailabilitySnapshot(rt);
             rightStr = `${workers.available.length}↑ workers · ${shortModel} · ${branch}`;
           } else {
-            const activeDocs = rt.boardContext ? readTasksDirFn(rt.boardContext.boardDir).filter(d => (d.task.contract as any)?.status === 'in_progress') : [];
-            const inProgressCount = activeDocs.filter(d => assigneeMatches(d.task.assignee, role)).length;
+            const taskOwners = getInProgressTaskOwnersSnapshot(rt);
+            const normalizedRole = normalizeAssignee(role) || role;
+            const inProgressCount = taskOwners[normalizedRole]?.count || 0;
             if (inProgressCount === 1) {
               rightStr = `${shortModel} · idle after`;
+            } else if (inProgressCount > 0) {
+              rightStr = `${shortModel} · ${inProgressCount} active`;
             } else {
               rightStr = `${shortModel}`;
             }
@@ -536,7 +623,13 @@ let tuiRef: any = null;
 
     if (rt.boardContext) {
       ctx.ui.notify(`Brainfile v2 found: ${path.relative(ctx.cwd, rt.boardContext.brainfilePath)}`, 'info');
+      const cleanedClaims = cleanupStaleWorkerClaims(rt);
+      if (cleanedClaims.removed > 0) {
+        ctx.ui.notify(`Cleaned ${cleanedClaims.removed} stale worker claim lock(s).`, 'info');
+      }
     }
+
+    setupMessageBus(ctx);
 
     const stateEntry = ctx.sessionManager
       .getEntries()
@@ -586,17 +679,20 @@ let tuiRef: any = null;
     if (rt.operatingModeOverride) {
       rt.operatingMode = rt.operatingModeOverride;
     } else {
-      const pmCheck = isPmClaimedByOther(rt);
-      if (pmCheck.claimed) {
-        rt.operatingMode = 'worker';
-        autoDemotedPmHolder = pmCheck.holder || 'unknown';
-      } else {
-        if (!tryAcquirePmLock(rt)) {
+      const promoted = tryPromoteAutoWorkerToPm(rt, ctx, 'session_start');
+      if (!promoted.promoted && !promoted.blocked) {
+        const pmCheck = isPmClaimedByOther(rt);
+        if (pmCheck.claimed) {
           rt.operatingMode = 'worker';
-          autoDemotedPmHolder = 'pm-lock (race)';
+          autoDemotedPmHolder = pmCheck.holder || 'unknown';
         } else {
-          rt.operatingMode = 'pm';
-          startPmLockRefreshTimer(rt);
+          if (!tryAcquirePmLock(rt)) {
+            rt.operatingMode = 'worker';
+            autoDemotedPmHolder = 'pm-lock (race)';
+          } else {
+            rt.operatingMode = 'pm';
+            startPmLockRefreshTimer(rt);
+          }
         }
       }
     }
@@ -649,9 +745,24 @@ let tuiRef: any = null;
     } else if (rt.operatingMode === 'worker') {
       releaseWorkerAssigneeClaim(rt);
     }
+
+    if (rt.operatingMode === 'pm' && rt.activeRunId && !isRunClosed(rt, rt.activeRunId)) {
+      emitEvent(rt, 'run.closed', ctx, 'session_shutdown', {
+        runId: rt.activeRunId,
+        data: {
+          result: 'aborted',
+          reason: 'session_shutdown',
+        },
+      });
+      rt.eventProjection.runClosedByRun[rt.activeRunId] = 'aborted';
+      rt.activeRunId = null;
+      persistState(rt);
+    }
+
     releasePmLock(rt);
     stopPmLockRefreshTimer(rt);
     stopListener(rt);
+    teardownMessageBus();
   });
 
   pi.on('model_select', async (_event, ctx) => {
@@ -882,6 +993,41 @@ let tuiRef: any = null;
           return;
         }
 
+        const hasContract = Boolean(located.task.contract && typeof located.task.contract === 'object');
+        const contractStatus = String((located.task.contract as any)?.status || '').toLowerCase();
+        if (resolvedCol.completionColumn && hasContract) {
+          const actor = getEffectiveListenerAssignee(rt, ctx);
+
+          if (rt.operatingMode !== 'pm') {
+            emitEvent(rt, 'message.decision', ctx, 'command:move', {
+              taskId,
+              to: 'pm',
+              threadId: `task:${taskId}`,
+              data: {
+                body: `Rejected completion move for ${taskId}: PM authority required.`,
+                orchestration: {
+                  action: 'terminal_transition',
+                  decision: 'rejected',
+                  reasonCode: 'authority_violation',
+                  reasonDetails: 'Only PM mode can transition contracted tasks to completion.',
+                  authority: {
+                    required: 'pm',
+                    enforced: true,
+                    actor,
+                  },
+                },
+              },
+            });
+            ctx.ui.notify('Only PM mode can move contracted tasks into completion columns.', 'error');
+            return;
+          }
+
+          if (contractStatus !== 'done') {
+            ctx.ui.notify(`Contracted task ${taskId} must be in done status before completion (current: ${contractStatus || 'none'}).`, 'error');
+            return;
+          }
+        }
+
         const moveResult = moveTaskFile(located.filePath, resolvedCol.id);
         if (!moveResult.success) {
           ctx.ui.notify(moveResult.error || 'Failed to move task.', 'error');
@@ -920,7 +1066,19 @@ let tuiRef: any = null;
 
         if (action === 'pickup') {
           const assignee = getEffectiveListenerAssignee(rt, ctx);
-          const pickup = pickupContract(located, assignee, 'command');
+          const decision = requestTaskPickupAuthorization(rt, ctx, located, assignee, 'command');
+          if (!decision.accepted || !decision.lease) {
+            ctx.ui.notify(
+              decision.reasonDetails ||
+              (decision.reasonCode
+                ? `Claim rejected (${decision.reasonCode}).`
+                : 'Claim rejected by scheduler.'),
+              'error'
+            );
+            return;
+          }
+
+          const pickup = pickupContract(located, assignee, 'command', rt, decision.lease);
           if (!pickup.ok) {
             ctx.ui.notify(pickup.error, 'error');
             return;
@@ -933,6 +1091,7 @@ let tuiRef: any = null;
             assignee,
             data: {
               status: 'in_progress',
+              orchestration: buildClaimDecisionOrchestration(decision),
             },
           });
           persistState(rt);
@@ -973,6 +1132,13 @@ let tuiRef: any = null;
         }
 
         if (action === 'validate') {
+          // Contract validation is an authority action that can move status to
+          // done/failed and must stay PM-only by design.
+          if (rt.operatingMode !== 'pm') {
+            ctx.ui.notify('Only PM mode can run contract.validate. Switch to PM mode or delegate this task to PM.', 'error');
+            return;
+          }
+
           const validation = runContractValidation(rt, located);
           if (!('ok' in validation)) {
             ctx.ui.notify(validation.error || 'Validation failed.', 'error');
@@ -980,7 +1146,7 @@ let tuiRef: any = null;
           }
 
           if (validation.ok) {
-            setContractStatus(located, 'done');
+            setContractStatus(located, 'done', { runtime: rt });
             emitEvent(rt, 'contract.validated', ctx, 'command', {
               taskId,
               data: {
@@ -991,7 +1157,7 @@ let tuiRef: any = null;
             ctx.ui.notify(`Contract validation passed: ${taskId}`, 'success');
           } else {
             const feedback = formatValidationFeedback(validation);
-            setContractStatus(located, 'failed', { feedback });
+            setContractStatus(located, 'failed', { feedback, runtime: rt });
             emitEvent(rt, 'contract.validated', ctx, 'command', {
               taskId,
               data: {
@@ -1066,7 +1232,10 @@ let tuiRef: any = null;
     applyTaskPatch,
     ensureTaskHasContract,
     getEffectiveListenerAssignee: (ctx: ExtensionContext) => getEffectiveListenerAssignee(rt, ctx),
-    pickupContract,
+    pickupContract: (located: any, assignee: string, source: any, _runtime?: any, authorization?: any) => pickupContract(located, assignee, source, rt, authorization),
+    requestTaskPickupAuthorization: (_runtime: any, ctx: ExtensionContext, located: any, assignee: string, source: 'listener' | 'tool' | 'command') =>
+      requestTaskPickupAuthorization(rt, ctx, located, assignee, source),
+    buildClaimDecisionOrchestration,
     emitEvent: (type: any, ctx: ExtensionContext, source: string, opts?: any) => emitEvent(rt, type, ctx, source, opts),
     persistState: () => persistState(rt),
     buildContractContextPayload,
@@ -1075,7 +1244,7 @@ let tuiRef: any = null;
     getNextRuleId,
     runContractValidation: (located: any) => runContractValidation(rt, located),
     formatValidationFeedback,
-    setContractStatus,
+    setContractStatus: (located: any, status: string, options?: any) => setContractStatus(located, status, { ...(options || {}), runtime: rt }),
     parseDeliverableSpecs,
     isTaskCompletable,
   });

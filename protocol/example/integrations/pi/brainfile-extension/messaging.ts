@@ -29,6 +29,29 @@ function normalizeAddress(value: string | undefined): string | undefined {
   return normalized || trimmed.toLowerCase();
 }
 
+function resolveThreadIdForTask(taskId: string | undefined, threadId: string | undefined): string {
+  const normalizedTaskId = (taskId || '').trim();
+  const trimmedThreadId = (threadId || '').trim();
+
+  if (!normalizedTaskId) {
+    return trimmedThreadId;
+  }
+
+  const expectedThread = `task:${normalizedTaskId}`;
+  if (!trimmedThreadId) {
+    return expectedThread;
+  }
+
+  if (trimmedThreadId.startsWith('task:') && trimmedThreadId !== expectedThread) {
+    // Guardrail: avoid routing messages to the wrong task's thread when a taskId
+    // is supplied. Normalize safely to the local task thread to prevent mismatched
+    // follow-ups and accidental PM/worker cross-thread leakage.
+    return expectedThread;
+  }
+
+  return trimmedThreadId;
+}
+
 type MessageRuntime = Pick<Rt, 'operatingMode' | 'lastWorkerAssignee' | 'autoWorkerAssignee' | 'listenerAssigneeOverride'>;
 
 export function emitMessage(
@@ -83,7 +106,9 @@ export function emitMessage(
 
   const from = normalizeAddress(options.from) || defaultFrom || (rt.operatingMode === 'pm' ? 'pm' : 'worker');
   const to = normalizeAddress(options.to);
-  const threadId = (options.threadId || '').trim() || (options.taskId ? `task:${options.taskId}` : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const resolvedThreadId = resolveThreadIdForTask(options.taskId, options.threadId);
+  const threadId = resolvedThreadId
+    || (options.taskId ? `task:${options.taskId}` : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const messageId = (options.messageId || '').trim() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
   emitEvent(kind, ctx, source, {

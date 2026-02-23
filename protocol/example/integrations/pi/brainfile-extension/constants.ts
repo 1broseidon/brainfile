@@ -1,7 +1,6 @@
 export const STATE_ENTRY_TYPE = 'brainfile-extension-state';
 export const STATUS_KEY = 'brainfile';
 export const WIDGET_KEY = 'brainfile-task';
-export const LISTENER_SAFETY_POLL_INTERVAL_MS = 30_000;
 export const DEFAULT_LISTENER_ASSIGNEE = 'worker';
 export const DEFAULT_STALE_TIMEOUT_SECONDS = 3600;
 export const DEFAULT_WORKER_PRESENCE_TTL_SECONDS = 45;
@@ -10,10 +9,23 @@ export const WORKER_CLAIM_REFRESH_INTERVAL_MS = 10_000;
 export const WORKER_CLAIM_LEASE_SECONDS = 90;
 export const WORKER_CLAIM_MAX_SLOT = 256;
 export const PI_EVENTS_BASENAME = 'pi-events.jsonl';
+export const PI_EVENT_BUS_BASENAME = 'pi-events.bus.sock';
+export const PI_EVENT_BUS_RECONNECT_DELAY_MS = 500;
+export const PI_EVENT_BUS_CONNECT_TIMEOUT_MS = 250;
+export const PI_EVENT_BUS_MAX_FRAME_BYTES = 256 * 1024;
+export const PI_EVENT_READ_CHUNK_BYTES = 64 * 1024;
 export const WORKER_CLAIMS_DIRNAME = 'worker-claims';
 export const PM_LOCK_DIRNAME = 'pm.lock';
 export const PM_LOCK_LEASE_SECONDS = 120;
 export const PM_LOCK_REFRESH_INTERVAL_MS = 30_000;
+// Event-log fallback is intentionally short-lived to avoid ghost PM runs
+// blocking clean restarts after abrupt shutdown.
+export const PM_RUN_CONFLICT_MAX_AGE_SECONDS = 30;
+export const TASK_PICKUP_LOCK_DIRNAME = 'task-pickup-locks';
+export const TASK_PICKUP_LOCK_STALE_SECONDS = 30;
+export const SCHEDULER_LEASE_DIRNAME = 'scheduler-leases';
+export const SCHEDULER_LEASE_TTL_SECONDS = 45;
+export const WORKER_IN_PROGRESS_CACHE_TTL_MS = 1_000;
 
 export const BF_LIST_TOOL = 'brainfile_list_tasks';
 export const BF_GET_TOOL = 'brainfile_get_task';
@@ -109,6 +121,13 @@ export const DESTRUCTIVE_BASH_PATTERNS: RegExp[] = [
   /\bchgrp\b/i,
   /\bln\b/i,
   /\btee\b/i,
+  // In-place mutation flags must be blocked even on otherwise read-style tools.
+  /\b(?:sed|gsed)\b[^\n]*\s--in-place(?:[=\s]|$)/i,
+  /\b(?:sed|gsed)\b[^\n]*\s-i(?:[^\w-]|$)/i,
+  /\b(?:awk|gawk)\b[^\n]*\s-i(?:[^\w-]|$)/i,
+  /\b(?:awk|gawk)\b[^\n]*\binplace\b/i,
+  /\bjq\b[^\n]*\s--in-place(?:[=\s]|$)/i,
+  /\bjq\b[^\n]*\s-i(?:[^\w-]|$)/i,
   /(^|[^<])>(?!>)/,
   />>/,
   /\bnpm\s+(install|uninstall|update|ci|link|publish)\b/i,

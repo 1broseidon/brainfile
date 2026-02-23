@@ -18,6 +18,8 @@ export function createEmptyEventProjection(): EventProjection {
     workerPresence: {},
     workerReadiness: {},
     taskAdoptedAt: {},
+    taskContractStatus: {},
+    taskLastEventAt: {},
   };
 }
 
@@ -73,7 +75,29 @@ export function normalizeEventProjection(value: unknown): EventProjection {
       const lastSeenAt = typeof presence.lastSeenAt === 'string' ? presence.lastSeenAt : null;
       const lastEventAt = typeof presence.lastEventAt === 'string' ? presence.lastEventAt : lastSeenAt;
       if (!status || !lastSeenAt || !lastEventAt) continue;
-      workerPresence[worker] = { status, lastSeenAt, lastEventAt };
+
+      let model: WorkerPresence['model'] | undefined;
+      if (presence.model && typeof presence.model === 'object') {
+        const rawModel = presence.model as Record<string, unknown>;
+        const provider = typeof rawModel.provider === 'string' ? rawModel.provider : '';
+        const id = typeof rawModel.id === 'string' ? rawModel.id : '';
+        const name = typeof rawModel.name === 'string' ? rawModel.name : '';
+
+        if (provider || id || name) {
+          model = {
+            provider: provider || 'unknown',
+            id: id || 'unknown',
+            name: name || id || provider || 'unknown',
+          };
+        }
+      }
+
+      workerPresence[worker] = {
+        status,
+        lastSeenAt,
+        lastEventAt,
+        ...(model ? { model } : {}),
+      };
     }
   }
 
@@ -137,6 +161,24 @@ export function normalizeEventProjection(value: unknown): EventProjection {
       }
       return out;
     })(),
+    taskContractStatus: (() => {
+      const out: Record<string, string> = {};
+      if (raw.taskContractStatus && typeof raw.taskContractStatus === 'object') {
+        for (const [k, v] of Object.entries(raw.taskContractStatus as Record<string, unknown>)) {
+          if (typeof v === 'string') out[k] = v;
+        }
+      }
+      return out;
+    })(),
+    taskLastEventAt: (() => {
+      const out: Record<string, string> = {};
+      if (raw.taskLastEventAt && typeof raw.taskLastEventAt === 'object') {
+        for (const [k, v] of Object.entries(raw.taskLastEventAt as Record<string, unknown>)) {
+          if (typeof v === 'string') out[k] = v;
+        }
+      }
+      return out;
+    })(),
   };
 }
 
@@ -168,6 +210,7 @@ export function createRt(pi: ExtensionAPI): Rt {
     workerOnlineEmitted: false,
     lastWorkerAssignee: null,
     autoWorkerAssignee: null,
+    workerInProgressCache: null,
     workerClaimToken: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
     workerClaimSlot: null,
     lastWorkerClaimRefreshAtMs: 0,
@@ -175,6 +218,7 @@ export function createRt(pi: ExtensionAPI): Rt {
     pmLockHeld: false,
     lastPmLockRefreshAtMs: 0,
     pmLockTimer: null,
+    publishAuditAppendNotice: null,
     // Placeholder — replaced in extension.ts after definition
     updateStatus: () => {},
   };
