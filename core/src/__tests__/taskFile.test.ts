@@ -311,4 +311,124 @@ describe('taskFile', () => {
       expect(docs).toEqual([]);
     });
   });
+
+  describe('extension fields', () => {
+    it('preserves unknown keys through parse', () => {
+      const content = [
+        '---',
+        'id: task-1',
+        'title: Test',
+        'x-otto:',
+        '  model_chain:',
+        '    - gpt-4',
+        '    - claude',
+        '  status: running',
+        'x-cursor:',
+        '  tab_id: 42',
+        '---',
+        '',
+      ].join('\n');
+
+      const result = parseTaskContent(content);
+      expect(result).not.toBeNull();
+      expect(result!.task['x-otto']).toEqual({
+        model_chain: ['gpt-4', 'claude'],
+        status: 'running',
+      });
+      expect(result!.task['x-cursor']).toEqual({ tab_id: 42 });
+    });
+
+    it('round-trips extension fields through serialize → parse', () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test',
+        'x-otto': { model_chain: ['gpt-4'], status: 'running' },
+      };
+
+      const serialized = serializeTaskContent(task, '## Description\nHello\n');
+      expect(serialized).toContain('x-otto:');
+
+      const parsed = parseTaskContent(serialized);
+      expect(parsed).not.toBeNull();
+      expect(parsed!.task['x-otto']).toEqual({
+        model_chain: ['gpt-4'],
+        status: 'running',
+      });
+    });
+
+    it('extension values are opaque (keys not transformed)', () => {
+      const content = [
+        '---',
+        'id: task-1',
+        'title: Test',
+        'x-otto:',
+        '  model_chain:',
+        '    - a',
+        '  retry_count: 3',
+        '---',
+        '',
+      ].join('\n');
+
+      const result = parseTaskContent(content);
+      const ext = result!.task['x-otto'] as Record<string, unknown>;
+      // Keys inside x-otto must stay as-is (snake_case), not be camel-cased
+      expect(ext['model_chain']).toEqual(['a']);
+      expect(ext['retry_count']).toBe(3);
+    });
+
+    it('preserves extension fields through file write/read roundtrip', () => {
+      const task: Task = {
+        id: 'task-ext',
+        title: 'Extension test',
+        column: 'todo',
+        'x-otto': { status: 'running', model_chain: ['gpt-4'] },
+        'x-cursor': { tab_id: 42 },
+      };
+      const body = '## Description\nTest body.\n';
+
+      const filePath = path.join(testDir, 'task-ext.md');
+      writeTaskFile(filePath, task, body);
+
+      const doc = readTaskFile(filePath);
+      expect(doc).not.toBeNull();
+      expect(doc!.task['x-otto']).toEqual({ status: 'running', model_chain: ['gpt-4'] });
+      expect(doc!.task['x-cursor']).toEqual({ tab_id: 42 });
+    });
+
+    it('preserves non-x-prefixed unknown keys too', () => {
+      const content = [
+        '---',
+        'id: task-1',
+        'title: Test',
+        'customField: hello',
+        '---',
+        '',
+      ].join('\n');
+
+      const result = parseTaskContent(content);
+      expect(result).not.toBeNull();
+      expect(result!.task['customField']).toBe('hello');
+    });
+
+    it('preserves extension fields through spread operations', () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test',
+        column: 'todo',
+        'x-otto': { status: 'running' },
+      };
+
+      // Simulate a move operation (spread + override)
+      const moved: Task = { ...task, column: 'in-progress' };
+      expect(moved['x-otto']).toEqual({ status: 'running' });
+      expect(moved.column).toBe('in-progress');
+
+      // Simulate completeTaskFile destructuring
+      const { column: _col, position: _pos, ...rest } = task;
+      const completed: Task = { ...rest, completedAt: '2026-01-01T00:00:00Z' };
+      expect(completed['x-otto']).toEqual({ status: 'running' });
+      expect(completed.completedAt).toBe('2026-01-01T00:00:00Z');
+      expect(completed).not.toHaveProperty('column');
+    });
+  });
 });

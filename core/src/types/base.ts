@@ -67,6 +67,10 @@ export interface Subtask {
 
 /**
  * Task definition - used by board type and per-task files (v2)
+ *
+ * Extension fields (e.g. `x-otto`, `x-cursor`) are preserved through
+ * parse/serialize cycles via the index signature.  Values are opaque —
+ * brainfile never transforms keys inside extension objects.
  */
 export interface Task {
   id: string;
@@ -93,6 +97,9 @@ export interface Task {
   position?: number;
   /** ISO 8601 timestamp when task was completed (v2 per-task files, set when moved to logs/) */
   completedAt?: string;
+
+  /** Extension fields (x-otto, x-cursor, etc.) are preserved for round-tripping. */
+  [key: string]: unknown;
 }
 
 /**
