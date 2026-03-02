@@ -21,7 +21,7 @@ npm install @brainfile/core
 Brainfile v2 uses a directory-based structure:
 - **Board Config**: `.brainfile/brainfile.md` (columns, types, rules)
 - **Active Tasks**: `.brainfile/board/*.md` (individual task files)
-- **Completed Tasks**: `.brainfile/logs/*.md` (history)
+- **Completion History**: `.brainfile/logs/ledger.jsonl` (unified log) + archived `.md` files
 
 This library exposes low-level file operations to manage this structure efficiently.
 
@@ -62,7 +62,7 @@ const newTask = addTaskFile(".brainfile/board/", {
 // Move a task to another column
 moveTaskFile(".brainfile/board/task-1.md", "in-progress");
 
-// Complete a task (moves file to logs/ directory)
+// Complete a task (appends to ledger.jsonl, archives file to logs/)
 completeTaskFile(".brainfile/board/task-1.md", ".brainfile/logs/");
 
 // Append a log entry to the task file
