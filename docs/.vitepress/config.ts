@@ -333,7 +333,13 @@ export default withMermaid(defineConfig({
           { text: 'CLI & TUI', link: '/tools/cli' },
           { text: 'MCP Server', link: '/tools/mcp' },
           { text: 'Pi Extension', link: '/tools/pi' },
-          { text: 'Core Library', link: '/tools/core' },
+        ],
+      },
+      {
+        text: 'Libraries',
+        items: [
+          { text: 'TypeScript', link: '/tools/core' },
+          { text: 'Python', link: '/tools/python' },
         ],
       },
       {

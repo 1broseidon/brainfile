@@ -1,9 +1,9 @@
 ---
-title: Core Library
+title: TypeScript (@brainfile/core)
 description: TypeScript/JavaScript library for Brainfile operations
 ---
 
-# Core Library
+# TypeScript (@brainfile/core)
 
 `@brainfile/core` is the TypeScript library that powers all Brainfile tools. Use it to build custom integrations, scripts, or entirely new interfaces.
 
