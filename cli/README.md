@@ -21,7 +21,7 @@ brainfile init
 This creates the standard v2 structure:
 - `.brainfile/brainfile.md` (Configuration, rules, definitions)
 - `.brainfile/board/` (Active tasks)
-- `.brainfile/logs/` (Completed tasks)
+- `.brainfile/logs/` (Completion history — `ledger.jsonl`)
 
 The board comes pre-configured with `To Do` and `In Progress` columns.
 
@@ -105,7 +105,7 @@ When a task is done, move it to the archive.
 ```bash
 brainfile complete -t task-10
 ```
-This moves the file from `.brainfile/board/` to `.brainfile/logs/`, preserving its history forever.
+This appends a record to `logs/ledger.jsonl` and archives the file from `.brainfile/board/` to `.brainfile/logs/`.
 
 ## Types
 
