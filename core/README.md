@@ -1,14 +1,8 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/brainfile/core/main/logo.png" alt="Brainfile Logo" width="128" height="128">
-</p>
-
 # @brainfile/core
 
-**The TypeScript engine behind Brainfile.**
+TypeScript library for the [Brainfile](https://brainfile.md) task coordination protocol. Provides parsing configuration, reading/writing task files, managing contracts, and handling board state.
 
-This library provides the core logic for managing Brainfile v2 projects: parsing configuration, reading/writing task files, managing contracts, and handling board state.
-
-It is used by the [CLI](https://www.npmjs.com/package/@brainfile/cli), VS Code extension, and other tools in the Brainfile ecosystem.
+Used by the [@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli) and other tools in the Brainfile ecosystem.
 
 ## Installation
 
