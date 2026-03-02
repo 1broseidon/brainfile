@@ -47,6 +47,10 @@
           "type": "string",
           "description": "Free-form notes about how this project prefers AI work to be structured"
         },
+        "identity": {
+          "type": "string",
+          "description": "System prompt identity — who this agent is and how it should behave"
+        },
         "tools": {
           "type": "object",
           "description": "CLI tools and commands available for agents to use",
