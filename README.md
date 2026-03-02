@@ -24,9 +24,10 @@ A Brainfile project lives in a `.brainfile` directory:
 ├── board/              # Active Documents (Todo, In Progress)
 │   ├── task-1.md
 │   └── epic-1.md
-└── logs/               # Completed Documents (Archive/History)
-    ├── task-2.md
-    └── adr-1.md
+└── logs/               # Completion History
+    ├── ledger.jsonl    # Unified completion log
+    ├── task-2.md       # (legacy) Archived task
+    └── adr-1.md        # (legacy) Archived ADR
 ```
 
 ### Board Configuration (`brainfile.md`)
@@ -93,7 +94,7 @@ The protocol supports custom document types via the `types` configuration in `br
 | Field | Description |
 |-------|-------------|
 | `idPrefix` | Prefix for IDs (e.g., `epic` -> `epic-1`). |
-| `completable` | If `true`, items move to `logs/` when done. If `false`, they stay on the board (e.g., ADRs). |
+| `completable` | If `true`, a completion record is appended to `logs/ledger.jsonl` and the file is archived to `logs/`. If `false`, items stay on the board (e.g., ADRs). |
 | `schema` | Optional JSON Schema URL for validation. |
 
 **Strict Mode**: If `strict: true` is set in `brainfile.md`, only explicitly defined types (plus the default `task`) are allowed.
@@ -103,7 +104,7 @@ The protocol supports custom document types via the `types` configuration in `br
 ### Task Lifecycle
 1.  **Created**: Added to `board/` in a default column.
 2.  **Active**: Moves between columns in `board/`.
-3.  **Completed**: The file is moved from `board/` to `logs/` and `completedAt` is set. Optionally, if a column has `completionColumn: true`, moving a task there triggers auto-completion.
+3.  **Completed**: A record is appended to `logs/ledger.jsonl`, the file is archived from `board/` to `logs/`, and `completedAt` is set. Optionally, if a column has `completionColumn: true`, moving a task there triggers auto-completion.
 
 ### Epic Lifecycle
 Epics are container documents. They can be completed like tasks, but often stay active longer.
@@ -114,7 +115,7 @@ Epics are container documents. They can be completed like tasks, but often stay 
 ADRs track decisions.
 1.  **Draft**: Created in `board/` (or a specific column).
 2.  **Accepted**: Marked as `status: accepted`.
-3.  **Promoted**: Using `brainfile adr promote`, the ADR is moved to `logs/` (status: `promoted`) and its title is extracted as a permanent rule in `brainfile.md`.
+3.  **Promoted**: Using `brainfile adr promote`, a record is appended to `logs/ledger.jsonl`, the ADR is archived to `logs/` (status: `promoted`), and its title is extracted as a permanent rule in `brainfile.md`.
 
 ## 5. Linking Model (`parentId`)
 

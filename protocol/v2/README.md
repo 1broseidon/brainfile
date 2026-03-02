@@ -23,8 +23,9 @@ Per-task file architecture. No deprecated fields. Clean break from v1.
 │   ├── task-1.md
 │   ├── epic-1.md
 │   └── adr-1.md
-└── logs/             # Completed task files
-    └── task-2.md
+└── logs/             # Completion history
+    ├── ledger.jsonl  # Unified completion log
+    └── task-2.md     # (legacy) Archived task
 ```
 
 The board file is config-only: columns, types, rules, metadata. Tasks are standalone `.md` files with YAML frontmatter and optional markdown body.
