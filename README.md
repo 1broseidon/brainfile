@@ -1,10 +1,6 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/brainfile/protocol/main/logo.png" alt="Brainfile Logo" width="128" height="128">
-</p>
-
 # Brainfile Protocol
 
-A document board protocol. Manage tasks, decisions, and project artifacts as structured markdown files on a kanban board -- readable by both humans and AI agents.
+An open protocol for agentic task coordination. Manage tasks, decisions, and project artifacts as structured markdown files — readable by both humans and AI agents.
 
 ## 1. Protocol Overview
 
@@ -174,4 +170,5 @@ rules:
 - **Contract**: [`https://brainfile.md/v1/contract.json`](https://brainfile.md/v1/contract.json)
 
 ---
-*Generated for Brainfile v2 Protocol*
+
+Full documentation at [brainfile.md](https://brainfile.md)
