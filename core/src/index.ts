@@ -187,6 +187,14 @@ export {
   type LinearFormatOptions,
 } from './formatters';
 
+// Export board config file reader/writer (v2 board config I/O)
+export {
+  parseBoardConfig,
+  serializeBoardConfig,
+  readBoardConfig,
+  writeBoardConfig,
+} from './boardFile';
+
 // Export task file reader/writer (v2 per-task file architecture)
 export {
   parseTaskContent,
@@ -202,6 +210,7 @@ export {
   type TaskOperationResult,
   type TaskFileInput,
   type TaskFilters,
+  type CompleteTaskFileOptions,
   generateNextFileTaskId,
   addTaskFile,
   moveTaskFile,
@@ -213,6 +222,18 @@ export {
   searchTaskFiles,
   searchLogs,
 } from './taskOperations';
+
+// Export ledger helpers (append-only JSONL completion history)
+export {
+  buildLedgerRecord,
+  appendLedgerRecord,
+  readLedger,
+  queryLedger,
+  getFileHistory,
+  getTaskContext,
+  normalizePathValue,
+  isLedgerContractStatus,
+} from './ledger';
 
 // Export v2 workspace helpers (directory detection, board reconstruction, body helpers)
 export {

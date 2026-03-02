@@ -29,6 +29,11 @@ export interface Rules {
 export interface AgentInstructions {
   instructions: string[];
   llmNotes?: string;
+  /** System prompt identity — who this agent is and how it should behave */
+  identity?: string;
+
+  /** Extension fields (x-otto, x-cursor, etc.) are preserved for round-tripping. */
+  [key: string]: unknown;
 }
 
 /**

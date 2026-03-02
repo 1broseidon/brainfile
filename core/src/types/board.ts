@@ -78,4 +78,7 @@ export interface BoardConfig extends BrainfileBase {
   /** Optional per-type configuration used by strict type validation. */
   types?: TypesConfig;
   statsConfig?: StatsConfig;
+
+  /** Extension fields (x-otto, x-cursor, etc.) are preserved for round-tripping. */
+  [key: string]: unknown;
 }
