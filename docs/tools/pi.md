@@ -291,7 +291,5 @@ This keeps orchestration decisions and conversation context auditable together.
 ## See Also
 
 - [Orchestration Guide](/guides/orchestration)
-- [Orchestration Workflows](/guides/orchestration-workflows)
-- [Orchestration Acceptance Harness](/guides/orchestration-acceptance)
 - [AI Agent Integration](/agents/integration)
 - [MCP Server](/tools/mcp)
