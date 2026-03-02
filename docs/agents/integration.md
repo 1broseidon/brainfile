@@ -114,7 +114,7 @@ For simple integration without MCP or hooks, add to your agent config file (`CLA
 - Use brainfile CLI or MCP tools for task operations
 - Update task status as you work (todo → in-progress → done)
 - Check .brainfile/brainfile.md for project rules and board config
-- Task files live in .brainfile/board/ (active) and .brainfile/logs/ (completed)
+- Task files live in `.brainfile/board/` (active) and `.brainfile/logs/` (completion history with `ledger.jsonl`)
 ```
 
 ---
@@ -181,8 +181,9 @@ AI agents should check for the board config in this order:
 │   ├── task-2.md
 │   ├── epic-1.md
 │   └── adr-1.md
-└── logs/             # Completed task files
-    └── task-3.md
+└── logs/             # Completed history
+    ├── ledger.jsonl  # Primary completion record
+    └── task-3.md     # (legacy) Archived task
 ```
 
 ---

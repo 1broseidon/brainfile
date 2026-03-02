@@ -14,7 +14,7 @@ brainfile init
 This creates `.brainfile/` with:
 - `brainfile.md` — board config (columns, types, rules)
 - `board/` — active task files
-- `logs/` — completed task archive
+- `logs/` — completion history (`ledger.jsonl`) and archives
 
 ## 2. Set Up MCP
 
@@ -41,7 +41,7 @@ brainfile list -c todo                            # filter by column
 brainfile add --title "Task name"                 # create task
 brainfile add --title "Fix bug" -p high --tags bug  # with metadata
 brainfile move --task task-1 --column in-progress # move between columns
-brainfile complete --task task-1                  # done (moves to logs/)
+brainfile complete --task task-1                  # done (appends to ledger.jsonl and archives)
 brainfile show --task task-1                      # view details
 brainfile patch --task task-1 -p critical         # update fields
 brainfile subtask --add "Write tests" --task task-1  # add subtask

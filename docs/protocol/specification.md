@@ -144,7 +144,7 @@ The protocol supports custom document types via the `types` configuration:
 | Field | Description |
 |-------|-------------|
 | `idPrefix` | Prefix for IDs (e.g., `epic` → `epic-1`) |
-| `completable` | If `true`, items can be completed (moved to `logs/`). If `false`, they stay on the board |
+| `completable` | If `true`, items can be completed (appended to `ledger.jsonl` and archived). If `false`, they stay on the board |
 | `schema` | Optional JSON Schema URL for validation |
 
 **Built-in type**: `task` (always available, idPrefix: `task`, completable: `true`).
@@ -164,11 +164,11 @@ columns:
 
 ### Default Columns
 
-`brainfile init` creates two columns: `todo` and `in-progress`. There is no default "done" column — completion is handled by moving files to `logs/`.
+`brainfile init` creates two columns: `todo` and `in-progress`. There is no default "done" column — completion is handled by appending a record to `ledger.jsonl` and archiving the file.
 
 ### completionColumn
 
-When `completionColumn: true`, moving a task to that column triggers auto-completion (file moves from `board/` to `logs/`). This is optional and not set by default.
+When `completionColumn: true`, moving a task to that column triggers auto-completion (file appends to `ledger.jsonl` and archives to `logs/`). This is optional and not set by default.
 
 ## Extension Fields
 
@@ -187,7 +187,7 @@ To prevent naming collisions with future protocol versions, vendor-specific exte
 ### Task Lifecycle
 1.  **Created**: Added to `board/` in a column (e.g., `todo`).
 2.  **Active**: Moves between columns in `board/`.
-3.  **Completed**: `brainfile complete` moves the file from `board/` to `logs/` and sets `completedAt`. Optionally, if a column has `completionColumn: true`, moving there triggers auto-completion.
+3.  **Completed**: `brainfile complete` appends a record to `ledger.jsonl`, moves the file from `board/` to `logs/`, and sets `completedAt`. Optionally, if a column has `completionColumn: true`, moving there triggers auto-completion.
 
 ### Epic Lifecycle
 Epics are container documents.
@@ -199,7 +199,7 @@ Epics are container documents.
 ADRs track decisions.
 1.  **Draft**: Created in `board/`.
 2.  **Accepted**: Moved to accepted column or marked.
-3.  **Promoted**: Using `brainfile adr promote`, the ADR is moved to `logs/` (status: `promoted`) and its title is extracted as a permanent rule in `brainfile.md`.
+3.  **Promoted**: Using `brainfile adr promote`, the ADR is moved to `logs/` (status: `promoted`), a record is appended to `ledger.jsonl`, and its title is extracted as a permanent rule in `brainfile.md`.
 
 ## Linking Model (`parentId`)
 
@@ -284,7 +284,7 @@ rules:
 | `subtasks` | array | No | Subtask objects |
 | `contract` | object | No | Agent contract |
 | `createdAt` | string | No | ISO 8601 timestamp |
-| `completedAt` | string | No | Set when moved to logs/ |
+| `completedAt` | string | No | Set when appended to `ledger.jsonl` and archived |
 
 ## Schema Reference
 
@@ -318,8 +318,8 @@ rules:
 2. **Include agent instructions** for consistent AI behavior
 3. **Use strict mode** to enforce document types
 4. **Preserve IDs** — never regenerate or change task IDs
-5. **Complete tasks via CLI** — `brainfile complete` handles the board/ → logs/ move
-6. **Archive history** — logs/ preserves completed work permanently
+5. **Complete tasks via CLI** — `brainfile complete` handles the `ledger.jsonl` append and file move
+6. **Archive history** — `logs/` (ledger and archives) preserves completed work permanently
 
 ---
 

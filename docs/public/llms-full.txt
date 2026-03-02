@@ -56,13 +56,13 @@ brainfile init
 This creates the .brainfile/ directory with:
   - .brainfile/brainfile.md — Board configuration (columns, types, rules)
   - .brainfile/board/ — Active task files
-  - .brainfile/logs/ — Completed task archive
+  - .brainfile/logs/ (ledger and legacy archive) — Completion history (ledger.jsonl) and archived files
 
 `
 .brainfile/
 ├── brainfile.md    ← Board config (columns, types, rules)
 ├── board/          ← Active task files go here
-└── logs/           ← Completed tasks archived here
+└── logs/           ← Completed history (ledger and archived files)
 `
 
 <ArchitectureDiagram />
@@ -83,7 +83,7 @@ Navigate with keyboard: TAB for columns, j/k for tasks, Enter to expand, q to qu
 brainfile list                              # See all tasks
 brainfile add --title "My first task"       # Add a task
 brainfile move --task task-1 --column in-progress  # Move columns
-brainfile complete --task task-1            # Complete (moves to logs/)
+brainfile complete --task task-1            # Complete (appends to ledger.jsonl and archives)
 `
 :::
 
@@ -176,7 +176,7 @@ The source of truth for work should live where the work happens: in the reposito
 :::
 
 ::: info 3. File-System Semantics
-Complex state management is replaced by simple file operations. Moving a file from board/ to logs/ is an immutable, searchable, and version-controlled record of completion. This simplicity is the key to scalability and resilience.
+Complex state management is replaced by simple file operations. Appending a record to logs/ledger.jsonl and archiving the task file is an immutable, searchable, and version-controlled record of completion. This simplicity is the key to scalability and resilience.
 :::
 
 ::: info 4. Explicit Contracts
@@ -375,7 +375,7 @@ The lifecycle ensures that work is properly claimed, implemented, and verified.
 | 🔵 ready | Contract is available for an agent to claim. | Agent: contract pickup |
 | 🟡 in_progress | Agent is currently working on the deliverables. | Agent: contract deliver |
 | 🟣 delivered | Work is complete and awaiting PM review. | PM: contract validate |
-| 🟢 done | PM has verified and accepted the work. | PM: brainfile complete to move to logs/. |
+| 🟢 done | PM has verified and accepted the work. | PM: brainfile complete to append to ledger.jsonl and archive. |
 | 🔴 failed | Validation failed. Feedback is provided. | PM: Add feedback, reset to ready for rework. |
 | ⚠️ blocked | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to ready. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
 
@@ -414,7 +414,7 @@ PM agents (usually humans or advanced LLMs) manage the lifecycle:
   Assign: Set the assignee to the appropriate worker agent.
   Validate: Once delivered, run brainfile contract validate -t task-X.
   Result:
-  - If successful: Status becomes done. Run brainfile complete to move to logs/.
+  - If successful: Status becomes done. Run brainfile complete to append to ledger.jsonl and archive.
   - If issues found: Status becomes failed. Edit task to add feedback and reset status to ready.
 
 ::: tip Quick Reference
@@ -550,7 +550,7 @@ PM runs automated validation
 
 brainfile contract validate -t task-105
 
-If all good, PM completes the task (moves to logs/)
+If all good, PM completes the task (appends to ledger.jsonl and archives)
 
 brainfile complete -t task-105
 `
@@ -701,7 +701,7 @@ Initialize a New Board
 brainfile init
 `
 
-Creates .brainfile/ directory with brainfile.md config, board/, and logs/. Default columns: To Do and In Progress.
+Creates .brainfile/ directory with brainfile.md config, board/, and logs/ (for completion history). Default columns: To Do and In Progress.
 
 List Tasks
 
@@ -728,7 +728,7 @@ brainfile move --task task-1 --column in-progress
 Complete Tasks
 
 `
-brainfile complete --task task-1   # Moves from board/ to logs/
+brainfile complete --task task-1   # Appends to ledger.jsonl and archives
 `
 
 Update Tasks
@@ -918,7 +918,7 @@ Task Management
 | move_task | Move a task between columns |
 | patch_task | Update specific fields on a task |
 | delete_task | Permanently delete a task |
-| complete_task | Complete a task (move from board/ to logs/) |
+| complete_task | Complete a task (appends to ledger.jsonl and archives) |
 
 Bulk Operations
 
@@ -1721,8 +1721,10 @@ Brainfile v2 uses a directory-based structure:
 ├── board/              # Active task files
 │   ├── task-1.md
 │   └── epic-1.md
-└── logs/               # Completed task files
-    └── task-2.md
+└── logs/               # Completed Documents
+    ├── ledger.jsonl    # Unified event log
+    ├── task-2.md       # (legacy) Completed task
+    └── adr-1.md        # (legacy) Completed ADR
 `
 
 File Discovery
@@ -1736,7 +1738,7 @@ File Discovery
 Completion
 
 ::: info Completion Model
-Completed tasks are moved from board/ to logs/ via brainfile complete. There is no "done" column by default — completion is a file-level operation that archives the task.
+Completed tasks are appended to logs/ledger.jsonl and moved to logs/ via brainfile complete. Completion is a file-level operation that archives the task.
 :::
 
 <svg viewBox="0 0 420 60" xmlns="http://www.w3.org/2000/svg" style="max-width: 400px; width: 100%; display: block; margin: 1.5em auto;">
@@ -1893,7 +1895,7 @@ Each task is a standalone .md file in .brainfile/board/:
 | contract | object | No | Agent contract |
 | createdAt | string | No | ISO 8601 timestamp |
 | updatedAt | string | No | ISO 8601 timestamp, set on mutations |
-| completedAt | string | No | Set when moved to logs/ |
+| completedAt | string | No | Set when appended to ledger.jsonl and moved to logs/ |
 | parentId | string | No | Parent document ID (any type) |
 | position | number | No | Sort position within the column |
 
@@ -2898,7 +2900,7 @@ Complete documentation for all @brainfile/cli commands.
 | brainfile add | Create tasks with contracts, subtasks, and metadata |
 | brainfile list | Filter and display tasks by column, tag, or contract status |
 | brainfile move | Move tasks between columns |
-| brainfile complete | Complete tasks — move from board/ to logs/ |
+| brainfile complete | Complete tasks — append to ledger.jsonl and archive to logs/ |
 | brainfile contract | Manage contracts — pickup, deliver, validate |
 | brainfile patch | Update fields on existing tasks |
 :::
@@ -2929,7 +2931,7 @@ Commands
 | template | Create from templates |
 | tui | Interactive terminal UI |
 | hooks | AI agent hook integration |
-| complete | Complete a task (move to logs/) |
+| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
 | contract | Manage agent-to-agent contracts |
 | adr | ADR lifecycle management |
 | rules | Manage project rules |
@@ -3273,7 +3275,7 @@ Options:
 
 complete
 
-Complete a task — moves it from board/ to logs/.
+Complete a task — appends to ledger.jsonl and archives to logs/.
 
 ::: tip Board Hygiene
 complete archives finished work to logs/, keeping your active board clean. Use --force for epics with remaining child tasks.
@@ -3518,7 +3520,7 @@ Task Management:
 | move_task | Move task between columns |
 | patch_task | Update task fields |
 | delete_task | Permanently delete a task |
-| complete_task | Complete a task (move from board/ to logs/) |
+| complete_task | Complete a task (appends to ledger.jsonl and archives) |
 
 Bulk Operations:
 
@@ -3821,7 +3823,7 @@ View Board Schema · Example
 
 Task
 
-Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual .md file in .brainfile/board/ (active) or .brainfile/logs/ (completed).
+Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual .md file in .brainfile/board/ (active) or .brainfile/logs/ (ledger and legacy archive) (completion history).
 
 `
 ---
@@ -4019,7 +4021,8 @@ Files:
 - .brainfile/board/adr-1.md
 - .brainfile/board/epic-1.md
 - .brainfile/board/task-1.md
-- .brainfile/logs/task-2.md
+- .brainfile/logs/ledger.jsonl (primary)
+- .brainfile/logs/task-2.md (legacy)
 
 ### .brainfile/brainfile.md
 
@@ -4040,7 +4043,7 @@ agent:
     This is an example Brainfile v2 workspace.
     - Board config lives in .brainfile/brainfile.md
     - Active docs live in .brainfile/board/
-    - Completed docs live in .brainfile/logs/
+    - Completed docs live in .brainfile/logs/ (ledger.jsonl and legacy archive)
 rules:
   always:
     - id: 1
@@ -4089,7 +4092,7 @@ This folder demonstrates the v2 layout:
 
 - `.brainfile/brainfile.md` (this file)
 - `.brainfile/board/` (active task/epic/adr files)
-- `.brainfile/logs/` (completed task files)
+- `.brainfile/logs/` (completion history and archives)
 
 ```
 
@@ -4197,7 +4200,7 @@ We need to protect upstream providers from bursty traffic and avoid quota exhaus
 
 ```
 
-### .brainfile/logs/task-2.md
+### .brainfile/logs/task-2.md (legacy archive)
 
 ```markdown
 ---

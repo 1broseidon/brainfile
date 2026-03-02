@@ -13,7 +13,7 @@ Complete documentation for all `@brainfile/cli` commands.
 | `brainfile add` | [Create tasks](#add) with contracts, subtasks, and metadata |
 | `brainfile list` | [Filter and display](#list) tasks by column, tag, or contract status |
 | `brainfile move` | [Move tasks](#move) between columns |
-| `brainfile complete` | [Complete tasks](#complete) — move from board/ to logs/ |
+| `brainfile complete` | [Complete tasks](#complete) — append to `ledger.jsonl` and archive to `logs/` |
 | `brainfile contract` | [Manage contracts](#contract) — pickup, deliver, validate |
 | `brainfile patch` | [Update fields](#patch) on existing tasks |
 :::
@@ -44,7 +44,7 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`template`](#template) | Create from templates |
 | [`tui`](#tui) | Interactive terminal UI |
 | [`hooks`](#hooks) | AI agent hook integration |
-| [`complete`](#complete) | Complete a task (move to logs/) |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
 | [`contract`](#contract) | Manage agent-to-agent contracts |
 | [`adr`](#adr) | ADR lifecycle management |
 | [`rules`](#rules) | Manage project rules |
@@ -388,7 +388,7 @@ brainfile hooks uninstall claude-code --scope all
 
 ## complete
 
-Complete a task — moves it from `board/` to `logs/`.
+Complete a task — appends a record to `ledger.jsonl` and moves it from `board/` to `logs/`.
 
 ::: tip Board Hygiene
 `complete` archives finished work to `logs/`, keeping your active board clean. Use `--force` for epics with remaining child tasks.
@@ -633,7 +633,7 @@ brainfile mcp --file ./project/brainfile.md
 | `move_task` | Move task between columns |
 | `patch_task` | Update task fields |
 | `delete_task` | Permanently delete a task |
-| `complete_task` | Complete a task (move from `board/` to `logs/`) |
+| `complete_task` | Complete a task (append to `ledger.jsonl` and archive) |
 
 *Bulk Operations:*
 

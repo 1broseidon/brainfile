@@ -70,7 +70,7 @@ brainfile contract validate --task task-42
 - `-t, --task <id>` - Task ID (required)
 
 **Outcomes:**
-- **Success**: Sets status to `done`. Use `brainfile complete -t task-42` to move to logs/.
+- **Success**: Sets status to `done`. Use `brainfile complete -t task-42` to append to `ledger.jsonl` and archive.
 - **Failure**: Sets status to `failed`, adds command output to `contract.feedback`.
 
 ---

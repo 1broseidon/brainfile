@@ -5,7 +5,7 @@
 ## Quick Facts
 
 - Format: YAML frontmatter + Markdown, one file per task
-- Structure: `.brainfile/brainfile.md` (config), `.brainfile/board/` (active tasks), `.brainfile/logs/` (completed)
+- Structure: `.brainfile/brainfile.md` (config), `.brainfile/board/` (active tasks), `.brainfile/logs/` (completed history with `ledger.jsonl`)
 - Document types: task, epic, adr (enforced by strict mode)
 - License: MIT
 - Schema: https://brainfile.md/v2
@@ -19,7 +19,9 @@
 │   ├── task-1.md
 │   ├── epic-1.md
 │   └── adr-1.md
-└── logs/               # Completed tasks (moved here on completion)
+└── logs/               # Completed history
+    ├── ledger.jsonl    # Primary completion record
+    └── task-2.md       # (legacy) Archived task
 ```
 
 ## Task File Format
@@ -95,7 +97,7 @@ brainfile show --task task-1                      # view task details
 brainfile add --title "Task name"                 # create task
 brainfile add --title "Fix bug" -p high --tags bug  # with metadata
 brainfile move --task task-1 --column in-progress # move between columns
-brainfile complete --task task-1                  # done (moves to logs/)
+brainfile complete --task task-1                  # done (appends to ledger.jsonl and archives)
 brainfile patch --task task-1 -p critical         # update fields
 brainfile subtask --add "Write tests" --task task-1   # add subtask
 brainfile subtask --toggle sub-1 --task task-1    # toggle completion
@@ -198,7 +200,7 @@ Rules are injected into agent context automatically via MCP.
 - Preserve all task IDs (never regenerate them)
 - Keep relatedFiles updated so agents have context
 - Include validation commands in contracts for automated verification
-- Complete tasks with `brainfile complete` (moves to logs/, preserves history)
+- Complete tasks with `brainfile complete` (appends to `ledger.jsonl` and archives)
 
 ## References
 

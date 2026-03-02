@@ -172,7 +172,7 @@ brainfile show -t {id}
 brainfile list --contract ready
 brainfile list --contract delivered
 
-# Complete task (moves to logs/)
+# Complete task (appends to ledger.jsonl and archives)
 brainfile complete -t {id}
 ```
 

@@ -51,7 +51,7 @@ brainfile move --task task-1 --column in-progress
 # Update task priority
 brainfile patch --task task-1 --priority critical
 
-# Complete task (moves from board/ to logs/)
+# Complete task (appends to ledger.jsonl and archives)
 brainfile complete --task task-1
 ```
 

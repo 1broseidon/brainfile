@@ -30,14 +30,14 @@ brainfile init
 This creates the `.brainfile/` directory with:
 - `.brainfile/brainfile.md` — Board configuration (columns, types, rules)
 - `.brainfile/board/` — Active task files
-- `.brainfile/logs/` — Completed task archive
+- `.brainfile/logs/` — Completion history (`ledger.jsonl`) and archives
 
-```
+`
 .brainfile/
 ├── brainfile.md    ← Board config (columns, types, rules)
 ├── board/          ← Active task files go here
-└── logs/           ← Completed tasks archived here
-```
+└── logs/           ← Completed history (ledger and archived files)
+`
 
 <ArchitectureDiagram />
 
@@ -58,7 +58,7 @@ Navigate with keyboard: `TAB` for columns, `j`/`k` for tasks, `Enter` to expand,
 brainfile list                              # See all tasks
 brainfile add --title "My first task"       # Add a task
 brainfile move --task task-1 --column in-progress  # Move columns
-brainfile complete --task task-1            # Complete (moves to logs/)
+brainfile complete --task task-1            # Complete (appends to ledger.jsonl and archives)
 ```
 :::
 

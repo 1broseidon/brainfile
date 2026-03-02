@@ -58,7 +58,7 @@ npx @brainfile/cli add --title "New task"
    ```bash
    brainfile init
    ```
-   This creates `.brainfile/` with `brainfile.md`, `board/`, and `logs/`.
+   This creates `.brainfile/` with `brainfile.md`, `board/`, and `logs/` (completion history).
 
 3. **List your tasks:**
    ```bash

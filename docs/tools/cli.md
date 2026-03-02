@@ -91,7 +91,7 @@ The TUI watches your file for changes — edits from your editor or AI assistant
 brainfile init
 ```
 
-Creates `.brainfile/` directory with `brainfile.md` config, `board/`, and `logs/`. Default columns: `To Do` and `In Progress`.
+Creates `.brainfile/` directory with `brainfile.md` config, `board/`, and `logs/` (completion history). Default columns: `To Do` and `In Progress`.
 
 ### List Tasks
 
@@ -118,7 +118,7 @@ brainfile move --task task-1 --column in-progress
 ### Complete Tasks
 
 ```bash
-brainfile complete --task task-1   # Moves from board/ to logs/
+brainfile complete --task task-1   # Appends to ledger.jsonl and archives
 ```
 
 ### Update Tasks

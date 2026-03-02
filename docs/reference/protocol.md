@@ -19,8 +19,10 @@ Brainfile v2 uses a directory-based structure:
 ├── board/              # Active task files
 │   ├── task-1.md
 │   └── epic-1.md
-└── logs/               # Completed task files
-    └── task-2.md
+└── logs/               # Completed Documents
+    ├── ledger.jsonl    # Unified event log
+    ├── task-2.md       # (legacy) Completed task
+    └── adr-1.md        # (legacy) Completed ADR
 ```
 
 ### File Discovery
@@ -34,7 +36,7 @@ Brainfile v2 uses a directory-based structure:
 ### Completion
 
 ::: info Completion Model
-Completed tasks are moved from `board/` to `logs/` via `brainfile complete`. There is no "done" column by default — completion is a file-level operation that archives the task.
+Completed tasks are moved from `board/` to `logs/` via `brainfile complete`. Completion appends a JSON record to `logs/ledger.jsonl` and archives the task file.
 :::
 
 <svg viewBox="0 0 420 60" xmlns="http://www.w3.org/2000/svg" style="max-width: 400px; width: 100%; display: block; margin: 1.5em auto;">
@@ -176,7 +178,7 @@ Each task is a standalone `.md` file in `.brainfile/board/`:
 | `id` | string | Yes | Unique ID (pattern: `{type}-N`, e.g., `task-1`, `epic-2`) |
 | `type` | string | No | Document type (default: `task`) |
 | `title` | string | Yes | Task title |
-| `column` | string | Yes* | Column ID (*required for active tasks, omitted in logs/) |
+| `column` | string | Yes* | Column ID (*required for active tasks, omitted in `logs/`) |
 | `description` | string | No | Detailed description (markdown) |
 | `priority` | string | No | `low`, `medium`, `high`, `critical` |
 | `effort` | string | No | `trivial`, `small`, `medium`, `large`, `xlarge` |
@@ -189,7 +191,7 @@ Each task is a standalone `.md` file in `.brainfile/board/`:
 | `contract` | object | No | Agent contract |
 | `createdAt` | string | No | ISO 8601 timestamp |
 | `updatedAt` | string | No | ISO 8601 timestamp, set on mutations |
-| `completedAt` | string | No | Set when moved to logs/ |
+| `completedAt` | string | No | Set when appended to `ledger.jsonl` and archived to `logs/` |
 | `parentId` | string | No | Parent document ID (any type) |
 | `position` | number | No | Sort position within the column |
 
@@ -215,7 +217,7 @@ These IDs are conventional but not required. The default `brainfile init` create
 | `review` | Tasks pending review |
 
 ::: info No default "done" column
-In v2, task completion is handled by moving files from `board/` to `logs/` via `brainfile complete`. A "done" column is not created by default. You can optionally add one with `completionColumn: true` if you want auto-completion behavior.
+In v2, task completion is handled by appending a record to `ledger.jsonl` and moving the file to `logs/` via `brainfile complete`. A "done" column is not created by default. You can optionally add one with `completionColumn: true` if you want auto-completion behavior.
 :::
 
 ---

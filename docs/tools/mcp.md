@@ -79,7 +79,7 @@ Your AI assistant gets access to these operations:
 | `move_task` | Move a task between columns |
 | `patch_task` | Update specific fields on a task |
 | `delete_task` | Permanently delete a task |
-| `complete_task` | Complete a task (move from `board/` to `logs/`) |
+| `complete_task` | Complete a task (append to `ledger.jsonl` and archive) |
 
 ### Bulk Operations
 

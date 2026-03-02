@@ -101,7 +101,7 @@ The lifecycle ensures that work is properly claimed, implemented, and verified.
 | 🔵 `ready` | Contract is available for an agent to claim. | Agent: `contract pickup` |
 | 🟡 `in_progress` | Agent is currently working on the deliverables. | Agent: `contract deliver` |
 | 🟣 `delivered` | Work is complete and awaiting PM review. | PM: `contract validate` |
-| 🟢 `done` | PM has verified and accepted the work. | PM: `brainfile complete` to move to logs/. |
+| 🟢 `done` | PM has verified and accepted the work. | PM: `brainfile complete` to append to `ledger.jsonl` and archive. |
 | 🔴 `failed` | Validation failed. Feedback is provided. | PM: Add feedback, reset to `ready` for rework. |
 | ⚠️ `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
 
@@ -136,7 +136,7 @@ PM agents (usually humans or advanced LLMs) manage the lifecycle:
 2.  **Assign**: Set the `assignee` to the appropriate worker agent.
 3.  **Validate**: Once delivered, run `brainfile contract validate -t task-X`.
 4.  **Result**:
-    - If successful: Status becomes `done`. Run `brainfile complete` to move to logs/.
+    - If successful: Status becomes `done`. Run `brainfile complete` to append to `ledger.jsonl` and archive.
     - If issues found: Status becomes `failed`. Edit task to add feedback and reset status to `ready`.
 
 ::: tip Quick Reference

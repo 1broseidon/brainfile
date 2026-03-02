@@ -15,7 +15,7 @@ const stages: Stage[] = [
   { id: 'plan',     number: '01', label: 'plan',     desc: 'Create contract',    x: 20 },
   { id: 'delegate', number: '02', label: 'delegate',  desc: 'Agent picks up',     x: 175 },
   { id: 'validate', number: '03', label: 'validate',  desc: 'QA review',          x: 330 },
-  { id: 'complete', number: '04', label: 'complete',  desc: 'Move to logs/',      x: 485 },
+  { id: 'complete', number: '04', label: 'complete',  desc: 'Archive to logs/',      x: 485 },
 ]
 </script>
 

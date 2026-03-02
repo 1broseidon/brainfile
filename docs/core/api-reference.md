@@ -537,7 +537,7 @@ Move a task to a different column (updates frontmatter).
 
 ### `completeTaskFile(boardPath, logsDir): void`
 
-Move a task from `board/` to `logs/`, setting `completedAt`.
+Complete a task by appending to `ledger.jsonl` and archiving the file, setting `completedAt`.
 
 ### `appendLog(filePath, message, agent?): void`
 

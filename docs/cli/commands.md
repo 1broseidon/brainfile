@@ -30,7 +30,7 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`hooks`](#hooks) | AI agent hook integration |
 | [`auth`](#auth) | Authenticate with GitHub/Linear |
 | [`config`](#config) | Manage CLI configuration |
-| [`complete`](#complete) | Complete a task (move to logs/) |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
 | [`contract`](#contract) | Manage agent-to-agent contracts |
 | [`adr`](#adr) | ADR lifecycle management |
 | [`rules`](#rules) | Manage project rules |
@@ -54,7 +54,7 @@ brainfile init --force  # Overwrite existing
 This creates:
 - `.brainfile/brainfile.md` — Board config with `todo` and `in-progress` columns
 - `.brainfile/board/` — Directory for active task files
-- `.brainfile/logs/` — Directory for completed task files
+- `.brainfile/logs/` — Directory for completion history (`ledger.jsonl`) and archived files
 
 **Options:**
 - `-f, --file <path>` - Output path (default: `.brainfile/brainfile.md`)
@@ -303,7 +303,7 @@ brainfile template --use feature-request --title "Dark mode"
 
 ## complete
 
-Complete a task — moves it from `.brainfile/board/` to `.brainfile/logs/`.
+Complete a task — appends a record to `.brainfile/logs/ledger.jsonl` and moves the file to `.brainfile/logs/`.
 
 ```bash
 brainfile complete --task task-1
@@ -482,7 +482,7 @@ brainfile adr promote -t adr-1 --category always
 ```
 
 **Subcommands:**
-- `promote` - Promote an ADR to a project rule and move it to logs/
+- `promote` - Promote an ADR to a project rule and archive to `logs/` (with `ledger.jsonl` record)
 
 **Options:**
 - `-t, --task <id>` - ADR task ID (required)

@@ -26,7 +26,7 @@ The source of truth for work should live where the work happens: in the reposito
 :::
 
 ::: info 3. File-System Semantics
-Complex state management is replaced by simple file operations. Moving a file from `board/` to `logs/` is an immutable, searchable, and version-controlled record of completion. This simplicity is the key to scalability and resilience.
+Complex state management is replaced by simple file operations. Appending a record to `logs/ledger.jsonl` and archiving the task file is an immutable, searchable, and version-controlled record of completion. This simplicity is the key to scalability and resilience.
 :::
 
 ::: info 4. Explicit Contracts

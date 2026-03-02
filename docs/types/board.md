@@ -10,7 +10,7 @@ https://brainfile.md/v2/board.json
 
 ## Overview
 
-The board file is **config-only** — it does not contain tasks. Tasks are individual files in `.brainfile/board/` (active) and `.brainfile/logs/` (completed). The board defines:
+The board file is **config-only** — it does not contain tasks. Tasks are individual files in `.brainfile/board/` (active) and `.brainfile/logs/` (completion history). The board defines:
 
 - Workflow columns (stages tasks move through)
 - Document types (task, epic, adr, custom)
@@ -88,7 +88,7 @@ Each type entry supports:
 | Field | Type | Description |
 |-------|------|-------------|
 | `idPrefix` | `string` (required) | Prefix for auto-generated IDs (e.g., `epic` → `epic-1`) |
-| `completable` | `boolean` | Whether items can be completed (moved to `logs/`). Default: `true` |
+| `completable` | `boolean` | Whether items can be completed (appended to `ledger.jsonl` and archived). Default: `true` |
 | `schema` | `string` | JSON Schema URL for validating extended fields |
 
 ### `strict`
@@ -346,7 +346,14 @@ status: active
 
 ### Completed Task (`.brainfile/logs/`)
 
-**`.brainfile/logs/task-2.md`**:
+Completed tasks are primarily recorded in the **`ledger.jsonl`** event log. The original task file is also moved to the `logs/` directory for archival.
+
+**`.brainfile/logs/ledger.jsonl`** (Entry example):
+```json
+{"id":"task-2","type":"task","status":"completed","completedAt":"2025-11-23T16:45:00Z","title":"Set up CI/CD pipeline"}
+```
+
+**`.brainfile/logs/task-2.md`** (legacy archive):
 ```yaml
 ---
 id: task-2

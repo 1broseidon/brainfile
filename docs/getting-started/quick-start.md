@@ -18,7 +18,7 @@ brainfile init
 This creates the `.brainfile/` directory with:
 - `.brainfile/brainfile.md` — Board configuration (columns, types, rules)
 - `.brainfile/board/` — Active task files
-- `.brainfile/logs/` — Completed task archive
+- `.brainfile/logs/` — Completion history (`ledger.jsonl`) and archives
 
 Default columns: `To Do` and `In Progress`.
 
@@ -56,7 +56,7 @@ brainfile move --task task-1 --column in-progress
 # Update a task
 brainfile patch --task task-1 --priority critical
 
-# Complete a task (moves from board/ to logs/)
+# Complete a task (appends to ledger.jsonl and archives)
 brainfile complete --task task-1
 
 # Create from template
@@ -204,7 +204,7 @@ addTaskFile('.brainfile/board/', {
   tags: ['feature']
 });
 
-// Complete a task (moves to logs/)
+// Complete a task (appends to ledger.jsonl and archives file)
 completeTaskFile('.brainfile/board/task-1.md', '.brainfile/logs/');
 ```
 

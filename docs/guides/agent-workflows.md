@@ -88,7 +88,7 @@ brainfile list --contract delivered
 # PM runs automated validation
 brainfile contract validate -t task-105
 
-# If all good, PM completes the task (moves to logs/)
+# If all good, PM completes the task (appends to ledger.jsonl and archives)
 brainfile complete -t task-105
 ```
 

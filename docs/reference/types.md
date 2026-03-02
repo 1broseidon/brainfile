@@ -60,7 +60,7 @@ Only `title` and one `column` are required.
 
 ## Task
 
-Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual `.md` file in `.brainfile/board/` (active) or `.brainfile/logs/` (completed).
+Standalone task documents with YAML frontmatter and optional markdown body. Each task is an individual `.md` file in `.brainfile/board/` (active) or `.brainfile/logs/` (completion history).
 
 ```yaml
 ---

@@ -15,7 +15,7 @@ npm install @brainfile/core
 
 ## Features
 
-- **v2 File Operations** - Read, write, add, move, and complete individual task files in `board/` and `logs/`
+- **v2 File Operations** - Read, write, add, move, and complete individual task files in `board/` and `logs/` (with `ledger.jsonl` history)
 - **Board Config** - Parse `brainfile.md` configuration (columns, types, rules)
 - **Type Validation** - Strict mode type/column validation via `getBoardTypes`, `validateType`, `validateColumn`
 - **Parse & Serialize** - Convert markdown files into structured Board objects and back
