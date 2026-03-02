@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v2/ledger-record.json",
+  "title": "Brainfile Ledger Record Schema",
+  "description": "Schema for a single JSONL ledger record appended when a task is completed. Each line in logs/ledger.jsonl must validate against this object schema.",
+  "type": "object",
+  "required": [
+    "id",
+    "type",
+    "title",
+    "filesChanged",
+    "createdAt",
+    "completedAt",
+    "cycleTimeHours",
+    "summary"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Task identifier (for example: task-1, epic-2, adr-3).",
+      "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
+    },
+    "type": {
+      "type": "string",
+      "description": "Document type for the completed item.",
+      "enum": ["task", "epic", "adr"]
+    },
+    "title": {
+      "type": "string",
+      "description": "Task title at completion time.",
+      "minLength": 1
+    },
+    "columnHistory": {
+      "type": "array",
+      "description": "Ordered list of columns traversed before completion.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Assignee recorded at completion time."
+    },
+    "priority": {
+      "type": "string",
+      "description": "Priority at completion time.",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+    "tags": {
+      "type": "array",
+      "description": "Tag set captured from the task.",
+      "items": { "type": "string" }
+    },
+    "parentId": {
+      "type": "string",
+      "description": "Parent item ID if the task is linked to another document.",
+      "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
+    },
+    "relatedFiles": {
+      "type": "array",
+      "description": "Task-related files from frontmatter context.",
+      "items": { "type": "string" }
+    },
+    "filesChanged": {
+      "type": "array",
+      "description": "Files created or modified while completing the task.",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "deliverables": {
+      "type": "array",
+      "description": "Resolved deliverable paths from task.contract.deliverables.",
+      "items": { "type": "string" }
+    },
+    "contractStatus": {
+      "type": "string",
+      "description": "Final contract status, when a contract exists.",
+      "enum": ["ready", "in_progress", "delivered", "done", "failed", "blocked"]
+    },
+    "validationAttempts": {
+      "type": "integer",
+      "description": "Number of contract validation attempts before completion.",
+      "minimum": 0
+    },
+    "constraints": {
+      "type": "array",
+      "description": "Constraints copied from the contract at completion time.",
+      "items": { "type": "string" }
+    },
+    "createdAt": {
+      "$ref": "https://brainfile.md/v2/base.json#/definitions/timestamp",
+      "description": "When the task was created."
+    },
+    "completedAt": {
+      "$ref": "https://brainfile.md/v2/base.json#/definitions/timestamp",
+      "description": "When the task was completed and recorded in the ledger."
+    },
+    "cycleTimeHours": {
+      "type": "number",
+      "description": "Elapsed time between createdAt and completedAt in hours.",
+      "minimum": 0
+    },
+    "summary": {
+      "type": "string",
+      "description": "Agent-written retrospective for what was completed.",
+      "minLength": 1
+    },
+    "subtasksCompleted": {
+      "type": "integer",
+      "description": "Number of subtasks marked complete at completion time.",
+      "minimum": 0
+    },
+    "subtasksTotal": {
+      "type": "integer",
+      "description": "Total number of subtasks defined at completion time.",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": true
+}

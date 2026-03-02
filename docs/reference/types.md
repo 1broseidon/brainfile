@@ -203,6 +203,7 @@ type: string            # Optional (defaults to board)
 schema: string          # Optional JSON schema URL
 protocolVersion: string # Optional version string
 agent:
+  identity: string      # System prompt identity
   instructions: []
   llmNotes: string
   tools: {}
@@ -213,6 +214,12 @@ rules:
   context: []
 ---
 ```
+
+::: tip Vendor Extensions
+The protocol supports arbitrary vendor extensions using the `x-*` naming convention (e.g., `x-otto: {}`).
+- **Opaque processing**: Internal keys are preserved and never transformed.
+- **Round-tripping**: Unknown fields are guaranteed to survive parse-serialize cycles.
+:::
 
 ::: tip Minimal Base
 ```yaml

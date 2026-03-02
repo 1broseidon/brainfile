@@ -108,16 +108,20 @@ See [AI Agent Integration](/agents/integration) for details.
 
 ---
 
-## Pi Extension (Recommended)
+## Pi Extension (Recommended for Multi-Agent Runs)
 
-For multi-agent orchestration, use the Brainfile extension in [Pi](https://pi.dev/):
+For operator-led PM/worker orchestration in [Pi](https://pi.dev/):
 
-1.  Run `/reload` to activate the extension
-2.  PM session: `/listen role pm` → `/listen on`
-3.  Worker sessions: `/listen role worker` → `/listen on`
-4.  Run `/listen status` to see active workers and run state
+1. Run `/reload` in each session
+2. Start exactly one PM session: `/listen role pm` → `/listen on`
+3. Start worker sessions: `/listen role worker` → `/listen on`
+4. From PM, run `/listen status` to confirm run ID + available workers
 
-See [Pi Extension](/tools/pi) for the full command reference and setup guide.
+Use the [Pi Extension manual](/tools/pi) for:
+- Direct 1:1 dispatch walkthrough
+- Pipeline DAG (`dependsOn`) walkthrough
+- Fan-out/fan-in barrier walkthrough
+- validation/close loops and troubleshooting
 
 ---
 

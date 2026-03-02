@@ -5,10 +5,10 @@ description: Guide for integrating AI agents with Brainfile task management
 
 ## Overview
 
-Brainfile is designed for AI agent compatibility. There are three ways to integrate:
+Brainfile is designed for AI agent compatibility. There are three integration paths:
 
-1. **Pi Extension** — Agent-native integration in [Pi](https://pi.dev/) (recommended)
-2. **MCP Server** — Tool access for Claude/Cursor
+1. **Pi Extension** — Operator manual + orchestration runtime in [Pi](https://pi.dev/) (recommended for multi-agent PM/worker workflows)
+2. **MCP Server** — Tool access for Claude/Cursor and other MCP clients
 3. **Agent Hooks** — Automatic reminders during development
 
 ## MCP Server (Recommended)
@@ -125,6 +125,7 @@ The `agent` block in `.brainfile/brainfile.md` provides explicit instructions:
 
 ```yaml
 agent:
+  identity: "Senior Software Engineer"  # Optional
   instructions:
     - Use CLI or MCP tools for all task operations
     - Preserve all IDs
@@ -136,6 +137,7 @@ agent:
 
 | Instruction | Reason |
 |-------------|--------|
+| `identity` | System prompt identity — who this agent is and how it should behave |
 | Use CLI or MCP tools | Structured operations prevent YAML corruption |
 | Preserve all IDs | Changing IDs breaks references and history |
 | Keep ordering | Maintains visual consistency in UIs |
@@ -282,16 +284,15 @@ brainfile contract deliver -t task-5
 
 ### Pi Extension
 
-The [Pi](https://pi.dev/) extension provides full orchestration for multi-agent workflows:
+The [Pi](https://pi.dev/) extension is the recommended orchestration surface for PM/worker operation:
 
-- **Active Task Context** — The current task and contract are injected into every agent turn.
-- **PM / Worker Roles** — `/listen role <pm|worker|auto>` separates orchestration from execution.
-- **Event Log** — All coordination is recorded in `.brainfile/state/pi-events.jsonl`.
-- **Quiet PM Chat** — The PM is only notified when work is blocked or the run completes.
-- **Worker Presence** — Heartbeat tracking; run `/listen status` to see who's online.
-- **Stable Worker IDs** — Workers get numbered identities (`claude-1`, `codex-2`) via lease-based slot claims.
+- **Role hygiene** — one PM session + worker sessions (`/listen role ...`) with explicit lock-based PM authority.
+- **Bus-first coordination** — realtime notifications trigger listener cycles quickly.
+- **JSONL audit/replay** — `.brainfile/state/pi-events.jsonl` remains the durable run history.
+- **PM-authoritative closure** — workers pick up/deliver; PM validates and closes.
+- **Slot-based worker identity** — workers are `worker-1`, `worker-2`, etc., independent of model swaps.
 
-See [Pi Extension](/tools/pi) for setup, commands, and workflow details.
+See the [Pi Extension manual](/tools/pi) for setup, showcase flows (Direct / Pipeline / Fan-In), and troubleshooting.
 
 ### CLI
 

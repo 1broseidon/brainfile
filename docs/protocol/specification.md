@@ -14,17 +14,20 @@ Brainfile v2 uses a directory-based structure where each task is its own file:
 ```
 .brainfile/
 ├── brainfile.md        # Board Configuration (columns, types, rules)
+├── state.json          # Contract metrics (git-ignored)
 ├── board/              # Active Documents
 │   ├── task-1.md
 │   └── epic-1.md
 └── logs/               # Completed Documents
-    ├── task-2.md
-    └── adr-1.md
+    ├── ledger.jsonl    # Unified event log
+    ├── task-2.md       # (legacy) Completed task
+    └── adr-1.md        # (legacy) Completed ADR
 ```
 
 - **`brainfile.md`** — Configuration only: columns, types, rules, agent instructions. No tasks stored here.
+- **`state.json`** — Ephemeral runtime state and metrics (usually git-ignored).
 - **`board/`** — Active task files (todo, in-progress, etc.)
-- **`logs/`** — Completed task files (permanent history)
+- **`logs/`** — Completed history (ledger and archived task files).
 
 ## File Discovery
 
@@ -61,6 +64,7 @@ types:                      # Custom document types
     idPrefix: adr
     completable: false
 agent:
+  identity: string          # System prompt identity
   instructions: []          # AI agent instructions
   llmNotes: string          # Free-form notes
 rules:
@@ -90,6 +94,7 @@ types:
     idPrefix: adr
     completable: false
 agent:
+  identity: "Senior Developer"
   instructions:
     - "Update task status in real-time"
 rules:
@@ -164,6 +169,18 @@ columns:
 ### completionColumn
 
 When `completionColumn: true`, moving a task to that column triggers auto-completion (file moves from `board/` to `logs/`). This is optional and not set by default.
+
+## Extension Fields
+
+The Brainfile protocol is extensible by design. Both humans and automated tools can add custom fields to any document.
+
+### Vendor Extensions (`x-*`)
+
+To prevent naming collisions with future protocol versions, vendor-specific extensions MUST use the `x-` prefix (e.g., `x-otto`, `x-cursor`).
+
+- **Opaque Processing**: Extension field values are treated as "opaque" — tools must never transform their internal keys or structures.
+- **Round-tripping**: Unknown fields are guaranteed to survive parse → serialize cycles.
+- **Example**: `x-otto: { workspaceId: "123" }`
 
 ## Lifecycle & Behavior
 

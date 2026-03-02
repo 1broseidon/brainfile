@@ -337,6 +337,19 @@ function shouldSuppressCompletedTaskStatusNotification(rt: Rt, parsed: Envelope)
   return status === 'done' || status === 'completed';
 }
 
+function shouldSuppressPmSelfConversationNotification(rt: Rt, parsed: Envelope): boolean {
+  // Internal PM→PM conversational envelopes (for example scheduler claim status)
+  // are useful for audit but should not be surfaced back into the PM LLM stream.
+  if (rt.operatingMode !== 'pm') return false;
+
+  const kind = parsed.kind || parsed.type;
+  if (!kind || !ORCHESTRATION_BATCH_KINDS.has(kind)) return false;
+
+  const from = normalizeAssignee(typeof parsed.from === 'string' ? parsed.from : '');
+  const to = normalizeAssignee(typeof parsed.to === 'string' ? parsed.to : '');
+  return from === 'pm' && to === 'pm';
+}
+
 function formatConversationBatch(messages: PendingConversationMessage[]): string[] {
   const lines: string[] = [`Received ${messages.length} conversational message(s):`];
 
@@ -613,6 +626,9 @@ export function processEventLog(rt: Rt, ctx: ExtensionContext): void {
 
             if (ORCHESTRATION_BATCH_KINDS.has(kind)) {
               if (shouldSuppressCompletedTaskStatusNotification(rt, parsed)) {
+                continue;
+              }
+              if (shouldSuppressPmSelfConversationNotification(rt, parsed)) {
                 continue;
               }
 

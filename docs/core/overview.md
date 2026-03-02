@@ -182,7 +182,7 @@ if (!result.board) {
 ## Used By
 
 - **[@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli)** — CLI with TUI and MCP server
-- **[Pi Extension](/tools/pi)** — Multi-agent orchestration in [Pi](https://pi.dev/)
+- **[Pi Extension](/tools/pi)** — Operator-focused PM/worker orchestration manual and runtime in [Pi](https://pi.dev/)
 - **VSCode extension** — Deprecated; see [VSCode](/tools/vscode) for migration notes
 
 ## Links

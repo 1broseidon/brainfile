@@ -259,6 +259,6 @@ brainfile template --use bug-report --title "Login fails"
 Templates work well in agent-driven workflows:
 
 - Create templated tasks from the CLI: `brainfile template --use bug-report --title "..."`
-- In [Pi](https://pi.dev/), the [Pi Extension](/tools/pi) can delegate templated tasks as contracts to workers.
+- In [Pi](https://pi.dev/), the [Pi Extension manual](/tools/pi) shows how templated tasks fit Direct 1:1, Pipeline DAG, and Fan-In orchestration runs.
 - With the [MCP Server](/tools/mcp), any MCP-compatible agent can create tasks from templates via tool calls.
 

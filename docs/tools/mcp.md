@@ -248,5 +248,5 @@ Hooks provide gentle reminders but don't give the assistant direct control.
 - [CLI Commands](/tools/cli) — Full command reference for manual task management
 - [Protocol Specification](/reference/protocol) — Complete file format and YAML structure specification
 - [Core Library](/tools/core) — Build custom integrations with `@brainfile/core`
-- [Pi Extension](/tools/pi) — Automated multi-agent orchestration with event-sourced coordination
+- [Pi Extension](/tools/pi) — User-focused PM/worker orchestration manual (bus-first realtime + JSONL audit/replay)
 - [Contract Guide](/guides/contracts) — Deep dive into the contract lifecycle and best practices
