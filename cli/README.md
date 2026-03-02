@@ -1,8 +1,6 @@
 # @brainfile/cli
 
-**The official CLI for Brainfile.** Manage tasks, contracts, and ADRs directly from your terminal.
-
-Designed for developers who want a local-first, file-based task management system that plays nicely with AI agents.
+CLI for the [Brainfile](https://brainfile.md) task coordination protocol. Manage tasks, contracts, and ADRs from your terminal. Includes a TUI board view and an MCP server for AI agent integration.
 
 ## Install
 
