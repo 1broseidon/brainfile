@@ -195,6 +195,21 @@ describe('taskOperations', () => {
       expect(doc!.task.parentId).toBe('epic-1');
     });
 
+    it('sets dependsOn when provided', () => {
+      const result = addTaskFile(tasksDir, {
+        title: 'Dependent task',
+        column: 'todo',
+        dependsOn: ['task-1', 'task-2', 'task-1'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.dependsOn).toEqual(['task-1', 'task-2']);
+
+      const doc = readTaskFile(result.filePath!);
+      expect(doc).not.toBeNull();
+      expect(doc!.task.dependsOn).toEqual(['task-1', 'task-2']);
+    });
+
     it('fails with empty title', () => {
       const result = addTaskFile(tasksDir, { title: '', column: 'todo' });
       expect(result.success).toBe(false);
@@ -390,8 +405,16 @@ describe('taskOperations', () => {
   });
 
   describe('completeTaskFile', () => {
-    it('moves task from tasks/ to logs/', () => {
-      const filePath = seedTask('task-1', 'done');
+    it('appends to ledger and removes active task file by default', () => {
+      const filePath = seedTask(
+        'task-1',
+        'done',
+        {
+          createdAt: '2026-01-01T00:00:00.000Z',
+          relatedFiles: ['src/app.ts'],
+        },
+        '## Summary\nImplemented the final piece.\n',
+      );
 
       const result = completeTaskFile(filePath, logsDir);
 
@@ -399,31 +422,46 @@ describe('taskOperations', () => {
       expect(result.task!.completedAt).toBeDefined();
       expect(result.task!.column).toBeUndefined();
       expect(result.task!.position).toBeUndefined();
-
-      // Original file should be removed
       expect(fs.existsSync(filePath)).toBe(false);
 
-      // New file should exist in logs/
-      const logPath = path.join(logsDir, 'task-1.md');
-      expect(fs.existsSync(logPath)).toBe(true);
-      expect(result.filePath).toBe(logPath);
+      const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+      expect(result.filePath).toBe(ledgerPath);
+      expect(fs.existsSync(ledgerPath)).toBe(true);
+
+      const lines = fs.readFileSync(ledgerPath, 'utf-8').trim().split('\n');
+      expect(lines).toHaveLength(1);
+      const record = JSON.parse(lines[0]);
+      expect(record.id).toBe('task-1');
+      expect(record.filesChanged).toContain('src/app.ts');
+      expect(record.summary).toBe('Implemented the final piece.');
     });
 
-    it('preserves body when completing', () => {
+    it('creates logs directory if missing (ledger mode)', () => {
+      const newLogsDir = path.join(testDir, 'new-logs');
+      const filePath = seedTask('task-1', 'done');
+
+      const result = completeTaskFile(filePath, newLogsDir);
+
+      expect(result.success).toBe(true);
+      expect(fs.existsSync(path.join(newLogsDir, 'ledger.jsonl'))).toBe(true);
+    });
+
+    it('supports legacy mode by moving markdown file to logs/', () => {
       const filePath = seedTask('task-1', 'done', {}, '## Log\n- Started work\n');
 
-      completeTaskFile(filePath, logsDir);
+      completeTaskFile(filePath, logsDir, { legacyMode: true });
 
       const doc = readTaskFile(path.join(logsDir, 'task-1.md'));
+      expect(doc).not.toBeNull();
       expect(doc!.body).toContain('## Log');
       expect(doc!.body).toContain('Started work');
     });
 
-    it('fails when destination log file already exists and does not overwrite it', () => {
+    it('fails in legacy mode when destination log file already exists', () => {
       const filePath = seedTask('task-1', 'done', { title: 'Active task' });
       seedLogTask('task-1', { title: 'Existing log entry' });
 
-      const result = completeTaskFile(filePath, logsDir);
+      const result = completeTaskFile(filePath, logsDir, { legacyMode: true });
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('already exists in logs');
@@ -437,14 +475,14 @@ describe('taskOperations', () => {
       expect(logDoc!.task.title).toBe('Existing log entry');
     });
 
-    it('prefers parentId-linked children in epic completion summary', () => {
+    it('keeps legacy epic child summary behavior behind legacy mode', () => {
       seedTask('task-10', 'todo', { title: 'Linked child', parentId: 'epic-1' });
       const epicPath = seedTask('epic-1', 'done', {
         type: 'epic',
         subtasks: [{ id: 'task-999', title: 'stale ref', completed: false }],
       });
 
-      const result = completeTaskFile(epicPath, logsDir);
+      const result = completeTaskFile(epicPath, logsDir, { legacyMode: true });
       expect(result.success).toBe(true);
 
       const doc = readTaskFile(path.join(logsDir, 'epic-1.md'));
@@ -452,16 +490,6 @@ describe('taskOperations', () => {
       expect(doc!.body).toContain('## Child Tasks');
       expect(doc!.body).toContain('- task-10: Linked child');
       expect(doc!.body).not.toContain('stale ref');
-    });
-
-    it('creates logs directory if missing', () => {
-      const newLogsDir = path.join(testDir, 'new-logs');
-      const filePath = seedTask('task-1', 'done');
-
-      const result = completeTaskFile(filePath, newLogsDir);
-
-      expect(result.success).toBe(true);
-      expect(fs.existsSync(path.join(newLogsDir, 'task-1.md'))).toBe(true);
     });
 
     it('fails for non-existent file', () => {

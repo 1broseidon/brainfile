@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Task, TaskDocument } from './types';
 import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, serializeTaskContent } from './taskFile';
+import { appendLedgerRecord, buildLedgerRecord } from './ledger';
 
 /**
  * Result of a file-based task operation
@@ -41,6 +42,8 @@ export interface TaskFileInput {
   subtasks?: string[];
   /** Optional parent task/document ID for first-class parent-child linking. */
   parentId?: string;
+  /** Task IDs that must be completed before this task can run. */
+  dependsOn?: string[];
   /** Document type (e.g., 'epic', 'adr'). When set, IDs use this as prefix (epic-1, adr-1). */
   type?: string;
 }
@@ -56,9 +59,27 @@ export interface TaskFilters {
   parentId?: string;
 }
 
+export interface CompleteTaskFileOptions {
+  /** Keep legacy behavior: move completed task markdown file into logs/. */
+  legacyMode?: boolean;
+  summary?: string;
+  filesChanged?: string[];
+  columnHistory?: string[];
+  validationAttempts?: number;
+}
+
 interface ChildTaskSummary {
   id: string;
   title: string;
+}
+
+function normalizeTaskDependencyIds(values?: string[]): string[] | undefined {
+  if (!Array.isArray(values)) {
+    return undefined;
+  }
+
+  const deps = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+  return deps.length > 0 ? deps : undefined;
 }
 
 function appendBodySection(body: string, section: string): string {
@@ -144,6 +165,65 @@ function writeTaskFileExclusive(filePath: string, task: Task, body: string): voi
   fs.mkdirSync(dir, { recursive: true });
   const content = serializeTaskContent(task, body);
   fs.writeFileSync(filePath, content, { encoding: 'utf-8', flag: 'wx' });
+}
+
+function rollbackLedgerAppend(logsDir: string, appendedRecord: ReturnType<typeof buildLedgerRecord>): void {
+  const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+  const appendedLine = `${JSON.stringify(appendedRecord)}\n`;
+  const appendedBytes = Buffer.byteLength(appendedLine, 'utf-8');
+
+  try {
+    const stat = fs.statSync(ledgerPath);
+    const newSize = stat.size - appendedBytes;
+    if (newSize >= 0) {
+      fs.truncateSync(ledgerPath, newSize);
+    }
+  } catch {
+    // Best effort rollback only.
+  }
+}
+
+function completeTaskFileLegacy(
+  taskPath: string,
+  logsDir: string,
+  doc: TaskDocument,
+  completedTask: Task,
+): TaskOperationResult {
+  const baseName = path.basename(taskPath);
+  const destPath = path.join(logsDir, baseName);
+  let completedBody = doc.body;
+
+  if (doc.task.type === 'epic') {
+    const boardDir = path.dirname(taskPath);
+    const childIds = extractEpicChildTaskIds(doc.task);
+    const childTasks = resolveChildTasks(doc.task.id, childIds, boardDir, logsDir);
+    const childTasksSection = buildChildTasksSection(childTasks);
+    completedBody = appendBodySection(doc.body, childTasksSection);
+  }
+
+  if (fs.existsSync(destPath)) {
+    return { success: false, error: `Task already exists in logs: ${doc.task.id}` };
+  }
+
+  try {
+    fs.mkdirSync(logsDir, { recursive: true });
+    writeTaskFileExclusive(destPath, completedTask, completedBody);
+  } catch (err) {
+    return { success: false, error: `Failed to complete task: ${err}` };
+  }
+
+  try {
+    fs.unlinkSync(taskPath);
+    return { success: true, task: completedTask, filePath: destPath };
+  } catch (err) {
+    // Roll back the new log file to avoid duplicated active/completed copies.
+    try {
+      fs.unlinkSync(destPath);
+    } catch {
+      // Best effort rollback.
+    }
+    return { success: false, error: `Failed to finalize completion: ${err}` };
+  }
 }
 
 /**
@@ -232,6 +312,7 @@ export function addTaskFile(
       ...(input.relatedFiles && input.relatedFiles.length > 0 && { relatedFiles: input.relatedFiles }),
       ...(input.template && { template: input.template }),
       ...(input.parentId && input.parentId.trim().length > 0 && { parentId: input.parentId.trim() }),
+      ...(normalizeTaskDependencyIds(input.dependsOn) && { dependsOn: normalizeTaskDependencyIds(input.dependsOn)! }),
       ...(subtasks && subtasks.length > 0 && { subtasks }),
       createdAt: now,
     };
@@ -299,15 +380,18 @@ export function moveTaskFile(
 }
 
 /**
- * Complete a task by moving its file from board/ to logs/ and adding completedAt.
+ * Complete a task by appending to `logs/ledger.jsonl` and removing board file.
+ * Legacy mode can still move markdown files into logs/.
  *
  * @param taskPath - Absolute path to the task file in board/
  * @param logsDir - Absolute path to the logs directory
+ * @param options - Optional completion behavior and ledger details
  * @returns TaskOperationResult with the completed task
  */
 export function completeTaskFile(
   taskPath: string,
   logsDir: string,
+  options: CompleteTaskFileOptions = {},
 ): TaskOperationResult {
   const doc = readTaskFile(taskPath);
   if (!doc) {
@@ -324,39 +408,30 @@ export function completeTaskFile(
     updatedAt: now,
   };
 
-  const baseName = path.basename(taskPath);
-  const destPath = path.join(logsDir, baseName);
-  let completedBody = doc.body;
-
-  if (doc.task.type === 'epic') {
-    const boardDir = path.dirname(taskPath);
-    const childIds = extractEpicChildTaskIds(doc.task);
-    const childTasks = resolveChildTasks(doc.task.id, childIds, boardDir, logsDir);
-    const childTasksSection = buildChildTasksSection(childTasks);
-    completedBody = appendBodySection(doc.body, childTasksSection);
+  if (options.legacyMode) {
+    return completeTaskFileLegacy(taskPath, logsDir, doc, completedTask);
   }
 
-  if (fs.existsSync(destPath)) {
-    return { success: false, error: `Task already exists in logs: ${doc.task.id}` };
-  }
+  const record = buildLedgerRecord(completedTask, doc.body, {
+    summary: options.summary,
+    filesChanged: options.filesChanged,
+    completedAt: now,
+    columnHistory: options.columnHistory,
+    validationAttempts: options.validationAttempts,
+  });
 
+  let ledgerPath: string;
   try {
-    fs.mkdirSync(logsDir, { recursive: true });
-    writeTaskFileExclusive(destPath, completedTask, completedBody);
+    ledgerPath = appendLedgerRecord(logsDir, record);
   } catch (err) {
-    return { success: false, error: `Failed to complete task: ${err}` };
+    return { success: false, error: `Failed to append ledger record: ${err}` };
   }
 
   try {
     fs.unlinkSync(taskPath);
-    return { success: true, task: completedTask, filePath: destPath };
+    return { success: true, task: completedTask, filePath: ledgerPath };
   } catch (err) {
-    // Roll back the new log file to avoid duplicated active/completed copies.
-    try {
-      fs.unlinkSync(destPath);
-    } catch {
-      // Best effort rollback.
-    }
+    rollbackLedgerAppend(logsDir, record);
     return { success: false, error: `Failed to finalize completion: ${err}` };
   }
 }

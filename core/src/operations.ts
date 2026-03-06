@@ -18,6 +18,7 @@ export interface TaskInput {
   description?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
   tags?: string[];
+  blockedBy?: string[];
   assignee?: string;
   dueDate?: string;
   relatedFiles?: string[];
@@ -34,6 +35,7 @@ export interface TaskPatch {
   description?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical' | null; // null to remove
   tags?: string[] | null;
+  blockedBy?: string[] | null;
   assignee?: string | null;
   dueDate?: string | null;
   relatedFiles?: string[] | null;
@@ -156,6 +158,7 @@ export function addTask(
     ...(input.description && { description: input.description.trim() }),
     ...(input.priority && { priority: input.priority }),
     ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
+    ...(input.blockedBy && input.blockedBy.length > 0 && { blockedBy: input.blockedBy }),
     ...(input.assignee && { assignee: input.assignee }),
     ...(input.dueDate && { dueDate: input.dueDate }),
     ...(input.relatedFiles && input.relatedFiles.length > 0 && { relatedFiles: input.relatedFiles }),
@@ -431,6 +434,13 @@ export function patchTask(
       delete updatedTask.tags;
     } else {
       updatedTask.tags = patch.tags;
+    }
+  }
+  if (patch.blockedBy !== undefined) {
+    if (patch.blockedBy === null || patch.blockedBy.length === 0) {
+      delete updatedTask.blockedBy;
+    } else {
+      updatedTask.blockedBy = patch.blockedBy;
     }
   }
   if (patch.assignee !== undefined) {

@@ -104,10 +104,10 @@ export class BrainfileValidator {
       errors.push({ path: `${path}.title`, message: 'Column title must be a non-empty string' });
     }
 
-    // Validate tasks
-    if (!Array.isArray(column.tasks)) {
+    // Validate tasks (undefined is valid in v2 config-only columns)
+    if (column.tasks !== undefined && !Array.isArray(column.tasks)) {
       errors.push({ path: `${path}.tasks`, message: 'Column tasks must be an array' });
-    } else {
+    } else if (Array.isArray(column.tasks)) {
       column.tasks.forEach((task: any, index: number) => {
         const taskErrors = this.validateTask(task, `${path}.tasks[${index}]`);
         errors.push(...taskErrors);

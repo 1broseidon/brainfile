@@ -82,12 +82,16 @@ export interface Task {
   title: string;
   /** Optional parent task/document ID for first-class parent-child linking. */
   parentId?: string;
+  /** Task IDs that must be completed before this task's contract can auto-activate or dispatch. */
+  dependsOn?: string[];
   /** Document type (e.g., 'epic', 'adr', 'bug'). Determines ID prefix when generating IDs. */
   type?: string;
   description?: string;
   relatedFiles?: string[];
   assignee?: string;
   tags?: string[];
+  /** Task IDs that must be completed before this task can run. */
+  blockedBy?: string[];
   priority?: 'low' | 'medium' | 'high' | 'critical';
   dueDate?: string;
   subtasks?: Subtask[];

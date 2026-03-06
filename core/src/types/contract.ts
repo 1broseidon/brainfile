@@ -17,6 +17,9 @@ export const CONTRACT_STATUSES = {
   DELIVERED: 'delivered',
   DONE: 'done',
   FAILED: 'failed',
+  REWORKING: 'reworking',
+  BLOCKED: 'blocked',
+  CANCELLED: 'cancelled',
 } as const;
 
 export type ContractStatus = typeof CONTRACT_STATUSES[keyof typeof CONTRACT_STATUSES];
@@ -79,5 +82,8 @@ export interface Contract {
   constraints?: string[];
   context?: ContractContext;
   metrics?: ContractMetrics;
+  /** Optional agent feedback from failed validation/review loops */
+  feedback?: string;
+  /** Maximum automatic validation retry attempts before failing */
+  maxRetries?: number;
 }
-

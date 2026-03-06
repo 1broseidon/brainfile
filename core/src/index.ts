@@ -235,6 +235,14 @@ export {
   isLedgerContractStatus,
 } from './ledger';
 
+// Export task dependency graph utilities
+export {
+  type DependencyGraphNode,
+  MissingDependencyError,
+  DependencyCycleError,
+  topologicalSort,
+} from './graph';
+
 // Export v2 workspace helpers (directory detection, board reconstruction, body helpers)
 export {
   type V2Dirs,
