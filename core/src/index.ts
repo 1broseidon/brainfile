@@ -211,6 +211,10 @@ export {
   type TaskFileInput,
   type TaskFilters,
   type CompleteTaskFileOptions,
+  type ContractTransitionOptions,
+  type ContractTransitionWithFeedbackOptions,
+  type CompleteContractOptions,
+  DEFAULT_CONTRACT_COLUMN_MAP,
   generateNextFileTaskId,
   addTaskFile,
   moveTaskFile,
@@ -221,6 +225,12 @@ export {
   findTask,
   searchTaskFiles,
   searchLogs,
+  // Compound contract + column operations
+  pickupTaskContract,
+  deliverTaskContract,
+  completeTaskContract,
+  failTaskContract,
+  getEffectiveState,
 } from './taskOperations';
 
 // Export ledger helpers (append-only JSONL completion history)

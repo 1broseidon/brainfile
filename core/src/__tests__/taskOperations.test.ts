@@ -12,9 +12,16 @@ import {
   searchTaskFiles,
   searchLogs,
   generateNextFileTaskId,
+  pickupTaskContract,
+  deliverTaskContract,
+  completeTaskContract,
+  failTaskContract,
+  getEffectiveState,
+  DEFAULT_CONTRACT_COLUMN_MAP,
 } from '../taskOperations';
 import { writeTaskFile, readTaskFile } from '../taskFile';
 import type { Task } from '../types';
+import type { Contract } from '../types/contract';
 
 describe('taskOperations', () => {
   let testDir: string;
@@ -762,6 +769,264 @@ describe('taskOperations', () => {
 
     it('returns empty for non-existent directory', () => {
       expect(searchLogs(path.join(testDir, 'nope'), 'test')).toEqual([]);
+    });
+  });
+
+  // ==========================================================================
+  // Compound contract + column operations
+  // ==========================================================================
+
+  const makeContract = (overrides?: Partial<Contract>): Contract => ({
+    status: 'ready',
+    deliverables: [{ type: 'file', path: 'src/feature.ts' }],
+    ...overrides,
+  });
+
+  const seedContractTask = (
+    id: string,
+    column: string,
+    contractOverrides?: Partial<Contract>,
+    taskOverrides?: Partial<Task>,
+  ) => {
+    return seedTask(id, column, {
+      contract: makeContract(contractOverrides),
+      ...taskOverrides,
+    });
+  };
+
+  describe('pickupTaskContract', () => {
+    it('sets contract status to in_progress and moves column to in-progress', () => {
+      const filePath = seedContractTask('task-1', 'todo');
+
+      const result = pickupTaskContract(filePath);
+
+      expect(result.success).toBe(true);
+      expect(result.task!.contract!.status).toBe('in_progress');
+      expect(result.task!.column).toBe('in-progress');
+      expect(result.task!.contract!.metrics?.pickedUpAt).toBeDefined();
+      expect(result.task!.contract!.metrics?.reworkCount).toBe(0);
+    });
+
+    it('writes changes to disk', () => {
+      const filePath = seedContractTask('task-1', 'todo');
+
+      pickupTaskContract(filePath);
+
+      const doc = readTaskFile(filePath);
+      expect(doc!.task.contract!.status).toBe('in_progress');
+      expect(doc!.task.column).toBe('in-progress');
+    });
+
+    it('respects custom column override', () => {
+      const filePath = seedContractTask('task-1', 'todo');
+
+      const result = pickupTaskContract(filePath, { column: 'active' });
+
+      expect(result.task!.column).toBe('active');
+    });
+
+    it('skips column sync when column=false', () => {
+      const filePath = seedContractTask('task-1', 'backlog');
+
+      const result = pickupTaskContract(filePath, { column: false });
+
+      expect(result.task!.column).toBe('backlog');
+      expect(result.task!.contract!.status).toBe('in_progress');
+    });
+
+    it('fails when task has no contract', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      const result = pickupTaskContract(filePath);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('no contract');
+    });
+
+    it('increments reworkCount on subsequent pickups', () => {
+      const filePath = seedContractTask('task-1', 'todo', {
+        metrics: { reworkCount: 2, pickedUpAt: '2025-01-01T00:00:00Z' },
+      });
+
+      const result = pickupTaskContract(filePath);
+
+      expect(result.task!.contract!.metrics?.reworkCount).toBe(3);
+    });
+  });
+
+  describe('deliverTaskContract', () => {
+    it('sets contract status to delivered and moves column to review', () => {
+      const filePath = seedContractTask('task-1', 'in-progress', {
+        status: 'in_progress',
+        metrics: { pickedUpAt: '2025-01-01T00:00:00.000Z' },
+      });
+
+      const result = deliverTaskContract(filePath);
+
+      expect(result.success).toBe(true);
+      expect(result.task!.contract!.status).toBe('delivered');
+      expect(result.task!.column).toBe('review');
+      expect(result.task!.contract!.metrics?.deliveredAt).toBeDefined();
+      expect(result.task!.contract!.metrics?.duration).toBeGreaterThanOrEqual(0);
+    });
+
+    it('respects custom column override', () => {
+      const filePath = seedContractTask('task-1', 'in-progress', { status: 'in_progress' });
+
+      const result = deliverTaskContract(filePath, { column: 'delivered' });
+
+      expect(result.task!.column).toBe('delivered');
+    });
+
+    it('skips column sync when column=false', () => {
+      const filePath = seedContractTask('task-1', 'in-progress', { status: 'in_progress' });
+
+      const result = deliverTaskContract(filePath, { column: false });
+
+      expect(result.task!.column).toBe('in-progress');
+      expect(result.task!.contract!.status).toBe('delivered');
+    });
+
+    it('fails when task has no contract', () => {
+      const filePath = seedTask('task-1', 'in-progress');
+
+      const result = deliverTaskContract(filePath);
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('completeTaskContract', () => {
+    it('sets contract to done and archives task to logs', () => {
+      const filePath = seedContractTask('task-1', 'review', {
+        status: 'delivered',
+        metrics: { pickedUpAt: '2025-01-01T00:00:00.000Z', deliveredAt: '2025-01-01T01:00:00.000Z' },
+      });
+
+      const result = completeTaskContract(filePath, logsDir);
+
+      expect(result.success).toBe(true);
+      expect(result.task!.contract!.status).toBe('done');
+      expect(result.task!.completedAt).toBeDefined();
+      // Task file should be removed from board
+      expect(fs.existsSync(filePath)).toBe(false);
+      // Ledger should have an entry
+      const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+      expect(fs.existsSync(ledgerPath)).toBe(true);
+    });
+
+    it('fails when task has no contract', () => {
+      const filePath = seedTask('task-1', 'review');
+
+      const result = completeTaskContract(filePath, logsDir);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('no contract');
+    });
+
+    it('computes duration from metrics', () => {
+      const filePath = seedContractTask('task-1', 'review', {
+        status: 'delivered',
+        metrics: { pickedUpAt: '2025-01-01T00:00:00.000Z', deliveredAt: '2025-01-01T01:00:00.000Z' },
+      });
+
+      const result = completeTaskContract(filePath, logsDir);
+
+      expect(result.task!.contract!.metrics?.duration).toBe(3600);
+    });
+  });
+
+  describe('failTaskContract', () => {
+    it('sets contract status to failed with feedback', () => {
+      const filePath = seedContractTask('task-1', 'in-progress', { status: 'in_progress' });
+
+      const result = failTaskContract(filePath, 'Tests failing in auth.test.ts');
+
+      expect(result.success).toBe(true);
+      expect(result.task!.contract!.status).toBe('failed');
+      expect(result.task!.contract!.feedback).toBe('Tests failing in auth.test.ts');
+    });
+
+    it('does not move column by default (no mapping for failed)', () => {
+      const filePath = seedContractTask('task-1', 'in-progress', { status: 'in_progress' });
+
+      const result = failTaskContract(filePath, 'Oops');
+
+      // 'failed' is not in DEFAULT_CONTRACT_COLUMN_MAP, so column stays
+      expect(result.task!.column).toBe('in-progress');
+    });
+
+    it('moves column when explicitly specified', () => {
+      const filePath = seedContractTask('task-1', 'in-progress', { status: 'in_progress' });
+
+      const result = failTaskContract(filePath, 'Oops', { column: 'blocked' });
+
+      expect(result.task!.column).toBe('blocked');
+    });
+
+    it('fails when task has no contract', () => {
+      const filePath = seedTask('task-1', 'in-progress');
+
+      const result = failTaskContract(filePath, 'Oops');
+
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe('getEffectiveState', () => {
+    it('returns contract status when contract exists', () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test',
+        column: 'todo',
+        contract: { status: 'in_progress' },
+      };
+
+      expect(getEffectiveState(task)).toBe('in_progress');
+    });
+
+    it('returns completed when task has completedAt but no contract', () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test',
+        completedAt: '2025-01-01T00:00:00Z',
+      };
+
+      expect(getEffectiveState(task)).toBe('completed');
+    });
+
+    it('returns column when no contract and not completed', () => {
+      const task: Task = {
+        id: 'task-1',
+        title: 'Test',
+        column: 'in-progress',
+      };
+
+      expect(getEffectiveState(task)).toBe('in-progress');
+    });
+
+    it('returns unknown when no column, no contract, not completed', () => {
+      const task: Task = { id: 'task-1', title: 'Test' };
+
+      expect(getEffectiveState(task)).toBe('unknown');
+    });
+  });
+
+  describe('DEFAULT_CONTRACT_COLUMN_MAP', () => {
+    it('maps in_progress to in-progress', () => {
+      expect(DEFAULT_CONTRACT_COLUMN_MAP['in_progress']).toBe('in-progress');
+    });
+
+    it('maps delivered to review', () => {
+      expect(DEFAULT_CONTRACT_COLUMN_MAP['delivered']).toBe('review');
+    });
+
+    it('maps blocked to blocked', () => {
+      expect(DEFAULT_CONTRACT_COLUMN_MAP['blocked']).toBe('blocked');
+    });
+
+    it('does not map failed (intentional — no default column for failures)', () => {
+      expect(DEFAULT_CONTRACT_COLUMN_MAP['failed']).toBeUndefined();
     });
   });
 });

@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Task, TaskDocument } from './types';
+import type { Contract, ContractStatus, ContractMetrics } from './types/contract';
 import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, serializeTaskContent } from './taskFile';
 import { appendLedgerRecord, buildLedgerRecord } from './ledger';
 
@@ -625,4 +626,254 @@ export function searchLogs(
   query: string,
 ): TaskDocument[] {
   return searchTaskFiles(logsDir, query);
+}
+
+// ============================================================================
+// Compound contract + column operations
+// ============================================================================
+
+/**
+ * Default mapping from contract status to column ID.
+ * Pass `column` option to override per-call, or `false` to skip column sync.
+ */
+export const DEFAULT_CONTRACT_COLUMN_MAP: Readonly<Record<string, string>> = {
+  in_progress: 'in-progress',
+  delivered: 'review',
+  blocked: 'blocked',
+};
+
+export interface ContractTransitionOptions {
+  /** Override target column ID, or `false` to skip column sync entirely. */
+  column?: string | false;
+}
+
+export interface ContractTransitionWithFeedbackOptions extends ContractTransitionOptions {
+  feedback?: string;
+}
+
+export interface CompleteContractOptions extends CompleteTaskFileOptions {
+  /** Override target column, or `false` to skip column sync (task is archived regardless). */
+  column?: string | false;
+}
+
+function resolveColumn(
+  contractStatus: string,
+  options?: ContractTransitionOptions,
+): string | undefined {
+  if (options?.column === false) return undefined;
+  if (typeof options?.column === 'string') return options.column;
+  return DEFAULT_CONTRACT_COLUMN_MAP[contractStatus];
+}
+
+function applyPickupMetrics(contract: Contract, now: string): void {
+  const metrics: ContractMetrics = { ...(contract.metrics ?? {}) };
+  metrics.pickedUpAt = now;
+  if (typeof metrics.reworkCount === 'number' && Number.isFinite(metrics.reworkCount)) {
+    metrics.reworkCount = Math.max(0, Math.round(metrics.reworkCount)) + 1;
+  } else {
+    metrics.reworkCount = 0;
+  }
+  contract.metrics = metrics;
+}
+
+function applyDeliverMetrics(contract: Contract, now: string): void {
+  const metrics: ContractMetrics = { ...(contract.metrics ?? {}) };
+  metrics.deliveredAt = now;
+  if (typeof metrics.pickedUpAt === 'string') {
+    const pickedUpMs = Date.parse(metrics.pickedUpAt);
+    const deliveredMs = Date.parse(now);
+    if (Number.isFinite(pickedUpMs) && Number.isFinite(deliveredMs)) {
+      metrics.duration = Math.max(0, Math.round((deliveredMs - pickedUpMs) / 1000));
+    }
+  }
+  contract.metrics = metrics;
+}
+
+/**
+ * Pickup a contract: set status to `in_progress`, apply pickup metrics,
+ * and move the task column to `in-progress` (default) or a custom column.
+ *
+ * @param taskPath - Absolute path to the task file
+ * @param options - Optional column override or `false` to skip column sync
+ */
+export function pickupTaskContract(
+  taskPath: string,
+  options?: ContractTransitionOptions,
+): TaskOperationResult {
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    return { success: false, error: `Failed to read task file: ${taskPath}` };
+  }
+
+  if (!doc.task.contract) {
+    return { success: false, error: `Task ${doc.task.id} has no contract` };
+  }
+
+  const now = new Date().toISOString();
+  const contract: Contract = { ...doc.task.contract, status: 'in_progress' as ContractStatus };
+  applyPickupMetrics(contract, now);
+
+  const targetColumn = resolveColumn('in_progress', options);
+  const updatedTask: Task = {
+    ...doc.task,
+    contract,
+    ...(targetColumn !== undefined && { column: targetColumn }),
+    updatedAt: now,
+  };
+
+  try {
+    writeTaskFile(taskPath, updatedTask, doc.body);
+    return { success: true, task: updatedTask, filePath: taskPath };
+  } catch (err) {
+    return { success: false, error: `Failed to write task file: ${err}` };
+  }
+}
+
+/**
+ * Deliver a contract: set status to `delivered`, apply deliver metrics,
+ * and move the task column to `review` (default) or a custom column.
+ *
+ * @param taskPath - Absolute path to the task file
+ * @param options - Optional column override or `false` to skip column sync
+ */
+export function deliverTaskContract(
+  taskPath: string,
+  options?: ContractTransitionOptions,
+): TaskOperationResult {
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    return { success: false, error: `Failed to read task file: ${taskPath}` };
+  }
+
+  if (!doc.task.contract) {
+    return { success: false, error: `Task ${doc.task.id} has no contract` };
+  }
+
+  const now = new Date().toISOString();
+  const contract: Contract = { ...doc.task.contract, status: 'delivered' as ContractStatus };
+  applyDeliverMetrics(contract, now);
+
+  const targetColumn = resolveColumn('delivered', options);
+  const updatedTask: Task = {
+    ...doc.task,
+    contract,
+    ...(targetColumn !== undefined && { column: targetColumn }),
+    updatedAt: now,
+  };
+
+  try {
+    writeTaskFile(taskPath, updatedTask, doc.body);
+    return { success: true, task: updatedTask, filePath: taskPath };
+  } catch (err) {
+    return { success: false, error: `Failed to write task file: ${err}` };
+  }
+}
+
+/**
+ * Complete a contract: set status to `done`, then archive the task to logs via
+ * `completeTaskFile()`. The task is removed from `board/` and recorded in the ledger.
+ *
+ * @param taskPath - Absolute path to the task file in board/
+ * @param logsDir - Absolute path to the logs directory
+ * @param options - Optional completion behavior and ledger details
+ */
+export function completeTaskContract(
+  taskPath: string,
+  logsDir: string,
+  options: CompleteContractOptions = {},
+): TaskOperationResult {
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    return { success: false, error: `Failed to read task file: ${taskPath}` };
+  }
+
+  if (!doc.task.contract) {
+    return { success: false, error: `Task ${doc.task.id} has no contract` };
+  }
+
+  const now = new Date().toISOString();
+  const metrics: ContractMetrics = { ...(doc.task.contract.metrics ?? {}) };
+  if (!metrics.deliveredAt) {
+    metrics.deliveredAt = now;
+  }
+  if (typeof metrics.pickedUpAt === 'string') {
+    const pickedUpMs = Date.parse(metrics.pickedUpAt);
+    const deliveredMs = Date.parse(metrics.deliveredAt);
+    if (Number.isFinite(pickedUpMs) && Number.isFinite(deliveredMs)) {
+      metrics.duration = Math.max(0, Math.round((deliveredMs - pickedUpMs) / 1000));
+    }
+  }
+
+  // Write contract.status = 'done' + metrics before completing,
+  // so the archived record captures the final contract state.
+  const updatedTask: Task = {
+    ...doc.task,
+    contract: { ...doc.task.contract, status: 'done' as ContractStatus, metrics },
+    updatedAt: now,
+  };
+
+  try {
+    writeTaskFile(taskPath, updatedTask, doc.body);
+  } catch (err) {
+    return { success: false, error: `Failed to update contract status: ${err}` };
+  }
+
+  // Now archive via the standard completion flow (ledger + unlink)
+  const { column: _col, ...completeOpts } = options;
+  return completeTaskFile(taskPath, logsDir, completeOpts);
+}
+
+/**
+ * Fail a contract: set status to `failed`, add feedback,
+ * and optionally move column to `blocked` or a custom column.
+ *
+ * @param taskPath - Absolute path to the task file
+ * @param feedback - Failure reason / feedback for the agent
+ * @param options - Optional column override or `false` to skip column sync
+ */
+export function failTaskContract(
+  taskPath: string,
+  feedback: string,
+  options?: ContractTransitionOptions,
+): TaskOperationResult {
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    return { success: false, error: `Failed to read task file: ${taskPath}` };
+  }
+
+  if (!doc.task.contract) {
+    return { success: false, error: `Task ${doc.task.id} has no contract` };
+  }
+
+  const now = new Date().toISOString();
+  const contract: Contract = {
+    ...doc.task.contract,
+    status: 'failed' as ContractStatus,
+    feedback: feedback.trim() || undefined,
+  };
+
+  const targetColumn = resolveColumn('failed', options);
+  const updatedTask: Task = {
+    ...doc.task,
+    contract,
+    ...(targetColumn !== undefined && { column: targetColumn }),
+    updatedAt: now,
+  };
+
+  try {
+    writeTaskFile(taskPath, updatedTask, doc.body);
+    return { success: true, task: updatedTask, filePath: taskPath };
+  } catch (err) {
+    return { success: false, error: `Failed to write task file: ${err}` };
+  }
+}
+
+/**
+ * Returns the most relevant user-facing state for a task.
+ * When a contract exists, its status takes priority over the column.
+ */
+export function getEffectiveState(task: Task): string {
+  if (task.contract) return task.contract.status;
+  if (task.completedAt) return 'completed';
+  return task.column ?? 'unknown';
 }
