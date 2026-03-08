@@ -403,6 +403,10 @@ export function buildLedgerRecord(
     record.subtasksCompleted = subtaskCounts.completed;
     record.subtasksTotal = subtaskCounts.total;
   }
+  const dependsOn = toUniqueStrings(task.dependsOn);
+  if (dependsOn.length > 0) {
+    record.dependsOn = dependsOn;
+  }
 
   return record;
 }

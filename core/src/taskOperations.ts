@@ -13,6 +13,7 @@ import * as path from 'path';
 import type { Task, TaskDocument } from './types';
 import type { Contract, ContractStatus, ContractMetrics } from './types/contract';
 import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, serializeTaskContent } from './taskFile';
+import { readLedger } from './ledger';
 import { appendLedgerRecord, buildLedgerRecord } from './ledger';
 
 /**
@@ -257,6 +258,20 @@ export function generateNextFileTaskId(boardDir: string, logsDir?: string, typeP
   scanDir(boardDir);
   if (logsDir) {
     scanDir(logsDir);
+
+    // Also scan ledger.jsonl — tasks completed via the non-legacy path
+    // only exist there, not as .md files in logs/.
+    try {
+      for (const record of readLedger(logsDir)) {
+        const match = record.id.match(pattern);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      }
+    } catch {
+      // Ledger may not exist yet
+    }
   }
 
   return `${typePrefix}-${maxNum + 1}`;

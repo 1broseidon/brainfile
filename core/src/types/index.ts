@@ -13,6 +13,9 @@ export * from './enums';
 export * from './contract';
 export * from './ledger';
 
+// Completed task reference (abstraction over Task and LedgerRecord)
+export * from './completed';
+
 // Type-specific definitions
 export * from './board';
 export * from './journal';

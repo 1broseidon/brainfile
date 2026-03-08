@@ -44,6 +44,8 @@ export interface LedgerRecord {
   constraints?: string[];
   subtasksCompleted?: number;
   subtasksTotal?: number;
+  /** Task IDs this task depended on (preserved for downstream dependency traversal). */
+  dependsOn?: string[];
 
   // Schema allows additional fields for forward compatibility.
   [key: string]: unknown;

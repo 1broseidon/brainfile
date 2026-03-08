@@ -105,6 +105,24 @@ describe('taskOperations', () => {
       seedLogTask('epic-5');
       expect(generateNextFileTaskId(tasksDir, logsDir, 'epic')).toBe('epic-6');
     });
+
+    it('scans ledger.jsonl so cleared boards do not restart at 1', () => {
+      // Simulate: board is empty, logs/ has no .md files, but ledger has completed tasks
+      const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+      fs.writeFileSync(ledgerPath, [
+        JSON.stringify({ id: 'task-7', type: 'task', title: 'Old task', filesChanged: [], createdAt: '2025-01-01T00:00:00Z', completedAt: '2025-01-02T00:00:00Z', cycleTimeHours: 24, summary: 'Done' }),
+        JSON.stringify({ id: 'task-12', type: 'task', title: 'Another old task', filesChanged: [], createdAt: '2025-01-01T00:00:00Z', completedAt: '2025-01-03T00:00:00Z', cycleTimeHours: 48, summary: 'Done' }),
+      ].join('\n') + '\n', 'utf-8');
+      expect(generateNextFileTaskId(tasksDir, logsDir)).toBe('task-13');
+    });
+
+    it('picks highest ID across board, log .md files, and ledger', () => {
+      seedTask('task-3', 'todo');
+      seedLogTask('task-5');
+      const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+      fs.writeFileSync(ledgerPath, JSON.stringify({ id: 'task-20', type: 'task', title: 'Ledger task', filesChanged: [], createdAt: '2025-01-01T00:00:00Z', completedAt: '2025-01-02T00:00:00Z', cycleTimeHours: 24, summary: 'Done' }) + '\n', 'utf-8');
+      expect(generateNextFileTaskId(tasksDir, logsDir)).toBe('task-21');
+    });
   });
 
   describe('addTaskFile', () => {

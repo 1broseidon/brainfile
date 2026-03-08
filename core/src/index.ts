@@ -245,6 +245,12 @@ export {
   isLedgerContractStatus,
 } from './ledger';
 
+// Export completed task reference helpers (Task ↔ LedgerRecord abstraction)
+export {
+  taskToCompletedRef,
+  ledgerRecordToCompletedRef,
+} from './completed';
+
 // Export task dependency graph utilities
 export {
   type DependencyGraphNode,
