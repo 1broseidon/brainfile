@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import {
   rulesCommand,
@@ -16,19 +17,20 @@ import { CLIError } from '../utils/cli-error';
 describe('rules command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board-rules.md');
+  let tempDir: string;
+  let tempBoardPath: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
-    // Copy test board to temp location
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-rules-test-'));
+    tempBoardPath = path.join(tempDir, 'temp-board-rules.md');
     fs.copyFileSync(testBoardPath, tempBoardPath);
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    // Clean up temp file
-    if (fs.existsSync(tempBoardPath)) {
-      fs.unlinkSync(tempBoardPath);
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
 

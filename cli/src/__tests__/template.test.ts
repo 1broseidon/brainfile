@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { templateCommand } from '../commands/template';
 import { Brainfile, type Column, type Task } from '@brainfile/core';
@@ -8,17 +9,20 @@ import { CLIError } from '../utils/cli-error';
 describe('template command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board-template.md');
+  let tempDir: string;
+  let tempBoardPath: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-template-test-'));
+    tempBoardPath = path.join(tempDir, 'temp-board-template.md');
     fs.copyFileSync(testBoardPath, tempBoardPath);
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    if (fs.existsSync(tempBoardPath)) {
-      fs.unlinkSync(tempBoardPath);
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
 

@@ -5,11 +5,16 @@ import * as os from 'os';
 export type SupportedTool = 'claude-code' | 'cursor' | 'cline';
 export type SettingsScope = 'user' | 'project';
 
+function resolveHomeDir(): string {
+  const home = process.env.HOME?.trim();
+  return home || os.homedir();
+}
+
 /**
  * Get settings path for a specific tool and scope
  */
 export function getSettingsPath(tool: SupportedTool, scope: SettingsScope): string {
-  const homeDir = os.homedir();
+  const homeDir = resolveHomeDir();
 
   if (scope === 'user') {
     switch (tool) {

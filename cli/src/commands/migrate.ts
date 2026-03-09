@@ -261,8 +261,7 @@ function migrateBrainfileToV2(brainfilePath: string, options: MigrateOptions): v
     title: col.title,
     ...(col.order !== undefined && { order: col.order }),
     ...(col.completionColumn && { completionColumn: col.completionColumn }),
-    tasks: [],
-  }));
+  })) as any;
   delete configBoard.archive;
   configBoard.schema = 'https://brainfile.md/v2/board.json';
 

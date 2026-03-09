@@ -8,22 +8,23 @@ import { CLIError } from '../utils/cli-error';
 describe('show command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board-show.md');
-  const tempArchivePath = path.join(fixturesDir, 'temp-board-show-archive.md');
+  let tempDir: string;
+  let tempBoardPath: string;
+  let tempArchivePath: string;
 
   let logger: MemoryLogger;
 
   beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-show-test-'));
+    tempBoardPath = path.join(tempDir, 'temp-board-show.md');
+    tempArchivePath = path.join(tempDir, 'temp-board-show-archive.md');
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    for (const p of [tempBoardPath, tempArchivePath]) {
-      if (fs.existsSync(p)) fs.unlinkSync(p);
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
-    // Clean up state.json that may be created by v2 migration hint
-    const fixtureStatePath = path.join(fixturesDir, 'state.json');
-    if (fs.existsSync(fixtureStatePath)) fs.unlinkSync(fixtureStatePath);
   });
 
   it('should show details for a task in the board', () => {
@@ -161,4 +162,3 @@ parentId: epic-1
     expect(output).toContain('task-2');
   });
 });
-

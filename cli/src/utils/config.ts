@@ -52,8 +52,15 @@ export interface BrainfileConfig {
 // Constants
 // ============================================================================
 
-const CONFIG_DIR = path.join(os.homedir(), '.config', 'brainfile');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+function resolveHomeDir(): string {
+  const envHome = process.env.XDG_CONFIG_HOME?.trim();
+  if (envHome) {
+    return envHome;
+  }
+
+  const home = process.env.HOME?.trim();
+  return home || os.homedir();
+}
 
 // ============================================================================
 // Config Functions
@@ -63,22 +70,28 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
  * Get the path to the config directory
  */
 export function getConfigDir(): string {
-  return CONFIG_DIR;
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME?.trim();
+  if (xdgConfigHome) {
+    return path.join(xdgConfigHome, 'brainfile');
+  }
+
+  return path.join(resolveHomeDir(), '.config', 'brainfile');
 }
 
 /**
  * Get the path to the config file
  */
 export function getConfigPath(): string {
-  return CONFIG_FILE;
+  return path.join(getConfigDir(), 'config.json');
 }
 
 /**
  * Ensure the config directory exists
  */
 export function ensureConfigDir(): void {
-  if (!fs.existsSync(CONFIG_DIR)) {
-    fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+  const configDir = getConfigDir();
+  if (!fs.existsSync(configDir)) {
+    fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
   }
 }
 
@@ -87,9 +100,10 @@ export function ensureConfigDir(): void {
  * @returns Config object, or empty object if file doesn't exist
  */
 export function loadConfig(): BrainfileConfig {
+  const configFile = getConfigPath();
   try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      const content = fs.readFileSync(CONFIG_FILE, 'utf-8');
+    if (fs.existsSync(configFile)) {
+      const content = fs.readFileSync(configFile, 'utf-8');
       return JSON.parse(content) as BrainfileConfig;
     }
   } catch (error) {
@@ -104,8 +118,9 @@ export function loadConfig(): BrainfileConfig {
  * @param config - Config object to save
  */
 export function saveConfig(config: BrainfileConfig): void {
+  const configFile = getConfigPath();
   ensureConfigDir();
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), {
+  fs.writeFileSync(configFile, JSON.stringify(config, null, 2), {
     encoding: 'utf-8',
     mode: 0o600, // Owner read/write only
   });

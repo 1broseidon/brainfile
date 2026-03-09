@@ -9,23 +9,21 @@ import { CLIError } from '../utils/cli-error';
 describe('add command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board-add.md');
+  let tempDir: string;
+  let tempBoardPath: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
-    // Copy test board to temp location
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-add-test-'));
+    tempBoardPath = path.join(tempDir, 'temp-board-add.md');
     fs.copyFileSync(testBoardPath, tempBoardPath);
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    // Clean up temp file
-    if (fs.existsSync(tempBoardPath)) {
-      fs.unlinkSync(tempBoardPath);
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
-    // Clean up state.json that may be created by v2 migration hint
-    const fixtureStatePath = path.join(fixturesDir, 'state.json');
-    if (fs.existsSync(fixtureStatePath)) fs.unlinkSync(fixtureStatePath);
   });
 
   it('should add a task with only title', () => {
@@ -116,7 +114,7 @@ describe('add command', () => {
     const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'Contracted task');
 
     expect(newTask?.contract).toBeDefined();
-    expect(newTask?.contract?.status).toBe('ready');
+    expect(newTask?.contract?.status).toBe('draft');
     expect(newTask?.contract?.deliverables?.map((d: any) => d.type)).toEqual(['file', 'test']);
     expect(newTask?.contract?.deliverables?.[0].path).toBe('src/feature.ts');
     expect(newTask?.contract?.validation?.commands).toEqual(['npm test']);

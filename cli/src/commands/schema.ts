@@ -254,7 +254,12 @@ export function schemaUpdateCommand(
   logger: Logger = defaultLogger
 ): SchemaResult {
   // Run the async update and handle synchronously for CLI
-  schemaUpdateAsync(options, logger);
+  void schemaUpdateAsync(options, logger).catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!options.json) {
+      logger.log(chalk.red(`Schema update failed: ${message}`));
+    }
+  });
 
   return {
     success: true,

@@ -1,14 +1,31 @@
 import * as path from 'path';
 import * as fs from 'fs';
+import * as os from 'os';
 import { schemaCommand } from '../commands/schema';
 import { MemoryLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 
 describe('schema command', () => {
+  let tempDir: string;
+  let originalHome: string | undefined;
+  let originalXdgConfigHome: string | undefined;
   let logger: MemoryLogger;
 
   beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-schema-test-'));
+    originalHome = process.env.HOME;
+    originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
+    process.env.HOME = tempDir;
+    process.env.XDG_CONFIG_HOME = path.join(tempDir, '.config');
     logger = new MemoryLogger();
+  });
+
+  afterEach(() => {
+    process.env.HOME = originalHome;
+    process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 
   describe('list schemas', () => {

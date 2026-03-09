@@ -1,23 +1,24 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
-import { Brainfile } from '@brainfile/core';
+import { Brainfile, readTaskFile } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
 import { contractPickupCommand, contractDeliverCommand, contractValidateCommand, contractAttachCommand } from '../commands/contract';
 
 describe('contract command', () => {
-  const fixturesDir = path.join(__dirname, 'fixtures');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board-contract.md');
+  let fixturesDir: string;
+  let tempBoardPath: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
     logger = new MemoryLogger();
-    if (!fs.existsSync(fixturesDir)) fs.mkdirSync(fixturesDir, { recursive: true });
+    fixturesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-contract-test-'));
+    tempBoardPath = path.join(fixturesDir, 'temp-board-contract.md');
   });
 
   afterEach(() => {
-    for (const name of ['temp-board-contract.md', 'exists.txt', 'ran1', 'ran2']) {
-      const p = path.join(fixturesDir, name);
-      if (fs.existsSync(p)) fs.unlinkSync(p);
+    if (fixturesDir && fs.existsSync(fixturesDir)) {
+      fs.rmSync(fixturesDir, { recursive: true, force: true });
     }
   });
 
@@ -92,7 +93,7 @@ columns:
     expect(typeof contract?.metrics?.duration).toBe('number');
   });
 
-  it('validate should set status to done when deliverables exist and commands pass', () => {
+  it('validate should set status to done when deliverables exist and commands pass (v1 unchanged)', () => {
     fs.writeFileSync(path.join(fixturesDir, 'exists.txt'), 'ok', 'utf-8');
 
     const markdown = `---
@@ -157,6 +158,117 @@ columns:
     expect(fs.existsSync(path.join(fixturesDir, 'ran2'))).toBe(false);
   });
 
+  it('v2 pickup/deliver/validate should sync columns and archive on success', () => {
+    const brainfileDir = path.join(fixturesDir, '.brainfile');
+    const boardDir = path.join(brainfileDir, 'board');
+    const logsDir = path.join(brainfileDir, 'logs');
+    fs.mkdirSync(boardDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+
+    const v2BoardPath = path.join(brainfileDir, 'brainfile.md');
+    fs.writeFileSync(v2BoardPath, `---
+title: Contract Board
+columns:
+  - id: todo
+    title: To Do
+  - id: in-progress
+    title: In Progress
+  - id: review
+    title: Review
+  - id: blocked
+    title: Blocked
+---\n`, 'utf-8');
+
+    fs.writeFileSync(path.join(fixturesDir, 'exists.txt'), 'ok', 'utf-8');
+    fs.writeFileSync(path.join(boardDir, 'task-1.md'), `---
+id: task-1
+title: Task With Contract
+column: todo
+position: 0
+contract:
+  status: ready
+  deliverables:
+    - type: file
+      path: exists.txt
+  validation:
+    commands:
+      - "node -e \\"process.exit(0)\\""
+---
+Task body
+`, 'utf-8');
+
+    const pickupResult = contractPickupCommand({ file: v2BoardPath, task: 'task-1' }, logger);
+    expect(pickupResult.success).toBe(true);
+    let taskDoc = readTaskFile(path.join(boardDir, 'task-1.md'));
+    expect(taskDoc?.task.contract?.status).toBe('in_progress');
+    expect(taskDoc?.task.column).toBe('in-progress');
+
+    const deliverResult = contractDeliverCommand({ file: v2BoardPath, task: 'task-1' }, logger);
+    expect(deliverResult.success).toBe(true);
+    taskDoc = readTaskFile(path.join(boardDir, 'task-1.md'));
+    expect(taskDoc?.task.contract?.status).toBe('delivered');
+    expect(taskDoc?.task.column).toBe('review');
+
+    const validateResult = contractValidateCommand({ file: v2BoardPath, task: 'task-1' }, logger);
+    expect(validateResult.success).toBe(true);
+    expect(fs.existsSync(path.join(boardDir, 'task-1.md'))).toBe(false);
+    const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+    expect(fs.existsSync(ledgerPath)).toBe(true);
+    const ledger = fs.readFileSync(ledgerPath, 'utf-8');
+    expect(ledger).toContain('"id":"task-1"');
+    expect(ledger).toContain('"contractStatus":"done"');
+  });
+
+  it('v2 validate should set status to failed and preserve task on validation failure', () => {
+    const brainfileDir = path.join(fixturesDir, '.brainfile');
+    const boardDir = path.join(brainfileDir, 'board');
+    const logsDir = path.join(brainfileDir, 'logs');
+    fs.mkdirSync(boardDir, { recursive: true });
+    fs.mkdirSync(logsDir, { recursive: true });
+
+    const v2BoardPath = path.join(brainfileDir, 'brainfile.md');
+    fs.writeFileSync(v2BoardPath, `---
+title: Contract Board
+columns:
+  - id: todo
+    title: To Do
+  - id: in-progress
+    title: In Progress
+  - id: review
+    title: Review
+  - id: blocked
+    title: Blocked
+---\n`, 'utf-8');
+
+    fs.writeFileSync(path.join(fixturesDir, 'exists.txt'), 'ok', 'utf-8');
+    fs.writeFileSync(path.join(boardDir, 'task-1.md'), `---
+id: task-1
+title: Task With Contract
+column: review
+position: 0
+contract:
+  status: delivered
+  deliverables:
+    - type: file
+      path: exists.txt
+  validation:
+    commands:
+      - "node -e \\"process.stderr.write('bad'); process.exit(1)\\""
+---
+Task body
+`, 'utf-8');
+
+    const validateResult = contractValidateCommand({ file: v2BoardPath, task: 'task-1' }, logger);
+    expect(validateResult.success).toBe(false);
+    expect(fs.existsSync(path.join(boardDir, 'task-1.md'))).toBe(true);
+
+    const taskDoc = readTaskFile(path.join(boardDir, 'task-1.md'));
+    expect(taskDoc?.task.contract?.status).toBe('failed');
+    expect(taskDoc?.task.contract?.feedback).toContain('bad');
+    expect(taskDoc?.task.column).toBe('review');
+    expect(fs.existsSync(path.join(logsDir, 'ledger.jsonl'))).toBe(false);
+  });
+
   it('attach should create a ready contract on an existing task', () => {
     const markdown = `---
 title: Contract Board
@@ -179,6 +291,7 @@ columns:
       ],
       validation: ['npm test'],
       constraint: ['Follow existing patterns'],
+      ready: true,
     }, logger);
 
     expect(result.success).toBe(true);
@@ -191,4 +304,3 @@ columns:
     expect(task?.contract?.constraints).toEqual(['Follow existing patterns']);
   });
 });
-

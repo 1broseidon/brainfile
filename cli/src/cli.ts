@@ -32,11 +32,16 @@ import {
   contractDeliverCommand,
   contractValidateCommand,
   contractAttachCommand,
+  contractActivateCommand,
+  contractGraphCommand,
+  parseContractGraphArgs,
   CONTRACT_COMMAND_HELP,
   CONTRACT_PICKUP_HELP,
   CONTRACT_DELIVER_HELP,
   CONTRACT_VALIDATE_HELP,
   CONTRACT_ATTACH_HELP,
+  CONTRACT_ACTIVATE_HELP,
+  CONTRACT_GRAPH_HELP,
 } from './commands/contract';
 import {
   afterEditCommand,
@@ -197,7 +202,8 @@ Brainfile file resolution (when you don't pass --file):
       (value, previous: string[]) => (previous ? [...previous, value] : [value]),
       []
     )
-    .option('--with-contract', 'Attach a contract (status=ready)')
+    .option('--with-contract', 'Attach a draft contract (use --ready to make it immediately dispatchable)')
+    .option('--ready', 'When used with --with-contract: set contract status=ready instead of draft')
     .option(
       '--deliverable <spec>',
       'Contract deliverable: type:path:description (description optional). Type: file|test|docs|design|research',
@@ -469,9 +475,10 @@ Brainfile file resolution (when you don't pass --file):
 
   const contractAttachCmd = contractCmd
     .command('attach')
-    .description('Attach a new contract to an existing task (status=ready)')
+    .description('Attach a new contract to an existing task (default status=draft)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to attach contract to (required)')
+    .option('--ready', 'Set contract status=ready instead of draft (immediately dispatchable)')
     .option(
       '--deliverable <spec>',
       'Contract deliverable: type:path:description (description optional). Type: file|test|docs|design|research',
@@ -492,6 +499,30 @@ Brainfile file resolution (when you don't pass --file):
     )
     .action((options) => { contractAttachCommand(options); });
   contractAttachCmd.addHelpText('after', `\n${CONTRACT_ATTACH_HELP}`);
+
+  const contractGraphCmd = contractCmd
+    .command('graph')
+    .description('Attach contracts to multiple tasks as a dependency graph')
+    .allowUnknownOption(true)
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--ready', 'Set attached contracts to status=ready instead of draft')
+    .option('--show', 'Print the current task dependency graph')
+    .action(() => {
+      const rawArgs = process.argv.slice(2);
+      const graphIndex = rawArgs.findIndex((arg, index) => arg === 'graph' && rawArgs[index - 1] === 'contract');
+      const graphArgs = graphIndex >= 0 ? rawArgs.slice(graphIndex + 1) : [];
+      contractGraphCommand(parseContractGraphArgs(graphArgs));
+    });
+  contractGraphCmd.addHelpText('after', `\n${CONTRACT_GRAPH_HELP}`);
+
+  const contractActivateCmd = contractCmd
+    .command('activate')
+    .description('Activate one or more draft contracts (draft → ready)')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --task <id>', 'Task ID to activate (single contract)')
+    .option('--parent <id>', 'Activate all draft contracts whose parentId matches this value')
+    .action((options) => { contractActivateCommand(options); });
+  contractActivateCmd.addHelpText('after', `\n${CONTRACT_ACTIVATE_HELP}`);
 
   // Add schema command
   const schemaCmd = program

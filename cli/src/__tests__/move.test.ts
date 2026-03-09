@@ -9,17 +9,20 @@ import { CLIError } from '../utils/cli-error';
 describe('move command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const tempBoardPath = path.join(fixturesDir, 'temp-board-move.md');
+  let tempDir: string;
+  let tempBoardPath: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-move-test-'));
+    tempBoardPath = path.join(tempDir, 'temp-board-move.md');
     fs.copyFileSync(testBoardPath, tempBoardPath);
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    if (fs.existsSync(tempBoardPath)) {
-      fs.unlinkSync(tempBoardPath);
+    if (tempDir && fs.existsSync(tempDir)) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
     }
   });
 
@@ -224,12 +227,14 @@ columns:
     expect(result.movedTask.completedAt).toBeDefined();
     expect(result.movedTask.column).toBeUndefined();
     expect(fs.existsSync(path.join(boardDir, taskFileName(task.id)))).toBe(false);
-    expect(fs.existsSync(path.join(logsDir, taskFileName(task.id)))).toBe(true);
 
-    const completedDoc = readTaskFile(path.join(logsDir, taskFileName(task.id)));
-    expect(completedDoc).not.toBeNull();
-    expect(completedDoc!.task.completedAt).toBeDefined();
-    expect(completedDoc!.task.column).toBeUndefined();
+    // Completion now writes to ledger.jsonl, not individual files in logs/
+    const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+    expect(fs.existsSync(ledgerPath)).toBe(true);
+    const ledgerContent = fs.readFileSync(ledgerPath, 'utf-8').trim();
+    const record = JSON.parse(ledgerContent);
+    expect(record.id).toBe(task.id);
+    expect(record.completedAt).toBeDefined();
   });
 
   it('does not auto-complete non-completable task types', () => {

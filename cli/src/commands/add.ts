@@ -28,18 +28,24 @@ import {
   markV2MigrationHintShown,
 } from '../utils/v2-detect';
 import { validateType } from '../utils/strict-validation';
+import { lintValidationCommands } from '../validation/command-lint';
 
 export const ADD_COMMAND_HELP = `
 Examples:
   brainfile add --title "Fix login bug" --column todo
 
-Create a task with a contract (for an agent):
+Create a task with a draft contract (daemon will ignore until activated):
   brainfile add -c todo -t "Implement feature" --assignee codex \\
     --with-contract \\
     --deliverable "file:src/feature.ts:Implementation" \\
     --deliverable "test:src/__tests__/feature.test.ts:Unit tests" \\
     --validation "cd core && npm test" \\
     --constraint "Make minimal changes"
+
+Create a task with a ready contract (immediately dispatchable):
+  brainfile add -c todo -t "Implement feature" --assignee codex \\
+    --with-contract --ready \\
+    --deliverable "file:src/feature.ts:Implementation"
 
 Create a parent task and children in one shot:
   brainfile add -c todo -t "Auth epic" --type epic \
@@ -72,6 +78,8 @@ export interface AddOptions {
   parent?: string;
   child?: string | string[];
   withContract?: boolean;
+  /** When true, created contract is status=ready instead of the default draft */
+  ready?: boolean;
   deliverable?: string | string[];
   validation?: string | string[];
   constraint?: string | string[];
@@ -201,6 +209,9 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
   // Build and attach contract if requested
   const deliverableSpecs = normalizeToArray(options.deliverable);
   const validationCommands = normalizeToArray(options.validation);
+  for (const warning of lintValidationCommands(validationCommands, filePath)) {
+    logger.warn(chalk.yellow(`Warning: ${warning.message}`));
+  }
   const constraints = normalizeToArray(options.constraint);
   const shouldAttachContract =
     Boolean(options.withContract) ||
@@ -215,6 +226,7 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
         deliverableSpecs,
         validationCommands,
         constraints,
+        status: options.ready ? 'ready' : 'draft',
       });
     } catch (e) {
       throw validationError((e as Error).message);
@@ -309,9 +321,12 @@ function addCommandV1(options: AddOptions, filePath: string, logger: Logger): Ad
     .find(col => col.id === targetColumn!.id)!
     .tasks[board.columns.find(col => col.id === targetColumn!.id)!.tasks.length - 1];
 
-  // Optionally attach a contract (status=ready)
+  // Optionally attach a contract (default status=draft; --ready makes it immediately dispatchable)
   const deliverableSpecs = normalizeToArray(options.deliverable);
   const validationCommands = normalizeToArray(options.validation);
+  for (const warning of lintValidationCommands(validationCommands, filePath)) {
+    logger.warn(chalk.yellow(`Warning: ${warning.message}`));
+  }
   const constraints = normalizeToArray(options.constraint);
   const shouldAttachContract =
     Boolean(options.withContract) ||
@@ -325,6 +340,7 @@ function addCommandV1(options: AddOptions, filePath: string, logger: Logger): Ad
         deliverableSpecs,
         validationCommands,
         constraints,
+        status: options.ready ? 'ready' : 'draft',
       });
     } catch (e) {
       throw validationError((e as Error).message);

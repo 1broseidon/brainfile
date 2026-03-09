@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { lintCommand } from '../commands/lint';
 import { MemoryLogger } from '../utils/logger';
@@ -67,7 +68,8 @@ describe('lint command', () => {
     it('should fix unquoted strings with --fix flag', () => {
       // Create a temporary copy to test fixing
       const unquotedFile = path.join(fixturesDir, 'invalid-yaml-unquoted.md');
-      const tempFile = path.join(fixturesDir, 'temp-fix-test.md');
+      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-lint-fix-test-'));
+      const tempFile = path.join(tempDir, 'temp-fix-test.md');
       fs.copyFileSync(unquotedFile, tempFile);
 
       try {
@@ -84,9 +86,8 @@ describe('lint command', () => {
         expect(fixedContent).toContain('"Enable Pages in repository settings (Source: GitHub Actions)"');
 
       } finally {
-        // Clean up
-        if (fs.existsSync(tempFile)) {
-          fs.unlinkSync(tempFile);
+        if (fs.existsSync(tempDir)) {
+          fs.rmSync(tempDir, { recursive: true, force: true });
         }
       }
     });

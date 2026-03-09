@@ -22,32 +22,26 @@ import {
   // Bulk operations
   moveTasks,
   patchTasks,
-  deleteTasks,
-  // Rule operations
-  addRule,
-  deleteRule,
   // Discovery
   findNearestBrainfile,
   findBrainfile,
   resolveBrainfilePath,
   type TaskInput,
+  type Task,
   type TaskPatch,
   type Board,
-  type Rules,
 } from '@brainfile/core';
 import { mcpCheckIncompleteSubtasks } from '../utils/errorHandler';
 import { buildContract } from '../utils/contractSpec';
 import { validateType, validateColumn } from '../utils/strict-validation';
-import { getEffectiveArchiveDestination, getArchiveConfig } from '../utils/config';
+import { getArchiveConfig } from '../utils/config';
 import { isGitHubAuthenticated, createGitHubIssue } from '../utils/github-auth';
 import { isLinearAuthenticated, createLinearIssue, getLinearTeams } from '../utils/linear-auth';
 import { formatTaskForGitHub, formatTaskForLinear } from '@brainfile/core';
 import { pickupContract, deliverContract, validateContract } from '../lib/contractRunner';
+import { executeContractGraphMcpAction } from '../mcp/tools/contract';
 import {
   archiveTaskToFile,
-  loadArchivedTasks,
-  restoreFromArchive,
-  removeFromArchive,
   getArchivePath,
 } from '../utils/archive';
 import {
@@ -388,63 +382,109 @@ export async function mcpCommand(options: McpOptions) {
     }
   );
 
-  // Search tasks tool
+  // Search tool (tasks + logs)
   server.registerTool(
-    'search_tasks',
+    'search',
     {
-      title: 'Search Tasks',
-      description: 'Search tasks by title, description, or other fields',
+      title: 'Search',
+      description: 'Search tasks and logs by query, list recent logs, or view one task/log entry',
       inputSchema: {
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        query: z.string().describe('Search query (matches title, description, tags)'),
+        query: z.string().optional().describe('Search query (matches title, description, tags, and log text in v2)'),
         column: z.string().optional().describe('Filter by column ID or name'),
         priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Filter by priority'),
-        assignee: z.string().optional().describe('Filter by assignee')
+        assignee: z.string().optional().describe('Filter by assignee'),
+        recent: z.boolean().optional().describe('List recently completed tasks (v2 only)'),
+        task: z.string().optional().describe('View a specific task/log entry (v2 only)'),
       }
     },
-    async ({ file, query, column, priority, assignee }) => {
+    async ({ file, query, column, priority, assignee, recent, task }) => {
       const filePath = file || defaultFile;
+
+      if (task) {
+        if (!isV2(filePath)) {
+          return { content: [{ type: 'text' as const, text: 'Error: task lookup in search requires v2 per-task file architecture.' }], isError: true };
+        }
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task, true);
+        if (!found) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+        const output = {
+          id: found.doc.task.id,
+          title: found.doc.task.title,
+          completedAt: found.doc.task.completedAt,
+          isLog: found.isLog,
+          description: extractDescription(found.doc.body),
+          log: extractLog(found.doc.body),
+        };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+      }
+
+      if (recent) {
+        if (!isV2(filePath)) {
+          return { content: [{ type: 'text' as const, text: 'Error: recent log listing requires v2 per-task file architecture.' }], isError: true };
+        }
+        const dirs = getV2Dirs(filePath);
+        const logDocs = readTasksDir(dirs.logsDir);
+        logDocs.sort((a, b) => (b.task.completedAt || '').localeCompare(a.task.completedAt || ''));
+        const logs = logDocs.slice(0, 20).map(doc => ({
+          id: doc.task.id,
+          title: doc.task.title,
+          completedAt: doc.task.completedAt,
+        }));
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ logs, count: logs.length }, null, 2) }] };
+      }
+
+      if (!query) {
+        return { content: [{ type: 'text' as const, text: 'Error: query is required unless recent or task is provided' }], isError: true };
+      }
+
+      const queryLower = query.toLowerCase();
 
       // V2: search per-task files
       if (isV2(filePath)) {
         const dirs = getV2Dirs(filePath);
-        const queryLower = query.toLowerCase();
-        let matches: Array<{ id: string; title: string; column?: string; priority?: string; tags?: string[]; assignee?: string; score: number; isLog?: boolean }> = [];
+        const matches: Array<{ id: string; title: string; column?: string; priority?: string; tags?: string[]; assignee?: string; score: number; isLog?: boolean }> = [];
+
+        const scoreDoc = (doc: TaskDocument, includeLogText: boolean): number => {
+          const t = doc.task;
+          let score = 0;
+          if (t.title.toLowerCase().includes(queryLower)) {
+            score += 10;
+            if (t.title.toLowerCase().startsWith(queryLower)) score += 5;
+          }
+          if (t.description?.toLowerCase().includes(queryLower)) score += 5;
+          if (extractDescription(doc.body)?.toLowerCase().includes(queryLower)) score += 5;
+          if (t.tags?.some(tag => tag.toLowerCase().includes(queryLower))) score += 3;
+          if (includeLogText && extractLog(doc.body)?.toLowerCase().includes(queryLower)) score += 2;
+          if (t.id.toLowerCase() === queryLower) score += 20;
+          return score;
+        };
 
         const taskDocs = readTasksDir(dirs.boardDir);
         for (const doc of taskDocs) {
-          const task = doc.task;
-          if (column && task.column !== column) continue;
-          if (priority && task.priority !== priority) continue;
-          if (assignee && task.assignee !== assignee) continue;
+          const t = doc.task;
+          if (column && t.column !== column) continue;
+          if (priority && t.priority !== priority) continue;
+          if (assignee && t.assignee !== assignee) continue;
 
-          let score = 0;
-          if (task.title.toLowerCase().includes(queryLower)) { score += 10; if (task.title.toLowerCase().startsWith(queryLower)) score += 5; }
-          if (task.description?.toLowerCase().includes(queryLower)) score += 5;
-          if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) score += 3;
-          if (task.id.toLowerCase() === queryLower) score += 20;
-
+          const score = scoreDoc(doc, false);
           if (score > 0) {
-            matches.push({ id: task.id, title: task.title, column: task.column, priority: task.priority, tags: task.tags, assignee: task.assignee, score });
+            matches.push({ id: t.id, title: t.title, column: t.column, priority: t.priority, tags: t.tags, assignee: t.assignee, score });
           }
         }
 
-        // Also search logs
         if (!column) {
           const logDocs = readTasksDir(dirs.logsDir);
           for (const doc of logDocs) {
-            const task = doc.task;
-            if (priority && task.priority !== priority) continue;
-            if (assignee && task.assignee !== assignee) continue;
+            const t = doc.task;
+            if (priority && t.priority !== priority) continue;
+            if (assignee && t.assignee !== assignee) continue;
 
-            let score = 0;
-            if (task.title.toLowerCase().includes(queryLower)) { score += 10; if (task.title.toLowerCase().startsWith(queryLower)) score += 5; }
-            if (task.description?.toLowerCase().includes(queryLower)) score += 5;
-            if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) score += 3;
-            if (task.id.toLowerCase() === queryLower) score += 20;
-
+            const score = scoreDoc(doc, true);
             if (score > 0) {
-              matches.push({ id: task.id, title: task.title, column: 'Completed', priority: task.priority, tags: task.tags, assignee: task.assignee, score, isLog: true });
+              matches.push({ id: t.id, title: t.title, column: 'Completed', priority: t.priority, tags: t.tags, assignee: t.assignee, score, isLog: true });
             }
           }
         }
@@ -460,8 +500,7 @@ export async function mcpCommand(options: McpOptions) {
       }
 
       const { board } = result;
-      const queryLower = query.toLowerCase();
-      let matches: Array<{ id: string; title: string; column: string; priority?: string; tags?: string[]; assignee?: string; score: number }> = [];
+      const matches: Array<{ id: string; title: string; column: string; priority?: string; tags?: string[]; assignee?: string; score: number }> = [];
 
       for (const col of board.columns) {
         if (column) {
@@ -470,31 +509,33 @@ export async function mcpCommand(options: McpOptions) {
           if (!matchesId && !matchesName) continue;
         }
 
-        for (const task of col.tasks) {
-          if (priority && task.priority !== priority) continue;
-          if (assignee && task.assignee !== assignee) continue;
+        for (const t of col.tasks) {
+          if (priority && t.priority !== priority) continue;
+          if (assignee && t.assignee !== assignee) continue;
 
           let score = 0;
-          if (task.title.toLowerCase().includes(queryLower)) { score += 10; if (task.title.toLowerCase().startsWith(queryLower)) score += 5; }
-          if (task.description?.toLowerCase().includes(queryLower)) score += 5;
-          if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) score += 3;
-          if (task.id.toLowerCase() === queryLower) score += 20;
+          if (t.title.toLowerCase().includes(queryLower)) {
+            score += 10;
+            if (t.title.toLowerCase().startsWith(queryLower)) score += 5;
+          }
+          if (t.description?.toLowerCase().includes(queryLower)) score += 5;
+          if (t.tags?.some(tag => tag.toLowerCase().includes(queryLower))) score += 3;
+          if (t.id.toLowerCase() === queryLower) score += 20;
 
           if (score > 0) {
-            matches.push({ id: task.id, title: task.title, column: col.title, priority: task.priority, tags: task.tags, assignee: task.assignee, score });
+            matches.push({ id: t.id, title: t.title, column: col.title, priority: t.priority, tags: t.tags, assignee: t.assignee, score });
           }
         }
       }
 
       matches.sort((a, b) => b.score - a.score);
-      const output = { results: matches, count: matches.length };
-      return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ results: matches, count: matches.length }, null, 2) }] };
     }
   );
 
   // Add task tool
   server.registerTool(
-    'add_task',
+    'task_add',
     {
       title: 'Add Task',
       description: 'Add a new task to a column in the brainfile',
@@ -511,7 +552,8 @@ export async function mcpCommand(options: McpOptions) {
         relatedFiles: z.array(z.string()).optional().describe('Related file paths'),
         type: z.string().optional().describe('Document type (e.g., epic, adr). Determines ID prefix. Default: task'),
         // Contract creation (optional)
-        with_contract: z.boolean().optional().describe('Attach a contract to the new task (status=ready)'),
+        with_contract: z.boolean().optional().describe('Attach a contract to the new task (default status=draft; use ready:true to make immediately dispatchable)'),
+        ready: z.boolean().optional().describe('When true, contract status is set to ready instead of draft'),
         deliverables: z.array(z.string()).optional().describe('Contract deliverables: type:path:description'),
         validation_commands: z.array(z.string()).optional().describe('Contract validation commands'),
         constraints: z.array(z.string()).optional().describe('Contract constraints'),
@@ -533,6 +575,7 @@ export async function mcpCommand(options: McpOptions) {
       relatedFiles,
       type: docType,
       with_contract,
+      ready: contractReady,
       deliverables,
       validation_commands,
       constraints,
@@ -587,7 +630,7 @@ export async function mcpCommand(options: McpOptions) {
             createdAt: new Date().toISOString(),
           };
 
-          // Optionally attach contract
+          // Optionally attach contract (default status=draft; ready:true → status=ready)
           const wantsContract =
             Boolean(with_contract ?? withContract) ||
             Boolean(deliverables && deliverables.length > 0) ||
@@ -600,6 +643,7 @@ export async function mcpCommand(options: McpOptions) {
               deliverableSpecs: deliverables,
               validationCommands: validation_commands ?? validationCommands,
               constraints,
+              status: contractReady ? 'ready' : 'draft',
             });
             task.contract = contract;
           }
@@ -667,6 +711,7 @@ export async function mcpCommand(options: McpOptions) {
             deliverableSpecs: deliverables,
             validationCommands: validation_commands ?? validationCommands,
             constraints,
+            status: contractReady ? 'ready' : 'draft',
           });
 
           const contractResult = setTaskContract(nextBoard, newTask.id, contract);
@@ -687,109 +732,31 @@ export async function mcpCommand(options: McpOptions) {
     }
   );
 
-  // Attach contract tool
-  server.registerTool(
-    'attach_contract',
-    {
-      title: 'Attach Contract',
-      description: 'Attach a new contract to an existing task (status=ready)',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().optional().describe('Task ID to attach contract to'),
-        task_id: z.string().optional().describe('Alias of task'),
-        deliverables: z.array(z.string()).optional().describe('Contract deliverables: type:path:description'),
-        validation_commands: z.array(z.string()).optional().describe('Contract validation commands'),
-        constraints: z.array(z.string()).optional().describe('Contract constraints'),
-        validationCommands: z.array(z.string()).optional().describe('Alias of validation_commands'),
-      }
-    },
-    async ({ file, task, task_id, deliverables, validation_commands, constraints, validationCommands }) => {
-      const filePath = file || defaultFile;
-      const resolvedTaskId = task || task_id;
-      if (!resolvedTaskId) {
-        return { content: [{ type: 'text' as const, text: 'Error: task is required' }], isError: true };
-      }
-
-      // V2: update task file directly
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const found = findV2Task(dirs, resolvedTaskId);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${resolvedTaskId}` }], isError: true };
-        }
-
-        try {
-          const contract = buildContract({
-            deliverableSpecs: deliverables,
-            validationCommands: validation_commands ?? validationCommands,
-            constraints,
-          });
-
-          found.doc.task.contract = contract;
-          found.doc.task.updatedAt = new Date().toISOString();
-          coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
-          return { content: [{ type: 'text' as const, text: `Contract attached: ${resolvedTaskId}` }] };
-        } catch (e) {
-          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
-        }
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-      const taskInfo = findTaskById(board, resolvedTaskId);
-      if (!taskInfo) {
-        return { content: [{ type: 'text' as const, text: `Error: Task not found: ${resolvedTaskId}` }], isError: true };
-      }
-
-      try {
-        const contract = buildContract({
-          deliverableSpecs: deliverables,
-          validationCommands: validation_commands ?? validationCommands,
-          constraints,
-        });
-
-        const contractResult = setTaskContract(board, resolvedTaskId, contract);
-        if (!contractResult.success || !contractResult.board) {
-          return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to attach contract'}` }], isError: true };
-        }
-
-        writeBoard(filePath, contractResult.board);
-        return { content: [{ type: 'text' as const, text: `Contract attached: ${resolvedTaskId}` }] };
-      } catch (e) {
-        return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
-      }
-    }
-  );
-
   // Move task tool
   server.registerTool(
-    'move_task',
+    'task_move',
     {
       title: 'Move Task',
       description: 'Move a task to a different column',
       inputSchema: {
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to move'),
+        taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to move'),
+        task: z.string().optional().describe('Alias of taskId for single task move'),
         column: z.string().describe('Target column ID or name')
       }
     },
-    async ({ file, task, column }) => {
+    async ({ file, taskId, task, column }) => {
       const filePath = file || defaultFile;
+      const rawTaskIds = taskId ?? task;
+      if (!rawTaskIds) {
+        return { content: [{ type: 'text' as const, text: 'Error: taskId is required' }], isError: true };
+      }
+      const taskIds = Array.isArray(rawTaskIds) ? rawTaskIds : [rawTaskIds];
+      const isBatch = taskIds.length > 1;
 
       // V2: update task file
       if (isV2(filePath)) {
         const dirs = getV2Dirs(filePath);
-        const taskPath = path.join(dirs.boardDir, taskFileName(task));
-        const doc = coreReadTaskFile(taskPath);
-        if (!doc) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-        }
-
         const board = readV2BoardConfig(filePath);
         let targetColumn = board.columns.find(c => c.id === column);
         if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
@@ -803,30 +770,59 @@ export async function mcpCommand(options: McpOptions) {
           );
         }
         const resolvedTargetColumn = targetColumn || { id: column, title: column, tasks: [] };
+        let nextPosition = readTasksDir(dirs.boardDir).filter(t => t.task.column === resolvedTargetColumn.id).length;
+        const results: Array<{ taskId: string; success: boolean; message?: string; warning?: string; error?: string }> = [];
 
-        const sourceColumn = doc.task.column || '';
-        const targetTasks = readTasksDir(dirs.boardDir).filter(t => t.task.column === resolvedTargetColumn.id);
-        doc.task.column = resolvedTargetColumn.id;
-        doc.task.position = targetTasks.length;
-        doc.task.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(taskPath, doc.task, doc.body);
-
-        const shouldAutoComplete = resolvedTargetColumn.completionColumn === true && isTaskCompletable(doc.task.type, (board as unknown as Record<string, unknown>).types);
-        if (shouldAutoComplete) {
-          const completeResult = coreCompleteTaskFile(taskPath, dirs.logsDir);
-          if (!completeResult.success) {
-            return { content: [{ type: 'text' as const, text: `Error: ${completeResult.error || `Failed to complete task: ${task}`}` }], isError: true };
+        for (const id of taskIds) {
+          const taskPath = path.join(dirs.boardDir, taskFileName(id));
+          const doc = coreReadTaskFile(taskPath);
+          if (!doc) {
+            results.push({ taskId: id, success: false, error: `Task not found: ${id}` });
+            continue;
           }
+
+          const sourceColumn = doc.task.column || '';
+          doc.task.column = resolvedTargetColumn.id;
+          doc.task.position = nextPosition++;
+          doc.task.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(taskPath, doc.task, doc.body);
+
+          const shouldAutoComplete =
+            resolvedTargetColumn.completionColumn === true &&
+            isTaskCompletable(doc.task.type, (board as unknown as Record<string, unknown>).types);
+          if (shouldAutoComplete) {
+            const completeResult = coreCompleteTaskFile(taskPath, dirs.logsDir);
+            if (!completeResult.success) {
+              results.push({ taskId: id, success: false, error: completeResult.error || `Failed to complete task: ${id}` });
+              continue;
+            }
+          }
+
+          const warning = mcpCheckIncompleteSubtasks(doc.task, resolvedTargetColumn);
+          let message = `Task ${id} moved from "${sourceColumn}" to "${resolvedTargetColumn.title}"`;
+          if (shouldAutoComplete) {
+            message += '\nTask auto-completed and moved to logs/.';
+          }
+          results.push({ taskId: id, success: true, message, warning: warning?.warning });
         }
 
-        const warning = mcpCheckIncompleteSubtasks(doc.task, resolvedTargetColumn);
-        let message = `Task ${task} moved from "${sourceColumn}" to "${resolvedTargetColumn.title}"`;
-        if (shouldAutoComplete) {
-          message += '\nTask auto-completed and moved to logs/.';
+        if (!isBatch) {
+          const single = results[0];
+          if (!single?.success) {
+            return { content: [{ type: 'text' as const, text: `Error: ${single?.error || 'Move failed'}` }], isError: true };
+          }
+          let text = single.message || `Task ${taskIds[0]} moved`;
+          if (single.warning) text += `\n\n${single.warning}`;
+          return { content: [{ type: 'text' as const, text }] };
         }
-        if (warning) message += `\n\n${warning.warning}`;
 
-        return { content: [{ type: 'text' as const, text: message }] };
+        const successCount = results.filter(r => r.success).length;
+        const failureCount = results.length - successCount;
+        const output = { success: failureCount === 0, successCount, failureCount, results };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          isError: failureCount > 0 && successCount === 0,
+        };
       }
 
       // V1: use board
@@ -835,11 +831,7 @@ export async function mcpCommand(options: McpOptions) {
         return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
       }
 
-      let { board } = result;
-      const taskInfo = findTaskById(board, task);
-      if (!taskInfo) {
-        return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-      }
+      const { board } = result;
 
       let targetColumn = findColumnById(board, column);
       if (!targetColumn) {
@@ -850,35 +842,72 @@ export async function mcpCommand(options: McpOptions) {
         return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
       }
 
-      const moveResult = moveTask(board, task, taskInfo.column.id, targetColumn.id, targetColumn.tasks.length);
+      if (!isBatch) {
+        const id = taskIds[0];
+        const taskInfo = findTaskById(board, id);
+        if (!taskInfo) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${id}` }], isError: true };
+        }
 
-      if (!moveResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${moveResult.error}` }], isError: true };
+        const moveResult = moveTask(board, id, taskInfo.column.id, targetColumn.id, targetColumn.tasks.length);
+        if (!moveResult.success) {
+          return { content: [{ type: 'text' as const, text: `Error: ${moveResult.error}` }], isError: true };
+        }
+        writeBoard(filePath, moveResult.board!);
+
+        const warning = mcpCheckIncompleteSubtasks(taskInfo.task, targetColumn);
+        let message = `Task ${id} moved from "${taskInfo.column.title}" to "${targetColumn.title}"`;
+        if (warning) message += `\n\n${warning.warning}`;
+        return { content: [{ type: 'text' as const, text: message }] };
       }
 
-      writeBoard(filePath, moveResult.board!);
-
-      const warning = mcpCheckIncompleteSubtasks(taskInfo.task, targetColumn);
-      let message = `Task ${task} moved from "${taskInfo.column.title}" to "${targetColumn.title}"`;
-      if (warning) {
-        message += `\n\n${warning.warning}`;
+      const tasksWithIncomplete: Array<{ id: string; incomplete: number; total: number }> = [];
+      for (const id of taskIds) {
+        const taskInfo = findTaskById(board, id);
+        if (taskInfo) {
+          const warning = mcpCheckIncompleteSubtasks(taskInfo.task, targetColumn);
+          if (warning?.incompleteSubtasks) {
+            tasksWithIncomplete.push({
+              id,
+              incomplete: warning.incompleteSubtasks.incomplete.length,
+              total: warning.incompleteSubtasks.total,
+            });
+          }
+        }
       }
 
+      const bulkResult = moveTasks(board, taskIds, targetColumn.id);
+      if (bulkResult.board) {
+        writeBoard(filePath, bulkResult.board);
+      }
+
+      const output: Record<string, unknown> = {
+        success: bulkResult.success,
+        successCount: bulkResult.successCount,
+        failureCount: bulkResult.failureCount,
+        results: bulkResult.results,
+      };
+      if (tasksWithIncomplete.length > 0) {
+        output.warning = `${tasksWithIncomplete.length} task(s) moved to "${targetColumn.title}" have incomplete subtasks`;
+        output.tasksWithIncompleteSubtasks = tasksWithIncomplete;
+      }
       return {
-        content: [{ type: 'text' as const, text: message }]
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        isError: !bulkResult.success,
       };
     }
   );
 
   // Patch task tool
   server.registerTool(
-    'patch_task',
+    'task_patch',
     {
       title: 'Patch Task',
       description: 'Update specific fields of a task. Set fields to null to remove them.',
       inputSchema: {
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to update'),
+        taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to update'),
+        task: z.string().optional().describe('Alias of taskId for single task update'),
         title: z.string().optional().describe('New task title'),
         description: z.string().nullable().optional().describe('New description (null to remove)'),
         priority: z.enum(['low', 'medium', 'high', 'critical']).nullable().optional().describe('New priority (null to remove)'),
@@ -888,32 +917,58 @@ export async function mcpCommand(options: McpOptions) {
         relatedFiles: z.array(z.string()).nullable().optional().describe('Related file paths (null to remove)')
       }
     },
-    async ({ file, task, title, description, priority, tags, assignee, dueDate, relatedFiles }) => {
+    async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles }) => {
       const filePath = file || defaultFile;
+      const rawTaskIds = taskId ?? task;
+      if (!rawTaskIds) {
+        return { content: [{ type: 'text' as const, text: 'Error: taskId is required' }], isError: true };
+      }
+      const taskIds = Array.isArray(rawTaskIds) ? rawTaskIds : [rawTaskIds];
+      const isBatch = taskIds.length > 1;
 
       const isNull = (v: unknown) => v === null || v === 'null';
 
       // V2: update task file directly
       if (isV2(filePath)) {
         const dirs = getV2Dirs(filePath);
-        const taskPath = path.join(dirs.boardDir, taskFileName(task));
-        const doc = coreReadTaskFile(taskPath);
-        if (!doc) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+
+        for (const id of taskIds) {
+          const taskPath = path.join(dirs.boardDir, taskFileName(id));
+          const doc = coreReadTaskFile(taskPath);
+          if (!doc) {
+            results.push({ taskId: id, success: false, error: 'Task not found' });
+            continue;
+          }
+
+          const t = doc.task;
+          if (title !== undefined) t.title = title;
+          if (description !== undefined) { if (isNull(description)) delete t.description; else t.description = description as string; }
+          if (priority !== undefined) { if (isNull(priority)) delete t.priority; else t.priority = priority as any; }
+          if (tags !== undefined) { if (isNull(tags)) delete t.tags; else t.tags = tags as string[]; }
+          if (assignee !== undefined) { if (isNull(assignee)) delete t.assignee; else t.assignee = assignee as string; }
+          if (dueDate !== undefined) { if (isNull(dueDate)) delete t.dueDate; else t.dueDate = dueDate as string; }
+          if (relatedFiles !== undefined) { if (isNull(relatedFiles)) delete t.relatedFiles; else t.relatedFiles = relatedFiles as string[]; }
+          t.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(taskPath, t, doc.body);
+          results.push({ taskId: id, success: true });
         }
 
-        const t = doc.task;
-        if (title !== undefined) t.title = title;
-        if (description !== undefined) { if (isNull(description)) delete t.description; else t.description = description as string; }
-        if (priority !== undefined) { if (isNull(priority)) delete t.priority; else t.priority = priority as any; }
-        if (tags !== undefined) { if (isNull(tags)) delete t.tags; else t.tags = tags as string[]; }
-        if (assignee !== undefined) { if (isNull(assignee)) delete t.assignee; else t.assignee = assignee as string; }
-        if (dueDate !== undefined) { if (isNull(dueDate)) delete t.dueDate; else t.dueDate = dueDate as string; }
-        if (relatedFiles !== undefined) { if (isNull(relatedFiles)) delete t.relatedFiles; else t.relatedFiles = relatedFiles as string[]; }
-        t.updatedAt = new Date().toISOString();
+        if (!isBatch) {
+          const single = results[0];
+          if (!single?.success) {
+            return { content: [{ type: 'text' as const, text: `Error: ${single?.error || 'Task not found'}` }], isError: true };
+          }
+          return { content: [{ type: 'text' as const, text: `Task ${taskIds[0]} updated successfully` }] };
+        }
 
-        coreWriteTaskFile(taskPath, t, doc.body);
-        return { content: [{ type: 'text' as const, text: `Task ${task} updated successfully` }] };
+        const successCount = results.filter(r => r.success).length;
+        const failureCount = results.length - successCount;
+        const output = { success: failureCount === 0, successCount, failureCount, results };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          isError: failureCount > 0 && successCount === 0,
+        };
       }
 
       // V1: use board
@@ -933,23 +988,36 @@ export async function mcpCommand(options: McpOptions) {
       if (dueDate !== undefined) patch.dueDate = isNull(dueDate) ? undefined : dueDate;
       if (relatedFiles !== undefined) patch.relatedFiles = isNull(relatedFiles) ? undefined : relatedFiles;
 
-      const patchResult = patchTask(board, task, patch);
-
-      if (!patchResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${patchResult.error}` }], isError: true };
+      if (!isBatch) {
+        const id = taskIds[0];
+        const patchResult = patchTask(board, id, patch);
+        if (!patchResult.success) {
+          return { content: [{ type: 'text' as const, text: `Error: ${patchResult.error}` }], isError: true };
+        }
+        writeBoard(filePath, patchResult.board!);
+        return { content: [{ type: 'text' as const, text: `Task ${id} updated successfully` }] };
       }
 
-      writeBoard(filePath, patchResult.board!);
-
+      const bulkResult = patchTasks(board, taskIds, patch);
+      if (bulkResult.board) {
+        writeBoard(filePath, bulkResult.board);
+      }
+      const output = {
+        success: bulkResult.success,
+        successCount: bulkResult.successCount,
+        failureCount: bulkResult.failureCount,
+        results: bulkResult.results,
+      };
       return {
-        content: [{ type: 'text' as const, text: `Task ${task} updated successfully` }]
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        isError: !bulkResult.success,
       };
     }
   );
 
   // Delete task tool
   server.registerTool(
-    'delete_task',
+    'task_delete',
     {
       title: 'Delete Task',
       description: 'Permanently delete a task from the brainfile',
@@ -1006,76 +1074,774 @@ export async function mcpCommand(options: McpOptions) {
     }
   );
 
-  // Archive task tool
+  // Unified subtask tool (action-based)
   server.registerTool(
-    'archive_task',
+    'subtask',
     {
-      title: 'Archive Task',
-      description: 'Archive a task locally or to an external service (GitHub Issues, Linear). If no destination is specified, uses the project default from brainfile.md, then user default from ~/.config/brainfile/config.json, then falls back to local.',
+      title: 'Subtask',
+      description: 'Unified subtask tool for add/toggle/delete/update with single, array, or all targeting',
+      inputSchema: {
+        action: z.enum(['add', 'toggle', 'delete', 'update']).describe('Subtask action'),
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().describe('Parent task ID'),
+        subtask: z.string().optional().describe('Single subtask title/id depending on action'),
+        subtasks: z.array(z.string()).optional().describe('Subtask titles/ids depending on action'),
+        title: z.string().optional().describe('New title for update action'),
+        titles: z.array(z.string()).optional().describe('Optional titles for batch update action'),
+        completed: z.boolean().optional().describe('For toggle action: set explicit completed state (true/false) instead of flipping'),
+        all: z.boolean().optional().describe('For toggle/delete action: target all subtasks in the task'),
+      }
+    },
+    async ({ action, file, task, subtask, subtasks, title, titles, completed, all }) => {
+      const filePath = file || defaultFile;
+      const listParam = subtasks ?? (subtask ? [subtask] : []);
+      const useAll = all === true;
+
+      const resolveUpdateTitles = (ids: string[]): { ok: true; values: string[] } | { ok: false; error: string } => {
+        if (titles && titles.length > 0) {
+          if (titles.length !== ids.length && titles.length !== 1) {
+            return { ok: false, error: 'titles length must match subtasks length (or provide a single title to apply to all)' };
+          }
+          const values = titles.length === 1 ? ids.map(() => titles[0]) : titles;
+          return { ok: true, values };
+        }
+        if (title !== undefined) {
+          return { ok: true, values: ids.map(() => title) };
+        }
+        return { ok: false, error: 'title or titles is required for action=update' };
+      };
+
+      // ── add ────────────────────────────────────────────────────────────────
+      if (action === 'add') {
+        const titlesToAdd = listParam.map(value => value.trim()).filter(Boolean);
+        if (titlesToAdd.length === 0) {
+          return { content: [{ type: 'text' as const, text: 'Error: subtask or subtasks is required for action=add' }], isError: true };
+        }
+
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+          const found = findV2Task(dirs, task);
+          if (!found) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+
+          const t = found.doc.task;
+          if (!t.subtasks) t.subtasks = [];
+          let nextIndex = t.subtasks.length > 0
+            ? Math.max(...t.subtasks.map(st => parseInt(st.id.split('-').pop() || '0', 10))) + 1
+            : 1;
+
+          const added: Array<{ id: string; title: string }> = [];
+          for (const value of titlesToAdd) {
+            const id = `${task}-${nextIndex++}`;
+            const newSubtask = { id, title: value, completed: false };
+            t.subtasks.push(newSubtask);
+            added.push({ id: newSubtask.id, title: newSubtask.title });
+          }
+          t.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+          if (added.length === 1) {
+            return { content: [{ type: 'text' as const, text: `Subtask added: ${added[0].id} - ${added[0].title}` }] };
+          }
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ added, count: added.length }, null, 2) }] };
+        }
+
+        const result = readBoard(filePath);
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        let board = result.board;
+        const added: Array<{ id: string; title: string }> = [];
+
+        for (const value of titlesToAdd) {
+          const addResult = addSubtask(board, task, value);
+          if (!addResult.success || !addResult.board) {
+            return { content: [{ type: 'text' as const, text: `Error: ${addResult.error}` }], isError: true };
+          }
+          board = addResult.board;
+          const updatedTask = findTaskById(board, task)?.task;
+          const created = updatedTask?.subtasks?.slice(-1)[0];
+          if (created) added.push({ id: created.id, title: created.title });
+        }
+
+        writeBoard(filePath, board);
+        if (added.length === 1) {
+          return { content: [{ type: 'text' as const, text: `Subtask added: ${added[0].id} - ${added[0].title}` }] };
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ added, count: added.length }, null, 2) }] };
+      }
+
+      // ── delete ─────────────────────────────────────────────────────────────
+      if (action === 'delete') {
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+          const found = findV2Task(dirs, task);
+          if (!found) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+          const t = found.doc.task;
+          if (!t.subtasks || t.subtasks.length === 0) {
+            return { content: [{ type: 'text' as const, text: `Error: Task has no subtasks` }], isError: true };
+          }
+
+          const targetIds = useAll ? t.subtasks.map(st => st.id) : listParam;
+          if (targetIds.length === 0) {
+            return { content: [{ type: 'text' as const, text: 'Error: subtask or subtasks is required for action=delete (unless all=true)' }], isError: true };
+          }
+
+          const existing = new Set(t.subtasks.map(st => st.id));
+          const deleted = targetIds.filter(id => existing.has(id));
+          const missing = targetIds.filter(id => !existing.has(id));
+          if (deleted.length === 0) {
+            return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${targetIds.join(', ')}` }], isError: true };
+          }
+
+          const deleteSet = new Set(deleted);
+          t.subtasks = t.subtasks.filter(st => !deleteSet.has(st.id));
+          t.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+          if (!useAll && deleted.length === 1 && missing.length === 0) {
+            return { content: [{ type: 'text' as const, text: `Subtask ${deleted[0]} deleted successfully` }] };
+          }
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ deleted, missing, count: deleted.length }, null, 2) }] };
+        }
+
+        const result = readBoard(filePath);
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        let board = result.board;
+        const taskInfo = findTaskById(board, task);
+        if (!taskInfo) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+        const targetIds = useAll ? (taskInfo.task.subtasks || []).map(st => st.id) : listParam;
+        if (targetIds.length === 0) {
+          return { content: [{ type: 'text' as const, text: 'Error: subtask or subtasks is required for action=delete (unless all=true)' }], isError: true };
+        }
+
+        const deleted: string[] = [];
+        const missing: string[] = [];
+        for (const id of targetIds) {
+          const deleteResult = deleteSubtask(board, task, id);
+          if (!deleteResult.success || !deleteResult.board) {
+            missing.push(id);
+            continue;
+          }
+          board = deleteResult.board;
+          deleted.push(id);
+        }
+        if (deleted.length === 0) {
+          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${targetIds.join(', ')}` }], isError: true };
+        }
+        writeBoard(filePath, board);
+        if (!useAll && deleted.length === 1 && missing.length === 0) {
+          return { content: [{ type: 'text' as const, text: `Subtask ${deleted[0]} deleted successfully` }] };
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ deleted, missing, count: deleted.length }, null, 2) }] };
+      }
+
+      // ── toggle ─────────────────────────────────────────────────────────────
+      if (action === 'toggle') {
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+          const found = findV2Task(dirs, task);
+          if (!found) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+          const t = found.doc.task;
+          if (!t.subtasks || t.subtasks.length === 0) {
+            return { content: [{ type: 'text' as const, text: `Error: Task has no subtasks` }], isError: true };
+          }
+
+          const targetIds = useAll ? t.subtasks.map(st => st.id) : listParam;
+          if (targetIds.length === 0) {
+            return { content: [{ type: 'text' as const, text: 'Error: subtask or subtasks is required for action=toggle (unless all=true)' }], isError: true };
+          }
+
+          const targetSet = new Set(targetIds);
+          const updated: Array<{ id: string; completed: boolean }> = [];
+          for (const st of t.subtasks) {
+            if (!targetSet.has(st.id)) continue;
+            st.completed = completed !== undefined ? completed : !st.completed;
+            updated.push({ id: st.id, completed: st.completed });
+          }
+          if (updated.length === 0) {
+            return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${targetIds.join(', ')}` }], isError: true };
+          }
+          t.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+          if (!useAll && updated.length === 1) {
+            const status = updated[0].completed ? 'completed' : 'incomplete';
+            return { content: [{ type: 'text' as const, text: `Subtask ${updated[0].id} marked as ${status}` }] };
+          }
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ updated, count: updated.length }, null, 2) }] };
+        }
+
+        const result = readBoard(filePath);
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        let board = result.board;
+        const taskInfo = findTaskById(board, task);
+        if (!taskInfo) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+        const targetIds = useAll ? (taskInfo.task.subtasks || []).map(st => st.id) : listParam;
+        if (targetIds.length === 0) {
+          return { content: [{ type: 'text' as const, text: 'Error: subtask or subtasks is required for action=toggle (unless all=true)' }], isError: true };
+        }
+
+        const updated: Array<{ id: string; completed: boolean }> = [];
+        if (useAll && completed !== undefined) {
+          const setResult = setAllSubtasksCompleted(board, task, completed);
+          if (!setResult.success || !setResult.board) {
+            return { content: [{ type: 'text' as const, text: `Error: ${setResult.error}` }], isError: true };
+          }
+          board = setResult.board;
+          const updatedTask = findTaskById(board, task)?.task;
+          for (const st of updatedTask?.subtasks || []) {
+            updated.push({ id: st.id, completed: st.completed });
+          }
+        } else if (completed !== undefined && targetIds.length > 0) {
+          const setResult = setSubtasksCompleted(board, task, targetIds, completed);
+          if (!setResult.success || !setResult.board) {
+            return { content: [{ type: 'text' as const, text: `Error: ${setResult.error}` }], isError: true };
+          }
+          board = setResult.board;
+          const updatedTask = findTaskById(board, task)?.task;
+          const targetSet = new Set(targetIds);
+          for (const st of updatedTask?.subtasks || []) {
+            if (targetSet.has(st.id)) updated.push({ id: st.id, completed: st.completed });
+          }
+        } else {
+          for (const id of targetIds) {
+            const toggleResult = toggleSubtask(board, task, id);
+            if (!toggleResult.success || !toggleResult.board) {
+              continue;
+            }
+            board = toggleResult.board;
+            const st = findTaskById(board, task)?.task.subtasks?.find(entry => entry.id === id);
+            if (st) updated.push({ id: st.id, completed: st.completed });
+          }
+        }
+
+        if (updated.length === 0) {
+          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${targetIds.join(', ')}` }], isError: true };
+        }
+        writeBoard(filePath, board);
+
+        if (!useAll && updated.length === 1) {
+          const status = updated[0].completed ? 'completed' : 'incomplete';
+          return { content: [{ type: 'text' as const, text: `Subtask ${updated[0].id} marked as ${status}` }] };
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ updated, count: updated.length }, null, 2) }] };
+      }
+
+      // ── update ─────────────────────────────────────────────────────────────
+      if (action === 'update') {
+        const targetIds = listParam;
+        if (targetIds.length === 0) {
+          return { content: [{ type: 'text' as const, text: 'Error: subtask or subtasks is required for action=update' }], isError: true };
+        }
+        const resolvedTitles = resolveUpdateTitles(targetIds);
+        if (!resolvedTitles.ok) {
+          return { content: [{ type: 'text' as const, text: `Error: ${resolvedTitles.error}` }], isError: true };
+        }
+
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+          const found = findV2Task(dirs, task);
+          if (!found) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+          const t = found.doc.task;
+          if (!t.subtasks || t.subtasks.length === 0) {
+            return { content: [{ type: 'text' as const, text: `Error: Task has no subtasks` }], isError: true };
+          }
+
+          const updates = new Map<string, string>();
+          targetIds.forEach((id, i) => updates.set(id, resolvedTitles.values[i]));
+          const updated: Array<{ id: string; title: string }> = [];
+          for (const st of t.subtasks) {
+            const nextTitle = updates.get(st.id);
+            if (nextTitle === undefined) continue;
+            st.title = nextTitle;
+            updated.push({ id: st.id, title: st.title });
+          }
+          if (updated.length === 0) {
+            return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${targetIds.join(', ')}` }], isError: true };
+          }
+          t.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(found.filePath, t, found.doc.body);
+
+          if (updated.length === 1) {
+            return { content: [{ type: 'text' as const, text: `Subtask ${updated[0].id} updated to "${updated[0].title}"` }] };
+          }
+          return { content: [{ type: 'text' as const, text: JSON.stringify({ updated, count: updated.length }, null, 2) }] };
+        }
+
+        const result = readBoard(filePath);
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        let board = result.board;
+        const updated: Array<{ id: string; title: string }> = [];
+
+        targetIds.forEach((id, idx) => {
+          const updateResult = updateSubtask(board, task, id, resolvedTitles.values[idx]);
+          if (!updateResult.success || !updateResult.board) return;
+          board = updateResult.board;
+          const st = findTaskById(board, task)?.task.subtasks?.find(entry => entry.id === id);
+          if (st) updated.push({ id: st.id, title: st.title });
+        });
+
+        if (updated.length === 0) {
+          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${targetIds.join(', ')}` }], isError: true };
+        }
+        writeBoard(filePath, board);
+        if (updated.length === 1) {
+          return { content: [{ type: 'text' as const, text: `Subtask ${updated[0].id} updated to "${updated[0].title}"` }] };
+        }
+        return { content: [{ type: 'text' as const, text: JSON.stringify({ updated, count: updated.length }, null, 2) }] };
+      }
+
+      return { content: [{ type: 'text' as const, text: `Error: Unknown action: ${action}` }], isError: true };
+    }
+  );
+
+  // Unified contract tool (action-based)
+  server.registerTool(
+    'contract',
+    {
+      title: 'Contract',
+      description: [
+        'Unified action-based contract tool.',
+        'action=attach   — Attach a new contract to a task (default status=draft; pass ready:true for immediate dispatch)',
+        'action=pickup   — Claim a contract (status → in_progress), returns agent context markdown',
+        'action=deliver  — Mark contract as delivered (status → delivered)',
+        'action=validate — Validate deliverables + commands (status → done/failed)',
+        'action=graph    — Attach contracts to multiple tasks atomically with dependsOn DAG edges (tasks array only)',
+        'action=activate — Flip draft → ready for one task (task param) or all children of a parent (parentId param)',
+      ].join('\n'),
+      inputSchema: {
+        action: z.enum(['attach', 'pickup', 'deliver', 'validate', 'graph', 'activate']).describe('Contract action'),
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().optional().describe('Task ID (required for attach, pickup, deliver, validate, and single-task activate)'),
+        parentId: z.string().optional().describe('For activate: activate all draft contracts whose parentId matches this value'),
+        // attach fields
+        ready: z.boolean().optional().describe('attach only: when true, status=ready instead of draft'),
+        deliverables: z.array(z.string()).optional().describe('attach only: type:path:description'),
+        validation_commands: z.array(z.string()).optional().describe('attach only: validation shell commands'),
+        constraints: z.array(z.string()).optional().describe('attach only: constraint strings'),
+        tasks: z.array(z.object({
+          task: z.string(),
+          deliverables: z.array(z.object({
+            type: z.enum(['file', 'test', 'docs', 'design', 'research']),
+            path: z.string(),
+            description: z.string().optional(),
+          })).optional(),
+          validation_commands: z.array(z.string()).optional(),
+          constraints: z.array(z.string()).optional(),
+          dependsOn: z.array(z.string()).optional(),
+        })).optional().describe('graph only: array of contract graph task specs'),
+        activate: z.boolean().optional().describe('graph only: when true, attached contracts start in ready instead of draft'),
+      }
+    },
+    async ({ action, file, task, parentId, ready: attachReady, deliverables, validation_commands, constraints, tasks, activate }) => {
+      const filePath = file || defaultFile;
+
+      // ── attach ─────────────────────────────────────────────────────────────
+      if (action === 'attach') {
+        if (!task) {
+          return { content: [{ type: 'text' as const, text: 'Error: task is required for action=attach' }], isError: true };
+        }
+
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+          const found = findV2Task(dirs, task);
+          if (!found) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+          try {
+            const contract = buildContract({
+              deliverableSpecs: deliverables,
+              validationCommands: validation_commands,
+              constraints,
+              status: attachReady ? 'ready' : 'draft',
+            });
+            found.doc.task.contract = contract;
+            found.doc.task.updatedAt = new Date().toISOString();
+            coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
+            return { content: [{ type: 'text' as const, text: `Contract attached (${contract.status}): ${task}` }] };
+          } catch (e) {
+            return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+          }
+        }
+
+        const readResult = readBoard(filePath);
+        if ('error' in readResult) {
+          return { content: [{ type: 'text' as const, text: `Error: ${readResult.error}` }], isError: true };
+        }
+        const taskInfo = findTaskById(readResult.board, task);
+        if (!taskInfo) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+        try {
+          const contract = buildContract({
+            deliverableSpecs: deliverables,
+            validationCommands: validation_commands,
+            constraints,
+            status: attachReady ? 'ready' : 'draft',
+          });
+          const contractResult = setTaskContract(readResult.board, task, contract);
+          if (!contractResult.success || !contractResult.board) {
+            return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to attach contract'}` }], isError: true };
+          }
+          writeBoard(filePath, contractResult.board);
+          return { content: [{ type: 'text' as const, text: `Contract attached (${contract.status}): ${task}` }] };
+        } catch (e) {
+          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+        }
+      }
+
+      // ── pickup ─────────────────────────────────────────────────────────────
+      if (action === 'pickup') {
+        if (!task) {
+          return { content: [{ type: 'text' as const, text: 'Error: task is required for action=pickup' }], isError: true };
+        }
+        const result = pickupContract({ filePath, taskId: task });
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: result.markdown }] };
+      }
+
+      // ── deliver ────────────────────────────────────────────────────────────
+      if (action === 'deliver') {
+        if (!task) {
+          return { content: [{ type: 'text' as const, text: 'Error: task is required for action=deliver' }], isError: true };
+        }
+        const result = deliverContract({ filePath, taskId: task });
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: `Contract delivered: ${task}` }] };
+      }
+
+      // ── validate ───────────────────────────────────────────────────────────
+      if (action === 'validate') {
+        if (!task) {
+          return { content: [{ type: 'text' as const, text: 'Error: task is required for action=validate' }], isError: true };
+        }
+        const result = validateContract({ filePath, taskId: task });
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        const output = {
+          ok: result.ok,
+          status: result.ok ? 'done' : 'failed',
+          deliverables: result.deliverableChecks,
+          commands: result.commandResults,
+          warnings: result.warnings,
+        };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          isError: !result.ok,
+        };
+      }
+
+      // ── graph ──────────────────────────────────────────────────────────────
+      if (action === 'graph') {
+        if (!tasks || tasks.length === 0) {
+          return { content: [{ type: 'text' as const, text: 'Error: tasks is required for action=graph and must be a non-empty array' }], isError: true };
+        }
+
+        try {
+          const result = executeContractGraphMcpAction({
+            file: filePath,
+            tasks,
+            activate,
+          });
+
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({
+              attached: result.attached,
+              count: result.count,
+              order: result.order,
+              graph: result.graph,
+            }, null, 2) }],
+          };
+        } catch (error) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+            isError: true,
+          };
+        }
+      }
+
+      // ── activate ───────────────────────────────────────────────────────────
+      if (action === 'activate') {
+        if (!task && !parentId) {
+          return { content: [{ type: 'text' as const, text: 'Error: task or parentId is required for action=activate' }], isError: true };
+        }
+
+        const activated: string[] = [];
+
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+
+          if (task) {
+            const found = findV2Task(dirs, task, false);
+            if (!found || found.isLog) {
+              return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+            }
+            if (!found.doc.task.contract) {
+              return { content: [{ type: 'text' as const, text: `Error: Task ${task} has no contract` }], isError: true };
+            }
+            if (found.doc.task.contract.status !== 'draft') {
+              return { content: [{ type: 'text' as const, text: `Error: Contract is not in draft status (current: ${found.doc.task.contract.status})` }], isError: true };
+            }
+            const readyAt = new Date().toISOString();
+            found.doc.task.contract = {
+              ...found.doc.task.contract,
+              status: 'ready',
+              metrics: ({
+                ...(found.doc.task.contract.metrics ?? {}),
+                readyAt,
+              } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+            };
+            found.doc.task.updatedAt = readyAt;
+            coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
+            activated.push(task);
+          } else {
+            // Bulk by parentId
+            const allTasks = readTasksDir(dirs.boardDir);
+            for (const doc of allTasks) {
+              const t = doc.task as any;
+              if (t.parentId !== parentId) continue;
+              if (!t.contract || t.contract.status !== 'draft') continue;
+              const readyAt = new Date().toISOString();
+              t.contract = {
+                ...t.contract,
+                status: 'ready',
+                metrics: ({
+                  ...(t.contract.metrics ?? {}),
+                  readyAt,
+                } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+              };
+              t.updatedAt = readyAt;
+              coreWriteTaskFile(path.join(dirs.boardDir, taskFileName(t.id)), t, doc.body);
+              activated.push(t.id);
+            }
+          }
+
+          const output = { activated, count: activated.length };
+          return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+        }
+
+        // V1
+        const readResult = readBoard(filePath);
+        if ('error' in readResult) {
+          return { content: [{ type: 'text' as const, text: `Error: ${readResult.error}` }], isError: true };
+        }
+        let board = readResult.board;
+
+        if (task) {
+          const taskInfo = findTaskById(board, task);
+          if (!taskInfo) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+          if (!taskInfo.task.contract) {
+            return { content: [{ type: 'text' as const, text: `Error: Task ${task} has no contract` }], isError: true };
+          }
+          if (taskInfo.task.contract.status !== 'draft') {
+            return { content: [{ type: 'text' as const, text: `Error: Contract is not in draft status (current: ${taskInfo.task.contract.status})` }], isError: true };
+          }
+          const readyAt = new Date().toISOString();
+          const updatedContract = {
+            ...taskInfo.task.contract,
+            status: 'ready' as const,
+            metrics: ({
+              ...(taskInfo.task.contract.metrics ?? {}),
+              readyAt,
+            } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+          };
+          const contractResult = setTaskContract(board, task, updatedContract);
+          if (!contractResult.success || !contractResult.board) {
+            return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to activate contract'}` }], isError: true };
+          }
+          board = contractResult.board;
+          activated.push(task);
+        } else {
+          // Bulk by parentId
+          for (const col of board.columns) {
+            for (const t of col.tasks) {
+              const taskAny = t as any;
+              if (taskAny.parentId !== parentId) continue;
+              if (!t.contract || t.contract.status !== 'draft') continue;
+              const readyAt = new Date().toISOString();
+              const updatedContract = {
+                ...t.contract,
+                status: 'ready' as const,
+                metrics: ({
+                  ...(t.contract.metrics ?? {}),
+                  readyAt,
+                } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+              };
+              const contractResult = setTaskContract(board, t.id, updatedContract);
+              if (contractResult.success && contractResult.board) {
+                board = contractResult.board;
+                activated.push(t.id);
+              }
+            }
+          }
+        }
+
+        writeBoard(filePath, board);
+        const output = { activated, count: activated.length };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+      }
+
+      return { content: [{ type: 'text' as const, text: `Error: Unknown action: ${action}` }], isError: true };
+    }
+  );
+
+  // Task complete tool (also supports archive destinations)
+  server.registerTool(
+    'task_complete',
+    {
+      title: 'Complete Task',
+      description: 'Complete a task or archive it to local/GitHub/Linear destination',
       inputSchema: {
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to archive'),
-        destination: z.enum(['local', 'github', 'linear']).optional().describe('Archive destination: local (default), github (creates closed issue), or linear (creates completed issue)')
+        task: z.string().describe('Task ID to complete'),
+        destination: z.enum(['local', 'github', 'linear']).optional().describe('Optional archive destination. If omitted, performs normal completion flow.'),
       }
     },
     async ({ file, task, destination }) => {
       const filePath = file || defaultFile;
 
-      // V2: archive means move task from board/ to logs/
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const found = findV2Task(dirs, task);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+      try {
+        // Default behavior: normal complete flow (v2 -> logs, v1 -> done column)
+        if (!destination) {
+          const { completeCommand } = await import('./complete');
+          const result = completeCommand({ file: filePath, task }, { log: () => {}, warn: () => {}, error: () => {}, info: () => {} });
+          return {
+            content: [{ type: 'text' as const, text: `Task ${task} completed at ${result.completedAt}` }]
+          };
         }
 
-        // Determine effective destination
-        const board = readV2BoardConfig(filePath);
-        const brainfileDestination = (board as any).archive?.destination;
-        const effectiveDestination = destination || getEffectiveArchiveDestination(brainfileDestination);
+        // Local archive keeps legacy archive_task behavior for v1
+        if (destination === 'local') {
+          if (isV2(filePath)) {
+            const dirs = getV2Dirs(filePath);
+            const found = findV2Task(dirs, task);
+            if (!found) {
+              return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+            }
+            const logPath = path.join(dirs.logsDir, taskFileName(task));
+            found.doc.task.completedAt = found.doc.task.completedAt || new Date().toISOString();
+            delete found.doc.task.column;
+            delete found.doc.task.position;
+            coreWriteTaskFile(logPath, found.doc.task, found.doc.body);
+            fs.unlinkSync(found.filePath);
+            return { content: [{ type: 'text' as const, text: `Task ${task} archived to logs/` }] };
+          }
 
-        // For GitHub/Linear, format and send before removing
-        if (effectiveDestination === 'github') {
-          if (!(await isGitHubAuthenticated())) {
-            return { content: [{ type: 'text' as const, text: `Error: Not authenticated with GitHub.\n\nTo authenticate, run:\n  npx @brainfile/cli auth github\n\nOr fall back to local archive:\n  Use destination: "local"` }], isError: true };
+          const readResult = readBoard(filePath);
+          if ('error' in readResult) {
+            return { content: [{ type: 'text' as const, text: `Error: ${readResult.error}` }], isError: true };
           }
-          const config = getArchiveConfig();
-          if (!config.github?.owner || !config.github?.repo) {
-            return { content: [{ type: 'text' as const, text: `Error: GitHub repository not configured.\n\nTo configure, run:\n  npx @brainfile/cli config set archive.github.owner <owner>\n  npx @brainfile/cli config set archive.github.repo <repo>` }], isError: true };
+          const taskInfo = findTaskById(readResult.board, task);
+          if (!taskInfo) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
           }
-          const payload = formatTaskForGitHub(found.doc.task, {
-            includeMeta: true, includeSubtasks: true, includeRelatedFiles: true,
-            boardTitle: board.title, fromColumn: found.doc.task.column || 'unknown',
-            extraLabels: config.github.labels,
-          });
-          const ghResult = await createGitHubIssue({ owner: config.github.owner, repo: config.github.repo, title: payload.title, body: payload.body, labels: payload.labels, state: 'closed' });
-          if (!ghResult.success) {
-            return { content: [{ type: 'text' as const, text: `Error creating GitHub issue: ${ghResult.error}` }], isError: true };
+          const archiveResult = archiveTaskToFile(filePath, readResult.board, taskInfo.column.id, task);
+          if (!archiveResult.success) {
+            return { content: [{ type: 'text' as const, text: `Error: ${archiveResult.error}` }], isError: true };
           }
-          fs.unlinkSync(found.filePath);
-          return { content: [{ type: 'text' as const, text: `Task ${task} archived to GitHub Issue #${ghResult.issueNumber} (closed)\n\nView: ${ghResult.issueUrl}` }] };
+          return {
+            content: [{ type: 'text' as const, text: `Task ${task} archived to ${path.basename(getArchivePath(filePath))}` }]
+          };
         }
 
-        if (effectiveDestination === 'linear') {
+        // External archive destinations: legacy archive behavior
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+          const found = findV2Task(dirs, task);
+          if (!found) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+          const board = readV2BoardConfig(filePath);
+
+          if (destination === 'github') {
+            if (!(await isGitHubAuthenticated())) {
+              return { content: [{ type: 'text' as const, text: 'Error: Not authenticated with GitHub.' }], isError: true };
+            }
+            const config = getArchiveConfig();
+            if (!config.github?.owner || !config.github?.repo) {
+              return { content: [{ type: 'text' as const, text: 'Error: GitHub repository not configured.' }], isError: true };
+            }
+            const payload = formatTaskForGitHub(found.doc.task, {
+              includeMeta: true,
+              includeSubtasks: true,
+              includeRelatedFiles: true,
+              boardTitle: board.title,
+              fromColumn: found.doc.task.column || 'unknown',
+              extraLabels: config.github.labels,
+            });
+            const ghResult = await createGitHubIssue({
+              owner: config.github.owner,
+              repo: config.github.repo,
+              title: payload.title,
+              body: payload.body,
+              labels: payload.labels,
+              state: 'closed',
+            });
+            if (!ghResult.success) {
+              return { content: [{ type: 'text' as const, text: `Error creating GitHub issue: ${ghResult.error}` }], isError: true };
+            }
+            fs.unlinkSync(found.filePath);
+            return { content: [{ type: 'text' as const, text: `Task ${task} archived to GitHub Issue #${ghResult.issueNumber} (closed)\n\nView: ${ghResult.issueUrl}` }] };
+          }
+
           if (!(await isLinearAuthenticated())) {
-            return { content: [{ type: 'text' as const, text: `Error: Not authenticated with Linear.\n\nTo authenticate, run:\n  npx @brainfile/cli auth linear --token <api-key>` }], isError: true };
+            return { content: [{ type: 'text' as const, text: 'Error: Not authenticated with Linear.' }], isError: true };
           }
           const config = getArchiveConfig();
           let teamId = config.linear?.teamId;
           if (!teamId) {
             const teams = await getLinearTeams();
-            if (teams.length === 0) { return { content: [{ type: 'text' as const, text: `Error: No Linear teams found.` }], isError: true }; }
-            if (teams.length === 1) { teamId = teams[0].id; }
-            else {
+            if (teams.length === 0) {
+              return { content: [{ type: 'text' as const, text: 'Error: No Linear teams found.' }], isError: true };
+            }
+            if (teams.length === 1) {
+              teamId = teams[0].id;
+            } else {
               const teamList = teams.map(t => `  ${t.key}: ${t.name} (${t.id})`).join('\n');
               return { content: [{ type: 'text' as const, text: `Error: Multiple Linear teams found. Please configure a default.\n\nAvailable teams:\n${teamList}` }], isError: true };
             }
           }
           const payload = formatTaskForLinear(found.doc.task, {
-            includeMeta: true, includeSubtasks: true, includeRelatedFiles: true,
-            boardTitle: board.title, fromColumn: found.doc.task.column || 'unknown', stateName: 'Done',
+            includeMeta: true,
+            includeSubtasks: true,
+            includeRelatedFiles: true,
+            boardTitle: board.title,
+            fromColumn: found.doc.task.column || 'unknown',
+            stateName: 'Done',
           });
-          const linearResult = await createLinearIssue({ teamId, title: payload.title, description: payload.description, priority: payload.priority, labelNames: payload.labelNames, stateName: 'Done' });
+          const linearResult = await createLinearIssue({
+            teamId,
+            title: payload.title,
+            description: payload.description,
+            priority: payload.priority,
+            labelNames: payload.labelNames,
+            stateName: 'Done',
+          });
           if (!linearResult.success) {
             return { content: [{ type: 'text' as const, text: `Error creating Linear issue: ${linearResult.error}` }], isError: true };
           }
@@ -1083,157 +1849,65 @@ export async function mcpCommand(options: McpOptions) {
           return { content: [{ type: 'text' as const, text: `Task ${task} archived to Linear Issue ${linearResult.issueId} (Done)\n\nView: ${linearResult.issueUrl}` }] };
         }
 
-        // Local archive: move from board/ to logs/
-        const logPath = path.join(dirs.logsDir, taskFileName(task));
-        found.doc.task.completedAt = found.doc.task.completedAt || new Date().toISOString();
-        delete found.doc.task.column;
-        delete found.doc.task.position;
-        coreWriteTaskFile(logPath, found.doc.task, found.doc.body);
-        fs.unlinkSync(found.filePath);
-        return { content: [{ type: 'text' as const, text: `Task ${task} archived to logs/` }] };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      // Find the task to get its column
-      const taskInfo = findTaskById(board, task);
-      if (!taskInfo) {
-        return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-      }
-
-      // Determine effective destination
-      const brainfileDestination = (board as any).archive?.destination;
-      const effectiveDestination = destination || getEffectiveArchiveDestination(brainfileDestination);
-
-      // Handle local archive (to separate brainfile-archive.md file)
-      if (effectiveDestination === 'local') {
-        const archiveResult = archiveTaskToFile(filePath, board, taskInfo.column.id, task);
-
-        if (!archiveResult.success) {
-          return { content: [{ type: 'text' as const, text: `Error: ${archiveResult.error}` }], isError: true };
+        const readResult = readBoard(filePath);
+        if ('error' in readResult) {
+          return { content: [{ type: 'text' as const, text: `Error: ${readResult.error}` }], isError: true };
+        }
+        const { board } = readResult;
+        const taskInfo = findTaskById(board, task);
+        if (!taskInfo) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
         }
 
-        const archivePath = getArchivePath(filePath);
-        return {
-          content: [{ type: 'text' as const, text: `Task ${task} archived to ${path.basename(archivePath)}` }]
-        };
-      }
-
-      // Handle GitHub archive
-      if (effectiveDestination === 'github') {
-        // Check authentication
-        if (!(await isGitHubAuthenticated())) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: Not authenticated with GitHub.\n\nTo authenticate, run:\n  npx @brainfile/cli auth github\n\nOr fall back to local archive:\n  Use destination: "local"`
-            }],
-            isError: true
-          };
+        if (destination === 'github') {
+          if (!(await isGitHubAuthenticated())) {
+            return { content: [{ type: 'text' as const, text: 'Error: Not authenticated with GitHub.' }], isError: true };
+          }
+          const config = getArchiveConfig();
+          if (!config.github?.owner || !config.github?.repo) {
+            return { content: [{ type: 'text' as const, text: 'Error: GitHub repository not configured.' }], isError: true };
+          }
+          const payload = formatTaskForGitHub(taskInfo.task, {
+            includeMeta: true,
+            includeSubtasks: true,
+            includeRelatedFiles: true,
+            boardTitle: board.title,
+            fromColumn: taskInfo.column.title,
+            extraLabels: config.github.labels,
+          });
+          const ghResult = await createGitHubIssue({
+            owner: config.github.owner,
+            repo: config.github.repo,
+            title: payload.title,
+            body: payload.body,
+            labels: payload.labels,
+            state: 'closed',
+          });
+          if (!ghResult.success) {
+            return { content: [{ type: 'text' as const, text: `Error creating GitHub issue: ${ghResult.error}` }], isError: true };
+          }
+          const deleteResult = deleteTask(board, taskInfo.column.id, task);
+          if (deleteResult.success) writeBoard(filePath, deleteResult.board!);
+          return { content: [{ type: 'text' as const, text: `Task ${task} archived to GitHub Issue #${ghResult.issueNumber} (closed)\n\nView: ${ghResult.issueUrl}` }] };
         }
 
-        // Check configuration
-        const config = getArchiveConfig();
-        if (!config.github?.owner || !config.github?.repo) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: GitHub repository not configured.\n\nTo configure, run:\n  npx @brainfile/cli config set archive.github.owner <owner>\n  npx @brainfile/cli config set archive.github.repo <repo>\n\nOr fall back to local archive:\n  Use destination: "local"`
-            }],
-            isError: true
-          };
-        }
-
-        // Format and create GitHub issue
-        const payload = formatTaskForGitHub(taskInfo.task, {
-          includeMeta: true,
-          includeSubtasks: true,
-          includeRelatedFiles: true,
-          boardTitle: board.title,
-          fromColumn: taskInfo.column.title,
-          extraLabels: config.github.labels,
-        });
-
-        const ghResult = await createGitHubIssue({
-          owner: config.github.owner,
-          repo: config.github.repo,
-          title: payload.title,
-          body: payload.body,
-          labels: payload.labels,
-          state: 'closed',
-        });
-
-        if (!ghResult.success) {
-          return {
-            content: [{ type: 'text' as const, text: `Error creating GitHub issue: ${ghResult.error}` }],
-            isError: true
-          };
-        }
-
-        // Remove task from board
-        const deleteResult = deleteTask(board, taskInfo.column.id, task);
-        if (deleteResult.success) {
-          writeBoard(filePath, deleteResult.board!);
-        }
-
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Task ${task} archived to GitHub Issue #${ghResult.issueNumber} (closed)\n\nView: ${ghResult.issueUrl}`
-          }]
-        };
-      }
-
-      // Handle Linear archive
-      if (effectiveDestination === 'linear') {
-        // Check authentication
         if (!(await isLinearAuthenticated())) {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: `Error: Not authenticated with Linear.\n\nTo authenticate, run:\n  npx @brainfile/cli auth linear --token <api-key>\n\nGet your API key from: https://linear.app/settings/api\n\nOr fall back to local archive:\n  Use destination: "local"`
-            }],
-            isError: true
-          };
+          return { content: [{ type: 'text' as const, text: 'Error: Not authenticated with Linear.' }], isError: true };
         }
-
-        // Check/get team configuration
         const config = getArchiveConfig();
         let teamId = config.linear?.teamId;
-
         if (!teamId) {
           const teams = await getLinearTeams();
           if (teams.length === 0) {
-            return {
-              content: [{
-                type: 'text' as const,
-                text: `Error: No Linear teams found.\n\nVerify your authentication:\n  npx @brainfile/cli auth status`
-              }],
-              isError: true
-            };
+            return { content: [{ type: 'text' as const, text: 'Error: No Linear teams found.' }], isError: true };
           }
           if (teams.length === 1) {
             teamId = teams[0].id;
           } else {
             const teamList = teams.map(t => `  ${t.key}: ${t.name} (${t.id})`).join('\n');
-            return {
-              content: [{
-                type: 'text' as const,
-                text: `Error: Multiple Linear teams found. Please configure a default.\n\nAvailable teams:\n${teamList}\n\nTo configure, run:\n  npx @brainfile/cli config set archive.linear.teamId <team-id>\n\nOr fall back to local archive:\n  Use destination: "local"`
-              }],
-              isError: true
-            };
+            return { content: [{ type: 'text' as const, text: `Error: Multiple Linear teams found. Please configure a default.\n\nAvailable teams:\n${teamList}` }], isError: true };
           }
         }
-
-        // Format and create Linear issue
         const payload = formatTaskForLinear(taskInfo.task, {
           includeMeta: true,
           includeSubtasks: true,
@@ -1242,7 +1916,6 @@ export async function mcpCommand(options: McpOptions) {
           fromColumn: taskInfo.column.title,
           stateName: 'Done',
         });
-
         const linearResult = await createLinearIssue({
           teamId,
           title: payload.title,
@@ -1251,1289 +1924,15 @@ export async function mcpCommand(options: McpOptions) {
           labelNames: payload.labelNames,
           stateName: 'Done',
         });
-
         if (!linearResult.success) {
-          return {
-            content: [{ type: 'text' as const, text: `Error creating Linear issue: ${linearResult.error}` }],
-            isError: true
-          };
+          return { content: [{ type: 'text' as const, text: `Error creating Linear issue: ${linearResult.error}` }], isError: true };
         }
-
-        // Remove task from board
         const deleteResult = deleteTask(board, taskInfo.column.id, task);
-        if (deleteResult.success) {
-          writeBoard(filePath, deleteResult.board!);
-        }
-
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Task ${task} archived to Linear Issue ${linearResult.issueId} (Done)\n\nView: ${linearResult.issueUrl}`
-          }]
-        };
-      }
-
-      return {
-        content: [{ type: 'text' as const, text: `Error: Unknown destination: ${effectiveDestination}` }],
-        isError: true
-      };
-    }
-  );
-
-  // Restore task tool
-  server.registerTool(
-    'restore_task',
-    {
-      title: 'Restore Task',
-      description: 'Restore a task from the archive to a column',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to restore'),
-        column: z.string().describe('Target column ID or name')
-      }
-    },
-    async ({ file, task, column }) => {
-      const filePath = file || defaultFile;
-
-      // V2: restore means move from logs/ to board/
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const board = readV2BoardConfig(filePath);
-
-        let targetColumn = board.columns.find(c => c.id === column);
-        if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
-        if (!targetColumn) {
-          return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
-        }
-
-        // Look in logs
-        const logPath = path.join(dirs.logsDir, taskFileName(task));
-        const doc = coreReadTaskFile(logPath);
-        if (!doc) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found in logs: ${task}` }], isError: true };
-        }
-
-        // Move to board/ with column info
-        const targetTasks = readTasksDir(dirs.boardDir).filter(t => t.task.column === targetColumn!.id);
-        doc.task.column = targetColumn.id;
-        doc.task.position = targetTasks.length;
-        delete doc.task.completedAt;
-        doc.task.updatedAt = new Date().toISOString();
-
-        const taskPath = path.join(dirs.boardDir, taskFileName(task));
-        coreWriteTaskFile(taskPath, doc.task, doc.body);
-        fs.unlinkSync(logPath);
-
-        return { content: [{ type: 'text' as const, text: `Task ${task} restored to "${targetColumn.title}"` }] };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      // Find target column
-      let targetColumn = findColumnById(board, column);
-      if (!targetColumn) {
-        targetColumn = findColumnByName(board, column);
-      }
-
-      if (!targetColumn) {
-        return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
-      }
-
-      // Restore from separate archive file
-      const restoreResult = restoreFromArchive(filePath, task, targetColumn.id);
-
-      if (!restoreResult.success) {
-        // Provide helpful error if archive is empty
-        const { tasks } = loadArchivedTasks(filePath);
-        if (tasks.length === 0) {
-          return {
-            content: [{ type: 'text' as const, text: `Error: Archive is empty (${path.basename(getArchivePath(filePath))})` }],
-            isError: true
-          };
-        }
-        return { content: [{ type: 'text' as const, text: `Error: ${restoreResult.error}` }], isError: true };
-      }
-
-      return {
-        content: [{ type: 'text' as const, text: `Task ${task} restored to "${targetColumn.title}"` }]
-      };
-    }
-  );
-
-  // Add subtask tool
-  server.registerTool(
-    'add_subtask',
-    {
-      title: 'Add Subtask',
-      description: 'Add a subtask to a task',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Parent task ID'),
-        title: z.string().describe('Subtask title')
-      }
-    },
-    async ({ file, task, title }) => {
-      const filePath = file || defaultFile;
-
-      // V2: update task file directly
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const found = findV2Task(dirs, task);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-        }
-
-        const t = found.doc.task;
-        if (!t.subtasks) t.subtasks = [];
-        const nextId = t.subtasks.length > 0
-          ? `${task}-${Math.max(...t.subtasks.map(s => parseInt(s.id.split('-').pop() || '0', 10))) + 1}`
-          : `${task}-1`;
-        const newSubtask = { id: nextId, title, completed: false };
-        t.subtasks.push(newSubtask);
-        t.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(found.filePath, t, found.doc.body);
-
-        return { content: [{ type: 'text' as const, text: `Subtask added: ${newSubtask.id} - ${newSubtask.title}` }] };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const addResult = addSubtask(board, task, title);
-
-      if (!addResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${addResult.error}` }], isError: true };
-      }
-
-      writeBoard(filePath, addResult.board!);
-
-      // Get the new subtask ID
-      const updatedTask = findTaskById(addResult.board!, task)!.task;
-      const newSubtask = updatedTask.subtasks!.slice(-1)[0];
-
-      return {
-        content: [{ type: 'text' as const, text: `Subtask added: ${newSubtask.id} - ${newSubtask.title}` }]
-      };
-    }
-  );
-
-  // Delete subtask tool
-  server.registerTool(
-    'delete_subtask',
-    {
-      title: 'Delete Subtask',
-      description: 'Delete a subtask from a task',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Parent task ID'),
-        subtask: z.string().describe('Subtask ID to delete')
-      }
-    },
-    async ({ file, task, subtask }) => {
-      const filePath = file || defaultFile;
-
-      // V2: update task file directly
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const found = findV2Task(dirs, task);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-        }
-
-        const t = found.doc.task;
-        if (!t.subtasks || !t.subtasks.some(s => s.id === subtask)) {
-          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${subtask}` }], isError: true };
-        }
-
-        t.subtasks = t.subtasks.filter(s => s.id !== subtask);
-        t.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(found.filePath, t, found.doc.body);
-
-        return { content: [{ type: 'text' as const, text: `Subtask ${subtask} deleted successfully` }] };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const deleteResult = deleteSubtask(board, task, subtask);
-
-      if (!deleteResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${deleteResult.error}` }], isError: true };
-      }
-
-      writeBoard(filePath, deleteResult.board!);
-
-      return {
-        content: [{ type: 'text' as const, text: `Subtask ${subtask} deleted successfully` }]
-      };
-    }
-  );
-
-  // Toggle subtask tool
-  server.registerTool(
-    'toggle_subtask',
-    {
-      title: 'Toggle Subtask',
-      description: 'Toggle a subtask completion status',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Parent task ID'),
-        subtask: z.string().describe('Subtask ID to toggle')
-      }
-    },
-    async ({ file, task, subtask }) => {
-      const filePath = file || defaultFile;
-
-      // V2: update task file directly
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const found = findV2Task(dirs, task);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-        }
-
-        const t = found.doc.task;
-        const st = t.subtasks?.find(s => s.id === subtask);
-        if (!st) {
-          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${subtask}` }], isError: true };
-        }
-
-        const wasCompleted = st.completed;
-        st.completed = !st.completed;
-        t.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(found.filePath, t, found.doc.body);
-
-        const newStatus = wasCompleted ? 'incomplete' : 'completed';
-        return { content: [{ type: 'text' as const, text: `Subtask ${subtask} marked as ${newStatus}` }] };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      // Get current status
-      const taskInfo = findTaskById(board, task);
-      const currentSubtask = taskInfo?.task.subtasks?.find(st => st.id === subtask);
-      const wasCompleted = currentSubtask?.completed || false;
-
-      const toggleResult = toggleSubtask(board, task, subtask);
-
-      if (!toggleResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${toggleResult.error}` }], isError: true };
-      }
-
-      writeBoard(filePath, toggleResult.board!);
-
-      const newStatus = wasCompleted ? 'incomplete' : 'completed';
-      return {
-        content: [{ type: 'text' as const, text: `Subtask ${subtask} marked as ${newStatus}` }]
-      };
-    }
-  );
-
-  // Update subtask tool
-  server.registerTool(
-    'update_subtask',
-    {
-      title: 'Update Subtask',
-      description: 'Update a subtask title',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Parent task ID'),
-        subtask: z.string().describe('Subtask ID to update'),
-        title: z.string().describe('New subtask title')
-      }
-    },
-    async ({ file, task, subtask, title }) => {
-      const filePath = file || defaultFile;
-
-      // V2: update task file directly
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const found = findV2Task(dirs, task);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-        }
-
-        const t = found.doc.task;
-        const st = t.subtasks?.find(s => s.id === subtask);
-        if (!st) {
-          return { content: [{ type: 'text' as const, text: `Error: Subtask not found: ${subtask}` }], isError: true };
-        }
-
-        st.title = title;
-        t.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(found.filePath, t, found.doc.body);
-
-        return { content: [{ type: 'text' as const, text: `Subtask ${subtask} updated to "${title}"` }] };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const updateResult = updateSubtask(board, task, subtask, title);
-
-      if (!updateResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${updateResult.error}` }], isError: true };
-      }
-
-      writeBoard(filePath, updateResult.board!);
-
-      return {
-        content: [{ type: 'text' as const, text: `Subtask ${subtask} updated to "${title}"` }]
-      };
-    }
-  );
-
-  // Bulk set subtasks completed tool
-  server.registerTool(
-    'bulk_set_subtasks',
-    {
-      title: 'Bulk Set Subtasks',
-      description: 'Set multiple subtasks to completed or incomplete in a single atomic operation',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Parent task ID'),
-        subtasks: z.array(z.string()).describe('Array of subtask IDs to update'),
-        completed: z.boolean().describe('Whether to mark as completed (true) or incomplete (false)')
-      }
-    },
-    async ({ file, task, subtasks, completed }) => {
-      const filePath = file || defaultFile;
-
-      // V2: update task file directly
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const found = findV2Task(dirs, task);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-        }
-
-        const t = found.doc.task;
-        if (!t.subtasks) {
-          return { content: [{ type: 'text' as const, text: `Error: Task has no subtasks` }], isError: true };
-        }
-
-        const subtaskSet = new Set(subtasks);
-        for (const st of t.subtasks) {
-          if (subtaskSet.has(st.id)) {
-            st.completed = completed;
-          }
-        }
-        t.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(found.filePath, t, found.doc.body);
-
-        const status = completed ? 'completed' : 'incomplete';
-        return { content: [{ type: 'text' as const, text: `${subtasks.length} subtasks marked as ${status}` }] };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const bulkResult = setSubtasksCompleted(board, task, subtasks, completed);
-
-      if (!bulkResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${bulkResult.error}` }], isError: true };
-      }
-
-      writeBoard(filePath, bulkResult.board!);
-
-      const status = completed ? 'completed' : 'incomplete';
-      return {
-        content: [{ type: 'text' as const, text: `${subtasks.length} subtasks marked as ${status}` }]
-      };
-    }
-  );
-
-  // Complete all subtasks tool
-  server.registerTool(
-    'complete_all_subtasks',
-    {
-      title: 'Complete All Subtasks',
-      description: 'Mark all subtasks in a task as completed or incomplete',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Parent task ID'),
-        completed: z.boolean().optional().default(true).describe('Whether to mark as completed (default: true) or incomplete (false)')
-      }
-    },
-    async ({ file, task, completed }) => {
-      const filePath = file || defaultFile;
-      const markCompleted = completed ?? true;
-
-      // V2: update task file directly
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const found = findV2Task(dirs, task);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-        }
-
-        const t = found.doc.task;
-        const count = t.subtasks?.length || 0;
-        if (t.subtasks) {
-          for (const st of t.subtasks) {
-            st.completed = markCompleted;
-          }
-        }
-        t.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(found.filePath, t, found.doc.body);
-
-        const status = markCompleted ? 'completed' : 'incomplete';
-        return { content: [{ type: 'text' as const, text: `All ${count} subtasks in ${task} marked as ${status}` }] };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const bulkResult = setAllSubtasksCompleted(board, task, markCompleted);
-
-      if (!bulkResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${bulkResult.error}` }], isError: true };
-      }
-
-      writeBoard(filePath, bulkResult.board!);
-
-      // Count subtasks for the message
-      const taskInfo = findTaskById(bulkResult.board!, task);
-      const count = taskInfo?.task.subtasks?.length || 0;
-
-      const status = markCompleted ? 'completed' : 'incomplete';
-      return {
-        content: [{ type: 'text' as const, text: `All ${count} subtasks in ${task} marked as ${status}` }]
-      };
-    }
-  );
-
-  // ==========================================================================
-  // BULK OPERATIONS
-  // ==========================================================================
-
-  // Bulk move tasks tool
-  server.registerTool(
-    'bulk_move_tasks',
-    {
-      title: 'Bulk Move Tasks',
-      description: 'Move multiple tasks to a target column in a single operation',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        tasks: z.array(z.string()).describe('Array of task IDs to move'),
-        column: z.string().describe('Target column ID or name')
-      }
-    },
-    async ({ file, tasks, column }) => {
-      const filePath = file || defaultFile;
-
-      // V2: update each task file
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const board = readV2BoardConfig(filePath);
-
-        let targetColumn = board.columns.find(c => c.id === column);
-        if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
-        if (!targetColumn) {
-          return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
-        }
-
-        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
-        let successCount = 0;
-        let failureCount = 0;
-
-        for (const taskId of tasks) {
-          const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
-          const doc = coreReadTaskFile(taskPath);
-          if (!doc) {
-            results.push({ taskId, success: false, error: 'Task not found' });
-            failureCount++;
-            continue;
-          }
-
-          doc.task.column = targetColumn.id;
-          doc.task.updatedAt = new Date().toISOString();
-          coreWriteTaskFile(taskPath, doc.task, doc.body);
-          results.push({ taskId, success: true });
-          successCount++;
-        }
-
-        const output = { success: failureCount === 0, successCount, failureCount, results };
-        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }], isError: failureCount > 0 && successCount === 0 };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      // Find target column
-      let targetColumn = findColumnById(board, column);
-      if (!targetColumn) {
-        targetColumn = findColumnByName(board, column);
-      }
-
-      if (!targetColumn) {
-        return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}` }], isError: true };
-      }
-
-      // Check for incomplete subtasks before move (for warning)
-      const tasksWithIncomplete: Array<{ id: string; incomplete: number; total: number }> = [];
-      for (const taskId of tasks) {
-        const taskInfo = findTaskById(board, taskId);
-        if (taskInfo) {
-          const warning = mcpCheckIncompleteSubtasks(taskInfo.task, targetColumn);
-          if (warning?.incompleteSubtasks) {
-            tasksWithIncomplete.push({
-              id: taskId,
-              incomplete: warning.incompleteSubtasks.incomplete.length,
-              total: warning.incompleteSubtasks.total
-            });
-          }
-        }
-      }
-
-      const bulkResult = moveTasks(board, tasks, targetColumn.id);
-
-      if (bulkResult.board) {
-        writeBoard(filePath, bulkResult.board);
-      }
-
-      const output: Record<string, unknown> = {
-        success: bulkResult.success,
-        successCount: bulkResult.successCount,
-        failureCount: bulkResult.failureCount,
-        results: bulkResult.results
-      };
-
-      // Add warning about incomplete subtasks if any
-      if (tasksWithIncomplete.length > 0) {
-        output.warning = `${tasksWithIncomplete.length} task(s) moved to "${targetColumn.title}" have incomplete subtasks`;
-        output.tasksWithIncompleteSubtasks = tasksWithIncomplete;
-      }
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
-        isError: !bulkResult.success
-      };
-    }
-  );
-
-  // Bulk patch tasks tool
-  server.registerTool(
-    'bulk_patch_tasks',
-    {
-      title: 'Bulk Patch Tasks',
-      description: 'Apply the same patch to multiple tasks in a single operation',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        tasks: z.array(z.string()).describe('Array of task IDs to patch'),
-        priority: z.enum(['low', 'medium', 'high', 'critical']).nullable().optional().describe('New priority (null to remove)'),
-        tags: z.array(z.string()).nullable().optional().describe('New tags (null to remove)'),
-        assignee: z.string().nullable().optional().describe('New assignee (null to remove)')
-      }
-    },
-    async ({ file, tasks, priority, tags, assignee }) => {
-      const filePath = file || defaultFile;
-
-      const isNull = (v: unknown) => v === null || v === 'null';
-
-      // V2: update each task file
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
-        let successCount = 0;
-        let failureCount = 0;
-
-        for (const taskId of tasks) {
-          const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
-          const doc = coreReadTaskFile(taskPath);
-          if (!doc) {
-            results.push({ taskId, success: false, error: 'Task not found' });
-            failureCount++;
-            continue;
-          }
-
-          const t = doc.task;
-          if (priority !== undefined) { if (isNull(priority)) delete t.priority; else t.priority = priority as any; }
-          if (tags !== undefined) { if (isNull(tags)) delete t.tags; else t.tags = tags as string[]; }
-          if (assignee !== undefined) { if (isNull(assignee)) delete t.assignee; else t.assignee = assignee as string; }
-          t.updatedAt = new Date().toISOString();
-          coreWriteTaskFile(taskPath, t, doc.body);
-          results.push({ taskId, success: true });
-          successCount++;
-        }
-
-        const output = { success: failureCount === 0, successCount, failureCount, results };
-        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }], isError: failureCount > 0 && successCount === 0 };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const patch: TaskPatch = {};
-      if (priority !== undefined) patch.priority = isNull(priority) ? undefined : priority;
-      if (tags !== undefined) patch.tags = isNull(tags) ? undefined : tags;
-      if (assignee !== undefined) patch.assignee = isNull(assignee) ? undefined : assignee;
-
-      const bulkResult = patchTasks(board, tasks, patch);
-
-      if (bulkResult.board) {
-        writeBoard(filePath, bulkResult.board);
-      }
-
-      const output = {
-        success: bulkResult.success,
-        successCount: bulkResult.successCount,
-        failureCount: bulkResult.failureCount,
-        results: bulkResult.results
-      };
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
-        isError: !bulkResult.success
-      };
-    }
-  );
-
-  // Bulk delete tasks tool
-  server.registerTool(
-    'bulk_delete_tasks',
-    {
-      title: 'Bulk Delete Tasks',
-      description: 'Permanently delete multiple tasks in a single operation',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        tasks: z.array(z.string()).describe('Array of task IDs to delete')
-      }
-    },
-    async ({ file, tasks }) => {
-      const filePath = file || defaultFile;
-
-      // V2: delete task files
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
-        let successCount = 0;
-        let failureCount = 0;
-
-        for (const taskId of tasks) {
-          const found = findV2Task(dirs, taskId, true);
-          if (!found) {
-            results.push({ taskId, success: false, error: 'Task not found' });
-            failureCount++;
-            continue;
-          }
-          try {
-            fs.unlinkSync(found.filePath);
-            results.push({ taskId, success: true });
-            successCount++;
-          } catch (e) {
-            results.push({ taskId, success: false, error: (e as Error).message });
-            failureCount++;
-          }
-        }
-
-        const output = { success: failureCount === 0, successCount, failureCount, results };
-        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }], isError: failureCount > 0 && successCount === 0 };
-      }
-
-      // V1: use board
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const bulkResult = deleteTasks(board, tasks);
-
-      if (bulkResult.board) {
-        writeBoard(filePath, bulkResult.board);
-      }
-
-      const output = {
-        success: bulkResult.success,
-        successCount: bulkResult.successCount,
-        failureCount: bulkResult.failureCount,
-        results: bulkResult.results
-      };
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
-        isError: !bulkResult.success
-      };
-    }
-  );
-
-  // Bulk archive tasks tool
-  server.registerTool(
-    'bulk_archive_tasks',
-    {
-      title: 'Bulk Archive Tasks',
-      description: 'Archive multiple tasks to the separate archive file',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        tasks: z.array(z.string()).describe('Array of task IDs to archive')
-      }
-    },
-    async ({ file, tasks }) => {
-      const filePath = file || defaultFile;
-
-      // V2: move task files from board/ to logs/
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
-        let successCount = 0;
-        let failureCount = 0;
-
-        for (const taskId of tasks) {
-          const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
-          const doc = coreReadTaskFile(taskPath);
-          if (!doc) {
-            results.push({ taskId, success: false, error: 'Task not found' });
-            failureCount++;
-            continue;
-          }
-
-          try {
-            const logPath = path.join(dirs.logsDir, taskFileName(taskId));
-            doc.task.completedAt = doc.task.completedAt || new Date().toISOString();
-            delete doc.task.column;
-            delete doc.task.position;
-            coreWriteTaskFile(logPath, doc.task, doc.body);
-            fs.unlinkSync(taskPath);
-            results.push({ taskId, success: true });
-            successCount++;
-          } catch (e) {
-            results.push({ taskId, success: false, error: (e as Error).message });
-            failureCount++;
-          }
-        }
-
-        const output = { success: failureCount === 0, successCount, failureCount, results };
-        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }], isError: failureCount > 0 && successCount === 0 };
-      }
-
-      // V1: use board
-      const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
-      let successCount = 0;
-      let failureCount = 0;
-
-      // Archive each task individually (need to re-read board after each archive)
-      for (const taskId of tasks) {
-        const boardResult = readBoard(filePath);
-        if ('error' in boardResult) {
-          results.push({ taskId, success: false, error: boardResult.error });
-          failureCount++;
-          continue;
-        }
-
-        const { board } = boardResult;
-        const taskInfo = findTaskById(board, taskId);
-
-        if (!taskInfo) {
-          results.push({ taskId, success: false, error: 'Task not found' });
-          failureCount++;
-          continue;
-        }
-
-        const archiveResult = archiveTaskToFile(filePath, board, taskInfo.column.id, taskId);
-
-        if (archiveResult.success) {
-          results.push({ taskId, success: true });
-          successCount++;
-        } else {
-          results.push({ taskId, success: false, error: archiveResult.error });
-          failureCount++;
-        }
-      }
-
-      const output = {
-        success: failureCount === 0,
-        successCount,
-        failureCount,
-        results,
-        archiveFile: path.basename(getArchivePath(filePath))
-      };
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
-        isError: failureCount > 0 && successCount === 0
-      };
-    }
-  );
-
-  // ==========================================================================
-  // CONTRACTS
-  // ==========================================================================
-
-  server.registerTool(
-    'contract_pickup',
-    {
-      title: 'Contract Pickup',
-      description: 'Claim a task contract (sets status to in_progress) and return agent context as markdown',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to pick up'),
-      }
-    },
-    async ({ file, task }) => {
-      const filePath = file || defaultFile;
-      const result = pickupContract({ filePath, taskId: task });
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-      return { content: [{ type: 'text' as const, text: result.markdown }] };
-    }
-  );
-
-  server.registerTool(
-    'contract_deliver',
-    {
-      title: 'Contract Deliver',
-      description: 'Mark a task contract as delivered (sets status to delivered)',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to deliver'),
-      }
-    },
-    async ({ file, task }) => {
-      const filePath = file || defaultFile;
-      const result = deliverContract({ filePath, taskId: task });
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-      return { content: [{ type: 'text' as const, text: `Contract delivered: ${task}` }] };
-    }
-  );
-
-  server.registerTool(
-    'contract_validate',
-    {
-      title: 'Contract Validate',
-      description: 'Validate contract deliverables + commands; sets status to done/failed',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to validate'),
-      }
-    },
-    async ({ file, task }) => {
-      const filePath = file || defaultFile;
-      const result = validateContract({ filePath, taskId: task });
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      const output = {
-        ok: result.ok,
-        status: result.ok ? 'done' : 'failed',
-        deliverables: result.deliverableChecks,
-        commands: result.commandResults,
-        warnings: result.warnings,
-      };
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
-        isError: !result.ok
-      };
-    }
-  );
-
-  // ==========================================================================
-  // TYPES
-  // ==========================================================================
-
-  server.registerTool(
-    'list_types',
-    {
-      title: 'List Types',
-      description: 'List board strict mode and custom type configuration',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-      }
-    },
-    async ({ file }) => {
-      const filePath = file || defaultFile;
-
-      if (isV2(filePath)) {
-        try {
-          const board = readV2BoardConfig(filePath);
-          const boardConfig = board as unknown as Record<string, unknown>;
-          const output = {
-            strict: boardConfig.strict === true,
-            types: sanitizeTypesConfig(boardConfig.types),
-          };
-
-          return {
-            content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
-          };
-        } catch (e) {
-          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
-        }
-      }
-
-      const result = readBoard(filePath);
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      const boardConfig = result.board as unknown as Record<string, unknown>;
-      const strict = boardConfig.strict === true;
-      const types = sanitizeTypesConfig(boardConfig.types);
-
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({ strict, types }, null, 2)
-        }]
-      };
-    }
-  );
-
-  // ==========================================================================
-  // RULES
-  // ==========================================================================
-
-  // List rules tool
-  server.registerTool(
-    'list_rules',
-    {
-      title: 'List Rules',
-      description: 'List all project rules (always, never, prefer, context) from the brainfile',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        category: z.enum(['always', 'never', 'prefer', 'context']).optional().describe('Filter by rule category')
-      }
-    },
-    async ({ file, category }) => {
-      const filePath = file || defaultFile;
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      const { board } = result;
-      const rules = board.rules || {};
-
-      // Filter by category if specified
-      let outputRules: Rules = rules;
-      if (category) {
-        outputRules = { [category]: rules[category] || [] } as Rules;
-      }
-
-      // Count total rules
-      const countRules = (r: Rules) =>
-        (r.always?.length || 0) +
-        (r.never?.length || 0) +
-        (r.prefer?.length || 0) +
-        (r.context?.length || 0);
-
-      const output = {
-        rules: outputRules,
-        totalCount: category
-          ? (outputRules[category]?.length || 0)
-          : countRules(rules),
-      };
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
-      };
-    }
-  );
-
-  // Add rule tool
-  server.registerTool(
-    'add_rule',
-    {
-      title: 'Add Rule',
-      description: 'Add a new project rule to the brainfile',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        category: z.enum(['always', 'never', 'prefer', 'context']).describe('Rule category'),
-        text: z.string().describe('Rule text/description')
-      }
-    },
-    async ({ file, category, text }) => {
-      const filePath = file || defaultFile;
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const addResult = addRule(board, category, text);
-
-      if (!addResult.success || !addResult.board) {
-        return { content: [{ type: 'text' as const, text: `Error: ${addResult.error}` }], isError: true };
-      }
-
-      writeBoard(filePath, addResult.board);
-
-      // Find the newly added rule (last one in the category)
-      const newRules = addResult.board.rules?.[category] || [];
-      const newRule = newRules[newRules.length - 1];
-
-      const output = {
-        success: true,
-        category,
-        rule: newRule,
-      };
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
-      };
-    }
-  );
-
-  // Delete rule tool
-  server.registerTool(
-    'delete_rule',
-    {
-      title: 'Delete Rule',
-      description: 'Delete a project rule from the brainfile by category and ID',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        category: z.enum(['always', 'never', 'prefer', 'context']).describe('Rule category'),
-        id: z.number().describe('Rule ID to delete')
-      }
-    },
-    async ({ file, category, id }) => {
-      const filePath = file || defaultFile;
-      const result = readBoard(filePath);
-
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      // Find the rule being deleted for the response
-      const existingRules = board.rules?.[category] || [];
-      const ruleToDelete = existingRules.find((r: { id: number; rule: string }) => r.id === id);
-
-      if (!ruleToDelete) {
-        const availableIds = existingRules.map((r: { id: number }) => r.id).join(', ');
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: Rule ${id} not found in ${category}. ${availableIds ? `Available IDs: ${availableIds}` : `No rules in ${category} category`}`
-          }],
-          isError: true
-        };
-      }
-
-      const deleteResult = deleteRule(board, category, id);
-
-      if (!deleteResult.success || !deleteResult.board) {
-        return { content: [{ type: 'text' as const, text: `Error: ${deleteResult.error}` }], isError: true };
-      }
-
-      writeBoard(filePath, deleteResult.board);
-
-      const output = {
-        success: true,
-        category,
-        deletedRule: ruleToDelete,
-      };
-
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }]
-      };
-    }
-  );
-
-  // ==========================================================================
-  // V2 NEW TOOLS: complete_task, search_logs, append_log
-  // ==========================================================================
-
-  // Complete task tool
-  server.registerTool(
-    'complete_task',
-    {
-      title: 'Complete Task',
-      description: 'Complete a task - in v2, moves task file from board/ to logs/ with completedAt timestamp. In v1, moves to done column.',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to complete'),
-      }
-    },
-    async ({ file, task }) => {
-      const filePath = file || defaultFile;
-
-      try {
-        const { completeCommand } = await import('./complete');
-        const result = completeCommand({ file: filePath, task }, { log: () => {}, warn: () => {}, error: () => {}, info: () => {} });
-        return {
-          content: [{ type: 'text' as const, text: `Task ${task} completed at ${result.completedAt}` }]
-        };
+        if (deleteResult.success) writeBoard(filePath, deleteResult.board!);
+        return { content: [{ type: 'text' as const, text: `Task ${task} archived to Linear Issue ${linearResult.issueId} (Done)\n\nView: ${linearResult.issueUrl}` }] };
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
       }
-    }
-  );
-
-  // Search logs tool
-  server.registerTool(
-    'search_logs',
-    {
-      title: 'Search Logs',
-      description: 'Search across completed task logs. Requires v2 per-task file architecture.',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        query: z.string().optional().describe('Search query to match against log content'),
-        recent: z.boolean().optional().describe('List recently completed tasks'),
-        task: z.string().optional().describe('View a specific task log'),
-      }
-    },
-    async ({ file, query, recent, task: taskId }) => {
-      const filePath = file || defaultFile;
-
-      if (!isV2(filePath)) {
-        return { content: [{ type: 'text' as const, text: 'Error: search_logs requires v2 per-task file architecture. Run: brainfile migrate' }], isError: true };
-      }
-
-      const dirs = getV2Dirs(filePath);
-
-      // View specific task log
-      if (taskId) {
-        const found = findV2Task(dirs, taskId, true);
-        if (!found) {
-          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${taskId}` }], isError: true };
-        }
-        const output = {
-          id: found.doc.task.id,
-          title: found.doc.task.title,
-          completedAt: found.doc.task.completedAt,
-          description: extractDescription(found.doc.body),
-          log: extractLog(found.doc.body),
-        };
-        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
-      }
-
-      // Search logs
-      if (query) {
-        const logDocs = readTasksDir(dirs.logsDir);
-        const queryLower = query.toLowerCase();
-        const matches: Array<{ id: string; title: string; completedAt?: string }> = [];
-
-        for (const doc of logDocs) {
-          const task = doc.task;
-          const desc = extractDescription(doc.body) || '';
-          const log = extractLog(doc.body) || '';
-          const fullText = [task.title, task.description || '', desc, log].join(' ').toLowerCase();
-          if (fullText.includes(queryLower)) {
-            matches.push({ id: task.id, title: task.title, completedAt: task.completedAt });
-          }
-        }
-
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ results: matches, count: matches.length }, null, 2) }] };
-      }
-
-      // Recent logs (default)
-      const logDocs = readTasksDir(dirs.logsDir);
-      logDocs.sort((a, b) => (b.task.completedAt || '').localeCompare(a.task.completedAt || ''));
-      const recent20 = logDocs.slice(0, 20).map(doc => ({
-        id: doc.task.id,
-        title: doc.task.title,
-        completedAt: doc.task.completedAt,
-      }));
-
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ logs: recent20, count: recent20.length }, null, 2) }] };
-    }
-  );
-
-  // Append log tool
-  server.registerTool(
-    'append_log',
-    {
-      title: 'Append Log',
-      description: 'Append a timestamped entry to a task log section. Works on both active tasks and completed logs. Requires v2 per-task file architecture.',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to append log to'),
-        message: z.string().describe('Log message to append'),
-        agent: z.string().optional().describe('Agent name for attribution'),
-      }
-    },
-    async ({ file, task: taskId, message, agent }) => {
-      const filePath = file || defaultFile;
-
-      if (!isV2(filePath)) {
-        return { content: [{ type: 'text' as const, text: 'Error: append_log requires v2 per-task file architecture. Run: brainfile migrate' }], isError: true };
-      }
-
-      const dirs = getV2Dirs(filePath);
-      const found = findV2Task(dirs, taskId, true);
-      if (!found) {
-        return { content: [{ type: 'text' as const, text: `Error: Task not found: ${taskId}` }], isError: true };
-      }
-
-      const { doc, filePath: taskFilePath } = found;
-      const timestamp = new Date().toISOString();
-      const agentPrefix = agent ? `[${agent}] ` : '';
-      const entry = `- ${timestamp}: ${agentPrefix}${message}`;
-
-      const existingDescription = extractDescription(doc.body);
-      const existingLog = extractLog(doc.body) || '';
-      const newLog = existingLog ? `${existingLog}\n${entry}` : entry;
-      const newBody = composeBody(existingDescription, newLog);
-      coreWriteTaskFile(taskFilePath, doc.task, newBody);
-
-      return { content: [{ type: 'text' as const, text: `Log entry added to ${taskId}: ${entry}` }] };
     }
   );
 

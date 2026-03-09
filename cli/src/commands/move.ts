@@ -223,7 +223,7 @@ function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): 
   task.position = newPosition;
   writeTaskFile(taskPath, task, doc.body);
 
-  const shouldAutoComplete = targetColumn.completionColumn === true && isTaskCompletable(task, board);
+  const shouldAutoComplete = (targetColumn as { completionColumn?: boolean }).completionColumn === true && isTaskCompletable(task, board);
   let movedTask: Task = task;
   if (shouldAutoComplete) {
     const completeResult = completeTaskFile(taskPath, dirs.logsDir);

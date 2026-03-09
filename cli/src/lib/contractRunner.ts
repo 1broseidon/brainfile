@@ -5,12 +5,15 @@ import {
   Brainfile,
   resolveBrainfilePath,
   findTaskById,
-  setTaskContractStatus,
+  pickupTaskContract,
+  deliverTaskContract,
+  completeTaskContract,
+  failTaskContract,
+  readTaskFile,
   type Board,
   type Contract,
   type Deliverable,
 } from '@brainfile/core';
-import { writeTaskFile } from '@brainfile/core';
 import {
   isV2,
   getV2Dirs,
@@ -263,16 +266,14 @@ export function pickupContract(ctx: ContractRunContext): ContractPickupResult | 
   const contract = getContractOrError(ctx.taskId, taskInfo.task.contract);
   if (!contract.ok) return { error: contract.error };
 
-  const result = setTaskContractStatus(board, ctx.taskId, 'in_progress');
-  if (!result.success || !result.board) return { error: result.error || 'Failed to update contract status' };
-
-  const updatedTaskInfo = findTaskById(result.board, ctx.taskId);
+  applyPickupMetrics(taskInfo.task.contract!);
+  const updatedTaskInfo = findTaskById(board, ctx.taskId);
   if (!updatedTaskInfo?.task.contract) {
     return { error: `Task ${ctx.taskId} has no contract` };
   }
 
-  applyPickupMetrics(updatedTaskInfo.task.contract);
-  writeBoardToFile(resolvedFilePath, result.board);
+  updatedTaskInfo.task.contract.status = 'in_progress';
+  writeBoardToFile(resolvedFilePath, board);
 
   const updatedContract = updatedTaskInfo.task.contract;
 
@@ -285,7 +286,7 @@ export function pickupContract(ctx: ContractRunContext): ContractPickupResult | 
     relatedFiles: updatedTaskInfo.task.relatedFiles,
   });
 
-  return { action: 'pickup', board: result.board, markdown };
+  return { action: 'pickup', board, markdown };
 }
 
 export function deliverContract(ctx: ContractRunContext): ContractDeliverResult | { error: string } {
@@ -305,18 +306,16 @@ export function deliverContract(ctx: ContractRunContext): ContractDeliverResult 
   const contract = getContractOrError(ctx.taskId, taskInfo.task.contract);
   if (!contract.ok) return { error: contract.error };
 
-  const result = setTaskContractStatus(board, ctx.taskId, 'delivered');
-  if (!result.success || !result.board) return { error: result.error || 'Failed to update contract status' };
-
-  const updatedTaskInfo = findTaskById(result.board, ctx.taskId);
+  applyDeliverMetrics(taskInfo.task.contract!);
+  const updatedTaskInfo = findTaskById(board, ctx.taskId);
   if (!updatedTaskInfo?.task.contract) {
     return { error: `Task ${ctx.taskId} has no contract` };
   }
 
-  applyDeliverMetrics(updatedTaskInfo.task.contract);
-  writeBoardToFile(resolvedFilePath, result.board);
+  updatedTaskInfo.task.contract.status = 'delivered';
+  writeBoardToFile(resolvedFilePath, board);
 
-  return { action: 'deliver', board: result.board };
+  return { action: 'deliver', board };
 }
 
 export function validateContract(ctx: ContractRunContext): ContractValidateResult | { error: string } {
@@ -415,17 +414,33 @@ export function validateContract(ctx: ContractRunContext): ContractValidateResul
     }
   }
 
-  const status = ok ? 'done' : 'failed';
-  const statusResult = setTaskContractStatus(board, ctx.taskId, status);
-  if (!statusResult.success || !statusResult.board) {
-    return { error: statusResult.error || 'Failed to update contract status' };
+  const failureFeedback = !deliverablesOk
+    ? deliverableChecks
+        .filter((check) => !check.ok)
+        .map((check) => {
+          const location = check.resolvedPath ? ` (${check.resolvedPath})` : '';
+          return `${check.deliverable.path}${location}: ${check.error || 'Validation failed'}`;
+        })
+        .join('\n')
+    : commandResults.at(-1)?.stderr || commandResults.at(-1)?.stdout || 'Validation failed';
+
+  const updatedTaskInfo = findTaskById(board, ctx.taskId);
+  if (!updatedTaskInfo?.task.contract) {
+    return { error: `Task ${ctx.taskId} has no contract` };
   }
 
-  writeBoardToFile(resolvedFilePath, statusResult.board);
+  if (ok && updatedTaskInfo.task.contract.status !== 'done') {
+    updatedTaskInfo.task.contract.status = 'done';
+  } else if (!ok) {
+    updatedTaskInfo.task.contract.status = 'failed';
+    updatedTaskInfo.task.contract.feedback = failureFeedback.trim() || undefined;
+  }
+
+  writeBoardToFile(resolvedFilePath, board);
 
   return {
     action: 'validate',
-    board: statusResult.board,
+    board,
     deliverableChecks,
     commandResults,
     warnings,
@@ -442,27 +457,28 @@ function pickupContractV2(ctx: ContractRunContext, resolvedFilePath: string): Co
   const found = findV2Task(dirs, ctx.taskId, false);
   if (!found) return { error: `Task not found: ${ctx.taskId}` };
 
-  const { doc, filePath: taskPath } = found;
-  const task = doc.task;
+  const { filePath: taskPath } = found;
+  const taskDoc = readTaskFile(taskPath);
+  if (!taskDoc) return { error: `Failed to read task file: ${taskPath}` };
 
-  if (!task.contract) return { error: `Task ${ctx.taskId} has no contract` };
+  if (!taskDoc.task.contract) return { error: `Task ${ctx.taskId} has no contract` };
 
-  // Update contract status + metrics atomically
-  task.contract.status = 'in_progress';
-  applyPickupMetrics(task.contract);
-  writeTaskFile(taskPath, task, doc.body);
+  const op = pickupTaskContract(taskPath);
+  if (!op.success) return { error: op.error || 'Failed to update contract status' };
 
-  const description = task.description || extractDescription(doc.body);
+  const updated = readTaskFile(taskPath);
+  if (!updated?.task.contract) return { error: `Task ${ctx.taskId} has no contract` };
+
+  const description = updated.task.description || extractDescription(updated.body);
   const markdown = formatContractContextMarkdown({
-    taskId: task.id,
-    taskTitle: task.title,
+    taskId: updated.task.id,
+    taskTitle: updated.task.title,
     description,
-    columnTitle: task.column,
-    contract: task.contract,
-    relatedFiles: task.relatedFiles,
+    columnTitle: updated.task.column,
+    contract: updated.task.contract,
+    relatedFiles: updated.task.relatedFiles,
   });
 
-  // Build a minimal board for the result
   const board: Board = { title: '', columns: [] };
 
   return { action: 'pickup', board, markdown };
@@ -473,14 +489,14 @@ function deliverContractV2(ctx: ContractRunContext, resolvedFilePath: string): C
   const found = findV2Task(dirs, ctx.taskId, false);
   if (!found) return { error: `Task not found: ${ctx.taskId}` };
 
-  const { doc, filePath: taskPath } = found;
-  const task = doc.task;
+  const { filePath: taskPath } = found;
+  const taskDoc = readTaskFile(taskPath);
+  if (!taskDoc) return { error: `Failed to read task file: ${taskPath}` };
 
-  if (!task.contract) return { error: `Task ${ctx.taskId} has no contract` };
+  if (!taskDoc.task.contract) return { error: `Task ${ctx.taskId} has no contract` };
 
-  task.contract.status = 'delivered';
-  applyDeliverMetrics(task.contract);
-  writeTaskFile(taskPath, task, doc.body);
+  const op = deliverTaskContract(taskPath);
+  if (!op.success) return { error: op.error || 'Failed to update contract status' };
 
   const board: Board = { title: '', columns: [] };
   return { action: 'deliver', board };
@@ -491,12 +507,13 @@ function validateContractV2(ctx: ContractRunContext, resolvedFilePath: string): 
   const found = findV2Task(dirs, ctx.taskId, false);
   if (!found) return { error: `Task not found: ${ctx.taskId}` };
 
-  const { doc, filePath: taskPath } = found;
-  const task = doc.task;
+  const { filePath: taskPath } = found;
+  const taskDoc = readTaskFile(taskPath);
+  if (!taskDoc) return { error: `Failed to read task file: ${taskPath}` };
 
-  if (!task.contract) return { error: `Task ${ctx.taskId} has no contract` };
+  if (!taskDoc.task.contract) return { error: `Task ${ctx.taskId} has no contract` };
 
-  const contract = task.contract;
+  const contract = taskDoc.task.contract;
   const brainfileAbs = path.resolve(resolvedFilePath);
   const brainfileDir = path.dirname(brainfileAbs);
   const baseDir = path.basename(brainfileDir) === '.brainfile'
@@ -567,10 +584,20 @@ function validateContractV2(ctx: ContractRunContext, resolvedFilePath: string): 
     }
   }
 
-  // Update contract status in task file
-  const status = ok ? 'done' : 'failed';
-  task.contract.status = status;
-  writeTaskFile(taskPath, task, doc.body);
+  const failureFeedback = !deliverablesOk
+    ? deliverableChecks
+        .filter((check) => !check.ok)
+        .map((check) => {
+          const location = check.resolvedPath ? ` (${check.resolvedPath})` : '';
+          return `${check.deliverable.path}${location}: ${check.error || 'Validation failed'}`;
+        })
+        .join('\n')
+    : commandResults.at(-1)?.stderr || commandResults.at(-1)?.stdout || 'Validation failed';
+
+  const op = ok
+    ? completeTaskContract(taskPath, dirs.logsDir)
+    : failTaskContract(taskPath, failureFeedback);
+  if (!op.success) return { error: op.error || 'Failed to update contract status' };
 
   const board: Board = { title: '', columns: [] };
 

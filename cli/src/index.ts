@@ -9,6 +9,9 @@ export {
   contractDeliverCommand,
   contractValidateCommand,
   contractAttachCommand,
+  contractActivateCommand,
+  contractGraphCommand,
+  parseContractGraphArgs,
 } from './commands/contract';
 export { adrPromoteCommand } from './commands/adr';
 export { initCommand } from './commands/init';

@@ -60,18 +60,24 @@ export function buildContract(params: {
   deliverableSpecs?: string | string[];
   validationCommands?: string | string[];
   constraints?: string | string[];
+  /** Contract status — defaults to 'draft'. Pass 'ready' to make immediately dispatchable. */
+  status?: import('@brainfile/core').ContractStatus;
 }): Contract {
   const deliverableSpecs = normalizeToArray(params.deliverableSpecs);
   const validationCommands = normalizeToArray(params.validationCommands).map((c) => c.trim()).filter(Boolean);
   const constraints = normalizeToArray(params.constraints).map((c) => c.trim()).filter(Boolean);
+  const status = params.status ?? 'draft';
 
   const deliverables = deliverableSpecs.map(parseDeliverableSpec);
 
   const contract: Contract = {
-    status: 'ready',
+    status,
     ...(deliverables.length > 0 ? { deliverables } : {}),
     ...(validationCommands.length > 0 ? { validation: { commands: validationCommands } } : {}),
     ...(constraints.length > 0 ? { constraints } : {}),
+    ...(status === 'ready'
+      ? { metrics: { readyAt: new Date().toISOString() } as Contract['metrics'] }
+      : {}),
   };
 
   return contract;
