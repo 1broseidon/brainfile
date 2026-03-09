@@ -160,6 +160,7 @@ Brainfile file resolution (when you don't pass --file):
     .option('--dir <path>', 'Directory containing legacy brainfile files (default: cwd)')
     .option('--force', 'Overwrite existing migration outputs (task files/backups)')
     .option('--v2', 'Deprecated alias; migration now targets v2 by default')
+    .option('--logs-to-ledger', 'Migrate logs/*.md files into ledger.jsonl (resolves ID conflicts with board)')
     .action(migrateCommand);
 
   const listCmd = program

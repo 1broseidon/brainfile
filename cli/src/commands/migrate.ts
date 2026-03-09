@@ -2,7 +2,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
 import { Brainfile } from '@brainfile/core';
-import { writeTaskFile, taskFileName, type Task } from '@brainfile/core';
+import {
+  writeTaskFile,
+  taskFileName,
+  readTasksDir,
+  readLedger,
+  buildLedgerRecord,
+  appendLedgerRecord,
+  generateNextFileTaskId,
+  type Task,
+} from '@brainfile/core';
 import { ensureDotBrainfileGitignore, removeLegacyStateFile } from '../utils/dot-brainfile';
 import { ensureV2Dirs } from '../utils/v2-detect';
 import { probeWorkspaceFormat, type WorkspaceProbe } from '../utils/workspace-format';
@@ -14,6 +23,8 @@ interface MigrateOptions {
   force?: boolean;
   /** Deprecated alias; migration always targets v2 now */
   v2?: boolean;
+  /** Migrate logs/*.md files into ledger.jsonl and clean up */
+  logsToLedger?: boolean;
 }
 
 /**
@@ -21,6 +32,11 @@ interface MigrateOptions {
  */
 export function migrateCommand(options: MigrateOptions = {}) {
   try {
+    if (options.logsToLedger) {
+      migrateLogsToLedger(options);
+      return;
+    }
+
     const rootDir = path.resolve(options.dir || process.cwd());
     const probe = probeWorkspaceFormat(rootDir);
 
@@ -277,6 +293,120 @@ function migrateBrainfileToV2(brainfilePath: string, options: MigrateOptions): v
   console.log(chalk.gray(`  Completed/logs:  ${logCount} files in logs/`));
   console.log(chalk.gray(`  Board config:    ${brainfilePath} (config-only)`));
   console.log(chalk.gray(`  Backup:          ${backupPath}`));
+}
+
+/**
+ * Extract the type prefix from a task ID (e.g. "task" from "task-42", "epic" from "epic-3").
+ */
+function getTypePrefix(taskId: string): string {
+  const match = taskId.match(/^(.+)-\d+$/);
+  return match ? match[1] : 'task';
+}
+
+/**
+ * Migrate legacy logs/*.md files into ledger.jsonl.
+ *
+ * When the old core allowed ID reuse (e.g. task-1 in both board/ and logs/),
+ * this resolves the conflict by keeping the log entry (it was completed first)
+ * and renaming the board task to the next available ID.
+ */
+function migrateLogsToLedger(options: MigrateOptions): void {
+  const rootDir = path.resolve(options.dir || process.cwd());
+  const probe = probeWorkspaceFormat(rootDir);
+
+  if (probe.format === 'empty') {
+    console.error(chalk.red('Error: No brainfile workspace found.'));
+    process.exit(1);
+    return;
+  }
+
+  const { logsDir, boardDir } = probe.paths;
+
+  if (!fs.existsSync(logsDir)) {
+    console.log(chalk.gray('No logs/ directory found. Nothing to migrate.'));
+    return;
+  }
+
+  const logDocs = readTasksDir(logsDir);
+  if (logDocs.length === 0) {
+    console.log(chalk.gray('No .md log files found in logs/. Nothing to migrate.'));
+    return;
+  }
+
+  // Read only the actual ledger.jsonl — don't use readLedger() which falls back
+  // to reading the very .md files we're about to migrate.
+  const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+  const existingLedgerIds = new Set<string>();
+  if (fs.existsSync(ledgerPath)) {
+    const lines = fs.readFileSync(ledgerPath, 'utf-8').split('\n');
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const record = JSON.parse(trimmed);
+        if (record?.id) existingLedgerIds.add(record.id);
+      } catch { /* skip malformed lines */ }
+    }
+  }
+
+  const boardDocs = fs.existsSync(boardDir) ? readTasksDir(boardDir) : [];
+  const boardIdMap = new Map(boardDocs.map((d) => [d.task.id, d]));
+
+  let migratedCount = 0;
+  let skippedCount = 0;
+  let conflictCount = 0;
+
+  for (const doc of logDocs) {
+    const taskId = doc.task.id;
+
+    if (existingLedgerIds.has(taskId)) {
+      console.log(chalk.gray(`  Skip: ${taskId} (already in ledger)`));
+      if (options.force) {
+        fs.rmSync(doc.filePath!, { force: true });
+        console.log(chalk.gray(`    Removed stale log file: ${path.basename(doc.filePath!)}`));
+      }
+      skippedCount++;
+      continue;
+    }
+
+    const record = buildLedgerRecord(doc.task, doc.body, {
+      completedAt: doc.task.completedAt || doc.task.updatedAt || new Date().toISOString(),
+    });
+    appendLedgerRecord(logsDir, record);
+    existingLedgerIds.add(taskId);
+    migratedCount++;
+
+    if (boardIdMap.has(taskId)) {
+      const boardDoc = boardIdMap.get(taskId)!;
+      const prefix = getTypePrefix(taskId);
+      const newId = generateNextFileTaskId(boardDir, logsDir, prefix);
+
+      const renamedTask: Task = { ...boardDoc.task, id: newId };
+      const newBoardPath = path.join(boardDir, taskFileName(newId));
+      writeTaskFile(newBoardPath, renamedTask, boardDoc.body);
+      fs.rmSync(boardDoc.filePath!, { force: true });
+
+      console.log(chalk.yellow(`  Conflict: board/${taskId} → ${newId} (completed task takes precedence)`));
+      conflictCount++;
+    }
+
+    fs.rmSync(doc.filePath!, { force: true });
+    console.log(chalk.gray(`  Migrated: ${taskId}`));
+  }
+
+  console.log('');
+  console.log(chalk.green(`Logs-to-ledger migration complete.`));
+  console.log(chalk.gray(`  Migrated to ledger:  ${migratedCount}`));
+  if (skippedCount > 0) {
+    console.log(chalk.gray(`  Skipped (in ledger): ${skippedCount}`));
+  }
+  if (conflictCount > 0) {
+    console.log(chalk.yellow(`  ID conflicts fixed:  ${conflictCount} board task(s) renamed`));
+  }
+  if (skippedCount > 0 && !options.force) {
+    console.log('');
+    console.log(chalk.gray('Tip: Use --force to also remove stale .md files that are already in the ledger.'));
+  }
 }
 
 function backupAndRemoveLegacyRoot(rootBrainfilePath: string, dotDir: string): string {
