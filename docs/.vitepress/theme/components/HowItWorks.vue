@@ -1,6 +1,9 @@
 <template>
   <section class="how-it-works fade-section">
-    <span class="section-label">How it works.</span>
+    <div class="section-header">
+      <h2 class="section-title">How It Works</h2>
+      <div class="section-divider"></div>
+    </div>
     <div class="step">
       <div class="step-left">
         <span class="step-number">01</span>
@@ -33,15 +36,28 @@
   gap: 0;
 }
 
-.section-label {
-  display: block;
-  font-family: 'JetBrains Mono', monospace;
+.section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 3rem;
+}
+
+.section-title {
+  font-family: 'Work Sans', sans-serif;
   font-size: 0.75rem;
-  color: #505060;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 1.25rem;
-  text-align: center;
+  letter-spacing: 0.4em;
+  color: #5cc8ff;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.section-divider {
+  height: 1px;
+  flex-grow: 1;
+  margin-left: 2rem;
+  background: #21262d;
 }
 
 .step {
@@ -49,11 +65,11 @@
   align-items: baseline;
   gap: 2rem;
   padding: 1.25rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid #21262d;
 }
 
 .step:first-child {
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid #21262d;
 }
 
 .step-left {
@@ -67,19 +83,19 @@
 .step-number {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
-  color: #383848;
+  color: #7d8590;
 }
 
 .step-keyword {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
   font-weight: 500;
-  color: #e8e8ec;
+  color: #c9d1d9;
 }
 
 .step-desc {
   font-size: 0.95rem;
-  color: #707080;
+  color: #9198a1;
   margin: 0;
   line-height: 1.5;
 }

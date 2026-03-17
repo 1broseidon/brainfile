@@ -10,6 +10,7 @@ import QuickStartTerminal from './components/QuickStartTerminal.vue'
 const { site } = useData()
 
 const homeRef = ref<HTMLElement | null>(null)
+const menuOpen = ref(false)
 
 // IntersectionObserver for scroll-triggered fade-in animations
 let observer: IntersectionObserver | null = null
@@ -43,8 +44,7 @@ onUnmounted(() => {
   <div class="home-root" ref="homeRef">
     <nav class="home-nav">
       <div class="nav-brand">
-        <a href="/" class="nav-wordmark">brainfile</a>
-        <span class="version-badge"><span class="status-dot"></span>v2.0</span>
+        <a href="https://chain.sh" target="_blank" rel="noopener" class="nav-chainsh">CHAIN.SH ↗</a>
       </div>
       <div class="nav-links">
         <a href="/reference/protocol">Specification</a>
@@ -52,7 +52,16 @@ onUnmounted(() => {
         <a href="/guides/contracts">Guides</a>
         <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
       </div>
+      <button class="nav-hamburger" :class="{ open: menuOpen }" @click="menuOpen = !menuOpen" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
     </nav>
+    <div class="nav-mobile" :class="{ open: menuOpen }" @click="menuOpen = false">
+      <a href="/reference/protocol">Specification</a>
+      <a href="/quick-start">Quick Start</a>
+      <a href="/guides/contracts">Guides</a>
+      <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
+    </div>
 
     <main class="home-content">
       <!-- Section 1: Hero split — text left, code right -->
@@ -75,7 +84,10 @@ onUnmounted(() => {
       <div class="home-inner">
       <!-- Contract Lifecycle -->
       <section class="lifecycle fade-section">
-        <span class="section-label">A contract has a lifecycle.</span>
+        <div class="section-header">
+          <h2 class="section-title">Contract Lifecycle</h2>
+          <div class="section-divider"></div>
+        </div>
         <StateMachine />
       </section>
 
@@ -84,7 +96,10 @@ onUnmounted(() => {
 
       <!-- Design decisions -->
       <section class="decisions fade-section">
-        <span class="section-label">Design decisions.</span>
+        <div class="section-header">
+          <h2 class="section-title">Design Decisions</h2>
+          <div class="section-divider"></div>
+        </div>
         <div class="decisions-grid">
           <div class="decision-card">
             <h3>Why files?</h3>
@@ -129,10 +144,14 @@ onUnmounted(() => {
             <a href="/contributing">Contributing</a>
           </div>
         </div>
-        <div class="footer-bottom">
-          <span class="footer-version">Brainfile v2.0 · Protocol Stable · MIT License</span>
-          <span class="footer-agent">For agents: <a href="/llms-install.txt">brainfile.md/llms-install.txt</a></span>
-          <a href="https://chain.sh" class="footer-chainsh" target="_blank" rel="noopener">↗ chain.sh</a>
+        <div class="footer-base">
+          <div class="footer-bottom">
+            <span class="footer-version">Brainfile v2.0 · Protocol Stable · MIT License</span>
+            <a href="https://chain.sh" class="footer-chainsh" target="_blank" rel="noopener">CHAIN.SH ↗</a>
+          </div>
+          <div class="footer-agents">
+            <span class="footer-agent">For agents: <a href="/llms-install.txt">brainfile.md/llms-install.txt</a></span>
+          </div>
         </div>
       </footer>
       </div>
@@ -143,9 +162,9 @@ onUnmounted(() => {
 <style scoped>
 .home-root {
   min-height: 100vh;
-  background: #050508;
-  color: #e8e8ec;
-  font-family: 'Inter', -apple-system, sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  font-family: 'Work Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -159,13 +178,19 @@ onUnmounted(() => {
   padding: 2rem 1.5rem 0;
 }
 
-.nav-wordmark {
-  font-family: 'Outfit', sans-serif;
-  font-weight: 600;
-  font-size: 1.1rem;
-  color: #e8e8ec;
+.nav-chainsh {
+  font-family: 'Work Sans', sans-serif;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  color: #7d8590;
   text-decoration: none;
-  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  transition: color 0.2s;
+}
+
+.nav-chainsh:hover {
+  color: #c9d1d9;
 }
 
 .nav-links {
@@ -173,15 +198,88 @@ onUnmounted(() => {
   gap: 1.75rem;
 }
 
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  width: 48px;
+  height: 48px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.nav-hamburger span {
+  display: block;
+  width: 18px;
+  height: 1.5px;
+  background: #c9d1d9;
+  transition: transform 0.25s, opacity 0.25s;
+}
+
+.nav-hamburger.open span:nth-child(1) {
+  transform: translateY(7.5px) rotate(45deg);
+}
+
+.nav-hamburger.open span:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-hamburger.open span:nth-child(3) {
+  transform: translateY(-7.5px) rotate(-45deg);
+}
+
+.nav-mobile {
+  display: none;
+  flex-direction: column;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease, padding 0.25s ease;
+}
+
+.nav-mobile.open {
+  max-height: 300px;
+  padding: 1rem 1.5rem;
+}
+
+.nav-mobile a {
+  font-size: 0.9rem;
+  color: #9198a1;
+  text-decoration: none;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #21262d;
+  transition: color 0.15s;
+}
+
+.nav-mobile a:last-child {
+  border-bottom: none;
+}
+
+.nav-mobile a:hover {
+  color: #c9d1d9;
+}
+
+@media (max-width: 640px) {
+  .nav-links { display: none; }
+  .nav-hamburger { display: flex; }
+  .nav-mobile { display: flex; }
+}
+
 .nav-links a {
   font-size: 0.85rem;
-  color: #707080;
+  color: #9198a1;
   text-decoration: none;
   transition: color 0.15s;
 }
 
 .nav-links a:hover {
-  color: #e8e8ec;
+  color: #c9d1d9;
 }
 
 /* ---- Content container ---- */
@@ -235,7 +333,7 @@ onUnmounted(() => {
   font-size: clamp(3rem, 7vw, 4.5rem);
   letter-spacing: -0.04em;
   line-height: 1;
-  color: #f0f0f4;
+  color: #c9d1d9;
   margin: 0 0 1.5rem;
 }
 
@@ -243,7 +341,7 @@ onUnmounted(() => {
   position: relative;
   font-size: clamp(1.15rem, 2.5vw, 1.35rem);
   line-height: 1.5;
-  color: #c0c0c8;
+  color: #c9d1d9;
   margin: 0 0 0.75rem;
   max-width: 36ch;
 }
@@ -252,7 +350,7 @@ onUnmounted(() => {
   position: relative;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
-  color: #585868;
+  color: #7d8590;
   margin: 0 0 2.5rem;
 }
 
@@ -279,11 +377,11 @@ onUnmounted(() => {
 }
 
 .link-secondary {
-  color: #707080;
+  color: #9198a1;
 }
 
 .link-secondary:hover {
-  color: #a0a0b0;
+  color: #9198a1;
 }
 
 .arrow {
@@ -296,19 +394,32 @@ onUnmounted(() => {
   transform: translateX(3px);
 }
 
-.section-label {
-  display: block;
-  font-family: 'JetBrains Mono', monospace;
+.section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 3rem;
+}
+
+.section-title {
+  font-family: 'Work Sans', sans-serif;
   font-size: 0.75rem;
-  color: #505060;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 1.25rem;
-  text-align: center;
+  letter-spacing: 0.4em;
+  color: #5cc8ff;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.section-divider {
+  height: 1px;
+  flex-grow: 1;
+  margin-left: 2rem;
+  background: #21262d;
 }
 
 .code-block {
-  background: #0a0a0e;
+  background: #161b22;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 8px;
   padding: 2rem;
@@ -320,7 +431,7 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.82rem;
   line-height: 1.7;
-  color: #a0a0b0;
+  color: #9198a1;
 }
 
 .code-block code {
@@ -328,7 +439,7 @@ onUnmounted(() => {
 }
 
 .code-block .hl-key {
-  color: #c8c8d0;
+  color: #c9d1d9;
 }
 
 /* ---- Section 2b: Contract Lifecycle ---- */
@@ -367,19 +478,19 @@ onUnmounted(() => {
 .step-number {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
-  color: #383848;
+  color: #7d8590;
 }
 
 .step-keyword {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
   font-weight: 500;
-  color: #e8e8ec;
+  color: #c9d1d9;
 }
 
 .step-desc {
   font-size: 0.95rem;
-  color: #707080;
+  color: #9198a1;
   margin: 0;
   line-height: 1.5;
 }
@@ -397,28 +508,27 @@ onUnmounted(() => {
 
 .decision-card {
   padding: 1.5rem;
-  background: rgba(10, 10, 14, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  background: rgba(22, 27, 34, 0.5);
+  border: 1px solid #21262d;
   transition: border-color 0.2s;
 }
 
 .decision-card:hover {
-  border-color: rgba(92, 200, 255, 0.15);
+  border-color: rgba(92, 200, 255, 0.2);
 }
 
 .decision-card h3 {
   font-family: 'Outfit', sans-serif;
   font-size: 1rem;
   font-weight: 500;
-  color: #e8e8ec;
+  color: #c9d1d9;
   margin: 0 0 0.6rem;
   letter-spacing: -0.01em;
 }
 
 .decision-card p {
   font-size: 0.85rem;
-  color: #585868;
+  color: #7d8590;
   margin: 0;
   line-height: 1.6;
 }
@@ -431,7 +541,7 @@ onUnmounted(() => {
 .ecosystem-note {
   margin: 0 0 1.5rem;
   font-size: 0.88rem;
-  color: #585868;
+  color: #7d8590;
 }
 
 .eco-grid {
@@ -445,17 +555,15 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 0.5rem;
   padding: 1.25rem 1.5rem;
-  background: rgba(10, 10, 14, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  background: rgba(22, 27, 34, 0.5);
+  border: 1px solid #21262d;
   text-decoration: none;
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+  transition: border-color 0.2s, background 0.2s;
 }
 
 .eco-card:hover {
   border-color: rgba(92, 200, 255, 0.25);
-  box-shadow: 0 0 20px rgba(92, 200, 255, 0.06);
-  transform: translateY(-2px);
+  background: rgba(92, 200, 255, 0.02);
 }
 
 .eco-card-header {
@@ -466,7 +574,7 @@ onUnmounted(() => {
 
 .eco-icon {
   font-size: 1.25rem;
-  color: #585868;
+  color: #7d8590;
   width: 32px;
   height: 32px;
   display: flex;
@@ -503,7 +611,7 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.9rem;
   font-weight: 500;
-  color: #e8e8ec;
+  color: #c9d1d9;
   transition: color 0.15s;
 }
 
@@ -513,7 +621,7 @@ onUnmounted(() => {
 
 .eco-card-desc {
   font-size: 0.82rem;
-  color: #585868;
+  color: #7d8590;
   line-height: 1.5;
 }
 
@@ -533,7 +641,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   padding: 0.75rem 1rem;
-  background: #0c0c12;
+  background: #1c2128;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
@@ -568,7 +676,7 @@ onUnmounted(() => {
   text-align: center;
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.7rem;
-  color: #383848;
+  color: #7d8590;
 }
 
 .terminal-copy {
@@ -580,20 +688,20 @@ onUnmounted(() => {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 5px;
-  color: #505060;
+  color: #7d8590;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
   padding: 0;
 }
 
 .terminal-copy:hover {
-  color: #a0a0b0;
+  color: #9198a1;
   border-color: rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.03);
 }
 
 .terminal-body {
-  background: #08080c;
+  background: #161b22;
   padding: 1.5rem;
   overflow-x: auto;
 }
@@ -603,7 +711,7 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.8rem;
   line-height: 1.7;
-  color: #a0a0b0;
+  color: #9198a1;
 }
 
 .terminal-body code {
@@ -632,7 +740,7 @@ onUnmounted(() => {
   display: inline-block;
   margin-top: 1.25rem;
   font-size: 0.9rem;
-  color: #707080;
+  color: #9198a1;
   text-decoration: none;
   transition: color 0.15s;
 }
@@ -670,7 +778,7 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #707080;
+  color: #9198a1;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin: 0 0 0.5rem;
@@ -678,49 +786,63 @@ onUnmounted(() => {
 
 .footer-col a {
   font-size: 0.85rem;
-  color: #505060;
+  color: #7d8590;
   text-decoration: none;
   transition: color 0.15s;
 }
 
 .footer-col a:hover {
-  color: #e8e8ec;
+  color: #c9d1d9;
 }
 
 .footer-bottom {
   display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   padding-top: 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-top: 1px solid #21262d;
+}
+
+.footer-base {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.footer-agents {
+  padding-top: 0.3rem;
 }
 
 .footer-version {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
-  color: #383848;
+  color: #7d8590;
 }
 
 .footer-chainsh {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'Work Sans', sans-serif;
   font-size: 0.75rem;
-  color: #383848;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #7d8590;
   text-decoration: none;
   transition: color 0.2s;
 }
 
 .footer-chainsh:hover {
-  color: #e8e8ec;
+  color: #c9d1d9;
 }
 
 .footer-agent {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
-  color: #2a2a38;
+  color: #7d8590;
 }
 
 .footer-agent a {
-  color: #383848;
+  color: #7d8590;
   text-decoration: none;
   transition: color 0.15s;
 }
@@ -736,27 +858,6 @@ onUnmounted(() => {
   gap: 0.75rem;
 }
 
-.version-badge {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.15rem 0.6rem;
-  background: rgba(42, 42, 56, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.7rem;
-  color: #a0a0b0;
-  font-weight: 500;
-}
-
-.status-dot {
-  width: 6px;
-  height: 6px;
-  background: #43d08a; /* subtle green */
-  border-radius: 50%;
-  box-shadow: 0 0 6px rgba(67, 208, 138, 0.4);
-}
 
 .state-machine {
   margin-top: 3rem;
@@ -780,16 +881,16 @@ onUnmounted(() => {
 
 .step-details {
   font-size: 0.9rem;
-  color: #585868;
+  color: #7d8590;
   margin: 0;
   line-height: 1.6;
   max-width: 58ch;
 }
 
 
-.contract-state-diagram .box { fill: #0a0a0e; stroke: #2a2a38; stroke-width: 2; rx: 6; }
-.contract-state-diagram .text { fill: #a0a0b0; font-family: 'JetBrains Mono', monospace; font-size: 14px; text-anchor: middle; dominant-baseline: middle; }
-.contract-state-diagram .line { stroke: #2a2a38; stroke-width: 2; fill: none; }
+.contract-state-diagram .box { fill: #161b22; stroke: #21262d; stroke-width: 2; rx: 6; }
+.contract-state-diagram .text { fill: #9198a1; font-family: 'JetBrains Mono', monospace; font-size: 14px; text-anchor: middle; dominant-baseline: middle; }
+.contract-state-diagram .line { stroke: #21262d; stroke-width: 2; fill: none; }
 
 .contract-state-diagram .box.success { stroke: #5cc8ff; }
 .contract-state-diagram .text.success { fill: #5cc8ff; }
@@ -833,7 +934,7 @@ onUnmounted(() => {
   background: rgba(10, 10, 14, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 5px;
-  color: #505060;
+  color: #7d8590;
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.15s, color 0.15s, border-color 0.15s;
@@ -849,7 +950,7 @@ onUnmounted(() => {
 }
 
 .copy-overlay:hover {
-  color: #a0a0b0;
+  color: #9198a1;
   border-color: rgba(255, 255, 255, 0.15);
   background: rgba(10, 10, 14, 0.95);
 }
@@ -917,6 +1018,16 @@ onUnmounted(() => {
   .footer-columns {
     grid-template-columns: 1fr;
     gap: 2rem;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .footer-agents {
+    padding-top: 0.5rem;
   }
 }
 </style>

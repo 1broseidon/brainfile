@@ -3,16 +3,16 @@
   --vp-font-family-mono: 'JetBrains Mono', monospace;
   --font-display: 'Outfit', sans-serif;
 
-  --void-bg: #050508;
-  --void-bg-alt: #0a0a0f;
-  --void-surface: #0f111a;
-  --void-text-1: #e8e8ec;
-  --void-text-2: #a0a0b0;
-  --void-text-3: #606070;
-  --void-border: rgba(255, 255, 255, 0.06);
+  --void-bg: #0d1117;
+  --void-bg-alt: #161b22;
+  --void-surface: #1c2128;
+  --void-text-1: #c9d1d9;
+  --void-text-2: #9198a1;
+  --void-text-3: #7d8590;
+  --void-border: #21262d;
 
   --accent-cyan: #5cc8ff;
-  --void-border-strong: rgba(255, 255, 255, 0.12);
+  --void-border-strong: #30363d;
   --accent-cyan-dim: rgba(92, 200, 255, 0.15);
   --accent-amber: #ffb347;
   --accent-amber-dim: rgba(255, 179, 71, 0.12);
@@ -58,10 +58,11 @@
   --vp-c-brand-2: #2a5a80;
 
   --vp-button-brand-bg: var(--accent-cyan);
-  --vp-button-brand-text: #050508;
+  --vp-button-brand-text: #0d1117;
   --vp-button-brand-hover-bg: #80d8ff;
 
-  --vp-nav-bg-color: rgba(5, 5, 8, 0.85);
+  --vp-nav-bg-color: rgba(13, 17, 23, 0.85);
+  --vp-sidebar-bg-color: #0d1117;
 }
 
 html, body {
@@ -71,9 +72,9 @@ html, body {
 }
 
 h1, h2, h3, h4 {
-  font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-family: 'Work Sans', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .VPNavBar {

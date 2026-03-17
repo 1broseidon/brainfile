@@ -3,7 +3,10 @@
 
 <template>
   <section class="ecosystem fade-section">
-    <span class="section-label">Ecosystem</span>
+    <div class="section-header">
+      <h2 class="section-title">Ecosystem</h2>
+      <div class="section-divider"></div>
+    </div>
     <p class="ecosystem-note">Integrations are optional adapters. The protocol comes first.</p>
     <div class="eco-grid">
       <a href="/tools/cli" class="eco-card">
@@ -48,15 +51,28 @@
   padding-bottom: 8rem;
 }
 
-.section-label {
-  display: block;
-  font-family: 'JetBrains Mono', monospace;
+.section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-family: 'Work Sans', sans-serif;
   font-size: 0.75rem;
-  color: #505060;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 1.25rem;
-  text-align: center;
+  letter-spacing: 0.4em;
+  color: #5cc8ff;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.section-divider {
+  height: 1px;
+  flex-grow: 1;
+  margin-left: 2rem;
+  background: #21262d;
 }
 
 .ecosystem-note {

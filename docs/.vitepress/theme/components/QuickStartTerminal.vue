@@ -34,7 +34,10 @@ async function copyToClipboard() {
 
 <template>
   <section class="quick-start fade-section">
-    <span class="section-label">Get started in 30 seconds.</span>
+    <div class="section-header">
+      <h2 class="section-title">Quick Start</h2>
+      <div class="section-divider"></div>
+    </div>
     <div class="terminal">
       <div class="terminal-header">
         <div class="terminal-dots">
@@ -95,15 +98,32 @@ async function copyToClipboard() {
   padding-bottom: 8rem;
 }
 
-.section-label {
-  display: block;
-  font-family: 'JetBrains Mono', monospace;
+.section-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.section-title {
+  font-family: 'Work Sans', sans-serif;
   font-size: 0.75rem;
-  color: #505060;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 1.25rem;
-  text-align: center;
+  letter-spacing: 0.4em;
+  color: #5cc8ff;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.section-divider {
+  height: 1px;
+  flex-grow: 1;
+  margin-left: 2rem;
+  background: #21262d;
+}
+
+.section-label-old {
+  display: none;
 }
 
 .terminal {
