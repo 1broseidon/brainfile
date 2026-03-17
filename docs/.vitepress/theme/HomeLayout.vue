@@ -132,6 +132,7 @@ onUnmounted(() => {
         <div class="footer-bottom">
           <span class="footer-version">Brainfile v2.0 · Protocol Stable · MIT License</span>
           <span class="footer-agent">For agents: <a href="/llms-install.txt">brainfile.md/llms-install.txt</a></span>
+          <a href="https://chain.sh" class="footer-chainsh" target="_blank" rel="noopener">↗ chain.sh</a>
         </div>
       </footer>
       </div>
@@ -698,6 +699,18 @@ onUnmounted(() => {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.75rem;
   color: #383848;
+}
+
+.footer-chainsh {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: #383848;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-chainsh:hover {
+  color: #e8e8ec;
 }
 
 .footer-agent {
