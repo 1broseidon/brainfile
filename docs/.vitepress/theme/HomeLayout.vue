@@ -52,8 +52,12 @@ onUnmounted(() => {
         <a href="/guides/contracts">Guides</a>
         <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
       </div>
-      <button class="nav-hamburger" :class="{ open: menuOpen }" @click="menuOpen = !menuOpen" aria-label="Menu">
-        <span></span><span></span><span></span>
+      <button class="nav-hamburger" :class="{ open: menuOpen }" @click="menuOpen = !menuOpen" aria-label="mobile navigation" :aria-expanded="menuOpen">
+        <span class="container">
+          <span class="top" />
+          <span class="middle" />
+          <span class="bottom" />
+        </span>
       </button>
     </nav>
     <div class="nav-mobile" :class="{ open: menuOpen }" @click="menuOpen = false">
@@ -166,6 +170,7 @@ onUnmounted(() => {
   color: #c9d1d9;
   font-family: 'Work Sans', sans-serif;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
 }
 
 /* ---- Nav ---- */
@@ -175,7 +180,8 @@ onUnmounted(() => {
   justify-content: space-between;
   max-width: 1100px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 0;
+  padding: 0 1.5rem;
+  height: 64px;
 }
 
 .nav-chainsh {
@@ -200,10 +206,8 @@ onUnmounted(() => {
 
 .nav-hamburger {
   display: none;
-  flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 6px;
   width: 48px;
   height: 48px;
   background: none;
@@ -212,24 +216,40 @@ onUnmounted(() => {
   padding: 0;
 }
 
-.nav-hamburger span {
-  display: block;
-  width: 18px;
-  height: 1.5px;
-  background: #c9d1d9;
-  transition: transform 0.25s, opacity 0.25s;
+.nav-hamburger .container {
+  position: relative;
+  width: 16px;
+  height: 14px;
+  overflow: hidden;
 }
 
-.nav-hamburger.open span:nth-child(1) {
-  transform: translateY(7.5px) rotate(45deg);
+.nav-hamburger .top,
+.nav-hamburger .middle,
+.nav-hamburger .bottom {
+  position: absolute;
+  width: 16px;
+  height: 2px;
+  background-color: #c9d1d9;
+  transition: top 0.25s, background-color 0.5s, transform 0.25s;
 }
 
-.nav-hamburger.open span:nth-child(2) {
-  opacity: 0;
-}
+.nav-hamburger .top    { top: 0;   left: 0; transform: translateX(0); }
+.nav-hamburger .middle { top: 6px; left: 0; transform: translateX(8px); }
+.nav-hamburger .bottom { top: 12px; left: 0; transform: translateX(4px); }
 
-.nav-hamburger.open span:nth-child(3) {
-  transform: translateY(-7.5px) rotate(-45deg);
+.nav-hamburger:hover .top    { top: 0;   transform: translateX(4px); }
+.nav-hamburger:hover .middle { top: 6px; transform: translateX(0); }
+.nav-hamburger:hover .bottom { top: 12px; transform: translateX(8px); }
+
+.nav-hamburger.open .top    { top: 6px; transform: translateX(0) rotate(225deg); }
+.nav-hamburger.open .middle { top: 6px; transform: translateX(16px); }
+.nav-hamburger.open .bottom { top: 6px; transform: translateX(0) rotate(135deg); }
+
+.nav-hamburger.open:hover .top,
+.nav-hamburger.open:hover .middle,
+.nav-hamburger.open:hover .bottom {
+  background-color: #9198a1;
+  transition: top 0.25s, background-color 0.25s, transform 0.25s;
 }
 
 .nav-mobile {
@@ -303,6 +323,7 @@ onUnmounted(() => {
   align-items: center;
   padding-top: 8rem;
   padding-bottom: 6rem;
+  overflow: hidden;
 }
 
 .hero-left {
@@ -961,14 +982,6 @@ onUnmounted(() => {
 
 /* ---- Responsive ---- */
 @media (max-width: 640px) {
-  .home-nav {
-    padding-top: 1.5rem;
-  }
-
-  .nav-links {
-    gap: 1rem;
-  }
-
   .hero-split {
     grid-template-columns: 1fr;
     padding-top: 6rem;

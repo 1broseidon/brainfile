@@ -374,11 +374,29 @@ div[class*='language-'] {
   background-color: var(--void-bg);
 }
 
+/* Nav wordmark — match hero Outfit font */
+.VPNavBarTitle .title {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  font-size: 1.1rem;
+}
+
 /* --- Responsive: Tables --- */
 @media (max-width: 768px) {
   .vp-doc table {
     display: block;
     overflow-x: auto;
+  }
+}
+
+/* --- Responsive: Code blocks --- */
+@media (max-width: 768px) {
+  .vp-doc div[class*='language-'],
+  div[class*='language-'] {
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
   }
 }
 

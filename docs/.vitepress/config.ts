@@ -5,7 +5,7 @@ import path from 'path'
 import { buildEndGenerateOpenGraphImages } from '@nolebase/vitepress-plugin-og-image/vitepress'
 
 export default withMermaid(defineConfig({
-  title: 'Brainfile',
+  title: 'brainfile',
   description: 'An open protocol for structured task coordination between humans and AI agents',
   cleanUrls: true,
   ignoreDeadLinks: true,
