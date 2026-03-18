@@ -1,5 +1,7 @@
 # Brainfile Protocol
 
+[![GitHub Stars](https://img.shields.io/github/stars/brainfile/protocol?style=social)](https://github.com/brainfile/protocol/stargazers)
+
 An open protocol for agentic task coordination. Manage tasks, decisions, and project artifacts as structured markdown files — readable by both humans and AI agents.
 
 ## 1. Protocol Overview
