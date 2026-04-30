@@ -122,6 +122,7 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:ci": "jest --ci --coverage --maxWorkers=2",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build",
     "prepack": "npm run build"
   },
