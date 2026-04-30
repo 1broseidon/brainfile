@@ -23,8 +23,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
 import type { Task, TaskDocument } from './types';
+import { parseTaskContent, serializeTaskContent } from './taskContent';
+
+export { parseTaskContent, serializeTaskContent } from './taskContent';
 
 /**
  * Validate task IDs before using them as path components.
@@ -45,92 +47,6 @@ function isUnsafeTaskId(taskId: string): boolean {
   }
 
   return path.basename(trimmed) !== trimmed;
-}
-
-/**
- * Parse YAML frontmatter and markdown body from a task file's content string.
- *
- * @param content - Raw file content (string)
- * @returns Parsed task metadata and body, or null if frontmatter is missing/invalid
- */
-export function parseTaskContent(content: string): { task: Task; body: string } | null {
-  const lines = content.split('\n');
-
-  // Must start with frontmatter delimiter
-  if (!lines[0] || lines[0].trim() !== '---') {
-    return null;
-  }
-
-  // Find closing delimiter
-  let endIndex = -1;
-  for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() === '---') {
-      endIndex = i;
-      break;
-    }
-  }
-
-  if (endIndex === -1) {
-    return null;
-  }
-
-  const yamlContent = lines.slice(1, endIndex).join('\n');
-  const bodyContent = lines.slice(endIndex + 1).join('\n');
-
-  let parsed: unknown;
-  try {
-    parsed = yaml.load(yamlContent);
-  } catch {
-    return null;
-  }
-
-  if (!parsed || typeof parsed !== 'object') {
-    return null;
-  }
-
-  const task = parsed as Task;
-
-  // id and title are required
-  if (!task.id || !task.title) {
-    return null;
-  }
-
-  // Trim leading blank line from body if present (convention: one blank line after ---)
-  const body = bodyContent.replace(/^\n/, '');
-
-  return { task, body };
-}
-
-/**
- * Serialize task metadata and body into a markdown string with YAML frontmatter.
- *
- * @param task - Task metadata
- * @param body - Markdown body content (can be empty string)
- * @returns Serialized file content
- */
-export function serializeTaskContent(task: Task, body: string = ''): string {
-  const yamlContent = yaml.dump(task, {
-    indent: 2,
-    lineWidth: -1,
-    noRefs: true,
-    sortKeys: false,
-    quotingType: '"',
-    forceQuotes: false,
-  });
-
-  const parts = ['---\n', yamlContent, '---\n'];
-
-  if (body.length > 0) {
-    // Ensure a blank line between frontmatter and body
-    parts.push('\n');
-    parts.push(body);
-    // Ensure trailing newline
-    if (!body.endsWith('\n')) {
-      parts.push('\n');
-    }
-  }
-
-  return parts.join('');
 }
 
 /**
