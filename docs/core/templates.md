@@ -244,7 +244,7 @@ const customTask = createCustomTask('My Task', 'Task description');
 
 ## CLI Integration
 
-The templates are also available through the [@brainfile/cli](/cli/commands) tool:
+The templates are also available through the [@brainfile/cli](/reference/commands) tool:
 
 ```bash
 # List available templates

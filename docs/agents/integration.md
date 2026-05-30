@@ -34,26 +34,22 @@ The MCP server auto-detects the brainfile location (`.brainfile/brainfile.md` or
 
 ### Available Tools
 
+The server registers **10 tools**. `task_move`/`task_patch` accept a single ID or an array (bulk), and `subtask`/`contract` dispatch on an `action` parameter.
+
 | Tool | Description |
 |------|-------------|
-| `list_tasks` | List tasks with column/tag filtering |
+| `list_tasks` | List tasks with column/tag/type filtering |
 | `get_task` | Get detailed task information by ID |
-| `add_task` | Create tasks with all fields |
-| `move_task` | Move between columns |
-| `patch_task` | Update specific fields |
-| `delete_task` | Permanently delete |
-| `archive_task` | Archive a task |
-| `restore_task` | Restore from archive |
-| `add_subtask` | Add subtask |
-| `delete_subtask` | Delete subtask |
-| `toggle_subtask` | Toggle completion |
-| `update_subtask` | Update subtask title |
-| `search_tasks` | Search by title, description, tags |
-| `list_rules` | List project rules |
-| `add_rule` | Add a project rule |
-| `contract_pickup` | Claim a contract |
-| `contract_deliver` | Mark contract as delivered |
-| `contract_validate` | Validate contract deliverables |
+| `search` | Search tasks and logs, list recent completions, or view one entry |
+| `task_add` | Create a task; optionally attach a contract |
+| `task_move` | Move one task or an array of tasks between columns |
+| `task_patch` | Update fields on one or many tasks (`null` removes a field) |
+| `task_delete` | Permanently delete a task |
+| `task_complete` | Complete a task (append to `ledger.jsonl` and archive), or archive to GitHub/Linear |
+| `subtask` | Action-based: `add` \| `toggle` \| `delete` \| `update` |
+| `contract` | Action-based: `attach` \| `pickup` \| `deliver` \| `validate` \| `graph` \| `activate` |
+
+See [MCP Server → Available Tools](/tools/mcp#available-tools) for full parameter tables.
 
 ### Benefits
 
@@ -176,6 +172,10 @@ AI agents should check for the board config in this order:
 ```
 .brainfile/
 ├── brainfile.md      # Board config (columns, types, rules)
+├── agents/           # Agent configuration files (optional)
+│   ├── _defaults.md  # Default settings for all agents
+│   ├── codex.md      # Codex agent config + instructions
+│   └── research.md   # Research agent config
 ├── board/            # Active task files
 │   ├── task-1.md
 │   ├── task-2.md
@@ -188,11 +188,227 @@ AI agents should check for the board config in this order:
 
 ---
 
+## Composable Agent Files
+
+Brainfile supports per-agent configuration files in `.brainfile/agents/` directory. This allows customizing agent behavior, commands, and providing agent-specific instructions.
+
+### Directory Structure
+
+```
+.brainfile/
+├── brainfile.md          # Board config
+├── agents/               # Per-agent configs (preferred)
+│   ├── _defaults.md      # Default settings for all agents
+│   ├── codex.md          # Codex agent config + instructions
+│   ├── cursor.md         # Cursor agent config
+│   └── research.md       # Research agent config
+└── agents.yaml           # Legacy monolithic config (fallback)
+```
+
+### Agent File Format
+
+Agent files use YAML frontmatter for configuration + markdown body for agent instructions:
+
+```markdown
+---
+command: claude
+args:
+  - --model
+  - claude-opus-4-6
+transport: acp-stdio
+capabilities:
+  - code
+  - test
+  - refactor
+permissionMode: orchestrator
+timeoutSeconds: 900
+model: claude-opus-4-6
+sessionMode: auto
+---
+
+# Agent Instructions
+
+You are a backend implementation specialist. Follow these guidelines:
+
+- Use functional patterns over OOP
+- Include comprehensive error handling
+- Write unit tests for all public functions
+- Document complex logic with inline comments
+- Follow the existing code style in the project
+```
+
+### Frontmatter Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `command` | `string` | Yes | Executable command to run (e.g., `claude`, `cursor`, `acp`) |
+| `args` | `string[]` | No | Command-line arguments |
+| `transport` | `"acp-stdio"` | No | Communication protocol (default: `acp-stdio`) |
+| `capabilities` | `string[]` | No | Agent capabilities (e.g., `code`, `test`, `docs`) |
+| `sessionMode` | `string` | No | Session management mode (e.g., `auto`, `manual`) |
+| `model` | `string` | No | AI model to use (e.g., `claude-opus-4-6`) |
+| `permissionMode` | `"orchestrator" \| "enforcer"` | No | Permission level (default: `orchestrator`) |
+| `timeoutSeconds` | `number` | No | Maximum execution time in seconds (default: 600) |
+
+### Instructions Body
+
+The markdown body after the frontmatter becomes the agent's instructions. These are injected into the dispatch prompt when the agent is invoked.
+
+**Guidelines for writing agent instructions:**
+- Be specific about the agent's role and responsibilities
+- Include coding standards and patterns to follow
+- Reference project-specific conventions
+- Keep instructions concise but actionable
+- Use markdown formatting for readability
+
+### Defaults File
+
+`_defaults.md` provides default values that apply to all agents unless overridden:
+
+```markdown
+---
+transport: acp-stdio
+permissionMode: orchestrator
+timeoutSeconds: 600
+model: claude-sonnet-4-5
+---
+```
+
+**Available default fields:**
+- `transport`
+- `permissionMode`
+- `timeoutSeconds`
+- `model`
+
+The markdown body of `_defaults.md` is ignored (only frontmatter is used).
+
+### Resolution Priority
+
+When resolving agent configuration, the system checks in this order:
+
+1. **Agent-specific file** in `.brainfile/agents/{agent-name}.md`
+2. **Defaults from** `.brainfile/agents/_defaults.md`
+3. **Legacy config** in `.brainfile/agents.yaml`
+4. **Builtin defaults** (hardcoded fallback)
+
+**Example resolution:**
+
+```
+.brainfile/agents/
+├── _defaults.md       # timeoutSeconds: 600, transport: acp-stdio
+└── codex.md           # command: codex, model: gpt-4
+
+Resolved for "codex":
+  command: codex              (from codex.md)
+  model: gpt-4                (from codex.md)
+  timeoutSeconds: 600         (from _defaults.md)
+  transport: acp-stdio        (from _defaults.md)
+  permissionMode: orchestrator (builtin default)
+```
+
+### Creating Agent Files
+
+**Manually:**
+
+Create `.brainfile/agents/my-agent.md`:
+
+```markdown
+---
+command: acp
+args:
+  - --provider
+  - anthropic
+model: claude-sonnet-4-5
+timeoutSeconds: 1200
+---
+
+# Implementation Agent
+
+You specialize in implementing features from contracts.
+Always write tests and update documentation.
+```
+
+**Via CLI (planned):**
+
+```bash
+# Future command
+brainfile agents add my-agent \
+  --command acp \
+  --model claude-sonnet-4-5 \
+  --timeout 1200
+```
+
+### Migrating from agents.yaml
+
+If you have an existing `.brainfile/agents.yaml`, convert it to the new format:
+
+**Old format (`agents.yaml`):**
+
+```yaml
+defaults:
+  transport: acp-stdio
+  permissionMode: orchestrator
+agents:
+  codex:
+    command: codex
+    model: gpt-4
+  research:
+    command: claude
+    model: claude-opus-4-6
+```
+
+**New format:**
+
+Create `.brainfile/agents/_defaults.md`:
+
+```markdown
+---
+transport: acp-stdio
+permissionMode: orchestrator
+---
+```
+
+Create `.brainfile/agents/codex.md`:
+
+```markdown
+---
+command: codex
+model: gpt-4
+---
+```
+
+Create `.brainfile/agents/research.md`:
+
+```markdown
+---
+command: claude
+model: claude-opus-4-6
+---
+
+# Research Agent
+
+You specialize in gathering documentation and best practices.
+Focus on actionable findings, not exhaustive summaries.
+```
+
+The system will prefer the `.brainfile/agents/` directory and fall back to `agents.yaml` if no agent-specific file exists.
+
+### Benefits of Agent Files
+
+- **Separation of concerns**: Each agent has its own configuration file
+- **Agent-specific instructions**: Customize behavior per agent role
+- **Version control friendly**: Easier to track changes to individual agents
+- **Scalable**: Add new agents without editing monolithic config
+- **Composable**: Mix and match agents with different capabilities
+- **Default inheritance**: Share common settings via `_defaults.md`
+
+
+
 ## Common Operations
 
 ### Moving a Task
 
-Use the CLI or MCP `move_task` tool:
+Use the CLI or MCP `task_move` tool:
 
 ```bash
 brainfile move -t task-1 -c in-progress
@@ -309,6 +525,6 @@ brainfile lint --check
 
 - [CLI Commands](/reference/commands) — Full command reference
 - [Protocol Specification](/reference/protocol) — File format details
-- [Core Library](/core/overview) — Programmatic operations
+- [Core Library](/tools/core) — Programmatic operations
 - [MCP Server](/tools/mcp) — MCP tool reference
 - [Contract System](/guides/contracts) — Contract workflow guide

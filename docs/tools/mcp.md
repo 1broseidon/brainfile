@@ -66,84 +66,61 @@ Restart your AI assistant after adding or changing MCP configuration.
 
 ## Available Tools
 
-Your AI assistant gets access to these operations:
+The MCP server registers **10 tools**. Several are action-based or accept arrays, so a single tool covers what would otherwise be many — `task_move` and `task_patch` accept one task ID or an array (bulk), `subtask` and `contract` dispatch on an `action` parameter.
 
 ### Task Management
 
-| Tool | Description |
-|------|-------------|
-| `list_tasks` | List all tasks, filter by column, tag, type, or contract status |
-| `get_task` | Get detailed information about a specific task |
-| `search_tasks` | Search tasks by query, column, priority, assignee |
-| `add_task` | Create a task with title, priority, tags, type, relatedFiles, etc. |
-| `move_task` | Move a task between columns |
-| `patch_task` | Update specific fields on a task |
-| `delete_task` | Permanently delete a task |
-| `complete_task` | Complete a task (append to `ledger.jsonl` and archive) |
+| Tool | Key parameters | Description |
+|------|----------------|-------------|
+| `list_tasks` | `column?`, `tag?`, `type?`, `file?` | List tasks, optionally filtered by column, tag, or document type |
+| `get_task` | `task`, `file?` | Get detailed information about a specific task by ID |
+| `search` | `query?`, `column?`, `priority?`, `assignee?`, `recent?`, `task?`, `file?` | Search tasks and logs, list recent completions (`recent: true`), or view one entry (`task`) |
+| `task_add` | `column`, `title`, `description?`, `priority?`, `tags?`, `assignee?`, `dueDate?`, `subtasks?`, `relatedFiles?`, `type?`, `parentId?`, `with_contract?`, `ready?`, `deliverables?`, `validation_commands?`, `constraints?` | Create a task; optionally attach a contract in the same call |
+| `task_move` | `taskId` (string or array), `column`, `file?` | Move one task or many to a column. Moving to a `completionColumn` auto-completes |
+| `task_patch` | `taskId` (string or array), `title?`, `description?`, `priority?`, `tags?`, `assignee?`, `dueDate?`, `relatedFiles?`, `parentId?` | Update fields on one or many tasks. Pass `null` to remove a field |
+| `task_delete` | `task`, `file?` | Permanently delete a task |
+| `task_complete` | `task`, `destination?` (`local`/`github`/`linear`), `file?` | Complete a task (append to `ledger.jsonl` and archive), or archive to GitHub/Linear |
 
-### Bulk Operations
+::: tip Bulk operations
+There are no separate `bulk_*` tools. Pass an array of IDs to `task_move` or `task_patch` to act on multiple tasks at once — the response reports `successCount`/`failureCount` and per-task results.
+:::
 
-| Tool | Description |
-|------|-------------|
-| `bulk_move_tasks` | Move multiple tasks to a column in one operation |
-| `bulk_patch_tasks` | Apply same patch to multiple tasks |
-| `bulk_delete_tasks` | Delete multiple tasks |
-| `bulk_archive_tasks` | Archive multiple tasks to local file |
+### Subtasks — `subtask`
 
-### Archiving
+A single action-based tool. Set `action` to `add`, `toggle`, `delete`, or `update`.
 
-| Tool | Description |
-|------|-------------|
-| `archive_task` | Archive a task to the local archive |
-| `restore_task` | Restore an archived task to a column |
+| Parameter | Applies to | Description |
+|-----------|------------|-------------|
+| `action` | all | `add` \| `toggle` \| `delete` \| `update` |
+| `task` | all | Parent task ID |
+| `subtask` / `subtasks` | all | One ID/title or an array, depending on action |
+| `title` / `titles` | `update` | New title(s) |
+| `completed` | `toggle` | Set explicit state instead of flipping |
+| `all` | `toggle`, `delete` | Target every subtask in the task |
 
-### Subtasks
+### Agent Contracts — `contract`
 
-| Tool | Description |
-|------|-------------|
-| `add_subtask` | Add a subtask to a task |
-| `toggle_subtask` | Mark a subtask complete/incomplete |
-| `update_subtask` | Change a subtask's title |
-| `delete_subtask` | Remove a subtask |
-| `bulk_set_subtasks` | Set multiple subtasks to completed or incomplete at once |
-| `complete_all_subtasks` | Mark all subtasks in a task as completed or incomplete |
+A single action-based tool. Set `action` to `attach`, `pickup`, `deliver`, `validate`, `graph`, or `activate`.
 
-### Log Operations
-
-| Tool | Description |
-|------|-------------|
-| `search_logs` | Search completed task logs by query, or list recent completions |
-| `append_log` | Append a timestamped log entry to any task (active or completed) |
-
-### Type Operations
-
-| Tool | Description |
-|------|-------------|
-| `list_types` | List board strict mode setting and custom type configuration |
-
-### Rule Operations
-
-| Tool | Description |
-|------|-------------|
-| `list_rules` | List project rules, optionally filtered by category |
-| `add_rule` | Add a new project rule (always, never, prefer, context) |
-| `delete_rule` | Delete a project rule by category and ID |
-
-### Agent Contracts
-
-| Tool | Description |
-|------|-------------|
-| `contract_pickup` | Claim a contract and set status to in_progress |
-| `contract_deliver` | Mark contract as delivered (ready for validation) |
-| `contract_validate` | Check deliverables exist and run validation commands |
-| `attach_contract` | Add contract to existing task with deliverables and validation |
+| Action | Parameters | Description |
+|--------|------------|-------------|
+| `attach` | `task`, `deliverables?`, `validation_commands?`, `constraints?`, `ready?` | Attach a contract (default status `draft`; `ready: true` for immediate dispatch) |
+| `pickup` | `task` | Claim a contract (status → `in_progress`); returns agent context markdown |
+| `deliver` | `task` | Mark contract delivered (status → `delivered`) |
+| `validate` | `task` | Check deliverables and run validation commands (status → `done`/`failed`) |
+| `graph` | `tasks` (array with `dependsOn`), `activate?` | Attach contracts to multiple tasks atomically with DAG edges |
+| `activate` | `task` or `parentId` | Flip `draft` → `ready` for one task or all children of a parent |
 
 **Contract workflow:**
-1. PM creates task with contract using `add_task` (with `with_contract`, `deliverables`, `validation_commands`, `constraints` parameters)
-2. Worker agent calls `contract_pickup` to claim the work
-3. Worker implements the deliverables
-4. Worker calls `contract_deliver` when done
-5. PM calls `contract_validate` to check work
+1. PM creates a task with a contract using `task_add` (with `with_contract`, `deliverables`, `validation_commands`, `constraints`), or attaches one later with `contract` `action: attach`.
+2. Worker calls `contract` `action: pickup` to claim the work.
+3. Worker implements the deliverables.
+4. Worker calls `contract` `action: deliver` when done.
+5. PM calls `contract` `action: validate` to check the work.
+
+::: info Ledger queries are library API, not MCP tools
+Completion history (`ledger.jsonl`) is queried through the `@brainfile/core` library (`queryLedger`, `getFileHistory`, `getTaskContext`, `readLedger`), not through dedicated MCP tools. From an assistant, use the `search` tool with `recent: true` to list recent completions. See [Ledger Query API](/reference/mcp-tools).
+:::
 
 ---
 
@@ -157,13 +134,13 @@ Your AI assistant gets access to these operations:
 
 **You:** "I finished the auth bug fix"
 
-**Assistant:** *calls `move_task`* "I've moved task-3 to Done."
+**Assistant:** *calls `task_move`* "I've moved task-3 to Done."
 
 ---
 
 **You:** "Create a task for the performance issue we discussed"
 
-**Assistant:** *calls `add_task`* "Created task-12 'Investigate slow dashboard load' with high priority in To Do."
+**Assistant:** *calls `task_add`* "Created task-12 'Investigate slow dashboard load' with high priority in To Do."
 
 ---
 

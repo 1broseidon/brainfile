@@ -47,18 +47,16 @@ When a task is completed:
 - **Contract Metadata**: `deliverables`, `constraints`, `contractStatus`, `validationAttempts`
 - **Completion Runtime**: `filesChanged`, `completedAt`, `cycleTimeHours`, `summary`
 
-## Context Queries (`get_task_context`)
+## Context Queries (`getTaskContext`)
 
-Use the `get_task_context` MCP tool to retrieve structured historical context for a task ID or related workstream.
+Use the `getTaskContext` function from `@brainfile/core` to retrieve structured historical context for a related workstream. This is a library API, not an MCP tool — see [Ledger Query API](/reference/mcp-tools).
 
-The tool combines:
+It combines:
 
-- Current task state (if active)
-- Ledger history for the same `id`
-- Related task history via `parentId`, `tags`, and `relatedFiles`
-- File-level signals from `filesChanged`
+- Ledger history scoped to the task's `relatedFiles` and contract deliverable paths
+- Related completions that touched the same files via `filesChanged`
 
-This provides agents with a compact, queryable summary, eliminating the need to scan multiple Markdown log files.
+This provides a compact, queryable summary, eliminating the need to scan multiple Markdown log files. From an assistant, use the `search` MCP tool with `recent: true` to list recent completions.
 
 ## File History
 

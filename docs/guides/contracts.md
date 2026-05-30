@@ -86,6 +86,7 @@ Keep constraints focused — 3–5 key requirements, not an exhaustive spec. The
 - **`validation.commands`**: Optional shell commands that the PM can run to automatically verify the work.
 - **`constraints`**: Guidelines or rules the agent must follow during implementation.
 - **`outOfScope`**: Explicitly defines what the agent should *not* do.
+- **`maxRetries`**: Optional number of automatic retry attempts when validation fails. When set, failed validation auto-resets the contract to `ready` and re-dispatches to the agent.
 - **`feedback`**: Used by the PM to provide guidance if a contract is rejected (status `failed`).
 
 ---
@@ -104,6 +105,55 @@ The lifecycle ensures that work is properly claimed, implemented, and verified.
 | 🟢 `done` | PM has verified and accepted the work. | PM: `brainfile complete` to append to `ledger.jsonl` and archive. |
 | 🔴 `failed` | Validation failed. Feedback is provided. | PM: Add feedback, reset to `ready` for rework. |
 | ⚠️ `blocked` | Agent is stuck and needs human/PM intervention. | PM: Resolve blocker and reset status to `ready`. Either party can set this status via manual YAML edit; there is no dedicated CLI command for it. |
+
+### Auto-Retry on Validation Failure
+
+When `contract.maxRetries` is set and validation fails, the system automatically:
+
+1. **Captures feedback**: Validation command output is written to `contract.feedback`
+2. **Increments retry count**: `contract.metrics.reworkCount` is incremented
+3. **Checks retry limit**: If `reworkCount < maxRetries`, proceed to step 4; otherwise, status remains `failed`
+4. **Resets status**: Contract status changes back to `ready`
+5. **Re-dispatches**: Task is automatically dispatched to the assigned agent with feedback
+
+**Example contract with auto-retry:**
+
+```yaml
+contract:
+  status: ready
+  maxRetries: 3
+  deliverables:
+    - path: src/feature.ts
+  validation:
+    commands:
+      - npm test -- feature
+  metrics:
+    reworkCount: 0
+```
+
+**Retry flow:**
+
+1. Agent delivers → Validation runs → Test fails
+2. System captures test output in `feedback`
+3. System increments `reworkCount` to 1
+4. Since `1 < 3` (maxRetries), status resets to `ready`
+5. Agent is re-dispatched with the failure feedback
+6. Agent fixes issue and delivers again
+7. If validation passes: status → `done`. If fails again: repeat steps 2-6 until `reworkCount >= maxRetries`
+
+**Manual retry override:**
+
+Even if maxRetries is exceeded, PM can force a retry:
+
+```bash
+brainfile contract validate --task task-1 --retry
+```
+
+This bypasses the retry limit check and forces one more validation attempt.
+
+::: warning Retry Accounting
+The `reworkCount` is incremented during validation failure checks. With `maxRetries: 3`, you get up to 3 rework cycles (initial attempt + 3 retries = 4 total validation attempts).
+:::
 
 ---
 

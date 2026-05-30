@@ -137,7 +137,7 @@ Worker identity is slot-based (`worker-1`, `worker-2`, ...). Routing is identity
 For reproducible scenario definitions and checklists:
 - Runbook: `/example/integrations/pi/brainfile-extension/SHOWCASE.md`
 - Scenario definitions: `/example/integrations/pi/brainfile-extension/examples/showcase-scenarios.md`
-- Acceptance harness: [/guides/orchestration-acceptance](/guides/orchestration-acceptance)
+- Event contract: [Orchestration Events](/specs/orchestration-events) · [Orchestration Schema](/specs/orchestration-schema)
 
 ## A) Direct 1:1 Dispatch
 

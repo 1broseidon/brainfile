@@ -1,73 +1,95 @@
 ---
-title: MCP Tool Reference (Ledger)
-description: Reference for ledger MCP tools and completion metadata fields
+title: Ledger Query API
+description: Programmatic access to completion history in logs/ledger.jsonl via @brainfile/core
 ---
 
-# MCP Tool Reference (Ledger)
+# Ledger Query API
 
-This page documents the MCP tools for interacting with the Brainfile ledger.
+Completion history lives in `.brainfile/logs/ledger.jsonl` (see [Ledger Schema Reference](/reference/ledger-schema)). It is queried through the **`@brainfile/core`** library, not through dedicated MCP tools.
 
-## `get_task_context`
+::: warning Not MCP tools
+There are no `get_task_context`, `query_ledger`, `get_stats`, or `get_file_history` MCP tools. The MCP server exposes 10 task/board tools (see [MCP Server](/tools/mcp#available-tools)); ledger analytics are a library concern. From an assistant, the closest MCP affordance is the `search` tool with `recent: true`, which lists recently completed tasks.
+:::
 
-Returns structured historical context for a task by matching its `relatedFiles` and contract deliverable paths.
+## Access paths
 
-| Input | Type | Required | Default | Notes |
-|---|---|---|---|---|
-| `taskId` | `string` | Yes | - | The ID of the task to retrieve context for (supports `task_id` alias). |
-| `maxEntries` | `number` | No | `5` | The maximum number of ledger entries to return (supports `max_entries` alias). |
-| `maxAgeDays` | `number` | No | `90` | The lookback window in days (supports `max_age_days` alias). |
-| `file` | `string` | No | server default | Optional brainfile path override. |
+| Need | Use |
+|------|-----|
+| List recent completions from an assistant | MCP `search` tool with `recent: true` |
+| View/search completed task logs from the CLI | `brainfile log --recent`, `brainfile log --search "<query>"`, `brainfile log -t <id>` |
+| Programmatic ledger queries | `@brainfile/core` functions below |
 
-## `query_ledger`
+## Library functions
 
-Returns ledger records filtered via indexed fields.
+Import from `@brainfile/core`. All take the **logs directory** (e.g. `.brainfile/logs/`) as their first argument and read from `ledger.jsonl`.
 
-| Input | Type | Required | Default | Notes |
-|---|---|---|---|---|
-| `assignee` | `string` | No | - | Filter by exact assignee name. |
-| `tags` | `string[]` | No | - | Filter by one or more tags (OR match). |
-| `since` | `string` | No | - | The ISO 8601 start date for the query (`completedAt >= since`). |
-| `until` | `string` | No | - | The ISO 8601 end date for the query (`completedAt <= until`). |
-| `files` | `string[]` | No | - | Filter by files touched across `filesChanged`, `relatedFiles`, or `deliverables`. |
-| `contractStatus` | `string \| string[]` | No | - | Filter by one or more contract statuses (supports `contract_status` alias). |
-| `file` | `string` | No | server default | Optional brainfile path override. |
+### `readLedger(logsDir): LedgerRecord[]`
 
-Supported contract statuses: `ready`, `in_progress`, `delivered`, `done`, `failed`, `blocked`.
+Read and parse every record in `ledger.jsonl`. Invalid lines are skipped.
 
-## `get_stats`
+```typescript
+import { readLedger } from '@brainfile/core';
 
-Returns aggregate analytics from ledger records.
+const records = readLedger('.brainfile/logs/');
+```
 
-| Input | Type | Required | Default | Notes |
-|---|---|---|---|---|
-| `assignee` | `string` | No | - | Filter statistics by a specific assignee. |
-| `since` | `string` | No | - | Filter statistics to records completed on or after this ISO 8601 date. |
-| `tag` | `string` | No | - | Filter statistics to records containing a specific tag. |
-| `file` | `string` | No | server default | Optional brainfile path override. |
+### `queryLedger(logsDir, filters?): LedgerRecord[]`
 
-The response includes totals, cycle-time metrics, breakdowns (`type`, `contractStatus`, `assignee`, `tag`), and top touched files.
+Filter records by indexed fields.
 
-## `get_file_history`
+| Filter | Type | Description |
+|--------|------|-------------|
+| `assignee` | `string` | Exact assignee match |
+| `tags` | `string[]` | OR match across tags (case-insensitive) |
+| `dateRange` | `{ since?: string; until?: string }` | Bounds on `completedAt` (ISO 8601) |
+| `contractStatus` | `string \| string[]` | One or more contract statuses |
+| `files` | `string[]` | Match across `filesChanged`, `relatedFiles`, and `deliverables` |
 
-Returns recent ledger records that touched a specific file path.
+```typescript
+import { queryLedger } from '@brainfile/core';
 
-| Input | Type | Required | Default | Notes |
-|---|---|---|---|---|
-| `filePath` | `string` | Yes | - | The file path to query history for (supports `file_path` alias). |
-| `last` | `number` | No | `10` | The maximum number of entries to return. |
-| `since` | `string` | No | - | The ISO 8601 start date for the query. |
-| `file` | `string` | No | server default | Optional brainfile path override. |
+const recent = queryLedger('.brainfile/logs/', {
+  assignee: 'codex',
+  tags: ['backend'],
+  contractStatus: ['done'],
+});
+```
 
-## Updated `complete_task`
+### `getFileHistory(logsDir, filePath, options?): LedgerRecord[]`
 
-The `complete_task` tool now accepts ledger metadata parameters for v2 file-based boards:
+Return records whose `filesChanged` include `filePath`, newest first.
 
-| Input | Type | Required | Default | Notes |
-|---|---|---|---|---|
-| `summary` | `string` | No | `Completed: {title}` | The retrospective summary for the completion record. |
-| `filesChanged` | `string[]` | No | inferred | A list of modified file paths. Defaults to git diff inference if omitted. |
-| `files_changed` | `string[]` | No | inferred | Alias of `filesChanged`. |
+| Option | Type | Description |
+|--------|------|-------------|
+| `dateRange` | `{ since?: string; until?: string }` | Restrict to a completion window |
+| `limit` | `number` | Cap the number of records returned |
 
-## Updated `contract_deliver`
+```typescript
+import { getFileHistory } from '@brainfile/core';
 
-The `contract_deliver` response now includes a prompt to prepare the `summary` and `filesChanged` list for the subsequent `complete_task` call.
+const history = getFileHistory('.brainfile/logs/', 'src/auth.ts', { limit: 10 });
+```
+
+### `getTaskContext(logsDir, relatedFiles, deliverables?, options?): TaskContextEntry[]`
+
+Build recent context for a workstream by intersecting task-scoped files (`relatedFiles` plus contract deliverable paths) with ledger history.
+
+```typescript
+import { getTaskContext } from '@brainfile/core';
+
+const context = getTaskContext(
+  '.brainfile/logs/',
+  ['src/auth.ts', 'src/middleware/auth.ts'],
+);
+```
+
+## Record shape
+
+Each record conforms to the v2 ledger schema. See [Ledger Schema Reference](/reference/ledger-schema) for the full field table and [`ledger-record.json`](https://brainfile.md/v2/ledger-record.json) for the JSON Schema.
+
+## Related references
+
+- [Ledger and Context Guide](/guides/ledger) — How the ledger works and `jq` query recipes
+- [Ledger Schema Reference](/reference/ledger-schema) — Field-by-field record reference
+- [MCP Server](/tools/mcp) — The 10 task/board MCP tools
+- [API Reference](/reference/api) — Full `@brainfile/core` surface

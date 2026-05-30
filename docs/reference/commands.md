@@ -56,6 +56,37 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`auth`](#auth) | Authenticate with external services |
 | [`mcp`](#mcp) | MCP server for AI assistants |
 
+---|## Commands
+
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## init
@@ -69,10 +100,37 @@ brainfile init --force  # Overwrite existing
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-f, --file <path>` | Output path (default: `.brainfile/brainfile.md`) |
-| `--force` | Overwrite if file exists |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## list
@@ -92,13 +150,37 @@ brainfile list --contract ready
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
-| `-c, --column <name>` | Filter by column |
-| `-t, --tag <name>` | Filter by tag |
-| `--parent <id>` | Filter by parent task ID (`parentId`) |
-| `--contract <status>` | Filter by contract status (`ready`, `in_progress`, `delivered`, `done`, `failed`, `blocked`) |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## show
@@ -112,18 +194,37 @@ brainfile show -t task-42
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | Task ID (required) |
-| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
-| `--json` | Output task data as JSON |
+|--------|## Commands
 
-**Output includes:**
-- Task ID, title, column, priority, tags, assignee
-- Full description
-- Subtasks with completion status
-- Related files
-- Contract details (if present)
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
+---
 ---
 
 ## add
@@ -143,24 +244,37 @@ brainfile add --title "Design doc" --type adr --column todo
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --title <text>` | Task title (required) |
-| `-c, --column <name>` | Target column (default: `todo`) |
-| `-d, --description <text>` | Task description |
-| `-p, --priority <level>` | `low`, `medium`, `high`, or `critical` |
-| `--type <type>` | Document type (e.g., `epic`, `adr`; default: `task`) |
-| `--parent <id>` | Parent task/epic ID |
-| `--child <title>` | Create child task(s) under the new parent (repeatable) |
-| `--tags <list>` | Comma-separated tags |
-| `--assignee <name>` | Assignee name |
-| `--due-date <date>` | Due date (YYYY-MM-DD) |
-| `--subtasks <list>` | Comma-separated subtask titles |
-| `--files <list>` | Comma-separated related file paths |
-| `--with-contract` | Attach a contract (status=ready) |
-| `--deliverable <spec>` | Contract deliverable: `type:path:description` (repeatable) |
-| `--validation <command>` | Contract validation command (repeatable) |
-| `--constraint <text>` | Contract constraint (repeatable) |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## move
@@ -178,10 +292,37 @@ brainfile move --task task-5 --column done
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | Task ID (required) |
-| `-c, --column <name>` | Target column (required) |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## patch
@@ -196,20 +337,37 @@ brainfile patch --task task-1 --clear-assignee
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | Task ID (required) |
-| `--title <text>` | New title |
-| `--description <text>` | New description |
-| `--priority <level>` | New priority |
-| `--tags <list>` | New tags (comma-separated) |
-| `--assignee <name>` | New assignee |
-| `--due-date <date>` | New due date |
-| `--clear-description` | Remove description |
-| `--clear-priority` | Remove priority |
-| `--clear-tags` | Remove tags |
-| `--clear-assignee` | Remove assignee |
-| `--clear-due-date` | Remove due date |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## delete
@@ -222,10 +380,37 @@ brainfile delete --task task-1 --force
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | Task ID (required) |
-| `--force` | Confirm deletion (required) |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## archive
@@ -240,12 +425,37 @@ brainfile archive --all --to linear --dry-run
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | Task ID to archive |
-| `--to <destination>` | Archive destination: `local`, `github`, or `linear` |
-| `--all` | Archive all tasks from local archive to external service |
-| `--dry-run` | Preview what would be created without making changes |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## restore
@@ -258,10 +468,37 @@ brainfile restore --task task-1 --column todo
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | Task ID (required) |
-| `-c, --column <name>` | Target column (required) |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## subtask
@@ -277,13 +514,35 @@ brainfile subtask --task task-1 --delete task-1-2
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | Parent task ID (required) |
-| `--add <title>` | Add a new subtask |
-| `--toggle <id>` | Toggle subtask completion |
-| `--update <id>` | Update subtask (use with `--title`) |
-| `--delete <id>` | Delete a subtask |
-| `--title <text>` | New title (for `--update`) |
+|--------|## Commands
+
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
 ---
 
@@ -299,17 +558,37 @@ brainfile lint --check      # Exit with error (for CI)
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
-| `--fix` | Automatically fix issues |
-| `--check` | Exit with error code if issues found |
+|--------|## Commands
 
-**What it checks:**
-- YAML syntax errors
-- Unquoted strings with colons (auto-fixable)
-- Duplicate column IDs
-- Missing required fields
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
+---
 ---
 
 ## template
@@ -324,18 +603,37 @@ brainfile template --use feature-request --title "Dark mode"
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-l, --list` | List available templates |
-| `-u, --use <id>` | Create from template |
-| `--title <text>` | Task title (required with `--use`) |
-| `--description <text>` | Task description |
-| `-c, --column <name>` | Target column (default: `todo`) |
+|--------|## Commands
 
-**Built-in Templates:**
-- `bug-report` — Bug tracking with triage steps
-- `feature-request` — Feature proposals
-- `refactor` — Code refactoring tasks
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
+---
 ---
 
 ## tui
@@ -381,9 +679,37 @@ brainfile hooks uninstall claude-code --scope all
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `--scope <scope>` | `user` (default), `project`, or `all` |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## complete
@@ -397,6 +723,7 @@ Complete a task — appends a record to `ledger.jsonl` and moves it from `board/
 ```bash
 brainfile complete --task task-1
 brainfile complete -t epic-1 --force
+brainfile complete -t task-2 --summary "Implemented rate limiter" --auto-files
 ```
 
 **Options:**
@@ -404,8 +731,21 @@ brainfile complete -t epic-1 --force
 |--------|-------------|
 | `-t, --task <id>` | Task ID (required) |
 | `--force` | Force epic completion even if child tasks are still active |
+| `--summary <text>` | Completion summary (added to ledger record) |
+| `--files-changed <paths>` | Comma-separated list of changed files |
+| `--auto-files` | Auto-detect changed files from git status |
+
+::: info Auto-Completion Cascade
+When a task is completed:
+1. **Parent auto-completion**: If this task is a child and all sibling tasks are also complete, the parent task auto-completes
+2. **Dependency unblocking**: Tasks blocked by this task (via `blockedBy`) become unblocked
+3. **Auto-dispatch**: Newly unblocked tasks with contracts are automatically dispatched to their assigned agents
+
+This creates a cascading execution flow where completing one task can trigger the next phase of work automatically.
+:::
 
 ---
+
 
 ## contract
 
@@ -419,6 +759,7 @@ The `contract` command drives the full agent-to-agent workflow: `pickup` → `de
 brainfile contract pickup --task task-1
 brainfile contract deliver --task task-1
 brainfile contract validate --task task-1
+brainfile contract validate --task task-1 --retry
 brainfile contract attach --task task-1 --deliverable "file:src/feature.ts:Implementation"
 ```
 
@@ -436,12 +777,26 @@ brainfile contract attach --task task-1 --deliverable "file:src/feature.ts:Imple
 | `-t, --task <id>` | Task ID (required) |
 | `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
 
+**Validate Options:**
+| Option | Description |
+|--------|-------------|
+| `--retry` | Force retry even if validation fails and maxRetries is exceeded |
+
 **Attach Options:**
 | Option | Description |
 |--------|-------------|
 | `--deliverable <spec>` | Add deliverable (format: `type:path:description`) |
 | `--validation <command>` | Add validation command (repeatable) |
 | `--constraint <text>` | Add constraint (repeatable) |
+
+::: info Auto-Retry on Validation Failure
+If `contract.maxRetries` is set and validation fails, the system automatically:
+1. Captures validation output as feedback in `contract.feedback`
+2. Resets contract status to `ready`
+3. Re-dispatches the task to the agent for rework
+
+Use `--retry` to manually force a retry attempt even if maxRetries is exceeded.
+:::
 
 See the [Contract Commands Reference](/cli/contract-commands) for detailed documentation.
 
@@ -457,10 +812,37 @@ brainfile adr promote -t adr-1 --category always
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | ADR task ID (required) |
-| `--category <cat>` | Rule category: `prefer`, `always`, `never`, `context` |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## rules
@@ -521,11 +903,37 @@ brainfile note -t task-1 "Fixed failing test" --agent codex
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-t, --task <id>` | Task ID (required) |
-| `--agent <name>` | Agent name for attribution |
-| `[message]` | Log message to append (positional argument) |
+|--------|## Commands
 
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
+
+---
 ---
 
 ## migrate
@@ -540,16 +948,37 @@ brainfile migrate --force
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `--dir <path>` | Project directory (default: current directory) |
-| `--force` | Overwrite existing .brainfile/brainfile.md |
+|--------|## Commands
 
-**What it does:**
-- Creates `.brainfile/` directory
-- Moves `brainfile.md` → `.brainfile/brainfile.md`
-- Creates `.brainfile/.gitignore` (ignores state.json)
-- Preserves all content exactly
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
+---
 ---
 
 ## config
@@ -565,18 +994,37 @@ brainfile config path
 
 **Subcommands:**
 | Command | Description |
+|---------|## Commands
+
+| Command | Description |
 |---------|-------------|
-| `list` | Show all configuration values |
-| `get <key>` | Get specific config value |
-| `set <key> <value>` | Set config value |
-| `path` | Show config file path |
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
-**Common Config Keys:**
-- `archive.default` — Default archive destination (`local`, `github`, `linear`)
-- `archive.github.owner` — GitHub repository owner
-- `archive.github.repo` — GitHub repository name
-- `archive.linear.teamId` — Linear team ID
-
+---
 ---
 
 ## auth
@@ -592,18 +1040,37 @@ brainfile auth logout github
 
 **Subcommands:**
 | Command | Description |
+|---------|## Commands
+
+| Command | Description |
 |---------|-------------|
-| `github [--token <token>]` | Authenticate with GitHub (auto-detects gh CLI or uses OAuth) |
-| `linear --token <token>` | Authenticate with Linear API |
-| `status` | Show authentication status for all services |
-| `logout [provider] [--all]` | Log out from service(s) |
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
-**Options:**
-| Option | Description |
-|--------|-------------|
-| `--token <token>` | API token (required for Linear, optional for GitHub) |
-| `--all` | Log out from all services |
-
+---
 ---
 
 ## mcp
@@ -617,88 +1084,73 @@ brainfile mcp --file ./project/brainfile.md
 
 **Options:**
 | Option | Description |
-|--------|-------------|
-| `-f, --file <path>` | Path to brainfile (auto-detects `.brainfile/brainfile.md`) |
+|--------|## Commands
 
-**Available MCP Tools (30):**
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
-*Task Management:*
-
-| Tool | Description |
-|------|-------------|
-| `list_tasks` | List tasks with optional filtering (column, tag, type, contract status) |
-| `get_task` | Get detailed information about a specific task |
-| `search_tasks` | Search tasks by query, column, priority, assignee |
-| `add_task` | Create a task with title, priority, tags, type, relatedFiles, contracts |
-| `move_task` | Move task between columns |
-| `patch_task` | Update task fields |
-| `delete_task` | Permanently delete a task |
-| `complete_task` | Complete a task (append to `ledger.jsonl` and archive) |
-
-*Bulk Operations:*
-
-| Tool | Description |
-|------|-------------|
-| `bulk_move_tasks` | Move multiple tasks to a column |
-| `bulk_patch_tasks` | Apply same patch to multiple tasks |
-| `bulk_delete_tasks` | Delete multiple tasks |
-| `bulk_archive_tasks` | Archive multiple tasks |
-
-*Archiving:*
-
-| Tool | Description |
-|------|-------------|
-| `archive_task` | Archive a task (local, GitHub, or Linear) |
-| `restore_task` | Restore from archive |
-
-*Subtasks:*
-
-| Tool | Description |
-|------|-------------|
-| `add_subtask` | Add a subtask |
-| `toggle_subtask` | Toggle subtask completion |
-| `update_subtask` | Update subtask title |
-| `delete_subtask` | Delete a subtask |
-| `bulk_set_subtasks` | Set multiple subtasks to completed or incomplete |
-| `complete_all_subtasks` | Mark all subtasks as completed or incomplete |
-
-*Agent Contracts:*
-
-| Tool | Description |
-|------|-------------|
-| `contract_pickup` | Claim a contract (status → in_progress) |
-| `contract_deliver` | Mark contract as delivered |
-| `contract_validate` | Check deliverables and run validation commands |
-| `attach_contract` | Add contract to existing task |
-
-*Logs, Types, and Rules:*
-
-| Tool | Description |
-|------|-------------|
-| `search_logs` | Search completed task logs |
-| `append_log` | Append a timestamped log entry to a task |
-| `list_types` | List board type configuration |
-| `list_rules` | List project rules |
-| `add_rule` | Add a project rule |
-| `delete_rule` | Delete a project rule |
-
+---
 ---
 
 ## Global Options
 
 | Option | Description |
-|--------|-------------|
-| `--help` | Display help for command |
-| `--version` | Display CLI version |
+|--------|## Commands
 
-## Exit Codes
+| Command | Description |
+|---------|-------------|
+| [`init`](#init) | Create a new brainfile |
+| [`list`](#list) | Display tasks |
+| [`show`](#show) | Display single task details |
+| [`add`](#add) | Create a new task |
+| [`move`](#move) | Move task between columns |
+| [`patch`](#patch) | Update task fields |
+| [`delete`](#delete) | Permanently delete a task |
+| [`archive`](#archive) | Archive a task |
+| [`restore`](#restore) | Restore from archive |
+| [`subtask`](#subtask) | Manage subtasks |
+| [`lint`](#lint) | Validate and fix syntax |
+| [`template`](#template) | Create from templates |
+| [`tui`](#tui) | Interactive terminal UI |
+| [`hooks`](#hooks) | AI agent hook integration |
+| [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
+| [`contract`](#contract) | Manage agent-to-agent contracts |
+| [`adr`](#adr) | ADR lifecycle management |
+| [`rules`](#rules) | Manage project rules |
+| [`types`](#types) | Document type management |
+| [`search`](#search) | Search tasks and logs |
+| [`log`](#log) | View completed task logs |
+| [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
+| [`config`](#config) | Manage user configuration |
+| [`auth`](#auth) | Authenticate with external services |
+| [`mcp`](#mcp) | MCP server for AI assistants |
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Error (invalid arguments, file not found) |
-| `2` | Validation error (with `lint --check`) |
-
+---
 ---
 
 ## CI/CD Integration

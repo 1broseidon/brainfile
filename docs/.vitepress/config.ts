@@ -311,9 +311,12 @@ export default withMermaid(defineConfig({
           { text: 'CLI Commands', link: '/reference/commands' },
           { text: 'API Reference', link: '/reference/api' },
           { text: 'Schema Types', link: '/reference/types' },
-          { text: 'Contract Schema', link: '/reference/contract-schema' },
           { text: 'Base Schema', link: '/types/base' },
           { text: 'Board Schema', link: '/types/board' },
+          { text: 'Contract Schema', link: '/reference/contract-schema' },
+          { text: 'Contract Object', link: '/types/contract' },
+          { text: 'Ledger Schema', link: '/reference/ledger-schema' },
+          { text: 'Ledger Query API', link: '/reference/mcp-tools' },
         ],
       },
       {
@@ -324,6 +327,15 @@ export default withMermaid(defineConfig({
           { text: 'Contract Commands', link: '/cli/contract-commands' },
           { text: 'Agent Workflows', link: '/guides/agent-workflows' },
           { text: 'Orchestration', link: '/guides/orchestration' },
+          { text: 'Ledger & Context', link: '/guides/ledger' },
+          { text: 'AI Agent Integration', link: '/agents/integration' },
+        ],
+      },
+      {
+        text: 'Orchestration Specs',
+        items: [
+          { text: 'Orchestration Schema', link: '/specs/orchestration-schema' },
+          { text: 'Orchestration Events', link: '/specs/orchestration-events' },
         ],
       },
       {
@@ -332,13 +344,17 @@ export default withMermaid(defineConfig({
           { text: 'CLI & TUI', link: '/tools/cli' },
           { text: 'MCP Server', link: '/tools/mcp' },
           { text: 'Pi Extension', link: '/tools/pi' },
+          { text: 'VSCode (Deprecated)', link: '/tools/vscode' },
         ],
       },
       {
         text: 'Libraries',
         items: [
           { text: 'TypeScript', link: '/tools/core' },
+          { text: 'Task Templates', link: '/core/templates' },
           { text: 'Python', link: '/tools/python' },
+          { text: 'Python Overview', link: '/python/overview' },
+          { text: 'Python API', link: '/python/api-reference' },
         ],
       },
       {

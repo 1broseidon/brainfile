@@ -145,6 +145,166 @@ Match agent strengths to task types. These are example roles — name and config
 | `failed` | Validator | `brainfile contract validate` fails |
 | `failed` → `ready` | PM | Add feedback, reset status for rework |
 
+
+## Task Dependencies
+
+Coordinate multi-step workflows by declaring dependencies in task frontmatter. A task with a `contract.status` of `ready` is only schedulable once its dependencies are satisfied.
+
+Use the `blockedBy` field to list task IDs that must complete first:
+
+```yaml
+---
+id: task-3
+title: Deploy to production
+column: todo
+blockedBy:
+  - task-1  # Tests must pass
+  - task-2  # Security review must complete
+contract:
+  status: ready
+---
+```
+
+**Dependency semantics:**
+1. `task-3` is not schedulable while `task-1` or `task-2` is incomplete.
+2. When a blocking task completes, the dependency is considered satisfied.
+3. When all blocking tasks are done, `task-3` becomes schedulable.
+
+::: tip dependsOn vs blockedBy
+The richer [orchestration schema](/specs/orchestration-schema) adds an `orchestration.dependsOn` DAG with success-state policies (`done` vs `delivered`) and fan-in barriers. `blockedBy` is the simpler top-level field and is treated as a compatibility fallback for `dependsOn` by schedulers.
+:::
+
+### Common dependency shapes
+
+**Linear chain** — each task blocked by the previous one:
+
+```yaml
+# task-2 blockedBy [task-1]; task-3 blockedBy [task-2]; task-4 blockedBy [task-3]
+```
+
+**Fan-out / fan-in** — parallel tasks converging on a join task:
+
+```yaml
+---
+id: task-merge
+title: Integrate all modules
+column: todo
+blockedBy: [task-1, task-5, task-9]   # join task waits for all three
+contract:
+  status: ready
+---
+```
+
+The parallel tasks (`task-1`, `task-5`, `task-9`) carry no dependencies and can run concurrently; `task-merge` unblocks once all three complete.
+
+## Epic Auto-Completion
+
+When all child tasks of a parent complete, the parent auto-completes. Children link to a parent via `parentId`:
+
+```yaml
+---
+id: epic-1
+type: epic
+title: Authentication overhaul
+column: in-progress
+---
+
+# Separate task files:
+# task-1 parentId: epic-1
+# task-2 parentId: epic-1
+```
+
+**Cascade behavior** (handled by `brainfile complete`):
+1. Complete `task-1` → `epic-1` still has an incomplete child (`task-2`).
+2. Complete `task-2` → all children done → `epic-1` auto-completes.
+3. If `epic-1` has its own parent, that parent's children are checked next.
+4. The cascade continues up the tree.
+
+::: warning Force Completion
+Use `brainfile complete --task epic-1 --force` to complete an epic that still has active children. This overrides the incomplete-children guard.
+:::
+
+## Automated Dispatch (Supervisor)
+
+The `brainfile` CLI itself does not spawn agent processes — task creation and completion are manual or agent-driven. To run a board **autonomously**, use the separate **`@brainfile/supervisor`** daemon (`bfs`), which watches `.brainfile/board/`, dispatches ready contracts to external agents, enforces quality gates, and advances the lifecycle.
+
+```bash
+# Watch the current workspace and start the daemon
+bfs watch
+bfs start
+
+# Inspect and control running work
+bfs status                 # daemon status
+bfs dispatch <task-id>     # force-dispatch a ready task, bypassing cooldown
+bfs cancel <task-id>       # abort a running job and reset it to draft
+bfs logs --events          # stream live dispatch events
+bfs stop                   # stop the daemon
+```
+
+**What the supervisor does each tick:**
+1. Finds tasks whose contracts are `ready` and whose `blockedBy`/`dependsOn` dependencies are satisfied.
+2. Dispatches them to their assigned agents (respecting `--concurrency`).
+3. On completion, re-evaluates downstream tasks that become unblocked and dispatches the next wave.
+4. Cascades epic auto-completion as children finish.
+
+::: info Run it dry first
+`bfs start --dry-run` shows the planned dispatch actions without spawning agents — useful for validating a dependency graph before going live. See the supervisor package for full configuration.
+:::
+
+## Orchestration Patterns
+
+### Sequential delivery
+
+Create a chain where each phase is blocked by the previous one, attach contracts, and let the supervisor advance it:
+
+```bash
+# Create the tasks with contracts (set blockedBy in each task's frontmatter)
+brainfile add -c todo --title "Design API" --assignee backend-agent --with-contract --ready
+brainfile add -c todo --title "Implement backend" --assignee backend-agent --with-contract
+brainfile add -c todo --title "Write tests" --assignee qa-agent --with-contract
+
+# Edit task frontmatter to chain dependencies:
+#   "Implement backend" blockedBy: [task-1]
+#   "Write tests"        blockedBy: [task-2]
+
+# Run autonomously
+bfs watch && bfs start
+```
+
+### Parallel research → synthesis
+
+Create independent research tasks plus a join task blocked by all of them:
+
+```bash
+brainfile add -c todo --title "Research Redis" --assignee research-agent --with-contract --ready
+brainfile add -c todo --title "Research Memcached" --assignee research-agent --with-contract --ready
+brainfile add -c todo --title "Research DynamoDB" --assignee research-agent --with-contract --ready
+brainfile add -c todo --title "Recommend caching solution" --assignee research-agent --with-contract
+# Set the recommendation task's blockedBy: [task-1, task-2, task-3]
+```
+
+When all research tasks complete, the join task unblocks and the supervisor dispatches it.
+
+### Epic with parallel streams
+
+Group converging streams of work under one epic using `parentId`:
+
+```bash
+brainfile add --title "Payment system overhaul" --type epic -c in-progress
+
+# Stream 1 (link each task to the epic)
+brainfile add -c todo --title "Design Stripe schema" --parent epic-1 --assignee backend-agent --with-contract --ready
+brainfile add -c todo --title "Implement webhooks" --parent epic-1 --assignee backend-agent --with-contract
+
+# Stream 2
+brainfile add -c todo --title "Design payment form" --parent epic-1 --assignee frontend-agent --with-contract --ready
+brainfile add -c todo --title "Implement checkout UI" --parent epic-1 --assignee frontend-agent --with-contract
+
+# When all child tasks complete, epic-1 auto-completes
+```
+
+
+
 ## Context Preservation
 
 Goal: minimize context pollution, maximize working time before compaction.
