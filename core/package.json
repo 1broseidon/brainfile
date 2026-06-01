@@ -1,0 +1,157 @@
+{
+  "name": "@brainfile/core",
+  "version": "0.15.3",
+  "description": "Core library for the Brainfile task management protocol",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js",
+      "require": "./dist/browser.js",
+      "default": "./dist/browser.js"
+    },
+    "./parser": {
+      "types": "./dist/parser.d.ts",
+      "import": "./dist/parser.js",
+      "require": "./dist/parser.js",
+      "default": "./dist/parser.js"
+    },
+    "./serializer": {
+      "types": "./dist/serializer.d.ts",
+      "import": "./dist/serializer.js",
+      "require": "./dist/serializer.js",
+      "default": "./dist/serializer.js"
+    },
+    "./graph": {
+      "types": "./dist/graph.d.ts",
+      "import": "./dist/graph.js",
+      "require": "./dist/graph.js",
+      "default": "./dist/graph.js"
+    },
+    "./realtime": {
+      "types": "./dist/realtime.d.ts",
+      "import": "./dist/realtime.js",
+      "require": "./dist/realtime.js",
+      "default": "./dist/realtime.js"
+    },
+    "./boardFile": {
+      "types": "./dist/boardFile.d.ts",
+      "import": "./dist/boardFile.js",
+      "require": "./dist/boardFile.js",
+      "default": "./dist/boardFile.js"
+    },
+    "./taskFile": {
+      "types": "./dist/taskFile.d.ts",
+      "import": "./dist/taskFile.js",
+      "require": "./dist/taskFile.js",
+      "default": "./dist/taskFile.js"
+    },
+    "./boardContent": {
+      "types": "./dist/boardContent.d.ts",
+      "import": "./dist/boardContent.js",
+      "require": "./dist/boardContent.js",
+      "default": "./dist/boardContent.js"
+    },
+    "./taskContent": {
+      "types": "./dist/taskContent.d.ts",
+      "import": "./dist/taskContent.js",
+      "require": "./dist/taskContent.js",
+      "default": "./dist/taskContent.js"
+    },
+    "./realtimeDiff": {
+      "types": "./dist/realtimeDiff.d.ts",
+      "import": "./dist/realtimeDiff.js",
+      "require": "./dist/realtimeDiff.js",
+      "default": "./dist/realtimeDiff.js"
+    },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "browser": [
+        "dist/browser.d.ts"
+      ],
+      "parser": [
+        "dist/parser.d.ts"
+      ],
+      "serializer": [
+        "dist/serializer.d.ts"
+      ],
+      "graph": [
+        "dist/graph.d.ts"
+      ],
+      "realtime": [
+        "dist/realtime.d.ts"
+      ],
+      "boardFile": [
+        "dist/boardFile.d.ts"
+      ],
+      "taskFile": [
+        "dist/taskFile.d.ts"
+      ],
+      "boardContent": [
+        "dist/boardContent.d.ts"
+      ],
+      "taskContent": [
+        "dist/taskContent.d.ts"
+      ],
+      "realtimeDiff": [
+        "dist/realtimeDiff.d.ts"
+      ],
+      "dist/*": [
+        "dist/*"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist coverage",
+    "watch": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:ci": "jest --ci --coverage --maxWorkers=2",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run build",
+    "prepack": "npm run build"
+  },
+  "keywords": [
+    "brainfile",
+    "task-management",
+    "kanban",
+    "markdown",
+    "yaml",
+    "protocol"
+  ],
+  "author": "Brainfile Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brainfile/core.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.x",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}
