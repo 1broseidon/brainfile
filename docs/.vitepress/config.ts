@@ -43,7 +43,7 @@ export default withMermaid(defineConfig({
 
             // Handle /v1 or /v1/
             if (url === '/v1' || url === '/v1/') {
-              const htmlPath = path.resolve(__dirname, '../../v1/index.html')
+              const htmlPath = path.resolve(__dirname, '../../protocol/v1/index.html')
               const content = fs.readFileSync(htmlPath, 'utf-8')
               res.setHeader('Content-Type', 'text/html')
               res.end(content)
@@ -53,7 +53,7 @@ export default withMermaid(defineConfig({
             // Handle /v1/*.json files
             if (url.startsWith('/v1/') && url.endsWith('.json')) {
               const filename = url.split('/v1/')[1]
-              const jsonPath = path.resolve(__dirname, '../../v1', filename)
+              const jsonPath = path.resolve(__dirname, '../../protocol/v1', filename)
               if (fs.existsSync(jsonPath)) {
                 const content = fs.readFileSync(jsonPath, 'utf-8')
                 res.setHeader('Content-Type', 'application/json')
@@ -65,7 +65,7 @@ export default withMermaid(defineConfig({
             // Handle /v1/*.html or /v1/*.md files
             if (url.startsWith('/v1/') && (url.endsWith('.html') || url.endsWith('.md'))) {
               const filename = url.split('/v1/')[1]
-              const filePath = path.resolve(__dirname, '../../v1', filename)
+              const filePath = path.resolve(__dirname, '../../protocol/v1', filename)
               if (fs.existsSync(filePath)) {
                 const content = fs.readFileSync(filePath, 'utf-8')
                 res.setHeader('Content-Type', url.endsWith('.md') ? 'text/markdown' : 'text/html')
@@ -76,7 +76,7 @@ export default withMermaid(defineConfig({
 
             // Handle /v2 or /v2/
             if (url === '/v2' || url === '/v2/') {
-              const htmlPath = path.resolve(__dirname, '../../v2/index.html')
+              const htmlPath = path.resolve(__dirname, '../../protocol/v2/index.html')
               const content = fs.readFileSync(htmlPath, 'utf-8')
               res.setHeader('Content-Type', 'text/html')
               res.end(content)
@@ -86,7 +86,7 @@ export default withMermaid(defineConfig({
             // Handle /v2/*.json files
             if (url.startsWith('/v2/') && url.endsWith('.json')) {
               const filename = url.split('/v2/')[1]
-              const jsonPath = path.resolve(__dirname, '../../v2', filename)
+              const jsonPath = path.resolve(__dirname, '../../protocol/v2', filename)
               if (fs.existsSync(jsonPath)) {
                 const content = fs.readFileSync(jsonPath, 'utf-8')
                 res.setHeader('Content-Type', 'application/json')
@@ -98,7 +98,7 @@ export default withMermaid(defineConfig({
             // Handle /v2/*.html or /v2/*.md files
             if (url.startsWith('/v2/') && (url.endsWith('.html') || url.endsWith('.md'))) {
               const filename = url.split('/v2/')[1]
-              const filePath = path.resolve(__dirname, '../../v2', filename)
+              const filePath = path.resolve(__dirname, '../../protocol/v2', filename)
               if (fs.existsSync(filePath)) {
                 const content = fs.readFileSync(filePath, 'utf-8')
                 res.setHeader('Content-Type', url.endsWith('.md') ? 'text/markdown' : 'text/html')
@@ -112,7 +112,7 @@ export default withMermaid(defineConfig({
               const rawPath = (url.split('?')[0] || '').trim()
               const rel = decodeURIComponent(rawPath.replace(/^\/example\//, ''))
 
-              const exampleDir = path.resolve(__dirname, '../../example')
+              const exampleDir = path.resolve(__dirname, '../../protocol/example')
               const filePath = path.resolve(exampleDir, rel)
 
               // Prevent path traversal
@@ -142,7 +142,7 @@ export default withMermaid(defineConfig({
         },
         generateBundle() {
           // Copy v1 directory files (schemas are now at /v1/*.json)
-          const v1Dir = path.resolve(__dirname, '../../v1')
+          const v1Dir = path.resolve(__dirname, '../../protocol/v1')
           const v1Files = fs.readdirSync(v1Dir)
           for (const file of v1Files) {
             const filePath = path.join(v1Dir, file)
@@ -157,7 +157,7 @@ export default withMermaid(defineConfig({
           }
 
           // Copy v2 directory files
-          const v2Dir = path.resolve(__dirname, '../../v2')
+          const v2Dir = path.resolve(__dirname, '../../protocol/v2')
           const v2Files = fs.readdirSync(v2Dir)
           for (const file of v2Files) {
             const filePath = path.join(v2Dir, file)
@@ -191,7 +191,7 @@ export default withMermaid(defineConfig({
             }
           }
 
-          const exampleDir = path.resolve(__dirname, '../../example')
+          const exampleDir = path.resolve(__dirname, '../../protocol/example')
           copyDirRecursive(exampleDir, 'example')
         },
       },

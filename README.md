@@ -1,8 +1,32 @@
-# Brainfile Protocol
+# Brainfile
 
-[![GitHub Stars](https://img.shields.io/github/stars/brainfile/protocol?style=social)](https://github.com/brainfile/protocol/stargazers)
+[![npm](https://img.shields.io/npm/v/brainfile?color=blue)](https://www.npmjs.com/package/brainfile)
+[![GitHub Stars](https://img.shields.io/github/stars/1broseidon/brainfile?style=social)](https://github.com/1broseidon/brainfile/stargazers)
 
-An open protocol for agentic task coordination. Manage tasks, decisions, and project artifacts as structured markdown files — readable by both humans and AI agents.
+An open protocol for agentic task coordination. Manage tasks, decisions, and project artifacts as structured Markdown files — readable by both humans and AI agents. This monorepo holds the protocol spec, the `@brainfile/core` library, and the `brainfile` CLI.
+
+## Install
+
+```bash
+npm i -g brainfile      # the CLI
+brainfile init          # scaffold a .brainfile board
+brainfile --help        # explore commands (add, list, move, contract, tui, mcp, …)
+```
+
+Use the library directly:
+
+```bash
+npm i @brainfile/core
+```
+
+## This Repository
+
+| Path | Package | What |
+|------|---------|------|
+| [`cli/`](cli) | [`brainfile`](https://www.npmjs.com/package/brainfile) | the command-line interface (and MCP server) |
+| [`core/`](core) | [`@brainfile/core`](https://www.npmjs.com/package/@brainfile/core) | parser, schema, and operations library |
+| [`protocol/`](protocol) | — | the versioned spec (`v1/`, `v2/`), examples, prompts |
+| [`docs/`](docs) | — | the documentation site → [brainfile.md](https://brainfile.md) |
 
 ## 1. Protocol Overview
 

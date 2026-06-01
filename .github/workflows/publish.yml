@@ -1,0 +1,133 @@
+name: Publish to NPM
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish'
+        required: true
+        type: choice
+        options:
+          - core
+          - cli
+          - both
+      version:
+        description: 'Version type (for automatic versioning)'
+        required: false
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  publish-core:
+    name: Publish Core Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for trusted publishing
+    if: |
+      (github.event_name == 'release') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.package == 'core' || github.event.inputs.package == 'both'))
+    
+    defaults:
+      run:
+        working-directory: ./core
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: core/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm run test:ci
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Bump version (if manual)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version
+        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
+      
+      - name: Publish to NPM
+        run: npm publish --provenance --access public
+      
+      - name: Get package version
+        id: package-version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      
+      - name: Create Git tag (if manual)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "@brainfile/core@${{ steps.package-version.outputs.version }}" -m "Release @brainfile/core@${{ steps.package-version.outputs.version }}"
+          git push origin "@brainfile/core@${{ steps.package-version.outputs.version }}"
+
+  publish-cli:
+    name: Publish CLI Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for trusted publishing
+    needs: publish-core
+    if: |
+      always() &&
+      (github.event_name == 'release') ||
+      (github.event_name == 'workflow_dispatch' && (github.event.inputs.package == 'cli' || github.event.inputs.package == 'both'))
+    
+    defaults:
+      run:
+        working-directory: ./cli
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+          cache-dependency-path: cli/package-lock.json
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run tests
+        run: npm test
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Bump version (if manual)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version
+        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
+      
+      - name: Publish to NPM
+        run: npm publish --provenance --access public
+      
+      - name: Get package version
+        id: package-version
+        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+      
+      - name: Create Git tag (if manual)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "brainfile@${{ steps.package-version.outputs.version }}" -m "Release brainfile@${{ steps.package-version.outputs.version }}"
+          git push origin "brainfile@${{ steps.package-version.outputs.version }}"
+

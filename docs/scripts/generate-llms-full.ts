@@ -9,7 +9,7 @@ const __dirname = path.dirname(__filename);
 
 const DOCS_DIR = path.join(__dirname, '..');
 const OUTPUT_FILE = path.join(__dirname, '../public/llms-full.txt');
-const EXAMPLE_ROOT_DIR = path.join(__dirname, '../../example');
+const EXAMPLE_ROOT_DIR = path.join(__dirname, '../../protocol/example');
 const EXAMPLE_V2_DIR = path.join(EXAMPLE_ROOT_DIR, '.brainfile');
 
 interface DocSectionCandidate {

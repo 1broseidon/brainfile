@@ -1,6 +1,6 @@
 {
-  "name": "@brainfile/cli",
-  "version": "0.17.2",
+  "name": "brainfile",
+  "version": "0.18.0",
   "description": "Command-line interface for Brainfile task management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,13 +28,13 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/brainfile/cli"
+    "url": "https://github.com/1broseidon/brainfile"
   },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@brainfile/core": "^0.15.1",
+    "@brainfile/core": "^0.18.0",
     "@modelcontextprotocol/sdk": "^1.22.0",
     "chalk": "^4.1.2",
     "chokidar": "^4.0.3",

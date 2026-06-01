@@ -38,7 +38,7 @@ Prevents fragmentation between markdown docs and the LLM reference by maintainin
 12. `reference/commands.md`
 13. `reference/contract-schema.md`
 14. `reference/types.md`
-15. `../../example/.brainfile/**` (complete v2 workspace example)
+15. `../../protocol/example/.brainfile/**` (complete v2 workspace example)
 
 ### Outputs
 
