@@ -1,133 +1,73 @@
-name: Publish to NPM
+name: Publish to npm
+
+# Publishes @brainfile/core then brainfile when a GitHub Release is published.
+# Auth: npm trusted publishing (OIDC) — no secrets needed once the trusted
+# publisher is configured on npmjs.com for each package (repo: 1broseidon/brainfile,
+# workflow: publish.yml). Until the `brainfile` package exists on the registry,
+# an NPM_TOKEN repo secret can be set as a one-time bootstrap fallback.
 
 on:
   release:
     types: [published]
   workflow_dispatch:
-    inputs:
-      package:
-        description: 'Package to publish'
-        required: true
-        type: choice
-        options:
-          - core
-          - cli
-          - both
-      version:
-        description: 'Version type (for automatic versioning)'
-        required: false
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+
+permissions:
+  contents: read
+  id-token: write # OIDC: trusted publishing + provenance
 
 jobs:
-  publish-core:
-    name: Publish Core Package
+  publish:
+    name: Publish packages
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write  # Required for trusted publishing
-    if: |
-      (github.event_name == 'release') ||
-      (github.event_name == 'workflow_dispatch' && (github.event.inputs.package == 'core' || github.event.inputs.package == 'both'))
-    
-    defaults:
-      run:
-        working-directory: ./core
-    
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
+          node-version: '24'
           cache: 'npm'
-          cache-dependency-path: core/package-lock.json
-      
-      - name: Install dependencies
+
+      - name: Ensure npm supports trusted publishing (>= 11.5.1)
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - name: Install
         run: npm ci
-      
-      - name: Run tests
-        run: npm run test:ci
-      
+
       - name: Build
         run: npm run build
-      
-      - name: Bump version (if manual)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version
-        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
-      
-      - name: Publish to NPM
-        run: npm publish --provenance --access public
-      
-      - name: Get package version
-        id: package-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      
-      - name: Create Git tag (if manual)
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git tag -a "@brainfile/core@${{ steps.package-version.outputs.version }}" -m "Release @brainfile/core@${{ steps.package-version.outputs.version }}"
-          git push origin "@brainfile/core@${{ steps.package-version.outputs.version }}"
 
-  publish-cli:
-    name: Publish CLI Package
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write  # Required for trusted publishing
-    needs: publish-core
-    if: |
-      always() &&
-      (github.event_name == 'release') ||
-      (github.event_name == 'workflow_dispatch' && (github.event.inputs.package == 'cli' || github.event.inputs.package == 'both'))
-    
-    defaults:
-      run:
-        working-directory: ./cli
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
-          cache-dependency-path: cli/package-lock.json
-      
-      - name: Install dependencies
-        run: npm ci
-      
-      - name: Run tests
-        run: npm test
-      
-      - name: Build
-        run: npm run build
-      
-      - name: Bump version (if manual)
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.version
-        run: npm version ${{ github.event.inputs.version }} --no-git-tag-version
-      
-      - name: Publish to NPM
-        run: npm publish --provenance --access public
-      
-      - name: Get package version
-        id: package-version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-      
-      - name: Create Git tag (if manual)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Test
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git tag -a "brainfile@${{ steps.package-version.outputs.version }}" -m "Release brainfile@${{ steps.package-version.outputs.version }}"
-          git push origin "brainfile@${{ steps.package-version.outputs.version }}"
+          npm run test:ci -w core
+          npm test -w cli
 
+      - name: Configure token auth if NPM_TOKEN is set (bootstrap fallback)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
+            echo "auth: token (bootstrap)"
+          else
+            echo "auth: OIDC trusted publishing"
+          fi
+
+      - name: Publish @brainfile/core
+        run: |
+          V=$(node -p "require('./core/package.json').version")
+          if npm view "@brainfile/core@$V" version >/dev/null 2>&1; then
+            echo "@brainfile/core@$V already on the registry — skipping"
+          else
+            npm publish -w core --provenance --access public
+          fi
+
+      - name: Publish brainfile
+        run: |
+          V=$(node -p "require('./cli/package.json').version")
+          if npm view "brainfile@$V" version >/dev/null 2>&1; then
+            echo "brainfile@$V already on the registry — skipping"
+          else
+            npm publish -w cli --provenance --access public
+          fi
