@@ -1,6 +1,6 @@
 # Brainfile v1 Schema Directory
 
-This directory contains the v1 schema specifications for the Brainfile protocol.
+This directory contains the v1 schemas for the Brainfile board format.
 
 ## Schema Files
 

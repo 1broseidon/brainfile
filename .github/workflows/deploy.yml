@@ -3,7 +3,7 @@ name: Deploy docs to GitHub Pages
 on:
   push:
     branches: [main]
-    paths: ['docs/**', 'protocol/**', '.github/workflows/deploy.yml']
+    paths: ['docs/**', '.github/workflows/deploy.yml']
   workflow_dispatch:
 
 permissions:
@@ -19,20 +19,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: docs/package-lock.json
       - name: Install
         run: cd docs && npm ci
       - name: Build VitePress
         run: cd docs && npm run build
-      - name: Copy schema files into dist
-        run: |
-          cp -r protocol/v1 docs/.vitepress/dist/v1
-          cp -r protocol/example docs/.vitepress/dist/example
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
