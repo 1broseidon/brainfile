@@ -2,15 +2,19 @@
   "name": "brainfile-monorepo",
   "private": true,
   "version": "0.18.0",
-  "description": "Brainfile — a markdown/YAML task-management protocol, its core library, and CLI.",
+  "description": "Brainfile — markdown/YAML task boards for humans and agents: core library and CLI.",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/1broseidon/brainfile"
   },
+  "workspaces": [
+    "core",
+    "cli"
+  ],
   "scripts": {
-    "test": "npm --prefix core test && npm --prefix cli test",
-    "build": "npm --prefix core run build && npm --prefix cli run build",
+    "build": "npm run build -w core && npm run build -w cli",
+    "test": "npm run test:ci -w core && npm test -w cli",
     "version:set": "node .github/scripts/sync-version.mjs"
   }
 }
