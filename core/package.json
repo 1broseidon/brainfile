@@ -144,14 +144,17 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.0",
+    "@types/jest": "^30.0.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.x",
-    "jest": "^29.7.0",
+    "jest": "^30.4.2",
     "ts-jest": "^29.1.0",
     "typescript": "^5.3.3"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
