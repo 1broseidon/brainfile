@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -24,11 +24,11 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
     {
       title: 'Complete Task',
       description: 'Complete a task or archive it to local/GitHub/Linear destination',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to complete'),
-        destination: z.enum(['local', 'github', 'linear']).optional().describe('Optional archive destination. If omitted, performs normal completion flow.'),
-      }
+      inputSchema: z.object({
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              task: z.string().describe('Task ID to complete'),
+              destination: z.enum(['local', 'github', 'linear']).optional().describe('Optional archive destination. If omitted, performs normal completion flow.'),
+            })
     },
     async ({ file, task, destination }) => {
       const filePath = file || defaultFile;

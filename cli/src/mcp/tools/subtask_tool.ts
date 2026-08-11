@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import {
   findTaskById,
@@ -19,17 +19,17 @@ export function registerSubtaskTool(server: McpServer, defaultFile: string): voi
     {
       title: 'Subtask',
       description: 'Unified subtask tool for add/toggle/delete/update with single, array, or all targeting',
-      inputSchema: {
-        action: z.enum(['add', 'toggle', 'delete', 'update']).describe('Subtask action'),
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Parent task ID'),
-        subtask: z.string().optional().describe('Single subtask title/id depending on action'),
-        subtasks: z.array(z.string()).optional().describe('Subtask titles/ids depending on action'),
-        title: z.string().optional().describe('New title for update action'),
-        titles: z.array(z.string()).optional().describe('Optional titles for batch update action'),
-        completed: z.boolean().optional().describe('For toggle action: set explicit completed state (true/false) instead of flipping'),
-        all: z.boolean().optional().describe('For toggle/delete action: target all subtasks in the task'),
-      }
+      inputSchema: z.object({
+              action: z.enum(['add', 'toggle', 'delete', 'update']).describe('Subtask action'),
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              task: z.string().describe('Parent task ID'),
+              subtask: z.string().optional().describe('Single subtask title/id depending on action'),
+              subtasks: z.array(z.string()).optional().describe('Subtask titles/ids depending on action'),
+              title: z.string().optional().describe('New title for update action'),
+              titles: z.array(z.string()).optional().describe('Optional titles for batch update action'),
+              completed: z.boolean().optional().describe('For toggle action: set explicit completed state (true/false) instead of flipping'),
+              all: z.boolean().optional().describe('For toggle/delete action: target all subtasks in the task'),
+            })
     },
     async ({ action, file, task, subtask, subtasks, title, titles, completed, all }) => {
       const filePath = file || defaultFile;

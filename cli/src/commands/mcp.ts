@@ -1,5 +1,8 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { serveStdio } from "@modelcontextprotocol/server/stdio";
+import { McpServer } from "@modelcontextprotocol/server";
+
+// Resolved at runtime from dist/commands/ — avoids widening tsc rootDir for a JSON import.
+const cliVersion: string = require('../../package.json').version;
 import {
   findNearestBrainfile,
   findBrainfile,
@@ -80,22 +83,25 @@ export async function mcpCommand(options: McpOptions) {
 
   assertV2Brainfile(defaultFile);
 
-  const server = new McpServer({
-    name: 'brainfile',
-    version: '0.8.1'
+  // The same factory serves both protocol eras: 2026-07-28 (stateless)
+  // natively, and pre-2026 clients through serveStdio's legacy shim.
+  serveStdio(() => {
+    const server = new McpServer({
+      name: 'brainfile',
+      version: cliVersion
+    });
+
+    registerListTasksTool(server, defaultFile);
+    registerGetTaskTool(server, defaultFile);
+    registerSearchTool(server, defaultFile);
+    registerTaskAddTool(server, defaultFile);
+    registerTaskMoveTool(server, defaultFile);
+    registerTaskPatchTool(server, defaultFile);
+    registerTaskDeleteTool(server, defaultFile);
+    registerSubtaskTool(server, defaultFile);
+    registerContractTool(server, defaultFile);
+    registerTaskCompleteTool(server, defaultFile);
+
+    return server;
   });
-
-  registerListTasksTool(server, defaultFile);
-  registerGetTaskTool(server, defaultFile);
-  registerSearchTool(server, defaultFile);
-  registerTaskAddTool(server, defaultFile);
-  registerTaskMoveTool(server, defaultFile);
-  registerTaskPatchTool(server, defaultFile);
-  registerTaskDeleteTool(server, defaultFile);
-  registerSubtaskTool(server, defaultFile);
-  registerContractTool(server, defaultFile);
-  registerTaskCompleteTool(server, defaultFile);
-
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
 }

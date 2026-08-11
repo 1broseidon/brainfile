@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as path from 'path';
 import {
@@ -29,28 +29,28 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
         'action=graph    — Attach contracts to multiple tasks atomically with dependsOn DAG edges (tasks array only)',
         'action=activate — Flip draft → ready for one task (task param) or all children of a parent (parentId param)',
       ].join('\n'),
-      inputSchema: {
-        action: z.enum(['attach', 'pickup', 'deliver', 'validate', 'graph', 'activate']).describe('Contract action'),
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().optional().describe('Task ID (required for attach, pickup, deliver, validate, and single-task activate)'),
-        parentId: z.string().optional().describe('For activate: activate all draft contracts whose parentId matches this value'),
-        ready: z.boolean().optional().describe('attach only: when true, status=ready instead of draft'),
-        deliverables: z.array(z.string()).optional().describe('attach only: type:path:description'),
-        validation_commands: z.array(z.string()).optional().describe('attach only: validation shell commands'),
-        constraints: z.array(z.string()).optional().describe('attach only: constraint strings'),
-        tasks: z.array(z.object({
-          task: z.string(),
-          deliverables: z.array(z.object({
-            type: z.enum(['file', 'test', 'docs', 'design', 'research']),
-            path: z.string(),
-            description: z.string().optional(),
-          })).optional(),
-          validation_commands: z.array(z.string()).optional(),
-          constraints: z.array(z.string()).optional(),
-          dependsOn: z.array(z.string()).optional(),
-        })).optional().describe('graph only: array of contract graph task specs'),
-        activate: z.boolean().optional().describe('graph only: when true, attached contracts start in ready instead of draft'),
-      }
+      inputSchema: z.object({
+              action: z.enum(['attach', 'pickup', 'deliver', 'validate', 'graph', 'activate']).describe('Contract action'),
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              task: z.string().optional().describe('Task ID (required for attach, pickup, deliver, validate, and single-task activate)'),
+              parentId: z.string().optional().describe('For activate: activate all draft contracts whose parentId matches this value'),
+              ready: z.boolean().optional().describe('attach only: when true, status=ready instead of draft'),
+              deliverables: z.array(z.string()).optional().describe('attach only: type:path:description'),
+              validation_commands: z.array(z.string()).optional().describe('attach only: validation shell commands'),
+              constraints: z.array(z.string()).optional().describe('attach only: constraint strings'),
+              tasks: z.array(z.object({
+                task: z.string(),
+                deliverables: z.array(z.object({
+                  type: z.enum(['file', 'test', 'docs', 'design', 'research']),
+                  path: z.string(),
+                  description: z.string().optional(),
+                })).optional(),
+                validation_commands: z.array(z.string()).optional(),
+                constraints: z.array(z.string()).optional(),
+                dependsOn: z.array(z.string()).optional(),
+              })).optional().describe('graph only: array of contract graph task specs'),
+              activate: z.boolean().optional().describe('graph only: when true, attached contracts start in ready instead of draft'),
+            })
     },
     async ({ action, file, task, parentId, ready: attachReady, deliverables, validation_commands, constraints, tasks, activate }) => {
       const filePath = file || defaultFile;

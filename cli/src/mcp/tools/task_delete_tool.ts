@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as fs from 'fs';
 import { findTaskById, deleteTask } from '@brainfile/core';
@@ -11,10 +11,10 @@ export function registerTaskDeleteTool(server: McpServer, defaultFile: string): 
     {
       title: 'Delete Task',
       description: 'Permanently delete a task from the brainfile',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to delete')
-      }
+      inputSchema: z.object({
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              task: z.string().describe('Task ID to delete')
+            })
     },
     async ({ file, task }) => {
       const filePath = file || defaultFile;

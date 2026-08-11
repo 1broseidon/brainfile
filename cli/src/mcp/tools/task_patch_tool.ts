@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as path from 'path';
 import {
@@ -18,19 +18,19 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
     {
       title: 'Patch Task',
       description: 'Update specific fields of a task. Set fields to null to remove them.',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to update'),
-        task: z.string().optional().describe('Alias of taskId for single task update'),
-        title: z.string().optional().describe('New task title'),
-        description: z.string().nullable().optional().describe('New description (null to remove)'),
-        priority: z.enum(['low', 'medium', 'high', 'critical']).nullable().optional().describe('New priority (null to remove)'),
-        tags: z.array(z.string()).nullable().optional().describe('New tags (null to remove)'),
-        assignee: z.string().nullable().optional().describe('New assignee (null to remove)'),
-        dueDate: z.string().nullable().optional().describe('New due date (null to remove)'),
-        relatedFiles: z.array(z.string()).nullable().optional().describe('Related file paths (null to remove)'),
-        parentId: z.string().nullable().optional().describe('Parent task ID (null to remove)')
-      }
+      inputSchema: z.object({
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to update'),
+              task: z.string().optional().describe('Alias of taskId for single task update'),
+              title: z.string().optional().describe('New task title'),
+              description: z.string().nullable().optional().describe('New description (null to remove)'),
+              priority: z.enum(['low', 'medium', 'high', 'critical']).nullable().optional().describe('New priority (null to remove)'),
+              tags: z.array(z.string()).nullable().optional().describe('New tags (null to remove)'),
+              assignee: z.string().nullable().optional().describe('New assignee (null to remove)'),
+              dueDate: z.string().nullable().optional().describe('New due date (null to remove)'),
+              relatedFiles: z.array(z.string()).nullable().optional().describe('Related file paths (null to remove)'),
+              parentId: z.string().nullable().optional().describe('Parent task ID (null to remove)')
+            })
     },
     async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles, parentId }) => {
       const filePath = file || defaultFile;

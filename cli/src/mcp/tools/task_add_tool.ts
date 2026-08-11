@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as path from 'path';
 import {
@@ -28,29 +28,29 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
     {
       title: 'Add Task',
       description: 'Add a new task to a column in the brainfile',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        column: z.string().describe('Column ID or name to add task to'),
-        title: z.string().describe('Task title'),
-        description: z.string().optional().describe('Task description'),
-        priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Task priority'),
-        tags: z.array(z.string()).optional().describe('Task tags'),
-        assignee: z.string().optional().describe('Task assignee'),
-        dueDate: z.string().optional().describe('Due date (YYYY-MM-DD)'),
-        subtasks: z.array(z.string()).optional().describe('Subtask titles (IDs auto-generated)'),
-        relatedFiles: z.array(z.string()).optional().describe('Related file paths'),
-        type: z.string().optional().describe('Document type (e.g., epic, adr). Determines ID prefix. Default: task'),
-        // Contract creation (optional)
-        with_contract: z.boolean().optional().describe('Attach a contract to the new task (default status=draft; use ready:true to make immediately dispatchable)'),
-        ready: z.boolean().optional().describe('When true, contract status is set to ready instead of draft'),
-        deliverables: z.array(z.string()).optional().describe('Contract deliverables: type:path:description'),
-        validation_commands: z.array(z.string()).optional().describe('Contract validation commands'),
-        constraints: z.array(z.string()).optional().describe('Contract constraints'),
-        parentId: z.string().optional().describe('Parent task ID for first-class parent-child linking'),
-        // Aliases (some clients prefer camelCase)
-        withContract: z.boolean().optional().describe('Alias of with_contract'),
-        validationCommands: z.array(z.string()).optional().describe('Alias of validation_commands'),
-      }
+      inputSchema: z.object({
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              column: z.string().describe('Column ID or name to add task to'),
+              title: z.string().describe('Task title'),
+              description: z.string().optional().describe('Task description'),
+              priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Task priority'),
+              tags: z.array(z.string()).optional().describe('Task tags'),
+              assignee: z.string().optional().describe('Task assignee'),
+              dueDate: z.string().optional().describe('Due date (YYYY-MM-DD)'),
+              subtasks: z.array(z.string()).optional().describe('Subtask titles (IDs auto-generated)'),
+              relatedFiles: z.array(z.string()).optional().describe('Related file paths'),
+              type: z.string().optional().describe('Document type (e.g., epic, adr). Determines ID prefix. Default: task'),
+              // Contract creation (optional)
+              with_contract: z.boolean().optional().describe('Attach a contract to the new task (default status=draft; use ready:true to make immediately dispatchable)'),
+              ready: z.boolean().optional().describe('When true, contract status is set to ready instead of draft'),
+              deliverables: z.array(z.string()).optional().describe('Contract deliverables: type:path:description'),
+              validation_commands: z.array(z.string()).optional().describe('Contract validation commands'),
+              constraints: z.array(z.string()).optional().describe('Contract constraints'),
+              parentId: z.string().optional().describe('Parent task ID for first-class parent-child linking'),
+              // Aliases (some clients prefer camelCase)
+              withContract: z.boolean().optional().describe('Alias of with_contract'),
+              validationCommands: z.array(z.string()).optional().describe('Alias of validation_commands'),
+            })
     },
     async ({
       file,

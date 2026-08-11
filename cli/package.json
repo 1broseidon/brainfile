@@ -35,7 +35,6 @@
   },
   "dependencies": {
     "@brainfile/core": "^0.18.1",
-    "@modelcontextprotocol/sdk": "1.22.0",
     "chalk": "^4.1.2",
     "chokidar": "^4.0.3",
     "commander": "^14.0.3",
@@ -43,7 +42,8 @@
     "js-yaml": "^4.1.0",
     "open": "^10.1.0",
     "react": "^17.0.2",
-    "zod": "^3.25.76"
+    "zod": "4.3.6",
+    "@modelcontextprotocol/server": "^2.0.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

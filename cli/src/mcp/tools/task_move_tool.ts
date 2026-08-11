@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as path from 'path';
 import {
@@ -33,12 +33,12 @@ export function registerTaskMoveTool(server: McpServer, defaultFile: string): vo
     {
       title: 'Move Task',
       description: 'Move a task to a different column',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to move'),
-        task: z.string().optional().describe('Alias of taskId for single task move'),
-        column: z.string().describe('Target column ID or name')
-      }
+      inputSchema: z.object({
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to move'),
+              task: z.string().optional().describe('Alias of taskId for single task move'),
+              column: z.string().describe('Target column ID or name')
+            })
     },
     async ({ file, taskId, task, column }) => {
       const filePath = file || defaultFile;

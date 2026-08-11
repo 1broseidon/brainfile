@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import { findTaskById } from '@brainfile/core';
 import { isV2, getV2Dirs, findV2Task, extractDescription } from '../../utils/v2-detect';
@@ -10,10 +10,10 @@ export function registerGetTaskTool(server: McpServer, defaultFile: string): voi
     {
       title: 'Get Task',
       description: 'Get detailed information about a specific task by ID',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        task: z.string().describe('Task ID to retrieve')
-      }
+      inputSchema: z.object({
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              task: z.string().describe('Task ID to retrieve')
+            })
     },
     async ({ file, task }) => {
       const filePath = file || defaultFile;

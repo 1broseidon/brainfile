@@ -1,4 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import { readTasksDir, type TaskDocument } from '@brainfile/core';
 import {
@@ -16,15 +16,15 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
     {
       title: 'Search',
       description: 'Search tasks and logs by query, list recent logs, or view one task/log entry',
-      inputSchema: {
-        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        query: z.string().optional().describe('Search query (matches title, description, tags, and log text in v2)'),
-        column: z.string().optional().describe('Filter by column ID or name'),
-        priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Filter by priority'),
-        assignee: z.string().optional().describe('Filter by assignee'),
-        recent: z.boolean().optional().describe('List recently completed tasks (v2 only)'),
-        task: z.string().optional().describe('View a specific task/log entry (v2 only)'),
-      }
+      inputSchema: z.object({
+              file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+              query: z.string().optional().describe('Search query (matches title, description, tags, and log text in v2)'),
+              column: z.string().optional().describe('Filter by column ID or name'),
+              priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Filter by priority'),
+              assignee: z.string().optional().describe('Filter by assignee'),
+              recent: z.boolean().optional().describe('List recently completed tasks (v2 only)'),
+              task: z.string().optional().describe('View a specific task/log entry (v2 only)'),
+            })
     },
     async ({ file, query, column, priority, assignee, recent, task }) => {
       const filePath = file || defaultFile;
