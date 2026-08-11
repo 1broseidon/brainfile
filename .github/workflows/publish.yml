@@ -3,8 +3,10 @@ name: Publish to npm
 # Publishes @brainfile/core then brainfile when a GitHub Release is published.
 # Auth: npm trusted publishing (OIDC) — no secrets needed once the trusted
 # publisher is configured on npmjs.com for each package (repo: 1broseidon/brainfile,
-# workflow: publish.yml). Until the `brainfile` package exists on the registry,
-# an NPM_TOKEN repo secret can be set as a one-time bootstrap fallback.
+# workflow: publish.yml). Bootstrap of a not-yet-published package name should be
+# a one-time local `npm publish` (tokens are being phased out of direct publishing:
+# staged-only by ~Jan 2027). The NPM_TOKEN fallback below remains for emergencies;
+# expect token publishes to require staged human 2FA approval on npmjs.com.
 
 on:
   release:
@@ -27,9 +29,9 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
-      - name: Ensure npm supports trusted publishing (>= 11.5.1)
+      - name: Ensure npm supports trusted publishing (>= 11.5.1, stay on 11.x)
         run: |
-          npm install -g npm@latest
+          npm install -g npm@^11.5.1
           npm --version
 
       - name: Install
