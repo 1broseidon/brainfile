@@ -3,7 +3,7 @@ import { ref } from 'vue'
 
 const copySuccess = ref(false)
 
-const quickStartCommands = `npm install -g @brainfile/cli
+const quickStartCommands = `npm install -g brainfile
 brainfile init
 brainfile add -c todo --title "My first task" --with-contract \\
   --deliverable "file:src/feature.ts:Implementation" \\
@@ -71,7 +71,7 @@ async function copyToClipboard() {
             <span class="copy-overlay-text">Copied!</span>
           </template>
         </button>
-        <pre><code><span class="t-prompt">$</span> <span class="t-cmd">npm install -g</span> @brainfile/cli
+        <pre><code><span class="t-prompt">$</span> <span class="t-cmd">npm install -g</span> brainfile
 
 <span class="t-prompt">$</span> <span class="t-cmd">brainfile init</span>
 <span class="t-output">✓ Created .brainfile/brainfile.md</span>

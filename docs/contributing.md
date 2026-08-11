@@ -4,50 +4,54 @@ title: Contributing
 
 # Contributing to Brainfile
 
-Brainfile is an open-source project organized across multiple repositories under the [brainfile](https://github.com/brainfile) GitHub organization. Each repo has a focused scope, independent versioning, and its own CI/CD pipeline.
+Brainfile is an open-source project developed in a single repository: [1broseidon/brainfile](https://github.com/1broseidon/brainfile). Each package lives in its own directory with a focused scope.
 
-## Repositories
+## Repository Layout
 
-| Repository | Package | What lives here |
+| Directory | Package | What lives here |
 |---|---|---|
-| [**brainfile/protocol**](https://github.com/brainfile/protocol) | — | Protocol specification, JSON schema, documentation site |
-| [**brainfile/core**](https://github.com/brainfile/core) | `@brainfile/core` | TypeScript library — parser, validator, serializer |
-| [**brainfile/cli**](https://github.com/brainfile/cli) | `@brainfile/cli` | Command-line tool and TUI |
-| [**brainfile/vscode**](https://github.com/brainfile/vscode) | — | Visual Studio Code extension |
+| [**cli/**](https://github.com/1broseidon/brainfile) | `brainfile` | Command-line tool, TUI, and MCP server |
+| [**core/**](https://github.com/1broseidon/brainfile) | `@brainfile/core` | TypeScript library — parser, validator, serializer |
+| [**docs/**](https://github.com/1broseidon/brainfile) | — | This documentation site and the board schemas |
 
-Pick the repo that matches what you want to work on and open issues or PRs there.
+Pick the directory that matches what you want to work on and open issues or PRs against the repo.
 
 ---
 
-## Protocol (`brainfile/protocol`)
+## Getting Started
 
-The specification, JSON schema, and this documentation site.
+```bash
+git clone https://github.com/1broseidon/brainfile.git
+cd brainfile
+```
+
+---
+
+## Docs (`docs/`)
+
+The documentation site and the JSON schemas for the board format.
 
 **Good first contributions:** documentation fixes, examples, schema clarifications.
 
-**For protocol changes** (new fields, behavioral changes):
+**For board format changes** (new fields, behavioral changes):
 
 1. Open an issue first describing the use case
 2. Consider backward compatibility with existing boards
-3. Update `brainfile.schema.json` and protocol docs together
-4. Bump `protocolVersion` if the change is breaking
+3. Update the schema and docs together
 
 ```bash
-git clone https://github.com/brainfile/protocol.git
-cd protocol
 cd docs && npm install && npm run dev   # local docs site
 ```
 
 ---
 
-## Core Library (`brainfile/core`)
+## Core Library (`core/`)
 
-The TypeScript library that parses, validates, and manipulates `.brainfile/` boards. Used by the CLI, MCP server, and extensions.
+The TypeScript library that parses, validates, and manipulates `.brainfile/` boards. Used by the CLI and MCP server.
 
 **Good first contributions:** bug fixes, type improvements, test coverage.
 
 ```bash
-git clone https://github.com/brainfile/core.git
 cd core
 npm install
 npm test
@@ -60,42 +64,21 @@ npm run build
 
 ---
 
-## CLI (`brainfile/cli`)
+## CLI (`cli/`)
 
-The `brainfile` command-line tool — task management, contract workflows, and the TUI board view.
+The `brainfile` command-line tool — task management, contract workflows, the TUI board view, and the MCP server.
 
 **Good first contributions:** new commands, improved error messages, shell completions.
 
 ```bash
-git clone https://github.com/brainfile/cli.git
 cd cli
 npm install
 npm run build
 npm test
 ```
 
-- Published to npm as `@brainfile/cli`
+- Published to npm as [`brainfile`](https://www.npmjs.com/package/brainfile)
 - Test across platforms (Linux, macOS, Windows)
-
----
-
-## VS Code Extension (`brainfile/vscode`)
-
-The visual board UI, inline task editing, and agent integration inside VS Code.
-
-**Good first contributions:** UI polish, accessibility, new webview features.
-
-```bash
-git clone https://github.com/brainfile/vscode.git
-cd vscode
-npm install
-npm run compile
-# Press F5 in VS Code to launch Extension Development Host
-```
-
-- Uses a custom CSS kit (`webview-ui/src/styles/`) for consistent theming
-- Board operations in `src/board/data/` are pure functions
-- See the repo's `CONTRIBUTING.md` for the full architecture guide
 
 ---
 
@@ -135,10 +118,10 @@ Include a scope when helpful: `feat(cli): add export command`, `fix(core): handl
 
 Have a question, idea, or want to share how you're using Brainfile?
 
-→ [GitHub Discussions](https://github.com/orgs/brainfile/discussions)
+→ [GitHub Discussions](https://github.com/1broseidon/brainfile/discussions)
 
 ---
 
 ## License
 
-All Brainfile repositories are [MIT licensed](https://opensource.org/licenses/MIT). By contributing, you agree that your contributions will be licensed under the same terms.
+Brainfile is [MIT licensed](https://opensource.org/licenses/MIT). By contributing, you agree that your contributions will be licensed under the same terms.

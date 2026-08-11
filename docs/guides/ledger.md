@@ -7,7 +7,7 @@ description: How Brainfile stores completion history in logs/ledger.jsonl and us
 
 Brainfile tracks completed work in an append-only JSONL ledger at `.brainfile/logs/ledger.jsonl`. Each line represents a single completion record.
 
-The ledger is additive to v2. Existing board and task behavior remains unchanged; no protocol version bump is required.
+The ledger is additive to v2. Existing board and task behavior remains unchanged; no schema version bump is required.
 
 ## Why the Ledger Exists
 
@@ -28,7 +28,7 @@ The ledger provides a queryable completion history without requiring agents to p
 **Example record:**
 
 ```json
-{"id":"task-137","type":"task","title":"Add ledger record schema","filesChanged":["protocol/v2/ledger-record.json"],"createdAt":"2026-03-01T10:00:00Z","completedAt":"2026-03-01T13:30:00Z","cycleTimeHours":3.5,"summary":"Added schema and docs for the completion ledger."}
+{"id":"task-137","type":"task","title":"Add ledger record schema","filesChanged":["docs/public/v2/ledger-record.json"],"createdAt":"2026-03-01T10:00:00Z","completedAt":"2026-03-01T13:30:00Z","cycleTimeHours":3.5,"summary":"Added schema and docs for the completion ledger."}
 ```
 
 Because this is append-only JSONL, writes are efficient and history remains immutable.
@@ -94,6 +94,6 @@ jq -r '.filesChanged[]' .brainfile/logs/ledger.jsonl | sort | uniq -c | sort -nr
 
 ## Related References
 
-- [Protocol Specification](/reference/protocol)
+- [Board Format Reference](/reference/protocol)
 - [Ledger Schema Reference](/reference/ledger-schema)
 - [Contract Schema Reference](/reference/contract-schema)

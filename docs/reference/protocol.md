@@ -1,11 +1,11 @@
 ---
-title: Protocol Specification
-description: Complete specification of the Brainfile file format
+title: Board Format
+description: The brainfile board format — Markdown files with YAML frontmatter, validated by the schema that ships with the CLI
 ---
 
-# Protocol Specification
+# Board Format
 
-The Brainfile protocol defines a structured format for project tasks stored in markdown files with YAML frontmatter.
+This is the file format brainfile runs on: project work stored as Markdown files with YAML frontmatter, validated against the JSON schema that ships inside the CLI. Everything the CLI, TUI, and MCP server do reads and writes this format.
 
 ## v2 Architecture
 
@@ -151,7 +151,7 @@ column: todo
 | `title` | string | Yes | Project or board title |
 | `type` | string | No | Document type (default: `board`) |
 | `schema` | string | No | JSON schema URL for validation |
-| `protocolVersion` | string | No | Protocol version |
+| `protocolVersion` | string | No | Board format version |
 | `strict` | boolean | No | Enforce type validation |
 | `types` | object | No | Custom document types |
 | `agent` | object | No | AI agent instructions |
@@ -435,4 +435,4 @@ Add OAuth2 support for Google and GitHub.
 - [Schema Types](/reference/types) — JSON schema definitions for all document types
 - [API Reference](/reference/api) — Programmatic access via @brainfile/core
 - [CLI Commands](/reference/commands) — Command-line interface reference
-- [Contract Schema](/reference/contract-schema) — Contract object specification
+- [Contract Schema](/reference/contract-schema) — Contract object field reference

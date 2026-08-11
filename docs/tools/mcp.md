@@ -36,7 +36,7 @@ Add to `.mcp.json` in your project root:
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp"]
+      "args": ["brainfile", "mcp"]
     }
   }
 }
@@ -51,7 +51,7 @@ For a specific brainfile path:
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp", "-f", "path/to/brainfile.md"]
+      "args": ["brainfile", "mcp", "-f", "path/to/brainfile.md"]
     }
   }
 }
@@ -170,7 +170,7 @@ The MCP server works with any tool that supports the Model Context Protocol:
 
 ### Server not loading
 
-1. Check that `@brainfile/cli` is installed: `npx @brainfile/cli --version`
+1. Check that `brainfile` is installed: `npx brainfile --version`
 2. Verify `.mcp.json` is valid JSON
 3. Restart your AI assistant completely
 4. Check assistant logs for MCP errors
@@ -186,7 +186,7 @@ Some assistants cache tool lists. Try:
 
 Specify the file explicitly:
 ```json
-"args": ["@brainfile/cli", "mcp", "-f", "./my-project/brainfile.md"]
+"args": ["brainfile", "mcp", "-f", "./my-project/brainfile.md"]
 ```
 
 ---
@@ -223,7 +223,6 @@ Hooks provide gentle reminders but don't give the assistant direct control.
 ## Next Steps
 
 - [CLI Commands](/tools/cli) — Full command reference for manual task management
-- [Protocol Specification](/reference/protocol) — Complete file format and YAML structure specification
+- [Board Format Reference](/reference/protocol) — Complete file format and YAML structure
 - [Core Library](/tools/core) — Build custom integrations with `@brainfile/core`
-- [Pi Extension](/tools/pi) — User-focused PM/worker orchestration manual (bus-first realtime + JSONL audit/replay)
 - [Contract Guide](/guides/contracts) — Deep dive into the contract lifecycle and best practices

@@ -61,7 +61,7 @@ The worker agent detects the assignment and begins work.
 
 ```bash
 # Worker checks for new tasks
-brainfile list --contract ready --assignee codex
+brainfile list --contract ready
 
 # Worker claims the task
 brainfile contract pickup -t task-105
@@ -144,4 +144,4 @@ Break a large feature into a sequence of contracts:
 A specialized `triage` agent can monitor incoming bug reports (tasks without contracts), research the cause, and then `attach` a contract with specific `relatedFiles` and `validation` commands for a `codex` agent to fix.
 
 ### Self-Referential Tasks
-Brainfile can manage its own development. Use contracts to coordinate work on the protocol itself — the same task board that tracks your features can track improvements to the coordination layer.
+Brainfile can manage its own development. Use contracts to coordinate work on brainfile itself — the same task board that tracks your features can track improvements to the coordination layer.

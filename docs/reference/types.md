@@ -56,7 +56,7 @@ columns:
 Only `title` and one `column` are required.
 :::
 
-[View Board Schema](https://brainfile.md/v2/board.json) · [Example](https://brainfile.md/example/.brainfile/brainfile.md)
+[View Board Schema](https://brainfile.md/v2/board.json)
 
 ## Task
 
@@ -216,7 +216,7 @@ rules:
 ```
 
 ::: tip Vendor Extensions
-The protocol supports arbitrary vendor extensions using the `x-*` naming convention (e.g., `x-otto: {}`).
+The schema supports arbitrary vendor extensions using the `x-*` naming convention (e.g., `x-otto: {}`).
 - **Opaque processing**: Internal keys are preserved and never transformed.
 - **Round-tripping**: Unknown fields are guaranteed to survive parse-serialize cycles.
 :::
@@ -249,6 +249,6 @@ When `type` is not specified, tools determine the type by:
 
 ## Next Steps
 
-- [Protocol Specification](/reference/protocol) — File format details
+- [Board Format Reference](/reference/protocol) — File format details
 - [API Reference](/reference/api) — Library documentation
 - [Core Library](/tools/core) — Build custom tools

@@ -321,7 +321,7 @@ See [API Reference](/reference/api) for complete type definitions.
 ## Next Steps
 
 - [API Reference](/reference/api) — Complete method signatures, parameters, and return types
-- [Protocol Specification](/reference/protocol) — Full YAML structure and field reference
+- [Board Format Reference](/reference/protocol) — Full YAML structure and field reference
 - [Schema Types](/reference/types) — JSON schema definitions for all document types
 - [MCP Server](/tools/mcp) — AI assistant integration using `@brainfile/core` under the hood
-- [CLI Source](https://github.com/brainfile/cli) — See how the CLI uses the core library
+- [CLI Source](https://github.com/1broseidon/brainfile) — See how the CLI uses the core library

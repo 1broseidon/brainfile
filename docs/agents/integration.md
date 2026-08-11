@@ -5,11 +5,10 @@ description: Guide for integrating AI agents with Brainfile task management
 
 ## Overview
 
-Brainfile is designed for AI agent compatibility. There are three integration paths:
+Brainfile is designed for AI agent compatibility. There are two integration paths:
 
-1. **Pi Extension** — Operator manual + orchestration runtime in [Pi](https://pi.dev/) (recommended for multi-agent PM/worker workflows)
-2. **MCP Server** — Tool access for Claude/Cursor and other MCP clients
-3. **Agent Hooks** — Automatic reminders during development
+1. **MCP Server** — Tool access for Claude/Cursor and other MCP clients
+2. **Agent Hooks** — Automatic reminders during development
 
 ## MCP Server (Recommended)
 
@@ -24,7 +23,7 @@ Add to `.mcp.json` in your project:
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp"]
+      "args": ["brainfile", "mcp"]
     }
   }
 }
@@ -328,16 +327,6 @@ You specialize in implementing features from contracts.
 Always write tests and update documentation.
 ```
 
-**Via CLI (planned):**
-
-```bash
-# Future command
-brainfile agents add my-agent \
-  --command acp \
-  --model claude-sonnet-4-5 \
-  --timeout 1200
-```
-
 ### Migrating from agents.yaml
 
 If you have an existing `.brainfile/agents.yaml`, convert it to the new format:
@@ -499,18 +488,6 @@ brainfile contract deliver -t task-5
 
 ## Integration with Tools
 
-### Pi Extension
-
-The [Pi](https://pi.dev/) extension is the recommended orchestration surface for PM/worker operation:
-
-- **Role hygiene** — one PM session + worker sessions (`/listen role ...`) with explicit lock-based PM authority.
-- **Bus-first coordination** — realtime notifications trigger listener cycles quickly.
-- **JSONL audit/replay** — `.brainfile/state/pi-events.jsonl` remains the durable run history.
-- **PM-authoritative closure** — workers pick up/deliver; PM validates and closes.
-- **Slot-based worker identity** — workers are `worker-1`, `worker-2`, etc., independent of model swaps.
-
-See the [Pi Extension manual](/tools/pi) for setup, showcase flows (Direct / Pipeline / Fan-In), and troubleshooting.
-
 ### CLI
 
 Use the CLI for validation:
@@ -524,7 +501,7 @@ brainfile lint --check
 ## See Also
 
 - [CLI Commands](/reference/commands) — Full command reference
-- [Protocol Specification](/reference/protocol) — File format details
+- [Board Format Reference](/reference/protocol) — File format details
 - [Core Library](/tools/core) — Programmatic operations
 - [MCP Server](/tools/mcp) — MCP tool reference
 - [Contract System](/guides/contracts) — Contract workflow guide

@@ -745,6 +745,6 @@ BrainfileLinter.groupIssues(lintResult);
 
 ## Next Steps
 
-- [Protocol Specification](/reference/protocol) — File format details
+- [Board Format Reference](/reference/protocol) — File format details
 - [CLI Commands](/reference/commands) — Command-line interface
 - [Core Library Guide](/tools/core) — Usage examples

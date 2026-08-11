@@ -7,7 +7,7 @@
       <h2 class="section-title">Ecosystem</h2>
       <div class="section-divider"></div>
     </div>
-    <p class="ecosystem-note">Integrations are optional adapters. The protocol comes first.</p>
+    <p class="ecosystem-note">Integrations are optional adapters. Your board files come first.</p>
     <div class="eco-grid">
       <a href="/tools/cli" class="eco-card">
         <div class="eco-card-header">
@@ -15,7 +15,7 @@
           <span class="eco-badge eco-badge-stable">stable</span>
         </div>
         <span class="eco-card-name">CLI &amp; TUI</span>
-        <span class="eco-card-desc">The reference implementation. Manage boards, contracts, and validation from the terminal.</span>
+        <span class="eco-card-desc">The main tool. Manage boards, contracts, and validation from the terminal.</span>
       </a>
       <a href="/tools/mcp" class="eco-card">
         <div class="eco-card-header">
@@ -32,14 +32,6 @@
         </div>
         <span class="eco-card-name">Core Library</span>
         <span class="eco-card-desc">Build your own integrations. TypeScript SDK for parsing, validating, and manipulating boards.</span>
-      </a>
-      <a href="/tools/pi" class="eco-card">
-        <div class="eco-card-header">
-          <span class="eco-icon">π</span>
-          <span class="eco-badge eco-badge-beta">beta</span>
-        </div>
-        <span class="eco-card-name">Pi Extension</span>
-        <span class="eco-card-desc">Showcase orchestrator integration for multi-agent runs with contract coordination.</span>
       </a>
     </div>
   </section>

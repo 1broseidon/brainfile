@@ -11,11 +11,10 @@ Prevents fragmentation between markdown docs and the LLM reference by maintainin
 ### How it Works
 
 1. Resolves documentation sections in a fixed order
-2. Supports migration-aware section candidates (for example `tools/pi.md` preferred, `tools/vscode.md` fallback)
+2. Supports migration-aware section candidates (fallback paths per section)
 3. Strips markdown formatting to plain text
 4. Combines sections with generated headers/TOC
-5. Adds a complete v2 workspace example from `protocol/example/.brainfile/`
-6. Writes to `public/llms-full.txt`
+5. Writes to `public/llms-full.txt`
 
 ### When it Runs
 
@@ -25,20 +24,17 @@ Prevents fragmentation between markdown docs and the LLM reference by maintainin
 ### Source Files (ordered)
 
 1. `quick-start.md`
-2. `why.md`
-3. `guides/getting-started-with-contracts.md`
-4. `guides/contracts.md`
-5. `guides/agent-workflows.md`
-6. `tools/cli.md`
-7. `tools/mcp.md`
-8. `tools/pi.md` (preferred) or `tools/vscode.md` (deprecated fallback)
-9. `tools/core.md`
-10. `reference/protocol.md`
-11. `reference/api.md`
-12. `reference/commands.md`
-13. `reference/contract-schema.md`
-14. `reference/types.md`
-15. `../../protocol/example/.brainfile/**` (complete v2 workspace example)
+2. `guides/getting-started-with-contracts.md`
+3. `guides/contracts.md`
+4. `guides/agent-workflows.md`
+5. `tools/cli.md`
+6. `tools/mcp.md`
+7. `tools/core.md`
+8. `reference/protocol.md`
+9. `reference/api.md`
+10. `reference/commands.md`
+11. `reference/contract-schema.md`
+12. `reference/types.md`
 
 ### Outputs
 
@@ -69,7 +65,7 @@ The generator is a TypeScript script using only Node built-ins.
 
 Key functions:
 
-- `resolveSections()` - resolves ordered section candidates (Pi-first)
+- `resolveSections()` - resolves ordered section candidates
 - `stripMarkdown()` - converts markdown to plain text
 - `generateHeader()` - builds header and TOC from resolved sections
 - `generate()` - main generation flow

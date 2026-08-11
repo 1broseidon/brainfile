@@ -1,31 +1,28 @@
-# Brainfile Protocol - Complete Reference for AI Agents
+# Brainfile - Complete Reference for AI Agents
 
 > Comprehensive documentation for AI agents integrating with Brainfile
 > Auto-generated from markdown documentation
 
 Version: 2.0
 Schema: https://brainfile.md/v2
-Last Updated: 2026-06-01
+Last Updated: 2026-08-11
 
 ---
 
 ## Table of Contents
 
 1. Quick Start Guide
-2. Why Brainfile?
-3. Getting Started with Contracts
-4. Comprehensive Guide to Contracts
-5. Agent Workflow Patterns
-6. CLI & Terminal UI
-7. MCP Server Integration
-8. Pi Extension Integration
-9. Core Library
-10. Protocol Specification
-11. API Reference
-12. CLI Commands Reference
-13. Contract Schema Reference
-14. Schema Types
-15. Complete Example
+2. Getting Started with Contracts
+3. Comprehensive Guide to Contracts
+4. Agent Workflow Patterns
+5. CLI & Terminal UI
+6. MCP Server Integration
+7. Core Library
+8. Board Format Reference
+9. API Reference
+10. CLI Commands Reference
+11. Contract Schema Reference
+12. Schema Types
 
 ---
 
@@ -45,7 +42,7 @@ Get a task board in your project in under a minute.
   Install
 
 `
-npm install -g @brainfile/cli
+npm install -g brainfile
 `
   Initialize
 
@@ -96,7 +93,7 @@ Want your AI assistant to manage tasks directly? Add this to .mcp.json in your p
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp"]
+      "args": ["brainfile", "mcp"]
     }
   }
 }
@@ -141,76 +138,14 @@ sequenceDiagram
 ---
 
 Next Steps
-  - Why Brainfile? — The philosophy behind file-based coordination
   - Getting Started with Contracts — Define deliverables for AI agents
   - CLI Commands — Full command reference and TUI guide
   - MCP Integration — Connect your AI assistant directly
-  - Protocol Specification — File format and schema details
+  - Board Format Reference — File format and schema details
 
 ---
 
-## 2. Why Brainfile?
-
-The Agentic Coordination Manifesto
-
-The Context Gap
-
-AI agents are remarkably capable at implementation, but they operate in a void of coordination. While they can read your code, they cannot see your intent, your priorities, or your acceptance criteria unless you manually translate them from external tools (Jira, Linear, Notion) into every prompt.
-
-This creates an integration tax on the human: copying requirements, updating statuses, and manually verifying that the agent stayed within scope.
-
-Brainfile is the solution to the context gap.
-
----
-
-Principles of Coordination
-
-::: info 1. Protocol over Platform
-Coordination should be an open standard, not a closed SaaS feature. By defining coordination as a file-system protocol, we enable any agent and any tool to participate without a central API or vendor lock-in.
-:::
-
-::: info 2. Context Locality
-The source of truth for work should live where the work happens: in the repository. When tasks and contracts are files in the codebase, they are naturally indexed by the agent alongside the source code, providing immediate, high-fidelity context.
-:::
-
-::: info 3. File-System Semantics
-Complex state management is replaced by simple file operations. Appending a record to logs/ledger.jsonl and archiving the task file is an immutable, searchable, and version-controlled record of completion. This simplicity is the key to scalability and resilience.
-:::
-
-::: info 4. Explicit Contracts
-Informal "please do X" requests are replaced by structured agreements. A contract defines exactly what constitutes success (deliverables) and how it will be measured (validation). This formalization reduces agent hallucination and ensures human-aligned outcomes.
-:::
-
-::: info 5. Architectural Memory
-Decisions made today should automatically guide the work of tomorrow. By promoting ADRs to project rules, the protocol ensures that every agent interaction is grounded in the project's established architectural standards.
-:::
-
----
-
-The Infrastructure Advantage
-
-::: tip What You Gain
-By adopting a file-based coordination protocol, you gain:
-  - Bespoke Diffs: See exactly how requirements changed over time in your git history.
-  - Offline Reliability: Your task board works on a plane, in a basement, or during a platform outage.
-  - Zero Latency: No API round-trips to fetch task context.
-  - Agent Interoperability: Use the same board with Claude, GitHub Copilot, Cursor, or your own custom agents.
-:::
-
----
-
-Join the Ecosystem
-
-Brainfile is more than a tool; it's a way of thinking about how humans and machines build software together.
-  - Read the Specification — The complete file format and YAML structure reference
-  - Explore the CLI — Install in 30 seconds and start managing tasks from your terminal
-  - Integrate the Core Library — Build custom tooling with @brainfile/core
-  - Set Up MCP — Give your AI assistant direct access to your task board
-  - Contract Guide — Learn how agents coordinate through structured agreements
-
----
-
-## 3. Getting Started with Contracts
+## 2. Getting Started with Contracts
 
 Getting Started with Contracts
 
@@ -275,7 +210,7 @@ Next, learn about Complex Agent Workflows or see the full Contract Schema Refere
 
 ---
 
-## 4. Comprehensive Guide to Contracts
+## 3. Comprehensive Guide to Contracts
 
 Agent-to-Agent Contracts
 
@@ -413,13 +348,11 @@ Retry flow:
 
 Manual retry override:
 
-Even if maxRetries is exceeded, PM can force a retry:
+Even if maxRetries is exceeded, the PM can force another attempt by resetting the contract status to ready (edit the task's YAML), letting the agent deliver again, and re-running:
 
 `
-brainfile contract validate --task task-1 --retry
+brainfile contract validate --task task-1
 `
-
-This bypasses the retry limit check and forces one more validation attempt.
 
 ::: warning Retry Accounting
 The reworkCount is incremented during validation failure checks. With maxRetries: 3, you get up to 3 rework cycles (initial attempt + 3 retries = 4 total validation attempts).
@@ -497,12 +430,12 @@ Benefits of the System
 Related Pages
   - Agent Workflows — PM and worker coordination patterns
   - Contract Commands — Full CLI reference for contract operations
-  - Contract Schema — Formal field-by-field specification
+  - Contract Schema — Field-by-field reference
   - Getting Started — 2-minute intro
 
 ---
 
-## 5. Agent Workflow Patterns
+## 4. Agent Workflow Patterns
 
 Agent Workflow Patterns
 
@@ -562,7 +495,7 @@ The worker agent detects the assignment and begins work.
 
 Worker checks for new tasks
 
-brainfile list --contract ready --assignee codex
+brainfile list --contract ready
 
 Worker claims the task
 
@@ -654,11 +587,11 @@ A specialized triage agent can monitor incoming bug reports (tasks without contr
 
 Self-Referential Tasks
 
-Brainfile can manage its own development. Use contracts to coordinate work on the protocol itself — the same task board that tracks your features can track improvements to the coordination layer.
+Brainfile can manage its own development. Use contracts to coordinate work on brainfile itself — the same task board that tracks your features can track improvements to the coordination layer.
 
 ---
 
-## 6. CLI & Terminal UI
+## 5. CLI & Terminal UI
 
 CLI & Terminal UI
 
@@ -667,7 +600,7 @@ The Brainfile CLI gives you full control over your task board from the terminal.
 Installation
 
 ``
-npm install -g @brainfile/cli
+npm install -g brainfile
 `
 
 Verify installation:
@@ -886,7 +819,7 @@ Next Steps
 
 ---
 
-## 7. MCP Server Integration
+## 6. MCP Server Integration
 
 MCP Server
 
@@ -921,7 +854,7 @@ Add to .mcp.json in your project root:
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp"]
+      "args": ["brainfile", "mcp"]
     }
   }
 }
@@ -936,7 +869,7 @@ For a specific brainfile path:
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp", "-f", "path/to/brainfile.md"]
+      "args": ["brainfile", "mcp", "-f", "path/to/brainfile.md"]
     }
   }
 }
@@ -1053,7 +986,7 @@ The MCP server works with any tool that supports the Model Context Protocol:
 Troubleshooting
 
 Server not loading
-  Check that @brainfile/cli is installed: npx @brainfile/cli --version
+  Check that brainfile is installed: npx brainfile --version
   Verify .mcp.json is valid JSON
   Restart your AI assistant completely
   Check assistant logs for MCP errors
@@ -1069,7 +1002,7 @@ Wrong file being used
 
 Specify the file explicitly:
 `
-"args": ["@brainfile/cli", "mcp", "-f", "./my-project/brainfile.md"]
+"args": ["brainfile", "mcp", "-f", "./my-project/brainfile.md"]
 `
 
 ---
@@ -1105,300 +1038,13 @@ Hooks provide gentle reminders but don't give the assistant direct control.
 
 Next Steps
   - CLI Commands — Full command reference for manual task management
-  - Protocol Specification — Complete file format and YAML structure specification
+  - Board Format Reference — Complete file format and YAML structure
   - Core Library — Build custom integrations with @brainfile/core`
-  - Pi Extension — User-focused PM/worker orchestration manual (bus-first realtime + JSONL audit/replay)
   - Contract Guide — Deep dive into the contract lifecycle and best practices
 
 ---
 
-## 8. Pi Extension Integration
-
-Pi Extension <Badge type="warning" text="beta" />
-
-Use the Brainfile Pi extension when you want to run multi-agent work as an operator, not as a custom integration author.
-
-This manual is focused on how to run orchestration reliably:
-  - bring up PM + workers correctly
-  - execute Direct / Pipeline / Fan-In showcase workflows
-  - validate and close runs cleanly
-  - troubleshoot common operational issues
-
-Source code on GitHub
-
----
-
-Mental Model (Operator View)
-
-You only need three concepts:
-  Realtime notifications are bus-first
-  - the local realtime bus is the primary trigger path for listener cycles
-  Audit/replay is JSONL
-  - .brainfile/state/pi-events.jsonl is the durable audit trail and replay source
-  PM controls terminal orchestration decisions
-  - workers pick up and deliver
-  - PM validates and closes
-
-This gives fast coordination + auditable history without manual polling loops.
-
----
-
-10-Minute Bring-Up (PM + Workers)
-
-1) Install/activate the extension in your workspace
-
-``
-git clone https://github.com/brainfile/protocol.git /tmp/brainfile-protocol
-cp -r /tmp/brainfile-protocol/example/integrations/pi/brainfile-extension/ .pi/extensions/brainfile-extension/
-cd .pi/extensions/brainfile-extension && npm install
-`
-
-Then in each Pi session:
-
-`
-/reload
-`
-
-2) Start one PM session
-
-`
-/listen role pm
-/listen on
-`
-
-3) Start worker sessions
-
-In each worker session:
-
-`
-/listen role worker
-/listen on
-`
-
-4) Verify health from PM
-
-`
-/listen status
-`
-
-You should see:
-  - active run ID
-  - available workers (worker-1, worker-2, ...)
-  - stale timeout
-
-Role hygiene checklist
-  - Keep exactly one PM active per workspace run.
-  - Keep all other sessions in worker mode.
-  - Use auto mode only if you understand PM lock behavior.
-  - Do not use sleep/manual polling loops; rely on event-driven listener flow.
-
----
-
-Session Roles and Assignment Behavior
-
-| Role | Main responsibility |
-|---|---|
-| PM | create/delegate contracts, validate deliveries, close runs |
-| Worker | pick up eligible contracts, implement, deliver |
-
-Worker identity is slot-based (worker-1, worker-2, ...). Routing is identity-based, not model-name-based.
-
-| Assignee on task | Pickup behavior |
-|---|---|
-| worker-2 | only worker-2 can pick it up |
-| pool or empty | any eligible idle worker |
-| legacy assignee (codex, claude, gemini) | treated as pool for compatibility |
-| pm | worker does not auto-pick |
-
----
-
-Operator Workflow (Plan → Execute → Validate → Close)
-
-1) Plan and delegate (PM)
-  - create task with contract deliverables/constraints
-  - assign to worker-N (direct) or pool (shared)
-  - set contract status to ready
-
-2) Execute (workers)
-  - worker listener auto-picks eligible ready tasks
-  - worker implements and runs delivery checks
-  - worker marks delivered
-
-3) Validate (PM)
-  - PM validates delivered contracts (contract.validate path)
-  - success → done
-  - failure → failed with feedback, then reset to ready
-
-4) Close
-  - complete/archive task after PM acceptance
-  - run ends with run.closed when orchestration reaches terminal state
-
----
-
-Showcase Flows (Direct / Pipeline / Fan-In)
-
-For reproducible scenario definitions and checklists:
-  - Runbook: /example/integrations/pi/brainfile-extension/SHOWCASE.md
-  - Scenario definitions: /example/integrations/pi/brainfile-extension/examples/showcase-scenarios.md
-  - Event contract: Orchestration Events · Orchestration Schema
-
-A) Direct 1:1 Dispatch
-
-Goal: non-target worker cannot claim a direct-targeted task.
-
-Expected operator evidence:
-  - rejection decision with reasonCode=dispatch_target_mismatch
-  - accepted pickup only for target worker
-
-Quick audit checks:
-
-`
-rg "dispatch_target_mismatch" .brainfile/state/pi-events.jsonl
-`
-
-B) Pipeline DAG (dependsOn)
-
-Goal: downstream stage unlocks only when prerequisites satisfy readiness policy.
-
-Expected operator evidence:
-  - blocked/waiting reason dependency_unmet before prerequisites complete
-  - downstream delegation only after prerequisites are satisfied
-
-Quick audit checks:
-
-`
-rg "dependency_unmet" .brainfile/state/pi-events.jsonl
-`
-
-C) Fan-Out / Fan-In Barrier (join.mode=barrier)
-
-Goal: join/synthesis stage waits until required branches satisfy barrier policy.
-
-Expected operator evidence:
-  - waiting reason join_waiting while branches are incomplete
-  - optional dependency_failed if barrier policy is violated by failed branches
-  - no early join delegation
-
-Quick audit checks:
-
-`
-rg "join_waiting|dependency_failed" .brainfile/state/pi-events.jsonl
-`
-
----
-
-Run Lifecycle Signals You Should Watch
-
-| Event | Operator meaning |
-|---|---|
-| run.started | PM orchestration run is active |
-| run.blocked | run cannot proceed (stale/failed/blocked conditions) |
-| run.closed | run reached terminal state (success, blocked, etc.) |
-| contract.delegated | PM delegated work |
-| contract.picked_up | worker successfully claimed task |
-| contract.delivered | worker submitted for PM validation |
-| contract.validated | PM accepted/rejected delivery |
-
-PM chat notifications are intentionally quiet and focused on meaningful orchestration events (blocked/close + delivery readiness signals), while full detail remains in JSONL audit.
-
----
-
-Commands You’ll Use Most
-
-Listener
-
-| Command | Use |
-|---|---|
-| /listen on | start listener |
-| /listen off | stop listener |
-| /listen status | inspect run/workers/stale timeout |
-| /listen role <pm|worker|auto> | set role |
-| /listen now | run a single diagnostic cycle |
-
-Task/contract operations
-
-| Command | Use |
-|---|---|
-| /bf contract pickup <id> | manual claim (when needed) |
-| /bf contract deliver <id> | submit delivery |
-| /bf contract validate <id> | PM validation |
-| /bf move <id> <column> | move task state |
-| /bf status | inspect active task |
-
----
-
-Troubleshooting
-
-Duplicate PM avoidance
-
-Symptom: two sessions both try to orchestrate as PM.
-
-What to do:
-  - keep only one explicit PM session (/listen role pm)
-  - keep others as workers (/listen role worker)
-  - if using auto, rely on PM lock arbitration and verify via /listen status
-
-Delayed duplicate messages / late status noise
-
-Symptom: old status/decision messages appear after task completion.
-
-What to do:
-  - treat .brainfile/state/pi-events.jsonl as source-of-truth audit
-  - use thread + inReplyTo for conversational clarity
-  - rely on PM validation state in board/log files for final authority
-
-Stale tasks and blocked runs
-
-Symptom: task remains in_progress too long; run moves to blocked.
-
-What to do:
-  - PM checks /listen status for worker presence and stale timeout
-  - inspect task.stale / run.blocked records in JSONL
-  - either unblock dependency or reset task to ready with feedback
-
-Workspace override:
-
-`
-{
-  "brainfileExtension": {
-    "staleTimeoutSeconds": 1800
-  }
-}
-`
-
-Reload behavior
-
-Symptom: session restart or /reload interrupted listener state.
-
-What to do:
-  - run /reload
-  - re-apply role (/listen role pm|worker)
-  - run /listen on
-  - verify with /listen status
-
-The listener catches up from persisted offsets + JSONL audit, so recovery is event-driven and does not require manual polling loops.
-
----
-
-A2A Messaging (Operator Essentials)
-
-Use brainfile_send_message for PM↔worker coordination inside task threads:
-  - keep threadId as task:<taskId>
-  - set inReplyTo when responding
-  - use message.blocker` for actionable blockers
-
-This keeps orchestration decisions and conversation context auditable together.
-
----
-
-See Also
-  - Orchestration Guide
-  - AI Agent Integration
-  - MCP Server
-
----
-
-## 9. Core Library
+## 7. Core Library
 
 TypeScript (@brainfile/core)
 
@@ -1717,18 +1363,18 @@ See API Reference for complete type definitions.
 
 Next Steps
   - API Reference — Complete method signatures, parameters, and return types
-  - Protocol Specification — Full YAML structure and field reference
+  - Board Format Reference — Full YAML structure and field reference
   - Schema Types — JSON schema definitions for all document types
   - MCP Server — AI assistant integration using @brainfile/core` under the hood
   - CLI Source — See how the CLI uses the core library
 
 ---
 
-## 10. Protocol Specification
+## 8. Board Format Reference
 
-Protocol Specification
+Board Format
 
-The Brainfile protocol defines a structured format for project tasks stored in markdown files with YAML frontmatter.
+This is the file format brainfile runs on: project work stored as Markdown files with YAML frontmatter, validated against the JSON schema that ships inside the CLI. Everything the CLI, TUI, and MCP server do reads and writes this format.
 
 v2 Architecture
 
@@ -1876,7 +1522,7 @@ Board Fields
 | title | string | Yes | Project or board title |
 | type | string | No | Document type (default: board) |
 | schema | string | No | JSON schema URL for validation |
-| protocolVersion | string | No | Protocol version |
+| protocolVersion | string | No | Board format version |
 | strict | boolean | No | Enforce type validation |
 | types | object | No | Custom document types |
 | agent | object | No | AI agent instructions |
@@ -2156,11 +1802,11 @@ Next Steps
   - Schema Types — JSON schema definitions for all document types
   - API Reference — Programmatic access via @brainfile/core
   - CLI Commands — Command-line interface reference
-  - Contract Schema — Contract object specification
+  - Contract Schema — Contract object field reference
 
 ---
 
-## 11. API Reference
+## 9. API Reference
 
 API Reference
 
@@ -2903,17 +2549,17 @@ BrainfileLinter.groupIssues(lintResult);
 ---
 
 Next Steps
-  - Protocol Specification — File format details
+  - Board Format Reference — File format details
   - CLI Commands — Command-line interface
   - Core Library Guide — Usage examples
 
 ---
 
-## 12. CLI Commands Reference
+## 10. CLI Commands Reference
 
 CLI Command Reference
 
-Complete documentation for all @brainfile/cli commands.
+Complete documentation for all brainfile CLI commands.
 
 ::: tip Most Used Commands
 | Command | Jump to |
@@ -2959,42 +2605,12 @@ Commands
 | types | Document type management |
 | search | Search tasks and logs |
 | log | View completed task logs |
+| note | Append a timestamped note to a task log |
 | migrate | Move brainfile to .brainfile/ directory |
 | config | Manage user configuration |
 | auth | Authenticate with external services |
 | mcp | MCP server for AI assistants |
 
----|## Commands
-
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 init
@@ -3008,37 +2624,10 @@ brainfile init --force  # Overwrite existing
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (default: .brainfile/brainfile.md) |
+| --force | Overwrite existing file |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 list
@@ -3058,37 +2647,13 @@ brainfile list --contract ready
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -c, --column <name> | Filter by column |
+| -t, --tag <name> | Filter by tag |
+| --parent <id> | Filter by parent task ID (parentId) |
+| --contract <status> | Filter by contract status (ready \| in_progress \| delivered \| done \| failed) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 show
@@ -3102,37 +2667,11 @@ brainfile show -t task-42
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | Task ID to show (required) |
+| --json | Output task data as JSON |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 add
@@ -3152,37 +2691,26 @@ brainfile add --title "Design doc" --type adr --column todo
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -c, --column <name> | Column to add task to (default: todo) |
+| -t, --title <text> | Task title (required) |
+| -d, --description <text> | Task description |
+| -p, --priority <level> | Priority level (low, medium, high, critical) |
+| --tags <tags> | Comma-separated tags |
+| --assignee <name> | Assignee name |
+| --due-date <date> | Due date (YYYY-MM-DD) |
+| --subtasks <titles> | Comma-separated subtask titles |
+| --files <paths> | Comma-separated related file paths |
+| --type <type> | Document type (e.g., epic, adr); determines ID prefix |
+| --parent <id> | Parent task ID (sets parentId on the new task file) |
+| --child <title> | Create a child task under the new parent (repeatable) |
+| --with-contract | Attach a draft contract |
+| --ready | With --with-contract: set contract status: ready instead of draft |
+| --deliverable <spec> | Contract deliverable type:path:description (repeatable) |
+| --validation <command> | Contract validation command (repeatable) |
+| --constraint <text> | Contract constraint (repeatable) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 move
@@ -3200,42 +2728,16 @@ brainfile move --task task-5 --column done
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | Task ID to move (required) |
+| -c, --column <name> | Target column name or ID (required) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 patch
 
-Update specific fields of a task. Use --clear-* options to remove fields.
+Update specific fields of a task. Use --clear- options to remove fields.
 
 `
 brainfile patch --task task-1 --priority critical
@@ -3245,37 +2747,20 @@ brainfile patch --task task-1 --clear-assignee
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | Task ID to update (required) |
+| --title <text> | New task title |
+| -d, --description <text> | New task description |
+| -p, --priority <level> | Priority (low, medium, high, critical, or none to remove) |
+| --tags <tags> | Comma-separated tags (replaces existing) |
+| --assignee <name> | Assignee name |
+| --due-date <date> | Due date (YYYY-MM-DD) |
+| --clear-tags | Remove all tags |
+| --clear-assignee | Remove assignee |
+| --clear-due-date | Remove due date |
+| --clear-priority | Remove priority |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 delete
@@ -3288,37 +2773,11 @@ brainfile delete --task task-1 --force
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | Task ID to delete (required) |
+| --force | Confirm deletion (required) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 archive
@@ -3333,37 +2792,13 @@ brainfile archive --all --to linear --dry-run
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | Task ID to archive |
+| --to <destination> | Archive destination: local, github, or linear |
+| --all | Archive all tasks from local archive to external service |
+| --dry-run | Preview what would be created without making changes |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 restore
@@ -3376,37 +2811,11 @@ brainfile restore --task task-1 --column todo
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | Task ID to restore (required) |
+| -c, --column <name> | Target column name or ID (required) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 subtask
@@ -3422,35 +2831,14 @@ brainfile subtask --task task-1 --delete task-1-2
 
 Options:
 | Option | Description |
-|--------|## Commands
-
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | Parent task ID (required) |
+| --add <title> | Add a new subtask |
+| --delete <subtask-id> | Delete a subtask |
+| --update <subtask-id> | Update a subtask (requires --title) |
+| --toggle <subtask-id> | Toggle subtask completion |
+| --title <text> | New title (for --update) |
 
 ---
 
@@ -3466,37 +2854,11 @@ brainfile lint --check      # Exit with error (for CI)
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| --fix | Automatically fix issues when possible |
+| --check | Exit with error code if issues found (for CI/CD) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 template
@@ -3511,37 +2873,14 @@ brainfile template --use feature-request --title "Dark mode"
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -l, --list | List all available templates |
+| -u, --use <template-id> | Create task from template |
+| --title <text> | Task title (for template usage) |
+| --description <text> | Task description (for template usage) |
+| -c, --column <name> | Column to add task to (default: todo) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 tui
@@ -3587,37 +2926,9 @@ Supported Assistants:
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| --scope <scope> | Installation scope: user or project (uninstall also accepts all) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 complete
@@ -3631,17 +2942,14 @@ complete archives finished work to logs/, keeping your active board clean. Use -
 `
 brainfile complete --task task-1
 brainfile complete -t epic-1 --force
-brainfile complete -t task-2 --summary "Implemented rate limiter" --auto-files
 `
 
 Options:
 | Option | Description |
 |--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
 | -t, --task <id> | Task ID (required) |
 | --force | Force epic completion even if child tasks are still active |
-| --summary <text> | Completion summary (added to ledger record) |
-| --files-changed <paths> | Comma-separated list of changed files |
-| --auto-files | Auto-detect changed files from git status |
 
 ::: info Auto-Completion Cascade
 When a task is completed:
@@ -3666,7 +2974,6 @@ The contract command drives the full agent-to-agent workflow: pickup → deliver
 brainfile contract pickup --task task-1
 brainfile contract deliver --task task-1
 brainfile contract validate --task task-1
-brainfile contract validate --task task-1 --retry
 brainfile contract attach --task task-1 --deliverable "file:src/feature.ts:Implementation"
 `
 
@@ -3676,7 +2983,9 @@ Subcommands:
 | pickup | Claim a contract and set status to in_progress |
 | deliver | Mark contract as delivered (ready for validation) |
 | validate | Check deliverables and run validation commands |
-| attach | Add contract to existing task |
+| attach | Add contract to existing task (default status draft) |
+| graph | Attach contracts to multiple tasks as a dependency graph |
+| activate | Activate one or more draft contracts (draft → ready) |
 
 Common Options:
 | Option | Description |
@@ -3684,14 +2993,10 @@ Common Options:
 | -t, --task <id> | Task ID (required) |
 | -f, --file <path> | Path to brainfile (auto-detects .brainfile/brainfile.md) |
 
-Validate Options:
-| Option | Description |
-|--------|-------------|
-| --retry | Force retry even if validation fails and maxRetries is exceeded |
-
 Attach Options:
 | Option | Description |
 |--------|-------------|
+| --ready | Set contract status: ready instead of draft |
 | --deliverable <spec> | Add deliverable (format: type:path:description) |
 | --validation <command> | Add validation command (repeatable) |
 | --constraint <text> | Add constraint (repeatable) |
@@ -3701,8 +3006,6 @@ If contract.maxRetries is set and validation fails, the system automatically:
   Captures validation output as feedback in contract.feedback
   Resets contract status to ready
   Re-dispatches the task to the agent for rework
-
-Use --retry to manually force a retry attempt even if maxRetries is exceeded.
 :::
 
 See the Contract Commands Reference for detailed documentation.
@@ -3717,39 +3020,13 @@ Manage Architecture Decision Records.
 brainfile adr promote -t adr-1 --category always
 `
 
-Options:
+Options (promote):
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | ADR task ID to promote (required) |
+| --category <category> | Rule category (prefer \| always \| never \| context) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 rules
@@ -3810,37 +3087,11 @@ brainfile note -t task-1 "Fixed failing test" --agent codex
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| -t, --task <id> | Task ID to add note to (required) |
+| --agent <name> | Agent name for attribution |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 migrate
@@ -3855,37 +3106,11 @@ brainfile migrate --force
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| --dir <path> | Directory containing legacy brainfile files (default: cwd) |
+| --force | Overwrite existing migration outputs (task files/backups) |
+| --logs-to-ledger | Migrate logs/.md files into ledger.jsonl |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 config
@@ -3901,37 +3126,12 @@ brainfile config path
 
 Subcommands:
 | Command | Description |
-|---------|## Commands
-
-| Command | Description |
 |---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
+| list | Show all config values |
+| get <key> | Get a specific config value |
+| set <key> <value> | Set a config value |
+| path | Show config file path |
 
----
 ---
 
 auth
@@ -3947,37 +3147,12 @@ brainfile auth logout github
 
 Subcommands:
 | Command | Description |
-|---------|## Commands
-
-| Command | Description |
 |---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
+| github | Authenticate with GitHub (--token or OAuth device flow) |
+| linear | Authenticate with Linear (--token required) |
+| status | Show authentication status for all providers |
+| logout [provider] | Log out from a provider (github, linear, or --all) |
 
----
 ---
 
 mcp
@@ -3991,73 +3166,19 @@ brainfile mcp --file ./project/brainfile.md
 
 Options:
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 Global Options
 
 | Option | Description |
-|--------|## Commands
+|--------|-------------|
+| -V, --version | Output the version number |
+| -h, --help | Display help for a command |
+| -f, --file <path> | Most commands accept a brainfile path (auto-detects .brainfile/brainfile.md by default) |
 
-| Command | Description |
-|---------|-------------|
-| init | Create a new brainfile |
-| list | Display tasks |
-| show | Display single task details |
-| add | Create a new task |
-| move | Move task between columns |
-| patch | Update task fields |
-| delete | Permanently delete a task |
-| archive | Archive a task |
-| restore | Restore from archive |
-| subtask | Manage subtasks |
-| lint | Validate and fix syntax |
-| template | Create from templates |
-| tui | Interactive terminal UI |
-| hooks | AI agent hook integration |
-| complete | Complete a task (append to ledger.jsonl and archive to logs/) |
-| contract | Manage agent-to-agent contracts |
-| adr | ADR lifecycle management |
-| rules | Manage project rules |
-| types | Document type management |
-| search | Search tasks and logs |
-| log | View completed task logs |
-| migrate | Move brainfile to .brainfile/ directory |
-| config | Manage user configuration |
-| auth | Authenticate with external services |
-| mcp | MCP server for AI assistants |
-
----
 ---
 
 CI/CD Integration
@@ -4074,7 +3195,7 @@ jobs:
     steps:
   - uses: actions/checkout@v4
   - name: Validate
-        run: npx @brainfile/cli lint --check
+        run: npx brainfile lint --check
 `
 
 Pre-commit Hook
@@ -4085,7 +3206,7 @@ Pre-commit Hook
 .git/hooks/pre-commit
 
 if [ -f "brainfile.md" ]; then
-  npx @brainfile/cli lint --check
+  npx brainfile lint --check
   if [ $? -ne 0 ]; then
     echo "brainfile.md has validation errors"
     exit 1
@@ -4110,11 +3231,11 @@ npm Scripts
 Next Steps
   - CLI & TUI Guide — Getting started with the CLI
   - MCP Server — AI assistant integration
-  - Protocol Specification — File format details
+  - Board Format Reference — File format details
 
 ---
 
-## 13. Contract Schema Reference
+## 11. Contract Schema Reference
 
 Contract Schema Reference
 
@@ -4236,7 +3357,7 @@ In v2, context.background moved to task.description and context.relevantFiles mo
 
 ---
 
-## 14. Schema Types
+## 12. Schema Types
 
 Schema Types
 
@@ -4291,7 +3412,7 @@ columns:
 Only title and one column are required.
 :::
 
-View Board Schema · Example
+View Board Schema
 
 Task
 
@@ -4454,7 +3575,7 @@ rules:
 `
 
 ::: tip Vendor Extensions
-The protocol supports arbitrary vendor extensions using the x-* naming convention (e.g., x-otto: {}).
+The schema supports arbitrary vendor extensions using the x-* naming convention (e.g., x-otto: {}).
   - Opaque processing: Internal keys are preserved and never transformed.
   - Round-tripping: Unknown fields are guaranteed to survive parse-serialize cycles.
 :::
@@ -4485,230 +3606,11 @@ Schema Directories
 | v2 | brainfile.md/v2/ | Current |
 
 Next Steps
-  - Protocol Specification — File format details
+  - Board Format Reference — File format details
   - API Reference — Library documentation
   - Core Library — Build custom tools
 
 ---
-
-## 15. Complete Example
-
-Example v2 workspace from protocol/example/.brainfile/:
-
-Files:
-- .brainfile/brainfile.md
-- .brainfile/board/adr-1.md
-- .brainfile/board/epic-1.md
-- .brainfile/board/task-1.md
-- .brainfile/logs/task-2.md
-
-### .brainfile/brainfile.md
-
-```markdown
----
-type: board
-title: Brainfile v2 Example Board
-schema: https://brainfile.md/v2/board.json
-protocolVersion: 2.0.0
-strict: true
-agent:
-  instructions:
-    - Use the CLI or MCP tools for task operations when available
-    - Preserve all IDs and unknown fields
-    - Update task column as you work (todo → in-progress → review → done)
-    - Use contracts when handing work off to another agent
-  llmNotes: |
-    This is an example Brainfile v2 workspace.
-    - Board config lives in .brainfile/brainfile.md
-    - Active docs live in .brainfile/board/
-    - Completed docs live in .brainfile/logs/
-rules:
-  always:
-    - id: 1
-      rule: Write tests for bug fixes and new features
-    - id: 2
-      rule: Keep tasks small and independently completable
-  never:
-    - id: 1
-      rule: Change or regenerate existing task IDs
-  prefer:
-    - id: 1
-      rule: Store context in task.description and files in task.relatedFiles
-  context:
-    - id: 1
-      rule: This repo uses TypeScript and Node
-
-types:
-  epic:
-    idPrefix: epic
-    completable: false
-    schema: https://brainfile.md/v2/epic.json
-  adr:
-    idPrefix: adr
-    completable: false
-    schema: https://brainfile.md/v2/adr.json
-
-columns:
-  - id: todo
-    title: To Do
-    order: 1
-  - id: in-progress
-    title: In Progress
-    order: 2
-  - id: review
-    title: Review
-    order: 3
-  - id: done
-    title: Done
-    order: 4
-    completionColumn: true
----
-
-# Example Workspace
-
-This folder demonstrates the v2 layout:
-
-- `.brainfile/brainfile.md` (this file)
-- `.brainfile/board/` (active task/epic/adr files)
-- `.brainfile/logs/` (completed task files)
-
-```
-
-### .brainfile/board/adr-1.md
-
-```markdown
----
-id: adr-1
-type: adr
-title: Use token bucket for rate limiting
-column: review
-tags: [architecture, backend]
-status: accepted
----
-
-## Decision
-
-Use a token bucket algorithm per provider.
-
-## Rationale
-
-- Allows bursts while enforcing an average rate
-- Simple to reason about and test
-
-## Consequences
-
-- Requires tracking bucket state per provider key
-- Needs careful clock/timer handling to avoid drift
-
-```
-
-### .brainfile/board/epic-1.md
-
-```markdown
----
-id: epic-1
-type: epic
-title: Improve API reliability
-column: todo
-priority: medium
-tags: [backend, reliability]
-status: active
-children:
-  - task-1
-  - adr-1
----
-
-## Goal
-
-Reduce outages and improve resilience for API traffic spikes.
-
-```
-
-### .brainfile/board/task-1.md
-
-```markdown
----
-id: task-1
-type: task
-title: Implement rate limiting
-column: in-progress
-priority: high
-effort: medium
-assignee: codex
-tags: [backend, api]
-relatedFiles:
-  - src/api/gateway.ts
-  - src/middleware/rateLimit.ts
-subtasks:
-  - id: sub-1
-    title: Add token bucket implementation
-    completed: true
-  - id: sub-2
-    title: Add unit tests
-    completed: false
-contract:
-  status: in_progress
-  version: 1
-  deliverables:
-    - type: file
-      path: src/rateLimiter.ts
-      description: Token bucket rate limiter
-    - type: test
-      path: src/__tests__/rateLimiter.test.ts
-      description: Unit tests for limiter behavior
-  validation:
-    commands:
-      - npm test -- rateLimiter
-      - npm run build
-  constraints:
-    - Use token bucket algorithm
-    - Keep implementation non-blocking (async)
-  outOfScope:
-    - UI for rate limit settings
----
-
-## Context
-
-We need to protect upstream providers from bursty traffic and avoid quota exhaustion.
-
-## Notes
-
-- Prefer per-provider buckets
-- Include clear error messages when rejecting requests
-
-```
-
-### .brainfile/logs/task-2.md
-
-```markdown
----
-id: task-2
-type: task
-title: Add CI validation for brainfile
-priority: medium
-tags: [ci, tooling]
-completedAt: "2026-02-01T12:00:00Z"
-contract:
-  status: done
-  version: 1
-  deliverables:
-    - type: file
-      path: .github/workflows/validate.yml
-      description: CI workflow that runs brainfile lint and tests
-  validation:
-    commands:
-      - npx @brainfile/cli lint --check
-  metrics:
-    pickedUpAt: "2026-02-01T10:00:00Z"
-    deliveredAt: "2026-02-01T11:00:00Z"
-    validatedAt: "2026-02-01T12:00:00Z"
-    duration: 3600
-    reworkCount: 0
----
-
-Completed and validated.
-
-```
 
 ---
 
@@ -4717,9 +3619,9 @@ Completed and validated.
 - **Website**: https://brainfile.md
 - **Quick Reference**: https://brainfile.md/llms.txt
 - **Schema**: https://brainfile.md/v2
-- **GitHub**: https://github.com/brainfile
-- **Issues**: https://github.com/brainfile/protocol/issues
-- **Discussions**: https://github.com/brainfile/protocol/discussions
+- **GitHub**: https://github.com/1broseidon/brainfile
+- **Issues**: https://github.com/1broseidon/brainfile/issues
+- **Discussions**: https://github.com/1broseidon/brainfile/discussions
 
 ---
 

@@ -18,7 +18,7 @@ Get a task board in your project in under a minute.
 ## 1. Install
 
 ```bash
-npm install -g @brainfile/cli
+npm install -g brainfile
 ```
 
 ## 2. Initialize
@@ -73,7 +73,7 @@ Want your AI assistant to manage tasks directly? Add this to `.mcp.json` in your
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp"]
+      "args": ["brainfile", "mcp"]
     }
   }
 }
@@ -119,8 +119,7 @@ sequenceDiagram
 
 ## Next Steps
 
-- [Why Brainfile?](/why) — The philosophy behind file-based coordination
 - [Getting Started with Contracts](/guides/getting-started-with-contracts) — Define deliverables for AI agents
 - [CLI Commands](/tools/cli) — Full command reference and TUI guide
 - [MCP Integration](/tools/mcp) — Connect your AI assistant directly
-- [Protocol Specification](/reference/protocol) — File format and schema details
+- [Board Format Reference](/reference/protocol) — File format and schema details

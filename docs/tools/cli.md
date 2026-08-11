@@ -10,7 +10,7 @@ The Brainfile CLI gives you full control over your task board from the terminal.
 ## Installation
 
 ```bash
-npm install -g @brainfile/cli
+npm install -g brainfile
 ```
 
 Verify installation:

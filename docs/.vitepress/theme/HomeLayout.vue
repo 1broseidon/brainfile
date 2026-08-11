@@ -47,10 +47,10 @@ onUnmounted(() => {
         <a href="https://chain.sh" target="_blank" rel="noopener" class="nav-chainsh">CHAIN.SH ↗</a>
       </div>
       <div class="nav-links">
-        <a href="/reference/protocol">Specification</a>
+        <a href="/reference/protocol">Board Format</a>
         <a href="/quick-start">Quick Start</a>
         <a href="/guides/contracts">Guides</a>
-        <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/1broseidon/brainfile" target="_blank" rel="noopener">GitHub</a>
       </div>
       <button class="nav-hamburger" :class="{ open: menuOpen }" @click="menuOpen = !menuOpen" aria-label="mobile navigation" :aria-expanded="menuOpen">
         <span class="container">
@@ -61,10 +61,10 @@ onUnmounted(() => {
       </button>
     </nav>
     <div class="nav-mobile" :class="{ open: menuOpen }" @click="menuOpen = false">
-      <a href="/reference/protocol">Specification</a>
+      <a href="/reference/protocol">Board Format</a>
       <a href="/quick-start">Quick Start</a>
       <a href="/guides/contracts">Guides</a>
-      <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/1broseidon/brainfile" target="_blank" rel="noopener">GitHub</a>
     </div>
 
     <main class="home-content">
@@ -73,11 +73,11 @@ onUnmounted(() => {
         <div class="dot-grid-bg"></div>
         <div class="hero-left">
           <h1 class="wordmark">brainfile</h1>
-          <p class="headline">An open protocol for agent-to-agent task coordination.</p>
-          <p class="subline">Human-in-the-loop compatible. File-system native. MIT licensed.</p>
+          <p class="headline">Markdown task boards for you and your AI agents.</p>
+          <p class="subline">One CLI, TUI, and MCP server. File-system native. MIT licensed.</p>
           <div class="opening-links">
-            <a href="/reference/protocol" class="link-primary">Read the Specification <span class="arrow">&rarr;</span></a>
-            <a href="/quick-start" class="link-secondary">Quick Start <span class="arrow">&rarr;</span></a>
+            <a href="/quick-start" class="link-primary">Get Started <span class="arrow">&rarr;</span></a>
+            <a href="/reference/commands" class="link-secondary">CLI Reference <span class="arrow">&rarr;</span></a>
           </div>
         </div>
         <div class="hero-right">
@@ -114,8 +114,8 @@ onUnmounted(() => {
             <p>Informal "please do X" breaks down at scale. Structured deliverables and validation commands make agent output verifiable.</p>
           </div>
           <div class="decision-card">
-            <h3>Why a protocol?</h3>
-            <p>Tools change. Claude, Cursor, Copilot, the next thing. A protocol survives all of them.</p>
+            <h3>Why one format?</h3>
+            <p>Agents change. Claude, Cursor, Codex, the next thing. Plain files and one schema outlive all of them.</p>
           </div>
         </div>
       </section>
@@ -130,8 +130,8 @@ onUnmounted(() => {
       <footer class="home-footer">
         <div class="footer-columns">
           <div class="footer-col">
-            <h4 class="footer-col-title">Protocol</h4>
-            <a href="/reference/protocol">Specification</a>
+            <h4 class="footer-col-title">Docs</h4>
+            <a href="/reference/protocol">Board Format</a>
             <a href="/quick-start">Quick Start</a>
             <a href="/guides/contracts">Guides</a>
           </div>
@@ -143,14 +143,14 @@ onUnmounted(() => {
           </div>
           <div class="footer-col">
             <h4 class="footer-col-title">Community</h4>
-            <a href="https://github.com/brainfile" target="_blank" rel="noopener">GitHub</a>
-            <a href="https://github.com/orgs/brainfile/discussions" target="_blank" rel="noopener">Discussions</a>
+            <a href="https://github.com/1broseidon/brainfile" target="_blank" rel="noopener">GitHub</a>
+            <a href="https://github.com/1broseidon/brainfile/issues" target="_blank" rel="noopener">Issues</a>
             <a href="/contributing">Contributing</a>
           </div>
         </div>
         <div class="footer-base">
           <div class="footer-bottom">
-            <span class="footer-version">Brainfile v2.0 · Protocol Stable · MIT License</span>
+            <span class="footer-version">brainfile · MIT License</span>
             <a href="https://chain.sh" class="footer-chainsh" target="_blank" rel="noopener">CHAIN.SH ↗</a>
           </div>
           <div class="footer-agents">

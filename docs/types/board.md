@@ -172,7 +172,7 @@ When `true`, tasks moved to this column are considered complete. This enables:
 
 ## Task File Structure
 
-Tasks are standalone `.md` files in `.brainfile/board/`. Each file has YAML frontmatter and an optional markdown body. See the [Task Schema](/reference/types) for the full specification.
+Tasks are standalone `.md` files in `.brainfile/board/`. Each file has YAML frontmatter and an optional markdown body. See the [Task Schema](/reference/types) for the full field reference.
 
 ::: tip Minimal Task File
 ```yaml
@@ -490,4 +490,3 @@ agent:
 - [Base Schema](./base.md)
 - [Task Schema](/reference/types)
 - [Contract Schema](./contract.md)
-- [Example Board](https://brainfile.md/example/.brainfile/brainfile.md)

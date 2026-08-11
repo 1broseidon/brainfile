@@ -5,7 +5,7 @@ Built with [VitePress](https://vitepress.dev/).
 ## Development
 
 ```bash
-cd protocol/docs
+cd docs
 npm install
 npm run dev           # Start dev server at localhost:5173
 npm run build         # Build production site to ./dist/
@@ -26,15 +26,13 @@ docs/
 │   └── generate-llms-full.ts  # Generates llms-full.txt from docs
 ├── index.md            # Homepage
 ├── quick-start.md      # Quick start guide
-├── why.md              # Why Brainfile?
 ├── guides/             # In-depth guides
-├── tools/              # CLI, MCP, Pi, Core docs
-├── reference/          # Protocol spec, API ref, CLI commands
+├── tools/              # CLI, MCP, Core docs
+├── reference/          # Board format, API ref, CLI commands
 ├── types/              # Schema documentation (base, board, contract)
 ├── cli/                # CLI-specific docs
 ├── core/               # Core library docs
-├── agents/             # AI agent integration
-└── vscode/             # Legacy VSCode docs (deprecated)
+└── agents/             # AI agent integration
 ```
 
 ## Generating LLM References

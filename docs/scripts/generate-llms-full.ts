@@ -9,8 +9,6 @@ const __dirname = path.dirname(__filename);
 
 const DOCS_DIR = path.join(__dirname, '..');
 const OUTPUT_FILE = path.join(__dirname, '../public/llms-full.txt');
-const EXAMPLE_ROOT_DIR = path.join(__dirname, '../../protocol/example');
-const EXAMPLE_V2_DIR = path.join(EXAMPLE_ROOT_DIR, '.brainfile');
 
 interface DocSectionCandidate {
   file: string;
@@ -29,20 +27,13 @@ interface DocSection {
 // Define sections in order. Some sections support fallback paths/titles for migration compatibility.
 const sectionSpecs: DocSectionSpec[] = [
   { candidates: [{ file: 'quick-start.md', title: 'Quick Start Guide' }] },
-  { candidates: [{ file: 'why.md', title: 'Why Brainfile?' }] },
   { candidates: [{ file: 'guides/getting-started-with-contracts.md', title: 'Getting Started with Contracts' }] },
   { candidates: [{ file: 'guides/contracts.md', title: 'Comprehensive Guide to Contracts' }] },
   { candidates: [{ file: 'guides/agent-workflows.md', title: 'Agent Workflow Patterns' }] },
   { candidates: [{ file: 'tools/cli.md', title: 'CLI & Terminal UI' }] },
   { candidates: [{ file: 'tools/mcp.md', title: 'MCP Server Integration' }] },
-  {
-    candidates: [
-      { file: 'tools/pi.md', title: 'Pi Extension Integration' },
-      { file: 'tools/vscode.md', title: 'VSCode Extension (Deprecated)' },
-    ],
-  },
   { candidates: [{ file: 'tools/core.md', title: 'Core Library' }] },
-  { candidates: [{ file: 'reference/protocol.md', title: 'Protocol Specification' }] },
+  { candidates: [{ file: 'reference/protocol.md', title: 'Board Format Reference' }] },
   { candidates: [{ file: 'reference/api.md', title: 'API Reference' }] },
   { candidates: [{ file: 'reference/commands.md', title: 'CLI Commands Reference' }] },
   { candidates: [{ file: 'reference/contract-schema.md', title: 'Contract Schema Reference' }] },
@@ -108,7 +99,7 @@ function stripMarkdown(markdown: string): string {
 
 function generateHeader(sections: DocSection[]): string {
   const now = new Date().toISOString().split('T')[0];
-  return `# Brainfile Protocol - Complete Reference for AI Agents
+  return `# Brainfile - Complete Reference for AI Agents
 
 > Comprehensive documentation for AI agents integrating with Brainfile
 > Auto-generated from markdown documentation
@@ -122,7 +113,6 @@ Last Updated: ${now}
 ## Table of Contents
 
 ${sections.map((s, i) => `${i + 1}. ${s.title}`).join('\n')}
-${sections.length + 1}. Complete Example
 
 ---
 
@@ -139,43 +129,6 @@ function readDocFile(file: string): string | null {
 
   const content = fs.readFileSync(fullPath, 'utf-8');
   return stripMarkdown(content);
-}
-
-function listMarkdownFiles(dir: string): string[] {
-  if (!fs.existsSync(dir)) return [];
-
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith('.md'))
-    .sort()
-    .map((f) => path.join(dir, f));
-}
-
-function readExampleWorkspace(): { tree: string; files: Array<{ relPath: string; content: string }> } | null {
-  if (!fs.existsSync(EXAMPLE_V2_DIR)) {
-    console.warn('Warning: Example .brainfile/ workspace not found');
-    return null;
-  }
-
-  const boardConfig = path.join(EXAMPLE_V2_DIR, 'brainfile.md');
-  const boardDir = path.join(EXAMPLE_V2_DIR, 'board');
-  const logsDir = path.join(EXAMPLE_V2_DIR, 'logs');
-
-  const filePaths = [
-    boardConfig,
-    ...listMarkdownFiles(boardDir),
-    ...listMarkdownFiles(logsDir),
-  ].filter((p) => fs.existsSync(p));
-
-  const files = filePaths.map((absPath) => {
-    const relPath = path.relative(EXAMPLE_ROOT_DIR, absPath).split(path.sep).join('/');
-    const content = fs.readFileSync(absPath, 'utf-8');
-    return { relPath, content };
-  });
-
-  const tree = files.map((f) => `- ${f.relPath}`).join('\n');
-
-  return { tree, files };
 }
 
 function generate(): void {
@@ -201,33 +154,15 @@ function generate(): void {
     }
   });
 
-  // Add complete example
-  console.log('Adding complete example...');
-  const example = readExampleWorkspace();
-
-  if (example) {
-    output += `## ${sections.length + 1}. Complete Example\n\n`;
-    output += 'Example v2 workspace from protocol/example/.brainfile/:\n\n';
-    output += 'Files:\n';
-    output += `${example.tree}\n\n`;
-
-    example.files.forEach((file) => {
-      output += `### ${file.relPath}\n\n`;
-      output += '```markdown\n';
-      output += file.content;
-      output += '\n```\n\n';
-    });
-  }
-
   // Add footer
   output += `---\n\n`;
   output += `## Support & Resources\n\n`;
   output += `- **Website**: https://brainfile.md\n`;
   output += `- **Quick Reference**: https://brainfile.md/llms.txt\n`;
   output += `- **Schema**: https://brainfile.md/v2\n`;
-  output += `- **GitHub**: https://github.com/brainfile\n`;
-  output += `- **Issues**: https://github.com/brainfile/protocol/issues\n`;
-  output += `- **Discussions**: https://github.com/brainfile/protocol/discussions\n\n`;
+  output += `- **GitHub**: https://github.com/1broseidon/brainfile\n`;
+  output += `- **Issues**: https://github.com/1broseidon/brainfile/issues\n`;
+  output += `- **Discussions**: https://github.com/1broseidon/brainfile/discussions\n\n`;
   output += `---\n\n`;
   output += `End of Complete Reference\n`;
   output += `Auto-generated from markdown documentation\n`;

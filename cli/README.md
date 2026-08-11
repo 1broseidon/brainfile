@@ -1,11 +1,11 @@
-# @brainfile/cli
+# brainfile
 
-CLI for the [Brainfile](https://brainfile.md) task coordination protocol. Manage tasks, contracts, and ADRs from your terminal. Includes a TUI board view and an MCP server for AI agent integration.
+Markdown task boards for you and your AI agents. Manage tasks, epics, contracts, and ADRs from your terminal — with a TUI board view and an MCP server so your coding agents work the same board. Everything is plain Markdown in your repo.
 
 ## Install
 
 ```bash
-npm i -g @brainfile/cli
+npm i -g brainfile
 ```
 
 ## Quick Start
@@ -213,7 +213,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp"]
+      "args": ["brainfile", "mcp"]
     }
   }
 }

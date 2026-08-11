@@ -1,6 +1,6 @@
-# Brainfile Protocol
+# Brainfile
 
-> An open protocol for agent-to-agent task coordination. File-system native.
+> Markdown task boards for humans and AI agents. File-system native.
 
 ## Quick Facts
 
@@ -206,5 +206,5 @@ Rules are injected into agent context automatically via MCP.
 
 - Bootstrap: https://brainfile.md/llms-install.txt
 - Full reference: https://brainfile.md/llms-full.txt
-- Specification: https://brainfile.md/reference/protocol
-- GitHub: https://github.com/brainfile
+- Board format: https://brainfile.md/reference/protocol
+- GitHub: https://github.com/1broseidon/brainfile

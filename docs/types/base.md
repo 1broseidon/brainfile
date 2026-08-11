@@ -15,7 +15,7 @@ https://brainfile.md/v2/base.json
 
 ## Overview
 
-The base schema establishes the foundational structure for the Brainfile protocol:
+The base schema establishes the foundational structure for all brainfile documents:
 
 - Common metadata fields (title, schema, version)
 - AI agent instructions
@@ -60,7 +60,7 @@ schema: https://brainfile.md/v2/board.json  # Optional — enables schema valida
 **Type**: `string` (semver pattern)
 **Pattern**: `^[0-9]+\.[0-9]+\.[0-9]+$`
 **Default**: `2.0.0`
-**Description**: Version of the Brainfile protocol
+**Description**: Version of the board format
 
 ```yaml
 protocolVersion: 2.0.0               # Optional — defaults to 2.0.0

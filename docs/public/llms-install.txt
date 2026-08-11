@@ -1,13 +1,13 @@
 # Brainfile — Agent Bootstrap
 
-You are setting up Brainfile, an open protocol for task coordination between humans and AI agents. Tasks are markdown files that live in the repo. No database, no platform.
+You are setting up Brainfile, a tool for task coordination between humans and AI agents. Tasks are markdown files that live in the repo. No database, no platform.
 
 ## 1. Install
 
 Run these two commands in the project root:
 
 ```
-npm install -g @brainfile/cli
+npm install -g brainfile
 brainfile init
 ```
 
@@ -25,7 +25,7 @@ Create or add to `.mcp.json` in the project root:
   "mcpServers": {
     "brainfile": {
       "command": "npx",
-      "args": ["@brainfile/cli", "mcp"]
+      "args": ["brainfile", "mcp"]
     }
   }
 }
@@ -131,5 +131,5 @@ You are now set up. For ongoing reference:
 
 - Quick reference: https://brainfile.md/llms.txt
 - Full documentation: https://brainfile.md/llms-full.txt
-- Specification: https://brainfile.md/reference/protocol
-- Source: https://github.com/brainfile
+- Board format: https://brainfile.md/reference/protocol
+- Source: https://github.com/1broseidon/brainfile

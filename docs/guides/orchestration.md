@@ -171,7 +171,7 @@ contract:
 3. When all blocking tasks are done, `task-3` becomes schedulable.
 
 ::: tip dependsOn vs blockedBy
-The richer [orchestration schema](/specs/orchestration-schema) adds an `orchestration.dependsOn` DAG with success-state policies (`done` vs `delivered`) and fan-in barriers. `blockedBy` is the simpler top-level field and is treated as a compatibility fallback for `dependsOn` by schedulers.
+Task frontmatter also supports a richer `orchestration.dependsOn` DAG with success-state policies (`done` vs `delivered`) and fan-in barriers. `blockedBy` is the simpler top-level field and is treated as a compatibility fallback for `dependsOn` by schedulers.
 :::
 
 ### Common dependency shapes

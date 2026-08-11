@@ -6,7 +6,7 @@ const { page } = useData()
 const copied = ref(false)
 const loading = ref(false)
 
-const GITHUB_RAW = 'https://raw.githubusercontent.com/brainfile/protocol/main/docs/'
+const GITHUB_RAW = 'https://raw.githubusercontent.com/1broseidon/brainfile/main/docs/'
 
 async function copyPage() {
   if (loading.value) return

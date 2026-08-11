@@ -244,7 +244,7 @@ const customTask = createCustomTask('My Task', 'Task description');
 
 ## CLI Integration
 
-The templates are also available through the [@brainfile/cli](/reference/commands) tool:
+The templates are also available through the [brainfile CLI](/reference/commands):
 
 ```bash
 # List available templates
@@ -259,6 +259,5 @@ brainfile template --use bug-report --title "Login fails"
 Templates work well in agent-driven workflows:
 
 - Create templated tasks from the CLI: `brainfile template --use bug-report --title "..."`
-- In [Pi](https://pi.dev/), the [Pi Extension manual](/tools/pi) shows how templated tasks fit Direct 1:1, Pipeline DAG, and Fan-In orchestration runs.
 - With the [MCP Server](/tools/mcp), any MCP-compatible agent can create tasks from templates via tool calls.
 

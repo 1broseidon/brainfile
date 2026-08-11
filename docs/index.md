@@ -1,6 +1,6 @@
 ---
 layout: home
 title: Brainfile
-titleTemplate: Open protocol for agentic task coordination
-description: An open protocol for agent-to-agent task coordination. Human-in-the-loop compatible. File-system native.
+titleTemplate: Markdown task boards for you and your AI agents
+description: Markdown task boards you share with your AI agents — one CLI, TUI, and MCP server. File-system native.
 ---

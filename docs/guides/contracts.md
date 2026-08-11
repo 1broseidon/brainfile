@@ -143,13 +143,11 @@ contract:
 
 **Manual retry override:**
 
-Even if maxRetries is exceeded, PM can force a retry:
+Even if maxRetries is exceeded, the PM can force another attempt by resetting the contract status to `ready` (edit the task's YAML), letting the agent deliver again, and re-running:
 
 ```bash
-brainfile contract validate --task task-1 --retry
+brainfile contract validate --task task-1
 ```
-
-This bypasses the retry limit check and forces one more validation attempt.
 
 ::: warning Retry Accounting
 The `reworkCount` is incremented during validation failure checks. With `maxRetries: 3`, you get up to 3 rework cycles (initial attempt + 3 retries = 4 total validation attempts).
@@ -223,5 +221,5 @@ These metrics are stored within the contract object in your `brainfile.md`.
 
 - [Agent Workflows](/guides/agent-workflows) — PM and worker coordination patterns
 - [Contract Commands](/cli/contract-commands) — Full CLI reference for contract operations
-- [Contract Schema](/reference/contract-schema) — Formal field-by-field specification
+- [Contract Schema](/reference/contract-schema) — Field-by-field reference
 - [Getting Started](/guides/getting-started-with-contracts) — 2-minute intro

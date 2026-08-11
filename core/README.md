@@ -1,8 +1,8 @@
 # @brainfile/core
 
-TypeScript library for the [Brainfile](https://brainfile.md) task coordination protocol. Provides parsing configuration, reading/writing task files, managing contracts, and handling board state.
+TypeScript library that powers [brainfile](https://www.npmjs.com/package/brainfile): board config parsing, reading/writing task files, contracts, and board state.
 
-Used by the [@brainfile/cli](https://www.npmjs.com/package/@brainfile/cli) and other tools in the Brainfile ecosystem.
+Used by the [brainfile CLI](https://www.npmjs.com/package/brainfile); use it directly when building your own tooling on top of brainfile boards.
 
 ## Installation
 
@@ -199,7 +199,7 @@ interface Contract {
 
 ## Contributing
 
-This package is part of the [Brainfile](https://github.com/brainfile) monorepo.
+This package is part of the [brainfile](https://github.com/1broseidon/brainfile) monorepo.
 Please see the root [CONTRIBUTING.md](../../CONTRIBUTING.md) for development guidelines.
 
 ## License

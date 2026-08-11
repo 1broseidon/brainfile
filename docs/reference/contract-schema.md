@@ -1,6 +1,6 @@
 ---
 title: Contract Schema Reference
-description: Formal specification of the Brainfile Contract object
+description: Field reference for the Brainfile Contract object
 ---
 
 # Contract Schema Reference

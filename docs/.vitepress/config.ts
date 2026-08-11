@@ -1,12 +1,11 @@
 import { defineConfig } from 'vitepress'
 import { withMermaid } from 'vitepress-plugin-mermaid'
-import fs from 'fs'
 import path from 'path'
 import { buildEndGenerateOpenGraphImages } from '@nolebase/vitepress-plugin-og-image/vitepress'
 
 export default withMermaid(defineConfig({
   title: 'brainfile',
-  description: 'An open protocol for structured task coordination between humans and AI agents',
+  description: 'Markdown task boards you share with your AI agents — CLI, TUI, and MCP server',
   cleanUrls: true,
   ignoreDeadLinks: true,
   appearance: 'force-dark',
@@ -33,169 +32,6 @@ export default withMermaid(defineConfig({
         interval: 1000,
       },
     },
-    plugins: [
-      {
-        name: 'serve-static-directories',
-        configureServer(server) {
-          // Serve v1 and example directories during dev
-          server.middlewares.use((req, res, next) => {
-            const url = req.url || ''
-
-            // Handle /v1 or /v1/
-            if (url === '/v1' || url === '/v1/') {
-              const htmlPath = path.resolve(__dirname, '../../protocol/v1/index.html')
-              const content = fs.readFileSync(htmlPath, 'utf-8')
-              res.setHeader('Content-Type', 'text/html')
-              res.end(content)
-              return
-            }
-
-            // Handle /v1/*.json files
-            if (url.startsWith('/v1/') && url.endsWith('.json')) {
-              const filename = url.split('/v1/')[1]
-              const jsonPath = path.resolve(__dirname, '../../protocol/v1', filename)
-              if (fs.existsSync(jsonPath)) {
-                const content = fs.readFileSync(jsonPath, 'utf-8')
-                res.setHeader('Content-Type', 'application/json')
-                res.end(content)
-                return
-              }
-            }
-
-            // Handle /v1/*.html or /v1/*.md files
-            if (url.startsWith('/v1/') && (url.endsWith('.html') || url.endsWith('.md'))) {
-              const filename = url.split('/v1/')[1]
-              const filePath = path.resolve(__dirname, '../../protocol/v1', filename)
-              if (fs.existsSync(filePath)) {
-                const content = fs.readFileSync(filePath, 'utf-8')
-                res.setHeader('Content-Type', url.endsWith('.md') ? 'text/markdown' : 'text/html')
-                res.end(content)
-                return
-              }
-            }
-
-            // Handle /v2 or /v2/
-            if (url === '/v2' || url === '/v2/') {
-              const htmlPath = path.resolve(__dirname, '../../protocol/v2/index.html')
-              const content = fs.readFileSync(htmlPath, 'utf-8')
-              res.setHeader('Content-Type', 'text/html')
-              res.end(content)
-              return
-            }
-
-            // Handle /v2/*.json files
-            if (url.startsWith('/v2/') && url.endsWith('.json')) {
-              const filename = url.split('/v2/')[1]
-              const jsonPath = path.resolve(__dirname, '../../protocol/v2', filename)
-              if (fs.existsSync(jsonPath)) {
-                const content = fs.readFileSync(jsonPath, 'utf-8')
-                res.setHeader('Content-Type', 'application/json')
-                res.end(content)
-                return
-              }
-            }
-
-            // Handle /v2/*.html or /v2/*.md files
-            if (url.startsWith('/v2/') && (url.endsWith('.html') || url.endsWith('.md'))) {
-              const filename = url.split('/v2/')[1]
-              const filePath = path.resolve(__dirname, '../../protocol/v2', filename)
-              if (fs.existsSync(filePath)) {
-                const content = fs.readFileSync(filePath, 'utf-8')
-                res.setHeader('Content-Type', url.endsWith('.md') ? 'text/markdown' : 'text/html')
-                res.end(content)
-                return
-              }
-            }
-
-            // Handle /example/** (files under protocol/example/, including nested paths)
-            if (url.startsWith('/example/')) {
-              const rawPath = (url.split('?')[0] || '').trim()
-              const rel = decodeURIComponent(rawPath.replace(/^\/example\//, ''))
-
-              const exampleDir = path.resolve(__dirname, '../../protocol/example')
-              const filePath = path.resolve(exampleDir, rel)
-
-              // Prevent path traversal
-              if (filePath.startsWith(exampleDir) && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-                const ext = path.extname(filePath).toLowerCase()
-                const contentType =
-                  ext === '.md'
-                    ? 'text/markdown; charset=utf-8'
-                    : ext === '.json'
-                      ? 'application/json; charset=utf-8'
-                      : ext === '.txt'
-                        ? 'text/plain; charset=utf-8'
-                        : ext === '.yml' || ext === '.yaml'
-                          ? 'text/yaml; charset=utf-8'
-                          : 'application/octet-stream'
-
-                const content = fs.readFileSync(filePath)
-                res.setHeader('Content-Type', contentType)
-                res.setHeader('Content-Disposition', `inline; filename="${path.basename(filePath)}"`)
-                res.end(content)
-                return
-              }
-            }
-
-            next()
-          })
-        },
-        generateBundle() {
-          // Copy v1 directory files (schemas are now at /v1/*.json)
-          const v1Dir = path.resolve(__dirname, '../../protocol/v1')
-          const v1Files = fs.readdirSync(v1Dir)
-          for (const file of v1Files) {
-            const filePath = path.join(v1Dir, file)
-            if (fs.statSync(filePath).isFile()) {
-              const content = fs.readFileSync(filePath, 'utf-8')
-              this.emitFile({
-                type: 'asset',
-                fileName: `v1/${file}`,
-                source: content,
-              })
-            }
-          }
-
-          // Copy v2 directory files
-          const v2Dir = path.resolve(__dirname, '../../protocol/v2')
-          const v2Files = fs.readdirSync(v2Dir)
-          for (const file of v2Files) {
-            const filePath = path.join(v2Dir, file)
-            if (fs.statSync(filePath).isFile()) {
-              const content = fs.readFileSync(filePath, 'utf-8')
-              this.emitFile({
-                type: 'asset',
-                fileName: `v2/${file}`,
-                source: content,
-              })
-            }
-          }
-
-          // Copy example directory files (recursive, includes nested directories like .brainfile/)
-          const copyDirRecursive = (srcDir: string, outDir: string) => {
-            const entries = fs.readdirSync(srcDir, { withFileTypes: true })
-            for (const entry of entries) {
-              const srcPath = path.join(srcDir, entry.name)
-              const outPath = `${outDir}/${entry.name}`
-
-              if (entry.isDirectory()) {
-                copyDirRecursive(srcPath, outPath)
-              } else if (entry.isFile()) {
-                const content = fs.readFileSync(srcPath)
-                this.emitFile({
-                  type: 'asset',
-                  fileName: outPath,
-                  source: content,
-                })
-              }
-            }
-          }
-
-          const exampleDir = path.resolve(__dirname, '../../protocol/example')
-          copyDirRecursive(exampleDir, 'example')
-        },
-      },
-    ],
   },
 
   buildEnd: async (siteConfig) => {
@@ -208,7 +44,7 @@ export default withMermaid(defineConfig({
           if (p.startsWith('/reference/') || p.startsWith('/types/')) return 'REFERENCE'
           if (p.startsWith('/guides/') || p.startsWith('/cli/')) return 'GUIDE'
           if (p.startsWith('/tools/')) return 'TOOLS'
-          return 'PROTOCOL'
+          return 'BRAINFILE'
         },
       },
     })(siteConfig)
@@ -220,7 +56,7 @@ export default withMermaid(defineConfig({
     pageData.frontmatter.head ??= []
 
     const title = pageData.frontmatter.title || pageData.title || 'Brainfile'
-    const description = pageData.frontmatter.description || pageData.description || 'An open protocol for structured task coordination between humans and AI agents'
+    const description = pageData.frontmatter.description || pageData.description || 'Markdown task boards you share with your AI agents — CLI, TUI, and MCP server'
     const relativePath = pageData.relativePath.replace(/\.md$/, '').replace(/\/index$/, '')
     const url = `https://brainfile.md/${relativePath === 'index' ? '' : relativePath}`
 
@@ -288,21 +124,19 @@ export default withMermaid(defineConfig({
 
   themeConfig: {
     nav: [
-      { text: 'Specification', link: '/reference/protocol' },
-      { text: 'Reference', link: '/reference/commands' },
+      { text: 'Quick Start', link: '/quick-start' },
       { text: 'Guides', link: '/guides/contracts' },
-      { text: 'Tools', link: '/tools/cli' },
-      { text: 'GitHub', link: 'https://github.com/brainfile' },
+      { text: 'Reference', link: '/reference/commands' },
+      { text: 'GitHub', link: 'https://github.com/1broseidon/brainfile' },
     ],
 
     sidebar: [
       {
-        text: 'Protocol',
+        text: 'Getting Started',
         items: [
           { text: 'Home', link: '/' },
-          { text: 'Why this Protocol?', link: '/why' },
           { text: 'Quick Start', link: '/quick-start' },
-          { text: 'Specification', link: '/reference/protocol' },
+          { text: 'Board Format', link: '/reference/protocol' },
         ],
       },
       {
@@ -332,29 +166,17 @@ export default withMermaid(defineConfig({
         ],
       },
       {
-        text: 'Orchestration Specs',
-        items: [
-          { text: 'Orchestration Schema', link: '/specs/orchestration-schema' },
-          { text: 'Orchestration Events', link: '/specs/orchestration-events' },
-        ],
-      },
-      {
         text: 'Tools',
         items: [
           { text: 'CLI & TUI', link: '/tools/cli' },
           { text: 'MCP Server', link: '/tools/mcp' },
-          { text: 'Pi Extension', link: '/tools/pi' },
-          { text: 'VSCode (Deprecated)', link: '/tools/vscode' },
         ],
       },
       {
-        text: 'Libraries',
+        text: 'Library',
         items: [
-          { text: 'TypeScript', link: '/tools/core' },
+          { text: '@brainfile/core', link: '/tools/core' },
           { text: 'Task Templates', link: '/core/templates' },
-          { text: 'Python', link: '/tools/python' },
-          { text: 'Python Overview', link: '/python/overview' },
-          { text: 'Python API', link: '/python/api-reference' },
         ],
       },
       {
@@ -366,8 +188,8 @@ export default withMermaid(defineConfig({
     ],
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/brainfile' },
-      { icon: 'npm', link: 'https://www.npmjs.com/package/@brainfile/cli' },
+      { icon: 'github', link: 'https://github.com/1broseidon/brainfile' },
+      { icon: 'npm', link: 'https://www.npmjs.com/package/brainfile' },
     ],
 
     search: {
@@ -376,7 +198,7 @@ export default withMermaid(defineConfig({
 
     footer: {
       message: 'Released under the MIT License.',
-      copyright: 'Copyright © 2025 Brainfile',
+      copyright: 'Copyright © 2026 George Dikeakos',
     },
   },
 }))

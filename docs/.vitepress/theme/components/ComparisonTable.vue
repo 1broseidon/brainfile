@@ -39,7 +39,7 @@ const rows: Row[] = [
   },
   {
     criteria: 'Vendor lock-in',
-    brainfile: { icon: '✓', text: 'Open protocol' },
+    brainfile: { icon: '✓', text: 'Plain Markdown files' },
     jira: { icon: '✗', text: 'Proprietary' },
     aiChat: { icon: '✗', text: 'Provider-specific' },
   },
