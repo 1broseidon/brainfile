@@ -1,9 +1,11 @@
 import * as fs from 'fs';
-import { Brainfile, BUILT_IN_TEMPLATES, generateTaskId, type Board, type Column, type Task } from '@brainfile/core';
+import * as path from 'path';
+import { Brainfile, BUILT_IN_TEMPLATES, generateNextFileTaskId, taskFileName, writeTaskFile, type Column } from '@brainfile/core';
 import { defaultLogger, type Logger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure, missingRequired, columnNotFound, operationFailed } from '../utils/cli-error';
 import { ExitCode } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { getV2Dirs, readV2BoardConfig, composeBody } from '../utils/v2-detect';
 
 interface TemplateOptions {
   file: string;
@@ -63,15 +65,8 @@ export function templateCommand(options: TemplateOptions, logger: Logger = defau
       throw fileNotFound(filePath);
     }
 
-    // Read and parse the file
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const result = Brainfile.parseWithErrors(content);
-
-    if (!result.board) {
-      throw parseFailure(result.error);
-    }
-
-    const board = result.board;
+    // Read v2 board config
+    const board = readV2BoardConfig(filePath);
 
     // Find the target column
     const targetColumn = board.columns.find(
@@ -106,7 +101,9 @@ export function templateCommand(options: TemplateOptions, logger: Logger = defau
     }
 
     // Generate task ID
-    const newTaskId = generateTaskId();
+    const dirs = getV2Dirs(filePath);
+    const prefix = partialTask.type && partialTask.type !== 'task' ? partialTask.type : 'task';
+    const newTaskId = generateNextFileTaskId(dirs.boardDir, dirs.logsDir, prefix);
 
     // Create complete task - ensure title is set
     // Spread partialTask first, then override with explicit values
@@ -114,14 +111,12 @@ export function templateCommand(options: TemplateOptions, logger: Logger = defau
       ...partialTask,
       id: newTaskId,
       title: options.title, // Always use the provided title
+      column: targetColumn.id,
+      position: targetColumn.tasks?.length || 0,
     };
 
-    // Add task to column
-    targetColumn.tasks.push(newTask);
-
-    // Serialize and write back
-    const updatedContent = Brainfile.serialize(board);
-    fs.writeFileSync(filePath, updatedContent, 'utf-8');
+    const body = composeBody(newTask.description);
+    writeTaskFile(path.join(dirs.boardDir, taskFileName(newTaskId)), newTask, body);
 
     // Success message
     logger.log('✓ Task created from template!');

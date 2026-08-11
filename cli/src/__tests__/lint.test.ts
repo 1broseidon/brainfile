@@ -8,14 +8,40 @@ import { CLIError } from '../utils/cli-error';
 describe('lint command', () => {
   const fixturesDir = path.join(__dirname, 'fixtures');
   let logger: MemoryLogger;
+  const tempDirs: string[] = [];
+
+  /**
+   * Stage a fixture as a v2 workspace config file.
+   *
+   * The lint command lints the resolved brainfile config file, but the v2-only
+   * runtime gate rejects any board path without a sibling board/ directory.
+   * Copy the fixture content to <tmp>/.brainfile/brainfile.md with board/ and
+   * logs/ dirs alongside so lint exercises the same content in a v2 layout.
+   */
+  function stageFixture(fixtureName: string): string {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-lint-test-'));
+    tempDirs.push(tempDir);
+    const dotDir = path.join(tempDir, '.brainfile');
+    fs.mkdirSync(path.join(dotDir, 'board'), { recursive: true });
+    fs.mkdirSync(path.join(dotDir, 'logs'), { recursive: true });
+    const brainfilePath = path.join(dotDir, 'brainfile.md');
+    fs.copyFileSync(path.join(fixturesDir, fixtureName), brainfilePath);
+    return brainfilePath;
+  }
 
   beforeEach(() => {
     logger = new MemoryLogger();
   });
 
+  afterAll(() => {
+    for (const dir of tempDirs) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   describe('valid files', () => {
     it('should pass validation for a valid brainfile', () => {
-      const validFile = path.join(fixturesDir, 'valid-lint.md');
+      const validFile = stageFixture('valid-lint.md');
 
       const result = lintCommand({ file: validFile }, logger);
 
@@ -25,7 +51,7 @@ describe('lint command', () => {
     });
 
     it('should pass validation for test-board.md', () => {
-      const validFile = path.join(fixturesDir, 'test-board.md');
+      const validFile = stageFixture('test-board.md');
 
       const result = lintCommand({ file: validFile }, logger);
 
@@ -36,7 +62,7 @@ describe('lint command', () => {
 
   describe('YAML syntax errors', () => {
     it('should detect YAML syntax errors', () => {
-      const invalidFile = path.join(fixturesDir, 'invalid-yaml-syntax.md');
+      const invalidFile = stageFixture('invalid-yaml-syntax.md');
 
       try {
         lintCommand({ file: invalidFile }, logger);
@@ -52,7 +78,7 @@ describe('lint command', () => {
 
   describe('unquoted strings with colons', () => {
     it('should detect unquoted strings with colons', () => {
-      const unquotedFile = path.join(fixturesDir, 'invalid-yaml-unquoted.md');
+      const unquotedFile = stageFixture('invalid-yaml-unquoted.md');
 
       try {
         lintCommand({ file: unquotedFile }, logger);
@@ -66,36 +92,25 @@ describe('lint command', () => {
     });
 
     it('should fix unquoted strings with --fix flag', () => {
-      // Create a temporary copy to test fixing
-      const unquotedFile = path.join(fixturesDir, 'invalid-yaml-unquoted.md');
-      const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-lint-fix-test-'));
-      const tempFile = path.join(tempDir, 'temp-fix-test.md');
-      fs.copyFileSync(unquotedFile, tempFile);
+      const tempFile = stageFixture('invalid-yaml-unquoted.md');
 
-      try {
-        const result = lintCommand({ file: tempFile, fix: true }, logger);
+      const result = lintCommand({ file: tempFile, fix: true }, logger);
 
-        expect(result.success).toBe(true);
-        expect(result.fixed).toBe(true);
+      expect(result.success).toBe(true);
+      expect(result.fixed).toBe(true);
 
-        const output = logger.getOutput();
-        expect(output).toContain('Fixed');
+      const output = logger.getOutput();
+      expect(output).toContain('Fixed');
 
-        // Verify the file was actually fixed
-        const fixedContent = fs.readFileSync(tempFile, 'utf-8');
-        expect(fixedContent).toContain('"Enable Pages in repository settings (Source: GitHub Actions)"');
-
-      } finally {
-        if (fs.existsSync(tempDir)) {
-          fs.rmSync(tempDir, { recursive: true, force: true });
-        }
-      }
+      // Verify the file was actually fixed
+      const fixedContent = fs.readFileSync(tempFile, 'utf-8');
+      expect(fixedContent).toContain('"Enable Pages in repository settings (Source: GitHub Actions)"');
     });
   });
 
   describe('duplicate column IDs', () => {
     it('should detect duplicate column IDs', () => {
-      const duplicateFile = path.join(fixturesDir, 'duplicate-columns.md');
+      const duplicateFile = stageFixture('duplicate-columns.md');
 
       // Warnings don't cause failure in default mode
       const result = lintCommand({ file: duplicateFile }, logger);
@@ -110,7 +125,7 @@ describe('lint command', () => {
 
   describe('check mode', () => {
     it('should throw error when issues found in check mode', () => {
-      const unquotedFile = path.join(fixturesDir, 'invalid-yaml-unquoted.md');
+      const unquotedFile = stageFixture('invalid-yaml-unquoted.md');
 
       try {
         lintCommand({ file: unquotedFile, check: true }, logger);
@@ -122,7 +137,7 @@ describe('lint command', () => {
     });
 
     it('should return check success when no issues in check mode', () => {
-      const validFile = path.join(fixturesDir, 'valid-lint.md');
+      const validFile = stageFixture('valid-lint.md');
 
       const result = lintCommand({ file: validFile, check: true }, logger);
 

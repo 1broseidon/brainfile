@@ -1,57 +1,61 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { Brainfile, readTaskFile } from '@brainfile/core';
+import { readTaskFile, taskFileName, writeTaskFile, type Task } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
 import { contractPickupCommand, contractDeliverCommand, contractValidateCommand, contractAttachCommand } from '../commands/contract';
+import { createV2TestWorkspace, type V2TestWorkspace } from './helpers/v2';
 
 describe('contract command', () => {
-  let fixturesDir: string;
-  let tempBoardPath: string;
+  let workspace: V2TestWorkspace;
   let logger: MemoryLogger;
 
   beforeEach(() => {
     logger = new MemoryLogger();
-    fixturesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-contract-test-'));
-    tempBoardPath = path.join(fixturesDir, 'temp-board-contract.md');
-  });
-
-  afterEach(() => {
-    if (fixturesDir && fs.existsSync(fixturesDir)) {
-      fs.rmSync(fixturesDir, { recursive: true, force: true });
-    }
-  });
-
-  it('pickup should set status to in_progress and output markdown context', () => {
-    fs.writeFileSync(path.join(fixturesDir, 'exists.txt'), 'ok', 'utf-8');
-
-    const markdown = `---
+    workspace = createV2TestWorkspace('brainfile-contract-test-', `---
 title: Contract Board
+schema: https://brainfile.md/v2/board.json
 columns:
   - id: todo
     title: To Do
-    tasks:
-      - id: task-1
-        title: Task With Contract
-        description: Work the contract
-        relatedFiles:
-          - src/a.ts
-        contract:
-          status: ready
-          deliverables:
-            - type: file
-              path: exists.txt
-              description: must exist
-          constraints:
-            - Be explicit
-          context:
-            relevantFiles:
-              - src/b.ts
----\n`;
+  - id: in-progress
+    title: In Progress
+  - id: review
+    title: Review
+  - id: blocked
+    title: Blocked
+---
+`);
+  });
 
-    fs.writeFileSync(tempBoardPath, markdown, 'utf-8');
+  afterEach(() => {
+    fs.rmSync(workspace.tempDir, { recursive: true, force: true });
+  });
 
-    const result = contractPickupCommand({ file: tempBoardPath, task: 'task-1' }, logger);
+  function writeTask(task: Task, body = ''): void {
+    writeTaskFile(path.join(workspace.boardDir, taskFileName(task.id)), task, body);
+  }
+
+  function readTask(taskId = 'task-1') {
+    return readTaskFile(path.join(workspace.boardDir, taskFileName(taskId)));
+  }
+
+  it('pickup should set status to in_progress and output markdown context', () => {
+    fs.writeFileSync(path.join(workspace.dotDir, 'exists.txt'), 'ok', 'utf-8');
+    writeTask({
+      id: 'task-1',
+      title: 'Task With Contract',
+      column: 'todo',
+      position: 0,
+      relatedFiles: ['src/a.ts'],
+      contract: {
+        status: 'ready',
+        deliverables: [{ type: 'file', path: 'exists.txt', description: 'must exist' } as any],
+        constraints: ['Be explicit'],
+        context: { relevantFiles: ['src/b.ts'] } as any,
+      },
+    } as Task, '## Description\nWork the contract\n');
+
+    const result = contractPickupCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger);
     expect(result.success).toBe(true);
     expect(logger.getOutput()).toContain('# Contract pickup: task-1');
     expect(logger.getOutput()).toContain('## Deliverables');
@@ -59,231 +63,124 @@ columns:
     expect(logger.getOutput()).toContain('src/a.ts');
     expect(logger.getOutput()).toContain('src/b.ts');
 
-    const updated = Brainfile.parse(fs.readFileSync(tempBoardPath, 'utf-8'));
-    const contract = updated?.columns[0].tasks[0].contract as any;
+    const contract = readTask()?.task.contract as any;
     expect(contract?.status).toBe('in_progress');
     expect(contract?.metrics?.pickedUpAt).toBeDefined();
     expect(contract?.metrics?.reworkCount).toBe(0);
+    expect(readTask()?.task.column).toBe('in-progress');
   });
 
   it('deliver should set status to delivered and write delivery metrics', () => {
-    const markdown = `---
-title: Contract Board
-columns:
-  - id: todo
-    title: To Do
-    tasks:
-      - id: task-1
-        title: Task With Contract
-        contract:
-          status: in_progress
-          metrics:
-            pickedUpAt: "2026-01-01T00:00:00.000Z"
----\n`;
+    writeTask({
+      id: 'task-1',
+      title: 'Task With Contract',
+      column: 'in-progress',
+      position: 0,
+      contract: {
+        status: 'in_progress',
+        metrics: { pickedUpAt: '2026-01-01T00:00:00.000Z' },
+      },
+    } as Task);
 
-    fs.writeFileSync(tempBoardPath, markdown, 'utf-8');
-
-    const result = contractDeliverCommand({ file: tempBoardPath, task: 'task-1' }, logger);
+    const result = contractDeliverCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger);
     expect(result.success).toBe(true);
 
-    const updated = Brainfile.parse(fs.readFileSync(tempBoardPath, 'utf-8'));
-    const contract = updated?.columns[0].tasks[0].contract as any;
+    const contract = readTask()?.task.contract as any;
     expect(contract?.status).toBe('delivered');
     expect(contract?.metrics?.deliveredAt).toBeDefined();
     expect(typeof contract?.metrics?.duration).toBe('number');
+    expect(readTask()?.task.column).toBe('review');
   });
 
-  it('validate should set status to done when deliverables exist and commands pass (v1 unchanged)', () => {
-    fs.writeFileSync(path.join(fixturesDir, 'exists.txt'), 'ok', 'utf-8');
+  it('validate should set status to done when deliverables exist and commands pass', () => {
+    // Deliverable paths resolve against the workspace root (parent of .brainfile)
+    fs.writeFileSync(path.join(workspace.tempDir, 'exists.txt'), 'ok', 'utf-8');
+    writeTask({
+      id: 'task-1',
+      title: 'Task With Contract',
+      column: 'review',
+      position: 0,
+      contract: {
+        status: 'delivered',
+        deliverables: [{ type: 'file', path: 'exists.txt' } as any],
+        validation: { commands: ['node -e "process.exit(0)"'] },
+      },
+    } as Task);
 
-    const markdown = `---
-title: Contract Board
-columns:
-  - id: todo
-    title: To Do
-    tasks:
-      - id: task-1
-        title: Task With Contract
-        contract:
-          status: delivered
-          deliverables:
-            - type: file
-              path: exists.txt
-          validation:
-            commands:
-              - "node -e \\"process.exit(0)\\""
----\n`;
-
-    fs.writeFileSync(tempBoardPath, markdown, 'utf-8');
-
-    const result = contractValidateCommand({ file: tempBoardPath, task: 'task-1' }, logger);
+    const result = contractValidateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger);
     expect(result.success).toBe(true);
+    expect(fs.existsSync(path.join(workspace.boardDir, 'task-1.md'))).toBe(false);
 
-    const updated = Brainfile.parse(fs.readFileSync(tempBoardPath, 'utf-8'));
-    expect(updated?.columns[0].tasks[0].contract?.status).toBe('done');
+    const ledgerPath = path.join(workspace.logsDir, 'ledger.jsonl');
+    expect(fs.existsSync(ledgerPath)).toBe(true);
+    expect(fs.readFileSync(ledgerPath, 'utf-8')).toContain('"contractStatus":"done"');
   });
 
   it('validate should stop on first failing command and set status to failed', () => {
-    fs.writeFileSync(path.join(fixturesDir, 'exists.txt'), 'ok', 'utf-8');
+    fs.writeFileSync(path.join(workspace.tempDir, 'exists.txt'), 'ok', 'utf-8');
+    writeTask({
+      id: 'task-1',
+      title: 'Task With Contract',
+      column: 'review',
+      position: 0,
+      contract: {
+        status: 'delivered',
+        deliverables: [{ type: 'file', path: 'exists.txt' } as any],
+        validation: {
+          commands: [
+            'node -e "require(\'fs\').writeFileSync(\'ran1\',\'\'); process.exit(1)"',
+            'node -e "require(\'fs\').writeFileSync(\'ran2\',\'\'); process.exit(0)"',
+          ],
+        },
+      },
+    } as Task);
 
-    const markdown = `---
-title: Contract Board
-columns:
-  - id: todo
-    title: To Do
-    tasks:
-      - id: task-1
-        title: Task With Contract
-        contract:
-          status: delivered
-          deliverables:
-            - type: file
-              path: exists.txt
-          validation:
-            commands:
-              - "node -e \\"require('fs').writeFileSync('ran1',''); process.exit(1)\\""
-              - "node -e \\"require('fs').writeFileSync('ran2',''); process.exit(0)\\""
----\n`;
-
-    fs.writeFileSync(tempBoardPath, markdown, 'utf-8');
-
-    const result = contractValidateCommand({ file: tempBoardPath, task: 'task-1' }, logger);
+    const result = contractValidateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger);
     expect(result.success).toBe(false);
 
-    const updated = Brainfile.parse(fs.readFileSync(tempBoardPath, 'utf-8'));
-    expect(updated?.columns[0].tasks[0].contract?.status).toBe('failed');
-
-    // ran1 should exist, ran2 should NOT (stop on first failure)
-    expect(fs.existsSync(path.join(fixturesDir, 'ran1'))).toBe(true);
-    expect(fs.existsSync(path.join(fixturesDir, 'ran2'))).toBe(false);
+    const taskDoc = readTask();
+    expect(taskDoc?.task.contract?.status).toBe('failed');
+    // Validation commands run with cwd at the workspace root (parent of .brainfile)
+    expect(fs.existsSync(path.join(workspace.tempDir, 'ran1'))).toBe(true);
+    expect(fs.existsSync(path.join(workspace.tempDir, 'ran2'))).toBe(false);
+    expect(fs.existsSync(path.join(workspace.logsDir, 'ledger.jsonl'))).toBe(false);
   });
 
-  it('v2 pickup/deliver/validate should sync columns and archive on success', () => {
-    const brainfileDir = path.join(fixturesDir, '.brainfile');
-    const boardDir = path.join(brainfileDir, 'board');
-    const logsDir = path.join(brainfileDir, 'logs');
-    fs.mkdirSync(boardDir, { recursive: true });
-    fs.mkdirSync(logsDir, { recursive: true });
+  it('validate should set status to failed and preserve task on validation failure', () => {
+    fs.writeFileSync(path.join(workspace.tempDir, 'exists.txt'), 'ok', 'utf-8');
+    writeTask({
+      id: 'task-1',
+      title: 'Task With Contract',
+      column: 'review',
+      position: 0,
+      contract: {
+        status: 'delivered',
+        deliverables: [{ type: 'file', path: 'exists.txt' } as any],
+        validation: { commands: ['node -e "process.stderr.write(\'bad\'); process.exit(1)"'] },
+      },
+    } as Task, 'Task body');
 
-    const v2BoardPath = path.join(brainfileDir, 'brainfile.md');
-    fs.writeFileSync(v2BoardPath, `---
-title: Contract Board
-columns:
-  - id: todo
-    title: To Do
-  - id: in-progress
-    title: In Progress
-  - id: review
-    title: Review
-  - id: blocked
-    title: Blocked
----\n`, 'utf-8');
-
-    fs.writeFileSync(path.join(fixturesDir, 'exists.txt'), 'ok', 'utf-8');
-    fs.writeFileSync(path.join(boardDir, 'task-1.md'), `---
-id: task-1
-title: Task With Contract
-column: todo
-position: 0
-contract:
-  status: ready
-  deliverables:
-    - type: file
-      path: exists.txt
-  validation:
-    commands:
-      - "node -e \\"process.exit(0)\\""
----
-Task body
-`, 'utf-8');
-
-    const pickupResult = contractPickupCommand({ file: v2BoardPath, task: 'task-1' }, logger);
-    expect(pickupResult.success).toBe(true);
-    let taskDoc = readTaskFile(path.join(boardDir, 'task-1.md'));
-    expect(taskDoc?.task.contract?.status).toBe('in_progress');
-    expect(taskDoc?.task.column).toBe('in-progress');
-
-    const deliverResult = contractDeliverCommand({ file: v2BoardPath, task: 'task-1' }, logger);
-    expect(deliverResult.success).toBe(true);
-    taskDoc = readTaskFile(path.join(boardDir, 'task-1.md'));
-    expect(taskDoc?.task.contract?.status).toBe('delivered');
-    expect(taskDoc?.task.column).toBe('review');
-
-    const validateResult = contractValidateCommand({ file: v2BoardPath, task: 'task-1' }, logger);
-    expect(validateResult.success).toBe(true);
-    expect(fs.existsSync(path.join(boardDir, 'task-1.md'))).toBe(false);
-    const ledgerPath = path.join(logsDir, 'ledger.jsonl');
-    expect(fs.existsSync(ledgerPath)).toBe(true);
-    const ledger = fs.readFileSync(ledgerPath, 'utf-8');
-    expect(ledger).toContain('"id":"task-1"');
-    expect(ledger).toContain('"contractStatus":"done"');
-  });
-
-  it('v2 validate should set status to failed and preserve task on validation failure', () => {
-    const brainfileDir = path.join(fixturesDir, '.brainfile');
-    const boardDir = path.join(brainfileDir, 'board');
-    const logsDir = path.join(brainfileDir, 'logs');
-    fs.mkdirSync(boardDir, { recursive: true });
-    fs.mkdirSync(logsDir, { recursive: true });
-
-    const v2BoardPath = path.join(brainfileDir, 'brainfile.md');
-    fs.writeFileSync(v2BoardPath, `---
-title: Contract Board
-columns:
-  - id: todo
-    title: To Do
-  - id: in-progress
-    title: In Progress
-  - id: review
-    title: Review
-  - id: blocked
-    title: Blocked
----\n`, 'utf-8');
-
-    fs.writeFileSync(path.join(fixturesDir, 'exists.txt'), 'ok', 'utf-8');
-    fs.writeFileSync(path.join(boardDir, 'task-1.md'), `---
-id: task-1
-title: Task With Contract
-column: review
-position: 0
-contract:
-  status: delivered
-  deliverables:
-    - type: file
-      path: exists.txt
-  validation:
-    commands:
-      - "node -e \\"process.stderr.write('bad'); process.exit(1)\\""
----
-Task body
-`, 'utf-8');
-
-    const validateResult = contractValidateCommand({ file: v2BoardPath, task: 'task-1' }, logger);
+    const validateResult = contractValidateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger);
     expect(validateResult.success).toBe(false);
-    expect(fs.existsSync(path.join(boardDir, 'task-1.md'))).toBe(true);
+    expect(fs.existsSync(path.join(workspace.boardDir, 'task-1.md'))).toBe(true);
 
-    const taskDoc = readTaskFile(path.join(boardDir, 'task-1.md'));
+    const taskDoc = readTask();
     expect(taskDoc?.task.contract?.status).toBe('failed');
     expect(taskDoc?.task.contract?.feedback).toContain('bad');
     expect(taskDoc?.task.column).toBe('review');
-    expect(fs.existsSync(path.join(logsDir, 'ledger.jsonl'))).toBe(false);
+    expect(fs.existsSync(path.join(workspace.logsDir, 'ledger.jsonl'))).toBe(false);
   });
 
   it('attach should create a ready contract on an existing task', () => {
-    const markdown = `---
-title: Contract Board
-columns:
-  - id: todo
-    title: To Do
-    tasks:
-      - id: task-1
-        title: Task Without Contract
----\n`;
-
-    fs.writeFileSync(tempBoardPath, markdown, 'utf-8');
+    writeTask({
+      id: 'task-1',
+      title: 'Task Without Contract',
+      column: 'todo',
+      position: 0,
+    } as Task);
 
     const result = contractAttachCommand({
-      file: tempBoardPath,
+      file: workspace.brainfilePath,
       task: 'task-1',
       deliverable: [
         'file:src/a.ts:Implementation',
@@ -296,8 +193,7 @@ columns:
 
     expect(result.success).toBe(true);
 
-    const updated = Brainfile.parse(fs.readFileSync(tempBoardPath, 'utf-8'));
-    const task = updated?.columns[0].tasks[0];
+    const task = readTask()?.task;
     expect(task?.contract?.status).toBe('ready');
     expect(task?.contract?.deliverables?.length).toBe(2);
     expect(task?.contract?.validation?.commands).toEqual(['npm test']);

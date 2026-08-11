@@ -3,17 +3,12 @@ import * as os from 'os';
 import * as path from 'path';
 import { tuiCommand } from '../commands/tui';
 import { render } from 'ink';
-import { shouldSuggestV2Migration, markV2MigrationHintShown } from '../utils/v2-detect';
+import { CLIError } from '../utils/cli-error';
 
 jest.mock('ink', () => ({
   render: jest.fn(() => ({
     waitUntilExit: () => Promise.resolve(),
   })),
-}));
-
-jest.mock('../utils/v2-detect', () => ({
-  shouldSuggestV2Migration: jest.fn(() => true),
-  markV2MigrationHintShown: jest.fn(),
 }));
 
 describe('tui command', () => {
@@ -37,21 +32,13 @@ describe('tui command', () => {
     jest.clearAllMocks();
   });
 
-  it('shows soft migration warning before launching TUI for legacy layouts', async () => {
+  it('rejects v1 brainfiles and points to migrate', async () => {
     const brainfilePath = path.join(tempDir, 'brainfile.md');
     fs.writeFileSync(brainfilePath, '---\ncolumns: []\n---\n', 'utf-8');
 
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
-
-    await tuiCommand({ file: brainfilePath });
-
-    expect(shouldSuggestV2Migration).toHaveBeenCalled();
-    expect(markV2MigrationHintShown).toHaveBeenCalled();
-    expect(render).toHaveBeenCalled();
-    expect(logSpy.mock.calls.flat().join(' ')).toContain('brainfile migrate');
-
-    writeSpy.mockRestore();
-    logSpy.mockRestore();
+    await expect(tuiCommand({ file: brainfilePath })).rejects.toThrow(CLIError);
+    await expect(tuiCommand({ file: brainfilePath })).rejects.toThrow('Brainfile v1 is no longer supported');
+    expect(render).not.toHaveBeenCalled();
   });
 });
+

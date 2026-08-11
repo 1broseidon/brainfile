@@ -1,34 +1,39 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { taskFileName, writeTaskFile, type Task } from '@brainfile/core';
 import { showCommand } from '../commands/show';
 import { MemoryLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
+import { createV2TestWorkspace, writeV2Task, type V2TestWorkspace } from './helpers/v2';
 
 describe('show command', () => {
-  const fixturesDir = path.join(__dirname, 'fixtures');
-  const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  let tempDir: string;
-  let tempBoardPath: string;
-  let tempArchivePath: string;
-
+  let workspace: V2TestWorkspace;
   let logger: MemoryLogger;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-show-test-'));
-    tempBoardPath = path.join(tempDir, 'temp-board-show.md');
-    tempArchivePath = path.join(tempDir, 'temp-board-show-archive.md');
+    workspace = createV2TestWorkspace('brainfile-show-test-');
+    writeV2Task(workspace, {
+      id: 'task-2',
+      title: 'Second task',
+      column: 'in-progress',
+      position: 0,
+      subtasks: [
+        { id: 'task-2-1', title: 'Subtask one', completed: true },
+        { id: 'task-2-2', title: 'Subtask two', completed: false },
+      ],
+    } as Task);
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+    if (workspace && fs.existsSync(workspace.tempDir)) {
+      fs.rmSync(workspace.tempDir, { recursive: true, force: true });
     }
   });
 
   it('should show details for a task in the board', () => {
-    const result = showCommand({ file: testBoardPath, task: 'task-2' }, logger);
+    const result = showCommand({ file: workspace.brainfilePath, task: 'task-2' }, logger);
     expect(result.success).toBe(true);
     expect(result.archived).toBe(false);
 
@@ -37,39 +42,32 @@ describe('show command', () => {
     expect(output).toContain('task-2');
     expect(output).toContain('Second task');
     expect(output).toContain('Column:');
-    expect(output).toContain('In Progress');
+    // v2 show renders the column id from the task file, not the column title
+    expect(output).toContain('in-progress');
     expect(output).toContain('Subtasks:');
     expect(output).toContain('1/2');
     expect(output).toContain('Subtask one');
     expect(output).toContain('Subtask two');
   });
 
-  it('should show details for a task in the archive and indicate archived', () => {
-    const board = `---
-title: Temp Board
-columns:
-  - id: todo
-    title: To Do
-    tasks: []
----\n`;
+  it('should show details for a completed task in logs and indicate archived', () => {
+    // v2 equivalent of the old archive file: completed tasks live in .brainfile/logs/
+    writeTaskFile(
+      path.join(workspace.logsDir, taskFileName('task-99')),
+      {
+        id: 'task-99',
+        title: 'Archived task',
+        description: 'Archived description text',
+        column: 'done',
+        position: 0,
+        subtasks: [
+          { id: 'task-99-1', title: 'Archived subtask', completed: true },
+        ],
+      } as Task,
+      ''
+    );
 
-    const archive = `---
-title: Archive
-columns: []
-archive:
-  - id: task-99
-    title: Archived task
-    description: Archived description text
-    subtasks:
-      - id: task-99-1
-        title: Archived subtask
-        completed: true
----\n`;
-
-    fs.writeFileSync(tempBoardPath, board, 'utf-8');
-    fs.writeFileSync(tempArchivePath, archive, 'utf-8');
-
-    const result = showCommand({ file: tempBoardPath, task: 'task-99' }, logger);
+    const result = showCommand({ file: workspace.brainfilePath, task: 'task-99' }, logger);
     expect(result.success).toBe(true);
     expect(result.archived).toBe(true);
 
@@ -85,11 +83,11 @@ archive:
   });
 
   it('should throw CLIError for missing task id', () => {
-    expect(() => showCommand({ file: testBoardPath, task: '' }, logger)).toThrow(CLIError);
+    expect(() => showCommand({ file: workspace.brainfilePath, task: '' }, logger)).toThrow(CLIError);
   });
 
   it('should throw CLIError for non-existent task id', () => {
-    expect(() => showCommand({ file: testBoardPath, task: 'task-999' }, logger)).toThrow(CLIError);
+    expect(() => showCommand({ file: workspace.brainfilePath, task: 'task-999' }, logger)).toThrow(CLIError);
   });
 
   it('should throw CLIError for non-existent file', () => {

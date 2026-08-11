@@ -7,6 +7,7 @@ import { findBrainfile as findBrainfileCore } from '@brainfile/core';
  */
 export function findBrainfile(): string | null {
   const found = findBrainfileCore(process.cwd());
+  if (found && found.kind !== 'dotdir') return null;
   return found?.absolutePath ?? null;
 }
 

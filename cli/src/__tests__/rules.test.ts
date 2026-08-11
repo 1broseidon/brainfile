@@ -13,18 +13,18 @@ import {
 import { Brainfile } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
+import { createV2TestWorkspace, type V2TestWorkspace } from './helpers/v2';
 
 describe('rules command', () => {
-  const fixturesDir = path.join(__dirname, 'fixtures');
-  const testBoardPath = path.join(fixturesDir, 'test-board.md');
+  let workspace: V2TestWorkspace;
   let tempDir: string;
   let tempBoardPath: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-rules-test-'));
-    tempBoardPath = path.join(tempDir, 'temp-board-rules.md');
-    fs.copyFileSync(testBoardPath, tempBoardPath);
+    workspace = createV2TestWorkspace('brainfile-rules-test-');
+    tempDir = workspace.tempDir;
+    tempBoardPath = workspace.brainfilePath;
     logger = new MemoryLogger();
   });
 

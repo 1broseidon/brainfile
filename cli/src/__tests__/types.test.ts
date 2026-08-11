@@ -1,9 +1,8 @@
 import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { MemoryLogger } from '../utils/logger';
 import { typesAddCommand, typesListCommand } from '../commands/types';
+import { createV2TestWorkspace, type V2TestWorkspace } from './helpers/v2';
 
 interface FrontmatterDoc {
   data: Record<string, unknown>;
@@ -34,22 +33,7 @@ function readFrontmatter(filePath: string): FrontmatterDoc {
   };
 }
 
-function writeV1Board(filePath: string, extraYaml: string = ''): void {
-  const content = `---
-title: Test Board
-columns:
-  - id: todo
-    title: To Do
-    tasks: []
-  - id: done
-    title: Done
-    tasks: []
-${extraYaml}---
-`;
-  fs.writeFileSync(filePath, content, 'utf-8');
-}
-
-function writeV2Board(brainfilePath: string, extraYaml: string = ''): void {
+function writeV2Board(workspace: V2TestWorkspace, extraYaml: string = ''): void {
   const content = `---
 title: Test V2 Board
 schema: https://brainfile.md/v2/board.json
@@ -62,27 +46,26 @@ columns:
     order: 2
 ${extraYaml}---
 `;
-  fs.writeFileSync(brainfilePath, content, 'utf-8');
+  fs.writeFileSync(workspace.brainfilePath, content, 'utf-8');
 }
 
 describe('types command', () => {
-  let tempDir: string;
+  let workspace: V2TestWorkspace;
   let logger: MemoryLogger;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-types-test-'));
+    workspace = createV2TestWorkspace('brainfile-types-test-');
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(workspace.tempDir, { recursive: true, force: true });
   });
 
   it('list with no types shows empty message', () => {
-    const v1Path = path.join(tempDir, 'brainfile.md');
-    writeV1Board(v1Path);
+    writeV2Board(workspace);
 
-    const result = typesListCommand({ file: v1Path }, logger);
+    const result = typesListCommand({ file: workspace.brainfilePath }, logger);
 
     expect(result.success).toBe(true);
     expect(result.types).toEqual({});
@@ -93,9 +76,8 @@ describe('types command', () => {
   });
 
   it('list with types defined shows each type', () => {
-    const v1Path = path.join(tempDir, 'brainfile.md');
-    writeV1Board(
-      v1Path,
+    writeV2Board(
+      workspace,
       `strict: true
 types:
   epic:
@@ -107,7 +89,7 @@ types:
 `
     );
 
-    const result = typesListCommand({ file: v1Path }, logger);
+    const result = typesListCommand({ file: workspace.brainfilePath }, logger);
 
     expect(result.success).toBe(true);
     expect(result.strict).toBe(true);
@@ -121,9 +103,8 @@ types:
   });
 
   it('list --json returns JSON', () => {
-    const v1Path = path.join(tempDir, 'brainfile.md');
-    writeV1Board(
-      v1Path,
+    writeV2Board(
+      workspace,
       `strict: true
 types:
   adr:
@@ -131,7 +112,7 @@ types:
 `
     );
 
-    const result = typesListCommand({ file: v1Path, json: true }, logger);
+    const result = typesListCommand({ file: workspace.brainfilePath, json: true }, logger);
 
     expect(result.success).toBe(true);
 
@@ -141,9 +122,8 @@ types:
   });
 
   it('types add writes new type to frontmatter', () => {
-    const v1Path = path.join(tempDir, 'brainfile.md');
-    writeV1Board(
-      v1Path,
+    writeV2Board(
+      workspace,
       `agent:
   instructions:
     - Keep tests updated
@@ -152,7 +132,7 @@ types:
 
     const result = typesAddCommand(
       {
-        file: v1Path,
+        file: workspace.brainfilePath,
         name: 'epic',
         idPrefix: 'epic',
         completable: false,
@@ -163,21 +143,20 @@ types:
 
     expect(result.success).toBe(true);
 
-    const parsed = readFrontmatter(v1Path);
+    const parsed = readFrontmatter(workspace.brainfilePath);
     const types = parsed.data.types as Record<string, any>;
     expect(types.epic.idPrefix).toBe('epic');
     expect(types.epic.completable).toBe(false);
     expect(types.epic.schema).toBe('https://example.com/epic.schema.json');
 
     // Verify unrelated fields are preserved
-    expect(parsed.data.title).toBe('Test Board');
+    expect(parsed.data.title).toBe('Test V2 Board');
     expect((parsed.data.agent as any).instructions).toEqual(['Keep tests updated']);
   });
 
   it('types add existing updates existing entry', () => {
-    const v1Path = path.join(tempDir, 'brainfile.md');
-    writeV1Board(
-      v1Path,
+    writeV2Board(
+      workspace,
       `types:
   bug:
     idPrefix: bug-old
@@ -188,7 +167,7 @@ types:
 
     const result = typesAddCommand(
       {
-        file: v1Path,
+        file: workspace.brainfilePath,
         name: 'bug',
         idPrefix: 'bug',
         completable: true,
@@ -199,48 +178,10 @@ types:
 
     expect(result.success).toBe(true);
 
-    const parsed = readFrontmatter(v1Path);
+    const parsed = readFrontmatter(workspace.brainfilePath);
     const types = parsed.data.types as Record<string, any>;
     expect(types.bug.idPrefix).toBe('bug');
     expect(types.bug.completable).toBe(true);
     expect(types.bug.schema).toBe('https://example.com/new.schema.json');
-  });
-
-  it('supports v2 board config for list and add', () => {
-    const dotDir = path.join(tempDir, '.brainfile');
-    const boardDir = path.join(dotDir, 'board');
-    const logsDir = path.join(dotDir, 'logs');
-    fs.mkdirSync(boardDir, { recursive: true });
-    fs.mkdirSync(logsDir, { recursive: true });
-
-    const v2Path = path.join(dotDir, 'brainfile.md');
-    writeV2Board(
-      v2Path,
-      `strict: true
-types:
-  adr:
-    idPrefix: adr
-`
-    );
-
-    const listResult = typesListCommand({ file: v2Path }, logger);
-    expect(listResult.success).toBe(true);
-    expect(listResult.strict).toBe(true);
-    expect(listResult.types.adr.idPrefix).toBe('adr');
-
-    typesAddCommand(
-      {
-        file: v2Path,
-        name: 'design',
-        idPrefix: 'design',
-        completable: true,
-      },
-      logger
-    );
-
-    const parsed = readFrontmatter(v2Path);
-    const types = parsed.data.types as Record<string, any>;
-    expect(types.design.idPrefix).toBe('design');
-    expect(types.design.completable).toBe(true);
   });
 });

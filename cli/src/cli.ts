@@ -2,7 +2,7 @@
 
 import { Command } from 'commander';
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, sep } from 'path';
 import { listCommand, LIST_COMMAND_HELP } from './commands/list';
 import { showCommand } from './commands/show';
 import { addCommand, ADD_COMMAND_HELP } from './commands/add';
@@ -94,8 +94,9 @@ function shouldLaunchTUI(): { launch: boolean; file: string } {
     return { launch: false, file: '' };
   }
 
-  // If first arg looks like a file path (contains . or / or exists), launch TUI with it
-  if (firstArg.includes('.') || firstArg.includes('/') || existsSync(firstArg)) {
+  // If first arg looks like a file/directory path, launch TUI with it.
+  // Directories are resolved to their .brainfile/brainfile.md by resolveCliBrainfilePath.
+  if (firstArg.includes('.') || firstArg.includes('/') || firstArg.endsWith(sep) || existsSync(firstArg)) {
     return { launch: true, file: firstArg };
   }
 
@@ -105,7 +106,10 @@ function shouldLaunchTUI(): { launch: boolean; file: string } {
 
 const tuiCheck = shouldLaunchTUI();
 if (tuiCheck.launch) {
-  tuiCommand({ file: tuiCheck.file });
+  void tuiCommand({ file: tuiCheck.file }).catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
 } else {
 
   const program = new Command();

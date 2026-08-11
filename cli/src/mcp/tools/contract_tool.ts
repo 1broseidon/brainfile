@@ -1,0 +1,313 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import * as path from 'path';
+import {
+  findTaskById,
+  setTaskContract,
+  readTasksDir,
+  writeTaskFile as coreWriteTaskFile,
+  taskFileName,
+  type Task,
+} from '@brainfile/core';
+import { isV2, getV2Dirs, findV2Task } from '../../utils/v2-detect';
+import { buildContract } from '../../utils/contractSpec';
+import { pickupContract, deliverContract, validateContract } from '../../lib/contractRunner';
+import { executeContractGraphMcpAction } from './contract';
+import { readBoard, writeBoard } from '../helpers';
+
+export function registerContractTool(server: McpServer, defaultFile: string): void {
+  server.registerTool(
+    'contract',
+    {
+      title: 'Contract',
+      description: [
+        'Unified action-based contract tool.',
+        'action=attach   — Attach a new contract to a task (default status=draft; pass ready:true for immediate dispatch)',
+        'action=pickup   — Claim a contract (status → in_progress), returns agent context markdown',
+        'action=deliver  — Mark contract as delivered (status → delivered)',
+        'action=validate — Validate deliverables + commands (status → done/failed)',
+        'action=graph    — Attach contracts to multiple tasks atomically with dependsOn DAG edges (tasks array only)',
+        'action=activate — Flip draft → ready for one task (task param) or all children of a parent (parentId param)',
+      ].join('\n'),
+      inputSchema: {
+        action: z.enum(['attach', 'pickup', 'deliver', 'validate', 'graph', 'activate']).describe('Contract action'),
+        file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
+        task: z.string().optional().describe('Task ID (required for attach, pickup, deliver, validate, and single-task activate)'),
+        parentId: z.string().optional().describe('For activate: activate all draft contracts whose parentId matches this value'),
+        ready: z.boolean().optional().describe('attach only: when true, status=ready instead of draft'),
+        deliverables: z.array(z.string()).optional().describe('attach only: type:path:description'),
+        validation_commands: z.array(z.string()).optional().describe('attach only: validation shell commands'),
+        constraints: z.array(z.string()).optional().describe('attach only: constraint strings'),
+        tasks: z.array(z.object({
+          task: z.string(),
+          deliverables: z.array(z.object({
+            type: z.enum(['file', 'test', 'docs', 'design', 'research']),
+            path: z.string(),
+            description: z.string().optional(),
+          })).optional(),
+          validation_commands: z.array(z.string()).optional(),
+          constraints: z.array(z.string()).optional(),
+          dependsOn: z.array(z.string()).optional(),
+        })).optional().describe('graph only: array of contract graph task specs'),
+        activate: z.boolean().optional().describe('graph only: when true, attached contracts start in ready instead of draft'),
+      }
+    },
+    async ({ action, file, task, parentId, ready: attachReady, deliverables, validation_commands, constraints, tasks, activate }) => {
+      const filePath = file || defaultFile;
+
+      // ── attach ─────────────────────────────────────────────────────────────
+      if (action === 'attach') {
+        if (!task) {
+          return { content: [{ type: 'text' as const, text: 'Error: task is required for action=attach' }], isError: true };
+        }
+
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+          const found = findV2Task(dirs, task);
+          if (!found) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+          try {
+            const contract = buildContract({
+              deliverableSpecs: deliverables,
+              validationCommands: validation_commands,
+              constraints,
+              status: attachReady ? 'ready' : 'draft',
+            });
+            found.doc.task.contract = contract;
+            found.doc.task.updatedAt = new Date().toISOString();
+            coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
+            return { content: [{ type: 'text' as const, text: `Contract attached (${contract.status}): ${task}` }] };
+          } catch (e) {
+            return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+          }
+        }
+
+        const readResult = readBoard(filePath);
+        if ('error' in readResult) {
+          return { content: [{ type: 'text' as const, text: `Error: ${readResult.error}` }], isError: true };
+        }
+        const taskInfo = findTaskById(readResult.board, task);
+        if (!taskInfo) {
+          return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+        }
+        try {
+          const contract = buildContract({
+            deliverableSpecs: deliverables,
+            validationCommands: validation_commands,
+            constraints,
+            status: attachReady ? 'ready' : 'draft',
+          });
+          const contractResult = setTaskContract(readResult.board, task, contract);
+          if (!contractResult.success || !contractResult.board) {
+            return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to attach contract'}` }], isError: true };
+          }
+          writeBoard(filePath, contractResult.board);
+          return { content: [{ type: 'text' as const, text: `Contract attached (${contract.status}): ${task}` }] };
+        } catch (e) {
+          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+        }
+      }
+
+      // ── pickup ─────────────────────────────────────────────────────────────
+      if (action === 'pickup') {
+        if (!task) {
+          return { content: [{ type: 'text' as const, text: 'Error: task is required for action=pickup' }], isError: true };
+        }
+        const result = pickupContract({ filePath, taskId: task });
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: result.markdown }] };
+      }
+
+      // ── deliver ────────────────────────────────────────────────────────────
+      if (action === 'deliver') {
+        if (!task) {
+          return { content: [{ type: 'text' as const, text: 'Error: task is required for action=deliver' }], isError: true };
+        }
+        const result = deliverContract({ filePath, taskId: task });
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        return { content: [{ type: 'text' as const, text: `Contract delivered: ${task}` }] };
+      }
+
+      // ── validate ───────────────────────────────────────────────────────────
+      if (action === 'validate') {
+        if (!task) {
+          return { content: [{ type: 'text' as const, text: 'Error: task is required for action=validate' }], isError: true };
+        }
+        const result = validateContract({ filePath, taskId: task });
+        if ('error' in result) {
+          return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
+        }
+        const output = {
+          ok: result.ok,
+          status: result.ok ? 'done' : 'failed',
+          deliverables: result.deliverableChecks,
+          commands: result.commandResults,
+          warnings: result.warnings,
+        };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          isError: !result.ok,
+        };
+      }
+
+      // ── graph ──────────────────────────────────────────────────────────────
+      if (action === 'graph') {
+        if (!tasks || tasks.length === 0) {
+          return { content: [{ type: 'text' as const, text: 'Error: tasks is required for action=graph and must be a non-empty array' }], isError: true };
+        }
+
+        try {
+          const result = executeContractGraphMcpAction({
+            file: filePath,
+            tasks,
+            activate,
+          });
+
+          return {
+            content: [{ type: 'text' as const, text: JSON.stringify({
+              attached: result.attached,
+              count: result.count,
+              order: result.order,
+              graph: result.graph,
+            }, null, 2) }],
+          };
+        } catch (error) {
+          return {
+            content: [{ type: 'text' as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+            isError: true,
+          };
+        }
+      }
+
+      // ── activate ───────────────────────────────────────────────────────────
+      if (action === 'activate') {
+        if (!task && !parentId) {
+          return { content: [{ type: 'text' as const, text: 'Error: task or parentId is required for action=activate' }], isError: true };
+        }
+
+        const activated: string[] = [];
+
+        if (isV2(filePath)) {
+          const dirs = getV2Dirs(filePath);
+
+          if (task) {
+            const found = findV2Task(dirs, task, false);
+            if (!found || found.isLog) {
+              return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+            }
+            if (!found.doc.task.contract) {
+              return { content: [{ type: 'text' as const, text: `Error: Task ${task} has no contract` }], isError: true };
+            }
+            if (found.doc.task.contract.status !== 'draft') {
+              return { content: [{ type: 'text' as const, text: `Error: Contract is not in draft status (current: ${found.doc.task.contract.status})` }], isError: true };
+            }
+            const readyAt = new Date().toISOString();
+            found.doc.task.contract = {
+              ...found.doc.task.contract,
+              status: 'ready',
+              metrics: ({
+                ...(found.doc.task.contract.metrics ?? {}),
+                readyAt,
+              } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+            };
+            found.doc.task.updatedAt = readyAt;
+            coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
+            activated.push(task);
+          } else {
+            // Bulk by parentId
+            const allTasks = readTasksDir(dirs.boardDir);
+            for (const doc of allTasks) {
+              const t = doc.task as any;
+              if (t.parentId !== parentId) continue;
+              if (!t.contract || t.contract.status !== 'draft') continue;
+              const readyAt = new Date().toISOString();
+              t.contract = {
+                ...t.contract,
+                status: 'ready',
+                metrics: ({
+                  ...(t.contract.metrics ?? {}),
+                  readyAt,
+                } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+              };
+              t.updatedAt = readyAt;
+              coreWriteTaskFile(path.join(dirs.boardDir, taskFileName(t.id)), t, doc.body);
+              activated.push(t.id);
+            }
+          }
+
+          const output = { activated, count: activated.length };
+          return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+        }
+
+        // V1
+        const readResult = readBoard(filePath);
+        if ('error' in readResult) {
+          return { content: [{ type: 'text' as const, text: `Error: ${readResult.error}` }], isError: true };
+        }
+        let board = readResult.board;
+
+        if (task) {
+          const taskInfo = findTaskById(board, task);
+          if (!taskInfo) {
+            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
+          }
+          if (!taskInfo.task.contract) {
+            return { content: [{ type: 'text' as const, text: `Error: Task ${task} has no contract` }], isError: true };
+          }
+          if (taskInfo.task.contract.status !== 'draft') {
+            return { content: [{ type: 'text' as const, text: `Error: Contract is not in draft status (current: ${taskInfo.task.contract.status})` }], isError: true };
+          }
+          const readyAt = new Date().toISOString();
+          const updatedContract = {
+            ...taskInfo.task.contract,
+            status: 'ready' as const,
+            metrics: ({
+              ...(taskInfo.task.contract.metrics ?? {}),
+              readyAt,
+            } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+          };
+          const contractResult = setTaskContract(board, task, updatedContract);
+          if (!contractResult.success || !contractResult.board) {
+            return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to activate contract'}` }], isError: true };
+          }
+          board = contractResult.board;
+          activated.push(task);
+        } else {
+          // Bulk by parentId
+          for (const col of board.columns) {
+            for (const t of col.tasks) {
+              const taskAny = t as any;
+              if (taskAny.parentId !== parentId) continue;
+              if (!t.contract || t.contract.status !== 'draft') continue;
+              const readyAt = new Date().toISOString();
+              const updatedContract = {
+                ...t.contract,
+                status: 'ready' as const,
+                metrics: ({
+                  ...(t.contract.metrics ?? {}),
+                  readyAt,
+                } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+              };
+              const contractResult = setTaskContract(board, t.id, updatedContract);
+              if (contractResult.success && contractResult.board) {
+                board = contractResult.board;
+                activated.push(t.id);
+              }
+            }
+          }
+        }
+
+        writeBoard(filePath, board);
+        const output = { activated, count: activated.length };
+        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+      }
+
+      return { content: [{ type: 'text' as const, text: `Error: Unknown action: ${action}` }], isError: true };
+    }
+  );
+}

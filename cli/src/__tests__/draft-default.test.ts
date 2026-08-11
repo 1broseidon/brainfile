@@ -9,34 +9,38 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { Brainfile, readTaskFile, taskFileName } from '@brainfile/core';
+import { readTaskFile, taskFileName, type Task } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
 import { addCommand } from '../commands/add';
 import {
   contractAttachCommand,
   contractActivateCommand,
 } from '../commands/contract';
+import {
+  createV2TestWorkspace,
+  writeV2Task,
+  readV2Task,
+  type V2TestWorkspace,
+} from './helpers/v2';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const BOARD_TEMPLATE = `---
-title: Test Board
-columns:
-  - id: todo
-    title: To Do
-    tasks:
-      - id: task-1
-        title: Existing Task
----
-`;
+const workspaces: V2TestWorkspace[] = [];
 
-function makeTempBrainfile(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-draft-test-'));
-  const filePath = path.join(dir, 'brainfile.md');
-  fs.writeFileSync(filePath, BOARD_TEMPLATE, 'utf-8');
-  return filePath;
+function makeWorkspace(withExistingTask = false): V2TestWorkspace {
+  const workspace = createV2TestWorkspace('bf-draft-test-');
+  if (withExistingTask) {
+    writeV2Task(workspace, {
+      id: 'task-1',
+      title: 'Existing Task',
+      column: 'todo',
+      position: 0,
+    } as Task);
+  }
+  workspaces.push(workspace);
+  return workspace;
 }
 
 function makeTempV2Dir(): string {
@@ -71,13 +75,19 @@ describe('draft default and activate behavior', () => {
     logger = new MemoryLogger();
   });
 
+  afterAll(() => {
+    for (const workspace of workspaces) {
+      fs.rmSync(workspace.tempDir, { recursive: true, force: true });
+    }
+  });
+
   describe('addCommand: --with-contract defaults to draft', () => {
     it('creates contract with status=draft when --with-contract used without --ready', () => {
-      const filePath = makeTempBrainfile();
+      const workspace = makeWorkspace();
 
       const result = addCommand(
         {
-          file: filePath,
+          file: workspace.brainfilePath,
           column: 'todo',
           title: 'Draft contract task',
           withContract: true,
@@ -89,18 +99,18 @@ describe('draft default and activate behavior', () => {
 
       expect(result.success).toBe(true);
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const task = board?.columns[0].tasks.find((t: any) => t.title === 'Draft contract task');
+      const task = readV2Task(workspace, result.taskId!)?.task;
+      expect(task?.title).toBe('Draft contract task');
       expect(task?.contract).toBeDefined();
       expect(task?.contract?.status).toBe('draft');
     });
 
     it('creates contract with status=ready when --with-contract and --ready are both set', () => {
-      const filePath = makeTempBrainfile();
+      const workspace = makeWorkspace();
 
       const result = addCommand(
         {
-          file: filePath,
+          file: workspace.brainfilePath,
           column: 'todo',
           title: 'Ready contract task',
           withContract: true,
@@ -112,18 +122,18 @@ describe('draft default and activate behavior', () => {
 
       expect(result.success).toBe(true);
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const task = board?.columns[0].tasks.find((t: any) => t.title === 'Ready contract task');
+      const task = readV2Task(workspace, result.taskId!)?.task;
+      expect(task?.title).toBe('Ready contract task');
       expect(task?.contract).toBeDefined();
       expect(task?.contract?.status).toBe('ready');
     });
 
     it('defaults to draft even when only deliverables are provided (no --with-contract flag)', () => {
-      const filePath = makeTempBrainfile();
+      const workspace = makeWorkspace();
 
       const result = addCommand(
         {
-          file: filePath,
+          file: workspace.brainfilePath,
           column: 'todo',
           title: 'Implicit contract task',
           deliverable: ['file:src/bar.ts:Implementation'],
@@ -133,8 +143,8 @@ describe('draft default and activate behavior', () => {
 
       expect(result.success).toBe(true);
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const task = board?.columns[0].tasks.find((t: any) => t.title === 'Implicit contract task');
+      const task = readV2Task(workspace, result.taskId!)?.task;
+      expect(task?.title).toBe('Implicit contract task');
       expect(task?.contract).toBeDefined();
       expect(task?.contract?.status).toBe('draft');
     });
@@ -146,11 +156,11 @@ describe('draft default and activate behavior', () => {
 
   describe('contractAttachCommand: defaults to draft', () => {
     it('creates draft contract when ready option is not passed', () => {
-      const filePath = makeTempBrainfile();
+      const workspace = makeWorkspace(true);
 
       const result = contractAttachCommand(
         {
-          file: filePath,
+          file: workspace.brainfilePath,
           task: 'task-1',
           deliverable: ['file:src/a.ts:Implementation'],
           validation: ['npm test'],
@@ -161,18 +171,17 @@ describe('draft default and activate behavior', () => {
 
       expect(result.success).toBe(true);
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const task = board?.columns[0].tasks.find((t: any) => t.id === 'task-1');
+      const task = readV2Task(workspace, 'task-1')?.task;
       expect(task?.contract).toBeDefined();
       expect(task?.contract?.status).toBe('draft');
     });
 
     it('creates ready contract when ready:true is explicitly passed', () => {
-      const filePath = makeTempBrainfile();
+      const workspace = makeWorkspace(true);
 
       const result = contractAttachCommand(
         {
-          file: filePath,
+          file: workspace.brainfilePath,
           task: 'task-1',
           deliverable: ['file:src/a.ts:Implementation'],
           ready: true,
@@ -182,8 +191,7 @@ describe('draft default and activate behavior', () => {
 
       expect(result.success).toBe(true);
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const task = board?.columns[0].tasks.find((t: any) => t.id === 'task-1');
+      const task = readV2Task(workspace, 'task-1')?.task;
       expect(task?.contract).toBeDefined();
       expect(task?.contract?.status).toBe('ready');
     });
@@ -193,111 +201,105 @@ describe('draft default and activate behavior', () => {
   // contractActivateCommand: single task
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('contractActivateCommand: single task (V1 board)', () => {
-    const BOARD_WITH_DRAFT = `---
-title: Activate Board
-columns:
-  - id: todo
-    title: To Do
-    tasks:
-      - id: task-1
-        title: Draft Task
-        contract:
-          status: draft
-          deliverables:
-            - type: file
-              path: src/foo.ts
----
-`;
-
+  describe('contractActivateCommand: single task', () => {
     it('activates a single draft contract to ready', () => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-activate-'));
-      const filePath = path.join(dir, 'brainfile.md');
-      fs.writeFileSync(filePath, BOARD_WITH_DRAFT, 'utf-8');
+      const workspace = makeWorkspace();
+      writeV2Task(workspace, {
+        id: 'task-1',
+        title: 'Draft Task',
+        column: 'todo',
+        position: 0,
+        contract: {
+          status: 'draft',
+          deliverables: [{ type: 'file', path: 'src/foo.ts' }],
+        },
+      } as Task);
 
-      const result = contractActivateCommand({ file: filePath, task: 'task-1' }, logger);
+      const result = contractActivateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger);
 
       expect(result.success).toBe(true);
       expect(result.activated).toContain('task-1');
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const task = board?.columns[0].tasks.find((t: any) => t.id === 'task-1');
+      const task = readV2Task(workspace, 'task-1')?.task;
       expect(task?.contract?.status).toBe('ready');
     });
 
     it('throws when task has no contract', () => {
-      const filePath = makeTempBrainfile();
+      const workspace = makeWorkspace(true);
 
       expect(() =>
-        contractActivateCommand({ file: filePath, task: 'task-1' }, logger)
+        contractActivateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger)
       ).toThrow();
     });
 
     it('throws when contract is not in draft status', () => {
-      const board = `---
-title: Test Board
-columns:
-  - id: todo
-    title: To Do
-    tasks:
-      - id: task-1
-        title: Already Ready Task
-        contract:
-          status: ready
----
-`;
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-activate-err-'));
-      const filePath = path.join(dir, 'brainfile.md');
-      fs.writeFileSync(filePath, board, 'utf-8');
+      const workspace = makeWorkspace();
+      writeV2Task(workspace, {
+        id: 'task-1',
+        title: 'Already Ready Task',
+        column: 'todo',
+        position: 0,
+        contract: { status: 'ready' },
+      } as Task);
 
       expect(() =>
-        contractActivateCommand({ file: filePath, task: 'task-1' }, logger)
+        contractActivateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger)
       ).toThrow();
     });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
-  // contractActivateCommand: bulk by parent (V1 board)
+  // contractActivateCommand: bulk by parent
   // ─────────────────────────────────────────────────────────────────────────
 
-  describe('contractActivateCommand: bulk by parent (V1 board)', () => {
-    const BOARD_WITH_PARENT_CHILDREN = `---
-title: Parent Board
-columns:
-  - id: todo
-    title: To Do
-    tasks:
-      - id: epic-1
-        title: Epic Task
-        type: epic
-      - id: task-2
-        title: Child Task A
-        parentId: epic-1
-        contract:
-          status: draft
-      - id: task-3
-        title: Child Task B
-        parentId: epic-1
-        contract:
-          status: draft
-      - id: task-4
-        title: Child Task C (ready, skip)
-        parentId: epic-1
-        contract:
-          status: ready
-      - id: task-5
-        title: Unrelated Task
-        contract:
-          status: draft
----
-`;
+  describe('contractActivateCommand: bulk by parent', () => {
+    function makeParentChildrenWorkspace(): V2TestWorkspace {
+      const workspace = makeWorkspace();
+      writeV2Task(workspace, {
+        id: 'epic-1',
+        title: 'Epic Task',
+        column: 'todo',
+        position: 0,
+        type: 'epic',
+      } as Task);
+      writeV2Task(workspace, {
+        id: 'task-2',
+        title: 'Child Task A',
+        column: 'todo',
+        position: 1,
+        parentId: 'epic-1',
+        contract: { status: 'draft' },
+      } as Task);
+      writeV2Task(workspace, {
+        id: 'task-3',
+        title: 'Child Task B',
+        column: 'todo',
+        position: 2,
+        parentId: 'epic-1',
+        contract: { status: 'draft' },
+      } as Task);
+      writeV2Task(workspace, {
+        id: 'task-4',
+        title: 'Child Task C (ready, skip)',
+        column: 'todo',
+        position: 3,
+        parentId: 'epic-1',
+        contract: { status: 'ready' },
+      } as Task);
+      writeV2Task(workspace, {
+        id: 'task-5',
+        title: 'Unrelated Task',
+        column: 'todo',
+        position: 4,
+        contract: { status: 'draft' },
+      } as Task);
+      return workspace;
+    }
 
     it('activates all draft contracts for children of a parent', () => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-bulk-activate-'));
-      const filePath = path.join(dir, 'brainfile.md');
-      fs.writeFileSync(filePath, BOARD_WITH_PARENT_CHILDREN, 'utf-8');
+      const workspace = makeParentChildrenWorkspace();
 
-      const result = contractActivateCommand({ file: filePath, parent: 'epic-1' }, logger);
+      const result = contractActivateCommand({ file: workspace.brainfilePath, parent: 'epic-1' }, logger);
 
       expect(result.success).toBe(true);
       expect(result.activated).toContain('task-2');
@@ -308,11 +310,9 @@ columns:
       expect(result.activated).not.toContain('task-5');
       expect(result.activated.length).toBe(2);
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const cols = board!.columns[0];
-      const task2 = cols.tasks.find((t: any) => t.id === 'task-2');
-      const task3 = cols.tasks.find((t: any) => t.id === 'task-3');
-      const task5 = cols.tasks.find((t: any) => t.id === 'task-5');
+      const task2 = readV2Task(workspace, 'task-2')?.task;
+      const task3 = readV2Task(workspace, 'task-3')?.task;
+      const task5 = readV2Task(workspace, 'task-5')?.task;
 
       expect(task2?.contract?.status).toBe('ready');
       expect(task3?.contract?.status).toBe('ready');
@@ -320,11 +320,9 @@ columns:
     });
 
     it('returns empty activated list and logs message when no draft children found', () => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-bulk-empty-'));
-      const filePath = path.join(dir, 'brainfile.md');
-      fs.writeFileSync(filePath, BOARD_WITH_PARENT_CHILDREN, 'utf-8');
+      const workspace = makeParentChildrenWorkspace();
 
-      const result = contractActivateCommand({ file: filePath, parent: 'nonexistent-parent' }, logger);
+      const result = contractActivateCommand({ file: workspace.brainfilePath, parent: 'nonexistent-parent' }, logger);
 
       expect(result.success).toBe(true);
       expect(result.activated).toHaveLength(0);
@@ -338,11 +336,11 @@ columns:
   describe('buildContract status defaults', () => {
     // Test via addCommand (indirect) to avoid importing internal util directly
     it('contract status is draft by default (no --ready flag)', () => {
-      const filePath = makeTempBrainfile();
+      const workspace = makeWorkspace();
 
-      addCommand(
+      const result = addCommand(
         {
-          file: filePath,
+          file: workspace.brainfilePath,
           column: 'todo',
           title: 'Default draft',
           withContract: true,
@@ -350,17 +348,17 @@ columns:
         logger
       );
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const task = board?.columns[0].tasks.find((t: any) => t.title === 'Default draft');
+      const task = readV2Task(workspace, result.taskId!)?.task;
+      expect(task?.title).toBe('Default draft');
       expect(task?.contract?.status).toBe('draft');
     });
 
     it('contract status is ready when --ready is passed', () => {
-      const filePath = makeTempBrainfile();
+      const workspace = makeWorkspace();
 
-      addCommand(
+      const result = addCommand(
         {
-          file: filePath,
+          file: workspace.brainfilePath,
           column: 'todo',
           title: 'Explicit ready',
           withContract: true,
@@ -369,8 +367,8 @@ columns:
         logger
       );
 
-      const board = Brainfile.parse(fs.readFileSync(filePath, 'utf-8'));
-      const task = board?.columns[0].tasks.find((t: any) => t.title === 'Explicit ready');
+      const task = readV2Task(workspace, result.taskId!)?.task;
+      expect(task?.title).toBe('Explicit ready');
       expect(task?.contract?.status).toBe('ready');
       expect((task?.contract?.metrics as { readyAt?: string } | undefined)?.readyAt).toBeDefined();
     });
@@ -381,7 +379,7 @@ columns:
   // ─────────────────────────────────────────────────────────────────────────
 
   describe('contractActivateCommand: V2 per-task files', () => {
-    function writeV2Task(
+    function writeBareV2Task(
       boardDir: string,
       task: Record<string, unknown>
     ): void {
@@ -395,7 +393,7 @@ columns:
       const dir = makeTempV2Dir();
       const boardDir = path.join(dir, 'board');
 
-      writeV2Task(boardDir, {
+      writeBareV2Task(boardDir, {
         id: 'task-1',
         title: 'V2 Draft Task',
         column: 'todo',
@@ -421,7 +419,7 @@ columns:
       const dir = makeTempV2Dir();
       const boardDir = path.join(dir, 'board');
 
-      writeV2Task(boardDir, {
+      writeBareV2Task(boardDir, {
         id: 'epic-1',
         title: 'Epic',
         column: 'todo',
@@ -430,7 +428,7 @@ columns:
         createdAt: new Date().toISOString(),
       });
 
-      writeV2Task(boardDir, {
+      writeBareV2Task(boardDir, {
         id: 'task-2',
         title: 'Child A',
         column: 'todo',
@@ -440,7 +438,7 @@ columns:
         createdAt: new Date().toISOString(),
       });
 
-      writeV2Task(boardDir, {
+      writeBareV2Task(boardDir, {
         id: 'task-3',
         title: 'Child B',
         column: 'todo',
@@ -450,7 +448,7 @@ columns:
         createdAt: new Date().toISOString(),
       });
 
-      writeV2Task(boardDir, {
+      writeBareV2Task(boardDir, {
         id: 'task-4',
         title: 'Unrelated',
         column: 'todo',

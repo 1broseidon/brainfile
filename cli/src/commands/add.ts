@@ -1,32 +1,24 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  Brainfile,
-  findColumnById,
-  findColumnByName,
-  addTask,
-  setTaskContract,
   writeTaskFile,
   readTaskFile,
   readTasksDir,
   generateNextFileTaskId,
   taskFileName,
-  type TaskInput,
   type Task,
 } from '@brainfile/core';
 import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
-import { CLIError, fileNotFound, parseFailure, missingRequired, operationFailed, columnNotFound, validationError } from '../utils/cli-error';
+import { CLIError, missingRequired, columnNotFound, validationError } from '../utils/cli-error';
 import { buildContract, normalizeToArray } from '../utils/contractSpec';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import {
-  isV2,
   ensureV2Dirs,
   readV2BoardConfig,
   composeBody,
-  shouldSuggestV2Migration,
-  markV2MigrationHintShown,
 } from '../utils/v2-detect';
+import { assertV2Brainfile } from '../utils/v2-only';
 import { validateType } from '../utils/strict-validation';
 import { lintValidationCommands } from '../validation/command-lint';
 
@@ -166,17 +158,8 @@ export function addCommand(options: AddOptions, logger: Logger = defaultLogger):
   // Resolve file path
   const filePath = resolveCliBrainfilePath(options.file);
 
-  // Check if file exists
-  if (!fs.existsSync(filePath)) {
-    throw fileNotFound(filePath);
-  }
-
-  // Detect v2 per-task file architecture
-  if (isV2(filePath)) {
-    return addCommandV2(options, filePath, logger);
-  }
-
-  return addCommandV1(options, filePath, logger);
+  assertV2Brainfile(filePath);
+  return addCommandV2(options, filePath, logger);
 }
 
 function addCommandV2(options: AddOptions, filePath: string, logger: Logger): AddResult {
@@ -264,115 +247,6 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
   logAddSuccess(options, parentTask.id, targetColumn.title, logger, createdChildren);
 
   return { success: true, taskId: parentTask.id, columnId: targetColumn.id };
-}
-
-function addCommandV1(options: AddOptions, filePath: string, logger: Logger): AddResult {
-  // Read and parse the file
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const result = Brainfile.parseWithErrors(content);
-
-  if (!result.board) {
-    throw parseFailure(result.error);
-  }
-
-  let board = result.board;
-
-  if (options.parent) {
-    logger.warn(chalk.yellow('Warning: --parent is only supported in v2 per-task file architecture. Ignoring for v1 board.'));
-  }
-  if (normalizeToArray(options.child).length > 0) {
-    logger.warn(chalk.yellow('Warning: --child is only supported in v2 per-task file architecture. Ignoring for v1 board.'));
-  }
-
-  // Find the target column by ID or name
-  let targetColumn = findColumnById(board, options.column);
-  if (!targetColumn) {
-    targetColumn = findColumnByName(board, options.column);
-  }
-
-  if (!targetColumn) {
-    const availableColumns = board.columns.map(col => `${col.id} (${col.title})`);
-    throw columnNotFound(options.column, availableColumns);
-  }
-
-  // Build TaskInput with all provided fields
-  const taskInput: TaskInput = {
-    title: options.title!,
-    ...(options.description && { description: options.description }),
-    ...(options.priority && { priority: options.priority }),
-    ...(options.tags && { tags: options.tags.split(',').map(t => t.trim()) }),
-    ...(options.assignee && { assignee: options.assignee }),
-    ...(options.dueDate && { dueDate: options.dueDate }),
-    ...(options.subtasks && { subtasks: options.subtasks.split(',').map(t => t.trim()) }),
-    ...(options.files && { relatedFiles: options.files.split(',').map(f => f.trim()) }),
-  };
-
-  // Add task using core operation (immutable)
-  const addResult = addTask(board, targetColumn.id, taskInput);
-
-  if (!addResult.success) {
-    throw operationFailed(addResult.error!);
-  }
-
-  board = addResult.board!;
-
-  // Get the new task for display
-  const newTask = board.columns
-    .find(col => col.id === targetColumn!.id)!
-    .tasks[board.columns.find(col => col.id === targetColumn!.id)!.tasks.length - 1];
-
-  // Optionally attach a contract (default status=draft; --ready makes it immediately dispatchable)
-  const deliverableSpecs = normalizeToArray(options.deliverable);
-  const validationCommands = normalizeToArray(options.validation);
-  for (const warning of lintValidationCommands(validationCommands, filePath)) {
-    logger.warn(chalk.yellow(`Warning: ${warning.message}`));
-  }
-  const constraints = normalizeToArray(options.constraint);
-  const shouldAttachContract =
-    Boolean(options.withContract) ||
-    deliverableSpecs.length > 0 ||
-    validationCommands.length > 0 ||
-    constraints.length > 0;
-  if (shouldAttachContract) {
-    let contract;
-    try {
-      contract = buildContract({
-        deliverableSpecs,
-        validationCommands,
-        constraints,
-        status: options.ready ? 'ready' : 'draft',
-      });
-    } catch (e) {
-      throw validationError((e as Error).message);
-    }
-
-    const contractResult = setTaskContract(board, newTask.id, contract);
-    if (!contractResult.success) {
-      throw operationFailed(contractResult.error || 'Failed to set task contract');
-    }
-    board = contractResult.board!;
-  }
-
-  // Serialize and write back
-  const updatedContent = Brainfile.serialize(board);
-  fs.writeFileSync(filePath, updatedContent, 'utf-8');
-
-  // Success message
-  logAddSuccess(options, newTask.id, targetColumn.title, logger);
-
-  // Show one-time migration hint for legacy/mixed layouts
-  if (shouldSuggestV2Migration(filePath)) {
-    logger.log('');
-    logger.log(
-      chalk.yellow('⚠ Legacy brainfile layout detected. ') +
-      chalk.gray('Run ') +
-      chalk.cyan('brainfile migrate') +
-      chalk.gray(' to upgrade to the v2 board/logs structure.')
-    );
-    markV2MigrationHintShown(filePath);
-  }
-
-  return { success: true, taskId: newTask.id, columnId: targetColumn.id };
 }
 
 function logAddSuccess(

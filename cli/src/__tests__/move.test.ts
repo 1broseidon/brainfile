@@ -2,72 +2,143 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { moveCommand } from '../commands/move';
-import { Brainfile, readTaskFile, taskFileName, writeTaskFile, type Column, type Task } from '@brainfile/core';
+import { readTaskFile, taskFileName, writeTaskFile, type Task } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 
-describe('move command', () => {
-  const fixturesDir = path.join(__dirname, 'fixtures');
-  const testBoardPath = path.join(fixturesDir, 'test-board.md');
+function createV2Workspace(tempDir: string, extraConfig = ''): { brainfilePath: string; boardDir: string; logsDir: string } {
+  const dotDir = path.join(tempDir, '.brainfile');
+  const boardDir = path.join(dotDir, 'board');
+  const logsDir = path.join(dotDir, 'logs');
+  const brainfilePath = path.join(dotDir, 'brainfile.md');
+
+  fs.mkdirSync(boardDir, { recursive: true });
+  fs.mkdirSync(logsDir, { recursive: true });
+  fs.writeFileSync(brainfilePath, `---
+title: Move V2 Test Board
+schema: https://brainfile.md/v2/board.json
+${extraConfig}columns:
+  - id: todo
+    title: To Do
+  - id: in-progress
+    title: In Progress
+  - id: done
+    title: Done
+---
+`, 'utf-8');
+
+  return { brainfilePath, boardDir, logsDir };
+}
+
+describe('move command (v1 rejection)', () => {
   let tempDir: string;
-  let tempBoardPath: string;
+  let legacyPath: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-move-test-'));
-    tempBoardPath = path.join(tempDir, 'temp-board-move.md');
-    fs.copyFileSync(testBoardPath, tempBoardPath);
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-move-v1-reject-'));
+    legacyPath = path.join(tempDir, 'brainfile.md');
+    fs.writeFileSync(legacyPath, `---
+title: Legacy Board
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+      - id: task-1
+        title: First task
+---
+`, 'utf-8');
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    }
+    fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('should move task between columns', () => {
+  it('rejects v1 brainfiles and points to migrate', () => {
+    expect(() => moveCommand({ file: legacyPath, task: 'task-1', column: 'done' }, logger)).toThrow(CLIError);
+
+    try {
+      moveCommand({ file: legacyPath, task: 'task-1', column: 'done' }, logger);
+    } catch (e) {
+      expect((e as CLIError).message).toContain('Brainfile v1 is no longer supported');
+      expect((e as CLIError).details).toContain('brainfile migrate');
+    }
+  });
+});
+
+describe('move command (v2)', () => {
+  let tempDir: string;
+  let brainfilePath: string;
+  let boardDir: string;
+  let logger: MemoryLogger;
+
+  beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-move-v2-'));
+    const workspace = createV2Workspace(tempDir);
+    brainfilePath = workspace.brainfilePath;
+    boardDir = workspace.boardDir;
+
+    writeTaskFile(path.join(boardDir, 'task-1.md'), {
+      id: 'task-1',
+      title: 'First task',
+      column: 'todo',
+      position: 0,
+      priority: 'high',
+      tags: ['urgent'],
+    } as Task, '');
+    writeTaskFile(path.join(boardDir, 'task-2.md'), {
+      id: 'task-2',
+      title: 'Second task',
+      column: 'in-progress',
+      position: 0,
+      priority: 'medium',
+      tags: ['test'],
+      subtasks: [
+        { id: 'task-2-1', title: 'Subtask one', completed: false },
+        { id: 'task-2-2', title: 'Subtask two', completed: true },
+      ],
+    } as Task, '');
+
+    logger = new MemoryLogger();
+  });
+
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('moves task between columns', () => {
     const result = moveCommand({
-      file: tempBoardPath,
+      file: brainfilePath,
       task: 'task-1',
       column: 'in-progress',
     }, logger);
 
     expect(result.success).toBe(true);
+    expect(result.movedTask.column).toBe('in-progress');
+    expect(logger.getOutput()).toContain('Task moved successfully');
 
-    const output = logger.getOutput();
-    expect(output).toContain('Task moved successfully');
-
-    const content = fs.readFileSync(tempBoardPath, 'utf-8');
-    const board = Brainfile.parse(content);
-
-    const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
-    const inProgressColumn = board?.columns.find((col: Column) => col.id === 'in-progress');
-
-    expect(todoColumn?.tasks).toHaveLength(0);
-    expect(inProgressColumn?.tasks).toHaveLength(2);
-
-    const movedTask = inProgressColumn?.tasks.find((t: Task) => t.id === 'task-1');
-    expect(movedTask).toBeDefined();
-    expect(movedTask?.title).toBe('First task');
+    const movedDoc = readTaskFile(path.join(boardDir, 'task-1.md'));
+    expect(movedDoc).not.toBeNull();
+    expect(movedDoc!.task.column).toBe('in-progress');
+    expect(movedDoc!.task.title).toBe('First task');
   });
 
-  it('should handle moving to same column', () => {
+  it('handles moving to same column', () => {
     const result = moveCommand({
-      file: tempBoardPath,
+      file: brainfilePath,
       task: 'task-1',
       column: 'todo',
     }, logger);
 
     expect(result.success).toBe(true);
-    // Should warn but not fail
     expect(logger.getOutput()).toContain('already in column');
   });
 
-  it('should require task ID', () => {
+  it('requires task ID', () => {
     expect(() => {
       moveCommand({
-        file: tempBoardPath,
+        file: brainfilePath,
         task: '',
         column: 'done',
       }, logger);
@@ -75,7 +146,7 @@ describe('move command', () => {
 
     try {
       moveCommand({
-        file: tempBoardPath,
+        file: brainfilePath,
         task: '',
         column: 'done',
       }, logger);
@@ -84,10 +155,10 @@ describe('move command', () => {
     }
   });
 
-  it('should require column', () => {
+  it('requires column', () => {
     expect(() => {
       moveCommand({
-        file: tempBoardPath,
+        file: brainfilePath,
         task: 'task-1',
         column: '',
       }, logger);
@@ -95,7 +166,7 @@ describe('move command', () => {
 
     try {
       moveCommand({
-        file: tempBoardPath,
+        file: brainfilePath,
         task: 'task-1',
         column: '',
       }, logger);
@@ -104,10 +175,10 @@ describe('move command', () => {
     }
   });
 
-  it('should handle non-existent task', () => {
+  it('handles non-existent task', () => {
     expect(() => {
       moveCommand({
-        file: tempBoardPath,
+        file: brainfilePath,
         task: 'task-999',
         column: 'done',
       }, logger);
@@ -115,7 +186,7 @@ describe('move command', () => {
 
     try {
       moveCommand({
-        file: tempBoardPath,
+        file: brainfilePath,
         task: 'task-999',
         column: 'done',
       }, logger);
@@ -124,51 +195,27 @@ describe('move command', () => {
     }
   });
 
-  it('should handle non-existent column', () => {
-    expect(() => {
-      moveCommand({
-        file: tempBoardPath,
-        task: 'task-1',
-        column: 'invalid-column',
-      }, logger);
-    }).toThrow(CLIError);
-
-    try {
-      moveCommand({
-        file: tempBoardPath,
-        task: 'task-1',
-        column: 'invalid-column',
-      }, logger);
-    } catch (error) {
-      expect((error as CLIError).message).toContain('Column not found');
-    }
-  });
-
-  it('should preserve task metadata when moving', () => {
+  it('preserves task metadata when moving', () => {
     const result = moveCommand({
-      file: tempBoardPath,
+      file: brainfilePath,
       task: 'task-2',
       column: 'done',
     }, logger);
 
     expect(result.success).toBe(true);
 
-    const content = fs.readFileSync(tempBoardPath, 'utf-8');
-    const board = Brainfile.parse(content);
-
-    const doneColumn = board?.columns.find((col: Column) => col.id === 'done');
-    const movedTask = doneColumn?.tasks.find((t: Task) => t.id === 'task-2');
-
-    expect(movedTask?.title).toBe('Second task');
-    expect(movedTask?.priority).toBe('medium');
-    expect(movedTask?.tags).toEqual(['test']);
-    expect(movedTask?.subtasks).toHaveLength(2);
+    const movedDoc = readTaskFile(path.join(boardDir, 'task-2.md'));
+    expect(movedDoc).not.toBeNull();
+    expect(movedDoc!.task.title).toBe('Second task');
+    expect(movedDoc!.task.priority).toBe('medium');
+    expect(movedDoc!.task.tags).toEqual(['test']);
+    expect(movedDoc!.task.subtasks).toHaveLength(2);
+    expect(movedDoc!.task.column).toBe('done');
   });
 });
 
 describe('move command (v2 completionColumn auto-complete)', () => {
   let tempDir: string;
-  let dotDir: string;
   let boardDir: string;
   let logsDir: string;
   let brainfilePath: string;
@@ -176,7 +223,7 @@ describe('move command (v2 completionColumn auto-complete)', () => {
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-move-v2-test-'));
-    dotDir = path.join(tempDir, '.brainfile');
+    const dotDir = path.join(tempDir, '.brainfile');
     boardDir = path.join(dotDir, 'board');
     logsDir = path.join(dotDir, 'logs');
     brainfilePath = path.join(dotDir, 'brainfile.md');
@@ -228,7 +275,6 @@ columns:
     expect(result.movedTask.column).toBeUndefined();
     expect(fs.existsSync(path.join(boardDir, taskFileName(task.id)))).toBe(false);
 
-    // Completion now writes to ledger.jsonl, not individual files in logs/
     const ledgerPath = path.join(logsDir, 'ledger.jsonl');
     expect(fs.existsSync(ledgerPath)).toBe(true);
     const ledgerContent = fs.readFileSync(ledgerPath, 'utf-8').trim();

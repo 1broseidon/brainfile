@@ -2,203 +2,71 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { addCommand } from '../commands/add';
-import { Brainfile, readTaskFile, type Board, type Column, type Task } from '@brainfile/core';
+import { readTaskFile } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 
-describe('add command', () => {
-  const fixturesDir = path.join(__dirname, 'fixtures');
-  const testBoardPath = path.join(fixturesDir, 'test-board.md');
+describe('add command (v1 rejection)', () => {
   let tempDir: string;
-  let tempBoardPath: string;
+  let legacyPath: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-add-test-'));
-    tempBoardPath = path.join(tempDir, 'temp-board-add.md');
-    fs.copyFileSync(testBoardPath, tempBoardPath);
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-add-v1-reject-'));
+    legacyPath = path.join(tempDir, 'brainfile.md');
+    fs.writeFileSync(legacyPath, `---
+title: Legacy Board
+columns:
+  - id: todo
+    title: To Do
+    tasks: []
+---
+`, 'utf-8');
     logger = new MemoryLogger();
   });
 
   afterEach(() => {
-    if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('rejects v1 brainfiles and points to migrate', () => {
+    expect(() => addCommand({ file: legacyPath, column: 'todo', title: 'New task' }, logger)).toThrow(CLIError);
+
+    try {
+      addCommand({ file: legacyPath, column: 'todo', title: 'New task' }, logger);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CLIError);
+      expect((e as CLIError).message).toContain('Brainfile v1 is no longer supported');
+      expect((e as CLIError).details).toContain('brainfile migrate');
     }
   });
 
-  it('should add a task with only title', () => {
-    const result = addCommand({
-      file: tempBoardPath,
-      column: 'todo',
-      title: 'New task',
-    }, logger);
-
-    expect(result.success).toBe(true);
-    expect(result.taskId).toBeDefined();
-
-    const output = logger.getOutput();
-    expect(output).toContain('Task added successfully');
-
-    // Verify task was added to file
-    const content = fs.readFileSync(tempBoardPath, 'utf-8');
-    const board = Brainfile.parse(content);
-
-    const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
-    expect(todoColumn?.tasks).toHaveLength(2); // Original task + new task
-
-    const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'New task');
-    expect(newTask).toBeDefined();
-    expect(newTask?.id).toBeDefined();
-  });
-
-  it('should add a task with all metadata', () => {
-    const result = addCommand({
-      file: tempBoardPath,
-      column: 'todo',
-      title: 'Feature task',
-      description: 'Test description',
-      priority: 'high',
-      tags: 'feature,new',
-    }, logger);
-
-    expect(result.success).toBe(true);
-
-    const content = fs.readFileSync(tempBoardPath, 'utf-8');
-    const board = Brainfile.parse(content);
-
-    const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
-    const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'Feature task');
-
-    expect(newTask?.description).toBe('Test description');
-    expect(newTask?.priority).toBe('high');
-    expect(newTask?.tags).toEqual(['feature', 'new']);
-  });
-
-  it('should add task to different columns', () => {
-    const result = addCommand({
-      file: tempBoardPath,
-      column: 'in-progress',
-      title: 'Active task',
-    }, logger);
-
-    expect(result.success).toBe(true);
-
-    const content = fs.readFileSync(tempBoardPath, 'utf-8');
-    const board = Brainfile.parse(content);
-
-    const inProgressColumn = board?.columns.find((col: Column) => col.id === 'in-progress');
-    const newTask = inProgressColumn?.tasks.find((t: Task) => t.title === 'Active task');
-
-    expect(newTask).toBeDefined();
-  });
-
-  it('should add a task with a contract when --with-contract options are provided', () => {
-    const result = addCommand({
-      file: tempBoardPath,
-      column: 'todo',
-      title: 'Contracted task',
-      withContract: true,
-      deliverable: [
-        'file:src/feature.ts:Main implementation',
-        'test:src/feature.test.ts:Unit tests',
-      ],
-      validation: ['npm test'],
-      constraint: ['Follow existing patterns'],
-    }, logger);
-
-    expect(result.success).toBe(true);
-
-    const content = fs.readFileSync(tempBoardPath, 'utf-8');
-    const board = Brainfile.parse(content);
-    const todoColumn = board?.columns.find((col: Column) => col.id === 'todo');
-    const newTask = todoColumn?.tasks.find((t: Task) => t.title === 'Contracted task');
-
-    expect(newTask?.contract).toBeDefined();
-    expect(newTask?.contract?.status).toBe('draft');
-    expect(newTask?.contract?.deliverables?.map((d: any) => d.type)).toEqual(['file', 'test']);
-    expect(newTask?.contract?.deliverables?.[0].path).toBe('src/feature.ts');
-    expect(newTask?.contract?.validation?.commands).toEqual(['npm test']);
-    expect(newTask?.contract?.constraints).toEqual(['Follow existing patterns']);
-  });
-
-  it('should throw CLIError when title is missing', () => {
-    expect(() => {
-      addCommand({
-        file: tempBoardPath,
-        column: 'todo',
-      }, logger);
-    }).toThrow(CLIError);
+  it('validates required title before workspace format', () => {
+    expect(() => addCommand({ file: legacyPath, column: 'todo' }, logger)).toThrow(CLIError);
 
     try {
-      addCommand({
-        file: tempBoardPath,
-        column: 'todo',
-      }, logger);
+      addCommand({ file: legacyPath, column: 'todo' }, logger);
     } catch (e) {
-      expect(e).toBeInstanceOf(CLIError);
       expect((e as CLIError).message).toContain('--title is required');
-    }
-  });
-
-  it('should throw CLIError for invalid column', () => {
-    expect(() => {
-      addCommand({
-        file: tempBoardPath,
-        column: 'invalid-column',
-        title: 'Test task',
-      }, logger);
-    }).toThrow(CLIError);
-
-    try {
-      addCommand({
-        file: tempBoardPath,
-        column: 'invalid-column',
-        title: 'Test task',
-      }, logger);
-    } catch (e) {
-      expect(e).toBeInstanceOf(CLIError);
-      expect((e as CLIError).message).toContain('Column not found');
-    }
-  });
-
-  it('should throw CLIError for non-existent file', () => {
-    expect(() => {
-      addCommand({
-        file: 'non-existent.md',
-        column: 'todo',
-        title: 'Test task',
-      }, logger);
-    }).toThrow(CLIError);
-
-    try {
-      addCommand({
-        file: 'non-existent.md',
-        column: 'todo',
-        title: 'Test task',
-      }, logger);
-    } catch (e) {
-      expect(e).toBeInstanceOf(CLIError);
-      expect((e as CLIError).message).toContain('File not found');
     }
   });
 });
 
-describe('add command (v2 --type flag)', () => {
+describe('add command (v2)', () => {
   let tempDir: string;
   let brainfilePath: string;
   let boardDir: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-add-type-'));
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-add-v2-'));
     const dotDir = path.join(tempDir, '.brainfile');
-    fs.mkdirSync(dotDir, { recursive: true });
     boardDir = path.join(dotDir, 'board');
-    fs.mkdirSync(boardDir);
-    fs.mkdirSync(path.join(dotDir, 'logs'));
+    fs.mkdirSync(boardDir, { recursive: true });
+    fs.mkdirSync(path.join(dotDir, 'logs'), { recursive: true });
 
     brainfilePath = path.join(dotDir, 'brainfile.md');
-    const boardContent = `---
+    fs.writeFileSync(brainfilePath, `---
 title: Test Board
 schema: https://brainfile.md/v2/board.json
 columns:
@@ -212,8 +80,7 @@ columns:
     title: Done
     order: 3
 ---
-`;
-    fs.writeFileSync(brainfilePath, boardContent, 'utf-8');
+`, 'utf-8');
     logger = new MemoryLogger();
   });
 
@@ -221,7 +88,97 @@ columns:
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('should generate type-prefixed ID when --type is provided', () => {
+  it('adds a task with metadata as a task file', () => {
+    const result = addCommand({
+      file: brainfilePath,
+      column: 'todo',
+      title: 'Feature task',
+      description: 'Test description',
+      priority: 'high',
+      tags: 'feature,new',
+    }, logger);
+
+    expect(result.success).toBe(true);
+    expect(result.taskId).toBe('task-1');
+    expect(logger.getOutput()).toContain('Task added successfully');
+
+    const doc = readTaskFile(path.join(boardDir, 'task-1.md'));
+    expect(doc).not.toBeNull();
+    expect(doc!.task.title).toBe('Feature task');
+    expect(doc!.task.column).toBe('todo');
+    expect(doc!.task.priority).toBe('high');
+    expect(doc!.task.tags).toEqual(['feature', 'new']);
+    expect(doc!.body).toContain('Test description');
+  });
+
+  it('adds a task with a draft contract', () => {
+    const result = addCommand({
+      file: brainfilePath,
+      column: 'todo',
+      title: 'Contracted task',
+      withContract: true,
+      deliverable: [
+        'file:src/feature.ts:Main implementation',
+        'test:src/feature.test.ts:Unit tests',
+      ],
+      validation: ['npm test'],
+      constraint: ['Follow existing patterns'],
+    }, logger);
+
+    expect(result.success).toBe(true);
+
+    const doc = readTaskFile(path.join(boardDir, `${result.taskId}.md`));
+    expect(doc).not.toBeNull();
+    expect(doc!.task.contract?.status).toBe('draft');
+    expect(doc!.task.contract?.deliverables?.map((d: any) => d.type)).toEqual(['file', 'test']);
+    expect(doc!.task.contract?.deliverables?.[0].path).toBe('src/feature.ts');
+    expect(doc!.task.contract?.validation?.commands).toEqual(['npm test']);
+    expect(doc!.task.contract?.constraints).toEqual(['Follow existing patterns']);
+  });
+
+  it('throws CLIError for invalid column', () => {
+    expect(() => {
+      addCommand({
+        file: brainfilePath,
+        column: 'invalid-column',
+        title: 'Test task',
+      }, logger);
+    }).toThrow(CLIError);
+
+    try {
+      addCommand({
+        file: brainfilePath,
+        column: 'invalid-column',
+        title: 'Test task',
+      }, logger);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CLIError);
+      expect((e as CLIError).message).toContain('Column not found');
+    }
+  });
+
+  it('throws CLIError for non-existent file', () => {
+    expect(() => {
+      addCommand({
+        file: path.join(tempDir, 'missing.md'),
+        column: 'todo',
+        title: 'Test task',
+      }, logger);
+    }).toThrow(CLIError);
+
+    try {
+      addCommand({
+        file: path.join(tempDir, 'missing.md'),
+        column: 'todo',
+        title: 'Test task',
+      }, logger);
+    } catch (e) {
+      expect(e).toBeInstanceOf(CLIError);
+      expect((e as CLIError).message).toContain('File not found');
+    }
+  });
+
+  it('generates type-prefixed ID when --type is provided', () => {
     const result = addCommand({
       file: brainfilePath,
       column: 'todo',
@@ -237,16 +194,14 @@ columns:
     expect(output).toContain('Type:');
     expect(output).toContain('epic');
 
-    // Verify the task file was written with the correct type and ID
-    const taskPath = path.join(boardDir, 'epic-1.md');
-    const doc = readTaskFile(taskPath);
+    const doc = readTaskFile(path.join(boardDir, 'epic-1.md'));
     expect(doc).not.toBeNull();
     expect(doc!.task.id).toBe('epic-1');
     expect(doc!.task.type).toBe('epic');
     expect(doc!.task.title).toBe('My Epic');
   });
 
-  it('should generate default task-prefixed ID when --type is omitted', () => {
+  it('generates default task-prefixed ID when --type is omitted', () => {
     const result = addCommand({
       file: brainfilePath,
       column: 'todo',
@@ -256,15 +211,13 @@ columns:
     expect(result.success).toBe(true);
     expect(result.taskId).toBe('task-1');
 
-    // Verify no type field is set on the task
-    const taskPath = path.join(boardDir, 'task-1.md');
-    const doc = readTaskFile(taskPath);
+    const doc = readTaskFile(path.join(boardDir, 'task-1.md'));
     expect(doc).not.toBeNull();
     expect(doc!.task.id).toBe('task-1');
     expect(doc!.task.type).toBeUndefined();
   });
 
-  it('should not set type field when --type is "task"', () => {
+  it('does not set type field when --type is "task"', () => {
     const result = addCommand({
       file: brainfilePath,
       column: 'todo',
@@ -275,20 +228,15 @@ columns:
     expect(result.success).toBe(true);
     expect(result.taskId).toBe('task-1');
 
-    const taskPath = path.join(boardDir, 'task-1.md');
-    const doc = readTaskFile(taskPath);
+    const doc = readTaskFile(path.join(boardDir, 'task-1.md'));
     expect(doc).not.toBeNull();
     expect(doc!.task.type).toBeUndefined();
   });
 
-  it('should increment type-specific IDs independently', () => {
-    // Add a regular task
+  it('increments type-specific IDs independently', () => {
     addCommand({ file: brainfilePath, column: 'todo', title: 'Task one' }, logger);
-    // Add an epic
     const epicResult = addCommand({ file: brainfilePath, column: 'todo', title: 'Epic one', type: 'epic' }, logger);
-    // Add another epic
     const epicResult2 = addCommand({ file: brainfilePath, column: 'todo', title: 'Epic two', type: 'epic' }, logger);
-    // Add an ADR
     const adrResult = addCommand({ file: brainfilePath, column: 'todo', title: 'ADR one', type: 'adr' }, logger);
 
     expect(epicResult.taskId).toBe('epic-1');
@@ -296,7 +244,7 @@ columns:
     expect(adrResult.taskId).toBe('adr-1');
   });
 
-  it('should not show Type in output when type is default task', () => {
+  it('does not show Type in output when type is default task', () => {
     addCommand({
       file: brainfilePath,
       column: 'todo',
@@ -307,7 +255,7 @@ columns:
     expect(output).not.toContain('Type:');
   });
 
-  it('should set parentId when --parent is provided', () => {
+  it('sets parentId when --parent is provided', () => {
     const parent = addCommand({
       file: brainfilePath,
       column: 'todo',
@@ -322,13 +270,12 @@ columns:
       parent: parent.taskId,
     }, logger);
 
-    const childPath = path.join(boardDir, `${child.taskId}.md`);
-    const childDoc = readTaskFile(childPath);
+    const childDoc = readTaskFile(path.join(boardDir, `${child.taskId}.md`));
     expect(childDoc).not.toBeNull();
     expect((childDoc!.task as any).parentId).toBe(parent.taskId);
   });
 
-  it('should create one child task per --child entry linked to the created parent', () => {
+  it('creates one child task per --child entry linked to the created parent', () => {
     const result = addCommand({
       file: brainfilePath,
       column: 'todo',
@@ -337,8 +284,7 @@ columns:
       child: ['OAuth flow', 'Session hardening'],
     }, logger);
 
-    const parentPath = path.join(boardDir, `${result.taskId}.md`);
-    const parentDoc = readTaskFile(parentPath);
+    const parentDoc = readTaskFile(path.join(boardDir, `${result.taskId}.md`));
     expect(parentDoc).not.toBeNull();
 
     const childDocs = fs

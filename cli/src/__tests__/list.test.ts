@@ -4,30 +4,102 @@ import * as path from 'path';
 import { listCommand } from '../commands/list';
 import { MemoryLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
-import { __resetV2MigrationHintState } from '../utils/v2-detect';
+
+function createV2Workspace(tempDir: string): { brainfilePath: string; boardDir: string; logsDir: string } {
+  const dotDir = path.join(tempDir, '.brainfile');
+  const boardDir = path.join(dotDir, 'board');
+  const logsDir = path.join(dotDir, 'logs');
+  fs.mkdirSync(boardDir, { recursive: true });
+  fs.mkdirSync(logsDir, { recursive: true });
+
+  const brainfilePath = path.join(dotDir, 'brainfile.md');
+  fs.writeFileSync(brainfilePath, `---
+title: Test Board
+schema: https://brainfile.md/v2/board.json
+columns:
+  - id: todo
+    title: To Do
+  - id: in-progress
+    title: In Progress
+  - id: done
+    title: Done
+---
+`, 'utf-8');
+
+  return { brainfilePath, boardDir, logsDir };
+}
+
+function writeTask(boardDir: string, name: string, content: string): void {
+  fs.writeFileSync(path.join(boardDir, name), content, 'utf-8');
+}
 
 describe('list command', () => {
-  const fixturesDir = path.join(__dirname, 'fixtures');
-  const testBoardPath = path.join(fixturesDir, 'test-board.md');
-  const fixtureStatePath = path.join(fixturesDir, 'state.json');
+  let tempDir: string;
+  let brainfilePath: string;
+  let boardDir: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-list-v2-'));
+    const workspace = createV2Workspace(tempDir);
+    brainfilePath = workspace.brainfilePath;
+    boardDir = workspace.boardDir;
+
+    writeTask(boardDir, 'task-1.md', `---
+id: task-1
+title: First task
+column: todo
+position: 0
+priority: high
+contract:
+  status: ready
+tags:
+  - test
+  - urgent
+---
+`);
+    writeTask(boardDir, 'task-2.md', `---
+id: task-2
+title: Second task
+column: in-progress
+position: 0
+priority: medium
+contract:
+  status: in_progress
+tags:
+  - test
+subtasks:
+  - id: task-2-1
+    title: Subtask one
+    completed: false
+  - id: task-2-2
+    title: Subtask two
+    completed: true
+---
+`);
+    writeTask(boardDir, 'task-3.md', `---
+id: task-3
+title: Completed task
+column: done
+position: 0
+priority: low
+contract:
+  status: done
+---
+`);
+
     logger = new MemoryLogger();
-    __resetV2MigrationHintState();
-    // Clean up state.json that may be created by v2 migration hint
-    if (fs.existsSync(fixtureStatePath)) fs.unlinkSync(fixtureStatePath);
   });
 
-  afterAll(() => {
-    if (fs.existsSync(fixtureStatePath)) fs.unlinkSync(fixtureStatePath);
+  afterEach(() => {
+    fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('should list all tasks when no filters are provided', () => {
-    const result = listCommand({ file: testBoardPath }, logger);
+  it('lists all tasks when no filters are provided', () => {
+    const result = listCommand({ file: brainfilePath }, logger);
 
     expect(result.success).toBe(true);
-    expect(result.totalTasks).toBeGreaterThan(0);
+    expect(result.totalTasks).toBe(3);
 
     const output = logger.getOutput();
     expect(output).toContain('Test Board');
@@ -39,8 +111,8 @@ describe('list command', () => {
     expect(output).toContain('Completed task');
   });
 
-  it('should filter tasks by column', () => {
-    const result = listCommand({ file: testBoardPath, column: 'todo' }, logger);
+  it('filters tasks by column', () => {
+    const result = listCommand({ file: brainfilePath, column: 'todo' }, logger);
 
     expect(result.success).toBe(true);
     const output = logger.getOutput();
@@ -51,8 +123,8 @@ describe('list command', () => {
     expect(output).not.toContain('task-3');
   });
 
-  it('should filter tasks by tag', () => {
-    const result = listCommand({ file: testBoardPath, tag: 'urgent' }, logger);
+  it('filters tasks by tag', () => {
+    const result = listCommand({ file: brainfilePath, tag: 'urgent' }, logger);
 
     expect(result.success).toBe(true);
     const output = logger.getOutput();
@@ -62,8 +134,8 @@ describe('list command', () => {
     expect(output).not.toContain('task-3');
   });
 
-  it('should filter tasks by contract status', () => {
-    const result = listCommand({ file: testBoardPath, contract: 'ready' }, logger);
+  it('filters tasks by contract status', () => {
+    const result = listCommand({ file: brainfilePath, contract: 'ready' }, logger);
 
     expect(result.success).toBe(true);
     const output = logger.getOutput();
@@ -73,21 +145,21 @@ describe('list command', () => {
     expect(output).not.toContain('task-3');
   });
 
-  it('should throw CLIError for non-existent file', () => {
+  it('throws CLIError for non-existent file', () => {
     expect(() => {
-      listCommand({ file: 'non-existent.md' }, logger);
+      listCommand({ file: path.join(tempDir, 'non-existent.md') }, logger);
     }).toThrow(CLIError);
 
     try {
-      listCommand({ file: 'non-existent.md' }, logger);
+      listCommand({ file: path.join(tempDir, 'non-existent.md') }, logger);
     } catch (e) {
       expect(e).toBeInstanceOf(CLIError);
       expect((e as CLIError).message).toContain('File not found');
     }
   });
 
-  it('should handle non-existent column gracefully', () => {
-    const result = listCommand({ file: testBoardPath, column: 'non-existent' }, logger);
+  it('handles non-existent column gracefully', () => {
+    const result = listCommand({ file: brainfilePath, column: 'non-existent' }, logger);
 
     expect(result.success).toBe(true);
     expect(result.columnsDisplayed).toBe(0);
@@ -96,86 +168,66 @@ describe('list command', () => {
     expect(output).toContain('No columns found matching');
   });
 
-  it('should show subtask progress', () => {
-    const result = listCommand({ file: testBoardPath, column: 'in-progress' }, logger);
+  it('shows subtask progress', () => {
+    const result = listCommand({ file: brainfilePath, column: 'in-progress' }, logger);
 
     expect(result.success).toBe(true);
     const output = logger.getOutput();
 
     expect(output).toContain('Subtasks:');
-    expect(output).toContain('1/2'); // 1 of 2 subtasks completed
+    expect(output).toContain('1/2');
   });
 
-  it('should show migration hint for legacy layouts', () => {
-    const result = listCommand({ file: testBoardPath }, logger);
+  it('rejects v1 brainfiles and points to migrate', () => {
+    const legacyPath = path.join(tempDir, 'legacy.md');
+    fs.writeFileSync(legacyPath, `---\ntitle: Legacy\ncolumns: []\n---\n`, 'utf-8');
 
-    expect(result.success).toBe(true);
-    const output = logger.getOutput();
-    expect(output).toContain('brainfile migrate');
-  });
+    expect(() => listCommand({ file: legacyPath }, logger)).toThrow(CLIError);
 
-  it('should not show migration hint after it has been shown once', () => {
-    // First run shows the hint
-    listCommand({ file: testBoardPath }, logger);
-    const firstOutput = logger.getOutput();
-    expect(firstOutput).toContain('brainfile migrate');
-
-    // Second run should not show the hint
-    logger.clear();
-    listCommand({ file: testBoardPath }, logger);
-    const secondOutput = logger.getOutput();
-    expect(secondOutput).not.toContain('brainfile migrate');
+    try {
+      listCommand({ file: legacyPath }, logger);
+    } catch (e) {
+      expect((e as CLIError).message).toContain('Brainfile v1 is no longer supported');
+      expect((e as CLIError).details).toContain('brainfile migrate');
+    }
   });
 });
 
 describe('list command (v2 parent filter)', () => {
   let tempDir: string;
   let brainfilePath: string;
+  let boardDir: string;
   let logger: MemoryLogger;
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-list-parent-'));
-    const dotDir = path.join(tempDir, '.brainfile');
-    const boardDir = path.join(dotDir, 'board');
-    fs.mkdirSync(boardDir, { recursive: true });
-    fs.mkdirSync(path.join(dotDir, 'logs'), { recursive: true });
+    const workspace = createV2Workspace(tempDir);
+    brainfilePath = workspace.brainfilePath;
+    boardDir = workspace.boardDir;
 
-    brainfilePath = path.join(dotDir, 'brainfile.md');
-    fs.writeFileSync(brainfilePath, `---
-title: Test Board
-columns:
-  - id: todo
-    title: To Do
----
-`, 'utf-8');
-
-    const parent = `---
+    writeTask(boardDir, 'epic-1.md', `---
 id: epic-1
 title: Parent epic
 type: epic
 column: todo
 position: 0
 ---
-`;
-    const child = `---
+`);
+    writeTask(boardDir, 'task-1.md', `---
 id: task-1
 title: Child task
 column: todo
 position: 1
 parentId: epic-1
 ---
-`;
-    const other = `---
+`);
+    writeTask(boardDir, 'task-2.md', `---
 id: task-2
 title: Other task
 column: todo
 position: 2
 ---
-`;
-
-    fs.writeFileSync(path.join(boardDir, 'epic-1.md'), parent, 'utf-8');
-    fs.writeFileSync(path.join(boardDir, 'task-1.md'), child, 'utf-8');
-    fs.writeFileSync(path.join(boardDir, 'task-2.md'), other, 'utf-8');
+`);
 
     logger = new MemoryLogger();
   });

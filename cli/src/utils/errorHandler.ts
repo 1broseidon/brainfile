@@ -116,9 +116,9 @@ export function getIncompleteSubtasksWarning(
  */
 export function fileNotFoundError(filePath: string): never {
   console.error(chalk.red(`Error: File not found: ${filePath}`));
-  console.log('');
-  console.log(chalk.gray('To create a new brainfile, run:'));
-  console.log(chalk.cyan('  brainfile init'));
+  console.error('');
+  console.error(chalk.gray('To create a new brainfile, run:'));
+  console.error(chalk.cyan('  brainfile init'));
   process.exit(ExitCode.USER_ERROR);
 }
 
@@ -130,9 +130,9 @@ export function parseError(error?: string): never {
   if (error) {
     console.error(chalk.red(error));
   }
-  console.log('');
-  console.log(chalk.gray('To validate and fix syntax issues, run:'));
-  console.log(chalk.cyan('  brainfile lint --fix'));
+  console.error('');
+  console.error(chalk.gray('To validate and fix syntax issues, run:'));
+  console.error(chalk.cyan('  brainfile lint --fix'));
   process.exit(ExitCode.USER_ERROR);
 }
 
@@ -144,10 +144,10 @@ export function taskNotFoundError(taskId: string, board: Board): never {
 
   const allTasks = board.columns.flatMap(col => col.tasks);
   if (allTasks.length > 0) {
-    console.log(chalk.gray('\nAvailable tasks:'));
+    console.error(chalk.gray('\nAvailable tasks:'));
     board.columns.forEach(col => {
       col.tasks.forEach(task => {
-        console.log(chalk.gray(`  - ${task.id}: ${task.title}`));
+        console.error(chalk.gray(`  - ${task.id}: ${task.title}`));
       });
     });
   }
@@ -160,9 +160,9 @@ export function taskNotFoundError(taskId: string, board: Board): never {
  */
 export function columnNotFoundError(columnId: string, board: Board): never {
   console.error(chalk.red(`Error: Column not found: ${columnId}`));
-  console.log(chalk.gray('Available columns:'));
+  console.error(chalk.gray('Available columns:'));
   board.columns.forEach(col => {
-    console.log(chalk.gray(`  - ${col.id} (${col.title})`));
+    console.error(chalk.gray(`  - ${col.id} (${col.title})`));
   });
   process.exit(ExitCode.USER_ERROR);
 }
@@ -174,13 +174,13 @@ export function subtaskNotFoundError(subtaskId: string, task: Task): never {
   console.error(chalk.red(`Error: Subtask not found: ${subtaskId}`));
 
   if (task.subtasks && task.subtasks.length > 0) {
-    console.log(chalk.gray('\nAvailable subtasks:'));
+    console.error(chalk.gray('\nAvailable subtasks:'));
     task.subtasks.forEach(st => {
       const status = st.completed ? chalk.green('[x]') : chalk.gray('[ ]');
-      console.log(chalk.gray(`  ${status} ${st.id}: ${st.title}`));
+      console.error(chalk.gray(`  ${status} ${st.id}: ${st.title}`));
     });
   } else {
-    console.log(chalk.gray(`\nTask ${task.id} has no subtasks.`));
+    console.error(chalk.gray(`\nTask ${task.id} has no subtasks.`));
   }
 
   process.exit(ExitCode.USER_ERROR);
@@ -191,7 +191,7 @@ export function subtaskNotFoundError(subtaskId: string, task: Task): never {
  */
 export function missingRequiredError(option: string, usage: string): never {
   console.error(chalk.red(`Error: ${option} is required`));
-  console.log(chalk.gray(`Usage: ${usage}`));
+  console.error(chalk.gray(`Usage: ${usage}`));
   process.exit(ExitCode.USER_ERROR);
 }
 

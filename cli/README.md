@@ -19,19 +19,19 @@ brainfile init
 This creates the standard v2 structure:
 - `.brainfile/brainfile.md` (Configuration, rules, definitions)
 - `.brainfile/board/` (Active tasks)
-- `.brainfile/logs/` (Completion history — `ledger.jsonl`)
+- `.brainfile/logs/` (Completed task files)
 
 The board comes pre-configured with `To Do` and `In Progress` columns.
 
 ### Migrating older layouts
 
-If your repo still has a legacy `brainfile.md` layout, run:
+If your repo still has a legacy `brainfile.md` layout, normal runtime commands will ask you to migrate before continuing. Run `brainfile migrate` from the directory that contains the old file, or pass `--dir` to point at that directory:
 
 ```bash
-brainfile migrate
+brainfile migrate --dir .
 ```
 
-This upgrades your workspace to v2 (`.brainfile/brainfile.md` + `board/` + `logs/`).
+This upgrades your workspace to v2 (`.brainfile/brainfile.md` + `board/` + `logs/`). Use `--logs-to-ledger` when you also want legacy `logs/*.md` files migrated into `ledger.jsonl`.
 
 ## Core Workflow
 
@@ -94,24 +94,25 @@ brainfile patch -t task-10 --priority critical --tags "frontend,urgent"
 brainfile patch -t task-10 --clear-tags --clear-assignee
 
 # Delete (permanently)
-brainfile delete -t task-10
+brainfile delete -t task-10 --force
 ```
 
 ### Complete
-When a task is done, move it to the archive.
+When a task is done, complete it from the active board.
 
 ```bash
 brainfile complete -t task-10
 ```
-This appends a record to `logs/ledger.jsonl` and archives the file from `.brainfile/board/` to `.brainfile/logs/`.
+This writes `.brainfile/logs/task-10.md` with a completion timestamp and removes the active task file from `.brainfile/board/`. Use `brainfile log` to view completed task history.
 
 ## Types
 
 Brainfile supports different document types.
 
 ```bash
-brainfile types list       # See available types (task, epic, adr)
-brainfile types add        # (Coming soon: define custom types)
+brainfile types list           # See configured types
+brainfile types list --json    # Output configured types as JSON
+brainfile types add epic       # Add a type (use --id-prefix, --completable, or --schema to customize it)
 ```
 
 ## Contracts: Working with AI Agents
@@ -146,26 +147,23 @@ brainfile contract deliver -t task-45
 Status changes to `delivered`.
 
 ### 4. Validate (User)
-Run the validation commands automatically.
+Run the validation commands and check deliverables.
 
 ```bash
 brainfile contract validate -t task-45
 ```
-- **Pass**: Task is marked `done`.
-- **Fail**: Task status reverts to `ready` (or `failed`) for rework.
+- **Pass**: Contract status becomes `done`.
+- **Fail**: Contract status becomes `failed` and records feedback for rework.
 
 ## ADR Promotion
 
-Architecture Decision Records (ADRs) are first-class citizens. You can promote an accepted ADR to a global rule that agents must follow.
+Architecture Decision Records (ADRs) are first-class task files. You can promote an ADR into a project rule.
 
 ```bash
 # 1. Create an ADR
-brainfile add -t "Use Postgres for all user data" --type adr -c proposed
+brainfile add -t "Use Postgres for all user data" --type adr -c todo
 
-# 2. Accept it (move to accepted column)
-brainfile move -t adr-1 -c accepted
-
-# 3. Promote to a rule
+# 2. Promote it to a rule
 brainfile adr promote -t adr-1 --category always
 ```
 
@@ -175,7 +173,7 @@ brainfile adr promote -t adr-1 --category always
 - `prefer`: Guidelines (e.g., "Prefer functional components")
 - `context`: informational context
 
-Promoted rules are added to `.brainfile/brainfile.md` and injected into agent prompts.
+Promoted rules are added to `.brainfile/brainfile.md`, and the promoted ADR file moves to `.brainfile/logs/`.
 
 ## TUI (Terminal UI)
 
@@ -187,20 +185,21 @@ brainfile tui      # Explicit subcommand also works
 ```
 
 ### Panels
-- **Board (`1`)**: Kanban view of active tasks.
-- **Logs (`2`)**: List of completed tasks.
-- **Rules (`3`)**: Active rules and configuration.
+- **Tasks (`1`)**: Kanban view of active tasks.
+- **Rules (`2`)**: Active rules and configuration.
+- **Logs (`3`)**: Completed task files.
 
 ### Keyboard Shortcuts
 | Key | Action |
 |-----|--------|
-| `tab` | Next column |
-| `j` / `k` | Down / Up |
-| `enter` | View task details |
+| `tab` / `shift+tab` | Next / previous column in wide mode |
+| `j` / `k` | Down / up |
+| `enter` | Expand or collapse the selected task |
 | `n` | New task |
 | `m` | Move task |
-| `e` | Edit task (in $EDITOR) |
+| `e` | Edit task in `$EDITOR` |
 | `/` | Search |
+| `?` | Show help |
 | `q` | Quit |
 
 ## AI Integration
@@ -220,4 +219,4 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-This gives Claude (and other MCP clients) full access to read your board, create tasks, and manage contracts.
+This registers MCP tools to list, read, search, create, update, move, complete, and delete tasks; manage subtasks; and run contract workflows.
