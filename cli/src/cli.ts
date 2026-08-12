@@ -275,7 +275,7 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('complete')
-    .description('Complete a task (move to logs in v2, or move to done column in v1)')
+    .description('Complete a task (moves it to logs/)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to complete (required)')
     .option('--force', 'Force epic completion even if child tasks are still active')

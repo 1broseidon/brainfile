@@ -8,15 +8,13 @@
  * @packageDocumentation
  */
 
-import * as fs from 'fs';
 import chalk from 'chalk';
-import { Brainfile, searchTasks as coreSearchTasks, type Task } from '@brainfile/core';
 import { type Logger, defaultLogger } from '../utils/logger';
-import { CLIError, fileNotFound, missingRequired, operationFailed } from '../utils/cli-error';
+import { missingRequired } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { assertV2Brainfile } from '../utils/v2-only';
 import { readTasksDir, type TaskDocument } from '@brainfile/core';
 import {
-  isV2,
   getV2Dirs,
   extractDescription,
   extractLog,
@@ -51,15 +49,9 @@ export function searchCommand(options: SearchOptions, logger: Logger = defaultLo
   }
 
   const filePath = resolveCliBrainfilePath(options.file);
-  if (!fs.existsSync(filePath)) {
-    throw fileNotFound(filePath);
-  }
+  assertV2Brainfile(filePath);
 
-  if (isV2(filePath)) {
-    return searchV2(filePath, options.query, options.column, logger);
-  }
-
-  return searchV1(filePath, options.query, options.column, logger);
+  return searchV2(filePath, options.query, options.column, logger);
 }
 
 function searchV2(filePath: string, query: string, column: string | undefined, logger: Logger): SearchResult {
@@ -114,41 +106,6 @@ function searchV2(filePath: string, query: string, column: string | undefined, l
   return { success: true, results, count: results.length };
 }
 
-function searchV1(filePath: string, query: string, column: string | undefined, logger: Logger): SearchResult {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const parsed = Brainfile.parseWithErrors(content);
-  if (!parsed.board) {
-    throw operationFailed(parsed.error || 'Failed to parse brainfile');
-  }
-
-  const board = parsed.board;
-  const queryLower = query.toLowerCase();
-  const results: SearchResult['results'] = [];
-
-  for (const col of board.columns) {
-    if (column && col.id !== column && col.title.toLowerCase() !== column.toLowerCase()) continue;
-
-    for (const task of col.tasks) {
-      const score = scoreMatchV1(task, queryLower);
-      if (score > 0) {
-        results.push({
-          id: task.id,
-          title: task.title,
-          column: col.title,
-          score,
-          isLog: false,
-        });
-      }
-    }
-  }
-
-  results.sort((a, b) => b.score - a.score);
-
-  displayResults(results, query, logger);
-
-  return { success: true, results, count: results.length };
-}
-
 function scoreMatch(task: { id: string; title: string; description?: string; tags?: string[] }, doc: TaskDocument, queryLower: string): number {
   let score = 0;
 
@@ -174,20 +131,6 @@ function scoreMatch(task: { id: string; title: string; description?: string; tag
   // Log body match
   const logContent = extractLog(doc.body);
   if (logContent?.toLowerCase().includes(queryLower)) score += 2;
-
-  return score;
-}
-
-function scoreMatchV1(task: Task, queryLower: string): number {
-  let score = 0;
-
-  if (task.id.toLowerCase() === queryLower) score += 20;
-  if (task.title.toLowerCase().includes(queryLower)) {
-    score += 10;
-    if (task.title.toLowerCase().startsWith(queryLower)) score += 5;
-  }
-  if (task.description?.toLowerCase().includes(queryLower)) score += 5;
-  if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) score += 3;
 
   return score;
 }

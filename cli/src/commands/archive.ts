@@ -1,10 +1,11 @@
 /**
  * Archive command for Brainfile CLI
  *
- * Supports archiving to:
- * - local: Move to local archive section (default)
+ * Exports completed tasks (from logs/) to:
  * - github: Create closed GitHub Issue
  * - linear: Create completed Linear issue
+ *
+ * Local archiving is handled by `brainfile complete` (tasks move to logs/).
  *
  * @packageDocumentation
  */
@@ -12,9 +13,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
-  Brainfile,
-  findTaskById,
-  deleteTask,
   formatTaskForGitHub,
   formatTaskForLinear,
   type Board,
@@ -22,33 +20,24 @@ import {
 } from '@brainfile/core';
 import chalk from 'chalk';
 import {
-  fileNotFoundError,
-  parseError,
-  taskNotFoundError,
   missingRequiredError,
   operationError,
   handleError,
 } from '../utils/errorHandler';
 import {
-  getEffectiveArchiveDestination,
   getArchiveConfig,
   getEffectiveDestination,
   type ParsedDestination,
 } from '../utils/config';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { assertV2Brainfile } from '../utils/v2-only';
 import { createGitHubIssue, isGitHubAuthenticated } from '../utils/github-auth';
 import { createLinearIssue, isLinearAuthenticated, getLinearTeams } from '../utils/linear-auth';
-import {
-  archiveTaskToFile,
-  loadArchivedTasks,
-  removeFromArchive,
-  getArchivePath,
-} from '../utils/archive';
 import { readTasksDir, taskFileName } from '@brainfile/core';
 import {
-  isV2,
   getV2Dirs,
   findV2Task,
+  readV2BoardConfig,
 } from '../utils/v2-detect';
 
 // ============================================================================
@@ -78,21 +67,9 @@ export async function archiveCommand(options: ArchiveOptions) {
 
     // Resolve file path
     const filePath = resolveCliBrainfilePath(options.file);
+    assertV2Brainfile(filePath);
 
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      fileNotFoundError(filePath);
-    }
-
-    // Read and parse the file
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const result = Brainfile.parseWithErrors(content);
-
-    if (!result.board) {
-      parseError(result.error);
-    }
-
-    const board = result.board;
+    const board = readV2BoardConfig(filePath);
 
     // Determine destination (supports extended format like github:owner/repo)
     const brainfileDestination = (board as any).archive?.destination;
@@ -107,6 +84,10 @@ export async function archiveCommand(options: ArchiveOptions) {
     }
 
     const destination = parsedDest.type;
+
+    if (destination === 'local') {
+      operationError('Local archive is not supported for v2 boards. Use "brainfile complete" to move tasks to logs/.');
+    }
 
     // Validate destination auth if needed
     if (destination === 'github' && !(await isGitHubAuthenticated())) {
@@ -123,33 +104,14 @@ export async function archiveCommand(options: ArchiveOptions) {
       process.exit(1);
     }
 
-    // Handle --all flag (archive all from local archive to external)
+    // Export from logs/ directory
     if (options.all) {
-      await archiveAllToExternal(filePath, board, destination, options.dryRun);
+      await archiveAllFromLogsV2(filePath, board, destination, options.dryRun);
       return;
     }
 
-    // V2: for external export, read from logs/ directory
-    if (isV2(filePath) && destination !== 'local') {
-      if (options.all) {
-        await archiveAllFromLogsV2(filePath, board, destination, options.dryRun);
-        return;
-      }
-      if (options.task) {
-        await archiveSingleFromLogsV2(filePath, board, options.task, destination, options.dryRun, parsedDest);
-        return;
-      }
-    }
-
-    // Handle --all flag (archive all from local archive to external)
-    if (options.all) {
-      await archiveAllToExternal(filePath, board, destination, options.dryRun);
-      return;
-    }
-
-    // Single task archive
     if (options.task) {
-      await archiveSingleTask(filePath, board, options.task, destination, options.dryRun, parsedDest);
+      await archiveSingleFromLogsV2(filePath, board, options.task, destination, options.dryRun, parsedDest);
     }
   } catch (error) {
     handleError(error);
@@ -193,11 +155,11 @@ async function archiveSingleFromLogsV2(
 
   // Export to external service then remove from logs
   if (destination === 'github') {
-    await archiveToGitHub(filePath, board, task, '', 'Completed', dryRun, parsedDest);
+    await archiveToGitHub(board, task, 'Completed', dryRun, parsedDest);
     // Remove from logs
     fs.unlinkSync(logPath);
   } else if (destination === 'linear') {
-    await archiveToLinear(filePath, board, task, '', 'Completed', dryRun, parsedDest);
+    await archiveToLinear(board, task, 'Completed', dryRun, parsedDest);
     fs.unlinkSync(logPath);
   }
 }
@@ -308,86 +270,12 @@ async function archiveAllFromLogsV2(
 }
 
 // ============================================================================
-// Single Task Archive
-// ============================================================================
-
-async function archiveSingleTask(
-  filePath: string,
-  board: Board,
-  taskId: string,
-  destination: ArchiveDestination,
-  dryRun?: boolean,
-  parsedDest?: ParsedDestination
-) {
-  // Find the task
-  const taskInfo = findTaskById(board, taskId);
-  if (!taskInfo) {
-    taskNotFoundError(taskId, board);
-    return;
-  }
-
-  const { task, column } = taskInfo;
-
-  if (dryRun) {
-    console.log(chalk.yellow('DRY RUN') + ' - No changes will be made');
-    console.log('');
-  }
-
-  // Archive based on destination
-  if (destination === 'local') {
-    await archiveToLocal(filePath, board, task, column.id, column.title, dryRun);
-  } else if (destination === 'github') {
-    await archiveToGitHub(filePath, board, task, column.id, column.title, dryRun, parsedDest);
-  } else if (destination === 'linear') {
-    await archiveToLinear(filePath, board, task, column.id, column.title, dryRun, parsedDest);
-  }
-}
-
-// ============================================================================
-// Local Archive
-// ============================================================================
-
-async function archiveToLocal(
-  filePath: string,
-  board: Board,
-  task: Task,
-  columnId: string,
-  columnTitle: string,
-  dryRun?: boolean
-) {
-  const archivePath = getArchivePath(filePath);
-
-  if (dryRun) {
-    console.log(`Would archive task ${chalk.cyan(task.id)} to ${chalk.cyan(path.basename(archivePath))}`);
-    return;
-  }
-
-  const archiveResult = archiveTaskToFile(filePath, board, columnId, task.id);
-
-  if (!archiveResult.success) {
-    operationError(archiveResult.error!);
-    return;
-  }
-
-  // Success message
-  console.log(chalk.green('✓') + ' Task archived locally');
-  console.log('');
-  console.log(chalk.gray(`  Task:   ${task.id} - ${task.title}`));
-  console.log(chalk.gray(`  From:   ${columnTitle}`));
-  console.log(chalk.gray(`  To:     ${path.basename(archivePath)}`));
-  console.log('');
-  console.log(chalk.gray('Use "brainfile restore" to restore this task.'));
-}
-
-// ============================================================================
 // GitHub Archive
 // ============================================================================
 
 async function archiveToGitHub(
-  filePath: string,
   board: Board,
   task: Task,
-  columnId: string,
   columnTitle: string,
   dryRun?: boolean,
   parsedDest?: ParsedDestination
@@ -450,13 +338,6 @@ async function archiveToGitHub(
     process.exit(1);
   }
 
-  // Remove task from board (delete, not archive locally)
-  const deleteResult = deleteTask(board, columnId, task.id);
-  if (deleteResult.success) {
-    const updatedContent = Brainfile.serialize(deleteResult.board!);
-    fs.writeFileSync(filePath, updatedContent, 'utf-8');
-  }
-
   // Success message
   console.log('');
   console.log(chalk.green('✓') + ` Created GitHub Issue #${result.issueNumber} (closed)`);
@@ -473,10 +354,8 @@ async function archiveToGitHub(
 // ============================================================================
 
 async function archiveToLinear(
-  filePath: string,
   board: Board,
   task: Task,
-  columnId: string,
   columnTitle: string,
   dryRun?: boolean,
   parsedDest?: ParsedDestination
@@ -569,13 +448,6 @@ async function archiveToLinear(
     process.exit(1);
   }
 
-  // Remove task from board
-  const deleteResult = deleteTask(board, columnId, task.id);
-  if (deleteResult.success) {
-    const updatedContent = Brainfile.serialize(deleteResult.board!);
-    fs.writeFileSync(filePath, updatedContent, 'utf-8');
-  }
-
   // Success message
   console.log('');
   console.log(chalk.green('✓') + ` Created Linear Issue ${result.issueId} (Done)`);
@@ -587,130 +459,3 @@ async function archiveToLinear(
   console.log(`View: ${chalk.underline(result.issueUrl)}`);
 }
 
-// ============================================================================
-// Archive All (from local archive to external)
-// ============================================================================
-
-async function archiveAllToExternal(
-  filePath: string,
-  board: Board,
-  destination: ArchiveDestination,
-  dryRun?: boolean
-) {
-  if (destination === 'local') {
-    console.log(chalk.yellow('Note:') + ' --all with --to=local has no effect (tasks are already archived)');
-    return;
-  }
-
-  // Load archived tasks from the separate archive file
-  const { tasks: archivedTasks, archivePath, error } = loadArchivedTasks(filePath);
-
-  if (error) {
-    console.log(chalk.red('✗') + ` ${error}`);
-    return;
-  }
-
-  if (archivedTasks.length === 0) {
-    console.log(`No tasks in local archive (${path.basename(archivePath)}) to export.`);
-    return;
-  }
-
-  console.log(`Found ${archivedTasks.length} task(s) in ${path.basename(archivePath)}.`);
-  console.log('');
-
-  if (dryRun) {
-    console.log(chalk.yellow('DRY RUN') + ' - No changes will be made');
-    console.log('');
-    for (const task of archivedTasks) {
-      console.log(`  Would archive: ${task.id} - ${task.title}`);
-    }
-    return;
-  }
-
-  let successCount = 0;
-  let failCount = 0;
-
-  for (const task of archivedTasks) {
-    console.log(`Archiving ${task.id}...`);
-
-    try {
-      if (destination === 'github') {
-        const config = getArchiveConfig();
-        const github = config.github;
-
-        if (!github?.owner || !github?.repo) {
-          console.log(chalk.red('✗') + ' GitHub not configured');
-          failCount++;
-          continue;
-        }
-
-        const payload = formatTaskForGitHub(task, {
-          includeMeta: true,
-          boardTitle: board.title,
-          fromColumn: 'Archive',
-        });
-
-        const result = await createGitHubIssue({
-          owner: github.owner,
-          repo: github.repo,
-          title: payload.title,
-          body: payload.body,
-          labels: payload.labels,
-          state: 'closed',
-        });
-
-        if (result.success) {
-          // Remove from archive file
-          removeFromArchive(filePath, task.id);
-          console.log(chalk.green('  ✓') + ` Created #${result.issueNumber}`);
-          successCount++;
-        } else {
-          console.log(chalk.red('  ✗') + ` Failed: ${result.error}`);
-          failCount++;
-        }
-      } else if (destination === 'linear') {
-        const config = getArchiveConfig();
-        const teamId = config.linear?.teamId;
-
-        if (!teamId) {
-          console.log(chalk.red('✗') + ' Linear teamId not configured');
-          failCount++;
-          continue;
-        }
-
-        const payload = formatTaskForLinear(task, {
-          includeMeta: true,
-          boardTitle: board.title,
-          fromColumn: 'Archive',
-          stateName: 'Done',
-        });
-
-        const result = await createLinearIssue({
-          teamId,
-          title: payload.title,
-          description: payload.description,
-          priority: payload.priority,
-          stateName: 'Done',
-        });
-
-        if (result.success) {
-          // Remove from archive file
-          removeFromArchive(filePath, task.id);
-          console.log(chalk.green('  ✓') + ` Created ${result.issueId}`);
-          successCount++;
-        } else {
-          console.log(chalk.red('  ✗') + ` Failed: ${result.error}`);
-          failCount++;
-        }
-      }
-    } catch (error) {
-      console.log(chalk.red('  ✗') + ` Error: ${error}`);
-      failCount++;
-    }
-  }
-
-  console.log('');
-  console.log(
-    `Done: ${chalk.green(successCount + ' succeeded')}, ${chalk.red(failCount + ' failed')}`
-  );
-}

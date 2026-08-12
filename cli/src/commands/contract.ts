@@ -1,15 +1,10 @@
 import { pickupContract, deliverContract, validateContract } from '../lib/contractRunner';
 import { defaultLogger, type Logger } from '../utils/logger';
-import * as fs from 'fs';
 import * as path from 'path';
 import {
-  Brainfile,
-  findTaskById,
-  setTaskContract,
   writeTaskFile,
   readTasksDir,
   taskFileName,
-  type Board,
   type Task,
   MissingDependencyError,
   DependencyCycleError,
@@ -18,7 +13,8 @@ import {
 import { missingRequired, operationFailed, validationError } from '../utils/cli-error';
 import { buildContract } from '../utils/contractSpec';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { isV2, getV2Dirs, findV2Task } from '../utils/v2-detect';
+import { assertV2Brainfile } from '../utils/v2-only';
+import { getV2Dirs, findV2Task } from '../utils/v2-detect';
 import { lintValidationCommands } from '../validation/command-lint';
 
 export const CONTRACT_COMMAND_HELP = `
@@ -181,10 +177,6 @@ function taskDependsOn(task: Task | undefined): string[] | undefined {
   return rawDependsOn.filter((value): value is string => typeof value === 'string');
 }
 
-function boardTasks(board: Board): Task[] {
-  return board.columns.flatMap((column) => column.tasks);
-}
-
 function validateTaskDependencyGraph(tasks: Task[]): string[] {
   try {
     return topologicalSort(tasks.map((task) => ({
@@ -214,28 +206,6 @@ function renderTaskDependencyGraph(tasks: Task[]): string {
         : taskId;
     })
     .join('\n');
-}
-
-function updateBoardTask(board: Board, taskId: string, updater: (task: Task) => Task): Board {
-  let found = false;
-
-  const columns = board.columns.map((column) => ({
-    ...column,
-    tasks: column.tasks.map((task) => {
-      if (task.id !== taskId) {
-        return task;
-      }
-
-      found = true;
-      return updater(task);
-    }),
-  }));
-
-  if (!found) {
-    throw operationFailed(`Task not found: ${taskId}`);
-  }
-
-  return { ...board, columns };
 }
 
 function applyGraphTaskUpdate(
@@ -286,18 +256,8 @@ function ensureUniqueGraphTasks(specs: ContractGraphTaskOptions[]): void {
 }
 
 function loadActiveTasks(filePath: string): Task[] {
-  if (isV2(filePath)) {
-    const dirs = getV2Dirs(filePath);
-    return readTasksDir(dirs.boardDir).map((doc) => doc.task);
-  }
-
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const parsed = Brainfile.parseWithErrors(content);
-  if (!parsed.board) {
-    throw operationFailed(parsed.error || 'Failed to parse brainfile');
-  }
-
-  return boardTasks(parsed.board);
+  const dirs = getV2Dirs(filePath);
+  return readTasksDir(dirs.boardDir).map((doc) => doc.task);
 }
 
 export function parseContractGraphArgs(args: readonly string[]): ContractGraphOptions {
@@ -395,9 +355,7 @@ export function parseContractGraphArgs(args: readonly string[]): ContractGraphOp
 
 export function contractGraphCommand(options: ContractGraphOptions, logger: Logger = defaultLogger): ContractGraphCommandResult {
   const filePath = resolveCliBrainfilePath(options.file);
-  if (!fs.existsSync(filePath)) {
-    throw operationFailed(`File not found: ${filePath}`);
-  }
+  assertV2Brainfile(filePath);
 
   if (options.show) {
     const activeTasks = loadActiveTasks(filePath);
@@ -411,69 +369,39 @@ export function contractGraphCommand(options: ContractGraphOptions, logger: Logg
 
   const now = new Date().toISOString();
 
-  if (isV2(filePath)) {
-    const dirs = getV2Dirs(filePath);
-    const docs = readTasksDir(dirs.boardDir);
-    const docById = new Map(docs.map((doc) => [doc.task.id, doc]));
+  const dirs = getV2Dirs(filePath);
+  const docs = readTasksDir(dirs.boardDir);
+  const docById = new Map(docs.map((doc) => [doc.task.id, doc]));
 
-    for (const spec of specs) {
-      if (isUnsafeTaskId(spec.task)) {
-        throw operationFailed(`Invalid task ID: ${spec.task}`);
-      }
-      if (!docById.has(spec.task)) {
-        throw operationFailed(`Task not found: ${spec.task}`);
-      }
-    }
-
-    const nextTasks = new Map(docs.map((doc) => [doc.task.id, { ...doc.task }]));
-    for (const spec of specs) {
-      nextTasks.set(
-        spec.task,
-        applyGraphTaskUpdate(nextTasks.get(spec.task)!, spec, Boolean(options.ready), now),
-      );
-    }
-
-    const order = validateTaskDependencyGraph([...nextTasks.values()]);
-    const graph = renderTaskDependencyGraph([...nextTasks.values()]);
-
-    for (const taskId of order) {
-      if (!specs.some((spec) => spec.task === taskId)) {
-        continue;
-      }
-
-      const doc = docById.get(taskId)!;
-      writeTaskFile(doc.filePath!, nextTasks.get(taskId)!, doc.body);
-    }
-
-    logger.log(`Contract graph attached (${options.ready ? 'ready' : 'draft'}): ${specs.map((spec) => spec.task).join(', ')}`);
-    return {
-      success: true,
-      attached: specs.map((spec) => spec.task),
-      order,
-      graph,
-    };
-  }
-
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const parsed = Brainfile.parseWithErrors(content);
-  if (!parsed.board) {
-    throw operationFailed(parsed.error || 'Failed to parse brainfile');
-  }
-
-  let board = parsed.board;
   for (const spec of specs) {
-    if (!findTaskById(board, spec.task)) {
+    if (isUnsafeTaskId(spec.task)) {
+      throw operationFailed(`Invalid task ID: ${spec.task}`);
+    }
+    if (!docById.has(spec.task)) {
       throw operationFailed(`Task not found: ${spec.task}`);
     }
-
-    board = updateBoardTask(board, spec.task, (task) =>
-      applyGraphTaskUpdate(task, spec, Boolean(options.ready), now));
   }
 
-  const order = validateTaskDependencyGraph(boardTasks(board));
-  const graph = renderTaskDependencyGraph(boardTasks(board));
+  const nextTasks = new Map(docs.map((doc) => [doc.task.id, { ...doc.task }]));
+  for (const spec of specs) {
+    nextTasks.set(
+      spec.task,
+      applyGraphTaskUpdate(nextTasks.get(spec.task)!, spec, Boolean(options.ready), now),
+    );
+  }
 
-  fs.writeFileSync(filePath, Brainfile.serialize(board), 'utf-8');
+  const order = validateTaskDependencyGraph([...nextTasks.values()]);
+  const graph = renderTaskDependencyGraph([...nextTasks.values()]);
+
+  for (const taskId of order) {
+    if (!specs.some((spec) => spec.task === taskId)) {
+      continue;
+    }
+
+    const doc = docById.get(taskId)!;
+    writeTaskFile(doc.filePath!, nextTasks.get(taskId)!, doc.body);
+  }
+
   logger.log(`Contract graph attached (${options.ready ? 'ready' : 'draft'}): ${specs.map((spec) => spec.task).join(', ')}`);
   return {
     success: true,
@@ -573,9 +501,7 @@ export function contractAttachCommand(options: ContractAttachOptions & { ready?:
   }
 
   const filePath = resolveCliBrainfilePath(options.file);
-  if (!fs.existsSync(filePath)) {
-    throw operationFailed(`File not found: ${filePath}`);
-  }
+  assertV2Brainfile(filePath);
 
   const validationCommands = Array.isArray(options.validation)
     ? options.validation
@@ -598,40 +524,18 @@ export function contractAttachCommand(options: ContractAttachOptions & { ready?:
     throw validationError((e as Error).message);
   }
 
-  if (isV2(filePath)) {
-    if (isUnsafeTaskId(options.task)) {
-      throw operationFailed(`Invalid task ID: ${options.task}`);
-    }
-
-    const dirs = getV2Dirs(filePath);
-    const found = findV2Task(dirs, options.task, false);
-    if (!found || found.isLog) {
-      throw operationFailed(`Task not found: ${options.task}`);
-    }
-
-    found.doc.task.contract = contract;
-    writeTaskFile(found.filePath, found.doc.task, found.doc.body);
-    logger.log(`Contract attached: ${options.task}`);
-    return { success: true };
+  if (isUnsafeTaskId(options.task)) {
+    throw operationFailed(`Invalid task ID: ${options.task}`);
   }
 
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const parsed = Brainfile.parseWithErrors(content);
-  if (!parsed.board) {
-    throw operationFailed(parsed.error || 'Failed to parse brainfile');
-  }
-
-  const taskInfo = findTaskById(parsed.board, options.task);
-  if (!taskInfo) {
+  const dirs = getV2Dirs(filePath);
+  const found = findV2Task(dirs, options.task, false);
+  if (!found || found.isLog) {
     throw operationFailed(`Task not found: ${options.task}`);
   }
 
-  const result = setTaskContract(parsed.board, options.task, contract);
-  if (!result.success || !result.board) {
-    throw operationFailed(result.error || 'Failed to attach contract');
-  }
-
-  fs.writeFileSync(filePath, Brainfile.serialize(result.board), 'utf-8');
+  found.doc.task.contract = contract;
+  writeTaskFile(found.filePath, found.doc.task, found.doc.body);
   logger.log(`Contract attached: ${options.task}`);
   return { success: true };
 }
@@ -648,144 +552,66 @@ export function contractActivateCommand(options: ContractActivateOptions, logger
   }
 
   const filePath = resolveCliBrainfilePath(options.file);
-  if (!fs.existsSync(filePath)) {
-    throw operationFailed(`File not found: ${filePath}`);
-  }
+  assertV2Brainfile(filePath);
 
   const activated: string[] = [];
-
-  // ── V2 per-task file architecture ──────────────────────────────────────────
-  if (isV2(filePath)) {
-    const dirs = getV2Dirs(filePath);
-
-    if (options.task) {
-      // Single task activation
-      if (isUnsafeTaskId(options.task)) {
-        throw operationFailed(`Invalid task ID: ${options.task}`);
-      }
-      const found = findV2Task(dirs, options.task, false);
-      if (!found || found.isLog) {
-        throw operationFailed(`Task not found: ${options.task}`);
-      }
-      if (!found.doc.task.contract) {
-        throw operationFailed(`Task ${options.task} has no contract`);
-      }
-      if (found.doc.task.contract.status !== 'draft') {
-        throw operationFailed(`Contract is not in draft status (current: ${found.doc.task.contract.status})`);
-      }
-      const readyAt = new Date().toISOString();
-      found.doc.task.contract = {
-        ...found.doc.task.contract,
-        status: 'ready',
-        metrics: ({
-          ...(found.doc.task.contract.metrics ?? {}),
-          readyAt,
-        } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-      };
-      found.doc.task.updatedAt = readyAt;
-      writeTaskFile(found.filePath, found.doc.task, found.doc.body);
-      activated.push(options.task);
-      logger.log(`Contract activated: ${options.task}`);
-    } else {
-      // Bulk activation by parentId
-      const parentId = options.parent!;
-      const allTasks = readTasksDir(dirs.boardDir);
-      for (const doc of allTasks) {
-        const task = doc.task as any;
-        if (task.parentId !== parentId) continue;
-        if (!task.contract || task.contract.status !== 'draft') continue;
-        const readyAt = new Date().toISOString();
-        task.contract = {
-          ...task.contract,
-          status: 'ready',
-          metrics: ({
-            ...(task.contract.metrics ?? {}),
-            readyAt,
-          } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-        };
-        task.updatedAt = readyAt;
-        const taskPath = path.join(dirs.boardDir, taskFileName(task.id));
-        writeTaskFile(taskPath, task, doc.body);
-        activated.push(task.id);
-        logger.log(`Contract activated: ${task.id}`);
-      }
-      if (activated.length === 0) {
-        logger.log(`No draft contracts found with parent: ${parentId}`);
-      }
-    }
-
-    return { success: true, activated };
-  }
-
-  // ── V1 board ──────────────────────────────────────────────────────────────
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const parsed = Brainfile.parseWithErrors(content);
-  if (!parsed.board) {
-    throw operationFailed(parsed.error || 'Failed to parse brainfile');
-  }
-
-  let board = parsed.board;
+  const dirs = getV2Dirs(filePath);
 
   if (options.task) {
-    // Single task
-    const taskInfo = findTaskById(board, options.task);
-    if (!taskInfo) {
+    // Single task activation
+    if (isUnsafeTaskId(options.task)) {
+      throw operationFailed(`Invalid task ID: ${options.task}`);
+    }
+    const found = findV2Task(dirs, options.task, false);
+    if (!found || found.isLog) {
       throw operationFailed(`Task not found: ${options.task}`);
     }
-    if (!taskInfo.task.contract) {
+    if (!found.doc.task.contract) {
       throw operationFailed(`Task ${options.task} has no contract`);
     }
-    if (taskInfo.task.contract.status !== 'draft') {
-      throw operationFailed(`Contract is not in draft status (current: ${taskInfo.task.contract.status})`);
+    if (found.doc.task.contract.status !== 'draft') {
+      throw operationFailed(`Contract is not in draft status (current: ${found.doc.task.contract.status})`);
     }
-
-    // Mutate via setTaskContract (re-attach with status=ready)
     const readyAt = new Date().toISOString();
-    const updatedContract = {
-      ...taskInfo.task.contract,
-      status: 'ready' as const,
+    found.doc.task.contract = {
+      ...found.doc.task.contract,
+      status: 'ready',
       metrics: ({
-        ...(taskInfo.task.contract.metrics ?? {}),
+        ...(found.doc.task.contract.metrics ?? {}),
         readyAt,
       } as NonNullable<NonNullable<Task['contract']>['metrics']>),
     };
-    const result = setTaskContract(board, options.task, updatedContract);
-    if (!result.success || !result.board) {
-      throw operationFailed(result.error || 'Failed to activate contract');
-    }
-    board = result.board;
+    found.doc.task.updatedAt = readyAt;
+    writeTaskFile(found.filePath, found.doc.task, found.doc.body);
     activated.push(options.task);
     logger.log(`Contract activated: ${options.task}`);
   } else {
-    // Bulk by parentId (V1 boards store parentId on task)
+    // Bulk activation by parentId
     const parentId = options.parent!;
-    for (const col of board.columns) {
-      for (const task of col.tasks) {
-        const t = task as any;
-        if (t.parentId !== parentId) continue;
-        if (!task.contract || task.contract.status !== 'draft') continue;
-        const readyAt = new Date().toISOString();
-        const updatedContract = {
-          ...task.contract,
-          status: 'ready' as const,
-          metrics: ({
-            ...(task.contract.metrics ?? {}),
-            readyAt,
-          } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-        };
-        const result = setTaskContract(board, task.id, updatedContract);
-        if (result.success && result.board) {
-          board = result.board;
-          activated.push(task.id);
-          logger.log(`Contract activated: ${task.id}`);
-        }
-      }
+    const allTasks = readTasksDir(dirs.boardDir);
+    for (const doc of allTasks) {
+      const task = doc.task as any;
+      if (task.parentId !== parentId) continue;
+      if (!task.contract || task.contract.status !== 'draft') continue;
+      const readyAt = new Date().toISOString();
+      task.contract = {
+        ...task.contract,
+        status: 'ready',
+        metrics: ({
+          ...(task.contract.metrics ?? {}),
+          readyAt,
+        } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+      };
+      task.updatedAt = readyAt;
+      const taskPath = path.join(dirs.boardDir, taskFileName(task.id));
+      writeTaskFile(taskPath, task, doc.body);
+      activated.push(task.id);
+      logger.log(`Contract activated: ${task.id}`);
     }
     if (activated.length === 0) {
       logger.log(`No draft contracts found with parent: ${parentId}`);
     }
   }
 
-  fs.writeFileSync(filePath, Brainfile.serialize(board), 'utf-8');
   return { success: true, activated };
 }

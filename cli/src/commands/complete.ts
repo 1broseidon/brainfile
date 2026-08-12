@@ -1,13 +1,9 @@
 /**
  * Complete command - move a task from board/ to logs/, set completedAt.
  *
- * In v2 per-task file architecture:
  * - Moves .brainfile/board/task-X.md to .brainfile/logs/task-X.md
  * - Adds completedAt timestamp to frontmatter
  * - Removes column and position fields
- *
- * In v1 (embedded tasks):
- * - Moves task to the first completion column (done) and adds completedAt
  *
  * @packageDocumentation
  */
@@ -15,12 +11,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { Brainfile, findTaskById, moveTask, findCompletionColumn } from '@brainfile/core';
 import { type Logger, defaultLogger } from '../utils/logger';
-import { fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
+import { missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { assertV2Brainfile } from '../utils/v2-only';
 import { writeTaskFile, readTasksDir, taskFileName, type Task } from '@brainfile/core';
-import { isV2, getV2Dirs, findV2Task } from '../utils/v2-detect';
+import { getV2Dirs, findV2Task } from '../utils/v2-detect';
 
 export interface CompleteOptions {
   file: string;
@@ -188,16 +184,9 @@ export function completeCommand(options: CompleteOptions, logger: Logger = defau
   }
 
   const filePath = resolveCliBrainfilePath(options.file);
-  if (!fs.existsSync(filePath)) {
-    throw fileNotFound(filePath);
-  }
+  assertV2Brainfile(filePath);
 
-  if (isV2(filePath)) {
-    return completeV2(filePath, options.task, options.force === true, logger);
-  }
-
-  const completedAt = new Date().toISOString();
-  return completeV1(filePath, options.task, completedAt, logger);
+  return completeV2(filePath, options.task, options.force === true, logger);
 }
 
 function completeV2(filePath: string, taskId: string, force: boolean, logger: Logger): CompleteResult {
@@ -263,47 +252,3 @@ function completeV2(filePath: string, taskId: string, force: boolean, logger: Lo
   return { success: true, taskId, completedAt };
 }
 
-function completeV1(filePath: string, taskId: string, completedAt: string, logger: Logger): CompleteResult {
-  const content = fs.readFileSync(filePath, 'utf-8');
-  const parsed = Brainfile.parseWithErrors(content);
-  if (!parsed.board) {
-    throw operationFailed(parsed.error || 'Failed to parse brainfile');
-  }
-
-  let board = parsed.board;
-  const taskInfo = findTaskById(board, taskId);
-  if (!taskInfo) {
-    throw taskNotFound(taskId);
-  }
-
-  // Find or determine done column
-  const doneColumn = findCompletionColumn(board) || board.columns.find(c =>
-    /^(done|completed?|finished|closed)$/i.test(c.id) ||
-    /^(done|completed?|finished|closed)$/i.test(c.title)
-  );
-
-  if (!doneColumn) {
-    throw operationFailed('No completion column found. Add a column with id "done" or set completionColumn: true');
-  }
-
-  // Move to done column if not already there
-  if (taskInfo.column.id !== doneColumn.id) {
-    const moveResult = moveTask(board, taskId, taskInfo.column.id, doneColumn.id, doneColumn.tasks.length);
-    if (!moveResult.success) {
-      throw operationFailed(moveResult.error!);
-    }
-    board = moveResult.board!;
-  }
-
-  // Write back
-  const updatedContent = Brainfile.serialize(board);
-  fs.writeFileSync(filePath, updatedContent, 'utf-8');
-
-  logger.log(chalk.green('Task completed!'));
-  logger.log('');
-  logger.log(chalk.gray(`  Task:        ${taskId} - ${taskInfo.task.title}`));
-  logger.log(chalk.gray(`  CompletedAt: ${completedAt}`));
-  logger.log(chalk.gray(`  Column:      ${doneColumn.title}`));
-
-  return { success: true, taskId, completedAt };
-}

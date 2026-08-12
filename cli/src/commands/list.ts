@@ -1,10 +1,9 @@
-import * as fs from 'fs';
-import { Brainfile, Task } from '@brainfile/core';
+import { Task } from '@brainfile/core';
 import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
-import { CLIError, fileNotFound, parseFailure } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { isV2, buildBoardFromV2, shouldSuggestV2Migration, markV2MigrationHintShown } from '../utils/v2-detect';
+import { assertV2Brainfile } from '../utils/v2-only';
+import { buildBoardFromV2, shouldSuggestV2Migration, markV2MigrationHintShown } from '../utils/v2-detect';
 
 export interface ListOptions {
   file: string;
@@ -40,27 +39,9 @@ Notes:
 export function listCommand(options: ListOptions, logger: Logger = defaultLogger): ListResult {
   // Resolve file path
   const filePath = resolveCliBrainfilePath(options.file);
+  assertV2Brainfile(filePath);
 
-  // Check if file exists
-  if (!fs.existsSync(filePath)) {
-    throw fileNotFound(filePath);
-  }
-
-  // Detect v2 per-task file architecture
-  let board;
-  if (isV2(filePath)) {
-    board = buildBoardFromV2(filePath);
-  } else {
-    // Read and parse the file (v1)
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const result = Brainfile.parseWithErrors(content);
-
-    if (!result.board) {
-      throw parseFailure(result.error);
-    }
-
-    board = result.board;
-  }
+  const board = buildBoardFromV2(filePath);
 
   // Filter columns if specified
   const columns = options.column

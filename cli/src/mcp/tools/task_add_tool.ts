@@ -2,25 +2,18 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as path from 'path';
 import {
-  findColumnById,
-  findColumnByName,
-  addTask,
-  setTaskContract,
   generateNextFileTaskId,
   readTasksDir,
   writeTaskFile as coreWriteTaskFile,
   taskFileName,
-  type TaskInput,
 } from '@brainfile/core';
 import {
-  isV2,
   ensureV2Dirs,
-  readV2BoardConfig,
   composeBody,
 } from '../../utils/v2-detect';
 import { buildContract } from '../../utils/contractSpec';
-import { validateType } from '@brainfile/core';
-import { readBoard, writeBoard, mcpStructuredError } from '../helpers';
+import { validateType, readBoardConfig } from '@brainfile/core';
+import { requireV2, mcpStructuredError } from '../helpers';
 
 export function registerTaskAddTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -75,151 +68,83 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
     }) => {
       const filePath = file || defaultFile;
 
-      // V2: add task as individual file
-      if (isV2(filePath)) {
-        try {
-          const dirs = ensureV2Dirs(filePath);
-          const board = readV2BoardConfig(filePath);
-          const typePrefix = docType || 'task';
-          const typeValidation = validateType(board as unknown as Parameters<typeof validateType>[0], typePrefix);
-          if (!typeValidation.valid) {
-            return mcpStructuredError(
-              typeValidation.error || `Invalid type: ${typePrefix}`,
-              'type',
-              typePrefix
-            );
-          }
+      const guard = requireV2(filePath);
+      if (guard) return guard;
 
-          let targetColumn = board.columns.find(c => c.id === column);
-          if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
-          if (!targetColumn) {
-            const available = board.columns.map(c => `${c.id} (${c.title})`).join(', ');
-            return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}. Available: ${available}` }], isError: true };
-          }
-
-          const taskId = generateNextFileTaskId(dirs.boardDir, dirs.logsDir, typePrefix);
-          const existingTasks = readTasksDir(dirs.boardDir).filter(t => t.task.column === targetColumn!.id);
-          const position = existingTasks.length;
-
-          const builtSubtasks = subtasks && subtasks.length > 0
-            ? subtasks.map((st: string, i: number) => ({ id: `${taskId}-${i + 1}`, title: st.trim(), completed: false }))
-            : undefined;
-
-          const task: any = {
-            id: taskId,
-            title,
-            ...(docType && docType !== 'task' && { type: docType }),
-            column: targetColumn.id,
-            position,
-            ...(description && { description }),
-            ...(priority && { priority }),
-            ...(tags && tags.length > 0 && { tags }),
-            ...(assignee && { assignee }),
-            ...(dueDate && { dueDate }),
-            ...(relatedFiles && relatedFiles.length > 0 && { relatedFiles }),
-            ...(builtSubtasks && { subtasks: builtSubtasks }),
-            ...(parentId && { parentId }),
-            createdAt: new Date().toISOString(),
-          };
-
-          const wantsContract =
-            Boolean(with_contract ?? withContract) ||
-            Boolean(deliverables && deliverables.length > 0) ||
-            Boolean(validation_commands && validation_commands.length > 0) ||
-            Boolean(validationCommands && validationCommands.length > 0) ||
-            Boolean(constraints && constraints.length > 0);
-
-          if (wantsContract) {
-            const contract = buildContract({
-              deliverableSpecs: deliverables,
-              validationCommands: validation_commands ?? validationCommands,
-              constraints,
-              status: contractReady ? 'ready' : 'draft',
-            });
-            task.contract = contract;
-          }
-
-          const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
-          const body = description ? composeBody(description) : '';
-          coreWriteTaskFile(taskPath, task, body);
-
-          return { content: [{ type: 'text' as const, text: `Task added successfully: ${taskId} - ${title}` }] };
-        } catch (e) {
-          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+      try {
+        const dirs = ensureV2Dirs(filePath);
+        const boardFile = readBoardConfig(filePath);
+        if (!boardFile) {
+          return { content: [{ type: 'text' as const, text: `Error: Failed to parse brainfile: ${filePath}` }], isError: true };
         }
-      }
+        const board = boardFile.config;
+        const typePrefix = docType || 'task';
+        const typeValidation = validateType(board, typePrefix);
+        if (!typeValidation.valid) {
+          return mcpStructuredError(
+            typeValidation.error || `Invalid type: ${typePrefix}`,
+            'type',
+            typePrefix
+          );
+        }
 
-      // V1: use board
-      const result = readBoard(filePath);
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
+        let targetColumn = board.columns.find(c => c.id === column);
+        if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
+        if (!targetColumn) {
+          const available = board.columns.map(c => `${c.id} (${c.title})`).join(', ');
+          return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}. Available: ${available}` }], isError: true };
+        }
 
-      let { board } = result;
+        const taskId = generateNextFileTaskId(dirs.boardDir, dirs.logsDir, typePrefix);
+        const existingTasks = readTasksDir(dirs.boardDir).filter(t => t.task.column === targetColumn!.id);
+        const position = existingTasks.length;
 
-      let targetColumn = findColumnById(board, column);
-      if (!targetColumn) {
-        targetColumn = findColumnByName(board, column);
-      }
+        const builtSubtasks = subtasks && subtasks.length > 0
+          ? subtasks.map((st: string, i: number) => ({ id: `${taskId}-${i + 1}`, title: st.trim(), completed: false }))
+          : undefined;
 
-      if (!targetColumn) {
-        const available = board.columns.map(c => `${c.id} (${c.title})`).join(', ');
-        return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}. Available: ${available}` }], isError: true };
-      }
+        const task: any = {
+          id: taskId,
+          title,
+          ...(docType && docType !== 'task' && { type: docType }),
+          column: targetColumn.id,
+          position,
+          ...(description && { description }),
+          ...(priority && { priority }),
+          ...(tags && tags.length > 0 && { tags }),
+          ...(assignee && { assignee }),
+          ...(dueDate && { dueDate }),
+          ...(relatedFiles && relatedFiles.length > 0 && { relatedFiles }),
+          ...(builtSubtasks && { subtasks: builtSubtasks }),
+          ...(parentId && { parentId }),
+          createdAt: new Date().toISOString(),
+        };
 
-      const taskInput: TaskInput = {
-        title,
-        ...(description && { description }),
-        ...(priority && { priority }),
-        ...(tags && tags.length > 0 && { tags }),
-        ...(assignee && { assignee }),
-        ...(dueDate && { dueDate }),
-        ...(subtasks && subtasks.length > 0 && { subtasks }),
-        ...(relatedFiles && relatedFiles.length > 0 && { relatedFiles })
-      };
+        const wantsContract =
+          Boolean(with_contract ?? withContract) ||
+          Boolean(deliverables && deliverables.length > 0) ||
+          Boolean(validation_commands && validation_commands.length > 0) ||
+          Boolean(validationCommands && validationCommands.length > 0) ||
+          Boolean(constraints && constraints.length > 0);
 
-      const addResult = addTask(board, targetColumn.id, taskInput);
-
-      if (!addResult.success) {
-        return { content: [{ type: 'text' as const, text: `Error: ${addResult.error}` }], isError: true };
-      }
-
-      const newTask = addResult.board!.columns
-        .find(c => c.id === targetColumn!.id)!
-        .tasks.slice(-1)[0];
-
-      const wantsContract =
-        Boolean(with_contract ?? withContract) ||
-        Boolean(deliverables && deliverables.length > 0) ||
-        Boolean(validation_commands && validation_commands.length > 0) ||
-        Boolean(validationCommands && validationCommands.length > 0) ||
-        Boolean(constraints && constraints.length > 0);
-
-      let nextBoard = addResult.board!;
-      if (wantsContract) {
-        try {
+        if (wantsContract) {
           const contract = buildContract({
             deliverableSpecs: deliverables,
             validationCommands: validation_commands ?? validationCommands,
             constraints,
             status: contractReady ? 'ready' : 'draft',
           });
-
-          const contractResult = setTaskContract(nextBoard, newTask.id, contract);
-          if (!contractResult.success || !contractResult.board) {
-            return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to set contract'}` }], isError: true };
-          }
-          nextBoard = contractResult.board;
-        } catch (e) {
-          return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
+          task.contract = contract;
         }
+
+        const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
+        const body = description ? composeBody(description) : '';
+        coreWriteTaskFile(taskPath, task, body);
+
+        return { content: [{ type: 'text' as const, text: `Task added successfully: ${taskId} - ${title}` }] };
+      } catch (e) {
+        return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
       }
-
-      writeBoard(filePath, nextBoard);
-
-      return {
-        content: [{ type: 'text' as const, text: `Task added successfully: ${newTask.id} - ${newTask.title}` }]
-      };
     }
   );
 }

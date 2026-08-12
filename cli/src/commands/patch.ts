@@ -1,19 +1,16 @@
-import * as fs from 'fs';
 import * as path from 'path';
-import { Brainfile, findTaskById, patchTask, type TaskPatch } from '@brainfile/core';
+import { type TaskPatch } from '@brainfile/core';
 import chalk from 'chalk';
 import {
-  fileNotFoundError,
-  parseError,
-  taskNotFoundError,
   missingRequiredError,
   validationError,
   operationError,
   handleError,
 } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { assertV2Brainfile } from '../utils/v2-only';
 import { writeTaskFile } from '@brainfile/core';
-import { isV2, getV2Dirs, findV2Task } from '../utils/v2-detect';
+import { getV2Dirs, findV2Task } from '../utils/v2-detect';
 
 interface PatchOptions {
   file: string;
@@ -65,11 +62,7 @@ export function patchCommand(options: PatchOptions) {
 
     // Resolve file path
     const filePath = resolveCliBrainfilePath(options.file);
-
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      fileNotFoundError(filePath);
-    }
+    assertV2Brainfile(filePath);
 
     // Build patch and changes for display
     const patch: TaskPatch = {};
@@ -121,99 +114,60 @@ export function patchCommand(options: PatchOptions) {
       changes.push('dueDate → removed');
     }
 
-    // V2 per-task file architecture
-    if (isV2(filePath)) {
-      if (isUnsafeTaskId(options.task)) {
-        operationError(`Invalid task ID: ${options.task}`);
-      }
-
-      const dirs = getV2Dirs(filePath);
-      const found = findV2Task(dirs, options.task, false);
-      if (!found || found.isLog) {
-        operationError(`Task not found: ${options.task}`);
-      }
-
-      const { doc, filePath: taskPath } = found;
-      const task = doc.task;
-
-      // Apply patch fields
-      if (patch.title) task.title = patch.title;
-      if (patch.description !== undefined) {
-        if (patch.description === null) {
-          delete task.description;
-        } else {
-          task.description = patch.description;
-        }
-      }
-      if (patch.priority !== undefined) {
-        if (patch.priority === null) {
-          delete task.priority;
-        } else {
-          task.priority = patch.priority as any;
-        }
-      }
-      if (patch.tags !== undefined) {
-        if (patch.tags === null) {
-          delete task.tags;
-        } else {
-          task.tags = patch.tags as string[];
-        }
-      }
-      if (patch.assignee !== undefined) {
-        if (patch.assignee === null) {
-          delete task.assignee;
-        } else {
-          task.assignee = patch.assignee;
-        }
-      }
-      if (patch.dueDate !== undefined) {
-        if (patch.dueDate === null) {
-          delete task.dueDate;
-        } else {
-          task.dueDate = patch.dueDate;
-        }
-      }
-
-      task.updatedAt = new Date().toISOString();
-      writeTaskFile(taskPath, task, doc.body);
-
-      console.log(chalk.green('Task updated successfully!'));
-      console.log('');
-      console.log(chalk.gray(`  Task: ${options.task}`));
-      changes.forEach(change => {
-        console.log(chalk.gray(`  ${change}`));
-      });
-      return;
+    if (isUnsafeTaskId(options.task)) {
+      operationError(`Invalid task ID: ${options.task}`);
     }
 
-    // V1: Read and parse the file
-    const content = fs.readFileSync(filePath, 'utf-8');
-    const result = Brainfile.parseWithErrors(content);
-
-    if (!result.board) {
-      parseError(result.error);
+    const dirs = getV2Dirs(filePath);
+    const found = findV2Task(dirs, options.task, false);
+    if (!found || found.isLog) {
+      operationError(`Task not found: ${options.task}`);
     }
 
-    let board = result.board;
+    const { doc, filePath: taskPath } = found;
+    const task = doc.task;
 
-    // Find the task
-    const taskInfo = findTaskById(board, options.task);
-    if (!taskInfo) {
-      taskNotFoundError(options.task, board);
+    // Apply patch fields
+    if (patch.title) task.title = patch.title;
+    if (patch.description !== undefined) {
+      if (patch.description === null) {
+        delete task.description;
+      } else {
+        task.description = patch.description;
+      }
+    }
+    if (patch.priority !== undefined) {
+      if (patch.priority === null) {
+        delete task.priority;
+      } else {
+        task.priority = patch.priority as any;
+      }
+    }
+    if (patch.tags !== undefined) {
+      if (patch.tags === null) {
+        delete task.tags;
+      } else {
+        task.tags = patch.tags as string[];
+      }
+    }
+    if (patch.assignee !== undefined) {
+      if (patch.assignee === null) {
+        delete task.assignee;
+      } else {
+        task.assignee = patch.assignee;
+      }
+    }
+    if (patch.dueDate !== undefined) {
+      if (patch.dueDate === null) {
+        delete task.dueDate;
+      } else {
+        task.dueDate = patch.dueDate;
+      }
     }
 
-    // Patch task using core operation
-    const patchResult = patchTask(board, options.task, patch);
+    task.updatedAt = new Date().toISOString();
+    writeTaskFile(taskPath, task, doc.body);
 
-    if (!patchResult.success) {
-      operationError(patchResult.error!);
-    }
-
-    // Serialize and write back
-    const updatedContent = Brainfile.serialize(patchResult.board!);
-    fs.writeFileSync(filePath, updatedContent, 'utf-8');
-
-    // Success message
     console.log(chalk.green('Task updated successfully!'));
     console.log('');
     console.log(chalk.gray(`  Task: ${options.task}`));

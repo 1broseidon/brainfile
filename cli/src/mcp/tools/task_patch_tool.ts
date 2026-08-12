@@ -2,15 +2,12 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as path from 'path';
 import {
-  patchTask,
-  patchTasks,
   readTaskFile as coreReadTaskFile,
   writeTaskFile as coreWriteTaskFile,
   taskFileName,
-  type TaskPatch,
 } from '@brainfile/core';
-import { isV2, getV2Dirs } from '../../utils/v2-detect';
-import { readBoard, writeBoard } from '../helpers';
+import { getV2Dirs } from '../../utils/v2-detect';
+import { requireV2 } from '../helpers';
 
 export function registerTaskPatchTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -43,90 +40,48 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
 
       const isNull = (v: unknown) => v === null || v === 'null';
 
-      // V2: update task file directly
-      if (isV2(filePath)) {
-        const dirs = getV2Dirs(filePath);
-        const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+      const guard = requireV2(filePath);
+      if (guard) return guard;
 
-        for (const id of taskIds) {
-          const taskPath = path.join(dirs.boardDir, taskFileName(id));
-          const doc = coreReadTaskFile(taskPath);
-          if (!doc) {
-            results.push({ taskId: id, success: false, error: 'Task not found' });
-            continue;
-          }
+      const dirs = getV2Dirs(filePath);
+      const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
 
-          const t = doc.task;
-          if (title !== undefined) t.title = title;
-          if (description !== undefined) { if (isNull(description)) delete t.description; else t.description = description as string; }
-          if (priority !== undefined) { if (isNull(priority)) delete t.priority; else t.priority = priority as any; }
-          if (tags !== undefined) { if (isNull(tags)) delete t.tags; else t.tags = tags as string[]; }
-          if (assignee !== undefined) { if (isNull(assignee)) delete t.assignee; else t.assignee = assignee as string; }
-          if (dueDate !== undefined) { if (isNull(dueDate)) delete t.dueDate; else t.dueDate = dueDate as string; }
-          if (relatedFiles !== undefined) { if (isNull(relatedFiles)) delete t.relatedFiles; else t.relatedFiles = relatedFiles as string[]; }
-          if (parentId !== undefined) { if (isNull(parentId)) delete t.parentId; else t.parentId = parentId as string; }
-          t.updatedAt = new Date().toISOString();
-          coreWriteTaskFile(taskPath, t, doc.body);
-          results.push({ taskId: id, success: true });
+      for (const id of taskIds) {
+        const taskPath = path.join(dirs.boardDir, taskFileName(id));
+        const doc = coreReadTaskFile(taskPath);
+        if (!doc) {
+          results.push({ taskId: id, success: false, error: 'Task not found' });
+          continue;
         }
 
-        if (!isBatch) {
-          const single = results[0];
-          if (!single?.success) {
-            return { content: [{ type: 'text' as const, text: `Error: ${single?.error || 'Task not found'}` }], isError: true };
-          }
-          return { content: [{ type: 'text' as const, text: `Task ${taskIds[0]} updated successfully` }] };
-        }
-
-        const successCount = results.filter(r => r.success).length;
-        const failureCount = results.length - successCount;
-        const output = { success: failureCount === 0, successCount, failureCount, results };
-        return {
-          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
-          isError: failureCount > 0 && successCount === 0,
-        };
+        const t = doc.task;
+        if (title !== undefined) t.title = title;
+        if (description !== undefined) { if (isNull(description)) delete t.description; else t.description = description as string; }
+        if (priority !== undefined) { if (isNull(priority)) delete t.priority; else t.priority = priority as any; }
+        if (tags !== undefined) { if (isNull(tags)) delete t.tags; else t.tags = tags as string[]; }
+        if (assignee !== undefined) { if (isNull(assignee)) delete t.assignee; else t.assignee = assignee as string; }
+        if (dueDate !== undefined) { if (isNull(dueDate)) delete t.dueDate; else t.dueDate = dueDate as string; }
+        if (relatedFiles !== undefined) { if (isNull(relatedFiles)) delete t.relatedFiles; else t.relatedFiles = relatedFiles as string[]; }
+        if (parentId !== undefined) { if (isNull(parentId)) delete t.parentId; else t.parentId = parentId as string; }
+        t.updatedAt = new Date().toISOString();
+        coreWriteTaskFile(taskPath, t, doc.body);
+        results.push({ taskId: id, success: true });
       }
-
-      // V1: use board
-      const result = readBoard(filePath);
-      if ('error' in result) {
-        return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
-      }
-
-      let { board } = result;
-
-      const patch: TaskPatch = {};
-      if (title !== undefined) patch.title = title;
-      if (description !== undefined) patch.description = isNull(description) ? undefined : description;
-      if (priority !== undefined) patch.priority = isNull(priority) ? undefined : priority;
-      if (tags !== undefined) patch.tags = isNull(tags) ? undefined : tags;
-      if (assignee !== undefined) patch.assignee = isNull(assignee) ? undefined : assignee;
-      if (dueDate !== undefined) patch.dueDate = isNull(dueDate) ? undefined : dueDate;
-      if (relatedFiles !== undefined) patch.relatedFiles = isNull(relatedFiles) ? undefined : relatedFiles;
 
       if (!isBatch) {
-        const id = taskIds[0];
-        const patchResult = patchTask(board, id, patch);
-        if (!patchResult.success) {
-          return { content: [{ type: 'text' as const, text: `Error: ${patchResult.error}` }], isError: true };
+        const single = results[0];
+        if (!single?.success) {
+          return { content: [{ type: 'text' as const, text: `Error: ${single?.error || 'Task not found'}` }], isError: true };
         }
-        writeBoard(filePath, patchResult.board!);
-        return { content: [{ type: 'text' as const, text: `Task ${id} updated successfully` }] };
+        return { content: [{ type: 'text' as const, text: `Task ${taskIds[0]} updated successfully` }] };
       }
 
-      const bulkResult = patchTasks(board, taskIds, patch);
-      if (bulkResult.board) {
-        writeBoard(filePath, bulkResult.board);
-      }
-      const output = {
-        success: bulkResult.success,
-        successCount: bulkResult.successCount,
-        failureCount: bulkResult.failureCount,
-        results: bulkResult.results,
-      };
+      const successCount = results.filter(r => r.success).length;
+      const failureCount = results.length - successCount;
+      const output = { success: failureCount === 0, successCount, failureCount, results };
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
-        isError: !bulkResult.success,
+        isError: failureCount > 0 && successCount === 0,
       };
     }
   );

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Brainfile, type Board, isV2, buildBoardFromV2 } from '@brainfile/core';
+import { isV2 } from '@brainfile/core';
 import { V1_UNSUPPORTED_MESSAGE } from '../utils/v2-only';
 
 export interface McpOptions {
@@ -56,26 +56,22 @@ export function resolveBrainfile(filePath: string): string {
   return path.resolve(filePath);
 }
 
-export function readBoard(filePath: string): { board: Board; content: string } | { error: string } {
+/**
+ * Guard for MCP tool handlers: returns an MCP error result when the target
+ * brainfile is missing or not in v2 per-task file layout, null otherwise.
+ */
+export function requireV2(filePath: string): { content: Array<{ type: 'text'; text: string }>; isError: true } | null {
   const resolvedPath = resolveBrainfile(filePath);
 
   if (!fs.existsSync(resolvedPath)) {
-    return { error: `File not found: ${resolvedPath}` };
+    return { content: [{ type: 'text' as const, text: `Error: File not found: ${resolvedPath}` }], isError: true };
   }
 
   if (!isV2(resolvedPath)) {
-    return { error: V1_UNSUPPORTED_MESSAGE };
+    return { content: [{ type: 'text' as const, text: `Error: ${V1_UNSUPPORTED_MESSAGE}` }], isError: true };
   }
 
-  const board = buildBoardFromV2(resolvedPath);
-  const content = fs.readFileSync(resolvedPath, 'utf-8');
-  return { board, content };
-}
-
-export function writeBoard(filePath: string, board: Board): void {
-  const resolvedPath = resolveBrainfile(filePath);
-  const content = Brainfile.serialize(board);
-  fs.writeFileSync(resolvedPath, content, 'utf-8');
+  return null;
 }
 
 export function mcpStructuredError(message: string, field: string, value: string) {

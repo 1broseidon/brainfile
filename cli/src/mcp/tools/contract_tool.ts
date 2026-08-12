@@ -2,18 +2,16 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import * as path from 'path';
 import {
-  findTaskById,
-  setTaskContract,
   readTasksDir,
   writeTaskFile as coreWriteTaskFile,
   taskFileName,
   type Task,
 } from '@brainfile/core';
-import { isV2, getV2Dirs, findV2Task } from '../../utils/v2-detect';
+import { getV2Dirs, findV2Task } from '../../utils/v2-detect';
 import { buildContract } from '../../utils/contractSpec';
 import { pickupContract, deliverContract, validateContract } from '../../lib/contractRunner';
 import { executeContractGraphMcpAction } from './contract';
-import { readBoard, writeBoard } from '../helpers';
+import { requireV2 } from '../helpers';
 
 export function registerContractTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -61,34 +59,12 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           return { content: [{ type: 'text' as const, text: 'Error: task is required for action=attach' }], isError: true };
         }
 
-        if (isV2(filePath)) {
-          const dirs = getV2Dirs(filePath);
-          const found = findV2Task(dirs, task);
-          if (!found) {
-            return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-          }
-          try {
-            const contract = buildContract({
-              deliverableSpecs: deliverables,
-              validationCommands: validation_commands,
-              constraints,
-              status: attachReady ? 'ready' : 'draft',
-            });
-            found.doc.task.contract = contract;
-            found.doc.task.updatedAt = new Date().toISOString();
-            coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
-            return { content: [{ type: 'text' as const, text: `Contract attached (${contract.status}): ${task}` }] };
-          } catch (e) {
-            return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
-          }
-        }
+        const guard = requireV2(filePath);
+        if (guard) return guard;
 
-        const readResult = readBoard(filePath);
-        if ('error' in readResult) {
-          return { content: [{ type: 'text' as const, text: `Error: ${readResult.error}` }], isError: true };
-        }
-        const taskInfo = findTaskById(readResult.board, task);
-        if (!taskInfo) {
+        const dirs = getV2Dirs(filePath);
+        const found = findV2Task(dirs, task);
+        if (!found) {
           return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
         }
         try {
@@ -98,11 +74,9 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
             constraints,
             status: attachReady ? 'ready' : 'draft',
           });
-          const contractResult = setTaskContract(readResult.board, task, contract);
-          if (!contractResult.success || !contractResult.board) {
-            return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to attach contract'}` }], isError: true };
-          }
-          writeBoard(filePath, contractResult.board);
+          found.doc.task.contract = contract;
+          found.doc.task.updatedAt = new Date().toISOString();
+          coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
           return { content: [{ type: 'text' as const, text: `Contract attached (${contract.status}): ${task}` }] };
         } catch (e) {
           return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
@@ -190,119 +164,57 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           return { content: [{ type: 'text' as const, text: 'Error: task or parentId is required for action=activate' }], isError: true };
         }
 
+        const guard = requireV2(filePath);
+        if (guard) return guard;
+
         const activated: string[] = [];
-
-        if (isV2(filePath)) {
-          const dirs = getV2Dirs(filePath);
-
-          if (task) {
-            const found = findV2Task(dirs, task, false);
-            if (!found || found.isLog) {
-              return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
-            }
-            if (!found.doc.task.contract) {
-              return { content: [{ type: 'text' as const, text: `Error: Task ${task} has no contract` }], isError: true };
-            }
-            if (found.doc.task.contract.status !== 'draft') {
-              return { content: [{ type: 'text' as const, text: `Error: Contract is not in draft status (current: ${found.doc.task.contract.status})` }], isError: true };
-            }
-            const readyAt = new Date().toISOString();
-            found.doc.task.contract = {
-              ...found.doc.task.contract,
-              status: 'ready',
-              metrics: ({
-                ...(found.doc.task.contract.metrics ?? {}),
-                readyAt,
-              } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-            };
-            found.doc.task.updatedAt = readyAt;
-            coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
-            activated.push(task);
-          } else {
-            // Bulk by parentId
-            const allTasks = readTasksDir(dirs.boardDir);
-            for (const doc of allTasks) {
-              const t = doc.task as any;
-              if (t.parentId !== parentId) continue;
-              if (!t.contract || t.contract.status !== 'draft') continue;
-              const readyAt = new Date().toISOString();
-              t.contract = {
-                ...t.contract,
-                status: 'ready',
-                metrics: ({
-                  ...(t.contract.metrics ?? {}),
-                  readyAt,
-                } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-              };
-              t.updatedAt = readyAt;
-              coreWriteTaskFile(path.join(dirs.boardDir, taskFileName(t.id)), t, doc.body);
-              activated.push(t.id);
-            }
-          }
-
-          const output = { activated, count: activated.length };
-          return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
-        }
-
-        // V1
-        const readResult = readBoard(filePath);
-        if ('error' in readResult) {
-          return { content: [{ type: 'text' as const, text: `Error: ${readResult.error}` }], isError: true };
-        }
-        let board = readResult.board;
+        const dirs = getV2Dirs(filePath);
 
         if (task) {
-          const taskInfo = findTaskById(board, task);
-          if (!taskInfo) {
+          const found = findV2Task(dirs, task, false);
+          if (!found || found.isLog) {
             return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
           }
-          if (!taskInfo.task.contract) {
+          if (!found.doc.task.contract) {
             return { content: [{ type: 'text' as const, text: `Error: Task ${task} has no contract` }], isError: true };
           }
-          if (taskInfo.task.contract.status !== 'draft') {
-            return { content: [{ type: 'text' as const, text: `Error: Contract is not in draft status (current: ${taskInfo.task.contract.status})` }], isError: true };
+          if (found.doc.task.contract.status !== 'draft') {
+            return { content: [{ type: 'text' as const, text: `Error: Contract is not in draft status (current: ${found.doc.task.contract.status})` }], isError: true };
           }
           const readyAt = new Date().toISOString();
-          const updatedContract = {
-            ...taskInfo.task.contract,
-            status: 'ready' as const,
+          found.doc.task.contract = {
+            ...found.doc.task.contract,
+            status: 'ready',
             metrics: ({
-              ...(taskInfo.task.contract.metrics ?? {}),
+              ...(found.doc.task.contract.metrics ?? {}),
               readyAt,
             } as NonNullable<NonNullable<Task['contract']>['metrics']>),
           };
-          const contractResult = setTaskContract(board, task, updatedContract);
-          if (!contractResult.success || !contractResult.board) {
-            return { content: [{ type: 'text' as const, text: `Error: ${contractResult.error || 'Failed to activate contract'}` }], isError: true };
-          }
-          board = contractResult.board;
+          found.doc.task.updatedAt = readyAt;
+          coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
           activated.push(task);
         } else {
           // Bulk by parentId
-          for (const col of board.columns) {
-            for (const t of col.tasks) {
-              const taskAny = t as any;
-              if (taskAny.parentId !== parentId) continue;
-              if (!t.contract || t.contract.status !== 'draft') continue;
-              const readyAt = new Date().toISOString();
-              const updatedContract = {
-                ...t.contract,
-                status: 'ready' as const,
-                metrics: ({
-                  ...(t.contract.metrics ?? {}),
-                  readyAt,
-                } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-              };
-              const contractResult = setTaskContract(board, t.id, updatedContract);
-              if (contractResult.success && contractResult.board) {
-                board = contractResult.board;
-                activated.push(t.id);
-              }
-            }
+          const allTasks = readTasksDir(dirs.boardDir);
+          for (const doc of allTasks) {
+            const t = doc.task as any;
+            if (t.parentId !== parentId) continue;
+            if (!t.contract || t.contract.status !== 'draft') continue;
+            const readyAt = new Date().toISOString();
+            t.contract = {
+              ...t.contract,
+              status: 'ready',
+              metrics: ({
+                ...(t.contract.metrics ?? {}),
+                readyAt,
+              } as NonNullable<NonNullable<Task['contract']>['metrics']>),
+            };
+            t.updatedAt = readyAt;
+            coreWriteTaskFile(path.join(dirs.boardDir, taskFileName(t.id)), t, doc.body);
+            activated.push(t.id);
           }
         }
 
-        writeBoard(filePath, board);
         const output = { activated, count: activated.length };
         return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
       }

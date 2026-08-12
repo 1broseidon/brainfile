@@ -2,9 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import {
-  Brainfile,
   resolveBrainfilePath,
-  findTaskById,
   pickupTaskContract,
   deliverTaskContract,
   completeTaskContract,
@@ -20,6 +18,7 @@ import {
   findV2Task,
   extractDescription,
 } from '../utils/v2-detect';
+import { V1_UNSUPPORTED_MESSAGE } from '../utils/v2-only';
 
 export type ContractAction = 'pickup' | 'deliver' | 'validate';
 
@@ -94,74 +93,20 @@ export type ContractRunnerResult =
   | ContractDeliverResult
   | ContractValidateResult;
 
-function readBoardFromFile(filePath: string): { board: Board; content: string } | { error: string } {
-  const resolvedPath = path.resolve(filePath);
-  if (!fs.existsSync(resolvedPath)) {
-    return { error: `File not found: ${resolvedPath}` };
+function requireV2Runner(resolvedFilePath: string): { error: string } | null {
+  if (!fs.existsSync(resolvedFilePath)) {
+    return { error: `File not found: ${resolvedFilePath}` };
   }
-
-  const content = fs.readFileSync(resolvedPath, 'utf-8');
-  const parsed = Brainfile.parseWithErrors(content);
-  if (!parsed.board) {
-    return { error: parsed.error || 'Failed to parse brainfile' };
+  if (!isV2(resolvedFilePath)) {
+    return { error: V1_UNSUPPORTED_MESSAGE };
   }
-
-  return { board: parsed.board, content };
-}
-
-function writeBoardToFile(filePath: string, board: Board): void {
-  const resolvedPath = path.resolve(filePath);
-  fs.writeFileSync(resolvedPath, Brainfile.serialize(board), 'utf-8');
+  return null;
 }
 
 function normalizeNonEmpty(input: string, errorMessage: string): { ok: true; value: string } | { ok: false; error: string } {
   const trimmed = input.trim();
   if (!trimmed) return { ok: false, error: errorMessage };
   return { ok: true, value: trimmed };
-}
-
-function getContractOrError(taskId: string, contract: Contract | undefined): { ok: true; contract: Contract } | { ok: false; error: string } {
-  if (!contract) return { ok: false, error: `Task ${taskId} has no contract` };
-  return { ok: true, contract };
-}
-
-type ContractMetricsBag = {
-  pickedUpAt?: string;
-  deliveredAt?: string;
-  duration?: number;
-  reworkCount?: number;
-};
-
-type ContractWithMetrics = Contract & { metrics?: ContractMetricsBag };
-
-function applyPickupMetrics(contract: Contract, at: Date = new Date()): void {
-  const withMetrics = contract as ContractWithMetrics;
-  const metrics: ContractMetricsBag = { ...(withMetrics.metrics ?? {}) };
-  metrics.pickedUpAt = at.toISOString();
-
-  if (typeof metrics.reworkCount === 'number' && Number.isFinite(metrics.reworkCount)) {
-    metrics.reworkCount = Math.max(0, Math.round(metrics.reworkCount)) + 1;
-  } else {
-    metrics.reworkCount = 0;
-  }
-
-  withMetrics.metrics = metrics;
-}
-
-function applyDeliverMetrics(contract: Contract, at: Date = new Date()): void {
-  const withMetrics = contract as ContractWithMetrics;
-  const metrics: ContractMetricsBag = { ...(withMetrics.metrics ?? {}) };
-  metrics.deliveredAt = at.toISOString();
-
-  if (typeof metrics.pickedUpAt === 'string') {
-    const pickedUpMs = Date.parse(metrics.pickedUpAt);
-    const deliveredMs = at.getTime();
-    if (Number.isFinite(pickedUpMs)) {
-      metrics.duration = Math.max(0, Math.round((deliveredMs - pickedUpMs) / 1000));
-    }
-  }
-
-  withMetrics.metrics = metrics;
 }
 
 export function formatContractContextMarkdown(params: {
@@ -251,201 +196,28 @@ export function formatContractContextMarkdown(params: {
 export function pickupContract(ctx: ContractRunContext): ContractPickupResult | { error: string } {
   const resolvedFilePath = resolveBrainfilePath({ filePath: ctx.filePath, startDir: process.cwd() });
 
-  // V2 per-task file architecture
-  if (isV2(resolvedFilePath)) {
-    return pickupContractV2(ctx, resolvedFilePath);
-  }
+  const guard = requireV2Runner(resolvedFilePath);
+  if (guard) return guard;
 
-  const read = readBoardFromFile(resolvedFilePath);
-  if ('error' in read) return { error: read.error };
-
-  const { board } = read;
-  const taskInfo = findTaskById(board, ctx.taskId);
-  if (!taskInfo) return { error: `Task not found: ${ctx.taskId}` };
-
-  const contract = getContractOrError(ctx.taskId, taskInfo.task.contract);
-  if (!contract.ok) return { error: contract.error };
-
-  applyPickupMetrics(taskInfo.task.contract!);
-  const updatedTaskInfo = findTaskById(board, ctx.taskId);
-  if (!updatedTaskInfo?.task.contract) {
-    return { error: `Task ${ctx.taskId} has no contract` };
-  }
-
-  updatedTaskInfo.task.contract.status = 'in_progress';
-  writeBoardToFile(resolvedFilePath, board);
-
-  const updatedContract = updatedTaskInfo.task.contract;
-
-  const markdown = formatContractContextMarkdown({
-    taskId: updatedTaskInfo.task.id,
-    taskTitle: updatedTaskInfo.task.title,
-    description: updatedTaskInfo.task.description,
-    columnTitle: updatedTaskInfo.column.title,
-    contract: updatedContract,
-    relatedFiles: updatedTaskInfo.task.relatedFiles,
-  });
-
-  return { action: 'pickup', board, markdown };
+  return pickupContractV2(ctx, resolvedFilePath);
 }
 
 export function deliverContract(ctx: ContractRunContext): ContractDeliverResult | { error: string } {
   const resolvedFilePath = resolveBrainfilePath({ filePath: ctx.filePath, startDir: process.cwd() });
 
-  if (isV2(resolvedFilePath)) {
-    return deliverContractV2(ctx, resolvedFilePath);
-  }
+  const guard = requireV2Runner(resolvedFilePath);
+  if (guard) return guard;
 
-  const read = readBoardFromFile(resolvedFilePath);
-  if ('error' in read) return { error: read.error };
-
-  const { board } = read;
-  const taskInfo = findTaskById(board, ctx.taskId);
-  if (!taskInfo) return { error: `Task not found: ${ctx.taskId}` };
-
-  const contract = getContractOrError(ctx.taskId, taskInfo.task.contract);
-  if (!contract.ok) return { error: contract.error };
-
-  applyDeliverMetrics(taskInfo.task.contract!);
-  const updatedTaskInfo = findTaskById(board, ctx.taskId);
-  if (!updatedTaskInfo?.task.contract) {
-    return { error: `Task ${ctx.taskId} has no contract` };
-  }
-
-  updatedTaskInfo.task.contract.status = 'delivered';
-  writeBoardToFile(resolvedFilePath, board);
-
-  return { action: 'deliver', board };
+  return deliverContractV2(ctx, resolvedFilePath);
 }
 
 export function validateContract(ctx: ContractRunContext): ContractValidateResult | { error: string } {
   const resolvedFilePath = resolveBrainfilePath({ filePath: ctx.filePath, startDir: process.cwd() });
 
-  if (isV2(resolvedFilePath)) {
-    return validateContractV2(ctx, resolvedFilePath);
-  }
+  const guard = requireV2Runner(resolvedFilePath);
+  if (guard) return guard;
 
-  const read = readBoardFromFile(resolvedFilePath);
-  if ('error' in read) return { error: read.error };
-
-  const { board } = read;
-  const taskInfo = findTaskById(board, ctx.taskId);
-  if (!taskInfo) return { error: `Task not found: ${ctx.taskId}` };
-
-  const contractInfo = getContractOrError(ctx.taskId, taskInfo.task.contract);
-  if (!contractInfo.ok) return { error: contractInfo.error };
-
-  const contract = contractInfo.contract;
-  const brainfileAbs = path.resolve(resolvedFilePath);
-  const brainfileDir = path.dirname(brainfileAbs);
-
-  // If brainfile is inside .brainfile/, use parent as project root
-  // This ensures paths like "cli/src/file.ts" resolve from project root, not .brainfile/
-  const baseDir = path.basename(brainfileDir) === '.brainfile'
-    ? path.dirname(brainfileDir)
-    : brainfileDir;
-
-  const deliverables = contract.deliverables ?? [];
-  const deliverableChecks: ContractValidateResult['deliverableChecks'] = [];
-
-  // Check file deliverables exist
-  for (const d of deliverables) {
-    if (d.type !== 'file') {
-      deliverableChecks.push({ deliverable: d, ok: true });
-      continue;
-    }
-    const normalized = normalizeNonEmpty(d.path, 'Deliverable path is required');
-    if (!normalized.ok) {
-      deliverableChecks.push({ deliverable: d, ok: false, error: normalized.error });
-      continue;
-    }
-
-    const resolved = path.isAbsolute(normalized.value)
-      ? normalized.value
-      : path.join(baseDir, normalized.value);
-
-    if (!fs.existsSync(resolved)) {
-      deliverableChecks.push({ deliverable: d, ok: false, resolvedPath: resolved, error: 'File not found' });
-    } else {
-      deliverableChecks.push({ deliverable: d, ok: true, resolvedPath: resolved });
-    }
-  }
-
-  // If any deliverable failed, fail fast (and do not run commands)
-  const deliverablesOk = deliverableChecks.every((c) => c.ok);
-  const commandResults: ValidationCommandResult[] = [];
-  const warnings: ValidationWarning[] = [];
-
-  let ok = deliverablesOk;
-  if (ok) {
-    const commands = contract.validation?.commands ?? [];
-    for (const raw of commands) {
-      const normalized = normalizeNonEmpty(raw, 'Validation command is required');
-      if (!normalized.ok) {
-        commandResults.push({ command: raw, exitCode: 1, stdout: '', stderr: normalized.error });
-        ok = false;
-        break;
-      }
-
-      // Check for directory-changing commands that may cause issues
-      const dirWarning = detectDirectoryChangeWarning(normalized.value);
-      if (dirWarning) {
-        warnings.push({ command: normalized.value, message: dirWarning });
-      }
-
-      const res = spawnSync(normalized.value, {
-        shell: true,
-        cwd: baseDir,
-        encoding: 'utf-8',
-      });
-
-      const exitCode = typeof res.status === 'number' ? res.status : 1;
-      commandResults.push({
-        command: normalized.value,
-        exitCode,
-        stdout: res.stdout ?? '',
-        stderr: res.stderr ?? '',
-      });
-
-      if (exitCode !== 0) {
-        ok = false;
-        break;
-      }
-    }
-  }
-
-  const failureFeedback = !deliverablesOk
-    ? deliverableChecks
-        .filter((check) => !check.ok)
-        .map((check) => {
-          const location = check.resolvedPath ? ` (${check.resolvedPath})` : '';
-          return `${check.deliverable.path}${location}: ${check.error || 'Validation failed'}`;
-        })
-        .join('\n')
-    : commandResults.at(-1)?.stderr || commandResults.at(-1)?.stdout || 'Validation failed';
-
-  const updatedTaskInfo = findTaskById(board, ctx.taskId);
-  if (!updatedTaskInfo?.task.contract) {
-    return { error: `Task ${ctx.taskId} has no contract` };
-  }
-
-  if (ok && updatedTaskInfo.task.contract.status !== 'done') {
-    updatedTaskInfo.task.contract.status = 'done';
-  } else if (!ok) {
-    updatedTaskInfo.task.contract.status = 'failed';
-    updatedTaskInfo.task.contract.feedback = failureFeedback.trim() || undefined;
-  }
-
-  writeBoardToFile(resolvedFilePath, board);
-
-  return {
-    action: 'validate',
-    board,
-    deliverableChecks,
-    commandResults,
-    warnings,
-    ok,
-  };
+  return validateContractV2(ctx, resolvedFilePath);
 }
 
 // ============================================================================

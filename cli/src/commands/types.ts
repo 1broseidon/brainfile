@@ -4,12 +4,11 @@ import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
 import {
   CLIError,
-  fileNotFound,
   missingRequired,
   parseFailure,
 } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { isV2, readV2BoardConfig } from '../utils/v2-detect';
+import { assertV2Brainfile } from '../utils/v2-only';
 
 export interface TypeEntry {
   idPrefix: string;
@@ -137,17 +136,6 @@ function sanitizeTypesConfig(raw: unknown): TypesConfig {
   return out;
 }
 
-function getV1TypesConfig(filePath: string): { strict: boolean; types: TypesConfig } {
-  const doc = readFrontmatter(filePath);
-  const strict = doc.data.strict === true;
-  const types = getBoardTypes(doc.data);
-  return { strict, types };
-}
-
-function getBoardTypes(board: Record<string, unknown>): TypesConfig {
-  return sanitizeTypesConfig(board.types);
-}
-
 function normalizeName(name?: string): string {
   const normalized = name?.trim();
   if (!normalized) {
@@ -181,30 +169,18 @@ export function parseBooleanFlag(value: string): boolean {
 }
 
 /**
- * List configured board types for v1/v2 boards.
+ * List configured board types from the v2 board config.
  */
 export function typesListCommand(
   options: TypesListOptions,
   logger: Logger = defaultLogger
 ): TypesListResult {
   const filePath = resolveCliBrainfilePath(options.file);
+  assertV2Brainfile(filePath);
 
-  if (!fs.existsSync(filePath)) {
-    throw fileNotFound(filePath);
-  }
-
-  let strict = false;
-  let types: TypesConfig = {};
-
-  if (isV2(filePath)) {
-    const board = readV2BoardConfig(filePath);
-    strict = (board as unknown as Record<string, unknown>).strict === true;
-    types = getBoardTypes(board as unknown as Record<string, unknown>);
-  } else {
-    const config = getV1TypesConfig(filePath);
-    strict = config.strict;
-    types = config.types;
-  }
+  const doc = readFrontmatter(filePath);
+  const strict = doc.data.strict === true;
+  const types: TypesConfig = sanitizeTypesConfig(doc.data.types);
 
   if (options.json) {
     logger.log(JSON.stringify({ strict, types }, null, 2));
@@ -229,17 +205,14 @@ export function typesListCommand(
 }
 
 /**
- * Add or update a type entry under board frontmatter.types for v1/v2 boards.
+ * Add or update a type entry under the v2 board config frontmatter.types.
  */
 export function typesAddCommand(
   options: TypesAddOptions,
   logger: Logger = defaultLogger
 ): TypesAddResult {
   const filePath = resolveCliBrainfilePath(options.file);
-
-  if (!fs.existsSync(filePath)) {
-    throw fileNotFound(filePath);
-  }
+  assertV2Brainfile(filePath);
 
   const name = normalizeName(options.name);
   const idPrefix = normalizeIdPrefix(name, options.idPrefix);

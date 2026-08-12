@@ -1,4 +1,3 @@
-import * as fs from 'fs';
 import * as path from 'path';
 import {
   writeTaskFile,
@@ -10,16 +9,15 @@ import {
 } from '@brainfile/core';
 import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
-import { CLIError, missingRequired, columnNotFound, validationError } from '../utils/cli-error';
+import { CLIError, missingRequired, columnNotFound, validationError, operationFailed } from '../utils/cli-error';
 import { buildContract, normalizeToArray } from '../utils/contractSpec';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import {
   ensureV2Dirs,
-  readV2BoardConfig,
   composeBody,
 } from '../utils/v2-detect';
 import { assertV2Brainfile } from '../utils/v2-only';
-import { validateType } from '@brainfile/core';
+import { validateType, readBoardConfig } from '@brainfile/core';
 import { lintValidationCommands } from '../validation/command-lint';
 
 export const ADD_COMMAND_HELP = `
@@ -164,9 +162,13 @@ export function addCommand(options: AddOptions, logger: Logger = defaultLogger):
 
 function addCommandV2(options: AddOptions, filePath: string, logger: Logger): AddResult {
   const dirs = ensureV2Dirs(filePath);
-  const board = readV2BoardConfig(filePath);
+  const boardFile = readBoardConfig(filePath);
+  if (!boardFile) {
+    throw operationFailed(`Failed to parse brainfile: ${filePath}`);
+  }
+  const board = boardFile.config;
   const typeName = options.type || 'task';
-  const typeValidation = validateType(board as unknown as Parameters<typeof validateType>[0], typeName);
+  const typeValidation = validateType(board, typeName);
   if (!typeValidation.valid) {
     throw new CLIError(typeValidation.error || `Invalid type: ${typeName}`);
   }
