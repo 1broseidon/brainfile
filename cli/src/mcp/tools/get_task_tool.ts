@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
 import { getV2Dirs, findV2Task, extractDescription } from '../../utils/v2-detect';
 import { requireV2 } from '../helpers';
+import { getTaskOutputSchema } from '../schemas';
 
 export function registerGetTaskTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -12,7 +13,8 @@ export function registerGetTaskTool(server: McpServer, defaultFile: string): voi
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               task: z.string().describe('Task ID to retrieve')
-            })
+            }),
+      outputSchema: getTaskOutputSchema
     },
     async ({ file, task }) => {
       const filePath = file || defaultFile;
@@ -33,7 +35,10 @@ export function registerGetTaskTool(server: McpServer, defaultFile: string): voi
         column: isLog ? 'Completed' : (doc.task.column || 'unknown'),
         ...(isLog && { archived: true }),
       };
-      return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        structuredContent: output,
+      };
     }
   );
 }

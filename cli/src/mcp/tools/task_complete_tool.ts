@@ -13,6 +13,7 @@ import { isLinearAuthenticated, createLinearIssue, getLinearTeams } from '../../
 import { getArchiveConfig } from '../../utils/config';
 import { completeCommand } from '../../commands/complete';
 import { requireV2 } from '../helpers';
+import { taskCompleteOutputSchema } from '../schemas';
 
 export function registerTaskCompleteTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -24,7 +25,8 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               task: z.string().describe('Task ID to complete'),
               destination: z.enum(['local', 'github', 'linear']).optional().describe('Optional archive destination. If omitted, performs normal completion flow.'),
-            })
+            }),
+      outputSchema: taskCompleteOutputSchema
     },
     async ({ file, task, destination }) => {
       const filePath = file || defaultFile;
@@ -36,8 +38,15 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
         // Default behavior: normal complete flow (task moves to logs/)
         if (!destination) {
           const result = completeCommand({ file: filePath, task }, { log: () => {}, warn: () => {}, error: () => {}, info: () => {} });
+          // `completedAt` was previously only interpolated into the message.
           return {
-            content: [{ type: 'text' as const, text: `Task ${task} completed at ${result.completedAt}` }]
+            content: [{ type: 'text' as const, text: `Task ${task} completed at ${result.completedAt}` }],
+            structuredContent: {
+              destination: 'local' as const,
+              taskId: task,
+              completedAt: result.completedAt,
+              archived: false,
+            },
           };
         }
 
@@ -58,7 +67,10 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
               isError: true,
             };
           }
-          return { content: [{ type: 'text' as const, text: `Task ${task} archived to logs/` }] };
+          return {
+            content: [{ type: 'text' as const, text: `Task ${task} archived to logs/` }],
+            structuredContent: { destination: 'local' as const, taskId: task, archived: true },
+          };
         }
 
         // External archive destinations
@@ -97,7 +109,15 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
             return { content: [{ type: 'text' as const, text: `Error creating GitHub issue: ${ghResult.error}` }], isError: true };
           }
           fs.unlinkSync(found.filePath);
-          return { content: [{ type: 'text' as const, text: `Task ${task} archived to GitHub Issue #${ghResult.issueNumber} (closed)\n\nView: ${ghResult.issueUrl}` }] };
+          return {
+            content: [{ type: 'text' as const, text: `Task ${task} archived to GitHub Issue #${ghResult.issueNumber} (closed)\n\nView: ${ghResult.issueUrl}` }],
+            structuredContent: {
+              destination: 'github' as const,
+              taskId: task,
+              issueNumber: ghResult.issueNumber,
+              issueUrl: ghResult.issueUrl,
+            },
+          };
         }
 
         if (!(await isLinearAuthenticated())) {
@@ -137,7 +157,15 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
           return { content: [{ type: 'text' as const, text: `Error creating Linear issue: ${linearResult.error}` }], isError: true };
         }
         fs.unlinkSync(found.filePath);
-        return { content: [{ type: 'text' as const, text: `Task ${task} archived to Linear Issue ${linearResult.issueId} (Done)\n\nView: ${linearResult.issueUrl}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Task ${task} archived to Linear Issue ${linearResult.issueId} (Done)\n\nView: ${linearResult.issueUrl}` }],
+          structuredContent: {
+            destination: 'linear' as const,
+            taskId: task,
+            issueId: linearResult.issueId,
+            issueUrl: linearResult.issueUrl,
+          },
+        };
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
       }

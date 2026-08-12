@@ -9,6 +9,7 @@ import { getV2Dirs, findV2Task } from '../../utils/v2-detect';
 import { pickupContract, deliverContract, validateContract } from '../../lib/contractRunner';
 import { executeContractGraphMcpAction } from './contract';
 import { requireV2 } from '../helpers';
+import { contractOutputSchema } from '../schemas';
 
 export function registerContractTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -45,7 +46,8 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
                 dependsOn: z.array(z.string()).optional(),
               })).optional().describe('graph only: array of contract graph task specs'),
               activate: z.boolean().optional().describe('graph only: when true, attached contracts start in ready instead of draft'),
-            })
+            }),
+      outputSchema: contractOutputSchema
     },
     async ({ action, file, task, parentId, ready: attachReady, deliverables, validation_commands, constraints, tasks, activate }) => {
       const filePath = file || defaultFile;
@@ -74,7 +76,11 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           if (!result.success || !result.task) {
             return { content: [{ type: 'text' as const, text: `Error: ${result.error || 'Failed to attach contract'}` }], isError: true };
           }
-          return { content: [{ type: 'text' as const, text: `Contract attached (${result.task.contract!.status}): ${task}` }] };
+          const status = result.task.contract!.status;
+          return {
+            content: [{ type: 'text' as const, text: `Contract attached (${status}): ${task}` }],
+            structuredContent: { action: 'attach' as const, task, status },
+          };
         } catch (e) {
           return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
         }
@@ -89,7 +95,12 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
         if ('error' in result) {
           return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
         }
-        return { content: [{ type: 'text' as const, text: result.markdown }] };
+        // The payload is genuinely free-text agent-context markdown, so the
+        // structured variant just carries it verbatim.
+        return {
+          content: [{ type: 'text' as const, text: result.markdown }],
+          structuredContent: { action: 'pickup' as const, task, markdown: result.markdown },
+        };
       }
 
       // ── deliver ────────────────────────────────────────────────────────────
@@ -101,7 +112,10 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
         if ('error' in result) {
           return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
         }
-        return { content: [{ type: 'text' as const, text: `Contract delivered: ${task}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Contract delivered: ${task}` }],
+          structuredContent: { action: 'deliver' as const, task },
+        };
       }
 
       // ── validate ───────────────────────────────────────────────────────────
@@ -114,6 +128,7 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }], isError: true };
         }
         const output = {
+          action: 'validate' as const,
           ok: result.ok,
           status: result.ok ? 'done' : 'failed',
           deliverables: result.deliverableChecks,
@@ -122,6 +137,7 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
         };
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
           isError: !result.ok,
         };
       }
@@ -139,13 +155,16 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
             activate,
           });
 
+          const output = {
+            action: 'graph' as const,
+            attached: result.attached,
+            count: result.count,
+            order: result.order,
+            graph: result.graph,
+          };
           return {
-            content: [{ type: 'text' as const, text: JSON.stringify({
-              attached: result.attached,
-              count: result.count,
-              order: result.order,
-              graph: result.graph,
-            }, null, 2) }],
+            content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+            structuredContent: output,
           };
         } catch (error) {
           return {
@@ -182,8 +201,11 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           activated.push(...activateTaskContractsByParent(dirs.boardDir, parentId!).activated);
         }
 
-        const output = { activated, count: activated.length };
-        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+        const output = { action: 'activate' as const, activated, count: activated.length };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
+        };
       }
 
       return { content: [{ type: 'text' as const, text: `Error: Unknown action: ${action}` }], isError: true };

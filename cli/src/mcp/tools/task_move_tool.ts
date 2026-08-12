@@ -10,6 +10,7 @@ import {
   requireV2,
   mcpStructuredError,
 } from '../helpers';
+import { taskMoveOutputSchema } from '../schemas';
 
 export function registerTaskMoveTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -22,7 +23,8 @@ export function registerTaskMoveTool(server: McpServer, defaultFile: string): vo
               taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to move'),
               task: z.string().optional().describe('Alias of taskId for single task move'),
               column: z.string().describe('Target column ID or name')
-            })
+            }),
+      outputSchema: taskMoveOutputSchema
     },
     async ({ file, taskId, task, column }) => {
       const filePath = file || defaultFile;
@@ -74,21 +76,29 @@ export function registerTaskMoveTool(server: McpServer, defaultFile: string): vo
         results.push({ taskId: id, success: true, message, warning: warning?.warning });
       }
 
+      const successCount = results.filter(r => r.success).length;
+      const failureCount = results.length - successCount;
+      // The structured payload is always the batch shape, so agents parse one
+      // shape whether they moved one task or ten. Only the text branches.
+      const output = { success: failureCount === 0, successCount, failureCount, results };
+
       if (!isBatch) {
         const single = results[0];
         if (!single?.success) {
-          return { content: [{ type: 'text' as const, text: `Error: ${single?.error || 'Move failed'}` }], isError: true };
+          return {
+            content: [{ type: 'text' as const, text: `Error: ${single?.error || 'Move failed'}` }],
+            structuredContent: output,
+            isError: true,
+          };
         }
         let text = single.message || `Task ${taskIds[0]} moved`;
         if (single.warning) text += `\n\n${single.warning}`;
-        return { content: [{ type: 'text' as const, text }] };
+        return { content: [{ type: 'text' as const, text }], structuredContent: output };
       }
 
-      const successCount = results.filter(r => r.success).length;
-      const failureCount = results.length - successCount;
-      const output = { success: failureCount === 0, successCount, failureCount, results };
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        structuredContent: output,
         isError: failureCount > 0 && successCount === 0,
       };
     }

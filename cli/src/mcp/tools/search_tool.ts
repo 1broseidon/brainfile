@@ -8,6 +8,7 @@ import {
   extractLog,
 } from '../../utils/v2-detect';
 import { requireV2 } from '../helpers';
+import { searchOutputSchema } from '../schemas';
 
 export function registerSearchTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -23,7 +24,8 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
               assignee: z.string().optional().describe('Filter by assignee'),
               recent: z.boolean().optional().describe('List recently completed tasks (v2 only)'),
               task: z.string().optional().describe('View a specific task/log entry (v2 only)'),
-            })
+            }),
+      outputSchema: searchOutputSchema
     },
     async ({ file, query, column, priority, assignee, recent, task }) => {
       const filePath = file || defaultFile;
@@ -45,7 +47,10 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
           description: extractDescription(found.doc.body),
           log: extractLog(found.doc.body),
         };
-        return { content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }] };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
+        };
       }
 
       if (recent) {
@@ -57,7 +62,11 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
           title: doc.task.title,
           completedAt: doc.task.completedAt,
         }));
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ logs, count: logs.length }, null, 2) }] };
+        const output = { logs, count: logs.length };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
+        };
       }
 
       if (!query) {
@@ -82,7 +91,11 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
       }
 
       matches.sort((a, b) => b.score - a.score);
-      return { content: [{ type: 'text' as const, text: JSON.stringify({ results: matches, count: matches.length }, null, 2) }] };
+      const output = { results: matches, count: matches.length };
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        structuredContent: output,
+      };
     }
   );
 }

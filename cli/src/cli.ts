@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
+import { renderCliError } from './utils/cli-error';
 import { readFileSync, existsSync } from 'fs';
 import { join, sep } from 'path';
 import { listCommand, LIST_COMMAND_HELP } from './commands/list';
@@ -676,6 +677,17 @@ Brainfile file resolution (when you don't pass --file):
       throw new Error(`Unknown types action: ${action}`);
     });
 
-  program.parse();
+  /**
+   * The CLI's outermost error boundary.
+   *
+   * `parseAsync` is an async function awaiting commander's action chain, so a
+   * synchronous `throw` from a sync action handler and a rejected promise
+   * from an async one both arrive here as one rejection. `program.parse()`
+   * could catch neither: a `CLIError` thrown by a command (15 command files
+   * throw them, and 7 have no local try/catch at all) escaped as an uncaught
+   * exception and printed a raw stack trace, and the async commands wired
+   * directly as `.action(fn)` printed unhandled-rejection noise.
+   */
+  program.parseAsync().catch(renderCliError);
 
 } // end else block for CLI commands

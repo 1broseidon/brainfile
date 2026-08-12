@@ -9,6 +9,7 @@ import {
 } from '@brainfile/core';
 import { getV2Dirs } from '../../utils/v2-detect';
 import { requireV2 } from '../helpers';
+import { taskPatchOutputSchema } from '../schemas';
 
 export function registerTaskPatchTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -28,7 +29,8 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
               dueDate: z.string().nullable().optional().describe('New due date (null to remove)'),
               relatedFiles: z.array(z.string()).nullable().optional().describe('Related file paths (null to remove)'),
               parentId: z.string().nullable().optional().describe('Parent task ID (null to remove)')
-            })
+            }),
+      outputSchema: taskPatchOutputSchema
     },
     async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles, parentId }) => {
       const filePath = file || defaultFile;
@@ -75,19 +77,30 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
         results.push({ taskId: id, success: true });
       }
 
+      const successCount = results.filter(r => r.success).length;
+      const failureCount = results.length - successCount;
+      // Always the batch shape, so a single-task patch and a batch patch parse
+      // identically. Only the text branches.
+      const output = { success: failureCount === 0, successCount, failureCount, results };
+
       if (!isBatch) {
         const single = results[0];
         if (!single?.success) {
-          return { content: [{ type: 'text' as const, text: `Error: ${single?.error || 'Task not found'}` }], isError: true };
+          return {
+            content: [{ type: 'text' as const, text: `Error: ${single?.error || 'Task not found'}` }],
+            structuredContent: output,
+            isError: true,
+          };
         }
-        return { content: [{ type: 'text' as const, text: `Task ${taskIds[0]} updated successfully` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Task ${taskIds[0]} updated successfully` }],
+          structuredContent: output,
+        };
       }
 
-      const successCount = results.filter(r => r.success).length;
-      const failureCount = results.length - successCount;
-      const output = { success: failureCount === 0, successCount, failureCount, results };
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+        structuredContent: output,
         isError: failureCount > 0 && successCount === 0,
       };
     }

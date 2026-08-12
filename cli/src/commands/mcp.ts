@@ -21,6 +21,33 @@ import { registerSubtaskTool } from '../mcp/tools/subtask_tool';
 import { registerContractTool } from '../mcp/tools/contract_tool';
 import { registerTaskCompleteTool } from '../mcp/tools/task_complete_tool';
 
+/**
+ * Builds the MCP server with all 10 consolidated tools registered.
+ *
+ * Exported so tests can serve the exact production registration over an
+ * in-memory transport instead of re-listing the tools (which would drift).
+ * The same factory serves both protocol eras.
+ */
+export function createBrainfileMcpServer(defaultFile: string): McpServer {
+  const server = new McpServer({
+    name: 'brainfile',
+    version: cliVersion
+  });
+
+  registerListTasksTool(server, defaultFile);
+  registerGetTaskTool(server, defaultFile);
+  registerSearchTool(server, defaultFile);
+  registerTaskAddTool(server, defaultFile);
+  registerTaskMoveTool(server, defaultFile);
+  registerTaskPatchTool(server, defaultFile);
+  registerTaskDeleteTool(server, defaultFile);
+  registerSubtaskTool(server, defaultFile);
+  registerContractTool(server, defaultFile);
+  registerTaskCompleteTool(server, defaultFile);
+
+  return server;
+}
+
 export async function mcpCommand(options: McpOptions) {
   // Auto-discover brainfile if not specified
   let defaultFile = options.file;
@@ -85,23 +112,5 @@ export async function mcpCommand(options: McpOptions) {
 
   // The same factory serves both protocol eras: 2026-07-28 (stateless)
   // natively, and pre-2026 clients through serveStdio's legacy shim.
-  serveStdio(() => {
-    const server = new McpServer({
-      name: 'brainfile',
-      version: cliVersion
-    });
-
-    registerListTasksTool(server, defaultFile);
-    registerGetTaskTool(server, defaultFile);
-    registerSearchTool(server, defaultFile);
-    registerTaskAddTool(server, defaultFile);
-    registerTaskMoveTool(server, defaultFile);
-    registerTaskPatchTool(server, defaultFile);
-    registerTaskDeleteTool(server, defaultFile);
-    registerSubtaskTool(server, defaultFile);
-    registerContractTool(server, defaultFile);
-    registerTaskCompleteTool(server, defaultFile);
-
-    return server;
-  });
+  serveStdio(() => createBrainfileMcpServer(defaultFile));
 }

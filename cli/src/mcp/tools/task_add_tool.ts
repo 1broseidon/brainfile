@@ -8,6 +8,7 @@ import {
 import { buildContract } from '@brainfile/core';
 import { validateType, readBoardConfig } from '@brainfile/core';
 import { requireV2, mcpStructuredError } from '../helpers';
+import { taskAddOutputSchema } from '../schemas';
 
 export function registerTaskAddTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -38,7 +39,8 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
               // Aliases (some clients prefer camelCase)
               withContract: z.boolean().optional().describe('Alias of with_contract'),
               validationCommands: z.array(z.string()).optional().describe('Alias of validation_commands'),
-            })
+            }),
+      outputSchema: taskAddOutputSchema
     },
     async ({
       file,
@@ -132,7 +134,10 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
           return { content: [{ type: 'text' as const, text: `Error: ${result.error || 'Failed to add task'}` }], isError: true };
         }
 
-        return { content: [{ type: 'text' as const, text: `Task added successfully: ${result.task.id} - ${title}` }] };
+        return {
+          content: [{ type: 'text' as const, text: `Task added successfully: ${result.task.id} - ${title}` }],
+          structuredContent: { id: result.task.id, title },
+        };
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
       }

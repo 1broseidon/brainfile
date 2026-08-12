@@ -8,6 +8,7 @@ import {
 } from '@brainfile/core';
 import { getV2Dirs, findV2Task } from '../../utils/v2-detect';
 import { requireV2 } from '../helpers';
+import { subtaskOutputSchema } from '../schemas';
 
 export function registerSubtaskTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
@@ -25,7 +26,8 @@ export function registerSubtaskTool(server: McpServer, defaultFile: string): voi
               titles: z.array(z.string()).optional().describe('Optional titles for batch update action'),
               completed: z.boolean().optional().describe('For toggle action: set explicit completed state (true/false) instead of flipping'),
               all: z.boolean().optional().describe('For toggle/delete action: target all subtasks in the task'),
-            })
+            }),
+      outputSchema: subtaskOutputSchema
     },
     async ({ action, file, task, subtask, subtasks, title, titles, completed, all }) => {
       const filePath = file || defaultFile;
@@ -67,11 +69,20 @@ export function registerSubtaskTool(server: McpServer, defaultFile: string): voi
           return { content: [{ type: 'text' as const, text: `Error: ${result.error || 'Failed to add subtasks'}` }], isError: true };
         }
         const added = result.affected.map(st => ({ id: st.id, title: st.title }));
+        // Plural shape regardless of count: item count must not change the
+        // structure agents parse. Only the text keeps its singular phrasing.
+        const output = { action: 'add' as const, added, count: added.length };
 
         if (added.length === 1) {
-          return { content: [{ type: 'text' as const, text: `Subtask added: ${added[0].id} - ${added[0].title}` }] };
+          return {
+            content: [{ type: 'text' as const, text: `Subtask added: ${added[0].id} - ${added[0].title}` }],
+            structuredContent: output,
+          };
         }
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ added, count: added.length }, null, 2) }] };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
+        };
       }
 
       // ── delete ─────────────────────────────────────────────────────────────
@@ -96,11 +107,18 @@ export function registerSubtaskTool(server: McpServer, defaultFile: string): voi
         }
         const deleted = result.affected.map(st => st.id);
         const missing = result.missing ?? [];
+        const output = { action: 'delete' as const, deleted, missing, count: deleted.length };
 
         if (!useAll && deleted.length === 1 && missing.length === 0) {
-          return { content: [{ type: 'text' as const, text: `Subtask ${deleted[0]} deleted successfully` }] };
+          return {
+            content: [{ type: 'text' as const, text: `Subtask ${deleted[0]} deleted successfully` }],
+            structuredContent: output,
+          };
         }
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ deleted, missing, count: deleted.length }, null, 2) }] };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
+        };
       }
 
       // ── toggle ─────────────────────────────────────────────────────────────
@@ -124,12 +142,21 @@ export function registerSubtaskTool(server: McpServer, defaultFile: string): voi
           return { content: [{ type: 'text' as const, text: `Error: ${result.error || 'Failed to toggle subtasks'}` }], isError: true };
         }
         const updated = result.affected.map(st => ({ id: st.id, completed: st.completed }));
+        // `toggle` and `update` both key their payload `updated` but carry
+        // different item shapes, so the action tag is what tells them apart.
+        const output = { action: 'toggle' as const, updated, count: updated.length };
 
         if (!useAll && updated.length === 1) {
           const status = updated[0].completed ? 'completed' : 'incomplete';
-          return { content: [{ type: 'text' as const, text: `Subtask ${updated[0].id} marked as ${status}` }] };
+          return {
+            content: [{ type: 'text' as const, text: `Subtask ${updated[0].id} marked as ${status}` }],
+            structuredContent: output,
+          };
         }
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ updated, count: updated.length }, null, 2) }] };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
+        };
       }
 
       // ── update ─────────────────────────────────────────────────────────────
@@ -161,11 +188,18 @@ export function registerSubtaskTool(server: McpServer, defaultFile: string): voi
           return { content: [{ type: 'text' as const, text: `Error: ${result.error || 'Failed to update subtasks'}` }], isError: true };
         }
         const updated = result.affected.map(st => ({ id: st.id, title: st.title }));
+        const output = { action: 'update' as const, updated, count: updated.length };
 
         if (updated.length === 1) {
-          return { content: [{ type: 'text' as const, text: `Subtask ${updated[0].id} updated to "${updated[0].title}"` }] };
+          return {
+            content: [{ type: 'text' as const, text: `Subtask ${updated[0].id} updated to "${updated[0].title}"` }],
+            structuredContent: output,
+          };
         }
-        return { content: [{ type: 'text' as const, text: JSON.stringify({ updated, count: updated.length }, null, 2) }] };
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
+          structuredContent: output,
+        };
       }
 
       return { content: [{ type: 'text' as const, text: `Error: Unknown action: ${action}` }], isError: true };

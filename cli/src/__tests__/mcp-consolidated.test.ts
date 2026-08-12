@@ -101,4 +101,49 @@ describe('mcp consolidated tools contract', () => {
     expect(src).toContain("server.registerTool(\n    'task_complete'");
     expect(src).toContain("destination: z.enum(['local', 'github', 'linear']).optional()");
   });
+
+  /**
+   * Every tool declares an outputSchema, and every tool file that declares one
+   * must return structuredContent — the SDK turns a missing structuredContent
+   * on a non-error result into an "Output validation error". Locked here the
+   * same way this file already locks the tool count and consolidation shape;
+   * the behavioural checks live in mcp-structured-output.test.ts.
+   */
+  test('all 10 tools declare an outputSchema and return structuredContent', () => {
+    const toolFiles = Object.keys(toolSources).filter(f => f.endsWith('_tool.ts'));
+    expect(toolFiles).toHaveLength(10);
+
+    for (const file of toolFiles) {
+      const src = toolSources[file];
+      expect(`${file}: ${src.includes('outputSchema:')}`).toBe(`${file}: true`);
+      expect(`${file}: ${src.includes('structuredContent:')}`).toBe(`${file}: true`);
+    }
+  });
+
+  /**
+   * Output schemas live in one module so the root shape stays reviewable:
+   * a non-object schema root makes the 2025-era codec re-wrap
+   * structuredContent as `{result: …}` while the 2026-era codec does not,
+   * silently splitting the two eras apart.
+   */
+  test('output schemas are defined in the shared schemas module', () => {
+    const schemaSource = fs.readFileSync(
+      path.join(__dirname, '..', 'mcp', 'schemas.ts'),
+      'utf-8',
+    );
+    for (const exported of [
+      'listTasksOutputSchema',
+      'getTaskOutputSchema',
+      'searchOutputSchema',
+      'taskAddOutputSchema',
+      'taskMoveOutputSchema',
+      'taskPatchOutputSchema',
+      'taskDeleteOutputSchema',
+      'subtaskOutputSchema',
+      'contractOutputSchema',
+      'taskCompleteOutputSchema',
+    ]) {
+      expect(schemaSource).toContain(`export const ${exported}`);
+    }
+  });
 });

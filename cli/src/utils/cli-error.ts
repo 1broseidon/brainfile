@@ -1,3 +1,4 @@
+import chalk from 'chalk';
 import { ExitCode, type ExitCodeType } from './errorHandler';
 
 /**
@@ -96,4 +97,37 @@ export function subtaskNotFound(subtaskId: string, availableSubtasks: string[] =
  */
 export function validationError(message: string): CLIError {
     return new CLIError(`Validation error: ${message}`, ExitCode.USER_ERROR);
+}
+
+/**
+ * Renders a failure that escaped a command and exits.
+ *
+ * This is the CLI's outermost error boundary, wired to `program.parseAsync()`
+ * in cli.ts. Commands throw `CLIError` rather than exiting themselves, and
+ * nothing used to catch those throws — so a missing `--task` surfaced as
+ * Node's raw uncaught-exception stack trace instead of the message and usage
+ * hint the error already carried.
+ *
+ * Two branches, deliberately:
+ *
+ * - `CLIError` is an expected, user-facing failure: print the message and its
+ *   usage `details`, exit with the code the error carries, and show no stack
+ *   (a stack tells the user nothing about a missing flag).
+ * - Anything else is a genuine bug: print the real stack, unmodified, and
+ *   exit 1. This is what Node already printed, just under our control so the
+ *   exit code is deterministic rather than depending on Node's
+ *   version-specific unhandled-rejection default.
+ */
+export function renderCliError(error: unknown): never {
+    if (error instanceof CLIError) {
+        console.error(chalk.red(`Error: ${error.message}`));
+        if (error.details) {
+            console.error('');
+            console.error(chalk.gray(error.details));
+        }
+        process.exit(error.exitCode);
+    }
+
+    console.error(error instanceof Error ? error.stack : String(error));
+    process.exit(ExitCode.USER_ERROR);
 }
