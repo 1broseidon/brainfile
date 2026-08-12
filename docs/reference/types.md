@@ -11,7 +11,7 @@ Brainfile uses JSON Schema to define the structure of board configuration and ta
 
 | Schema | v2 URL | Purpose |
 |--------|--------|---------|
-| **Base** | `/v2/base.json` | Shared fields (title, agent, rules) |
+| **Base** | `/v2/base.json` | Shared fields (title, agent) |
 | **Board** | `/v2/board.json` | Board configuration (columns, types) |
 | **Task** | `/v2/task.json` | Standalone task documents |
 | **Contract** | `/v2/contract.json` | Task contract object (`task.contract`) |
@@ -24,7 +24,7 @@ These are the built-in types, but Brainfile is not limited to them. You can defi
 
 ## Board (Default)
 
-Board configuration defines columns, document types, and project rules. Tasks are standalone files in `.brainfile/board/`.
+Board configuration defines columns and document types. Tasks are standalone files in `.brainfile/board/`.
 
 ```yaml
 ---
@@ -207,11 +207,6 @@ agent:
   instructions: []
   llmNotes: string
   tools: {}
-rules:
-  always: []
-  never: []
-  prefer: []
-  context: []
 ---
 ```
 

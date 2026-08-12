@@ -47,9 +47,8 @@ describe("Brainfile integration", () => {
     expect(() => Brainfile.createFromTemplate("missing", {})).toThrow("Template not found");
   });
 
-  it("finds task and rule locations through the facade", () => {
+  it("finds task locations through the facade", () => {
     const markdown = loadFixture("valid-complex.md");
     expect(Brainfile.findTaskLocation(markdown, "task-1")?.line).toBe(30);
-    expect(Brainfile.findRuleLocation(markdown, 1, "always")?.line).toBe(11);
   });
 });

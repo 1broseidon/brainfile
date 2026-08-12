@@ -3,7 +3,7 @@
  * @packageDocumentation
  */
 
-import { Board, Task, Column, Rule, Subtask, Journal, JournalEntry, Brainfile, BrainfileType } from './types';
+import { Board, Task, Column, Subtask, Journal, JournalEntry, Brainfile, BrainfileType } from './types';
 import { inferType } from './inference';
 
 export interface ValidationError {
@@ -44,12 +44,6 @@ export class BrainfileValidator {
         const columnErrors = this.validateColumn(column, `columns[${index}]`);
         errors.push(...columnErrors);
       });
-    }
-
-    // Validate rules (optional)
-    if (board.rules !== undefined) {
-      const rulesErrors = this.validateRules(board.rules, 'rules');
-      errors.push(...rulesErrors);
     }
 
     // Validate archive (optional)
@@ -221,65 +215,6 @@ export class BrainfileValidator {
   }
 
   /**
-   * Validate Rules object
-   * @param rules - The rules to validate
-   * @param path - The path for error reporting
-   * @returns Array of validation errors
-   */
-  static validateRules(rules: any, path: string): ValidationError[] {
-    const errors: ValidationError[] = [];
-
-    if (!rules) {
-      errors.push({ path, message: 'Rules is null or undefined' });
-      return errors;
-    }
-
-    const ruleTypes = ['always', 'never', 'prefer', 'context'];
-
-    ruleTypes.forEach(ruleType => {
-      if (rules[ruleType] !== undefined) {
-        if (!Array.isArray(rules[ruleType])) {
-          errors.push({ path: `${path}.${ruleType}`, message: `Rules ${ruleType} must be an array` });
-        } else {
-          rules[ruleType].forEach((rule: any, index: number) => {
-            const ruleErrors = this.validateRule(rule, `${path}.${ruleType}[${index}]`);
-            errors.push(...ruleErrors);
-          });
-        }
-      }
-    });
-
-    return errors;
-  }
-
-  /**
-   * Validate a Rule object
-   * @param rule - The rule to validate
-   * @param path - The path for error reporting
-   * @returns Array of validation errors
-   */
-  static validateRule(rule: any, path: string): ValidationError[] {
-    const errors: ValidationError[] = [];
-
-    if (!rule) {
-      errors.push({ path, message: 'Rule is null or undefined' });
-      return errors;
-    }
-
-    // Validate id
-    if (typeof rule.id !== 'number') {
-      errors.push({ path: `${path}.id`, message: 'Rule id must be a number' });
-    }
-
-    // Validate rule
-    if (typeof rule.rule !== 'string' || rule.rule.trim() === '') {
-      errors.push({ path: `${path}.rule`, message: 'Rule rule must be a non-empty string' });
-    }
-
-    return errors;
-  }
-
-  /**
    * Validate any brainfile object with type detection
    * @param data - The brainfile data to validate
    * @param filename - Optional filename for type inference
@@ -347,12 +282,6 @@ export class BrainfileValidator {
         const entryErrors = this.validateJournalEntry(entry, `entries[${index}]`);
         errors.push(...entryErrors);
       });
-    }
-
-    // Validate rules (optional)
-    if (journal.rules !== undefined) {
-      const rulesErrors = this.validateRules(journal.rules, 'rules');
-      errors.push(...rulesErrors);
     }
 
     return { valid: errors.length === 0, errors };

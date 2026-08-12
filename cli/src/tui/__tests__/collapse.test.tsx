@@ -90,12 +90,14 @@ describe('list collapse/expand — survives a restart (§A1)', () => {
       // A brand-new BrainfileTUI instance against the *same* filePath — the
       // collapsed id must be read from `.brainfile/state/tui.json`, not kept
       // in memory (there is no shared memory between these two instances).
+      //
+      // No TAB this time: the same state file also carries the resume column
+      // (§C3), so the second mount opens straight onto the column the first
+      // session ended on.
       const second = render(
         <BrainfileTUI filePath={fixture.brainfilePath} width={WIDE} height={26} />,
       );
       await tick(200);
-      second.stdin.write(TAB);
-      await tick();
       const row = lineWith(second.lastFrame(), 'epic-1');
       expect(row).toMatch(/^ ▸ epic-1\b/);
       expect(row).toContain('3 hidden');

@@ -2,15 +2,6 @@ import type { Board, Task } from '@brainfile/core';
 
 export type BoardColumn = Board['columns'][number];
 
-/**
- * Panels reachable from the board. v3 redesigns the board panel only; rules and
- * logs keep their v2 presentation and their `1`/`2`/`3` entry points (the v3
- * header is a single row and has no slot for a panel switcher, and the design
- * spec is silent on whether these views survive — so they are preserved rather
- * than deleted on an inference).
- */
-export type MainPanel = 'board' | 'rules' | 'logs';
-
 /** Responsive layout mode. Only the *detail* presentation varies by width. */
 export type LayoutMode = 'wide' | 'narrow';
 
@@ -23,11 +14,12 @@ export const LAYOUT = {
   MIN_HEIGHT: 16,
 } as const;
 
-/** Rule categories (rules panel). */
-export type RuleType = 'always' | 'never' | 'prefer' | 'context';
-
+/**
+ * Every mode the TUI can be in. adr-2 collapsed the 1/2/3 panel system, so the
+ * rules- and logs-panel modes are gone; completed work is a stop on the `t`
+ * type-cycle rendered by the ordinary list and detail views (§B2).
+ */
 export type ViewMode =
-  // v3 board modes
   | 'browse'
   | 'detail'
   | 'filter'
@@ -35,14 +27,7 @@ export type ViewMode =
   | 'move'
   | 'complete-confirm'
   | 'add'
-  | 'delete-confirm'
-  // Rules panel modes (unchanged from v2)
-  | 'rule-add'
-  | 'rule-edit'
-  | 'rule-delete-confirm'
-  // Logs panel modes (unchanged from v2)
-  | 'logs-restore'
-  | 'logs-delete-confirm';
+  | 'delete-confirm';
 
 export interface StatusMessage {
   text: string;
@@ -61,8 +46,6 @@ export interface AppState {
   board: Board | null;
   error: string | null;
   lastUpdated: Date;
-
-  activePanel: MainPanel;
 
   // Board navigation
   activeColumnIndex: number;
@@ -99,23 +82,23 @@ export interface AppState {
   // Overlay state
   moveTargetIndex: number;
   newTaskTitle: string;
+  /**
+   * The add overlay was opened by `N` rather than `a`: on submit, hand the
+   * newly created document straight to `$EDITOR` (§C1). A title is still
+   * required first, so aborting the editor cannot leave an untitled stray.
+   */
+  addThenEdit: boolean;
   completeConfirm: CompleteConfirmTarget | null;
 
   statusMessage: StatusMessage | null;
   lastContentHash: string | null;
   reloadFlash: boolean;
 
-  // Rules panel state
-  activeRuleType: RuleType;
-  selectedRuleIndex: number;
-  ruleEditText: string;
-  ruleEditId: number | null;
-
-  // Logs panel state
+  /**
+   * Documents read from `logs/` for the `done` type-cycle stop (§B2). Refreshed
+   * by the loader alongside the board, since chokidar already watches logsDir.
+   */
   logs: Task[];
-  selectedLogIndex: number;
-  logRestoreColumnIndex: number;
-  expandedLogIds: Set<string>;
 }
 
 export interface TUIProps {

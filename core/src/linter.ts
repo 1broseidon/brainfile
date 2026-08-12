@@ -7,6 +7,14 @@ import * as yaml from "js-yaml";
 import { Board } from "./types";
 import { BrainfileParser } from "./parser";
 import { BrainfileValidator } from "./validator";
+import { parseFrontmatter, serializeFrontmatter } from "./frontmatter";
+
+/** Warning text for a legacy `rules:` block (adr-2 removed the feature). */
+export const LEGACY_RULES_MESSAGE =
+  "rules is removed (adr-2); fold into agent.instructions";
+
+/** Category order used when folding legacy rules into agent.instructions. */
+const RULE_CATEGORY_ORDER = ["always", "never", "prefer", "context"] as const;
 
 export interface LintIssue {
   type: "error" | "warning";
@@ -56,6 +64,24 @@ export class BrainfileLinter {
 
       if (options.autoFix) {
         fixedContent = this.fixUnquotedStrings(content, quotableStrings);
+      }
+    }
+
+    // Step 1b: legacy `rules:` block (removed by adr-2). Warned about always;
+    // folded into `agent.instructions` under --fix.
+    const legacyRules = this.findLegacyRules(fixedContent);
+    if (legacyRules) {
+      issues.push({
+        type: "warning",
+        message: LEGACY_RULES_MESSAGE,
+        line: legacyRules.line,
+        fixable: true,
+        code: "LEGACY_RULES"
+      });
+
+      if (options.autoFix) {
+        const folded = this.foldLegacyRules(fixedContent);
+        if (folded !== null) fixedContent = folded;
       }
     }
 
@@ -137,6 +163,76 @@ export class BrainfileLinter {
       fixedContent: options.autoFix && fixedContent !== content ? fixedContent : undefined,
       board: board || undefined
     };
+  }
+
+  /**
+   * Locate a legacy top-level `rules:` block in the frontmatter.
+   *
+   * Deliberately textual rather than YAML-object based: this must report a
+   * usable line number, and it must still fire on a file whose frontmatter
+   * fails to `yaml.load` for some unrelated reason.
+   */
+  private static findLegacyRules(content: string): { line: number } | null {
+    const lines = content.split("\n");
+    if (!lines[0] || lines[0].trim() !== "---") return null;
+
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim() === "---") return null; // end of frontmatter
+      // Top-level key only — an indented `rules:` belongs to something else.
+      if (/^rules:\s*$/.test(lines[i]) || /^rules:\s+\S/.test(lines[i])) {
+        return { line: i + 1 };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Fold a legacy `rules:` block into `agent.instructions` and remove it.
+   *
+   * Each rule becomes `"<category>: <text>"` (adr-2's stated shape), appended
+   * in category order after any instructions already present. Returns null if
+   * the frontmatter cannot be round-tripped, in which case the caller keeps
+   * the original content and the warning stands unfixed.
+   */
+  private static foldLegacyRules(content: string): string | null {
+    const doc = parseFrontmatter<Record<string, unknown>>(content);
+    if (!doc) return null;
+
+    const data = doc.data;
+    const rules = data.rules;
+    if (!rules || typeof rules !== "object" || Array.isArray(rules)) return null;
+
+    const folded: string[] = [];
+    for (const category of RULE_CATEGORY_ORDER) {
+      const entries = (rules as Record<string, unknown>)[category];
+      if (!Array.isArray(entries)) continue;
+      for (const entry of entries) {
+        const text =
+          typeof entry === "string"
+            ? entry
+            : typeof (entry as { rule?: unknown })?.rule === "string"
+              ? ((entry as { rule: string }).rule)
+              : null;
+        if (text && text.trim()) folded.push(`${category}: ${text.trim()}`);
+      }
+    }
+
+    delete data.rules;
+
+    if (folded.length > 0) {
+      const agent =
+        data.agent && typeof data.agent === "object" && !Array.isArray(data.agent)
+          ? (data.agent as Record<string, unknown>)
+          : {};
+      const existing = Array.isArray(agent.instructions)
+        ? (agent.instructions as unknown[]).filter((i): i is string => typeof i === "string")
+        : [];
+      agent.instructions = [...existing, ...folded];
+      data.agent = agent;
+    }
+
+    return serializeFrontmatter(data, doc.body);
   }
 
   /**

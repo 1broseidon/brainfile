@@ -26,7 +26,7 @@ describe("BrainfileSerializer.serialize", () => {
     const parsed = BrainfileParser.parse(serialized);
 
     expect(parsed?.columns[0].tasks[0].tags).toEqual(["bug", "urgent"]);
-    expect(parsed?.rules?.always?.[0].rule).toContain("Always test");
+    expect(parsed?.agent?.instructions).toEqual(["Test instruction"]);
   });
 });
 

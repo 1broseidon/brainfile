@@ -27,7 +27,10 @@ export interface HeaderBarProps {
   /** Documents surviving the filter / total documents on the board. */
   matchCount?: number;
   totalCount?: number;
-  /** Label shown instead of column tabs for the rules and logs panels. */
+  /**
+   * Label shown instead of column tabs for the `done` type-cycle stop, whose
+   * rows come from `logs/` and are not column-organized.
+   */
   panelLabel?: string;
   /** Active type-cycle filter (§A2), e.g. `plan`. Omitted/`'all'` renders nothing. */
   activeType?: string;

@@ -42,7 +42,7 @@ columns:
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('promotes an ADR to a rule and moves task file to logs/', () => {
+  it('marks an ADR accepted and moves its task file to logs/', () => {
     const adrTask: Task = {
       id: 'adr-1',
       title: 'ADR-123: Board stays lean: only in-flight work',
@@ -56,27 +56,18 @@ columns:
       composeBody('Decision details', 'Initial rationale')
     );
 
-    const result = adrPromoteCommand(
-      { file: brainfilePath, task: 'adr-1', category: 'prefer' },
-      logger
-    );
+    const result = adrPromoteCommand({ file: brainfilePath, task: 'adr-1' }, logger);
 
     expect(result.success).toBe(true);
     expect(result.taskId).toBe('adr-1');
-    expect(result.rule).toEqual({
-      id: 1,
-      rule: 'Board stays lean: only in-flight work',
-      source: 'adr-1',
-    });
+    expect(result.title).toBe('ADR-123: Board stays lean: only in-flight work');
     expect(result.completedAt).toBeDefined();
 
-    const board = Brainfile.parse(fs.readFileSync(brainfilePath, 'utf-8')) as any;
-    expect(board.rules?.prefer).toHaveLength(1);
-    expect(board.rules.prefer[0]).toEqual({
-      id: 1,
-      rule: 'Board stays lean: only in-flight work',
-      source: 'adr-1',
-    });
+    // adr-2: promotion no longer writes anything into board config.
+    const configBefore = fs.readFileSync(brainfilePath, 'utf-8');
+    expect(configBefore).not.toContain('rules:');
+    const board = Brainfile.parse(configBefore) as any;
+    expect(board.rules).toBeUndefined();
 
     expect(fs.existsSync(path.join(boardDir, 'adr-1.md'))).toBe(false);
     expect(fs.existsSync(path.join(logsDir, 'adr-1.md'))).toBe(true);
@@ -89,27 +80,18 @@ columns:
 
     const output = logger.getOutput();
     expect(output).toContain('ADR promoted!');
-    expect(output).toContain('Board stays lean: only in-flight work');
+    expect(output).toContain('adr-1');
   });
 
   it('throws CLIError for invalid ADR id', () => {
     expect(() => {
-      adrPromoteCommand({ file: brainfilePath, task: 'adr-999', category: 'prefer' }, logger);
+      adrPromoteCommand({ file: brainfilePath, task: 'adr-999' }, logger);
     }).toThrow(CLIError);
   });
 
-  it('throws CLIError for invalid category', () => {
-    const adrTask: Task = {
-      id: 'adr-1',
-      title: 'ADR-1: Use TypeScript',
-      type: 'adr',
-      column: 'todo',
-      position: 0,
-    };
-    writeTaskFile(path.join(boardDir, 'adr-1.md'), adrTask, '');
-
+  it('throws CLIError when --task is missing', () => {
     expect(() => {
-      adrPromoteCommand({ file: brainfilePath, task: 'adr-1', category: 'invalid' }, logger);
+      adrPromoteCommand({ file: brainfilePath }, logger);
     }).toThrow(CLIError);
   });
 
@@ -124,7 +106,7 @@ columns:
     writeTaskFile(path.join(boardDir, 'task-1.md'), nonAdrTask, '');
 
     expect(() => {
-      adrPromoteCommand({ file: brainfilePath, task: 'task-1', category: 'always' }, logger);
+      adrPromoteCommand({ file: brainfilePath, task: 'task-1' }, logger);
     }).toThrow(CLIError);
   });
 });

@@ -396,5 +396,70 @@ columns:
       expect(result.board?.columns[0].tasks[0].priority).toBe("high");
     });
   });
-});
 
+  // ── adr-2: the rules feature is gone ────────────────────────────────────
+  describe("legacy rules block (adr-2)", () => {
+    const withRules = `---
+title: Legacy Board
+agent:
+  instructions:
+    - Run the tests
+rules:
+  always:
+    - id: 1
+      rule: Write tests first
+  never:
+    - id: 2
+      rule: Commit secrets
+columns:
+  - id: todo
+    title: To Do
+    tasks: []
+---
+`;
+
+    it("warns that rules is removed", () => {
+      const result = BrainfileLinter.lint(withRules);
+
+      const issue = result.issues.find((i) => i.code === "LEGACY_RULES");
+      expect(issue).toBeDefined();
+      expect(issue?.type).toBe("warning");
+      expect(issue?.fixable).toBe(true);
+      expect(issue?.message).toBe("rules is removed (adr-2); fold into agent.instructions");
+      expect(issue?.line).toBe(6);
+      // A warning, not an error: a legacy file still parses.
+      expect(result.valid).toBe(true);
+      expect(result.board?.title).toBe("Legacy Board");
+    });
+
+    it("--fix folds each rule into agent.instructions and drops the block", () => {
+      const result = BrainfileLinter.lint(withRules, { autoFix: true });
+
+      expect(result.fixedContent).toBeDefined();
+      const fixed = result.fixedContent!;
+      expect(fixed).not.toMatch(/^rules:/m);
+      expect(fixed).toContain("Run the tests");
+      expect(fixed).toContain("always: Write tests first");
+      expect(fixed).toContain("never: Commit secrets");
+
+      // The folded file is clean on a second pass.
+      const second = BrainfileLinter.lint(fixed);
+      expect(second.issues.find((i) => i.code === "LEGACY_RULES")).toBeUndefined();
+    });
+
+    it("leaves a file without rules untouched", () => {
+      const clean = `---
+title: Clean Board
+columns:
+  - id: todo
+    title: To Do
+    tasks: []
+---
+`;
+      const result = BrainfileLinter.lint(clean, { autoFix: true });
+
+      expect(result.issues.find((i) => i.code === "LEGACY_RULES")).toBeUndefined();
+      expect(result.fixedContent).toBeUndefined();
+    });
+  });
+});

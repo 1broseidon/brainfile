@@ -63,6 +63,8 @@ describe('type-cycle (§A2)', () => {
     await h.press('t', 't', 't', 't'); // plan
     await h.press('t'); // adr
     expect(headerLine(h)).toContain(' · adr');
+    await h.press('t'); // done — the completed-history stop (adr-2 §B2)
+    expect(headerLine(h)).toContain('done');
     await h.press('t'); // all
 
     expect(headerLine(h)).not.toContain(' · ');

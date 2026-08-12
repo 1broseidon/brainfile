@@ -13,6 +13,14 @@ import type { Board } from '@brainfile/core';
 /** Fixed cycle order (excluding `'all'`, which always leads). */
 const FIXED_TYPE_ORDER = ['task', 'epic', 'spec', 'plan', 'adr'];
 
+/**
+ * The completed-history stop (§B2). Not a document *type* — a pseudo-type that
+ * swaps the row source from board columns to `logs/`, which is why it is
+ * appended unconditionally rather than gated on `board.types` the way the real
+ * types are.
+ */
+export const DONE_FILTER = 'done';
+
 export function getTypeCycleOptions(board: Board | null): string[] {
   // `types` is a BoardConfig-only field; `Board` (the runtime, task-populated
   // shape) doesn't declare it statically, but the parsed object still carries
@@ -22,5 +30,5 @@ export function getTypeCycleOptions(board: Board | null): string[] {
     Object.keys((board as unknown as { types?: Record<string, unknown> } | null)?.types ?? {}),
   );
   const available = FIXED_TYPE_ORDER.filter((type) => type === 'task' || configured.has(type));
-  return ['all', ...available];
+  return ['all', ...available, DONE_FILTER];
 }

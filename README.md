@@ -19,7 +19,7 @@ A board is a `.brainfile/` directory:
 
 ```
 .brainfile/
-├── brainfile.md        # board config: columns, rules, document types
+├── brainfile.md        # board config: columns, agent instructions, document types
 ├── board/              # active documents, one file each
 │   ├── task-1.md
 │   └── epic-1.md
@@ -28,7 +28,7 @@ A board is a `.brainfile/` directory:
     └── task-2.md       # archived documents
 ```
 
-`brainfile.md` holds configuration only — columns, project rules, agent instructions, and custom document types. Every task, epic, or ADR is its own Markdown file with YAML frontmatter:
+`brainfile.md` holds configuration only — columns, agent instructions, and custom document types. Every task, epic, or ADR is its own Markdown file with YAML frontmatter:
 
 ```yaml
 ---
@@ -56,7 +56,7 @@ One file per document means clean diffs, painless merges, and history for free. 
 
 - **MCP server** — `brainfile mcp` exposes board operations (`list_tasks`, `task_add`, `task_move`, `task_patch`, `subtask`, `contract`, `search`, …) to Claude, Cursor, or any MCP client, so agents read and update the same board you see in the TUI.
 - **Contracts** — a task can carry a contract: deliverables, validation commands, and constraints. Agents pick up (`brainfile contract pickup`), deliver, and you validate (`brainfile contract validate`) — which actually runs the validation commands. "Please do X" becomes verifiable.
-- **Rules** — project rules live in the board config (`always` / `never` / `prefer` / `context`), one place agents are told to read before working.
+- **Agent instructions** — project guidance lives in `agent.instructions` in the board config, one place agents are told to read before working.
 
 ## This repository
 

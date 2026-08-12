@@ -4,6 +4,8 @@ import * as path from 'path';
 import * as chokidar from 'chokidar';
 import { Brainfile, hashBoardContent } from '@brainfile/core';
 import { isV2, getV2Dirs, buildBoardFromV2 } from '../../utils/v2-detect.js';
+import { loadLogs } from '../actions.js';
+import { DONE_FILTER } from '../typeCycle.js';
 import type { AppState } from '../types.js';
 
 function getV2ChangeSignature(filePath: string): string {
@@ -84,6 +86,12 @@ export function useBrainfileLoader(
         ? hashBoardContent(`${content}\n${getV2ChangeSignature(filePath)}`)
         : hashBoardContent(content);
 
+      // `logs/` feeds the `done` type-cycle stop (§B2). chokidar already
+      // watches logsDir and routes those events here, so the archive is
+      // refreshed on exactly the same beat as the board — one source of truth
+      // for "what does the TUI currently believe is on disk".
+      const logs = loadLogs(filePath).logs;
+
       setState((prev) => {
         // Skip redundant refreshes using content hash
         if (!forceRefresh && prev.lastContentHash === contentHash) {
@@ -91,6 +99,31 @@ export function useBrainfileLoader(
         }
 
         if (board) {
+          // ── Selection survival across a refresh (rubric P3) ──────────────
+          // Both branches re-resolve BY ID, never by index: an external
+          // insert/delete above the cursor must not slide the selection onto a
+          // different document.
+          if (prev.activeTypeFilter === DONE_FILTER) {
+            const prevLogId = prev.logs[prev.selectedTaskIndex]?.id;
+            const foundIdx = prevLogId ? logs.findIndex((t) => t.id === prevLogId) : -1;
+            // Deleted out from under the cursor → clamp into bounds (C4).
+            const nextIndex =
+              foundIdx >= 0
+                ? foundIdx
+                : Math.max(0, Math.min(prev.selectedTaskIndex, logs.length - 1));
+
+            return {
+              ...prev,
+              board,
+              logs,
+              error: null,
+              lastUpdated: new Date(),
+              selectedTaskIndex: nextIndex,
+              reloadFlash: true,
+              lastContentHash: contentHash,
+            };
+          }
+
           // Preserve selection by task ID and column ID if possible
           const prevColumn = prev.board?.columns[prev.activeColumnIndex];
           const prevTaskId = prevColumn?.tasks[prev.selectedTaskIndex]?.id;
@@ -119,6 +152,7 @@ export function useBrainfileLoader(
           return {
             ...prev,
             board,
+            logs,
             error: null,
             lastUpdated: new Date(),
             activeColumnIndex: newColumnIndex,

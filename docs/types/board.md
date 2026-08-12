@@ -1,6 +1,6 @@
 # Board Schema
 
-The board schema defines the project configuration file (`.brainfile/brainfile.md`). It declares columns, document types, rules, and metadata. Tasks are standalone `.md` files in `.brainfile/board/`, each validated against [task.json](/reference/types).
+The board schema defines the project configuration file (`.brainfile/brainfile.md`). It declares columns, document types, and metadata. Tasks are standalone `.md` files in `.brainfile/board/`, each validated against [task.json](/reference/types).
 
 ## Schema URL
 
@@ -14,7 +14,6 @@ The board file is **config-only** — it does not contain tasks. Tasks are indiv
 
 - Workflow columns (stages tasks move through)
 - Document types (task, epic, adr, custom)
-- Project rules for agents
 - Statistics configuration
 
 ::: tip Minimal Example
@@ -266,18 +265,6 @@ agent:
     - Update task status as work progresses
     - Preserve all task IDs
     - Use the CLI or MCP tools for task operations
-rules:
-  always:
-    - id: 1
-      rule: test all features before moving to done
-    - id: 2
-      rule: link related files for each task
-  never:
-    - id: 1
-      rule: skip code review
-  prefer:
-    - id: 1
-      rule: small focused tasks over large epics
 types:
   epic:
     idPrefix: epic

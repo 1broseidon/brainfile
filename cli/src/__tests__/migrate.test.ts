@@ -62,4 +62,56 @@ columns:
     expect(logTask).not.toBeNull();
     expect(logTask!.task.completedAt).toBeDefined();
   });
+
+  it('never writes a rules block into the v2 config (adr-2)', () => {
+    // A real v1 board carrying the removed feature. Migration must not carry
+    // it forward: the v2 config is freshly constructed, and reintroducing
+    // `rules` there would resurrect a field the schema no longer has.
+    const legacyContent = `---
+title: Legacy Board With Rules
+agent:
+  instructions:
+    - Preserve all IDs
+rules:
+  always:
+    - id: 1
+      rule: write tests first
+  never:
+    - id: 2
+      rule: commit secrets
+columns:
+  - id: todo
+    title: To Do
+    tasks:
+      - id: task-1
+        title: First task
+---
+`;
+
+    fs.writeFileSync(path.join(tempDir, 'brainfile.md'), legacyContent, 'utf-8');
+
+    migrateCommand({});
+
+    const configContent = fs.readFileSync(
+      path.join(tempDir, '.brainfile', 'brainfile.md'),
+      'utf-8',
+    );
+
+    expect(configContent).not.toMatch(/^rules:/m);
+    expect(configContent).not.toContain('write tests first');
+    expect(configContent).not.toContain('commit secrets');
+
+    // Everything else still migrates normally.
+    expect(configContent).toContain('title: Legacy Board With Rules');
+    expect(configContent).toContain('Preserve all IDs');
+    expect(fs.existsSync(path.join(tempDir, '.brainfile', 'board', 'task-1.md'))).toBe(true);
+
+    // The v1 backup keeps the original, so nothing is lost — `lint --fix` on
+    // that file is the documented path to fold the rules into instructions.
+    const backup = fs.readFileSync(
+      path.join(tempDir, '.brainfile', 'brainfile.md.v1.bak'),
+      'utf-8',
+    );
+    expect(backup).toContain('write tests first');
+  });
 });

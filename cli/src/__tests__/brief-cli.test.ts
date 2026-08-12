@@ -192,7 +192,7 @@ updatedAt: 2026-08-01T00:00:00.000Z
     const result = runCli(['brief', '-f', boardPath, '--agent', 'codex']);
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Board & Rules');
+    expect(result.stdout).toContain('Board & Decisions');
     expect(result.stdout).toContain('Your Tasks');
     expect(result.stdout).toContain('task-1');
     expect(result.stdout).toContain('(todo)');

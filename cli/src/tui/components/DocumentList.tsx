@@ -17,6 +17,8 @@ export interface DocumentListProps {
   selectedIndex: number;
   viewportHeight: number;
   width: number;
+  /** Rows are archived docs (`done` stop) — titles render muted (§B2). */
+  archived?: boolean;
   /** Shown instead of rows when the column (or the filter result) is empty. */
   emptyMessage?: string;
 }
@@ -26,6 +28,7 @@ export function DocumentList({
   selectedIndex,
   viewportHeight,
   width,
+  archived = false,
   emptyMessage = 'No documents',
 }: DocumentListProps) {
   if (rows.length === 0) {
@@ -48,6 +51,7 @@ export function DocumentList({
           selected={start + index === selectedIndex}
           width={width}
           idWidth={idWidth}
+          archived={archived}
         />
       ))}
     </Box>

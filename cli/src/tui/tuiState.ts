@@ -1,5 +1,6 @@
 /**
- * TUI-local view state — currently just collapsed-row ids (v3.1 §A1).
+ * TUI-local view state: collapsed-row ids (v3.1 §A1) plus the resume view —
+ * which column and type-cycle stop the last session ended on (§C3).
  *
  * Lives at `.brainfile/state/tui.json`, sibling to `brief`'s per-agent
  * checkpoints (`core`'s `briefState.ts`), and reuses the same atomic-write
@@ -20,6 +21,18 @@ import {
 
 export interface TuiState {
   collapsed: string[];
+  /**
+   * Column id the last session was on. Stored by ID, not index: a column added
+   * or reordered between sessions must not silently resume somewhere else.
+   */
+  lastColumn?: string;
+  /**
+   * Type-cycle stop the last session was on (`all`, a document type, or
+   * `done`). Both this and `lastColumn` already have on-screen indicators —
+   * the header tabs and the `· type` label — so resuming into them satisfies
+   * rubric P9 without any new chrome.
+   */
+  lastTypeFilter?: string;
 }
 
 export function getTuiStatePath(brainfilePath: string): string {
@@ -36,10 +49,27 @@ export function readTuiState(brainfilePath: string): TuiState {
     const collapsed = Array.isArray(parsed.collapsed)
       ? parsed.collapsed.filter((id): id is string => typeof id === 'string')
       : [];
-    return { collapsed };
+    return {
+      collapsed,
+      ...(typeof parsed.lastColumn === 'string' ? { lastColumn: parsed.lastColumn } : {}),
+      ...(typeof parsed.lastTypeFilter === 'string'
+        ? { lastTypeFilter: parsed.lastTypeFilter }
+        : {}),
+    };
   } catch {
     return { collapsed: [] };
   }
+}
+
+/**
+ * Merge a partial update into the persisted state.
+ *
+ * Every writer touches one concern (collapse toggles, or the resume view), and
+ * a whole-object write would let the last writer clobber the other's field.
+ */
+export function patchTuiState(brainfilePath: string, patch: Partial<TuiState>): void {
+  const current = readTuiState(brainfilePath);
+  writeTuiState(brainfilePath, { ...current, ...patch });
 }
 
 export function writeTuiState(brainfilePath: string, state: TuiState): void {

@@ -35,7 +35,7 @@ describe("BrainfileValidator.validate", () => {
     expect(templateResult.errors.find((e) => e.path.includes("template"))).toBeDefined();
   });
 
-  it("validates nested structures including archive and rules", () => {
+  it("validates nested structures including archive", () => {
     const result = BrainfileValidator.validate({
       ...complexBoard,
       archive: "not-an-array" as any,
@@ -59,26 +59,6 @@ describe("BrainfileValidator.validate", () => {
 
     expect(result.valid).toBe(false);
     expect(result.errors.find((e) => e.path === "statsConfig.columns")).toBeDefined();
-  });
-
-  it("validates rules collections and entries", () => {
-    const result = BrainfileValidator.validate({
-      title: "Rules board",
-      columns: [],
-      rules: {
-        always: "not-array" as any,
-        never: [{ id: "one" as any, rule: "" }],
-      },
-    });
-
-    expect(result.valid).toBe(false);
-    expect(result.errors).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ path: "rules.always" }),
-        expect.objectContaining({ path: "rules.never[0].id" }),
-        expect.objectContaining({ path: "rules.never[0].rule" }),
-      ])
-    );
   });
 
   it("collects errors for malformed nested structures", () => {

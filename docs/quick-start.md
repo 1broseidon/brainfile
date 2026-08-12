@@ -28,13 +28,13 @@ brainfile init
 ```
 
 This creates the `.brainfile/` directory with:
-- `.brainfile/brainfile.md` — Board configuration (columns, types, rules)
+- `.brainfile/brainfile.md` — Board configuration (columns, types)
 - `.brainfile/board/` — Active task files
 - `.brainfile/logs/` — Completion history (`ledger.jsonl`) and archives
 
 `
 .brainfile/
-├── brainfile.md    ← Board config (columns, types, rules)
+├── brainfile.md    ← Board config (columns, types)
 ├── board/          ← Active task files go here
 └── logs/           ← Completed history (ledger and archived files)
 `

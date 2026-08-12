@@ -42,7 +42,6 @@ export function diffBoards(previous: Board, next: Board): BoardDiff {
       protocolVersion: previous.protocolVersion,
       schema: previous.schema,
       agent: previous.agent,
-      rules: previous.rules,
       statsConfig: previous.statsConfig
     },
     {
@@ -50,7 +49,6 @@ export function diffBoards(previous: Board, next: Board): BoardDiff {
       protocolVersion: next.protocolVersion,
       schema: next.schema,
       agent: next.agent,
-      rules: next.rules,
       statsConfig: next.statsConfig
     }
   );

@@ -68,7 +68,6 @@ import {
 } from './commands/hooks';
 import { configCommand } from './commands/config';
 import { schemaCommand, SCHEMA_COMMAND_HELP } from './commands/schema';
-import { rulesCommand, RULES_COMMAND_HELP } from './commands/rules';
 import { adrPromoteCommand, ADR_COMMAND_HELP } from './commands/adr';
 import {
   planAddCommand,
@@ -89,7 +88,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'adr', 'plan', 'types', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -616,23 +615,6 @@ Brainfile file resolution (when you don't pass --file):
     .action((name, options) => { schemaCommand({ name, json: options.json }); });
   schemaCmd.addHelpText('after', `\n${SCHEMA_COMMAND_HELP}`);
 
-  // Add rules command group
-  const rulesCmd = program
-    .command('rules [action]')
-    .description('Manage project rules (always, never, prefer, context)')
-    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
-    .option('--json', 'Output in JSON format')
-    .option('--category <category>', 'Filter by category (for list)')
-    .argument('[args...]', 'Arguments for the action (category, text/id)')
-    .action((action, args, options) => {
-      rulesCommand(action, args, {
-        file: options.file,
-        json: options.json,
-        category: options.category,
-      });
-    });
-  rulesCmd.addHelpText('after', `\n${RULES_COMMAND_HELP}`);
-
   // Add ADR command group
   const adrCmd = program
     .command('adr')
@@ -641,10 +623,9 @@ Brainfile file resolution (when you don't pass --file):
 
   adrCmd
     .command('promote')
-    .description('Promote an ADR into a project rule and move it to logs/')
+    .description('Mark an ADR accepted and move it to logs/')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'ADR task ID to promote (required)')
-    .option('--category <category>', 'Rule category (prefer|always|never|context)')
     .action((options) => { adrPromoteCommand(options); });
 
   // Add types command

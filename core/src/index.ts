@@ -105,9 +105,6 @@ export {
   patchTasks,
   deleteTasks,
   archiveTasks,
-  // Rule operations
-  addRule,
-  deleteRule,
 } from './operations';
 
 // Export strict board validation helpers
@@ -350,8 +347,6 @@ export type {
   Task,
   TaskDocument,
   Subtask,
-  Rule,
-  Rules,
   TaskTemplate,
   TemplateVariable,
   TemplateConfig
@@ -447,21 +442,6 @@ export class Brainfile {
    */
   static findTaskLocation(content: string, taskId: string) {
     return BrainfileParser.findTaskLocation(content, taskId);
-  }
-
-  /**
-   * Find the location of a rule in the file content
-   * @param content - The markdown content
-   * @param ruleId - The rule ID to find
-   * @param ruleType - The type of rule
-   * @returns Line and column location or null if not found
-   */
-  static findRuleLocation(
-    content: string,
-    ruleId: number,
-    ruleType: "always" | "never" | "prefer" | "context"
-  ) {
-    return BrainfileParser.findRuleLocation(content, ruleId, ruleType);
   }
 }
 

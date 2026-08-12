@@ -19,8 +19,7 @@ The base schema establishes the foundational structure for all brainfile documen
 
 - Common metadata fields (title, schema, version)
 - AI agent instructions
-- Project rules
-- Reusable definitions (timestamps, rules)
+- Reusable definitions (timestamps)
 
 ## Required Fields
 
@@ -73,7 +72,7 @@ protocolVersion: 2.0.0               # Optional — defaults to 2.0.0
 
 ```yaml
 agent:                              # Optional — AI agent configuration
-  instructions:                     # Optional — behavioral rules
+  instructions:                     # Optional — behavioural guidance
     - Modify only the YAML frontmatter
     - Preserve all IDs
   llmNotes: This project uses TypeScript and React  # Optional — free-form context
@@ -100,35 +99,33 @@ agent:                              # Optional — AI agent configuration
 **Type**: `object`
 **Description**: CLI tools available for agents to use
 
-### `rules`
+### `rules` (removed)
 
-**Type**: `object`
-**Description**: Project rules organized by category
+::: warning Removed in v2
+`rules` was removed by [adr-2](https://github.com/1broseidon/brainfile). Project
+guidance now lives in [`agent.instructions`](#agent), which agents already read.
+
+A legacy `rules:` block still parses without error, and `brainfile lint` warns
+about it. `brainfile lint --fix` folds each entry into `agent.instructions`,
+prefixed by its old category, and removes the block:
 
 ```yaml
-rules:                              # Optional — project rules
-  always:                           # Optional — must always follow
+# before
+agent:
+  instructions:
+    - Preserve all IDs
+rules:
+  always:
     - id: 1
-      rule: test all features before moving to done
-  never:                            # Optional — must never violate
-    - id: 1
-      rule: skip code review
-  prefer:                           # Optional — preferred approaches
-    - id: 1
-      rule: small focused tasks over large epics
-  context:                          # Optional — contextual info
-    - id: 1
-      rule: this is a TypeScript project
+      rule: write tests
+
+# after `brainfile lint --fix`
+agent:
+  instructions:
+    - Preserve all IDs
+    - "always: write tests"
 ```
-
-#### Rule Categories
-
-| Category | Purpose | Example |
-|----------|---------|---------|
-| `always` | Must always follow | Always write tests |
-| `never` | Must never violate | Never skip code review |
-| `prefer` | Preferred approaches | Prefer functional style |
-| `context` | Contextual info | This is a React project |
+:::
 
 ## Reusable Definitions
 
@@ -141,18 +138,6 @@ rules:                              # Optional — project rules
 - `2025-11-24T14:22:00-08:00`
 
 Used by type-specific schemas for `createdAt` and `updatedAt` fields.
-
-### `rule`
-
-**Type**: `object`
-**Required**: `id`, `rule`
-**Structure**:
-```json
-{
-  "id": 1,
-  "rule": "Rule text here"
-}
-```
 
 ## Example
 
@@ -170,19 +155,12 @@ agent:
   tools:
     brainfile:
       prefer: true
-rules:
-  always:
-    - id: 1
-      rule: write tests
-  never:
-    - id: 1
-      rule: skip reviews
 columns: [...]
 ---
 ```
 
 ## See Also
 
-- [Board Schema](./board.md) — Board configuration (columns, types, rules)
+- [Board Schema](./board.md) — Board configuration (columns, types)
 - [Task Schema](/reference/types) — All schema types including Task, Epic, ADR
 - [Contract Schema](./contract.md) — Contract object for PM-to-agent workflows

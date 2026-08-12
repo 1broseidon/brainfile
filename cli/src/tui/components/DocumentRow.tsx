@@ -75,9 +75,15 @@ export interface DocumentRowProps {
   width: number;
   /** Shared id-column width so titles align within the visible window. */
   idWidth: number;
+  /**
+   * Archived doc (`done` stop). Dims the title to muted so completed work reads
+   * as past tense next to live work (§B2). Selection still inverts — selection
+   * always wins visually, and inverse is the one indicator NO_COLOR keeps.
+   */
+  archived?: boolean;
 }
 
-export function DocumentRow({ row, selected, width, idWidth }: DocumentRowProps) {
+export function DocumentRow({ row, selected, width, idWidth, archived = false }: DocumentRowProps) {
   const { task, depth, orphanParentId } = row;
 
   // Parents-with-children get the ▾/▸ collapse-state glyph in place of their
@@ -119,7 +125,9 @@ export function DocumentRow({ row, selected, width, idWidth }: DocumentRowProps)
       <Text>{indent}</Text>
       <Text color={selected ? undefined : PALETTE.textSecondary}>{glyphCell}</Text>
       <Text color={dim}>{idCell}</Text>
-      <Text color={selected ? undefined : PALETTE.text}>{title}</Text>
+      <Text color={selected ? undefined : archived ? PALETTE.textMuted : PALETTE.text}>
+        {title}
+      </Text>
       <Text>{pad(gap)}</Text>
       {rightSegments.map((seg, index) => (
         <Text key={`${seg.text}-${index}`}>

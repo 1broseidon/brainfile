@@ -39,7 +39,6 @@ import type { Task } from '@brainfile/core';
 import { PALETTE, RULE, GLYPHS, getContractStateColor } from '../theme.js';
 import { getPriorityColor, getDocType } from '../utils.js';
 import { truncate, truncateStart, wrapText, pad } from '../text.js';
-import { buildDetailStops } from '../detailStops.js';
 import type { ActivityEntry } from '../actions.js';
 
 /** Deliverables shown before the rest are dropped (§B1). */
@@ -169,8 +168,6 @@ export function DetailView({
   );
   const clampedScroll = Math.max(0, Math.min(scrollOffset, Math.max(0, bodyLines.length - bodyBudget)));
   const visibleBody = bodyLines.slice(clampedScroll, clampedScroll + bodyBudget);
-
-  const stops = buildDetailStops(task, children);
 
   const stateText = priority ? `${columnLabel} · ${priority}` : columnLabel;
   const breadcrumbBudget = Math.max(6, Math.floor(contentWidth * 0.4));

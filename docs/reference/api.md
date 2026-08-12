@@ -151,10 +151,6 @@ const task = Brainfile.createFromTemplate("bug-report", {
 
 Find line number of a task in source.
 
-#### `Brainfile.findRuleLocation(content: string, ruleId: number, ruleType: RuleType): Location`
-
-Find line number of a rule in source.
-
 ---
 
 ## Board Operations
@@ -455,7 +451,6 @@ interface Board {
   protocolVersion?: string;
   schema?: string;
   agent?: AgentInstructions;
-  rules?: Rules;
   columns: Column[];
   archive?: Task[];      // legacy compat
   strict?: boolean;      // v2: enforce type validation
@@ -660,21 +655,21 @@ interface AgentInstructions {
 }
 ```
 
-### Rules
+### Rules (removed)
 
-```typescript
-interface Rules {
-  always?: Rule[];
-  never?: Rule[];
-  prefer?: Rule[];
-  context?: Rule[];
-}
+::: warning Removed in v2
+The `Rules` and `Rule` interfaces were removed by adr-2 and are no longer
+exported from `@brainfile/core` or `@brainfile/core/browser`. The `rules` field
+is gone from `Board`, `BoardConfig`, and `Journal`, and the `addRule`,
+`deleteRule`, and `findRuleLocation` methods no longer exist.
 
-interface Rule {
-  id: number;
-  rule: string;
-}
-```
+Project guidance now lives in [`AgentInstructions`](#agentinstructions), which
+agents already read.
+
+A legacy `rules:` block still parses without error, and `brainfile lint` warns
+about it. `brainfile lint --fix` folds each entry into `agent.instructions`,
+prefixed by its old category, and removes the block.
+:::
 
 ### SerializeOptions
 

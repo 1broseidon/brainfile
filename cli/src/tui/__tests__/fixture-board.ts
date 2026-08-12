@@ -293,6 +293,35 @@ const TASKS: Array<{ task: Task; body?: string }> = [
   },
 ];
 
+/**
+ * Completed documents, written to `logs/`. These are what the `done` stop on
+ * the `t` type-cycle renders (§B2) — one plain task and one typed doc, both
+ * carrying `completedAt` so the detail view's archived banner has a date.
+ */
+const LOGS: Array<{ task: Task; body?: string }> = [
+  {
+    task: {
+      id: 'task-90',
+      title: 'Ship the v2 migration',
+      column: 'done',
+      createdAt: '2026-08-01T09:00:00.000Z',
+      completedAt: '2026-08-12T14:00:00.000Z',
+      tags: ['migration'],
+    },
+    body: '## Description\nMoved every board onto per-task files.',
+  },
+  {
+    task: {
+      id: 'spec-90',
+      title: 'Per-task file format',
+      type: 'spec',
+      column: 'done',
+      createdAt: '2026-07-20T09:00:00.000Z',
+      completedAt: '2026-08-05T11:30:00.000Z',
+    },
+  },
+];
+
 export function createFixtureBoard(prefix = 'brainfile-tui-v3-'): FixtureBoard {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   const dotDir = path.join(tempDir, '.brainfile');
@@ -307,6 +336,32 @@ export function createFixtureBoard(prefix = 'brainfile-tui-v3-'): FixtureBoard {
   for (const { task, body } of TASKS) {
     writeTaskFile(path.join(boardDir, taskFileName(task.id)), task, body ?? '');
   }
+
+  for (const { task, body } of LOGS) {
+    writeTaskFile(path.join(logsDir, taskFileName(task.id)), task, body ?? '');
+  }
+
+  // `logs/ledger.jsonl` alongside the archived docs — this is what `complete`
+  // actually writes, and its absence is not a neutral omission: core falls back
+  // to scanning markdown and `console.warn`s once per logs directory. With a
+  // fresh temp workspace per test that becomes one warning per mount, which
+  // floods jest's worker IPC badly enough to stall the whole parallel run.
+  fs.writeFileSync(
+    path.join(logsDir, 'ledger.jsonl'),
+    LOGS.map(({ task }) =>
+      JSON.stringify({
+        id: task.id,
+        type: task.type ?? 'task',
+        title: task.title,
+        filesChanged: [],
+        createdAt: task.createdAt,
+        completedAt: task.completedAt,
+        cycleTimeHours: 1,
+        summary: task.title,
+      }),
+    ).join('\n') + '\n',
+    'utf-8',
+  );
 
   return {
     tempDir,

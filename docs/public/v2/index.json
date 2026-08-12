@@ -12,12 +12,12 @@
       "url": "https://brainfile.md/v2/base.json",
       "status": "stable",
       "requiredFields": ["title"],
-      "optionalFields": ["type", "schema", "protocolVersion", "agent", "rules"]
+      "optionalFields": ["type", "schema", "protocolVersion", "agent"]
     },
     "board": {
       "id": "board",
       "title": "Board Schema",
-      "description": "Board configuration file. Defines columns, document types, rules, and project metadata. Tasks are standalone files validated against task.json.",
+      "description": "Board configuration file. Defines columns, document types, and project metadata. Tasks are standalone files validated against task.json.",
       "url": "https://brainfile.md/v2/board.json",
       "status": "stable",
       "extends": "base",

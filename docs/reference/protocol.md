@@ -78,11 +78,6 @@ types:                     # Custom document types
 agent:
   instructions: []
   llmNotes: string
-rules:
-  always: []
-  never: []
-  prefer: []
-  context: []
 ---
 ```
 
@@ -155,7 +150,6 @@ column: todo
 | `strict` | boolean | No | Enforce type validation |
 | `types` | object | No | Custom document types |
 | `agent` | object | No | AI agent instructions |
-| `rules` | object | No | Project rules |
 | `columns` | array | Yes | Workflow columns |
 | `statsConfig` | object | No | Statistics configuration |
 
@@ -247,27 +241,14 @@ agent:
 
 ---
 
-## Rules Block
+## Rules Block (removed)
 
-Project rules for AI and human reference:
+`rules` was removed by adr-2. Project guidance belongs in `agent.instructions`,
+which is the block agents are already told to read.
 
-```yaml
-rules:
-  always:
-    - id: 1
-      rule: write tests for new features
-    - id: 2
-      rule: update task status as you work
-  never:
-    - id: 1
-      rule: commit directly to main
-  prefer:
-    - id: 1
-      rule: functional patterns over classes
-  context:
-    - id: 1
-      rule: TypeScript monorepo with Jest
-```
+Legacy files are still accepted: a `rules:` block parses without error, and
+`brainfile lint --fix` folds each entry into `agent.instructions` (prefixed by
+its former category) and removes the block.
 
 ---
 
@@ -394,10 +375,7 @@ agent:
   instructions:
     - Update task status as you work
     - Preserve all IDs
-rules:
-  always:
-    - id: 1
-      rule: write tests for new features
+    - Write tests for new features
 ---
 
 # My Project

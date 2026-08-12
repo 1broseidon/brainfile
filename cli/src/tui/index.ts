@@ -10,8 +10,6 @@ export type {
   ViewMode,
   BoardColumn,
   TUIProps,
-  MainPanel,
-  RuleType,
   LayoutMode,
   CompleteConfirmTarget,
 } from './types.js';

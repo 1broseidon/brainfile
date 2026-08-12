@@ -4,13 +4,17 @@
   "title": "Brainfile Base Schema",
   "description": "Base schema that all brainfile types extend. Defines shared fields for board configuration files.",
   "type": "object",
-  "required": ["title"],
+  "required": [
+    "title"
+  ],
   "properties": {
     "type": {
       "type": "string",
       "description": "Type identifier. Default: board.",
       "minLength": 1,
-      "examples": ["board"]
+      "examples": [
+        "board"
+      ]
     },
     "schema": {
       "type": "string",
@@ -23,7 +27,11 @@
       "type": "string",
       "description": "Title of the brainfile",
       "minLength": 1,
-      "examples": ["My Project", "Dev Log 2025", "Reading List"]
+      "examples": [
+        "My Project",
+        "Dev Log 2025",
+        "Reading List"
+      ]
     },
     "protocolVersion": {
       "type": "string",
@@ -49,7 +57,7 @@
         },
         "identity": {
           "type": "string",
-          "description": "System prompt identity — who this agent is and how it should behave"
+          "description": "System prompt identity \u2014 who this agent is and how it should behave"
         },
         "tools": {
           "type": "object",
@@ -64,7 +72,10 @@
                 "type": "string"
               },
               "prefer": {
-                "type": ["boolean", "string"]
+                "type": [
+                  "boolean",
+                  "string"
+                ]
               },
               "commands": {
                 "type": "array",
@@ -78,58 +89,17 @@
         }
       },
       "additionalProperties": true
-    },
-    "rules": {
-      "type": "object",
-      "description": "Project rules organized by category",
-      "properties": {
-        "always": {
-          "type": "array",
-          "description": "Rules that must always be followed",
-          "items": { "$ref": "#/definitions/rule" }
-        },
-        "never": {
-          "type": "array",
-          "description": "Rules that must never be violated",
-          "items": { "$ref": "#/definitions/rule" }
-        },
-        "prefer": {
-          "type": "array",
-          "description": "Preferred approaches or patterns",
-          "items": { "$ref": "#/definitions/rule" }
-        },
-        "context": {
-          "type": "array",
-          "description": "Contextual information and constraints",
-          "items": { "$ref": "#/definitions/rule" }
-        }
-      },
-      "additionalProperties": true
     }
   },
   "additionalProperties": true,
   "definitions": {
-    "rule": {
-      "type": "object",
-      "required": ["id", "rule"],
-      "properties": {
-        "id": {
-          "type": ["integer", "string"],
-          "description": "Unique identifier within the rule category"
-        },
-        "rule": {
-          "type": "string",
-          "description": "The rule text",
-          "minLength": 1
-        }
-      },
-      "additionalProperties": true
-    },
     "timestamp": {
       "type": "string",
       "description": "ISO 8601 timestamp",
       "format": "date-time",
-      "examples": ["2026-01-15T10:30:00Z"]
+      "examples": [
+        "2026-01-15T10:30:00Z"
+      ]
     }
   }
 }

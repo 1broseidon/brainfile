@@ -139,9 +139,29 @@ describe('schema command', () => {
   });
 
   describe('update command', () => {
+    let originalFetch: typeof globalThis.fetch;
+    let fetchMock: jest.Mock;
+
+    // schemaCommand({ name: 'update' }) returns synchronously but fires a
+    // FLOATING async task that fetches the published schemas and writes them
+    // over the bundled copies. Under jest, getBundledSchemasDir() resolves to
+    // cli/src/schemas -- the real, checked-in source tree -- so an unmocked
+    // fetch here silently reverts local schema edits to whatever is currently
+    // published at brainfile.md/v1. Always stub the network in this block.
+    beforeEach(() => {
+      originalFetch = globalThis.fetch;
+      fetchMock = jest.fn().mockRejectedValue(new Error('network disabled in tests'));
+      globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
+    });
+
+    afterEach(async () => {
+      // Let the floating update promise settle before restoring real fetch,
+      // otherwise it resolves after teardown against the unstubbed global.
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      globalThis.fetch = originalFetch;
+    });
+
     it('should return success for update action', () => {
-      // Note: This test doesn't actually check network calls
-      // The async update happens in the background
       const result = schemaCommand({ name: 'update' }, logger);
 
       expect(result.success).toBe(true);
@@ -153,6 +173,34 @@ describe('schema command', () => {
 
       expect(result.success).toBe(true);
       expect(result.action).toBe('update');
+    });
+
+    it('should not overwrite the bundled schema sources', async () => {
+      const schemasDir = path.join(__dirname, '..', 'schemas');
+      const before = fs
+        .readdirSync(schemasDir)
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => [f, fs.readFileSync(path.join(schemasDir, f), 'utf-8')] as const);
+
+      expect(before.length).toBeGreaterThan(0);
+
+      schemaCommand({ name: 'update' }, logger);
+      await new Promise((resolve) => setTimeout(resolve, 25));
+
+      for (const [file, content] of before) {
+        expect(fs.readFileSync(path.join(schemasDir, file), 'utf-8')).toBe(content);
+      }
+      expect(fetchMock).toHaveBeenCalled();
+    });
+  });
+
+  describe('bundled board schema (adr-2)', () => {
+    it('should not document the removed rules field', () => {
+      const result = schemaCommand({ name: 'board' }, logger);
+      const schema = result.schema as { description?: string };
+
+      expect(schema.description).toBeDefined();
+      expect(schema.description).not.toMatch(/rules/i);
     });
   });
 });

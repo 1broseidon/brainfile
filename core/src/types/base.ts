@@ -6,24 +6,6 @@
 import type { Contract } from './contract';
 
 /**
- * Rule definition for project guidelines
- */
-export interface Rule {
-  id: number;
-  rule: string;
-}
-
-/**
- * Rules structure with different priority levels
- */
-export interface Rules {
-  always?: Rule[];
-  never?: Rule[];
-  prefer?: Rule[];
-  context?: Rule[];
-}
-
-/**
  * AI agent instructions
  */
 export interface AgentInstructions {
@@ -57,8 +39,6 @@ export interface BrainfileBase {
   protocolVersion?: string;
   /** AI agent instructions */
   agent?: AgentInstructions;
-  /** Project rules and guidelines */
-  rules?: Rules;
 }
 
 /**

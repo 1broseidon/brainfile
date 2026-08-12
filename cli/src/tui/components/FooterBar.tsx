@@ -17,8 +17,17 @@ import { PALETTE, RULE } from '../theme.js';
 import { isCompletable } from '../utils.js';
 import { pad, truncate } from '../text.js';
 
-/** Actions offered while browsing the board list. */
-export function browseActions(selected: Task | undefined): string[] {
+/**
+ * Actions offered while browsing the list.
+ *
+ * The `done` stop is read-mostly (§B2): archived docs cannot be moved,
+ * completed or added to, and there are no columns to cycle. `e edit` survives —
+ * the $EDITOR handoff opens the doc's real file and is orthogonal to board
+ * mutation. Restoring stays a CLI verb this round.
+ */
+export function browseActions(selected: Task | undefined, archived = false): string[] {
+  if (archived) return ['↵ detail', 'e edit', 't type', 'q quit'];
+
   const actions = ['↵ detail', 'm move'];
   if (isCompletable(selected)) actions.push('c complete');
   actions.push('a add', 't type', 'tab column', 'q quit');
@@ -32,6 +41,8 @@ export interface DetailFooterContext {
   hasChildren: boolean;
   hasSubtasks: boolean;
   bodyOverflows: boolean;
+  /** Archived doc — board mutations are suppressed (§B2). */
+  archived?: boolean;
 }
 
 /**
@@ -47,8 +58,11 @@ export function detailActions(ctx: DetailFooterContext): string[] {
   if (ctx.hasSubtasks) actions.push('space toggle');
   if (ctx.bodyOverflows) actions.push('u/d scroll');
   if (ctx.hasParent) actions.push('p parent');
-  actions.push('e edit', 'm move');
-  if (isCompletable(ctx.task)) actions.push('c complete');
+  actions.push('e edit');
+  if (!ctx.archived) {
+    actions.push('m move');
+    if (isCompletable(ctx.task)) actions.push('c complete');
+  }
   actions.push('esc back');
   return actions;
 }

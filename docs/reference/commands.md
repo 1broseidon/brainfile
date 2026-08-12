@@ -47,7 +47,6 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`complete`](#complete) | Complete a task (append to `ledger.jsonl` and archive to `logs/`) |
 | [`contract`](#contract) | Manage agent-to-agent contracts |
 | [`adr`](#adr) | ADR lifecycle management |
-| [`rules`](#rules) | Manage project rules |
 | [`types`](#types) | Document type management |
 | [`search`](#search) | Search tasks and logs |
 | [`log`](#log) | View completed task logs |
@@ -464,28 +463,17 @@ See the [Contract Commands Reference](/cli/contract-commands) for detailed docum
 Manage Architecture Decision Records.
 
 ```bash
-brainfile adr promote -t adr-1 --category always
+brainfile adr promote -t adr-1
 ```
+
+Promoting marks the ADR accepted and moves it to `logs/`. Accepted ADRs appear
+in the board lane of `brainfile brief`.
 
 **Options (promote):**
 | Option | Description |
 |--------|-------------|
 | `-f, --file <path>` | Path to brainfile file (auto-detect by default) |
 | `-t, --task <id>` | ADR task ID to promote (required) |
-| `--category <category>` | Rule category (`prefer` \| `always` \| `never` \| `context`) |
-
----
-
-## rules
-
-Manage project rules.
-
-```bash
-brainfile rules                          # List all rules
-brainfile rules list --category always   # Filter by category
-brainfile rules add always "Write tests" # Add a rule
-brainfile rules delete always 1          # Delete rule by ID
-```
 
 ---
 

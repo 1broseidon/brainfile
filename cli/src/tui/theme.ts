@@ -13,7 +13,7 @@
  *    for the header and footer boundaries.
  */
 
-export const PALETTE = {
+const RAW_PALETTE = {
   // Text hierarchy
   text: '#ffffff',
   textSecondary: '#a0a0a0',
@@ -25,7 +25,6 @@ export const PALETTE = {
   high: '#f59e0b',
   medium: '#3b82f6',
   low: '#6b7280',
-  giga: '#a855f7',
 
   // Contract-state signal (design §3: draft dim · ready cyan · in_progress
   // yellow · delivered magenta · done green · failed/blocked red)
@@ -43,12 +42,40 @@ export const PALETTE = {
   info: '#3b82f6',
   accent: '#7c3aed',
 
-  // Carried over for the rules and logs panels, which keep their v2
-  // presentation this round. The v3 board and detail views use neither: they
-  // have no borders, and selection is an inverse bar rather than a background.
-  border: '#333333',
-  bgHighlight: '#2a2a2a',
 } as const;
+
+/**
+ * `NO_COLOR` (https://no-color.org): any non-empty value disables colour. The
+ * empty string is falsy in JS, which happens to be exactly the spec's rule.
+ *
+ * Gating happens HERE, at the prop layer, rather than by forcing `chalk.level`
+ * to 0 globally. That distinction is load-bearing: chalk gates `inverse` behind
+ * the same single `level` check as colour, so zeroing the level would erase the
+ * selection bar along with the palette. Returning `undefined` for every colour
+ * leaves ink's `<Text color={undefined}>` unstyled — the exact value the views
+ * already pass for a selected row — while `inverse` keeps working untouched.
+ *
+ * The Proxy means all ~107 `PALETTE.x` call sites need no change, and the check
+ * is a plain runtime read at module init, so it survives the esbuild bundle
+ * without depending on import order the way a `FORCE_COLOR` shim would.
+ */
+export function isNoColor(env: NodeJS.ProcessEnv = process.env): boolean {
+  return Boolean(env.NO_COLOR);
+}
+
+/**
+ * The palette the views see. Exported as a factory so the gate is testable
+ * without module-cache gymnastics — `PALETTE` itself is the one-shot
+ * application of it to the real environment.
+ */
+export function makePalette(noColor: boolean): typeof RAW_PALETTE {
+  if (!noColor) return RAW_PALETTE;
+  return new Proxy(RAW_PALETTE, { get: () => undefined }) as unknown as typeof RAW_PALETTE;
+}
+
+export const NO_COLOR = isNoColor();
+
+export const PALETTE: typeof RAW_PALETTE = makePalette(NO_COLOR);
 
 /** The only box-drawing character v3 uses: header and footer rules. */
 export const RULE = '─';

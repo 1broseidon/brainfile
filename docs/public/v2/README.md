@@ -6,7 +6,7 @@ Per-task file architecture. No deprecated fields. Clean break from v1.
 
 | File | Purpose |
 |------|---------|
-| **base.json** | Shared fields (title, agent instructions, rules) |
+| **base.json** | Shared fields (title, agent instructions) |
 | **board.json** | Board configuration (columns, types, strict mode) |
 | **task.json** | Standalone task documents |
 | **contract.json** | PM-to-agent contracts |
@@ -28,7 +28,7 @@ Per-task file architecture. No deprecated fields. Clean break from v1.
     └── task-2.md     # (legacy) Archived task
 ```
 
-The board file is config-only: columns, types, rules, metadata. Tasks are standalone `.md` files with YAML frontmatter and optional markdown body.
+The board file is config-only: columns, types, metadata. Tasks are standalone `.md` files with YAML frontmatter and optional markdown body.
 
 ## Document Types
 

@@ -37,10 +37,3 @@ export type {
   CompleteConfirmOverlayProps,
   AddOverlayProps,
 } from './Overlays.js';
-
-// Carried over from v2 without a visual pass this round (see types.ts MainPanel).
-export { RulesPanel } from './RulesPanel.js';
-export type { RulesPanelProps } from './RulesPanel.js';
-
-export { LogsPanel } from './LogsPanel.js';
-export type { LogsPanelProps } from './LogsPanel.js';

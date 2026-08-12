@@ -1,26 +1,28 @@
 /**
  * v3 keyboard model.
  *
- * The required set (design §5) is: j/k move · tab and [ ] column cycle ·
+ * The required set (design §5) is: j/k move · h/l and tab column cycle ·
  * ↵ detail · esc back/clear · / filter · m move · c complete · a add ·
  * space toggle subtask (in detail) · ? help · q quit. Existing binds that
- * predate v3 (g/G, ctrl-d/ctrl-u, arrows, h/l, e, p, d, y, r, n, A, 1/2/3) are
- * preserved, per §5's "preserve existing keybinds where they exist".
+ * predate v3 (g/G, ctrl-d/ctrl-u, arrows, e, p, d, y, r, n, A) are preserved,
+ * per §5's "preserve existing keybinds where they exist".
  *
- * The mode set shrank: `subtask` is gone (space toggles inline in detail) and
- * `search` became `filter`; `detail` and `complete-confirm` are new.
+ * adr-2 retired three groups: `[`/`]` (h/l and tab are the column cycle, and a
+ * key that silently duplicates another is muscle-memory noise — rubric P2);
+ * `1`/`2`/`3` (there are no panels left to switch between); and every
+ * rules/logs modal mode. Completed work is the `done` stop on `t`.
  */
+import { spawnSync } from 'child_process';
 import { useCallback, useEffect, useRef } from 'react';
-import { useInput, useApp } from 'ink';
-import type { AppState, StatusMessage, BoardColumn, RuleType, ViewMode } from '../types.js';
+import { useInput, useApp, useStdin } from 'ink';
+import type { AppState, StatusMessage, BoardColumn, ViewMode } from '../types.js';
 import type { Task } from '@brainfile/core';
 import type { DocRow } from '../rows.js';
 import { isCompletable } from '../utils.js';
 import { buildDetailStops, clampDetailCursor } from '../detailStops.js';
 import { computeDetailLayout } from '../components/DetailView.js';
-import { writeTuiState } from '../tuiState.js';
+import { patchTuiState } from '../tuiState.js';
 import {
-  editTaskInEditor,
   moveTaskAction,
   deleteTaskAction,
   archiveTaskAction,
@@ -29,17 +31,9 @@ import {
   toggleSubtaskAction,
   copyToClipboard,
   addTaskAction,
-  newTaskInEditor,
-  addRuleAction,
-  updateRuleAction,
-  deleteRuleAction,
-  restoreTaskAction,
-  deleteArchivedTaskAction,
-  loadLogs,
+  resolveTaskFilePath,
   type ActivityEntry,
 } from '../actions.js';
-
-const RULE_TYPES: RuleType[] = ['always', 'never', 'prefer', 'context'];
 
 interface UseKeyboardNavigationProps {
   state: AppState;
@@ -50,8 +44,6 @@ interface UseKeyboardNavigationProps {
   loadBrainfile: (forceRefresh?: boolean) => void;
   filePath: string;
   allColumns: BoardColumn[];
-  /** Every task on the board, unfiltered — for parent/child lookups (§B1/§B2). */
-  allBoardTasks: Task[];
   /** `t`-cycle options for the current board (§A2), `'all'` first. */
   typeCycleOptions: string[];
   /** The document currently drilled into in the detail view, if any (§B2). */
@@ -62,6 +54,10 @@ interface UseKeyboardNavigationProps {
   /** Same width/height `DetailView` renders with, so scroll math agrees (§B2). */
   detailWidth: number;
   detailHeight: number;
+  /** List is the `done` stop — archived docs are read-mostly (§B2). */
+  doneView: boolean;
+  /** The drilled-into doc is archived — same gating, resolved per-doc. */
+  detailArchived: boolean;
 }
 
 /** How long a status toast stays on screen. */
@@ -76,7 +72,6 @@ export function useKeyboardNavigation({
   loadBrainfile,
   filePath,
   allColumns,
-  allBoardTasks,
   typeCycleOptions,
   detailTask,
   detailChildren,
@@ -84,8 +79,23 @@ export function useKeyboardNavigation({
   detailActivity,
   detailWidth,
   detailHeight,
+  doneView,
+  detailArchived,
 }: UseKeyboardNavigationProps) {
-  const { exit } = useApp();
+  const { exit, suspendTerminal } = useApp();
+  // DEVIATION from the bind's `!process.stdout.isTTY || !process.stdin.isTTY`.
+  // `isRawModeSupported` is ink's own `stdin.isTTY` (ink App.js:121), i.e. the
+  // stdin ink was actually rendered against, which under non-default
+  // `render()` options need not be `process.stdin`. It is also precisely the
+  // "can this terminal be suspended?" question `suspendTerminal` asks.
+  //
+  // The bind's stdout half is deliberately not mirrored: it is vacuous here.
+  // Ink only renders interactively when `stdout.isTTY` (ink.js:707), so a user
+  // who can see a board to press `e` on already has an interactive stdout —
+  // and asserting it against the process global would be wrong under injected
+  // streams and unsatisfiable in-process, where `process.stdout.isTTY` is
+  // undefined under any piped or test runner.
+  const { isRawModeSupported } = useStdin();
 
   /**
    * Status toasts expire on a timer. Track them so unmounting cancels the
@@ -114,6 +124,57 @@ export function useKeyboardNavigation({
       statusTimers.current.add(timer);
     },
     [setState],
+  );
+
+  /**
+   * `$EDITOR` handoff (§C1): hand the terminal to the editor on the document's
+   * REAL `.md` file, then reload.
+   *
+   * The callback form of ink's `suspendTerminal` is deliberate — ink restores
+   * raw mode and forces a full redraw even if the callback throws, so a
+   * crashing editor cannot leave the TUI wedged with the terminal in raw mode.
+   *
+   * `$EDITOR` → `$VISUAL` → `vi`, so "no editor configured" is never fatal;
+   * the only hard failure is having no TTY to hand over, which is checked
+   * before suspending rather than discovered as a crash inside it.
+   */
+  const openInEditor = useCallback(
+    (taskId: string) => {
+      const located = resolveTaskFilePath(filePath, taskId);
+      if (!located.success) {
+        showStatus(located.error, 'error');
+        return;
+      }
+
+      if (!isRawModeSupported) {
+        showStatus('$EDITOR requires an interactive terminal', 'error');
+        return;
+      }
+
+      const editor = process.env.EDITOR || process.env.VISUAL || 'vi';
+
+      void suspendTerminal(async () => {
+        spawnSync(editor, [located.path], { stdio: 'inherit', shell: true });
+      })
+        .then(() => {
+          // Reload from disk. Selection is restored by id, so the row the user
+          // was on is still the row they come back to (§C4).
+          loadBrainfile(true);
+        })
+        .catch((err: unknown) => {
+          showStatus(`Editor failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+        });
+    },
+    [filePath, showStatus, suspendTerminal, loadBrainfile, isRawModeSupported],
+  );
+
+  /** Persist the resume column by ID (§C3). Best-effort: never blocks a keypress. */
+  const rememberColumn = useCallback(
+    (columnIndex: number) => {
+      const id = allColumns[columnIndex]?.id;
+      if (id) patchTuiState(filePath, { lastColumn: id });
+    },
+    [allColumns, filePath],
   );
 
   const currentTask: Task | undefined = rows[state.selectedTaskIndex]?.task;
@@ -263,26 +324,33 @@ export function useKeyboardNavigation({
     // ── Quick add (title only) ────────────────────────────────────────────
     if (state.mode === 'add') {
       if (key.escape) {
-        setMode('browse', { newTaskTitle: '' });
+        setMode('browse', { newTaskTitle: '', addThenEdit: false });
         return;
       }
       if (key.return) {
         const title = state.newTaskTitle.trim();
-        if (title) {
-          const column = allColumns[state.activeColumnIndex];
-          if (column) {
-            const result = addTaskAction(filePath, column.id, { title });
-            if (result.success) {
-              showStatus(result.message || 'Task added', 'success');
-              loadBrainfile(true);
-            } else {
-              showStatus(result.error || 'Failed to add task', 'error');
-            }
-          }
-        } else {
+        if (!title) {
           showStatus('Title required', 'error');
+          return; // stay in the overlay rather than discarding what was typed
         }
-        setMode('browse', { newTaskTitle: '' });
+
+        const column = allColumns[state.activeColumnIndex];
+        if (column) {
+          const result = addTaskAction(filePath, column.id, { title });
+          if (result.success) {
+            showStatus(result.message || 'Task added', 'success');
+            loadBrainfile(true);
+            // `N` continues into $EDITOR on the document just created.
+            // `addTaskAction` reports `Added <id>`; that id is what to open.
+            if (state.addThenEdit) {
+              const newId = result.message?.replace(/^Added\s+/, '').trim();
+              if (newId) openInEditor(newId);
+            }
+          } else {
+            showStatus(result.error || 'Failed to add task', 'error');
+          }
+        }
+        setMode('browse', { newTaskTitle: '', addThenEdit: false });
         return;
       }
       if (key.backspace || key.delete) {
@@ -410,6 +478,13 @@ export function useKeyboardNavigation({
 
       // `space` toggles the subtask under the cursor (existing action wiring).
       if (input === ' ') {
+        if (detailArchived) {
+          // The underlying action only resolves board files, so without this
+          // an archived doc answers "not found" — technically true, and
+          // useless. Say the real reason instead (§B2).
+          showStatus('Completed documents are read-only here', 'info');
+          return;
+        }
         if (stop?.kind === 'subtask' && detailTask) {
           const result = toggleSubtaskAction(filePath, detailTask.id, stop.subtask.id);
           if (result.success) {
@@ -442,160 +517,19 @@ export function useKeyboardNavigation({
         return;
       }
 
-      if (input === 'm' && detailTask) {
+      // Board mutations are suppressed on an archived doc (§B2); `e` is not a
+      // board mutation, so it stays available everywhere.
+      if (input === 'm' && detailTask && !detailArchived) {
         setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
         return;
       }
-      if (input === 'c' && detailTask && isCompletable(detailTask)) {
+      if (input === 'c' && detailTask && !detailArchived && isCompletable(detailTask)) {
         completeTask(detailTask, false);
         return;
       }
       if (input === 'e' && detailTask) {
-        const result = editTaskInEditor(filePath, detailTask.id);
-        if (result.success) {
-          showStatus(result.message || 'Task updated', 'success');
-          loadBrainfile(true);
-        } else {
-          showStatus(result.error || 'Edit failed', 'error');
-        }
+        openInEditor(detailTask.id);
         return;
-      }
-      return;
-    }
-
-    // ── Rules panel modal modes (carried over unchanged) ──────────────────
-    if (state.mode === 'rule-add' || state.mode === 'rule-edit') {
-      if (key.escape) {
-        setMode('browse', { ruleEditText: '', ruleEditId: null });
-        return;
-      }
-      if (key.return) {
-        const text = state.ruleEditText.trim();
-        if (!text) {
-          showStatus('Rule text required', 'error');
-          return;
-        }
-        const result =
-          state.mode === 'rule-add'
-            ? addRuleAction(filePath, state.activeRuleType, text)
-            : state.ruleEditId !== null
-              ? updateRuleAction(filePath, state.activeRuleType, state.ruleEditId, text)
-              : { success: false, error: 'No rule selected' };
-        if (result.success) {
-          showStatus(result.message || 'Rule saved', 'success');
-          loadBrainfile(true);
-        } else {
-          showStatus(result.error || 'Failed to save rule', 'error');
-        }
-        setMode('browse', { ruleEditText: '', ruleEditId: null });
-        return;
-      }
-      if (key.backspace || key.delete) {
-        setState((prev) => ({ ...prev, ruleEditText: prev.ruleEditText.slice(0, -1) }));
-        return;
-      }
-      if (input && !key.ctrl && !key.meta) {
-        setState((prev) => ({ ...prev, ruleEditText: prev.ruleEditText + input }));
-      }
-      return;
-    }
-
-    if (state.mode === 'rule-delete-confirm') {
-      const rules = state.board?.rules?.[state.activeRuleType] || [];
-      const rule = rules[state.selectedRuleIndex];
-      if (input === 'y' || input === 'Y') {
-        if (rule) {
-          const result = deleteRuleAction(filePath, state.activeRuleType, rule.id);
-          if (result.success) {
-            showStatus(result.message || 'Rule deleted', 'success');
-            loadBrainfile(true);
-            setState((prev) => ({
-              ...prev,
-              mode: 'browse',
-              selectedRuleIndex: Math.max(0, prev.selectedRuleIndex - 1),
-            }));
-            return;
-          }
-          showStatus(result.error || 'Failed to delete rule', 'error');
-        }
-        setMode('browse');
-        return;
-      }
-      if (input === 'n' || input === 'N' || key.escape) {
-        setMode('browse');
-        showStatus('Delete cancelled', 'info');
-      }
-      return;
-    }
-
-    // ── Logs panel modal modes (carried over unchanged) ───────────────────
-    if (state.mode === 'logs-restore') {
-      if (key.escape) {
-        setMode('browse');
-        return;
-      }
-      if (key.downArrow || input === 'j') {
-        setState((prev) => ({
-          ...prev,
-          logRestoreColumnIndex: Math.min(prev.logRestoreColumnIndex + 1, allColumns.length - 1),
-        }));
-        return;
-      }
-      if (key.upArrow || input === 'k') {
-        setState((prev) => ({
-          ...prev,
-          logRestoreColumnIndex: Math.max(prev.logRestoreColumnIndex - 1, 0),
-        }));
-        return;
-      }
-      if (key.return) {
-        const task = state.logs[state.selectedLogIndex];
-        const column = allColumns[state.logRestoreColumnIndex];
-        if (task && column) {
-          const result = restoreTaskAction(filePath, task.id, column.id);
-          if (result.success) {
-            showStatus(result.message || 'Task restored', 'success');
-            loadBrainfile(true);
-            const logResult = loadLogs(filePath);
-            setState((prev) => ({
-              ...prev,
-              mode: 'browse',
-              logs: logResult.logs,
-              selectedLogIndex: Math.max(0, prev.selectedLogIndex - 1),
-            }));
-            return;
-          }
-          showStatus(result.error || 'Failed to restore task', 'error');
-        }
-        setMode('browse');
-      }
-      return;
-    }
-
-    if (state.mode === 'logs-delete-confirm') {
-      const task = state.logs[state.selectedLogIndex];
-      if (input === 'y' || input === 'Y') {
-        if (task) {
-          const result = deleteArchivedTaskAction(filePath, task.id);
-          if (result.success) {
-            showStatus(result.message || 'Task permanently deleted', 'success');
-            const logResult = loadLogs(filePath);
-            setState((prev) => ({
-              ...prev,
-              mode: 'browse',
-              logs: logResult.logs,
-              selectedLogIndex: Math.max(0, prev.selectedLogIndex - 1),
-            }));
-            return;
-          }
-          showStatus(result.error || 'Failed to delete task', 'error');
-        }
-        setMode('browse');
-        return;
-      }
-      if (input === 'n' || input === 'N' || key.escape) {
-        setMode('browse');
-        showStatus('Delete cancelled', 'info');
       }
       return;
     }
@@ -610,354 +544,244 @@ export function useKeyboardNavigation({
       setMode('help');
       return;
     }
-    if (input === '1') {
-      setState((prev) => ({ ...prev, activePanel: 'board', mode: 'browse' }));
+    if (input === '/') {
+      setMode('filter', { filterQuery: '', selectedTaskIndex: 0 });
       return;
     }
-    if (input === '2') {
-      setState((prev) => ({ ...prev, activePanel: 'rules', mode: 'browse' }));
+    // Type-cycle (§A2): all → task → epic → spec → plan → adr → all,
+    // restricted to types the board actually declares.
+    if (input === 't') {
+      if (typeCycleOptions.length > 1) {
+        const idx = typeCycleOptions.indexOf(state.activeTypeFilter);
+        const next = typeCycleOptions[(idx < 0 ? 0 : idx + 1) % typeCycleOptions.length];
+        patchTuiState(filePath, { lastTypeFilter: next }); // resume view (§C3)
+        setState((prev) => ({ ...prev, activeTypeFilter: next, selectedTaskIndex: 0 }));
+      }
       return;
     }
-    if (input === '3') {
-      setState((prev) => ({ ...prev, activePanel: 'logs', mode: 'browse' }));
+    // Collapse/expand (§A1): only a no-op-free toggle when the row has
+    // children currently rendered under it.
+    if (input === ' ') {
+      if (doneView) return; // flat list, nothing to collapse
+      const row = rows[state.selectedTaskIndex];
+      if (row && (row.childCount ?? 0) > 0) {
+        const id = row.task.id;
+        setState((prev) => {
+          const next = new Set(prev.collapsedIds);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          patchTuiState(filePath, { collapsed: Array.from(next) });
+          return { ...prev, collapsedIds: next };
+        });
+      }
       return;
     }
-
-    if (state.activePanel === 'board') {
-      if (input === '/') {
-        setMode('filter', { filterQuery: '', selectedTaskIndex: 0 });
+    if (input === 'r') {
+      loadBrainfile(true);
+      showStatus('Reloaded', 'info');
+      return;
+    }
+    if (key.return) {
+      if (currentTask) {
+        setMode('detail', { detailPath: [currentTask.id], detailCursor: 0, detailScroll: 0 });
+      } else {
+        showStatus('No document selected', 'info');
+      }
+      return;
+    }
+    // ── Board mutations ───────────────────────────────────────────────────
+    // The `done` stop is read-mostly (§B2): every mutating key answers with a
+    // status line instead of silently doing nothing (rubric P6 — a keystroke
+    // that produces no feedback is indistinguishable from a dropped one).
+    if (input === 'a' || input === 'n') {
+      if (doneView) {
+        showStatus('Completed documents are read-only here', 'info');
         return;
       }
-      // Type-cycle (§A2): all → task → epic → spec → plan → adr → all,
-      // restricted to types the board actually declares.
-      if (input === 't') {
-        if (typeCycleOptions.length > 1) {
-          const idx = typeCycleOptions.indexOf(state.activeTypeFilter);
-          const next = typeCycleOptions[(idx < 0 ? 0 : idx + 1) % typeCycleOptions.length];
-          setState((prev) => ({ ...prev, activeTypeFilter: next, selectedTaskIndex: 0 }));
-        }
+      setMode('add', { newTaskTitle: '', addThenEdit: false });
+      return;
+    }
+    if (input === 'm') {
+      if (doneView) {
+        showStatus('Completed documents are read-only here', 'info');
         return;
       }
-      // Collapse/expand (§A1): only a no-op-free toggle when the row has
-      // children currently rendered under it.
-      if (input === ' ') {
-        const row = rows[state.selectedTaskIndex];
-        if (row && (row.childCount ?? 0) > 0) {
-          const id = row.task.id;
-          setState((prev) => {
-            const next = new Set(prev.collapsedIds);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            writeTuiState(filePath, { collapsed: Array.from(next) });
-            return { ...prev, collapsedIds: next };
-          });
-        }
+      if (!currentTask) {
+        showStatus('No document selected', 'error');
         return;
       }
-      if (input === 'r') {
+      setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
+      return;
+    }
+    if (input === 'c') {
+      if (doneView) {
+        showStatus('Already completed', 'info');
+        return;
+      }
+      if (!currentTask) {
+        showStatus('No document selected', 'error');
+        return;
+      }
+      if (!isCompletable(currentTask)) {
+        showStatus(`${currentTask.id} cannot be completed`, 'info');
+        return;
+      }
+      completeTask(currentTask, false);
+      return;
+    }
+    if (input === 'd') {
+      if (doneView) {
+        showStatus('Completed documents are read-only here', 'info');
+        return;
+      }
+      if (!currentTask) {
+        showStatus('No document selected', 'error');
+        return;
+      }
+      setMode('delete-confirm');
+      return;
+    }
+    // `e` works on archived docs too — it edits the document's own file and
+    // mutates no board state (§B2).
+    if (input === 'e') {
+      if (!currentTask) {
+        showStatus('No document selected', 'error');
+        return;
+      }
+      openInEditor(currentTask.id);
+      return;
+    }
+    if (input === 'p') {
+      if (!currentTask) return;
+      if (doneView) {
+        showStatus('Completed documents are read-only here', 'info');
+        return;
+      }
+      const result = cyclePriorityAction(filePath, currentTask.id);
+      if (result.success) {
+        showStatus(result.message || 'Priority updated', 'success');
         loadBrainfile(true);
-        showStatus('Reloaded', 'info');
+      } else {
+        showStatus(result.error || 'Failed to update priority', 'error');
+      }
+      return;
+    }
+    if (input === 'y') {
+      if (!currentTask) return;
+      const result = copyToClipboard(currentTask.id);
+      showStatus(
+        result.success ? `Copied ${currentTask.id}` : result.error || 'Copy failed',
+        result.success ? 'success' : 'error',
+      );
+      return;
+    }
+    // `N` = new document, then straight into $EDITOR on its real file.
+    //
+    // The old flow wrote a synthetic YAML template to a temp file and diffed
+    // the result back into a patch. Now the title is collected by the ordinary
+    // add overlay first, the document is created for real, and the editor opens
+    // on THAT file — so there is no second format to keep in sync, and
+    // abandoning the editor cannot leave an untitled stray behind (the title
+    // was already required to get this far).
+    if (input === 'N') {
+      if (doneView) {
+        showStatus('Completed documents are read-only here', 'info');
         return;
       }
-      if (key.return) {
-        if (currentTask) {
-          setMode('detail', { detailPath: [currentTask.id], detailCursor: 0, detailScroll: 0 });
-        } else {
-          showStatus('No document selected', 'info');
-        }
+      setMode('add', { newTaskTitle: '', addThenEdit: true });
+      return;
+    }
+    if (input === 'A') {
+      if (!currentTask) return;
+      if (doneView) {
+        showStatus('Completed documents are read-only here', 'info');
         return;
       }
-      if (input === 'a' || input === 'n') {
-        setMode('add', { newTaskTitle: '' });
-        return;
-      }
-      if (input === 'm') {
-        if (!currentTask) {
-          showStatus('No document selected', 'error');
-          return;
-        }
-        setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
-        return;
-      }
-      if (input === 'c') {
-        if (!currentTask) {
-          showStatus('No document selected', 'error');
-          return;
-        }
-        if (!isCompletable(currentTask)) {
-          showStatus(`${currentTask.id} cannot be completed`, 'info');
-          return;
-        }
-        completeTask(currentTask, false);
-        return;
-      }
-      if (input === 'd') {
-        if (!currentTask) {
-          showStatus('No document selected', 'error');
-          return;
-        }
-        setMode('delete-confirm');
-        return;
-      }
-      if (input === 'e') {
-        if (!currentTask) {
-          showStatus('No document selected', 'error');
-          return;
-        }
-        const result = editTaskInEditor(filePath, currentTask.id);
-        if (result.success) {
-          showStatus(result.message || 'Task updated', 'success');
-          loadBrainfile(true);
-        } else {
-          showStatus(result.error || 'Edit failed', 'error');
-        }
-        return;
-      }
-      if (input === 'p') {
-        if (!currentTask) return;
-        const result = cyclePriorityAction(filePath, currentTask.id);
-        if (result.success) {
-          showStatus(result.message || 'Priority updated', 'success');
-          loadBrainfile(true);
-        } else {
-          showStatus(result.error || 'Failed to update priority', 'error');
-        }
-        return;
-      }
-      if (input === 'y') {
-        if (!currentTask) return;
-        const result = copyToClipboard(currentTask.id);
-        showStatus(
-          result.success ? `Copied ${currentTask.id}` : result.error || 'Copy failed',
-          result.success ? 'success' : 'error',
-        );
-        return;
-      }
-      if (input === 'N') {
-        const column = allColumns[state.activeColumnIndex];
-        if (column) {
-          const result = newTaskInEditor(filePath, column.id);
-          if (result.success) {
-            showStatus(result.message || 'Task created', 'success');
-            loadBrainfile(true);
-          } else {
-            showStatus(result.error || 'Failed to create task', 'error');
-          }
-        }
-        return;
-      }
-      if (input === 'A') {
-        if (!currentTask) return;
-        showStatus('Moving to logs...', 'info');
-        archiveTaskActionAsync(filePath, currentTask.id)
-          .then((result) => {
-            showStatus(
-              result.success
-                ? result.message || 'Task moved to logs'
-                : result.error || 'Move to logs failed',
-              result.success ? 'success' : 'error',
-            );
-            if (result.success) loadBrainfile(true);
-          })
-          .catch((err) => showStatus(`Move to logs failed: ${err}`, 'error'));
-        return;
-      }
+      showStatus('Moving to logs...', 'info');
+      archiveTaskActionAsync(filePath, currentTask.id)
+        .then((result) => {
+          showStatus(
+            result.success
+              ? result.message || 'Task moved to logs'
+              : result.error || 'Move to logs failed',
+            result.success ? 'success' : 'error',
+          );
+          if (result.success) loadBrainfile(true);
+        })
+        .catch((err) => showStatus(`Move to logs failed: ${err}`, 'error'));
+      return;
+    }
 
-      // Navigation
-      if (key.downArrow || input === 'j') {
-        setState((prev) => ({
-          ...prev,
-          selectedTaskIndex: Math.min(prev.selectedTaskIndex + 1, maxRowIndex),
-        }));
-        return;
-      }
-      if (key.upArrow || input === 'k') {
-        setState((prev) => ({
-          ...prev,
-          selectedTaskIndex: Math.max(prev.selectedTaskIndex - 1, 0),
-        }));
-        return;
-      }
-      if (key.ctrl && input === 'd') {
-        setState((prev) => ({
-          ...prev,
-          selectedTaskIndex: Math.min(
-            prev.selectedTaskIndex + Math.floor(viewportHeight / 2),
-            maxRowIndex,
-          ),
-        }));
-        return;
-      }
-      if (key.ctrl && input === 'u') {
-        setState((prev) => ({
-          ...prev,
-          selectedTaskIndex: Math.max(prev.selectedTaskIndex - Math.floor(viewportHeight / 2), 0),
-        }));
-        return;
-      }
-      if (input === 'g') {
-        setState((prev) => ({ ...prev, selectedTaskIndex: 0 }));
-        return;
-      }
-      if (input === 'G') {
-        setState((prev) => ({ ...prev, selectedTaskIndex: maxRowIndex }));
-        return;
-      }
+    // Navigation
+    if (key.downArrow || input === 'j') {
+      setState((prev) => ({
+        ...prev,
+        selectedTaskIndex: Math.min(prev.selectedTaskIndex + 1, maxRowIndex),
+      }));
+      return;
+    }
+    if (key.upArrow || input === 'k') {
+      setState((prev) => ({
+        ...prev,
+        selectedTaskIndex: Math.max(prev.selectedTaskIndex - 1, 0),
+      }));
+      return;
+    }
+    if (key.ctrl && input === 'd') {
+      setState((prev) => ({
+        ...prev,
+        selectedTaskIndex: Math.min(
+          prev.selectedTaskIndex + Math.floor(viewportHeight / 2),
+          maxRowIndex,
+        ),
+      }));
+      return;
+    }
+    if (key.ctrl && input === 'u') {
+      setState((prev) => ({
+        ...prev,
+        selectedTaskIndex: Math.max(prev.selectedTaskIndex - Math.floor(viewportHeight / 2), 0),
+      }));
+      return;
+    }
+    if (input === 'g') {
+      setState((prev) => ({ ...prev, selectedTaskIndex: 0 }));
+      return;
+    }
+    if (input === 'G') {
+      setState((prev) => ({ ...prev, selectedTaskIndex: maxRowIndex }));
+      return;
+    }
 
-      // Column cycling
-      if (key.tab || key.rightArrow || input === 'l' || input === ']') {
-        if (filteredColumnsLength > 0) {
-          setState((prev) => ({
-            ...prev,
-            activeColumnIndex: (prev.activeColumnIndex + 1) % filteredColumnsLength,
-            selectedTaskIndex: 0,
-          }));
-        }
-        return;
+    // Column cycling
+    // `[`/`]` are retired (§C6): h/l, tab and the arrows are the column
+    // cycle. Under `done` there is one flat archive list and no columns, so
+    // cycling is a deliberate no-op rather than a silent index change.
+    if (key.tab || key.rightArrow || input === 'l') {
+      if (!doneView && filteredColumnsLength > 0) {
+        setState((prev) => {
+          const nextIndex = (prev.activeColumnIndex + 1) % filteredColumnsLength;
+          rememberColumn(nextIndex);
+          return { ...prev, activeColumnIndex: nextIndex, selectedTaskIndex: 0 };
+        });
       }
-      if ((key.shift && key.tab) || key.leftArrow || input === 'h' || input === '[') {
-        if (filteredColumnsLength > 0) {
-          setState((prev) => ({
-            ...prev,
-            activeColumnIndex:
-              prev.activeColumnIndex === 0 ? filteredColumnsLength - 1 : prev.activeColumnIndex - 1,
-            selectedTaskIndex: 0,
-          }));
-        }
-        return;
-      }
-
-      if (key.escape) {
-        setState((prev) => ({ ...prev, filterQuery: '', selectedTaskIndex: 0 }));
+      return;
+    }
+    if ((key.shift && key.tab) || key.leftArrow || input === 'h') {
+      if (!doneView && filteredColumnsLength > 0) {
+        setState((prev) => {
+          const nextIndex =
+            prev.activeColumnIndex === 0 ? filteredColumnsLength - 1 : prev.activeColumnIndex - 1;
+          rememberColumn(nextIndex);
+          return { ...prev, activeColumnIndex: nextIndex, selectedTaskIndex: 0 };
+        });
       }
       return;
     }
 
-    // ── Rules panel browse (carried over unchanged) ───────────────────────
-    if (state.activePanel === 'rules') {
-      const rules = state.board?.rules?.[state.activeRuleType] || [];
-      const maxRuleIndex = Math.max(0, rules.length - 1);
-
-      if (key.leftArrow || input === 'h' || (key.shift && key.tab)) {
-        const idx = RULE_TYPES.indexOf(state.activeRuleType);
-        setState((prev) => ({
-          ...prev,
-          activeRuleType: RULE_TYPES[idx === 0 ? RULE_TYPES.length - 1 : idx - 1],
-          selectedRuleIndex: 0,
-        }));
-        return;
-      }
-      if (key.tab || key.rightArrow || input === 'l') {
-        const idx = RULE_TYPES.indexOf(state.activeRuleType);
-        setState((prev) => ({
-          ...prev,
-          activeRuleType: RULE_TYPES[(idx + 1) % RULE_TYPES.length],
-          selectedRuleIndex: 0,
-        }));
-        return;
-      }
-      if (key.downArrow || input === 'j') {
-        setState((prev) => ({
-          ...prev,
-          selectedRuleIndex: Math.min(prev.selectedRuleIndex + 1, maxRuleIndex),
-        }));
-        return;
-      }
-      if (key.upArrow || input === 'k') {
-        setState((prev) => ({
-          ...prev,
-          selectedRuleIndex: Math.max(prev.selectedRuleIndex - 1, 0),
-        }));
-        return;
-      }
-      if (input === 'a' || input === 'n') {
-        setMode('rule-add', { ruleEditText: '', ruleEditId: null });
-        return;
-      }
-      if (input === 'e') {
-        const rule = rules[state.selectedRuleIndex];
-        if (rule) setMode('rule-edit', { ruleEditText: rule.rule, ruleEditId: rule.id });
-        else showStatus('No rule selected', 'error');
-        return;
-      }
-      if (input === 'd') {
-        if (rules[state.selectedRuleIndex]) setMode('rule-delete-confirm');
-        else showStatus('No rule selected', 'error');
-        return;
-      }
-      if (input === 'g') {
-        setState((prev) => ({ ...prev, selectedRuleIndex: 0 }));
-        return;
-      }
-      if (input === 'G') {
-        setState((prev) => ({ ...prev, selectedRuleIndex: maxRuleIndex }));
-      }
-      return;
+    if (key.escape) {
+      setState((prev) => ({ ...prev, filterQuery: '', selectedTaskIndex: 0 }));
     }
-
-    // ── Logs panel browse (carried over unchanged) ────────────────────────
-    if (state.activePanel === 'logs') {
-      const maxLogIndex = Math.max(0, state.logs.length - 1);
-
-      if (input === 'r') {
-        const result = loadLogs(filePath);
-        setState((prev) => ({ ...prev, logs: result.logs }));
-        showStatus('Logs refreshed', 'info');
-        return;
-      }
-      if (key.downArrow || input === 'j') {
-        setState((prev) => ({
-          ...prev,
-          selectedLogIndex: Math.min(prev.selectedLogIndex + 1, maxLogIndex),
-        }));
-        return;
-      }
-      if (key.upArrow || input === 'k') {
-        setState((prev) => ({
-          ...prev,
-          selectedLogIndex: Math.max(prev.selectedLogIndex - 1, 0),
-        }));
-        return;
-      }
-      if (key.return) {
-        const task = state.logs[state.selectedLogIndex];
-        if (task) {
-          setState((prev) => {
-            const expanded = new Set(prev.expandedLogIds);
-            if (expanded.has(task.id)) expanded.delete(task.id);
-            else expanded.add(task.id);
-            return { ...prev, expandedLogIds: expanded };
-          });
-        }
-        return;
-      }
-      if (input === 'R') {
-        if (state.logs.length === 0) {
-          showStatus('No logged tasks', 'error');
-          return;
-        }
-        setMode('logs-restore', { logRestoreColumnIndex: 0 });
-        return;
-      }
-      if (input === 'd') {
-        if (state.logs.length === 0) {
-          showStatus('No logged tasks', 'error');
-          return;
-        }
-        setMode('logs-delete-confirm');
-        return;
-      }
-      if (input === 'g') {
-        setState((prev) => ({ ...prev, selectedLogIndex: 0 }));
-        return;
-      }
-      if (input === 'G') {
-        setState((prev) => ({ ...prev, selectedLogIndex: maxLogIndex }));
-        return;
-      }
-      if (key.escape) {
-        setState((prev) => ({ ...prev, expandedLogIds: new Set() }));
-      }
-    }
+    return;
   });
 }

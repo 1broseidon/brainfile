@@ -16,14 +16,26 @@ describe("BrainfileParser.parse", () => {
     expect(board?.columns[0].tasks[0].title).toBe("First Task");
   });
 
-  it("parses a complex board with rules and archive", () => {
+  it("parses a complex board with archive", () => {
     const markdown = loadFixture("valid-complex.md");
     const board = BrainfileParser.parse(markdown);
 
     expect(board).not.toBeNull();
-    expect(board?.rules?.always?.[0].rule).toContain("Write tests");
     expect(board?.archive?.[0].title).toBe("Old Task");
     expect(board?.columns[0].tasks[0].relatedFiles).toContain("src/utils.ts");
+  });
+
+  // adr-2 removed `rules` from the schema and the types. The parser must still
+  // read a legacy file carrying the block without erroring; the field simply
+  // rides along untyped (parseFrontmatter casts, it never filters).
+  it("tolerates a legacy rules block on read", () => {
+    const markdown = loadFixture("valid-complex.md");
+    const board = BrainfileParser.parse(markdown);
+
+    expect(board).not.toBeNull();
+    expect(board?.title).toBe("Complex Project");
+    const legacy = (board as unknown as { rules?: Record<string, Array<{ rule: string }>> }).rules;
+    expect(legacy?.always?.[0].rule).toContain("Write tests");
   });
 
   it("returns null for invalid YAML", () => {
@@ -77,22 +89,6 @@ describe("BrainfileParser.findTaskLocation", () => {
     const markdown = loadFixture("valid-complex.md");
     const location = BrainfileParser.findTaskLocation(markdown, "does-not-exist");
 
-    expect(location).toBeNull();
-  });
-});
-
-describe("BrainfileParser.findRuleLocation", () => {
-  const markdown = loadFixture("valid-complex.md");
-
-  it("finds rules across all rule types", () => {
-    expect(BrainfileParser.findRuleLocation(markdown, 1, "always")).toEqual({ line: 11, column: 0 });
-    expect(BrainfileParser.findRuleLocation(markdown, 1, "never")).toEqual({ line: 14, column: 0 });
-    expect(BrainfileParser.findRuleLocation(markdown, 1, "prefer")).toEqual({ line: 17, column: 0 });
-    expect(BrainfileParser.findRuleLocation(markdown, 1, "context")).toEqual({ line: 20, column: 0 });
-  });
-
-  it("returns null when the rule id is missing", () => {
-    const location = BrainfileParser.findRuleLocation(markdown, 99, "always");
     expect(location).toBeNull();
   });
 });

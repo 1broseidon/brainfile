@@ -109,7 +109,7 @@ For simple integration without MCP or hooks, add to your agent config file (`CLA
 
 - Use brainfile CLI or MCP tools for task operations
 - Update task status as you work (todo → in-progress → done)
-- Check .brainfile/brainfile.md for project rules and board config
+- Check .brainfile/brainfile.md for agent instructions and board config
 - Task files live in `.brainfile/board/` (active) and `.brainfile/logs/` (completion history with `ledger.jsonl`)
 ```
 
@@ -171,7 +171,7 @@ AI agents should check for the board config in this order:
 
 ```
 .brainfile/
-├── brainfile.md      # Board config (columns, types, rules)
+├── brainfile.md      # Board config (columns, types)
 ├── agents/           # Agent configuration files (optional)
 │   ├── _defaults.md  # Default settings for all agents
 │   ├── codex.md      # Codex agent config + instructions

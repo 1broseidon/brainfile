@@ -17,12 +17,6 @@ export const complexBoard: Board = {
   agent: {
     instructions: ["Test instruction"],
   },
-  rules: {
-    always: [{ id: 1, rule: "Always test" }],
-    never: [{ id: 1, rule: "Never skip tests" }],
-    prefer: [{ id: 1, rule: "Prefer simple solutions" }],
-    context: [{ id: 1, rule: "Context matters" }],
-  },
   statsConfig: {
     columns: ["todo", "done"],
   },

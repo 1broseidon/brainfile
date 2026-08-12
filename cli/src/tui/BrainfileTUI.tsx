@@ -4,14 +4,17 @@
  * The shell is three fixed pieces — a one-row header + rule, a flexible content
  * region, and a rule + status line + one-row footer — with no borders anywhere
  * (design §1). The content region is either the board list, the board list
- * beside a detail pane (wide), a fullscreen detail (narrow), an overlay, or one
- * of the carried-over rules/logs panels.
+ * beside a detail pane (wide), a fullscreen detail (narrow), or an overlay.
+ *
+ * adr-2 collapsed the old 1/2/3 panel system: there is ONE list. Completed work
+ * is the `done` stop on the `t` type-cycle, sourced from `logs/` and rendered
+ * dim by the same DocumentList and DetailView as everything else (§B2).
  *
  * Filtering runs through core `searchTasksRanked`, so the TUI ranks results the
  * same way `brainfile search` and the MCP `search` tool do, and inherits the
  * full token vocabulary (`p:`, `#`, `@`, `type:`, `contract:`, `due:`).
  */
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import type { Task } from '@brainfile/core';
 import { searchTasksRanked } from '@brainfile/core';
@@ -23,9 +26,9 @@ import { buildRows, buildFlatRows } from './rows.js';
 import { getDocType } from './utils.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
-import { loadLogs, getTaskActivity } from './actions.js';
+import { getTaskActivity } from './actions.js';
 import { readTuiState } from './tuiState.js';
-import { getTypeCycleOptions } from './typeCycle.js';
+import { getTypeCycleOptions, DONE_FILTER } from './typeCycle.js';
 import {
   HeaderBar,
   FooterBar,
@@ -40,15 +43,12 @@ import {
   DeleteConfirmOverlay,
   CompleteConfirmOverlay,
   AddOverlay,
-  RulesPanel,
-  LogsPanel,
 } from './components/index.js';
 
 const baseInitialState: Omit<AppState, 'collapsedIds'> = {
   board: null,
   error: null,
   lastUpdated: new Date(),
-  activePanel: 'board',
   activeColumnIndex: 0,
   selectedTaskIndex: 0,
   mode: 'browse',
@@ -59,18 +59,12 @@ const baseInitialState: Omit<AppState, 'collapsedIds'> = {
   detailScroll: 0,
   moveTargetIndex: 0,
   newTaskTitle: '',
+  addThenEdit: false,
   completeConfirm: null,
   statusMessage: null,
   lastContentHash: null,
   reloadFlash: false,
-  activeRuleType: 'always',
-  selectedRuleIndex: 0,
-  ruleEditText: '',
-  ruleEditId: null,
   logs: [],
-  selectedLogIndex: 0,
-  logRestoreColumnIndex: 0,
-  expandedLogIds: new Set(),
 };
 
 export function BrainfileTUI({ filePath, width, height }: TUIProps) {
@@ -100,12 +94,31 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   const isTooSmall = termWidth < LAYOUT.MIN_WIDTH || termHeight < LAYOUT.MIN_HEIGHT;
   const layoutMode: LayoutMode = termWidth >= LAYOUT.DETAIL_PANE_MIN_WIDTH ? 'wide' : 'narrow';
 
-  // Lazy initializer: collapsed-row state is read from `.brainfile/state/tui.json`
-  // once, at mount, keyed on the (stable-per-session) filePath prop (§A1).
-  const [state, setState] = useState<AppState>(() => ({
-    ...baseInitialState,
-    collapsedIds: new Set(readTuiState(filePath).collapsed),
-  }));
+  // Lazy initializer: view state is read from `.brainfile/state/tui.json` once,
+  // at mount, keyed on the (stable-per-session) filePath prop — collapsed rows
+  // (§A1) plus the resume view (§C3).
+  //
+  // The column resumes by ID, resolved after the board loads (the board is null
+  // here); only the type filter can be applied immediately, since it needs no
+  // board lookup and `activeTypeFilter` already falls back to `all` whenever
+  // the stored value is not in the current cycle.
+  //
+  // Read ONCE, in the state initializer, and stash the column half in a ref
+  // from there. `useRef(readTuiState(...).lastColumn)` would re-read the file
+  // on every single render — useRef evaluates its argument each time and
+  // discards all but the first.
+  /** Resume column, applied once on the first board load (§C3). */
+  const resumeColumn = useRef<string | undefined>(undefined);
+
+  const [state, setState] = useState<AppState>(() => {
+    const persisted = readTuiState(filePath);
+    resumeColumn.current = persisted.lastColumn;
+    return {
+      ...baseInitialState,
+      collapsedIds: new Set(persisted.collapsed),
+      activeTypeFilter: persisted.lastTypeFilter ?? baseInitialState.activeTypeFilter,
+    };
+  });
 
   const viewportHeight = Math.max(termHeight - HEADER_ROWS - FOOTER_ROWS, 3);
 
@@ -125,21 +138,31 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     ? state.activeTypeFilter
     : 'all';
   const typeFilterActive = activeTypeFilter !== 'all';
+  /**
+   * The `done` stop (§B2): rows come from `logs/`, not from board columns, so
+   * the whole column pipeline (tabs, `h`/`l` cycling, per-column counts) is
+   * bypassed. Archived docs are read-mostly — no move, no complete.
+   */
+  const doneView = activeTypeFilter === DONE_FILTER;
 
   /** Type-cycle filter (§A2), applied before search so both compose (AND). */
   const typeFilteredColumns = useMemo<BoardColumn[]>(() => {
-    if (!typeFilterActive) return orderedColumns as BoardColumn[];
+    if (!typeFilterActive || doneView) return orderedColumns as BoardColumn[];
     return orderedColumns.map((column) => ({
       ...column,
       tasks: (column.tasks ?? []).filter((task) => getDocType(task) === activeTypeFilter),
     })) as BoardColumn[];
-  }, [orderedColumns, typeFilterActive, activeTypeFilter]);
+  }, [orderedColumns, typeFilterActive, doneView, activeTypeFilter]);
 
   // Column tab counts reflect the type filter, but not the search filter or
-  // collapse (§A1/§A2) — this is the denominator for "x/y match" too.
+  // collapse (§A1/§A2) — this is the denominator for "x/y match" too. Under
+  // `done` the denominator is the archive, which has no columns.
   const totalCount = useMemo(
-    () => typeFilteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
-    [typeFilteredColumns],
+    () =>
+      doneView
+        ? state.logs.length
+        : typeFilteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
+    [typeFilteredColumns, doneView, state.logs],
   );
 
   const filterQuery = state.filterQuery.trim();
@@ -159,9 +182,20 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     }) as BoardColumn[];
   }, [typeFilteredColumns, hasFilter, filterQuery]);
 
+  /** Archived docs, search-filtered the same way board columns are (§B2). */
+  const filteredLogs = useMemo<Task[]>(() => {
+    if (!doneView) return [];
+    if (!hasFilter) return state.logs;
+    const docs = state.logs.map((task) => ({ task, body: task.description ?? '' }));
+    return searchTasksRanked(docs, filterQuery).map((match) => match.doc.task);
+  }, [doneView, state.logs, hasFilter, filterQuery]);
+
   const matchCount = useMemo(
-    () => filteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
-    [filteredColumns],
+    () =>
+      doneView
+        ? filteredLogs.length
+        : filteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
+    [filteredColumns, doneView, filteredLogs],
   );
 
   const activeColumnIndex = Math.min(
@@ -169,15 +203,18 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     Math.max(0, filteredColumns.length - 1),
   );
   const currentColumn = filteredColumns[activeColumnIndex];
-  // Under a type filter, render flat (§A2) — no pull-up-under-parent, no
-  // collapse (there is rarely a visible parent to collapse into). Otherwise,
-  // the normal hierarchy + collapse-state list (§A1).
+  // `done` is one flat list off `logs/`. Otherwise: under a type filter render
+  // flat (§A2) — no pull-up-under-parent, no collapse (there is rarely a
+  // visible parent to collapse into) — else the normal hierarchy + collapse
+  // list (§A1).
   const rows = useMemo(
     () =>
-      typeFilterActive
-        ? buildFlatRows(currentColumn?.tasks ?? [])
-        : buildRows(currentColumn?.tasks ?? [], state.collapsedIds),
-    [currentColumn, typeFilterActive, state.collapsedIds],
+      doneView
+        ? buildFlatRows(filteredLogs)
+        : typeFilterActive
+          ? buildFlatRows(currentColumn?.tasks ?? [])
+          : buildRows(currentColumn?.tasks ?? [], state.collapsedIds),
+    [currentColumn, doneView, filteredLogs, typeFilterActive, state.collapsedIds],
   );
   const maxRowIndex = Math.max(0, rows.length - 1);
   const selectedIndex = Math.min(state.selectedTaskIndex, maxRowIndex);
@@ -188,6 +225,18 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     [orderedColumns],
   );
 
+  /**
+   * Every doc detail can resolve, board and archive alike. Drilling into a
+   * `done` row must find a doc that lives in no column, so the archive is
+   * appended rather than substituted — a breadcrumb can legitimately span both
+   * (an archived epic whose children are still active).
+   */
+  const allDocs = useMemo(
+    () => [...allBoardTasks, ...state.logs],
+    [allBoardTasks, state.logs],
+  );
+  const archivedIds = useMemo(() => new Set(state.logs.map((t) => t.id)), [state.logs]);
+
   // ── Detail v2 (§B1/§B2): resolve the current drill-down document ─────────
   // Resolved off `detailPath`, not `state.mode === 'detail'`: an overlay
   // (move/delete/complete-confirm) opened *from* the detail view leaves
@@ -196,18 +245,27 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   // after a drill-down (§B2 `enter`) or a `p` parent jump.
   const detailTaskId = state.detailPath[state.detailPath.length - 1];
   const detailTask: Task | undefined =
-    state.detailPath.length > 0 ? allBoardTasks.find((t) => t.id === detailTaskId) : undefined;
+    state.detailPath.length > 0 ? allDocs.find((t) => t.id === detailTaskId) : undefined;
   const detailChildren = useMemo(
-    () => (detailTask ? allBoardTasks.filter((t) => t.parentId === detailTask.id) : []),
-    [allBoardTasks, detailTask],
+    () => (detailTask ? allDocs.filter((t) => t.parentId === detailTask.id) : []),
+    [allDocs, detailTask],
   );
   const detailParent = detailTask?.parentId
-    ? allBoardTasks.find((t) => t.id === detailTask.parentId)
+    ? allDocs.find((t) => t.id === detailTask.parentId)
     : undefined;
+  /**
+   * The state line's left half. A board doc names its column; an archived doc
+   * has none, so it carries the completion date instead (`· completed 08-12`),
+   * sliced MM-DD the same way DetailView slices `createdAt` (§B2).
+   */
   const detailColumnLabel = useMemo(() => {
     if (!detailTask) return '';
+    if (archivedIds.has(detailTask.id)) {
+      const at = detailTask.completedAt;
+      return at ? `completed ${at.slice(5, 10)}` : 'completed';
+    }
     return orderedColumns.find((c) => c.tasks?.some((t) => t.id === detailTask.id))?.id ?? '';
-  }, [orderedColumns, detailTask]);
+  }, [orderedColumns, detailTask, archivedIds]);
   // Reads the task file + ledger fresh whenever the doc or the board reloads;
   // best-effort and read-only (getTaskActivity degrades to [] on any failure).
   const detailActivity = useMemo(
@@ -224,6 +282,17 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     ? computeDetailLayout(detailTask, detailViewWidth, detailViewHeight, detailChildren, detailActivity)
     : null;
 
+  // Resume the last session's column, by ID, the first time a board is
+  // available. Runs once and then disarms, so it can never fight the user's
+  // own column cycling later in the session.
+  useEffect(() => {
+    const wanted = resumeColumn.current;
+    if (!wanted || orderedColumns.length === 0) return;
+    resumeColumn.current = undefined;
+    const idx = orderedColumns.findIndex((c) => c.id === wanted);
+    if (idx > 0) setState((prev) => ({ ...prev, activeColumnIndex: idx }));
+  }, [orderedColumns]);
+
   // Keep the selection in bounds when the board or the filter changes.
   useEffect(() => {
     setState((prev) => ({
@@ -232,13 +301,6 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
       selectedTaskIndex: Math.min(prev.selectedTaskIndex, maxRowIndex),
     }));
   }, [filteredColumns.length, maxRowIndex]);
-
-  useEffect(() => {
-    if (state.activePanel === 'logs') {
-      const result = loadLogs(filePath);
-      setState((prev) => ({ ...prev, logs: result.logs }));
-    }
-  }, [state.activePanel, filePath, state.lastUpdated]);
 
   useKeyboardNavigation({
     state: { ...state, activeColumnIndex, selectedTaskIndex: selectedIndex },
@@ -249,7 +311,6 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     loadBrainfile,
     filePath,
     allColumns: orderedColumns as BoardColumn[],
-    allBoardTasks,
     typeCycleOptions,
     detailTask,
     detailChildren,
@@ -257,6 +318,8 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     detailActivity,
     detailWidth: detailViewWidth,
     detailHeight: detailViewHeight,
+    doneView,
+    detailArchived: Boolean(detailTask && archivedIds.has(detailTask.id)),
   });
 
   if (isTooSmall) {
@@ -295,9 +358,15 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   const boardTitle = state.board.title || 'brainfile';
   // The state chip and detail state line use the column *id* (`todo`), not its
   // display title — the header tabs already carry the titles (design §4.1/§4.2).
-  const columnLabel = currentColumn?.id ?? '';
+  // Under `done` there is no column, so the chip names the stop itself.
+  const columnLabel = doneView ? DONE_FILTER : (currentColumn?.id ?? '');
   const columnName = currentColumn?.title ?? '';
   const fullscreenDetail = detailOpen && layoutMode === 'narrow';
+
+  // Read-mostly gating (§B2): board mutations are suppressed on archived docs.
+  // In the list that means the whole `done` stop; in detail it is per-doc,
+  // since a breadcrumb can cross from an archived parent to a live child.
+  const detailArchived = Boolean(detailTask && archivedIds.has(detailTask.id));
 
   const detailFooterCtx = {
     task: detailTask,
@@ -305,6 +374,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     hasChildren: detailChildren.length > 0,
     hasSubtasks: (detailTask?.subtasks?.length ?? 0) > 0,
     bodyOverflows: detailLayout?.bodyOverflows ?? false,
+    archived: detailArchived,
   };
 
   // Narrow detail replaces the list entirely (design §4.2).
@@ -338,7 +408,9 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
 
   const listWidth = detailOpen ? termWidth - detailPaneWidth : termWidth;
 
-  const footerActions = detailOpen ? detailActions(detailFooterCtx) : browseActions(selectedTask);
+  const footerActions = detailOpen
+    ? detailActions(detailFooterCtx)
+    : browseActions(selectedTask, doneView);
 
   return (
     <Box flexDirection="column" width={termWidth} height={termHeight}>
@@ -351,61 +423,33 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
         filterActive={state.mode === 'filter' || hasFilter}
         matchCount={matchCount}
         totalCount={totalCount}
-        panelLabel={
-          state.activePanel === 'rules' ? 'rules' : state.activePanel === 'logs' ? 'logs' : undefined
-        }
-        activeType={activeTypeFilter}
+        // `done` replaces the column tabs (there are none) rather than
+        // appending a `· done` suffix to them — one indicator, not two (P9).
+        panelLabel={doneView ? DONE_FILTER : undefined}
+        activeType={doneView ? 'all' : activeTypeFilter}
       />
 
       <Box flexGrow={1} flexShrink={0} flexDirection="column">
-        {state.activePanel === 'board' ? (
-          <BoardContent
-            state={state}
-            rows={rows}
-            selectedIndex={selectedIndex}
-            viewportHeight={viewportHeight}
-            listWidth={listWidth}
-            detailPaneWidth={detailPaneWidth}
-            detailOpen={detailOpen}
-            selectedTask={selectedTask}
-            detailTask={detailTask}
-            detailParent={detailParent}
-            detailChildren={detailChildren}
-            detailActivity={detailActivity}
-            detailColumnLabel={detailColumnLabel}
-            columnName={columnName}
-            columns={orderedColumns as BoardColumn[]}
-            termWidth={termWidth}
-            hasFilter={hasFilter}
-          />
-        ) : null}
-
-        {state.activePanel === 'rules' ? (
-          <RulesPanel
-            rules={state.board.rules}
-            activeRuleType={state.activeRuleType}
-            selectedRuleIndex={state.selectedRuleIndex}
-            viewportHeight={viewportHeight}
-            termWidth={termWidth}
-            mode={state.mode}
-            editText={state.ruleEditText}
-            layoutMode={layoutMode}
-          />
-        ) : null}
-
-        {state.activePanel === 'logs' ? (
-          <LogsPanel
-            logs={state.logs}
-            selectedIndex={state.selectedLogIndex}
-            viewportHeight={viewportHeight}
-            termWidth={termWidth}
-            expandedIds={state.expandedLogIds}
-            mode={state.mode}
-            columns={orderedColumns as BoardColumn[]}
-            restoreColumnIndex={state.logRestoreColumnIndex}
-            layoutMode={layoutMode}
-          />
-        ) : null}
+        <BoardContent
+          state={state}
+          rows={rows}
+          selectedIndex={selectedIndex}
+          viewportHeight={viewportHeight}
+          listWidth={listWidth}
+          detailPaneWidth={detailPaneWidth}
+          detailOpen={detailOpen}
+          selectedTask={selectedTask}
+          detailTask={detailTask}
+          detailParent={detailParent}
+          detailChildren={detailChildren}
+          detailActivity={detailActivity}
+          detailColumnLabel={detailColumnLabel}
+          columnName={columnName}
+          columns={orderedColumns as BoardColumn[]}
+          termWidth={termWidth}
+          hasFilter={hasFilter}
+          archived={doneView}
+        />
       </Box>
 
       <Box height={1} flexShrink={0}>
@@ -414,13 +458,9 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
 
       <FooterBar
         width={termWidth}
-        itemCount={state.activePanel === 'board' && !detailOpen ? rows.length : undefined}
-        actions={
-          state.activePanel === 'board'
-            ? footerActions
-            : ['j/k move', 'a add', 'e edit', 'd delete', '1 board', 'q quit']
-        }
-        stateChip={state.activePanel === 'board' ? columnLabel : state.activePanel}
+        itemCount={detailOpen ? undefined : rows.length}
+        actions={footerActions}
+        stateChip={columnLabel}
       />
     </Box>
   );
@@ -444,6 +484,7 @@ function BoardContent({
   columns,
   termWidth,
   hasFilter,
+  archived,
 }: {
   state: AppState;
   rows: ReturnType<typeof buildRows>;
@@ -462,6 +503,8 @@ function BoardContent({
   columns: BoardColumn[];
   termWidth: number;
   hasFilter: boolean;
+  /** Whole list is archived (`done` stop) — rows render dim (§B2). */
+  archived: boolean;
 }) {
   // A move/delete confirm can be opened either from the list (target =
   // list selection) or from the detail view (target = the doc currently
@@ -504,7 +547,14 @@ function BoardContent({
       selectedIndex={selectedIndex}
       viewportHeight={viewportHeight}
       width={listWidth}
-      emptyMessage={hasFilter ? 'No matches · esc to clear' : 'No documents in this column'}
+      archived={archived}
+      emptyMessage={
+        hasFilter
+          ? 'No matches · esc to clear'
+          : archived
+            ? 'Nothing completed yet'
+            : 'No documents in this column'
+      }
     />
   );
 

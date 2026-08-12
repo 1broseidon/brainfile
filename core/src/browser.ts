@@ -43,6 +43,4 @@ export type {
   Task,
   TaskDocument,
   Subtask,
-  Rule,
-  Rules,
 } from './types';

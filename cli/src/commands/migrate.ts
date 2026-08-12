@@ -280,6 +280,10 @@ function migrateBrainfileToV2(brainfilePath: string, options: MigrateOptions): v
     ...(col.completionColumn && { completionColumn: col.completionColumn }),
   })) as any;
   delete configBoard.archive;
+  // adr-2 removed `rules`. A v1 board may still carry the block; a freshly
+  // migrated v2 config must never reintroduce it (`lint --fix` is the path
+  // that folds those entries into `agent.instructions`).
+  delete (configBoard as { rules?: unknown }).rules;
   configBoard.schema = 'https://brainfile.md/v2/board.json';
 
   const configContent = Brainfile.serialize(configBoard);

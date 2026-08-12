@@ -47,13 +47,6 @@ columns:
 agent:
   instructions:
     - Always run the tests
-rules:
-  always:
-    - id: 1
-      rule: Write tests first
-  never:
-    - id: 2
-      rule: Commit secrets
 ${boardExtra}---
 `,
     'utf-8',
@@ -71,6 +64,15 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     updatedAt: T0,
     ...overrides,
   };
+}
+
+/** An ADR already accepted via `adr promote` — lives in logs/ with status set. */
+function addAcceptedAdr(fx: Fixture, id: string, title: string): void {
+  writeTaskFile(
+    path.join(fx.dirs.logsDir, `${id}.md`),
+    { id, title, type: 'adr', status: 'promoted', createdAt: T0 } as Task,
+    '',
+  );
 }
 
 function addTask(fx: Fixture, task: Task, body = ''): string {
@@ -138,19 +140,37 @@ describe('buildBrief', () => {
         'orientation', 'assigned', 'notes', 'completions',
       ]);
 
-      // Board title + agent instruction + both rules.
+      // Board title + agent instruction (adr-2: no rules lane).
       const orientation = lane(result, 'orientation');
       expect(orientation.items.map((i) => i.text)).toEqual([
-        'Brief Test Board', 'Always run the tests', 'Write tests first', 'Commit secrets',
+        'Brief Test Board', 'Always run the tests',
       ]);
       expect(orientation.items.map((i) => i.why)).toEqual([
-        'board', 'agent instructions', 'always', 'never',
+        'board', 'agent instructions',
       ]);
 
       expect(lane(result, 'assigned').items).toHaveLength(1);
       expect(lane(result, 'assigned').items[0].taskId).toBe('task-1');
       expect(lane(result, 'notes').items).toHaveLength(1);
       expect(lane(result, 'completions').items[0].taskId).toBe('task-99');
+    });
+
+    it('lists accepted ADRs in the orientation lane (adr-2 replaces rules)', () => {
+      addAcceptedAdr(fx, 'adr-2', 'Kill the rules block');
+      addAcceptedAdr(fx, 'adr-10', 'Per-repo boards');
+      // A board-resident ADR with no accepted status is still a proposal.
+      addTask(fx, makeTask({ id: 'adr-3', title: 'Undecided', type: 'adr' }));
+
+      const result = buildBrief(fx.dirs, 'codex', { lastBriefAt: null, now: NOW });
+      const orientation = lane(result, 'orientation');
+
+      expect(orientation.items.map((i) => i.text)).toEqual([
+        'Brief Test Board', 'Always run the tests', 'Kill the rules block', 'Per-repo boards',
+      ]);
+      expect(orientation.items.slice(2).map((i) => i.taskId)).toEqual(['adr-2', 'adr-10']);
+      expect(orientation.items.slice(2).map((i) => i.why)).toEqual([
+        'accepted adr', 'accepted adr',
+      ]);
     });
 
     it('inlines contract status as current truth, never as a transition', () => {

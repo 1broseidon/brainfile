@@ -22,8 +22,6 @@ export function getPriorityColor(priority?: string): string {
   switch (priority?.toLowerCase()) {
     case 'critical':
       return PALETTE.critical;
-    case 'giga':
-      return PALETTE.giga;
     case 'high':
       return PALETTE.high;
     case 'medium':

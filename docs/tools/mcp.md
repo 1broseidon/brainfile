@@ -107,7 +107,8 @@ per agent, stored locally in `.brainfile/state/<agent>.json` (gitignored).
 |------|----------------|-------------|
 | `brief` | `agent`, `peek?`, `file?` | Get what changed for one agent since its last brief |
 
-The first call for an agent returns a **full** orientation (board rules and agent
+The first call for an agent returns a **full** orientation (agent instructions,
+accepted ADRs and
 instructions, assigned tasks, latest notes, recent completions). Every later call
 returns a **delta**: new notes, task changes, completions, and whether the board
 config changed. Pass `peek: true` to read without marking the brief as seen.

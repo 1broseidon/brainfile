@@ -302,6 +302,38 @@ function sortAssigned(docs: TaskDocument[]): TaskDocument[] {
   });
 }
 
+/**
+ * Accepted ADRs — the standing decisions an agent must orient against (adr-2
+ * replaced the old `rules` block with exactly this).
+ *
+ * An ADR counts as accepted once `adr promote` has marked it (`status:
+ * promoted`, which also moves the file into `logs/`); a board-resident ADR
+ * explicitly marked `accepted` counts too, since the status field is free-form
+ * and both spellings appear in practice. Board and logs are both searched:
+ * promotion archives the doc, so restricting to `board/` would show nothing.
+ */
+function acceptedAdrs(dirs: V2Dirs): TaskDocument[] {
+  const ACCEPTED = new Set(['accepted', 'promoted']);
+  const docs: TaskDocument[] = [];
+
+  for (const dir of [dirs.boardDir, dirs.logsDir]) {
+    let entries: TaskDocument[];
+    try {
+      entries = readTasksDir(dir);
+    } catch {
+      continue; // A missing/unreadable dir is orientation we simply don't have.
+    }
+    for (const doc of entries) {
+      const task = doc.task as Task & { status?: string };
+      if ((task.type || '').toLowerCase() !== 'adr') continue;
+      if (!ACCEPTED.has((task.status || '').toLowerCase())) continue;
+      docs.push(doc);
+    }
+  }
+
+  return docs.sort((a, b) => a.task.id.localeCompare(b.task.id, undefined, { numeric: true }));
+}
+
 function fullLanes(
   dirs: V2Dirs,
   agentName: string,
@@ -318,11 +350,8 @@ function fullLanes(
   for (const instruction of board?.agent?.instructions ?? []) {
     orientation.push({ text: instruction, why: 'agent instructions' });
   }
-  const rules = board?.rules;
-  for (const tag of ['always', 'never', 'prefer', 'context'] as const) {
-    for (const rule of rules?.[tag] ?? []) {
-      orientation.push({ text: rule.rule, why: tag });
-    }
+  for (const doc of acceptedAdrs(dirs)) {
+    orientation.push({ taskId: doc.task.id, text: doc.task.title, why: 'accepted adr' });
   }
 
   // ── assigned ────────────────────────────────────────────────────────────
@@ -365,7 +394,7 @@ function fullLanes(
     }));
 
   return [
-    { id: 'orientation', label: 'Board & Rules', items: orientation },
+    { id: 'orientation', label: 'Board & Decisions', items: orientation },
     { id: 'assigned', label: 'Your Tasks', items: assignedItems },
     { id: 'notes', label: 'Latest Notes', items: noteItems },
     { id: 'completions', label: 'Recently Completed (yours)', items: completionItems },

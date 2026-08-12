@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brainfile.md/v1/board.json",
   "title": "Brainfile Board Schema",
-  "description": "Schema for Kanban-style task boards. In v2 (per-task file architecture), the board file is config-only: it defines columns, rules, and project metadata. Tasks are standalone .md files in .brainfile/tasks/ (active) and .brainfile/logs/ (completed), each validated against task.json. In v1 (legacy), tasks are embedded in column arrays within this file.",
+  "description": "Schema for Kanban-style task boards. In v2 (per-task file architecture), the board file is config-only: it defines columns, document types, and project metadata. Tasks are standalone .md files in .brainfile/tasks/ (active) and .brainfile/logs/ (completed), each validated against task.json. In v1 (legacy), tasks are embedded in column arrays within this file.",
   "x-brainfile-renderer": "kanban",
   "x-brainfile-columns-path": "$.columns",
   "x-brainfile-title-field": "title",
