@@ -55,6 +55,18 @@ export interface ActionResult {
   success: boolean;
   error?: string;
   message?: string;
+  /**
+   * Populated when core's epic-safety gate refuses a completion because the
+   * epic still has active children. The TUI surfaces these in the `c complete`
+   * confirmation and can re-issue the call with `{ force: true }`.
+   */
+  incompleteChildren?: Array<{ id: string; title: string }>;
+}
+
+/** Options accepted by the completion/archive actions. */
+export interface ArchiveActionOptions {
+  /** Override core's epic-safety gate after the user confirms. */
+  force?: boolean;
 }
 
 /**
@@ -235,14 +247,26 @@ function createEmptyArchiveBoard(): Board {
  * Archive a task to a separate brainfile-archive.md file
  * Per protocol spec, archived tasks go to a separate file, not inline archive array
  */
-export function archiveTaskAction(filePath: string, taskId: string): ActionResult {
+export function archiveTaskAction(
+  filePath: string,
+  taskId: string,
+  options?: ArchiveActionOptions
+): ActionResult {
   if (isV2(filePath)) {
     const dirs = getV2Dirs(filePath);
     const located = resolveV2TaskPath(filePath, taskId);
     if (!located) return { success: false, error: `Task ${taskId} not found` };
 
-    const result = completeTaskFile(located.taskPath, dirs.logsDir);
-    if (!result.success) return { success: false, error: result.error };
+    const result = completeTaskFile(located.taskPath, dirs.logsDir, { force: options?.force });
+    if (!result.success) {
+      // Forward core's structured list so callers can name the blockers rather
+      // than only echoing the error string.
+      return {
+        success: false,
+        error: result.error,
+        incompleteChildren: result.incompleteChildren,
+      };
+    }
 
     return { success: true, message: `Moved ${taskId} to logs` };
   }
@@ -313,7 +337,8 @@ export function archiveTaskAction(filePath: string, taskId: string): ActionResul
  */
 export async function archiveTaskActionAsync(
   filePath: string,
-  taskId: string
+  taskId: string,
+  options?: ArchiveActionOptions
 ): Promise<ActionResult> {
   const { board, error } = readBoardState(filePath);
   if (!board) return { success: false, error };
@@ -332,7 +357,7 @@ export async function archiveTaskActionAsync(
 
   // Handle local archive (default behavior)
   if (destination === 'local') {
-    return archiveTaskAction(filePath, taskId);
+    return archiveTaskAction(filePath, taskId, options);
   }
 
   // Handle GitHub archive

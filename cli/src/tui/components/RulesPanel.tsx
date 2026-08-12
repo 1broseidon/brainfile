@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { PALETTE, BOX, ICONS } from '../theme.js';
+import { PALETTE, RULE, GLYPHS } from '../theme.js';
 import type { RuleType, LayoutMode } from '../types.js';
 import { truncate } from '../utils.js';
 
@@ -130,7 +130,7 @@ export function RulesPanel({
 
       {/* Separator */}
       <Box>
-        <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 4))}</Text>
+        <Text color={PALETTE.border}>{RULE.repeat(Math.max(1, termWidth - 4))}</Text>
       </Box>
 
       {/* Rule editing mode */}
@@ -141,7 +141,7 @@ export function RulesPanel({
           </Text>
           <Box marginTop={0}>
             <Text color={PALETTE.text} backgroundColor={PALETTE.bgHighlight}>
-              {' '}{editText || ' '}{ICONS.cursor}{' '}
+              {' '}{editText || ' '}{GLYPHS.cursor}{' '}
             </Text>
           </Box>
           <Text color={PALETTE.textMuted} dimColor>
@@ -189,7 +189,7 @@ export function RulesPanel({
                     backgroundColor={isSelected ? PALETTE.bgHighlight : undefined}
                     bold={isSelected}
                   >
-                    {isSelected ? ICONS.pointer : ' '}{' '}
+                    {isSelected ? GLYPHS.pointer : ' '}{' '}
                     <Text color={RULE_TYPE_COLORS[activeRuleType]}>#{rule.id}</Text>
                     {' '}{truncate(rule.rule, maxWidth - 8)}
                   </Text>

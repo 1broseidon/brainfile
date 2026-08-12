@@ -1,15 +1,40 @@
 // Main component
 export { BrainfileTUI } from './BrainfileTUI.js';
 
-// Theme
-export { PALETTE, BOX, BORDERS, SPACING, ICONS } from './theme.js';
+// Design system
+export { PALETTE, RULE, GLYPHS, TYPE_GLYPHS, getTypeGlyph, getContractStateColor } from './theme.js';
 
 // Types
-export type { AppState, ViewMode, BoardColumn, TUIProps, MainPanel, RuleType } from './types.js';
-export { HEADER_ROWS, FOOTER_ROWS } from './types.js';
+export type {
+  AppState,
+  ViewMode,
+  BoardColumn,
+  TUIProps,
+  MainPanel,
+  RuleType,
+  LayoutMode,
+  CompleteConfirmTarget,
+} from './types.js';
+export { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
+
+// Row model
+export { buildRows, windowRows } from './rows.js';
+export type { DocRow } from './rows.js';
 
 // Utils
-export { truncate, getPriorityColor, parseSearchQuery, taskMatchesFilter } from './utils.js';
+export {
+  truncate,
+  safeTruncate,
+  wrapText,
+  getPriorityColor,
+  parseSearchQuery,
+  taskMatchesFilter,
+  searchTasksRanked,
+  isCompletable,
+  getDocType,
+  getSubtaskProgress,
+  getContractState,
+} from './utils.js';
 export type { ParsedSearch } from './utils.js';
 
 // Hooks
@@ -18,12 +43,12 @@ export { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
 
 // Components
 export {
-  Header,
-  ProgressBar,
-  SearchBar,
-  ColumnTabs,
-  TaskCard,
-  TaskList,
-  StatusBar,
+  HeaderBar,
+  FooterBar,
+  browseActions,
+  detailActions,
+  DocumentRow,
+  DocumentList,
+  DetailView,
   HelpOverlay,
 } from './components/index.js';

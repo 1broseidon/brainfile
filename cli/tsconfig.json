@@ -14,10 +14,20 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "moduleResolution": "node",
+    "baseUrl": ".",
+    // ink 7 and ink-testing-library publish an `exports` map with no top-level
+    // `main`/`types`, which node10 module resolution cannot read. The executable
+    // is produced by esbuild (which resolves `exports` natively) — these mappings
+    // exist purely so `tsc --noEmit` and ts-jest can find the type declarations
+    // without forcing the whole package onto `moduleResolution: bundler`.
+    "paths": {
+      "ink": ["./node_modules/ink/build/index"],
+      "ink-testing-library": ["../node_modules/ink-testing-library/build/index"]
+    },
     "jsx": "react",
     "jsxFactory": "React.createElement",
     "jsxFragmentFactory": "React.Fragment"
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
+  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }

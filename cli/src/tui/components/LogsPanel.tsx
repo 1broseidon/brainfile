@@ -1,7 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { Task } from '@brainfile/core';
-import { PALETTE, BOX, ICONS } from '../theme.js';
+import { PALETTE, RULE, GLYPHS } from '../theme.js';
 import { truncate, getPriorityColor } from '../utils.js';
 import type { BoardColumn, LayoutMode } from '../types.js';
 
@@ -65,7 +65,7 @@ export function LogsPanel({
 
       {/* Separator */}
       <Box>
-        <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 4))}</Text>
+        <Text color={PALETTE.border}>{RULE.repeat(Math.max(1, termWidth - 4))}</Text>
       </Box>
 
       {/* Restore mode: column picker */}
@@ -82,7 +82,7 @@ export function LogsPanel({
                   backgroundColor={idx === restoreColumnIndex ? PALETTE.bgHighlight : undefined}
                   bold={idx === restoreColumnIndex}
                 >
-                  {idx === restoreColumnIndex ? ICONS.pointer : ' '} {col.title}
+                  {idx === restoreColumnIndex ? GLYPHS.pointer : ' '} {col.title}
                   <Text color={PALETTE.textDim}> ({col.tasks?.length ?? 0})</Text>
                 </Text>
               </Box>
@@ -140,8 +140,8 @@ export function LogsPanel({
                       backgroundColor={isSelected ? PALETTE.bgHighlight : undefined}
                       bold={isSelected}
                     >
-                      {isSelected ? ICONS.pointer : ' '}{' '}
-                      {isExpanded ? ICONS.expanded : ICONS.collapsed}{' '}
+                      {isSelected ? GLYPHS.pointer : ' '}{' '}
+                      {isExpanded ? '▼' : GLYPHS.collapsed}{' '}
                       <Text color={PALETTE.textDim}>{task.id}</Text>
                       {' '}{truncate(task.title, maxWidth - task.id.length - 8)}
                       {task.priority && (

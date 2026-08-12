@@ -1,19 +1,17 @@
 /**
- * Overlays - Modal-like UI components for task management
+ * v3 overlays. All chrome-free (design §1: "No chrome") — the v2 rounded
+ * `borderStyle` boxes are gone; a dim label row and indentation carry the
+ * separation instead.
  *
- * - MoveOverlay: Column picker for moving tasks
- * - DeleteConfirmOverlay: Confirmation prompt for deletion
- * - SubtaskOverlay: Subtask picker for toggling completion
- * - StatusMessage: Toast-like feedback messages
+ * The v2 subtask picker modal is deleted: subtasks toggle with `space` directly
+ * in the detail view (design §4.2).
  */
 import React from 'react';
 import { Box, Text } from 'ink';
-import { PALETTE } from '../theme.js';
-import type { StatusMessage as StatusMessageType, BoardColumn } from '../types.js';
-import type { Task } from '@brainfile/core';
-import { truncate } from '../utils.js';
+import { PALETTE, GLYPHS } from '../theme.js';
+import type { StatusMessage as StatusMessageType, BoardColumn, CompleteConfirmTarget } from '../types.js';
+import { truncate } from '../text.js';
 
-// Status message toast
 export interface StatusMessageProps {
   message: StatusMessageType | null;
 }
@@ -21,207 +19,148 @@ export interface StatusMessageProps {
 export function StatusMessageDisplay({ message }: StatusMessageProps) {
   if (!message) return null;
 
-  const color = message.type === 'success'
-    ? PALETTE.success
-    : message.type === 'error'
-    ? PALETTE.error
-    : PALETTE.accent;
+  const color =
+    message.type === 'success'
+      ? PALETTE.success
+      : message.type === 'error'
+        ? PALETTE.error
+        : PALETTE.textSecondary;
 
-  const icon = message.type === 'success'
-    ? '✓'
-    : message.type === 'error'
-    ? '✗'
-    : '●';
+  const glyph =
+    message.type === 'success'
+      ? GLYPHS.success
+      : message.type === 'error'
+        ? GLYPHS.error
+        : GLYPHS.live;
 
   return (
     <Box paddingLeft={1}>
-      <Text color={color}>{icon} {message.text}</Text>
+      <Text color={color} wrap="truncate">{`${glyph} ${message.text}`}</Text>
     </Box>
   );
 }
 
-// Move overlay - column picker
 export interface MoveOverlayProps {
   columns: BoardColumn[];
   selectedIndex: number;
+  taskId: string;
   taskTitle: string;
-  termWidth: number;
+  width: number;
 }
 
-export function MoveOverlay({ columns, selectedIndex, taskTitle, termWidth }: MoveOverlayProps) {
+export function MoveOverlay({
+  columns,
+  selectedIndex,
+  taskId,
+  taskTitle,
+  width,
+}: MoveOverlayProps) {
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={PALETTE.accent}
-      paddingX={2}
-      paddingY={1}
-      marginX={2}
-    >
-      <Text color={PALETTE.text} bold>Move Task</Text>
-      <Text color={PALETTE.textSecondary}>{truncate(taskTitle, termWidth - 10)}</Text>
-
-      <Box marginTop={1}>
-        <Text color={PALETTE.textMuted}>Select column: </Text>
-        <Text color={PALETTE.textSecondary}>{'←/→ or 1-'}{columns.length}</Text>
+    <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
+      <Text color={PALETTE.textMuted}>move</Text>
+      <Text wrap="truncate">
+        <Text color={PALETTE.textMuted}>{`  ${taskId}  `}</Text>
+        <Text color={PALETTE.text}>{truncate(taskTitle, Math.max(1, width - taskId.length - 6))}</Text>
+      </Text>
+      <Box flexDirection="column" marginTop={1} paddingLeft={2}>
+        {columns.map((column, index) => (
+          <Text key={column.id} inverse={index === selectedIndex} wrap="truncate">
+            {`${index + 1}  ${column.title}`}
+          </Text>
+        ))}
       </Box>
-
-      <Box marginTop={1}>
-        {columns.map((col, idx) => {
-          const isSelected = idx === selectedIndex;
-          return (
-            <Box key={col.id} marginRight={1}>
-              {isSelected ? (
-                <Text backgroundColor={PALETTE.accent} color={PALETTE.bg} bold>
-                  {` ${idx + 1}:${col.title} `}
-                </Text>
-              ) : (
-                <Text color={PALETTE.textSecondary}>
-                  {` ${idx + 1}:${col.title} `}
-                </Text>
-              )}
-            </Box>
-          );
-        })}
-      </Box>
-
-      <Box marginTop={1}>
-        <Text color={PALETTE.textMuted}>
-          <Text color={PALETTE.success}>ENTER</Text> confirm
-          <Text color={PALETTE.warning}> ESC</Text> cancel
-        </Text>
+      <Box marginTop={1} paddingLeft={2}>
+        <Text color={PALETTE.textMuted}>↑↓ select · 1-{columns.length} jump · ↵ confirm · esc cancel</Text>
       </Box>
     </Box>
   );
 }
 
-// Delete confirmation overlay
 export interface DeleteConfirmOverlayProps {
   taskId: string;
   taskTitle: string;
-  termWidth: number;
+  width: number;
 }
 
-export function DeleteConfirmOverlay({ taskId, taskTitle, termWidth }: DeleteConfirmOverlayProps) {
+export function DeleteConfirmOverlay({ taskId, taskTitle, width }: DeleteConfirmOverlayProps) {
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={PALETTE.error}
-      paddingX={2}
-      paddingY={1}
-      marginX={2}
-    >
-      <Text color={PALETTE.error} bold>Delete Task?</Text>
-      <Box marginTop={1}>
-        <Text color={PALETTE.textSecondary}>{truncate(taskTitle, termWidth - 10)}</Text>
-        <Text color={PALETTE.textMuted}> ({taskId})</Text>
+    <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
+      <Text color={PALETTE.error}>delete</Text>
+      <Text wrap="truncate">
+        <Text color={PALETTE.textMuted}>{`  ${taskId}  `}</Text>
+        <Text color={PALETTE.text}>{truncate(taskTitle, Math.max(1, width - taskId.length - 6))}</Text>
+      </Text>
+      <Box marginTop={1} paddingLeft={2}>
+        <Text color={PALETTE.textMuted}>This cannot be undone.</Text>
       </Box>
-
-      <Box marginTop={1}>
-        <Text color={PALETTE.textMuted}>This action cannot be undone.</Text>
-      </Box>
-
-      <Box marginTop={1}>
-        <Text>
-          <Text color={PALETTE.error} bold>Y</Text>
-          <Text color={PALETTE.textSecondary}> delete  </Text>
-          <Text color={PALETTE.success} bold>N</Text>
-          <Text color={PALETTE.textSecondary}> cancel</Text>
-        </Text>
+      <Box marginTop={1} paddingLeft={2}>
+        <Text color={PALETTE.textMuted}>y delete · n cancel</Text>
       </Box>
     </Box>
   );
 }
 
-// New task input overlay
-export interface NewTaskOverlayProps {
+export interface CompleteConfirmOverlayProps {
+  target: CompleteConfirmTarget;
+  width: number;
+}
+
+/**
+ * Raised when core's epic-safety gate refuses a completion. The blockers come
+ * straight from `ActionResult.incompleteChildren`, so the prompt names them
+ * rather than making the user go find out which children are still open.
+ */
+export function CompleteConfirmOverlay({ target, width }: CompleteConfirmOverlayProps) {
+  return (
+    <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
+      <Text color={PALETTE.warning}>complete</Text>
+      <Text wrap="truncate">
+        <Text color={PALETTE.textMuted}>{`  ${target.id}  `}</Text>
+        <Text color={PALETTE.text}>
+          {truncate(target.title, Math.max(1, width - target.id.length - 6))}
+        </Text>
+      </Text>
+      <Box marginTop={1} paddingLeft={2}>
+        <Text color={PALETTE.textMuted}>
+          {`${target.incompleteChildren.length} incomplete child task${
+            target.incompleteChildren.length === 1 ? '' : 's'
+          }:`}
+        </Text>
+      </Box>
+      <Box flexDirection="column" paddingLeft={4}>
+        {target.incompleteChildren.map((child) => (
+          <Text key={child.id} wrap="truncate">
+            <Text color={PALETTE.textMuted}>{`${child.id}  `}</Text>
+            <Text color={PALETTE.textSecondary}>
+              {truncate(child.title, Math.max(1, width - child.id.length - 8))}
+            </Text>
+          </Text>
+        ))}
+      </Box>
+      <Box marginTop={1} paddingLeft={2}>
+        <Text color={PALETTE.textMuted}>y complete anyway · n cancel</Text>
+      </Box>
+    </Box>
+  );
+}
+
+export interface AddOverlayProps {
   title: string;
   columnName: string;
-  termWidth: number;
 }
 
-export function NewTaskOverlay({ title, columnName, termWidth }: NewTaskOverlayProps) {
+export function AddOverlay({ title, columnName }: AddOverlayProps) {
   return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={PALETTE.accent}
-      paddingX={2}
-      paddingY={1}
-      marginX={2}
-    >
-      <Text color={PALETTE.text} bold>New Task</Text>
-      <Text color={PALETTE.textSecondary}>Adding to {columnName}</Text>
-
-      <Box marginTop={1}>
-        <Text color={PALETTE.accent}>{'❯ '}</Text>
-        <Text color={title ? PALETTE.text : PALETTE.textMuted}>{title || 'Enter task title...'}</Text>
-        <Text color={PALETTE.accent}>{'▌'}</Text>
-      </Box>
-
-      <Box marginTop={1}>
-        <Text color={PALETTE.textMuted}>
-          <Text color={PALETTE.success}>ENTER</Text> create
-          <Text color={PALETTE.warning}> ESC</Text> cancel
+    <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
+      <Text color={PALETTE.textMuted}>{`add to ${columnName}`}</Text>
+      <Box marginTop={1} paddingLeft={2}>
+        <Text wrap="truncate">
+          <Text color={title ? PALETTE.text : PALETTE.textMuted}>{title || 'title…'}</Text>
+          <Text color={PALETTE.accent}>{GLYPHS.cursor}</Text>
         </Text>
       </Box>
-    </Box>
-  );
-}
-
-// Subtask picker overlay
-export interface SubtaskOverlayProps {
-  task: Task;
-  selectedIndex: number;
-  termWidth: number;
-}
-
-export function SubtaskOverlay({ task, selectedIndex, termWidth }: SubtaskOverlayProps) {
-  const subtasks = task.subtasks || [];
-
-  return (
-    <Box
-      flexDirection="column"
-      borderStyle="round"
-      borderColor={PALETTE.accent}
-      paddingX={2}
-      paddingY={1}
-      marginX={2}
-    >
-      <Text color={PALETTE.text} bold>Toggle Subtask</Text>
-      <Text color={PALETTE.textSecondary}>{truncate(task.title, termWidth - 10)}</Text>
-
-      <Box marginTop={1} flexDirection="column">
-        {subtasks.map((st, idx) => {
-          const isSelected = idx === selectedIndex;
-          const checkmark = st.completed ? '✓' : '○';
-          const textColor = st.completed ? PALETTE.success : PALETTE.textSecondary;
-
-          return (
-            <Box key={st.id}>
-              {isSelected ? (
-                <Text backgroundColor={PALETTE.bgHighlight}>
-                  <Text color={PALETTE.accent}>{'▸ '}</Text>
-                  <Text color={textColor}>{checkmark} {truncate(st.title, termWidth - 14)}</Text>
-                </Text>
-              ) : (
-                <Text>
-                  <Text color={PALETTE.textDim}>{'  '}</Text>
-                  <Text color={textColor}>{checkmark} {truncate(st.title, termWidth - 14)}</Text>
-                </Text>
-              )}
-            </Box>
-          );
-        })}
-      </Box>
-
-      <Box marginTop={1}>
-        <Text color={PALETTE.textMuted}>
-          <Text color={PALETTE.textSecondary}>↑/↓</Text> select
-          <Text color={PALETTE.success}> ENTER/SPACE</Text> toggle
-          <Text color={PALETTE.warning}> ESC</Text> close
-        </Text>
+      <Box marginTop={1} paddingLeft={2}>
+        <Text color={PALETTE.textMuted}>↵ create · esc cancel</Text>
       </Box>
     </Box>
   );

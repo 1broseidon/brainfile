@@ -11,7 +11,20 @@ import { templateCommand } from './commands/template';
 import { lintCommand } from './commands/lint';
 import { initCommand } from './commands/init';
 import { migrateCommand } from './commands/migrate';
-import { tuiCommand } from './commands/tui';
+/**
+ * The TUI is loaded on demand, never at module scope.
+ *
+ * `commands/tui` pulls in ink 7 → react → yoga-layout, and yoga instantiates a
+ * wasm module in a top-level `await`. Statically importing it would make every
+ * non-TUI invocation (`list`, `show`, `mcp`, …) pay for that, since the whole
+ * entry graph is a single esbuild bundle. Deferring it keeps that cost on the
+ * `tui` path alone; the build already emits split chunks, so the import
+ * resolves to a chunk that is only read when this function runs.
+ */
+async function runTui(options: { file: string }): Promise<void> {
+  const { tuiCommand } = await import('./commands/tui');
+  return tuiCommand(options);
+}
 import { patchCommand } from './commands/patch';
 import { deleteCommand } from './commands/delete';
 import { archiveCommand } from './commands/archive';
@@ -113,7 +126,7 @@ function shouldLaunchTUI(): { launch: boolean; file: string } {
 
 const tuiCheck = shouldLaunchTUI();
 if (tuiCheck.launch) {
-  void tuiCommand({ file: tuiCheck.file }).catch((error: unknown) => {
+  void runTui({ file: tuiCheck.file }).catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   });
@@ -357,7 +370,14 @@ Brainfile file resolution (when you don't pass --file):
     .command('tui')
     .description('Launch interactive Terminal UI for task management')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
-    .action(tuiCommand);
+    .action((options) => {
+      // `program.parse()` is synchronous, so the action's promise is floating —
+      // handle rejection here, the same way the auto-launch branch above does.
+      void runTui(options).catch((error: unknown) => {
+        console.error(error instanceof Error ? error.message : String(error));
+        process.exit(1);
+      });
+    });
 
   // Add hooks command group
   const hooksCommand = program

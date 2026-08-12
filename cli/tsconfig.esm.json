@@ -1,0 +1,15 @@
+{
+  // Used only by the `tui` Jest project (ts-jest ESM mode) for the
+  // ink-testing-library render tests. Native ESM + bundler resolution so ink 7,
+  // ink-testing-library and yoga-layout are consumed exactly as Node consumes
+  // them, with no transform and no `paths` indirection.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "paths": {},
+    "noEmit": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

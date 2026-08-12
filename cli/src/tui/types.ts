@@ -2,35 +2,45 @@ import type { Board, Task } from '@brainfile/core';
 
 export type BoardColumn = Board['columns'][number];
 
-/** Main panel tabs */
-export type MainPanel = 'tasks' | 'rules' | 'logs';
+/**
+ * Panels reachable from the board. v3 redesigns the board panel only; rules and
+ * logs keep their v2 presentation and their `1`/`2`/`3` entry points (the v3
+ * header is a single row and has no slot for a panel switcher, and the design
+ * spec is silent on whether these views survive — so they are preserved rather
+ * than deleted on an inference).
+ */
+export type MainPanel = 'board' | 'rules' | 'logs';
 
-/** Responsive layout mode */
+/** Responsive layout mode. Only the *detail* presentation varies by width. */
 export type LayoutMode = 'wide' | 'narrow';
 
-/** Layout breakpoints */
 export const LAYOUT = {
-  WIDE_MIN_WIDTH: 80,    // Full tabbed layout
-  NARROW_MIN_WIDTH: 50,  // Stacked columns layout
+  /** ≥ this width, detail is a persistent right pane; below it, fullscreen. */
+  DETAIL_PANE_MIN_WIDTH: 110,
+  /** Fraction of the terminal the detail pane occupies in wide mode. */
+  DETAIL_PANE_FRACTION: 0.45,
+  MIN_WIDTH: 50,
   MIN_HEIGHT: 16,
 } as const;
 
-/** Rule categories */
+/** Rule categories (rules panel). */
 export type RuleType = 'always' | 'never' | 'prefer' | 'context';
 
 export type ViewMode =
+  // v3 board modes
   | 'browse'
-  | 'search'
+  | 'detail'
+  | 'filter'
   | 'help'
   | 'move'
+  | 'complete-confirm'
+  | 'add'
   | 'delete-confirm'
-  | 'subtask'
-  | 'new-task'
-  // Rules modes
+  // Rules panel modes (unchanged from v2)
   | 'rule-add'
   | 'rule-edit'
   | 'rule-delete-confirm'
-  // Logs modes
+  // Logs panel modes (unchanged from v2)
   | 'logs-restore'
   | 'logs-delete-confirm';
 
@@ -40,59 +50,67 @@ export interface StatusMessage {
   timestamp: number;
 }
 
+/** A `c complete` blocked by core's epic-safety gate, awaiting confirmation. */
+export interface CompleteConfirmTarget {
+  id: string;
+  title: string;
+  incompleteChildren: Array<{ id: string; title: string }>;
+}
+
 export interface AppState {
   board: Board | null;
   error: string | null;
   lastUpdated: Date;
 
-  // Main panel (tabs)
   activePanel: MainPanel;
 
-  // Navigation (Tasks panel)
+  // Board navigation
   activeColumnIndex: number;
+  /** Index into the *rendered row list* (parents and children are both rows). */
   selectedTaskIndex: number;
-  selectedGlobalIndex: number; // For narrow/stacked layout
 
-  // Modes
   mode: ViewMode;
-  searchQuery: string;
+  /** Incremental filter query, fed to core `searchTasksRanked`. */
+  filterQuery: string;
 
-  // UI
-  expandedTaskIds: Set<string>;
-  reloadFlash: boolean;
-
-  // Realtime sync
-  lastContentHash: string | null;
-
-  // Status messages
-  statusMessage: StatusMessage | null;
-
-  // Move mode: selected column index for move picker
-  moveTargetIndex: number;
-
-  // Subtask mode: selected subtask index
+  /** Focused subtask row inside the detail view (space toggles it). */
   selectedSubtaskIndex: number;
 
-  // New task mode: title input
+  // Overlay state
+  moveTargetIndex: number;
   newTaskTitle: string;
+  completeConfirm: CompleteConfirmTarget | null;
+
+  statusMessage: StatusMessage | null;
+  lastContentHash: string | null;
+  reloadFlash: boolean;
 
   // Rules panel state
   activeRuleType: RuleType;
   selectedRuleIndex: number;
   ruleEditText: string;
-  ruleEditId: number | null; // null for new rule
+  ruleEditId: number | null;
 
   // Logs panel state
   logs: Task[];
   selectedLogIndex: number;
-  logSearchQuery: string;
   logRestoreColumnIndex: number;
   expandedLogIds: Set<string>;
 }
 
 export interface TUIProps {
   filePath: string;
+  /**
+   * Terminal dimension overrides. Present so render tests can pin a width and
+   * height deterministically — ink-testing-library's fake stdout hardcodes
+   * `columns = 100` and exposes no `rows`, which cannot produce a controlled
+   * wide (≥110) or narrow frame on its own.
+   */
+  width?: number;
+  height?: number;
 }
 
-export const HEADER_ROWS = 7; // title(1) + progress(3: padTop+content+padBottom) + tabs(2: marginTop+content) + separator(1)
-export const FOOTER_ROWS = 4; // separator(1) + status message(1) + status bar(2)
+/** header row + rule */
+export const HEADER_ROWS = 2;
+/** rule + status-message line + footer row */
+export const FOOTER_ROWS = 3;

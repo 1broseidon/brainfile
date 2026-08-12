@@ -1,0 +1,26 @@
+{
+  // Library emit: produces `dist/index.js` + `dist/**` (CJS) for programmatic
+  // consumers of the `brainfile` package (`main`/`types`).
+  //
+  // The TUI is deliberately excluded. It imports ink 7, which is ESM-only and
+  // cannot be represented in this CJS output; the executable gets the TUI from
+  // the esbuild bundle instead (`dist/cli.mjs`). `src/cli.ts` is excluded for
+  // the same reason — the entry it would emit is replaced by the generated CJS
+  // launcher in `scripts/build-bundle.mjs`. Type coverage for the excluded
+  // files is not lost: the root `tsconfig.json` still typechecks them under
+  // `npm run typecheck`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/tui/**",
+    "src/commands/tui.tsx",
+    "src/cli.ts"
+  ]
+}

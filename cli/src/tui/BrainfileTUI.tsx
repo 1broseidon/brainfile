@@ -1,110 +1,104 @@
+/**
+ * TUI v3 root.
+ *
+ * The shell is three fixed pieces — a one-row header + rule, a flexible content
+ * region, and a rule + status line + one-row footer — with no borders anywhere
+ * (design §1). The content region is either the board list, the board list
+ * beside a detail pane (wide), a fullscreen detail (narrow), an overlay, or one
+ * of the carried-over rules/logs panels.
+ *
+ * Filtering runs through core `searchTasksRanked`, so the TUI ranks results the
+ * same way `brainfile search` and the MCP `search` tool do, and inherits the
+ * full token vocabulary (`p:`, `#`, `@`, `type:`, `contract:`, `due:`).
+ */
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
-import type { Board } from '@brainfile/core';
+import type { Task } from '@brainfile/core';
+import { searchTasksRanked } from '@brainfile/core';
 
-import { PALETTE, BOX } from './theme.js';
-import type { AppState, TUIProps, LayoutMode } from './types.js';
+import { PALETTE } from './theme.js';
+import type { AppState, TUIProps, LayoutMode, BoardColumn } from './types.js';
 import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
+import { buildRows } from './rows.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
-import { parseSearchQuery, taskMatchesFilter } from './utils.js';
 import { loadLogs } from './actions.js';
 import {
-  Header,
-  ProgressBar,
-  SearchBar,
-  ColumnTabs,
-  TaskList,
-  StackedTaskList,
-  flattenTasks,
-  StatusBar,
+  HeaderBar,
+  FooterBar,
+  browseActions,
+  detailActions,
+  DocumentList,
+  DetailView,
   HelpOverlay,
   StatusMessageDisplay,
   MoveOverlay,
   DeleteConfirmOverlay,
-  SubtaskOverlay,
-  NewTaskOverlay,
-  MainPanelTabs,
+  CompleteConfirmOverlay,
+  AddOverlay,
   RulesPanel,
   LogsPanel,
 } from './components/index.js';
-
-type BoardColumn = Board['columns'][number];
 
 const initialState: AppState = {
   board: null,
   error: null,
   lastUpdated: new Date(),
-  activePanel: 'tasks',
+  activePanel: 'board',
   activeColumnIndex: 0,
   selectedTaskIndex: 0,
-  selectedGlobalIndex: 0,
   mode: 'browse',
-  searchQuery: '',
-  expandedTaskIds: new Set(),
-  reloadFlash: false,
-  lastContentHash: null,
-  statusMessage: null,
-  moveTargetIndex: 0,
+  filterQuery: '',
   selectedSubtaskIndex: 0,
+  moveTargetIndex: 0,
   newTaskTitle: '',
-  // Rules panel
+  completeConfirm: null,
+  statusMessage: null,
+  lastContentHash: null,
+  reloadFlash: false,
   activeRuleType: 'always',
   selectedRuleIndex: 0,
   ruleEditText: '',
   ruleEditId: null,
-  // Logs panel
   logs: [],
   selectedLogIndex: 0,
-  logSearchQuery: '',
   logRestoreColumnIndex: 0,
   expandedLogIds: new Set(),
 };
 
-export function BrainfileTUI({ filePath }: TUIProps) {
+export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   const { stdout } = useStdout();
 
-  // Track terminal dimensions with resize listener
   const [dimensions, setDimensions] = useState({
-    width: stdout?.columns ?? process.stdout.columns ?? 80,
-    height: stdout?.rows ?? process.stdout.rows ?? 24,
+    width: width ?? stdout?.columns ?? process.stdout.columns ?? 80,
+    height: height ?? stdout?.rows ?? process.stdout.rows ?? 24,
   });
 
   useEffect(() => {
+    if (width !== undefined && height !== undefined) return undefined;
     const handleResize = () => {
       setDimensions({
-        width: process.stdout.columns ?? 80,
-        height: process.stdout.rows ?? 24,
+        width: width ?? process.stdout.columns ?? 80,
+        height: height ?? process.stdout.rows ?? 24,
       });
     };
-
     process.stdout.on('resize', handleResize);
     return () => {
       process.stdout.off('resize', handleResize);
     };
-  }, []);
+  }, [width, height]);
 
-  const termWidth = dimensions.width;
-  const termHeight = dimensions.height;
-  const isTooSmall = termWidth < LAYOUT.NARROW_MIN_WIDTH || termHeight < LAYOUT.MIN_HEIGHT;
-
-  // Determine layout mode based on width
-  const layoutMode: LayoutMode = termWidth >= LAYOUT.WIDE_MIN_WIDTH ? 'wide' : 'narrow';
+  const termWidth = width ?? dimensions.width;
+  const termHeight = height ?? dimensions.height;
+  const isTooSmall = termWidth < LAYOUT.MIN_WIDTH || termHeight < LAYOUT.MIN_HEIGHT;
+  const layoutMode: LayoutMode = termWidth >= LAYOUT.DETAIL_PANE_MIN_WIDTH ? 'wide' : 'narrow';
 
   const [state, setState] = useState<AppState>(initialState);
 
-  const viewportHeight = Math.max(termHeight - HEADER_ROWS - FOOTER_ROWS, 5);
-  // Height available for task lists after accounting for in-panel UI (search bar, column tabs + separator)
-  const searchBarRows = state.mode === 'search'
-    ? (state.searchQuery.trim().length === 0 ? 2 : 1)
-    : 0;
-  const columnHeaderRows = layoutMode === 'wide' ? 3 : 0; // ColumnTabs (2) + separator (1)
-  const tasksViewportHeight = Math.max(1, viewportHeight - searchBarRows - columnHeaderRows);
+  const viewportHeight = Math.max(termHeight - HEADER_ROWS - FOOTER_ROWS, 3);
 
-  // Load brainfile and watch for changes
   const { loadBrainfile } = useBrainfileLoader(filePath, state, setState);
 
-  // Sort columns by order property (like VSCode extension)
   const orderedColumns = useMemo(() => {
     if (!state.board) return [];
     return [...state.board.columns].sort((a, b) => {
@@ -114,264 +108,184 @@ export function BrainfileTUI({ filePath }: TUIProps) {
     });
   }, [state.board]);
 
-  const allBoardTasks = useMemo(
-    () => orderedColumns.flatMap(col => col.tasks ?? []),
-    [orderedColumns]
+  const totalCount = useMemo(
+    () => orderedColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
+    [orderedColumns],
   );
 
-  // Filtered columns based on search with structured filters
-  const searchQuery = state.searchQuery.trim();
-  const parsedSearch = useMemo(() => parseSearchQuery(searchQuery), [searchQuery]);
-  const hasActiveFilter = searchQuery.length > 0;
+  const filterQuery = state.filterQuery.trim();
+  const hasFilter = filterQuery.length > 0;
 
-  const filteredColumns = useMemo(() => {
-    if (!orderedColumns.length) return [];
-    if (!hasActiveFilter) return orderedColumns;
+  /**
+   * Ranked filter. `searchTasksRanked` wants documents, not board tasks, so the
+   * board's in-memory tasks are wrapped; the returned order is the ranking, and
+   * we keep it per column.
+   */
+  const filteredColumns = useMemo<BoardColumn[]>(() => {
+    if (!hasFilter) return orderedColumns as BoardColumn[];
+    return orderedColumns.map((column) => {
+      const docs = (column.tasks ?? []).map((task) => ({ task, body: task.description ?? '' }));
+      const matches = searchTasksRanked(docs, filterQuery);
+      return { ...column, tasks: matches.map((match) => match.doc.task) };
+    }) as BoardColumn[];
+  }, [orderedColumns, hasFilter, filterQuery]);
 
-    return orderedColumns
-      .map(col => ({
-        ...col,
-        tasks: (col.tasks ?? []).filter(task => taskMatchesFilter(task, parsedSearch)),
-      }))
-      .filter(col => (col.tasks?.length ?? 0) > 0);
-  }, [orderedColumns, hasActiveFilter, parsedSearch]);
+  const matchCount = useMemo(
+    () => filteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
+    [filteredColumns],
+  );
 
-  // Check if search has no results
-  const hasNoSearchResults = hasActiveFilter && filteredColumns.length === 0;
+  const activeColumnIndex = Math.min(
+    state.activeColumnIndex,
+    Math.max(0, filteredColumns.length - 1),
+  );
+  const currentColumn = filteredColumns[activeColumnIndex];
+  const rows = useMemo(() => buildRows(currentColumn?.tasks ?? []), [currentColumn]);
+  const maxRowIndex = Math.max(0, rows.length - 1);
+  const selectedIndex = Math.min(state.selectedTaskIndex, maxRowIndex);
+  const selectedTask: Task | undefined = rows[selectedIndex]?.task;
 
-  // Flatten tasks for narrow mode
-  const flatTasks = useMemo(() => flattenTasks(filteredColumns), [filteredColumns]);
-  const maxGlobalIndex = Math.max(0, flatTasks.length - 1);
+  const allBoardTasks = useMemo(
+    () => orderedColumns.flatMap((column) => column.tasks ?? []),
+    [orderedColumns],
+  );
+  const parentTask = selectedTask?.parentId
+    ? allBoardTasks.find((task) => task.id === selectedTask.parentId)
+    : undefined;
 
-  // Current column and its tasks (wide mode)
-  const currentColumn = filteredColumns[state.activeColumnIndex];
-  const currentTasks = currentColumn?.tasks || [];
-  const currentTask = layoutMode === 'wide'
-    ? currentTasks[state.selectedTaskIndex]
-    : flatTasks[state.selectedGlobalIndex]?.task;
-  const maxTaskIndex = Math.max(0, currentTasks.length - 1);
-
-  // Keep selection in bounds
+  // Keep the selection in bounds when the board or the filter changes.
   useEffect(() => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       activeColumnIndex: Math.min(prev.activeColumnIndex, Math.max(0, filteredColumns.length - 1)),
-      selectedTaskIndex: Math.min(prev.selectedTaskIndex, maxTaskIndex),
-      selectedGlobalIndex: Math.min(prev.selectedGlobalIndex, maxGlobalIndex),
+      selectedTaskIndex: Math.min(prev.selectedTaskIndex, maxRowIndex),
     }));
-  }, [filteredColumns.length, maxTaskIndex, maxGlobalIndex]);
+  }, [filteredColumns.length, maxRowIndex]);
 
-  // Calculate stats
-  const stats = useMemo(() => {
-    if (!state.board) return { total: 0, done: 0, percentage: 0 };
-
-    const total = state.board.columns.reduce((sum, col) => sum + (col.tasks?.length ?? 0), 0);
-    const doneCol = state.board.columns.find(col => col.id === 'done' || col.title.toLowerCase() === 'done');
-    const done = doneCol?.tasks?.length || 0;
-    const percentage = total > 0 ? Math.round((done / total) * 100) : 0;
-
-    return { total, done, percentage };
-  }, [state.board]);
-
-  // Calculate rules count
-  const rulesCount = useMemo(() => {
-    if (!state.board?.rules) return 0;
-    const r = state.board.rules;
-    return (r.always?.length || 0) + (r.never?.length || 0) + (r.prefer?.length || 0) + (r.context?.length || 0);
-  }, [state.board?.rules]);
-
-  // Load logs when switching to logs panel
   useEffect(() => {
     if (state.activePanel === 'logs') {
       const result = loadLogs(filePath);
-      setState(prev => ({ ...prev, logs: result.logs }));
+      setState((prev) => ({ ...prev, logs: result.logs }));
     }
   }, [state.activePanel, filePath, state.lastUpdated]);
 
-  // Keyboard navigation
   useKeyboardNavigation({
-    state,
+    state: { ...state, activeColumnIndex, selectedTaskIndex: selectedIndex },
     setState,
-    currentTasks,
-    maxTaskIndex,
+    rows,
     filteredColumnsLength: filteredColumns.length,
     viewportHeight,
     loadBrainfile,
     filePath,
     allColumns: orderedColumns as BoardColumn[],
-    layoutMode,
-    flatTasks,
-    maxGlobalIndex,
   });
 
-  // Check minimum terminal size (after all hooks)
   if (isTooSmall) {
     return (
-      <Box flexDirection="column" width={termWidth} height={termHeight} justifyContent="center" alignItems="center">
-        <Text color={PALETTE.error} bold>Terminal too small</Text>
-        <Text color={PALETTE.textSecondary}>
-          Minimum: {LAYOUT.NARROW_MIN_WIDTH}x{LAYOUT.MIN_HEIGHT} · Current: {termWidth}x{termHeight}
+      <Box flexDirection="column" width={termWidth} height={termHeight} paddingLeft={1}>
+        <Text color={PALETTE.error}>Terminal too small</Text>
+        <Text color={PALETTE.textMuted}>
+          Minimum {LAYOUT.MIN_WIDTH}x{LAYOUT.MIN_HEIGHT} · current {termWidth}x{termHeight}
         </Text>
-        <Box marginTop={1}>
-          <Text color={PALETTE.textMuted}>Resize terminal to continue</Text>
-        </Box>
       </Box>
     );
   }
 
-  // Error state
   if (state.error) {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text color={PALETTE.error} bold>Error</Text>
-        <Box marginTop={1}>
-          <Text color={PALETTE.textSecondary}>{state.error}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text color={PALETTE.textMuted}>Press <Text color={PALETTE.accent}>q</Text> to quit, <Text color={PALETTE.accent}>r</Text> to retry</Text>
-        </Box>
+      <Box flexDirection="column" paddingLeft={1}>
+        <Text color={PALETTE.error}>Error</Text>
+        <Text color={PALETTE.textSecondary}>{state.error}</Text>
+        <Text color={PALETTE.textMuted}>q quit · r retry</Text>
       </Box>
     );
   }
 
-  // Loading state
   if (!state.board) {
     return (
-      <Box padding={1}>
-        <Text color={PALETTE.textMuted}>Loading...</Text>
+      <Box paddingLeft={1}>
+        <Text color={PALETTE.textMuted}>Loading…</Text>
       </Box>
     );
   }
 
-  // Help overlay
   if (state.mode === 'help') {
-    return <HelpOverlay termWidth={termWidth} termHeight={termHeight} layoutMode={layoutMode} />;
+    return <HelpOverlay termWidth={termWidth} termHeight={termHeight} />;
   }
+
+  const boardTitle = state.board.title || 'brainfile';
+  // The state chip and detail state line use the column *id* (`todo`), not its
+  // display title — the header tabs already carry the titles (design §4.1/§4.2).
+  const columnLabel = currentColumn?.id ?? '';
+  const columnName = currentColumn?.title ?? '';
+  const detailOpen = state.mode === 'detail' && Boolean(selectedTask);
+  const fullscreenDetail = detailOpen && layoutMode === 'narrow';
+
+  // Narrow detail replaces the list entirely (design §4.2).
+  if (fullscreenDetail && selectedTask) {
+    return (
+      <Box flexDirection="column" width={termWidth} height={termHeight}>
+        <DetailView
+          task={selectedTask}
+          columnLabel={columnLabel}
+          width={termWidth}
+          height={termHeight - FOOTER_ROWS}
+          selectedSubtaskIndex={state.selectedSubtaskIndex}
+          parent={parentTask}
+        />
+        <Box flexGrow={1} />
+        <Box height={1}>
+          <StatusMessageDisplay message={state.statusMessage} />
+        </Box>
+        <FooterBar width={termWidth} actions={detailActions(selectedTask)} stateChip={columnLabel} />
+      </Box>
+    );
+  }
+
+  const detailPaneWidth = Math.floor(termWidth * LAYOUT.DETAIL_PANE_FRACTION);
+  const listWidth = detailOpen ? termWidth - detailPaneWidth : termWidth;
+
+  const footerActions = detailOpen
+    ? detailActions(selectedTask)
+    : browseActions(selectedTask);
 
   return (
     <Box flexDirection="column" width={termWidth} height={termHeight}>
-      {/* Header */}
-      <Header
-        title={state.board.title || 'Brainfile'}
-        stats={stats}
-        reloadFlash={state.reloadFlash}
-        layoutMode={layoutMode}
-        termWidth={termWidth}
+      <HeaderBar
+        title={boardTitle}
+        columns={filteredColumns}
+        activeColumnIndex={activeColumnIndex}
+        width={termWidth}
+        filterQuery={state.filterQuery}
+        filterActive={state.mode === 'filter' || hasFilter}
+        matchCount={matchCount}
+        totalCount={totalCount}
+        panelLabel={
+          state.activePanel === 'rules' ? 'rules' : state.activePanel === 'logs' ? 'logs' : undefined
+        }
       />
 
-      {/* Progress Bar (wide mode only - narrow mode shows % in header) */}
-      {layoutMode === 'wide' && (
-        <ProgressBar done={stats.done} total={stats.total} width={termWidth - 4} />
-      )}
-
-      {/* Main Panel Tabs (Tasks / Rules / Logs) */}
-      <MainPanelTabs
-        activePanel={state.activePanel}
-        rulesCount={rulesCount}
-        logsCount={state.logs.length}
-        layoutMode={layoutMode}
-      />
-
-      {/* Separator */}
-      <Box paddingLeft={1}>
-        <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
-      </Box>
-
-      {/* Panel content */}
       <Box flexGrow={1} flexDirection="column">
-        {/* ===== TASKS PANEL ===== */}
-        {state.activePanel === 'tasks' && (
-          <>
-            {/* Search bar (if active) */}
-            {state.mode === 'search' && (
-              <SearchBar query={state.searchQuery} width={termWidth - 2} />
-            )}
+        {state.activePanel === 'board' ? (
+          <BoardContent
+            state={state}
+            rows={rows}
+            selectedIndex={selectedIndex}
+            viewportHeight={viewportHeight}
+            listWidth={listWidth}
+            detailPaneWidth={detailPaneWidth}
+            detailOpen={detailOpen}
+            selectedTask={selectedTask}
+            parentTask={parentTask}
+            columnLabel={columnLabel}
+            columnName={columnName}
+            columns={orderedColumns as BoardColumn[]}
+            termWidth={termWidth}
+            hasFilter={hasFilter}
+          />
+        ) : null}
 
-            {/* Column tabs (wide mode only) */}
-            {layoutMode === 'wide' && (
-              <>
-                <ColumnTabs
-                  columns={filteredColumns}
-                  activeIndex={state.activeColumnIndex}
-                  termWidth={termWidth}
-                />
-                <Box paddingLeft={1}>
-                  <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
-                </Box>
-              </>
-            )}
-
-            {/* Overlays take precedence over task list */}
-            {state.mode === 'move' && currentTask && (
-              <MoveOverlay
-                columns={orderedColumns as BoardColumn[]}
-                selectedIndex={state.moveTargetIndex}
-                taskTitle={currentTask.title}
-                termWidth={termWidth}
-              />
-            )}
-
-            {state.mode === 'delete-confirm' && currentTask && (
-              <DeleteConfirmOverlay
-                taskId={currentTask.id}
-                taskTitle={currentTask.title}
-                termWidth={termWidth}
-              />
-            )}
-
-            {state.mode === 'subtask' && currentTask && (
-              <SubtaskOverlay
-                task={currentTask}
-                selectedIndex={state.selectedSubtaskIndex}
-                termWidth={termWidth}
-              />
-            )}
-
-            {state.mode === 'new-task' && (
-              <NewTaskOverlay
-                title={state.newTaskTitle}
-                columnName={currentColumn?.title || 'Unknown'}
-                termWidth={termWidth}
-              />
-            )}
-
-            {/* No search results message */}
-            {hasNoSearchResults && (
-              <Box flexDirection="column" paddingX={2} paddingY={1}>
-                <Text color={PALETTE.textSecondary}>
-                  No results for "<Text color={PALETTE.text}>{state.searchQuery}</Text>"
-                </Text>
-                <Text color={PALETTE.textMuted}>Press ESC to clear search</Text>
-              </Box>
-            )}
-
-            {/* Task list (hidden when overlay is active or no results) */}
-            {!hasNoSearchResults && state.mode !== 'move' && state.mode !== 'delete-confirm' && state.mode !== 'subtask' && state.mode !== 'new-task' && (
-              layoutMode === 'wide' ? (
-                <TaskList
-                  tasks={currentTasks}
-                  allTasks={allBoardTasks}
-                  selectedIndex={state.selectedTaskIndex}
-                  expandedIds={state.expandedTaskIds}
-                  viewportHeight={tasksViewportHeight}
-                  termWidth={termWidth}
-                />
-              ) : (
-                <StackedTaskList
-                  columns={filteredColumns}
-                  allTasks={allBoardTasks}
-                  selectedGlobalIndex={state.selectedGlobalIndex}
-                  expandedIds={state.expandedTaskIds}
-                  viewportHeight={tasksViewportHeight}
-                  termWidth={termWidth}
-                />
-              )
-            )}
-          </>
-        )}
-
-        {/* ===== RULES PANEL ===== */}
-        {state.activePanel === 'rules' && (
+        {state.activePanel === 'rules' ? (
           <RulesPanel
             rules={state.board.rules}
             activeRuleType={state.activeRuleType}
@@ -382,10 +296,9 @@ export function BrainfileTUI({ filePath }: TUIProps) {
             editText={state.ruleEditText}
             layoutMode={layoutMode}
           />
-        )}
+        ) : null}
 
-        {/* ===== LOGS PANEL ===== */}
-        {state.activePanel === 'logs' && (
+        {state.activePanel === 'logs' ? (
           <LogsPanel
             logs={state.logs}
             selectedIndex={state.selectedLogIndex}
@@ -397,37 +310,115 @@ export function BrainfileTUI({ filePath }: TUIProps) {
             restoreColumnIndex={state.logRestoreColumnIndex}
             layoutMode={layoutMode}
           />
-        )}
+        ) : null}
       </Box>
 
-      {/* Footer separator */}
-      <Box paddingLeft={1}>
-        <Text color={PALETTE.border}>{BOX.horizontal.repeat(Math.max(1, termWidth - 2))}</Text>
-      </Box>
-
-      {/* Status message (toast) - always reserve space to prevent layout shift */}
       <Box height={1}>
-        {state.statusMessage && (
-          <StatusMessageDisplay message={state.statusMessage} />
-        )}
+        <StatusMessageDisplay message={state.statusMessage} />
       </Box>
 
-      {/* Status bar */}
-      <StatusBar
-        mode={state.mode}
-        columnName={state.activePanel === 'tasks'
-          ? (layoutMode === 'wide' ? (currentColumn?.title || '') : 'ALL')
-          : state.activePanel}
-        taskIndex={state.activePanel === 'tasks'
-          ? (layoutMode === 'wide' ? state.selectedTaskIndex + 1 : state.selectedGlobalIndex + 1)
-          : (state.activePanel === 'logs' ? state.selectedLogIndex + 1 : state.selectedRuleIndex + 1)}
-        taskCount={state.activePanel === 'tasks'
-          ? (layoutMode === 'wide' ? currentTasks.length : flatTasks.length)
-          : (state.activePanel === 'logs' ? state.logs.length : (state.board.rules?.[state.activeRuleType]?.length || 0))}
-        termWidth={termWidth}
-        activePanel={state.activePanel}
-        layoutMode={layoutMode}
+      <FooterBar
+        width={termWidth}
+        itemCount={state.activePanel === 'board' && !detailOpen ? rows.length : undefined}
+        actions={
+          state.activePanel === 'board'
+            ? footerActions
+            : ['j/k move', 'a add', 'e edit', 'd delete', '1 board', 'q quit']
+        }
+        stateChip={state.activePanel === 'board' ? columnLabel : state.activePanel}
       />
+    </Box>
+  );
+}
+
+function BoardContent({
+  state,
+  rows,
+  selectedIndex,
+  viewportHeight,
+  listWidth,
+  detailPaneWidth,
+  detailOpen,
+  selectedTask,
+  parentTask,
+  columnLabel,
+  columnName,
+  columns,
+  termWidth,
+  hasFilter,
+}: {
+  state: AppState;
+  rows: ReturnType<typeof buildRows>;
+  selectedIndex: number;
+  viewportHeight: number;
+  listWidth: number;
+  detailPaneWidth: number;
+  detailOpen: boolean;
+  selectedTask: Task | undefined;
+  parentTask: Task | undefined;
+  columnLabel: string;
+  columnName: string;
+  columns: BoardColumn[];
+  termWidth: number;
+  hasFilter: boolean;
+}) {
+  if (state.mode === 'move' && selectedTask) {
+    return (
+      <MoveOverlay
+        columns={columns}
+        selectedIndex={state.moveTargetIndex}
+        taskId={selectedTask.id}
+        taskTitle={selectedTask.title}
+        width={termWidth}
+      />
+    );
+  }
+
+  if (state.mode === 'delete-confirm' && selectedTask) {
+    return (
+      <DeleteConfirmOverlay
+        taskId={selectedTask.id}
+        taskTitle={selectedTask.title}
+        width={termWidth}
+      />
+    );
+  }
+
+  if (state.mode === 'complete-confirm' && state.completeConfirm) {
+    return <CompleteConfirmOverlay target={state.completeConfirm} width={termWidth} />;
+  }
+
+  if (state.mode === 'add') {
+    return <AddOverlay title={state.newTaskTitle} columnName={columnName} />;
+  }
+
+  const list = (
+    <DocumentList
+      rows={rows}
+      selectedIndex={selectedIndex}
+      viewportHeight={viewportHeight}
+      width={listWidth}
+      emptyMessage={hasFilter ? 'No matches · esc to clear' : 'No documents in this column'}
+    />
+  );
+
+  if (!detailOpen || !selectedTask) return list;
+
+  return (
+    <Box flexDirection="row" flexGrow={1}>
+      <Box width={listWidth} flexDirection="column">
+        {list}
+      </Box>
+      <Box width={detailPaneWidth} flexDirection="column">
+        <DetailView
+          task={selectedTask}
+          columnLabel={columnLabel}
+          width={detailPaneWidth}
+          height={viewportHeight}
+          selectedSubtaskIndex={state.selectedSubtaskIndex}
+          parent={parentTask}
+        />
+      </Box>
     </Box>
   );
 }
