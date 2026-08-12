@@ -18,6 +18,7 @@ import { WireClient, type Era } from './helpers/mcp-wire';
 const ERAS: Era[] = ['legacy', 'modern'];
 
 const EXPECTED_TOOLS = [
+  'brief',
   'contract',
   'get_task',
   'list_tasks',
@@ -89,7 +90,7 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
 
   // ── advertisement ────────────────────────────────────────────────────────
 
-  test('advertises exactly the 10 consolidated tools', async () => {
+  test('advertises exactly the 11 consolidated tools', async () => {
     const names = (await client.listTools()).map((t) => t.name).sort();
     expect(names).toEqual(EXPECTED_TOOLS);
   });
@@ -281,6 +282,56 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
     expect(result.structuredContent).toBeUndefined();
   });
 
+  test('brief returns a full orientation on first call, then a delta', async () => {
+    // A per-era-unique agent: the brief checkpoint is per-agent state, and the
+    // two eras get separate fixture dirs, so this cannot leak across eras.
+    const agent = `wire-first-${era}`;
+
+    const first = await client.callTool('brief', { agent });
+    expect(first.isError).toBeFalsy();
+    expect(first.structuredContent).toMatchObject({
+      agent,
+      mode: 'full',
+      lastBriefAt: null,
+      peek: false,
+    });
+    const lanes = (first.structuredContent as any).lanes;
+    expect(Array.isArray(lanes)).toBe(true);
+    // Full mode always orients, even when nothing is assigned to this agent.
+    expect(lanes.map((l: any) => l.id)).toEqual(
+      ['orientation', 'assigned', 'notes', 'completions'],
+    );
+
+    const second = await client.callTool('brief', { agent });
+    expect(second.structuredContent).toMatchObject({
+      mode: 'delta',
+      lastBriefAt: (first.structuredContent as any).generatedAt,
+    });
+    expect((second.structuredContent as any).lanes.map((l: any) => l.id)).toEqual(
+      ['notes', 'changes', 'completions', 'config'],
+    );
+  });
+
+  test('brief --peek does not advance the stored checkpoint', async () => {
+    const agent = `wire-peek-${era}`;
+
+    const seed = await client.callTool('brief', { agent });
+    const checkpoint = (seed.structuredContent as any).generatedAt;
+
+    const peeked = await client.callTool('brief', { agent, peek: true });
+    expect(peeked.structuredContent).toMatchObject({ peek: true, lastBriefAt: checkpoint });
+
+    // A second peek still sees the same checkpoint: peek wrote nothing.
+    const again = await client.callTool('brief', { agent, peek: true });
+    expect(again.structuredContent).toMatchObject({ peek: true, lastBriefAt: checkpoint });
+  });
+
+  test('brief rejects a missing agent without tripping output validation', async () => {
+    const result = await client.callTool('brief', { agent: '   ' });
+    expect(result.isError).toBe(true);
+    expect(WireClient.text(result) ?? '').not.toContain('Output validation error');
+  });
+
   test('no success path trips the SDK output-validation guard', async () => {
     // Once a tool declares outputSchema, ANY non-error result lacking
     // structuredContent becomes an "Output validation error" isError result.
@@ -292,6 +343,8 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
       ['search', { query: 'wire' }],
       ['search', { recent: true }],
       ['search', { task: 'task-1' }],
+      // peek keeps this sweep side-effect-free against the shared fixture.
+      ['brief', { agent: `wire-sweep-${era}`, peek: true }],
     ];
     for (const [name, args] of calls) {
       const result = await client.callTool(name, args);

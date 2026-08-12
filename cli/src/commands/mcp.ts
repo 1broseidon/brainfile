@@ -20,9 +20,10 @@ import { registerTaskDeleteTool } from '../mcp/tools/task_delete_tool';
 import { registerSubtaskTool } from '../mcp/tools/subtask_tool';
 import { registerContractTool } from '../mcp/tools/contract_tool';
 import { registerTaskCompleteTool } from '../mcp/tools/task_complete_tool';
+import { registerBriefTool } from '../mcp/tools/brief_tool';
 
 /**
- * Builds the MCP server with all 10 consolidated tools registered.
+ * Builds the MCP server with all 11 consolidated tools registered.
  *
  * Exported so tests can serve the exact production registration over an
  * in-memory transport instead of re-listing the tools (which would drift).
@@ -44,6 +45,7 @@ export function createBrainfileMcpServer(defaultFile: string): McpServer {
   registerSubtaskTool(server, defaultFile);
   registerContractTool(server, defaultFile);
   registerTaskCompleteTool(server, defaultFile);
+  registerBriefTool(server, defaultFile);
 
   return server;
 }

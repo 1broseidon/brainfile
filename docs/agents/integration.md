@@ -33,7 +33,7 @@ The MCP server auto-detects the brainfile location (`.brainfile/brainfile.md` or
 
 ### Available Tools
 
-The server registers **10 tools**. `task_move`/`task_patch` accept a single ID or an array (bulk), and `subtask`/`contract` dispatch on an `action` parameter.
+The server registers **11 tools**. `task_move`/`task_patch` accept a single ID or an array (bulk), and `subtask`/`contract` dispatch on an `action` parameter.
 
 | Tool | Description |
 |------|-------------|
@@ -47,6 +47,7 @@ The server registers **10 tools**. `task_move`/`task_patch` accept a single ID o
 | `task_complete` | Complete a task (append to `ledger.jsonl` and archive), or archive to GitHub/Linear |
 | `subtask` | Action-based: `add` \| `toggle` \| `delete` \| `update` |
 | `contract` | Action-based: `attach` \| `pickup` \| `deliver` \| `validate` \| `graph` \| `activate` |
+| `brief` | Per-agent digest of what changed since that agent's last brief (`peek` to not mark as seen) |
 
 See [MCP Server → Available Tools](/tools/mcp#available-tools) for full parameter tables.
 

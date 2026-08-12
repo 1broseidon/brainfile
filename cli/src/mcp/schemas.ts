@@ -1,5 +1,5 @@
 /**
- * Output schemas for the 10 consolidated MCP tools.
+ * Output schemas for the 11 consolidated MCP tools.
  *
  * Each tool declares one of these as `outputSchema`, and every non-error
  * success path returns the matching object as `structuredContent` alongside
@@ -318,3 +318,29 @@ export const taskCompleteOutputSchema = z.discriminatedUnion('destination', [
     issueUrl: z.string().optional(),
   }),
 ]);
+
+/**
+ * `brief` — per-agent attention digest.
+ *
+ * Object root (not a bare array of lanes) so both protocol eras hand clients
+ * identical bytes, per note 3 above. `lastBriefAt` is nullable rather than
+ * optional: "this agent has never briefed" is a meaningful state a client must
+ * be able to distinguish from an omitted field.
+ */
+export const briefOutputSchema = z.object({
+  agent: z.string(),
+  mode: z.enum(['full', 'delta']),
+  generatedAt: z.string(),
+  lastBriefAt: z.string().nullable(),
+  peek: z.boolean(),
+  lanes: z.array(z.object({
+    id: z.string(),
+    label: z.string(),
+    items: z.array(z.object({
+      taskId: z.string().optional(),
+      text: z.string(),
+      why: z.string(),
+      at: z.string().optional(),
+    })),
+  })),
+});

@@ -66,7 +66,7 @@ Restart your AI assistant after adding or changing MCP configuration.
 
 ## Available Tools
 
-The MCP server registers **10 tools**. Several are action-based or accept arrays, so a single tool covers what would otherwise be many — `task_move` and `task_patch` accept one task ID or an array (bulk), `subtask` and `contract` dispatch on an `action` parameter.
+The MCP server registers **11 tools**. Several are action-based or accept arrays, so a single tool covers what would otherwise be many — `task_move` and `task_patch` accept one task ID or an array (bulk), `subtask` and `contract` dispatch on an `action` parameter.
 
 ### Task Management
 
@@ -97,6 +97,24 @@ A single action-based tool. Set `action` to `add`, `toggle`, `delete`, or `updat
 | `title` / `titles` | `update` | New title(s) |
 | `completed` | `toggle` | Set explicit state instead of flipping |
 | `all` | `toggle`, `delete` | Target every subtask in the task |
+
+### Agent Briefs — `brief`
+
+Per-agent attention primitive: "what changed that I should care about?" State is
+per agent, stored locally in `.brainfile/state/<agent>.json` (gitignored).
+
+| Tool | Key parameters | Description |
+|------|----------------|-------------|
+| `brief` | `agent`, `peek?`, `file?` | Get what changed for one agent since its last brief |
+
+The first call for an agent returns a **full** orientation (board rules and agent
+instructions, assigned tasks, latest notes, recent completions). Every later call
+returns a **delta**: new notes, task changes, completions, and whether the board
+config changed. Pass `peek: true` to read without marking the brief as seen.
+
+Notes are detected independently of `updatedAt`, because adding a note does not
+bump it. Contract states are reported as current truth — Brainfile records no
+prior status, so a brief never claims a transition it cannot know.
 
 ### Agent Contracts — `contract`
 

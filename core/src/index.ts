@@ -180,14 +180,41 @@ export {
   getDotBrainfileGitignorePath,
   ensureDotBrainfileDir,
   ensureDotBrainfileGitignore,
+  atomicWriteFileSync,
   DOT_BRAINFILE_DIRNAME,
   BRAINFILE_BASENAME,
   BRAINFILE_STATE_BASENAME,
   DOT_BRAINFILE_GITIGNORE_BASENAME,
+  DOT_BRAINFILE_STATE_DIRNAME,
+  DOT_BRAINFILE_STATE_IGNORE_ENTRY,
   type FoundBrainfile,
   type BrainfileResolutionKind,
   type ResolveBrainfilePathOptions,
 } from './utils/files';
+
+// Export the per-agent brief primitive (read-only) and its checkpoint state
+export {
+  buildBrief,
+  isEmptyBrief,
+  parseNoteLine,
+  parseNotes,
+  relativeTime,
+  type BuildBriefOptions,
+  type BriefResult,
+  type BriefLane,
+  type BriefItem,
+  type ParsedNote,
+} from './brief';
+
+export {
+  readBriefState,
+  writeBriefState,
+  getBriefStateDir,
+  getBriefStatePath,
+  sanitizeAgentFilename,
+  BRIEF_STATE_VERSION,
+  type BriefState,
+} from './briefState';
 
 // Export formatters for external services
 export {

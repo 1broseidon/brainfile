@@ -32,6 +32,7 @@ import { archiveCommand } from './commands/archive';
 import { restoreCommand } from './commands/restore';
 import { completeCommand } from './commands/complete';
 import { logCommand, logNoteCommand } from './commands/log';
+import { briefCommand } from './commands/brief';
 import { searchCommand } from './commands/search';
 import {
   githubAuthCommand,
@@ -88,7 +89,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'adr', 'plan', 'types', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'adr', 'plan', 'types', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -319,6 +320,15 @@ Brainfile file resolution (when you don't pass --file):
     .option('--agent <name>', 'Agent name for attribution')
     .argument('[message]', 'Log message to append')
     .action((message, options) => { logNoteCommand({ ...options, message }); });
+
+  program
+    .command('brief')
+    .description('Per-agent brief: what changed since this agent last checked in')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--agent <name>', 'Agent identifier (required — brief state is per-agent)')
+    .option('--peek', 'Read the brief without marking it as seen')
+    .option('--json', 'Output as JSON')
+    .action((options) => { briefCommand(options); });
 
   program
     .command('search')

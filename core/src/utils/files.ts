@@ -6,6 +6,10 @@ export const BRAINFILE_BASENAME = 'brainfile.md';
 /** @deprecated state.json is no longer used by Brainfile. */
 export const BRAINFILE_STATE_BASENAME = 'state.json';
 export const DOT_BRAINFILE_GITIGNORE_BASENAME = '.gitignore';
+/** Directory holding local-only per-agent state; never committed. */
+export const DOT_BRAINFILE_STATE_DIRNAME = 'state';
+/** `.gitignore` entry that excludes the per-agent state directory. */
+export const DOT_BRAINFILE_STATE_IGNORE_ENTRY = 'state/';
 
 export type BrainfileResolutionKind = 'dotdir' | 'root' | 'hidden' | 'bb';
 
@@ -136,10 +140,12 @@ export function ensureDotBrainfileDir(brainfilePath: string): string {
 }
 
 /**
- * Ensure `.brainfile/.gitignore` exists, stripping any stale `state.json` entry.
+ * Ensure `.brainfile/.gitignore` exists and ignores local-only agent state.
  *
- * Note: Brainfile no longer writes `state.json`, so no state entry is added.
- * Pre-existing `state.json` lines left over from older versions are removed.
+ * - Strips any stale `state.json` entry (Brainfile no longer writes state.json).
+ * - Adds `state/` so per-agent local state (e.g. `brief` checkpoints written to
+ *   `.brainfile/state/<agent>.json`) never gets committed. This is idempotent:
+ *   the entry is only appended when not already present.
  */
 export function ensureDotBrainfileGitignore(brainfilePath: string): void {
   ensureDotBrainfileDir(brainfilePath);
@@ -149,11 +155,46 @@ export function ensureDotBrainfileGitignore(brainfilePath: string): void {
     ? fs.readFileSync(gitignorePath, 'utf-8')
     : '';
 
-  const filtered = existing
+  const lines = existing
     .split(/\r?\n/)
-    .filter((line) => line.trim() !== BRAINFILE_STATE_BASENAME)
-    .join('\n')
-    .trimEnd();
+    .filter((line) => line.trim() !== BRAINFILE_STATE_BASENAME);
+
+  const hasStateDir = lines.some((line) => line.trim() === DOT_BRAINFILE_STATE_IGNORE_ENTRY);
+  if (!hasStateDir) {
+    lines.push(DOT_BRAINFILE_STATE_IGNORE_ENTRY);
+  }
+
+  // Trim surrounding blank lines so an initially-empty file doesn't gain a
+  // leading newline when the first entry is appended.
+  const filtered = lines.join('\n').trim();
 
   fs.writeFileSync(gitignorePath, filtered.length > 0 ? `${filtered}\n` : '', 'utf-8');
+}
+
+/**
+ * Write a file atomically: serialize to a unique temp file in the same
+ * directory, then `rename()` it into place (atomic replace on POSIX).
+ *
+ * Used for state that concurrent agents may read-modify-write, where a partial
+ * write would be observable (e.g. per-agent `brief` checkpoints). Nothing else
+ * in this codebase needed this before: `writeTaskFileExclusive` uses `wx`
+ * (create-only) and is not applicable to files that are updated repeatedly.
+ */
+export function atomicWriteFileSync(filePath: string, content: string): void {
+  const abs = toAbsolute(filePath);
+  const dir = path.dirname(abs);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const tmp = path.join(dir, `.${path.basename(abs)}.tmp-${process.pid}-${Date.now()}`);
+  try {
+    fs.writeFileSync(tmp, content, 'utf-8');
+    fs.renameSync(tmp, abs);
+  } catch (err) {
+    try {
+      if (fs.existsSync(tmp)) fs.unlinkSync(tmp);
+    } catch {
+      // best-effort cleanup; surface the original failure
+    }
+    throw err;
+  }
 }
