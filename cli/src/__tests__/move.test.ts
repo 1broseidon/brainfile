@@ -275,12 +275,15 @@ columns:
     expect(result.movedTask.column).toBeUndefined();
     expect(fs.existsSync(path.join(boardDir, taskFileName(task.id)))).toBe(false);
 
-    const ledgerPath = path.join(logsDir, 'ledger.jsonl');
-    expect(fs.existsSync(ledgerPath)).toBe(true);
-    const ledgerContent = fs.readFileSync(ledgerPath, 'utf-8').trim();
-    const record = JSON.parse(ledgerContent);
-    expect(record.id).toBe(task.id);
-    expect(record.completedAt).toBeDefined();
+    // Auto-complete-on-move is canonicalized on legacy mode: the task lands in
+    // logs/ as a markdown file so `brainfile log`/`search`/TUI logs can see it.
+    const logPath = path.join(logsDir, taskFileName(task.id));
+    expect(fs.existsSync(logPath)).toBe(true);
+    const logDoc = readTaskFile(logPath);
+    expect(logDoc).not.toBeNull();
+    expect(logDoc!.task.id).toBe(task.id);
+    expect(logDoc!.task.completedAt).toBeDefined();
+    expect(logDoc!.body).toContain('Move me');
   });
 
   it('does not auto-complete non-completable task types', () => {

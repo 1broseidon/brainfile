@@ -1,14 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
-import * as path from 'path';
 import {
-  readTasksDir,
-  writeTaskFile as coreWriteTaskFile,
-  taskFileName,
-  type Task,
+  attachTaskContract,
+  activateTaskContract,
+  activateTaskContractsByParent,
 } from '@brainfile/core';
 import { getV2Dirs, findV2Task } from '../../utils/v2-detect';
-import { buildContract } from '../../utils/contractSpec';
 import { pickupContract, deliverContract, validateContract } from '../../lib/contractRunner';
 import { executeContractGraphMcpAction } from './contract';
 import { requireV2 } from '../helpers';
@@ -68,16 +65,16 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
         }
         try {
-          const contract = buildContract({
+          const result = attachTaskContract(found.filePath, {
             deliverableSpecs: deliverables,
             validationCommands: validation_commands,
             constraints,
-            status: attachReady ? 'ready' : 'draft',
+            ready: attachReady === true,
           });
-          found.doc.task.contract = contract;
-          found.doc.task.updatedAt = new Date().toISOString();
-          coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
-          return { content: [{ type: 'text' as const, text: `Contract attached (${contract.status}): ${task}` }] };
+          if (!result.success || !result.task) {
+            return { content: [{ type: 'text' as const, text: `Error: ${result.error || 'Failed to attach contract'}` }], isError: true };
+          }
+          return { content: [{ type: 'text' as const, text: `Contract attached (${result.task.contract!.status}): ${task}` }] };
         } catch (e) {
           return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
         }
@@ -175,44 +172,14 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           if (!found || found.isLog) {
             return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
           }
-          if (!found.doc.task.contract) {
-            return { content: [{ type: 'text' as const, text: `Error: Task ${task} has no contract` }], isError: true };
+          const result = activateTaskContract(found.filePath);
+          if (!result.success) {
+            return { content: [{ type: 'text' as const, text: `Error: ${result.error || `Failed to activate contract: ${task}`}` }], isError: true };
           }
-          if (found.doc.task.contract.status !== 'draft') {
-            return { content: [{ type: 'text' as const, text: `Error: Contract is not in draft status (current: ${found.doc.task.contract.status})` }], isError: true };
-          }
-          const readyAt = new Date().toISOString();
-          found.doc.task.contract = {
-            ...found.doc.task.contract,
-            status: 'ready',
-            metrics: ({
-              ...(found.doc.task.contract.metrics ?? {}),
-              readyAt,
-            } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-          };
-          found.doc.task.updatedAt = readyAt;
-          coreWriteTaskFile(found.filePath, found.doc.task, found.doc.body);
           activated.push(task);
         } else {
           // Bulk by parentId
-          const allTasks = readTasksDir(dirs.boardDir);
-          for (const doc of allTasks) {
-            const t = doc.task as any;
-            if (t.parentId !== parentId) continue;
-            if (!t.contract || t.contract.status !== 'draft') continue;
-            const readyAt = new Date().toISOString();
-            t.contract = {
-              ...t.contract,
-              status: 'ready',
-              metrics: ({
-                ...(t.contract.metrics ?? {}),
-                readyAt,
-              } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-            };
-            t.updatedAt = readyAt;
-            coreWriteTaskFile(path.join(dirs.boardDir, taskFileName(t.id)), t, doc.body);
-            activated.push(t.id);
-          }
+          activated.push(...activateTaskContractsByParent(dirs.boardDir, parentId!).activated);
         }
 
         const output = { activated, count: activated.length };

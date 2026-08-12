@@ -136,15 +136,24 @@ export function ensureDotBrainfileDir(brainfilePath: string): string {
 }
 
 /**
- * Ensure `.brainfile/.gitignore` exists.
+ * Ensure `.brainfile/.gitignore` exists, stripping any stale `state.json` entry.
  *
  * Note: Brainfile no longer writes `state.json`, so no state entry is added.
+ * Pre-existing `state.json` lines left over from older versions are removed.
  */
 export function ensureDotBrainfileGitignore(brainfilePath: string): void {
   ensureDotBrainfileDir(brainfilePath);
   const gitignorePath = getDotBrainfileGitignorePath(brainfilePath);
 
-  if (!fs.existsSync(gitignorePath)) {
-    fs.writeFileSync(gitignorePath, '', 'utf-8');
-  }
+  const existing = fs.existsSync(gitignorePath)
+    ? fs.readFileSync(gitignorePath, 'utf-8')
+    : '';
+
+  const filtered = existing
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== BRAINFILE_STATE_BASENAME)
+    .join('\n')
+    .trimEnd();
+
+  fs.writeFileSync(gitignorePath, filtered.length > 0 ? `${filtered}\n` : '', 'utf-8');
 }

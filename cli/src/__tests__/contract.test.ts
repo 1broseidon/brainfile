@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { readTaskFile, taskFileName, writeTaskFile, type Task } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
-import { contractPickupCommand, contractDeliverCommand, contractValidateCommand, contractAttachCommand } from '../commands/contract';
+import { contractPickupCommand, contractDeliverCommand, contractValidateCommand, contractAttachCommand, contractActivateCommand } from '../commands/contract';
 import { createV2TestWorkspace, type V2TestWorkspace } from './helpers/v2';
 
 describe('contract command', () => {
@@ -169,6 +169,58 @@ columns:
     expect(taskDoc?.task.contract?.feedback).toContain('bad');
     expect(taskDoc?.task.column).toBe('review');
     expect(fs.existsSync(path.join(workspace.logsDir, 'ledger.jsonl'))).toBe(false);
+  });
+
+  it('activate stamps metrics.readyAt on a draft contract', () => {
+    writeTask({
+      id: 'task-1',
+      title: 'Draft contract task',
+      column: 'todo',
+      position: 0,
+      contract: { status: 'draft' },
+    } as Task);
+
+    const result = contractActivateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger);
+
+    expect(result.success).toBe(true);
+    expect(result.activated).toEqual(['task-1']);
+
+    const contract = readTask()?.task.contract;
+    expect(contract?.status).toBe('ready');
+    expect(contract?.metrics?.readyAt).toBeDefined();
+    expect(logger.getOutput()).toContain('Contract activated: task-1');
+  });
+
+  it('activate rejects a task with no contract', () => {
+    writeTask({ id: 'task-1', title: 'No contract', column: 'todo', position: 0 } as Task);
+
+    expect(() =>
+      contractActivateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger),
+    ).toThrow(/has no contract/);
+  });
+
+  it('activate rejects a contract that is not in draft', () => {
+    writeTask({
+      id: 'task-1',
+      title: 'Already ready',
+      column: 'todo',
+      position: 0,
+      contract: { status: 'ready' },
+    } as Task);
+
+    expect(() =>
+      contractActivateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger),
+    ).toThrow(/not in draft status \(current: ready\)/);
+  });
+
+  it('attach rejects an invalid deliverable spec before touching the task', () => {
+    writeTask({ id: 'task-1', title: 'Target', column: 'todo', position: 0 } as Task);
+
+    expect(() =>
+      contractAttachCommand({ file: workspace.brainfilePath, task: 'task-1', deliverable: ['bogus'] }, logger),
+    ).toThrow(/Invalid deliverable format/);
+
+    expect(readTask()?.task.contract).toBeUndefined();
   });
 
   it('attach should create a ready contract on an existing task', () => {

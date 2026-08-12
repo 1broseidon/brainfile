@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { type TaskPatch } from '@brainfile/core';
+import { type TaskPatch, type TaskFilePatch } from '@brainfile/core';
 import chalk from 'chalk';
 import {
   missingRequiredError,
@@ -9,7 +9,7 @@ import {
 } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
-import { writeTaskFile } from '@brainfile/core';
+import { patchTaskFile } from '@brainfile/core';
 import { getV2Dirs, findV2Task } from '../utils/v2-detect';
 
 interface PatchOptions {
@@ -124,49 +124,19 @@ export function patchCommand(options: PatchOptions) {
       operationError(`Task not found: ${options.task}`);
     }
 
-    const { doc, filePath: taskPath } = found;
-    const task = doc.task;
+    const { filePath: taskPath } = found;
 
-    // Apply patch fields
-    if (patch.title) task.title = patch.title;
-    if (patch.description !== undefined) {
-      if (patch.description === null) {
-        delete task.description;
-      } else {
-        task.description = patch.description;
-      }
+    const result = patchTaskFile(taskPath, {
+      title: patch.title,
+      description: patch.description,
+      priority: patch.priority as TaskFilePatch['priority'],
+      tags: patch.tags,
+      assignee: patch.assignee,
+      dueDate: patch.dueDate,
+    });
+    if (!result.success) {
+      operationError(result.error || `Failed to update task: ${options.task}`);
     }
-    if (patch.priority !== undefined) {
-      if (patch.priority === null) {
-        delete task.priority;
-      } else {
-        task.priority = patch.priority as any;
-      }
-    }
-    if (patch.tags !== undefined) {
-      if (patch.tags === null) {
-        delete task.tags;
-      } else {
-        task.tags = patch.tags as string[];
-      }
-    }
-    if (patch.assignee !== undefined) {
-      if (patch.assignee === null) {
-        delete task.assignee;
-      } else {
-        task.assignee = patch.assignee;
-      }
-    }
-    if (patch.dueDate !== undefined) {
-      if (patch.dueDate === null) {
-        delete task.dueDate;
-      } else {
-        task.dueDate = patch.dueDate;
-      }
-    }
-
-    task.updatedAt = new Date().toISOString();
-    writeTaskFile(taskPath, task, doc.body);
 
     console.log(chalk.green('Task updated successfully!'));
     console.log('');

@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import chalk from 'chalk';
-import { ensureDotBrainfileGitignore, removeLegacyStateFile } from '../utils/dot-brainfile';
+import { ensureDotBrainfileGitignore } from '@brainfile/core';
+import { removeLegacyStateFile } from '../utils/dot-brainfile';
 import { probeWorkspaceFormat, workspaceRootFromBrainfilePath } from '../utils/workspace-format';
 
 const DEFAULT_BRAINFILE_V2 = `---

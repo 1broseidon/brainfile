@@ -12,7 +12,8 @@ import {
   generateNextFileTaskId,
   type Task,
 } from '@brainfile/core';
-import { ensureDotBrainfileGitignore, removeLegacyStateFile } from '../utils/dot-brainfile';
+import { ensureDotBrainfileGitignore } from '@brainfile/core';
+import { removeLegacyStateFile } from '../utils/dot-brainfile';
 import { ensureV2Dirs } from '../utils/v2-detect';
 import { probeWorkspaceFormat, type WorkspaceProbe } from '../utils/workspace-format';
 

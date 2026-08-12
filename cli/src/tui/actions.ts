@@ -20,6 +20,10 @@ import {
   addTask,
   addTaskFile,
   moveTaskFile,
+  moveTaskFileToColumn,
+  readBoardConfig,
+  patchTaskFile,
+  toggleSubtasksInFile,
   deleteTaskFile,
   completeTaskFile,
   findTask,
@@ -148,13 +152,23 @@ export function moveTaskAction(
   }
 
   if (isV2(filePath)) {
-    const located = resolveV2TaskPath(filePath, taskId);
-    if (!located) return { success: false, error: `Task ${taskId} not found` };
+    const boardFile = readBoardConfig(filePath);
+    if (!boardFile) return { success: false, error: `Failed to parse brainfile: ${filePath}` };
 
-    const moveResult = moveTaskFile(located.taskPath, targetColumn.id, targetColumn.tasks.length);
+    const moveResult = moveTaskFileToColumn(
+      getV2Dirs(filePath),
+      boardFile.config,
+      taskId,
+      targetColumn.id,
+    );
     if (!moveResult.success) return { success: false, error: moveResult.error };
 
-    return { success: true, message: `Moved to ${targetColumn.title}` };
+    return {
+      success: true,
+      message: moveResult.autoCompleted
+        ? `Completed via ${targetColumn.title}`
+        : `Moved to ${targetColumn.title}`,
+    };
   }
 
   const result = moveTask(board, taskId, taskInfo.column.id, targetColumn.id, targetColumn.tasks.length);
@@ -460,69 +474,18 @@ export function patchTaskAction(
     const located = resolveV2TaskPath(filePath, taskId);
     if (!located) return { success: false, error: `Task ${taskId} not found` };
 
-    const doc = readTaskFile(located.taskPath);
-    if (!doc) return { success: false, error: `Failed to read task ${taskId}` };
+    const result = patchTaskFile(located.taskPath, {
+      title: patch.title,
+      description: patch.description,
+      priority: patch.priority,
+      tags: patch.tags,
+      assignee: patch.assignee,
+      dueDate: patch.dueDate,
+      relatedFiles: patch.relatedFiles,
+    });
+    if (!result.success) return { success: false, error: result.error };
 
-    const updatedTask: Task = { ...doc.task };
-
-    if (patch.title !== undefined) updatedTask.title = patch.title;
-
-    if (patch.description !== undefined) {
-      if (patch.description === null) {
-        delete updatedTask.description;
-      } else {
-        updatedTask.description = patch.description;
-      }
-    }
-
-    if (patch.priority !== undefined) {
-      if (patch.priority === null) {
-        delete updatedTask.priority;
-      } else {
-        updatedTask.priority = patch.priority;
-      }
-    }
-
-    if (patch.tags !== undefined) {
-      if (patch.tags === null) {
-        delete updatedTask.tags;
-      } else {
-        updatedTask.tags = patch.tags;
-      }
-    }
-
-    if (patch.assignee !== undefined) {
-      if (patch.assignee === null) {
-        delete updatedTask.assignee;
-      } else {
-        updatedTask.assignee = patch.assignee;
-      }
-    }
-
-    if (patch.dueDate !== undefined) {
-      if (patch.dueDate === null) {
-        delete updatedTask.dueDate;
-      } else {
-        updatedTask.dueDate = patch.dueDate;
-      }
-    }
-
-    if (patch.relatedFiles !== undefined) {
-      if (patch.relatedFiles === null) {
-        delete updatedTask.relatedFiles;
-      } else {
-        updatedTask.relatedFiles = patch.relatedFiles;
-      }
-    }
-
-    updatedTask.updatedAt = new Date().toISOString();
-
-    try {
-      writeTaskFile(located.taskPath, updatedTask, doc.body);
-      return { success: true, message: `Updated ${taskId}` };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
-    }
+    return { success: true, message: `Updated ${taskId}` };
   }
 
   const { board, error } = readBrainfile(filePath);
@@ -554,21 +517,10 @@ export function cyclePriorityAction(filePath: string, taskId: string): ActionRes
     const nextIndex = (currentIndex + 1) % priorities.length;
     const nextPriority = priorities[nextIndex];
 
-    const updatedTask: Task = {
-      ...doc.task,
-      ...(nextPriority ? { priority: nextPriority } : {}),
-      updatedAt: new Date().toISOString(),
-    };
-    if (!nextPriority) {
-      delete updatedTask.priority;
-    }
+    const result = patchTaskFile(located.taskPath, { priority: nextPriority ?? null });
+    if (!result.success) return { success: false, error: result.error };
 
-    try {
-      writeTaskFile(located.taskPath, updatedTask, doc.body);
-      return { success: true, message: `Priority: ${nextPriority || 'none'}` };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
-    }
+    return { success: true, message: `Priority: ${nextPriority || 'none'}` };
   }
 
   const { board, error } = readBrainfile(filePath);
@@ -603,33 +555,15 @@ export function toggleSubtaskAction(
     const located = resolveV2TaskPath(filePath, taskId);
     if (!located) return { success: false, error: `Task ${taskId} not found` };
 
-    const doc = readTaskFile(located.taskPath);
-    if (!doc) return { success: false, error: `Failed to read task ${taskId}` };
-
-    if (!doc.task.subtasks || doc.task.subtasks.length === 0) {
-      return { success: false, error: `Task ${taskId} has no subtasks` };
+    const result = toggleSubtasksInFile(located.taskPath, [subtaskId]);
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.missing?.length ? `Subtask ${subtaskId} not found` : result.error,
+      };
     }
 
-    const updatedSubtasks = doc.task.subtasks.map((subtask) => {
-      if (subtask.id !== subtaskId) return subtask;
-      return { ...subtask, completed: !subtask.completed };
-    });
-
-    const found = updatedSubtasks.some((subtask) => subtask.id === subtaskId);
-    if (!found) return { success: false, error: `Subtask ${subtaskId} not found` };
-
-    const updatedTask: Task = {
-      ...doc.task,
-      subtasks: updatedSubtasks,
-      updatedAt: new Date().toISOString(),
-    };
-
-    try {
-      writeTaskFile(located.taskPath, updatedTask, doc.body);
-      return { success: true, message: `Toggled ${subtaskId}` };
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
-    }
+    return { success: true, message: `Toggled ${subtaskId}` };
   }
 
   const { board, error } = readBrainfile(filePath);

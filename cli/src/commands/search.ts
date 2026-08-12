@@ -13,12 +13,8 @@ import { type Logger, defaultLogger } from '../utils/logger';
 import { missingRequired } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
-import { readTasksDir, type TaskDocument } from '@brainfile/core';
-import {
-  getV2Dirs,
-  extractDescription,
-  extractLog,
-} from '../utils/v2-detect';
+import { readTasksDir, searchTasksRanked } from '@brainfile/core';
+import { getV2Dirs } from '../utils/v2-detect';
 
 export interface SearchOptions {
   file: string;
@@ -56,45 +52,28 @@ export function searchCommand(options: SearchOptions, logger: Logger = defaultLo
 
 function searchV2(filePath: string, query: string, column: string | undefined, logger: Logger): SearchResult {
   const dirs = getV2Dirs(filePath);
-  const queryLower = query.toLowerCase();
 
-  const results: SearchResult['results'] = [];
+  // Active tasks (optionally restricted to one column)
+  const taskMatches = searchTasksRanked(readTasksDir(dirs.boardDir), query, { column });
 
-  // Search active tasks
-  const taskDocs = readTasksDir(dirs.boardDir);
-  for (const doc of taskDocs) {
-    const task = doc.task;
+  const results: SearchResult['results'] = taskMatches.map(({ doc, score }) => ({
+    id: doc.task.id,
+    title: doc.task.title,
+    column: doc.task.column,
+    score,
+    isLog: false,
+  }));
 
-    // Column filter
-    if (column && task.column !== column) continue;
-
-    const score = scoreMatch(task, doc, queryLower);
-    if (score > 0) {
-      results.push({
-        id: task.id,
-        title: task.title,
-        column: task.column,
-        score,
-        isLog: false,
-      });
-    }
-  }
-
-  // Search logs (completed tasks)
+  // Completed logs — skipped entirely when a column filter is active
   if (!column) {
-    const logDocs = readTasksDir(dirs.logsDir);
-    for (const doc of logDocs) {
-      const task = doc.task;
-      const score = scoreMatch(task, doc, queryLower);
-      if (score > 0) {
-        results.push({
-          id: task.id,
-          title: task.title,
-          score,
-          isLog: true,
-          completedAt: task.completedAt,
-        });
-      }
+    for (const { doc, score } of searchTasksRanked(readTasksDir(dirs.logsDir), query)) {
+      results.push({
+        id: doc.task.id,
+        title: doc.task.title,
+        score,
+        isLog: true,
+        completedAt: doc.task.completedAt,
+      });
     }
   }
 
@@ -104,35 +83,6 @@ function searchV2(filePath: string, query: string, column: string | undefined, l
   displayResults(results, query, logger);
 
   return { success: true, results, count: results.length };
-}
-
-function scoreMatch(task: { id: string; title: string; description?: string; tags?: string[] }, doc: TaskDocument, queryLower: string): number {
-  let score = 0;
-
-  // ID exact match
-  if (task.id.toLowerCase() === queryLower) score += 20;
-
-  // Title match
-  if (task.title.toLowerCase().includes(queryLower)) {
-    score += 10;
-    if (task.title.toLowerCase().startsWith(queryLower)) score += 5;
-  }
-
-  // Description match (frontmatter)
-  if (task.description?.toLowerCase().includes(queryLower)) score += 5;
-
-  // Markdown description match
-  const description = extractDescription(doc.body);
-  if (description?.toLowerCase().includes(queryLower)) score += 5;
-
-  // Tag match
-  if (task.tags?.some(t => t.toLowerCase().includes(queryLower))) score += 3;
-
-  // Log body match
-  const logContent = extractLog(doc.body);
-  if (logContent?.toLowerCase().includes(queryLower)) score += 2;
-
-  return score;
 }
 
 function displayResults(results: SearchResult['results'], query: string, logger: Logger): void {

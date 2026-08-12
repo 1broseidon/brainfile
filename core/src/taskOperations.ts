@@ -10,8 +10,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { Task, TaskDocument } from './types';
+import type { BoardConfig, Subtask, Task, TaskDocument } from './types';
 import type { Contract, ContractStatus, ContractMetrics } from './types/contract';
+import type { V2Dirs } from './workspace';
+import { isTypeCompletable, validateColumn } from './boardValidation';
+import { buildContract } from './contractSpec';
+import { generateNextSubtaskId } from './idGen';
 import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, serializeTaskContent } from './taskFile';
 import { readLedger } from './ledger';
 import { appendLedgerRecord, buildLedgerRecord } from './ledger';
@@ -24,6 +28,11 @@ export interface TaskOperationResult {
   task?: Task;
   filePath?: string;
   error?: string;
+  /**
+   * Populated only when the completed task is type `epic` and has children.
+   * Present on both blocked failures and forced-through successes.
+   */
+  incompleteChildren?: Array<{ id: string; title: string }>;
 }
 
 /**
@@ -48,6 +57,30 @@ export interface TaskFileInput {
   dependsOn?: string[];
   /** Document type (e.g., 'epic', 'adr'). When set, IDs use this as prefix (epic-1, adr-1). */
   type?: string;
+  /** Optional contract to attach at creation time (single-write, avoids a second file write). */
+  contract?: Contract;
+  /**
+   * Free-form document status/lifecycle string (e.g. "draft" | "active" | "superseded"
+   * for plan documents). Not validated by core — convention lives at the frontend level.
+   */
+  status?: string;
+}
+
+/**
+ * Field-level patch for an existing task file.
+ *
+ * `undefined` leaves the field untouched; `null` deletes it.
+ */
+export interface TaskFilePatch {
+  title?: string;
+  description?: string | null;
+  priority?: 'low' | 'medium' | 'high' | 'critical' | null;
+  tags?: string[] | null;
+  assignee?: string | null;
+  dueDate?: string | null;
+  relatedFiles?: string[] | null;
+  parentId?: string | null;
+  status?: string | null;
 }
 
 /**
@@ -59,6 +92,8 @@ export interface TaskFilters {
   priority?: 'low' | 'medium' | 'high' | 'critical';
   assignee?: string;
   parentId?: string;
+  /** Document type filter (e.g. 'plan', 'epic'). Untyped tasks match 'task'. */
+  type?: string;
 }
 
 export interface CompleteTaskFileOptions {
@@ -68,11 +103,16 @@ export interface CompleteTaskFileOptions {
   filesChanged?: string[];
   columnHistory?: string[];
   validationAttempts?: number;
+  /** Complete an epic even if it has incomplete (still-active) child tasks. */
+  force?: boolean;
 }
+
+type ChildTaskStateStatus = 'active' | 'completed' | 'missing';
 
 interface ChildTaskSummary {
   id: string;
   title: string;
+  status: ChildTaskStateStatus;
 }
 
 function normalizeTaskDependencyIds(values?: string[]): string[] | undefined {
@@ -117,40 +157,77 @@ function extractEpicChildTaskIds(task: Task): string[] {
   return [...new Set(childIds)];
 }
 
-function resolveChildTasks(
-  epicId: string,
+function resolveChildTaskStates(
   childIds: string[],
   boardDir: string,
   logsDir: string,
 ): ChildTaskSummary[] {
-  const docs = [...readTasksDir(boardDir), ...readTasksDir(logsDir)];
-
-  // Prefer first-class parentId links when present.
-  const linked = docs.filter((doc) => doc.task.parentId === epicId);
-  if (linked.length > 0) {
-    return linked.map((doc) => ({ id: doc.task.id, title: doc.task.title }));
-  }
-
   if (childIds.length === 0) {
     return [];
   }
 
-  const titleById = new Map<string, string>();
-  for (const doc of docs) {
-    if (!titleById.has(doc.task.id)) {
-      titleById.set(doc.task.id, doc.task.title);
+  const activeById = new Map<string, string>();
+  for (const doc of readTasksDir(boardDir)) {
+    if (!activeById.has(doc.task.id)) {
+      activeById.set(doc.task.id, doc.task.title);
     }
   }
 
-  const childTasks: ChildTaskSummary[] = [];
-  for (const childId of childIds) {
-    const title = titleById.get(childId);
-    if (title) {
-      childTasks.push({ id: childId, title });
+  const completedById = new Map<string, string>();
+  for (const doc of readTasksDir(logsDir)) {
+    if (!completedById.has(doc.task.id)) {
+      completedById.set(doc.task.id, doc.task.title);
     }
   }
 
-  return childTasks;
+  return childIds.map((childId) => {
+    const activeTitle = activeById.get(childId);
+    if (activeTitle) {
+      return { id: childId, title: activeTitle, status: 'active' as const };
+    }
+
+    const completedTitle = completedById.get(childId);
+    if (completedTitle) {
+      return { id: childId, title: completedTitle, status: 'completed' as const };
+    }
+
+    return { id: childId, title: 'Unknown task reference', status: 'missing' as const };
+  });
+}
+
+function resolveParentLinkedChildStates(
+  epicId: string,
+  boardDir: string,
+  logsDir: string,
+): ChildTaskSummary[] {
+  const activeChildren = readTasksDir(boardDir)
+    .filter((doc) => doc.task.parentId === epicId)
+    .map((doc) => ({ id: doc.task.id, title: doc.task.title, status: 'active' as const }));
+
+  const completedChildren = readTasksDir(logsDir)
+    .filter((doc) => doc.task.parentId === epicId)
+    .map((doc) => ({ id: doc.task.id, title: doc.task.title, status: 'completed' as const }));
+
+  return [...activeChildren, ...completedChildren];
+}
+
+/**
+ * Resolve an epic's child tasks and their completion states.
+ *
+ * First-class `parentId` links win when any exist; otherwise the epic's
+ * legacy `subtasks` ID references are resolved against board/ and logs/.
+ */
+function resolveEpicChildStates(
+  task: Task,
+  boardDir: string,
+  logsDir: string,
+): ChildTaskSummary[] {
+  const linkedByParentId = resolveParentLinkedChildStates(task.id, boardDir, logsDir);
+  if (linkedByParentId.length > 0) {
+    return linkedByParentId;
+  }
+
+  return resolveChildTaskStates(extractEpicChildTaskIds(task), boardDir, logsDir);
 }
 
 function buildChildTasksSection(childTasks: ChildTaskSummary[]): string {
@@ -158,8 +235,26 @@ function buildChildTasksSection(childTasks: ChildTaskSummary[]): string {
     return '## Child Tasks\nNo child tasks recorded.';
   }
 
-  const lines = childTasks.map((child) => `- ${child.id}: ${child.title}`);
-  return `## Child Tasks\n${lines.join('\n')}`;
+  const totalChildren = childTasks.length;
+  const completedChildren = childTasks.filter((child) => child.status === 'completed').length;
+
+  const lines: string[] = [
+    '## Child Tasks',
+    `Summary: ${completedChildren}/${totalChildren} children completed.`,
+  ];
+
+  for (const child of childTasks) {
+    const statusLabel =
+      child.status === 'completed'
+        ? 'completed'
+        : child.status === 'active'
+          ? 'incomplete'
+          : 'missing';
+
+    lines.push(`- ${child.id}: ${child.title} (${statusLabel})`);
+  }
+
+  return lines.join('\n');
 }
 
 function writeTaskFileExclusive(filePath: string, task: Task, body: string): void {
@@ -190,16 +285,14 @@ function completeTaskFileLegacy(
   logsDir: string,
   doc: TaskDocument,
   completedTask: Task,
+  childStates?: ChildTaskSummary[],
 ): TaskOperationResult {
   const baseName = path.basename(taskPath);
   const destPath = path.join(logsDir, baseName);
   let completedBody = doc.body;
 
   if (doc.task.type === 'epic') {
-    const boardDir = path.dirname(taskPath);
-    const childIds = extractEpicChildTaskIds(doc.task);
-    const childTasks = resolveChildTasks(doc.task.id, childIds, boardDir, logsDir);
-    const childTasksSection = buildChildTasksSection(childTasks);
+    const childTasksSection = buildChildTasksSection(childStates ?? []);
     completedBody = appendBodySection(doc.body, childTasksSection);
   }
 
@@ -303,6 +396,11 @@ export function addTaskFile(
   const typePrefix = input.type || 'task';
   const maxAttempts = input.id ? 1 : 25;
 
+  // Append to the end of the target column when no explicit position is given.
+  const resolvedPosition = input.position !== undefined
+    ? input.position
+    : readTasksDir(boardDir).filter((doc) => doc.task.column === input.column.trim()).length;
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const taskId = input.id || generateNextFileTaskId(boardDir, logsDir, typePrefix);
     const now = new Date().toISOString();
@@ -319,8 +417,9 @@ export function addTaskFile(
       title: input.title.trim(),
       ...(input.type && { type: input.type }),
       column: input.column.trim(),
-      ...(input.position !== undefined && { position: input.position }),
+      position: resolvedPosition,
       ...(input.description && { description: input.description.trim() }),
+      ...(input.status && { status: input.status }),
       ...(input.priority && { priority: input.priority }),
       ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
       ...(input.assignee && { assignee: input.assignee }),
@@ -330,6 +429,7 @@ export function addTaskFile(
       ...(input.parentId && input.parentId.trim().length > 0 && { parentId: input.parentId.trim() }),
       ...(normalizeTaskDependencyIds(input.dependsOn) && { dependsOn: normalizeTaskDependencyIds(input.dependsOn)! }),
       ...(subtasks && subtasks.length > 0 && { subtasks }),
+      ...(input.contract && { contract: input.contract }),
       createdAt: now,
     };
 
@@ -395,6 +495,370 @@ export function moveTaskFile(
   }
 }
 
+export interface MoveTaskFileOptions {
+  /** Explicit position within the target column. Defaults to the current task count in that column (append to end). */
+  position?: number;
+  /** Skip auto-complete even if the resolved target column has `completionColumn: true`. */
+  skipAutoComplete?: boolean;
+}
+
+export interface MoveTaskFileResult extends TaskOperationResult {
+  /** Resolved target column (id/title/completionColumn), present on success. */
+  column?: { id: string; title: string; completionColumn?: boolean };
+  /** True when the move was a no-op because the task was already in the target column. No write occurred. */
+  noop?: boolean;
+  /** True when the move triggered auto-completion (task archived to logs/, no longer at filePath). */
+  autoCompleted?: boolean;
+}
+
+/**
+ * Move a task to a column resolved against board config, auto-completing when
+ * the target column is a completion column and the task's type is completable.
+ *
+ * Column refs resolve by ID first, then case-insensitively by title. Strict
+ * boards reject unknown columns; non-strict boards fall back to the raw ref.
+ *
+ * @param dirs - V2 directory layout for the workspace
+ * @param board - Parsed board config (columns, types, strict flag)
+ * @param taskId - Task ID to move
+ * @param columnRef - Target column ID or title
+ * @param options - Position override / auto-complete opt-out
+ */
+export function moveTaskFileToColumn(
+  dirs: V2Dirs,
+  board: BoardConfig,
+  taskId: string,
+  columnRef: string,
+  options: MoveTaskFileOptions = {},
+): MoveTaskFileResult {
+  let resolved = board.columns.find((c) => c.id === columnRef);
+  if (!resolved) {
+    resolved = board.columns.find((c) => c.title.toLowerCase() === columnRef.toLowerCase());
+  }
+
+  const targetColumnId = resolved?.id ?? columnRef;
+  const columnValidation = validateColumn(board, targetColumnId);
+  if (!columnValidation.valid) {
+    return { success: false, error: columnValidation.error || `Invalid column: ${targetColumnId}` };
+  }
+
+  const resolvedColumn = resolved ?? { id: columnRef, title: columnRef };
+
+  const doc = findTask(dirs.boardDir, taskId);
+  if (!doc) {
+    return { success: false, error: `Task not found: ${taskId}` };
+  }
+
+  let filePath = doc.filePath ?? path.join(dirs.boardDir, taskFileName(taskId));
+
+  if (doc.task.column === resolvedColumn.id) {
+    return { success: true, task: doc.task, filePath, column: resolvedColumn, noop: true };
+  }
+
+  const newPosition = options.position !== undefined
+    ? options.position
+    : readTasksDir(dirs.boardDir).filter((d) => d.task.column === resolvedColumn.id).length;
+
+  let task: Task = {
+    ...doc.task,
+    column: resolvedColumn.id,
+    position: newPosition,
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    writeTaskFile(filePath, task, doc.body);
+  } catch (err) {
+    return { success: false, error: `Failed to write task file: ${err}` };
+  }
+
+  const shouldAutoComplete =
+    !options.skipAutoComplete &&
+    resolvedColumn.completionColumn === true &&
+    isTypeCompletable(task.type, board.types);
+
+  if (!shouldAutoComplete) {
+    return { success: true, task, filePath, column: resolvedColumn };
+  }
+
+  const completeResult = completeTaskFile(filePath, dirs.logsDir, { legacyMode: true });
+  if (!completeResult.success || !completeResult.task) {
+    return {
+      success: false,
+      error: completeResult.error || `Failed to complete task: ${taskId}`,
+      column: resolvedColumn,
+      ...(completeResult.incompleteChildren && { incompleteChildren: completeResult.incompleteChildren }),
+    };
+  }
+
+  task = completeResult.task;
+  filePath = completeResult.filePath ?? filePath;
+
+  return { success: true, task, filePath, column: resolvedColumn, autoCompleted: true };
+}
+
+/**
+ * Apply a field-level patch to an existing task file.
+ *
+ * Fields absent from `patch` (or set to `undefined`) are left untouched.
+ * Fields set to `null` are deleted. `title` is only assigned when truthy —
+ * it has no delete semantics.
+ *
+ * @param taskPath - Absolute path to the task file
+ * @param patch - Fields to set or clear
+ */
+export function patchTaskFile(taskPath: string, patch: TaskFilePatch): TaskOperationResult {
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    return { success: false, error: `Failed to read task file: ${taskPath}` };
+  }
+
+  const task: Task = { ...doc.task };
+
+  if (patch.title) task.title = patch.title;
+
+  const applyField = <K extends keyof Task>(key: K, value: Task[K] | null | undefined): void => {
+    if (value === undefined) return;
+    if (value === null) {
+      delete task[key];
+    } else {
+      task[key] = value;
+    }
+  };
+
+  applyField('description', patch.description);
+  applyField('priority', patch.priority);
+  applyField('tags', patch.tags);
+  applyField('assignee', patch.assignee);
+  applyField('dueDate', patch.dueDate);
+  applyField('relatedFiles', patch.relatedFiles);
+  applyField('parentId', patch.parentId);
+  applyField('status', patch.status);
+
+  task.updatedAt = new Date().toISOString();
+
+  try {
+    writeTaskFile(taskPath, task, doc.body);
+    return { success: true, task, filePath: taskPath };
+  } catch (err) {
+    return { success: false, error: `Failed to write task file: ${err}` };
+  }
+}
+
+// ============================================================================
+// Subtask file mutators
+// ============================================================================
+
+export interface SubtaskMutationResult extends TaskOperationResult {
+  /** Full updated subtask array on success. */
+  subtasks?: Subtask[];
+  /** The subtask(s) actually created/updated/toggled/deleted by this call. */
+  affected?: Subtask[];
+  /** Requested subtask IDs that did not exist on the task (delete/toggle/update). */
+  missing?: string[];
+}
+
+function readTaskForSubtaskMutation(
+  taskPath: string,
+): { doc: TaskDocument; task: Task } | { error: string } {
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    return { error: `Failed to read task file: ${taskPath}` };
+  }
+  return { doc, task: { ...doc.task } };
+}
+
+function writeSubtaskMutation(
+  taskPath: string,
+  doc: TaskDocument,
+  task: Task,
+): TaskOperationResult {
+  task.updatedAt = new Date().toISOString();
+  try {
+    writeTaskFile(taskPath, task, doc.body);
+    return { success: true, task, filePath: taskPath };
+  } catch (err) {
+    return { success: false, error: `Failed to write task file: ${err}` };
+  }
+}
+
+/**
+ * Append one or more subtasks to a task file.
+ *
+ * IDs are allocated sequentially through the canonical `generateNextSubtaskId`,
+ * feeding each freshly generated ID back into the pool before generating the next.
+ */
+export function addSubtasksToFile(taskPath: string, titles: string[]): SubtaskMutationResult {
+  const read = readTaskForSubtaskMutation(taskPath);
+  if ('error' in read) return { success: false, error: read.error };
+  const { doc, task } = read;
+
+  const cleanTitles = titles.map((t) => t.trim()).filter(Boolean);
+  if (cleanTitles.length === 0) {
+    return { success: false, error: 'No subtask titles provided' };
+  }
+
+  const subtasks: Subtask[] = [...(task.subtasks ?? [])];
+  const existingIds = subtasks.map((st) => st.id);
+  const affected: Subtask[] = [];
+
+  for (const title of cleanTitles) {
+    const id = generateNextSubtaskId(task.id, existingIds);
+    existingIds.push(id);
+    const created: Subtask = { id, title, completed: false };
+    subtasks.push(created);
+    affected.push(created);
+  }
+
+  task.subtasks = subtasks;
+  const written = writeSubtaskMutation(taskPath, doc, task);
+  if (!written.success) return written;
+
+  return { ...written, subtasks, affected };
+}
+
+function resolveSubtaskTargets(
+  subtasks: Subtask[],
+  subtaskIds: string[] | 'all',
+): { targetIds: string[]; missing: string[] } {
+  if (subtaskIds === 'all') {
+    return { targetIds: subtasks.map((st) => st.id), missing: [] };
+  }
+
+  const existing = new Set(subtasks.map((st) => st.id));
+  return {
+    targetIds: subtaskIds.filter((id) => existing.has(id)),
+    missing: subtaskIds.filter((id) => !existing.has(id)),
+  };
+}
+
+/**
+ * Delete subtasks from a task file. Pass `'all'` to clear every subtask.
+ *
+ * Fails only when no requested subtask existed; partial batches succeed and
+ * report the unmatched IDs via `missing`.
+ */
+export function deleteSubtasksFromFile(
+  taskPath: string,
+  subtaskIds: string[] | 'all',
+): SubtaskMutationResult {
+  const read = readTaskForSubtaskMutation(taskPath);
+  if ('error' in read) return { success: false, error: read.error };
+  const { doc, task } = read;
+
+  const current = task.subtasks ?? [];
+  if (current.length === 0) {
+    return { success: false, error: `Task ${task.id} has no subtasks` };
+  }
+
+  const { targetIds, missing } = resolveSubtaskTargets(current, subtaskIds);
+  if (targetIds.length === 0) {
+    return {
+      success: false,
+      error: `Subtask not found: ${missing.join(', ')}`,
+      missing,
+    };
+  }
+
+  const deleteSet = new Set(targetIds);
+  const affected = current.filter((st) => deleteSet.has(st.id));
+  const subtasks = current.filter((st) => !deleteSet.has(st.id));
+
+  task.subtasks = subtasks;
+  const written = writeSubtaskMutation(taskPath, doc, task);
+  if (!written.success) return written;
+
+  return { ...written, subtasks, affected, missing };
+}
+
+/**
+ * Toggle subtask completion. Pass `'all'` to target every subtask.
+ *
+ * When `completed` is provided every target is forced to that value; otherwise
+ * each target's own current value is flipped independently.
+ */
+export function toggleSubtasksInFile(
+  taskPath: string,
+  subtaskIds: string[] | 'all',
+  completed?: boolean,
+): SubtaskMutationResult {
+  const read = readTaskForSubtaskMutation(taskPath);
+  if ('error' in read) return { success: false, error: read.error };
+  const { doc, task } = read;
+
+  const current = task.subtasks ?? [];
+  if (current.length === 0) {
+    return { success: false, error: `Task ${task.id} has no subtasks` };
+  }
+
+  const { targetIds, missing } = resolveSubtaskTargets(current, subtaskIds);
+  if (targetIds.length === 0) {
+    return {
+      success: false,
+      error: `Subtask not found: ${missing.join(', ')}`,
+      missing,
+    };
+  }
+
+  const targetSet = new Set(targetIds);
+  const affected: Subtask[] = [];
+  const subtasks = current.map((st) => {
+    if (!targetSet.has(st.id)) return st;
+    const next: Subtask = { ...st, completed: completed !== undefined ? completed : !st.completed };
+    affected.push(next);
+    return next;
+  });
+
+  task.subtasks = subtasks;
+  const written = writeSubtaskMutation(taskPath, doc, task);
+  if (!written.success) return written;
+
+  return { ...written, subtasks, affected, missing };
+}
+
+/**
+ * Rename subtasks by ID. Unmatched IDs are reported via `missing`;
+ * the call fails only when no update applied.
+ */
+export function updateSubtasksInFile(
+  taskPath: string,
+  updates: Array<{ id: string; title: string }>,
+): SubtaskMutationResult {
+  const read = readTaskForSubtaskMutation(taskPath);
+  if ('error' in read) return { success: false, error: read.error };
+  const { doc, task } = read;
+
+  const current = task.subtasks ?? [];
+  if (current.length === 0) {
+    return { success: false, error: `Task ${task.id} has no subtasks` };
+  }
+
+  const titleById = new Map(updates.map((u) => [u.id, u.title]));
+  const { targetIds, missing } = resolveSubtaskTargets(current, updates.map((u) => u.id));
+  if (targetIds.length === 0) {
+    return {
+      success: false,
+      error: `Subtask not found: ${missing.join(', ')}`,
+      missing,
+    };
+  }
+
+  const affected: Subtask[] = [];
+  const subtasks = current.map((st) => {
+    const nextTitle = titleById.get(st.id);
+    if (nextTitle === undefined) return st;
+    const next: Subtask = { ...st, title: nextTitle };
+    affected.push(next);
+    return next;
+  });
+
+  task.subtasks = subtasks;
+  const written = writeSubtaskMutation(taskPath, doc, task);
+  if (!written.success) return written;
+
+  return { ...written, subtasks, affected, missing };
+}
+
 /**
  * Complete a task by appending to `logs/ledger.jsonl` and removing board file.
  * Legacy mode can still move markdown files into logs/.
@@ -414,6 +878,29 @@ export function completeTaskFile(
     return { success: false, error: `Failed to read task file: ${taskPath}` };
   }
 
+  // Epic safety gate: refuse to complete an epic that still has active children,
+  // unless the caller explicitly forces it. Non-epic types skip this entirely.
+  let childStates: ChildTaskSummary[] | undefined;
+  let incompleteChildren: Array<{ id: string; title: string }> | undefined;
+  if (doc.task.type === 'epic') {
+    const boardDir = path.dirname(taskPath);
+    childStates = resolveEpicChildStates(doc.task, boardDir, logsDir);
+    const incomplete = childStates
+      .filter((child) => child.status === 'active')
+      .map((child) => ({ id: child.id, title: child.title }));
+
+    if (incomplete.length > 0) {
+      if (!options.force) {
+        return {
+          success: false,
+          error: `Epic ${doc.task.id} has ${incomplete.length} incomplete child task(s). Use force:true to override.`,
+          incompleteChildren: incomplete,
+        };
+      }
+      incompleteChildren = incomplete;
+    }
+  }
+
   const now = new Date().toISOString();
 
   // Remove column and position, add completedAt
@@ -425,7 +912,10 @@ export function completeTaskFile(
   };
 
   if (options.legacyMode) {
-    return completeTaskFileLegacy(taskPath, logsDir, doc, completedTask);
+    const legacyResult = completeTaskFileLegacy(taskPath, logsDir, doc, completedTask, childStates);
+    return incompleteChildren && legacyResult.success
+      ? { ...legacyResult, incompleteChildren }
+      : legacyResult;
   }
 
   const record = buildLedgerRecord(completedTask, doc.body, {
@@ -445,7 +935,12 @@ export function completeTaskFile(
 
   try {
     fs.unlinkSync(taskPath);
-    return { success: true, task: completedTask, filePath: ledgerPath };
+    return {
+      success: true,
+      task: completedTask,
+      filePath: ledgerPath,
+      ...(incompleteChildren && { incompleteChildren }),
+    };
   } catch (err) {
     rollbackLedgerAppend(logsDir, record);
     return { success: false, error: `Failed to finalize completion: ${err}` };
@@ -559,6 +1054,9 @@ export function listTasks(
     }
     if (filters.parentId) {
       docs = docs.filter((d) => d.task.parentId === filters.parentId);
+    }
+    if (filters.type) {
+      docs = docs.filter((d) => (d.task.type || 'task') === filters.type);
     }
   }
 
@@ -881,6 +1379,128 @@ export function failTaskContract(
   } catch (err) {
     return { success: false, error: `Failed to write task file: ${err}` };
   }
+}
+
+export interface AttachContractOptions {
+  deliverableSpecs?: string | string[];
+  validationCommands?: string | string[];
+  constraints?: string | string[];
+  /** Build the contract with status=ready instead of the default draft. */
+  ready?: boolean;
+}
+
+/**
+ * Build and attach a contract to an existing task file.
+ *
+ * Throws (does not return a failure result) when a deliverable spec string is
+ * malformed — callers already catch and rewrap that into their own error types.
+ *
+ * @param taskPath - Absolute path to the task file
+ * @param options - Deliverable/validation/constraint specs and ready flag
+ */
+export function attachTaskContract(
+  taskPath: string,
+  options: AttachContractOptions,
+): TaskOperationResult {
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    return { success: false, error: `Failed to read task file: ${taskPath}` };
+  }
+
+  const contract = buildContract({
+    deliverableSpecs: options.deliverableSpecs,
+    validationCommands: options.validationCommands,
+    constraints: options.constraints,
+    status: options.ready ? 'ready' : 'draft',
+  });
+
+  const task: Task = {
+    ...doc.task,
+    contract,
+    updatedAt: new Date().toISOString(),
+  };
+
+  try {
+    writeTaskFile(taskPath, task, doc.body);
+    return { success: true, task, filePath: taskPath };
+  } catch (err) {
+    return { success: false, error: `Failed to write task file: ${err}` };
+  }
+}
+
+function applyContractActivation(task: Task, readyAt: string): Task {
+  return {
+    ...task,
+    contract: {
+      ...task.contract!,
+      status: 'ready' as ContractStatus,
+      metrics: { ...(task.contract!.metrics ?? {}), readyAt },
+    },
+    updatedAt: readyAt,
+  };
+}
+
+/**
+ * Activate a draft contract (draft → ready), stamping `metrics.readyAt`.
+ *
+ * @param taskPath - Absolute path to the task file
+ */
+export function activateTaskContract(taskPath: string): TaskOperationResult {
+  const doc = readTaskFile(taskPath);
+  if (!doc) {
+    return { success: false, error: `Failed to read task file: ${taskPath}` };
+  }
+
+  if (!doc.task.contract) {
+    return { success: false, error: `Task ${doc.task.id} has no contract` };
+  }
+
+  if (doc.task.contract.status !== 'draft') {
+    return {
+      success: false,
+      error: `Contract is not in draft status (current: ${doc.task.contract.status})`,
+    };
+  }
+
+  const task = applyContractActivation(doc.task, new Date().toISOString());
+
+  try {
+    writeTaskFile(taskPath, task, doc.body);
+    return { success: true, task, filePath: taskPath };
+  } catch (err) {
+    return { success: false, error: `Failed to write task file: ${err}` };
+  }
+}
+
+export interface ActivateByParentResult {
+  activated: string[];
+}
+
+/**
+ * Activate every draft contract whose task has the given `parentId`.
+ *
+ * Zero matches is a valid empty result, not an error.
+ *
+ * @param boardDir - Absolute path to `.brainfile/board/`
+ * @param parentId - Parent task/document ID to match
+ */
+export function activateTaskContractsByParent(
+  boardDir: string,
+  parentId: string,
+): ActivateByParentResult {
+  const activated: string[] = [];
+
+  for (const doc of readTasksDir(boardDir)) {
+    if (doc.task.parentId !== parentId) continue;
+    if (doc.task.contract?.status !== 'draft') continue;
+
+    const task = applyContractActivation(doc.task, new Date().toISOString());
+    const taskPath = doc.filePath ?? path.join(boardDir, taskFileName(task.id));
+    writeTaskFile(taskPath, task, doc.body);
+    activated.push(task.id);
+  }
+
+  return { activated };
 }
 
 /**

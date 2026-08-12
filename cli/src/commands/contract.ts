@@ -11,7 +11,14 @@ import {
   topologicalSort,
 } from '@brainfile/core';
 import { missingRequired, operationFailed, validationError } from '../utils/cli-error';
-import { buildContract } from '../utils/contractSpec';
+import {
+  buildContract,
+  normalizeToArray,
+  parseDeliverableSpec,
+  attachTaskContract,
+  activateTaskContract,
+  activateTaskContractsByParent,
+} from '@brainfile/core';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { getV2Dirs, findV2Task } from '../utils/v2-detect';
@@ -512,14 +519,10 @@ export function contractAttachCommand(options: ContractAttachOptions & { ready?:
     logger.warn(`Warning: ${warning.message}`);
   }
 
-  let contract;
+  // Validate deliverable specs up front so a malformed spec is reported
+  // before task resolution, matching the pre-refactor error ordering.
   try {
-    contract = buildContract({
-      deliverableSpecs: options.deliverable,
-      validationCommands: options.validation,
-      constraints: options.constraint,
-      status: (options as any).ready ? 'ready' : 'draft',
-    });
+    normalizeToArray(options.deliverable).forEach(parseDeliverableSpec);
   } catch (e) {
     throw validationError((e as Error).message);
   }
@@ -534,8 +537,16 @@ export function contractAttachCommand(options: ContractAttachOptions & { ready?:
     throw operationFailed(`Task not found: ${options.task}`);
   }
 
-  found.doc.task.contract = contract;
-  writeTaskFile(found.filePath, found.doc.task, found.doc.body);
+  const result = attachTaskContract(found.filePath, {
+    deliverableSpecs: options.deliverable,
+    validationCommands: options.validation,
+    constraints: options.constraint,
+    ready: (options as any).ready === true,
+  });
+  if (!result.success) {
+    throw operationFailed(result.error || `Failed to attach contract: ${options.task}`);
+  }
+
   logger.log(`Contract attached: ${options.task}`);
   return { success: true };
 }
@@ -566,47 +577,19 @@ export function contractActivateCommand(options: ContractActivateOptions, logger
     if (!found || found.isLog) {
       throw operationFailed(`Task not found: ${options.task}`);
     }
-    if (!found.doc.task.contract) {
-      throw operationFailed(`Task ${options.task} has no contract`);
+    const result = activateTaskContract(found.filePath);
+    if (!result.success) {
+      throw operationFailed(result.error || `Failed to activate contract: ${options.task}`);
     }
-    if (found.doc.task.contract.status !== 'draft') {
-      throw operationFailed(`Contract is not in draft status (current: ${found.doc.task.contract.status})`);
-    }
-    const readyAt = new Date().toISOString();
-    found.doc.task.contract = {
-      ...found.doc.task.contract,
-      status: 'ready',
-      metrics: ({
-        ...(found.doc.task.contract.metrics ?? {}),
-        readyAt,
-      } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-    };
-    found.doc.task.updatedAt = readyAt;
-    writeTaskFile(found.filePath, found.doc.task, found.doc.body);
     activated.push(options.task);
     logger.log(`Contract activated: ${options.task}`);
   } else {
     // Bulk activation by parentId
     const parentId = options.parent!;
-    const allTasks = readTasksDir(dirs.boardDir);
-    for (const doc of allTasks) {
-      const task = doc.task as any;
-      if (task.parentId !== parentId) continue;
-      if (!task.contract || task.contract.status !== 'draft') continue;
-      const readyAt = new Date().toISOString();
-      task.contract = {
-        ...task.contract,
-        status: 'ready',
-        metrics: ({
-          ...(task.contract.metrics ?? {}),
-          readyAt,
-        } as NonNullable<NonNullable<Task['contract']>['metrics']>),
-      };
-      task.updatedAt = readyAt;
-      const taskPath = path.join(dirs.boardDir, taskFileName(task.id));
-      writeTaskFile(taskPath, task, doc.body);
-      activated.push(task.id);
-      logger.log(`Contract activated: ${task.id}`);
+    const result = activateTaskContractsByParent(dirs.boardDir, parentId);
+    for (const id of result.activated) {
+      activated.push(id);
+      logger.log(`Contract activated: ${id}`);
     }
     if (activated.length === 0) {
       logger.log(`No draft contracts found with parent: ${parentId}`);

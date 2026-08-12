@@ -26,6 +26,15 @@ export {
   removeTaskContractConstraint,
 } from './contract';
 
+// Export contract spec helpers (deliverable parsing + contract building)
+export {
+  ALLOWED_DELIVERABLE_TYPES,
+  type AllowedDeliverableType,
+  normalizeToArray,
+  parseDeliverableSpec,
+  buildContract,
+} from './contractSpec';
+
 // Export parser
 export { BrainfileParser } from './parser';
 export type { ParseResult } from './parser';
@@ -104,6 +113,7 @@ export {
 // Export strict board validation helpers
 export {
   getBoardTypes,
+  isTypeCompletable,
   validateType,
   validateColumn,
   type BoardValidationResult,
@@ -126,6 +136,8 @@ export {
   findCompletionColumn,
   isCompletionColumn,
   getTasksWithIncompleteSubtasks,
+  getIncompleteSubtasksSummary,
+  type IncompleteSubtasksResult,
   getOverdueTasks
 } from './query';
 
@@ -209,15 +221,23 @@ export {
 export {
   type TaskOperationResult,
   type TaskFileInput,
+  type TaskFilePatch,
   type TaskFilters,
   type CompleteTaskFileOptions,
   type ContractTransitionOptions,
   type ContractTransitionWithFeedbackOptions,
   type CompleteContractOptions,
+  type MoveTaskFileOptions,
+  type MoveTaskFileResult,
+  type SubtaskMutationResult,
+  type AttachContractOptions,
+  type ActivateByParentResult,
   DEFAULT_CONTRACT_COLUMN_MAP,
   generateNextFileTaskId,
   addTaskFile,
   moveTaskFile,
+  moveTaskFileToColumn,
+  patchTaskFile,
   completeTaskFile,
   deleteTaskFile,
   appendLog,
@@ -225,13 +245,32 @@ export {
   findTask,
   searchTaskFiles,
   searchLogs,
+  // Subtask file mutators
+  addSubtasksToFile,
+  deleteSubtasksFromFile,
+  toggleSubtasksInFile,
+  updateSubtasksInFile,
   // Compound contract + column operations
   pickupTaskContract,
   deliverTaskContract,
   completeTaskContract,
   failTaskContract,
+  attachTaskContract,
+  activateTaskContract,
+  activateTaskContractsByParent,
   getEffectiveState,
 } from './taskOperations';
+
+// Export ranked search (structured filters + relevance scoring)
+export {
+  parseSearchQuery,
+  taskMatchesFilters,
+  scoreTaskDocument,
+  searchTasksRanked,
+  type SearchFilters,
+  type ParsedSearchQuery,
+  type SearchMatch,
+} from './search';
 
 // Export ledger helpers (append-only JSONL completion history)
 export {

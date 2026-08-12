@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
-import { readTasksDir, type TaskDocument } from '@brainfile/core';
+import { readTasksDir, searchTasksRanked } from '@brainfile/core';
 import {
   getV2Dirs,
   findV2Task,
@@ -14,7 +14,7 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
     'search',
     {
       title: 'Search',
-      description: 'Search tasks and logs by query, list recent logs, or view one task/log entry',
+      description: 'Search tasks and logs by query, list recent logs, or view one task/log entry. All board documents are searchable, including epics, specs, adrs, and plans.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               query: z.string().optional().describe('Search query (matches title, description, tags, and log text in v2)'),
@@ -64,50 +64,20 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
         return { content: [{ type: 'text' as const, text: 'Error: query is required unless recent or task is provided' }], isError: true };
       }
 
-      const queryLower = query.toLowerCase();
-
       const dirs = getV2Dirs(filePath);
       const matches: Array<{ id: string; title: string; column?: string; priority?: string; tags?: string[]; assignee?: string; score: number; isLog?: boolean }> = [];
 
-      const scoreDoc = (doc: TaskDocument, includeLogText: boolean): number => {
+      const boardMatches = searchTasksRanked(readTasksDir(dirs.boardDir), query, { column, priority, assignee });
+      for (const { doc, score } of boardMatches) {
         const t = doc.task;
-        let score = 0;
-        if (t.title.toLowerCase().includes(queryLower)) {
-          score += 10;
-          if (t.title.toLowerCase().startsWith(queryLower)) score += 5;
-        }
-        if (t.description?.toLowerCase().includes(queryLower)) score += 5;
-        if (extractDescription(doc.body)?.toLowerCase().includes(queryLower)) score += 5;
-        if (t.tags?.some(tag => tag.toLowerCase().includes(queryLower))) score += 3;
-        if (includeLogText && extractLog(doc.body)?.toLowerCase().includes(queryLower)) score += 2;
-        if (t.id.toLowerCase() === queryLower) score += 20;
-        return score;
-      };
-
-      const taskDocs = readTasksDir(dirs.boardDir);
-      for (const doc of taskDocs) {
-        const t = doc.task;
-        if (column && t.column !== column) continue;
-        if (priority && t.priority !== priority) continue;
-        if (assignee && t.assignee !== assignee) continue;
-
-        const score = scoreDoc(doc, false);
-        if (score > 0) {
-          matches.push({ id: t.id, title: t.title, column: t.column, priority: t.priority, tags: t.tags, assignee: t.assignee, score });
-        }
+        matches.push({ id: t.id, title: t.title, column: t.column, priority: t.priority, tags: t.tags, assignee: t.assignee, score });
       }
 
       if (!column) {
-        const logDocs = readTasksDir(dirs.logsDir);
-        for (const doc of logDocs) {
+        const logMatches = searchTasksRanked(readTasksDir(dirs.logsDir), query, { priority, assignee });
+        for (const { doc, score } of logMatches) {
           const t = doc.task;
-          if (priority && t.priority !== priority) continue;
-          if (assignee && t.assignee !== assignee) continue;
-
-          const score = scoreDoc(doc, true);
-          if (score > 0) {
-            matches.push({ id: t.id, title: t.title, column: 'Completed', priority: t.priority, tags: t.tags, assignee: t.assignee, score, isLog: true });
-          }
+          matches.push({ id: t.id, title: t.title, column: 'Completed', priority: t.priority, tags: t.tags, assignee: t.assignee, score, isLog: true });
         }
       }
 

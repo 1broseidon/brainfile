@@ -3,8 +3,9 @@ import { z } from 'zod';
 import * as path from 'path';
 import {
   readTaskFile as coreReadTaskFile,
-  writeTaskFile as coreWriteTaskFile,
+  patchTaskFile,
   taskFileName,
+  type TaskFilePatch,
 } from '@brainfile/core';
 import { getV2Dirs } from '../../utils/v2-detect';
 import { requireV2 } from '../helpers';
@@ -14,7 +15,7 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
     'task_patch',
     {
       title: 'Patch Task',
-      description: 'Update specific fields of a task. Set fields to null to remove them.',
+      description: 'Update specific fields of a task. Set fields to null to remove them. Set parentId to a plan ID to link a task to the plan it implements.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to update'),
@@ -54,17 +55,23 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
           continue;
         }
 
-        const t = doc.task;
-        if (title !== undefined) t.title = title;
-        if (description !== undefined) { if (isNull(description)) delete t.description; else t.description = description as string; }
-        if (priority !== undefined) { if (isNull(priority)) delete t.priority; else t.priority = priority as any; }
-        if (tags !== undefined) { if (isNull(tags)) delete t.tags; else t.tags = tags as string[]; }
-        if (assignee !== undefined) { if (isNull(assignee)) delete t.assignee; else t.assignee = assignee as string; }
-        if (dueDate !== undefined) { if (isNull(dueDate)) delete t.dueDate; else t.dueDate = dueDate as string; }
-        if (relatedFiles !== undefined) { if (isNull(relatedFiles)) delete t.relatedFiles; else t.relatedFiles = relatedFiles as string[]; }
-        if (parentId !== undefined) { if (isNull(parentId)) delete t.parentId; else t.parentId = parentId as string; }
-        t.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(taskPath, t, doc.body);
+        const nullable = <T>(v: T | null | undefined): T | null | undefined =>
+          v === undefined ? undefined : (isNull(v) ? null : (v as T));
+
+        const result = patchTaskFile(taskPath, {
+          title,
+          description: nullable(description),
+          priority: nullable(priority) as TaskFilePatch['priority'],
+          tags: nullable(tags),
+          assignee: nullable(assignee),
+          dueDate: nullable(dueDate),
+          relatedFiles: nullable(relatedFiles),
+          parentId: nullable(parentId),
+        });
+        if (!result.success) {
+          results.push({ taskId: id, success: false, error: result.error || 'Task not found' });
+          continue;
+        }
         results.push({ taskId: id, success: true });
       }
 

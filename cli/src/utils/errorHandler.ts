@@ -1,5 +1,6 @@
 import chalk from 'chalk';
-import type { Board, Column, Task } from '@brainfile/core';
+import type { Board, Column, Task, IncompleteSubtasksResult } from '@brainfile/core';
+import { getIncompleteSubtasksSummary } from '@brainfile/core';
 
 // ============================================================================
 // Exit Codes
@@ -53,34 +54,15 @@ export function isDoneColumn(column: { id: string; title: string }): boolean {
 // Incomplete Subtasks Check
 // ============================================================================
 
-export interface IncompleteSubtasksResult {
-  hasIncomplete: boolean;
-  completed: number;
-  total: number;
-  incomplete: Array<{ id: string; title: string }>;
-}
+export type { IncompleteSubtasksResult };
 
 /**
  * Checks a task for incomplete subtasks.
+ *
+ * Thin alias over core's `getIncompleteSubtasksSummary` — kept for the
+ * CLI's historical import name.
  */
-export function checkIncompleteSubtasks(task: Task): IncompleteSubtasksResult {
-  if (!task.subtasks || task.subtasks.length === 0) {
-    return { hasIncomplete: false, completed: 0, total: 0, incomplete: [] };
-  }
-
-  const incomplete = task.subtasks
-    .filter(st => !st.completed)
-    .map(st => ({ id: st.id, title: st.title }));
-
-  const completed = task.subtasks.length - incomplete.length;
-
-  return {
-    hasIncomplete: incomplete.length > 0,
-    completed,
-    total: task.subtasks.length,
-    incomplete,
-  };
-}
+export const checkIncompleteSubtasks = getIncompleteSubtasksSummary;
 
 /**
  * Prints a warning about incomplete subtasks when moving to a done column.

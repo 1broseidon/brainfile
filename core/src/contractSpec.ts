@@ -1,4 +1,13 @@
-import type { Contract, Deliverable } from '@brainfile/core';
+/**
+ * Contract specification helpers.
+ *
+ * Pure parsing/building functions over `Contract`/`Deliverable` shapes.
+ * No filesystem or CLI dependencies — safe to use from any frontend.
+ *
+ * @packageDocumentation
+ */
+
+import type { Contract, ContractStatus, Deliverable } from './types/contract';
 
 export const ALLOWED_DELIVERABLE_TYPES = ['file', 'test', 'docs', 'design', 'research'] as const;
 export type AllowedDeliverableType = (typeof ALLOWED_DELIVERABLE_TYPES)[number];
@@ -61,7 +70,7 @@ export function buildContract(params: {
   validationCommands?: string | string[];
   constraints?: string | string[];
   /** Contract status — defaults to 'draft'. Pass 'ready' to make immediately dispatchable. */
-  status?: import('@brainfile/core').ContractStatus;
+  status?: ContractStatus;
 }): Contract {
   const deliverableSpecs = normalizeToArray(params.deliverableSpecs);
   const validationCommands = normalizeToArray(params.validationCommands).map((c) => c.trim()).filter(Boolean);
@@ -76,7 +85,7 @@ export function buildContract(params: {
     ...(validationCommands.length > 0 ? { validation: { commands: validationCommands } } : {}),
     ...(constraints.length > 0 ? { constraints } : {}),
     ...(status === 'ready'
-      ? { metrics: { readyAt: new Date().toISOString() } as Contract['metrics'] }
+      ? { metrics: { readyAt: new Date().toISOString() } }
       : {}),
   };
 

@@ -73,6 +73,8 @@ export interface ContractMetrics {
   deliveredAt?: string;
   duration?: number;
   reworkCount?: number;
+  /** ISO timestamp when a draft contract's status flipped to 'ready'. */
+  readyAt?: string;
 }
 
 export interface Contract {

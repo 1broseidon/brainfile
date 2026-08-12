@@ -1,7 +1,8 @@
 import {
-  writeTaskFile,
-  generateNextSubtaskId,
-  type Subtask,
+  addSubtasksToFile,
+  deleteSubtasksFromFile,
+  toggleSubtasksInFile,
+  updateSubtasksInFile,
 } from '@brainfile/core';
 import chalk from 'chalk';
 import {
@@ -68,12 +69,12 @@ function subtaskCommandV2(options: SubtaskOptions, brainfilePath: string) {
 
   // Handle add
   if (options.add) {
-    const existingIds = (task.subtasks || []).map(st => st.id);
-    const newId = generateNextSubtaskId(task.id, existingIds);
-    const newSubtask: Subtask = { id: newId, title: options.add, completed: false };
-    task.subtasks = [...(task.subtasks || []), newSubtask];
-    writeTaskFile(filePath, task, doc.body);
-    console.log(chalk.green(`Subtask added: ${newId} - ${options.add}`));
+    const result = addSubtasksToFile(filePath, [options.add]);
+    if (!result.success || !result.affected?.length) {
+      validationError(result.error || `Failed to add subtask to ${options.task}`);
+    }
+    const added = result.affected![0];
+    console.log(chalk.green(`Subtask added: ${added.id} - ${added.title}`));
     return;
   }
 
@@ -84,13 +85,12 @@ function subtaskCommandV2(options: SubtaskOptions, brainfilePath: string) {
 
   // Handle delete
   if (options.delete) {
-    const subtask = task.subtasks!.find(st => st.id === options.delete);
-    if (!subtask) {
+    const result = deleteSubtasksFromFile(filePath, [options.delete]);
+    if (!result.success || !result.affected?.length) {
       subtaskNotFoundError(options.delete!, task);
     }
-    task.subtasks = task.subtasks!.filter(st => st.id !== options.delete);
-    writeTaskFile(filePath, task, doc.body);
-    console.log(chalk.green(`Subtask deleted: ${options.delete} - ${subtask!.title}`));
+    const deleted = result.affected![0];
+    console.log(chalk.green(`Subtask deleted: ${deleted.id} - ${deleted.title}`));
     return;
   }
 
@@ -99,30 +99,22 @@ function subtaskCommandV2(options: SubtaskOptions, brainfilePath: string) {
     if (!options.title) {
       missingRequiredError('--title', 'brainfile subtask --task <task-id> --update <subtask-id> --title "New title"');
     }
-    const subtask = task.subtasks!.find(st => st.id === options.update);
-    if (!subtask) {
+    const oldTitle = task.subtasks!.find(st => st.id === options.update)?.title;
+    const result = updateSubtasksInFile(filePath, [{ id: options.update, title: options.title! }]);
+    if (!result.success || !result.affected?.length) {
       subtaskNotFoundError(options.update!, task);
     }
-    const oldTitle = subtask!.title;
-    task.subtasks = task.subtasks!.map(st =>
-      st.id === options.update ? { ...st, title: options.title! } : st
-    );
-    writeTaskFile(filePath, task, doc.body);
     console.log(chalk.green(`Subtask updated: ${options.update}\n  "${oldTitle}" → "${options.title}"`));
     return;
   }
 
   // Handle toggle
   if (options.toggle) {
-    const subtask = task.subtasks!.find(st => st.id === options.toggle);
-    if (!subtask) {
+    const result = toggleSubtasksInFile(filePath, [options.toggle]);
+    if (!result.success || !result.affected?.length) {
       subtaskNotFoundError(options.toggle!, task);
     }
-    const newStatus = !subtask!.completed ? 'completed' : 'incomplete';
-    task.subtasks = task.subtasks!.map(st =>
-      st.id === options.toggle ? { ...st, completed: !st.completed } : st
-    );
-    writeTaskFile(filePath, task, doc.body);
+    const newStatus = result.affected![0].completed ? 'completed' : 'incomplete';
     console.log(chalk.green(`Subtask ${options.toggle} marked as ${newStatus}`));
     return;
   }

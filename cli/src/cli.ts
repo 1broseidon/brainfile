@@ -56,6 +56,13 @@ import { schemaCommand, SCHEMA_COMMAND_HELP } from './commands/schema';
 import { rulesCommand, RULES_COMMAND_HELP } from './commands/rules';
 import { adrPromoteCommand, ADR_COMMAND_HELP } from './commands/adr';
 import {
+  planAddCommand,
+  planListCommand,
+  planShowCommand,
+  planLinkCommand,
+  PLAN_COMMAND_HELP,
+} from './commands/plan';
+import {
   typesListCommand,
   typesAddCommand,
   parseBooleanFlag,
@@ -67,7 +74,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'adr', 'types', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'rules', 'adr', 'plan', 'types', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -528,6 +535,47 @@ Brainfile file resolution (when you don't pass --file):
     .option('--parent <id>', 'Activate all draft contracts whose parentId matches this value')
     .action((options) => { contractActivateCommand(options); });
   contractActivateCmd.addHelpText('after', `\n${CONTRACT_ACTIVATE_HELP}`);
+
+  // Add plan command group (first-class plan documents)
+  const planCmd = program
+    .command('plan')
+    .description('Manage first-class plan documents');
+  planCmd.addHelpText('after', `\n${PLAN_COMMAND_HELP}`);
+
+  planCmd
+    .command('add')
+    .description('Create a new plan document')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --title <title>', 'Plan title (required)')
+    .option('-c, --column <id>', 'Column to place the plan in (default: todo)')
+    .option('--description <text>', 'Plan description (written to the markdown body)')
+    .option('--tags <tags>', 'Comma-separated tags')
+    .option('--parent <id>', 'Parent plan or epic ID')
+    .option('--status <status>', 'Free-form status (e.g. draft, active, superseded)')
+    .action((options) => { planAddCommand(options); });
+
+  planCmd
+    .command('list')
+    .description('List plan documents')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--status <status>', 'Filter by free-form status')
+    .action((options) => { planListCommand(options); });
+
+  planCmd
+    .command('show')
+    .description('Show a plan document')
+    .argument('<plan-id>', 'Plan ID to show')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output in JSON format')
+    .action((planId, options) => { planShowCommand({ ...options, plan: planId }); });
+
+  planCmd
+    .command('link')
+    .description('Link a task to a plan (sets the task\'s parentId)')
+    .argument('<plan-id>', 'Plan ID to link to')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-t, --task <id>', 'Task ID to link (required)')
+    .action((planId, options) => { planLinkCommand({ ...options, plan: planId }); });
 
   // Add schema command
   const schemaCmd = program

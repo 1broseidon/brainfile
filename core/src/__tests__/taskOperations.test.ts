@@ -12,6 +12,15 @@ import {
   searchTaskFiles,
   searchLogs,
   generateNextFileTaskId,
+  moveTaskFileToColumn,
+  patchTaskFile,
+  addSubtasksToFile,
+  deleteSubtasksFromFile,
+  toggleSubtasksInFile,
+  updateSubtasksInFile,
+  attachTaskContract,
+  activateTaskContract,
+  activateTaskContractsByParent,
   pickupTaskContract,
   deliverTaskContract,
   completeTaskContract,
@@ -20,7 +29,7 @@ import {
   DEFAULT_CONTRACT_COLUMN_MAP,
 } from '../taskOperations';
 import { writeTaskFile, readTaskFile } from '../taskFile';
-import type { Task } from '../types';
+import type { BoardConfig, Task } from '../types';
 import type { Contract } from '../types/contract';
 
 describe('taskOperations', () => {
@@ -507,7 +516,8 @@ describe('taskOperations', () => {
         subtasks: [{ id: 'task-999', title: 'stale ref', completed: false }],
       });
 
-      const result = completeTaskFile(epicPath, logsDir, { legacyMode: true });
+      // task-10 is an active parentId-linked child, so the epic gate requires force.
+      const result = completeTaskFile(epicPath, logsDir, { legacyMode: true, force: true });
       expect(result.success).toBe(true);
 
       const doc = readTaskFile(path.join(logsDir, 'epic-1.md'));
@@ -1027,6 +1037,580 @@ describe('taskOperations', () => {
       const task: Task = { id: 'task-1', title: 'Test' };
 
       expect(getEffectiveState(task)).toBe('unknown');
+    });
+  });
+
+  // ==========================================================================
+  // moveTaskFileToColumn
+  // ==========================================================================
+
+  describe('moveTaskFileToColumn', () => {
+    const dirs = () => ({
+      dotDir: testDir,
+      boardDir: tasksDir,
+      logsDir,
+      brainfilePath: path.join(testDir, 'brainfile.md'),
+    });
+
+    const board = (overrides?: Partial<BoardConfig>): BoardConfig => ({
+      title: 'Test Board',
+      columns: [
+        { id: 'todo', title: 'To Do' },
+        { id: 'in-progress', title: 'In Progress' },
+        { id: 'done', title: 'Done', completionColumn: true },
+      ],
+      ...overrides,
+    }) as BoardConfig;
+
+    it('resolves the target column by id', () => {
+      seedTask('task-1', 'todo');
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-1', 'in-progress');
+
+      expect(result.success).toBe(true);
+      expect(result.column!.id).toBe('in-progress');
+      expect(result.task!.column).toBe('in-progress');
+    });
+
+    it('resolves the target column by title, case-insensitively', () => {
+      seedTask('task-1', 'todo');
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-1', 'in progress');
+
+      expect(result.success).toBe(true);
+      expect(result.column!.id).toBe('in-progress');
+    });
+
+    it('rejects an unknown column on a strict board', () => {
+      seedTask('task-1', 'todo');
+      const result = moveTaskFileToColumn(dirs(), board({ strict: true }), 'task-1', 'nope');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("Column 'nope' is not defined");
+    });
+
+    it('falls back to the raw column id on a non-strict board', () => {
+      seedTask('task-1', 'todo');
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-1', 'staging');
+
+      expect(result.success).toBe(true);
+      expect(result.column).toEqual({ id: 'staging', title: 'staging' });
+      expect(readTaskFile(path.join(tasksDir, 'task-1.md'))!.task.column).toBe('staging');
+    });
+
+    it('reports a no-op without writing when already in the target column', () => {
+      const filePath = seedTask('task-1', 'todo');
+      const before = fs.readFileSync(filePath, 'utf-8');
+
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-1', 'todo');
+
+      expect(result.success).toBe(true);
+      expect(result.noop).toBe(true);
+      expect(fs.readFileSync(filePath, 'utf-8')).toBe(before);
+    });
+
+    it('fails when the task does not exist', () => {
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-99', 'in-progress');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task not found: task-99');
+    });
+
+    it('defaults position to the end of the target column', () => {
+      seedTask('task-1', 'in-progress', { position: 0 });
+      seedTask('task-2', 'in-progress', { position: 1 });
+      seedTask('task-3', 'todo');
+
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-3', 'in-progress');
+
+      expect(result.task!.position).toBe(2);
+    });
+
+    it('respects an explicit position override', () => {
+      seedTask('task-1', 'in-progress', { position: 0 });
+      seedTask('task-2', 'todo');
+
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-2', 'in-progress', { position: 7 });
+
+      expect(result.task!.position).toBe(7);
+    });
+
+    it('auto-completes a completable task moved to a completion column', () => {
+      seedTask('task-1', 'todo');
+
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-1', 'done');
+
+      expect(result.success).toBe(true);
+      expect(result.autoCompleted).toBe(true);
+      expect(result.task!.completedAt).toBeDefined();
+      expect(fs.existsSync(path.join(tasksDir, 'task-1.md'))).toBe(false);
+    });
+
+    it('writes an auto-completed task into logs/ as markdown, not just the ledger', () => {
+      seedTask('task-1', 'todo', {}, '## Description\nFindable later\n');
+
+      moveTaskFileToColumn(dirs(), board(), 'task-1', 'done');
+
+      const logDoc = readTaskFile(path.join(logsDir, 'task-1.md'));
+      expect(logDoc).not.toBeNull();
+      expect(logDoc!.task.completedAt).toBeDefined();
+      expect(logDoc!.body).toContain('Findable later');
+    });
+
+    it('skips auto-complete for a non-completable type', () => {
+      seedTask('adr-1', 'todo', { type: 'adr' });
+      const cfg = board({ types: { adr: { idPrefix: 'adr', completable: false } } });
+
+      const result = moveTaskFileToColumn(dirs(), cfg, 'adr-1', 'done');
+
+      expect(result.success).toBe(true);
+      expect(result.autoCompleted).toBeUndefined();
+      expect(fs.existsSync(path.join(tasksDir, 'adr-1.md'))).toBe(true);
+    });
+
+    it('skips auto-complete when skipAutoComplete is set', () => {
+      seedTask('task-1', 'todo');
+
+      const result = moveTaskFileToColumn(dirs(), board(), 'task-1', 'done', { skipAutoComplete: true });
+
+      expect(result.success).toBe(true);
+      expect(result.autoCompleted).toBeUndefined();
+      expect(fs.existsSync(path.join(tasksDir, 'task-1.md'))).toBe(true);
+    });
+  });
+
+  // ==========================================================================
+  // patchTaskFile
+  // ==========================================================================
+
+  describe('patchTaskFile', () => {
+    it('assigns a new title', () => {
+      const filePath = seedTask('task-1', 'todo');
+      const result = patchTaskFile(filePath, { title: 'Renamed' });
+
+      expect(result.success).toBe(true);
+      expect(readTaskFile(filePath)!.task.title).toBe('Renamed');
+    });
+
+    it.each([
+      ['description', 'A description'],
+      ['assignee', 'alice'],
+      ['dueDate', '2026-01-01'],
+      ['parentId', 'epic-1'],
+      ['status', 'active'],
+    ] as const)('sets and clears %s', (field, value) => {
+      const filePath = seedTask('task-1', 'todo');
+
+      patchTaskFile(filePath, { [field]: value } as any);
+      expect(readTaskFile(filePath)!.task[field]).toBe(value);
+
+      patchTaskFile(filePath, { [field]: null } as any);
+      expect(readTaskFile(filePath)!.task[field]).toBeUndefined();
+    });
+
+    it('sets and clears priority', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      patchTaskFile(filePath, { priority: 'high' });
+      expect(readTaskFile(filePath)!.task.priority).toBe('high');
+
+      patchTaskFile(filePath, { priority: null });
+      expect(readTaskFile(filePath)!.task.priority).toBeUndefined();
+    });
+
+    it('sets and clears tags', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      patchTaskFile(filePath, { tags: ['a', 'b'] });
+      expect(readTaskFile(filePath)!.task.tags).toEqual(['a', 'b']);
+
+      patchTaskFile(filePath, { tags: null });
+      expect(readTaskFile(filePath)!.task.tags).toBeUndefined();
+    });
+
+    it('sets and clears relatedFiles', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      patchTaskFile(filePath, { relatedFiles: ['src/a.ts'] });
+      expect(readTaskFile(filePath)!.task.relatedFiles).toEqual(['src/a.ts']);
+
+      patchTaskFile(filePath, { relatedFiles: null });
+      expect(readTaskFile(filePath)!.task.relatedFiles).toBeUndefined();
+    });
+
+    it('leaves absent fields untouched and stamps updatedAt', () => {
+      const filePath = seedTask('task-1', 'todo', { assignee: 'bob', priority: 'low' });
+
+      patchTaskFile(filePath, { priority: 'high' });
+
+      const task = readTaskFile(filePath)!.task;
+      expect(task.assignee).toBe('bob');
+      expect(task.updatedAt).toBeDefined();
+    });
+
+    it('fails for a non-existent file', () => {
+      const result = patchTaskFile(path.join(tasksDir, 'nope.md'), { title: 'x' });
+      expect(result.success).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // Subtask file mutators
+  // ==========================================================================
+
+  describe('subtask file mutators', () => {
+    const seedWithSubtasks = (subtasks: Array<{ id: string; title: string; completed?: boolean }>) =>
+      seedTask('task-1', 'todo', {
+        subtasks: subtasks.map((st) => ({ completed: false, ...st })),
+      });
+
+    it('addSubtasksToFile allocates canonical sequential IDs', () => {
+      const filePath = seedWithSubtasks([
+        { id: 'task-1-1', title: 'First' },
+        { id: 'task-1-3', title: 'Third' },
+      ]);
+
+      const result = addSubtasksToFile(filePath, ['Fourth', 'Fifth']);
+
+      expect(result.success).toBe(true);
+      expect(result.affected!.map((st) => st.id)).toEqual(['task-1-4', 'task-1-5']);
+      expect(result.subtasks).toHaveLength(4);
+    });
+
+    it('addSubtasksToFile initializes the array when absent', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      const result = addSubtasksToFile(filePath, ['Only one']);
+
+      expect(result.success).toBe(true);
+      expect(result.affected![0].id).toBe('task-1-1');
+    });
+
+    it('addSubtasksToFile rejects an empty title list', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      const result = addSubtasksToFile(filePath, ['   ', '']);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('No subtask titles provided');
+    });
+
+    it('deleteSubtasksFromFile removes every subtask when passed all', () => {
+      const filePath = seedWithSubtasks([
+        { id: 'task-1-1', title: 'A' },
+        { id: 'task-1-2', title: 'B' },
+      ]);
+
+      const result = deleteSubtasksFromFile(filePath, 'all');
+
+      expect(result.success).toBe(true);
+      expect(result.subtasks).toEqual([]);
+      expect(result.affected).toHaveLength(2);
+    });
+
+    it('deleteSubtasksFromFile tolerates partial batches and reports missing', () => {
+      const filePath = seedWithSubtasks([{ id: 'task-1-1', title: 'A' }]);
+
+      const result = deleteSubtasksFromFile(filePath, ['task-1-1', 'task-1-9']);
+
+      expect(result.success).toBe(true);
+      expect(result.affected!.map((st) => st.id)).toEqual(['task-1-1']);
+      expect(result.missing).toEqual(['task-1-9']);
+    });
+
+    it('deleteSubtasksFromFile fails when nothing matched', () => {
+      const filePath = seedWithSubtasks([{ id: 'task-1-1', title: 'A' }]);
+
+      const result = deleteSubtasksFromFile(filePath, ['task-1-9']);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Subtask not found: task-1-9');
+    });
+
+    it('toggleSubtasksInFile forces an explicit completed value', () => {
+      const filePath = seedWithSubtasks([
+        { id: 'task-1-1', title: 'A', completed: true },
+        { id: 'task-1-2', title: 'B', completed: false },
+      ]);
+
+      const result = toggleSubtasksInFile(filePath, 'all', true);
+
+      expect(result.subtasks!.every((st) => st.completed)).toBe(true);
+    });
+
+    it('toggleSubtasksInFile flips each target independently when completed is omitted', () => {
+      const filePath = seedWithSubtasks([
+        { id: 'task-1-1', title: 'A', completed: true },
+        { id: 'task-1-2', title: 'B', completed: false },
+      ]);
+
+      const result = toggleSubtasksInFile(filePath, 'all');
+
+      expect(result.subtasks!.map((st) => st.completed)).toEqual([false, true]);
+    });
+
+    it('updateSubtasksInFile renames a batch', () => {
+      const filePath = seedWithSubtasks([
+        { id: 'task-1-1', title: 'A' },
+        { id: 'task-1-2', title: 'B' },
+      ]);
+
+      const result = updateSubtasksInFile(filePath, [
+        { id: 'task-1-1', title: 'A2' },
+        { id: 'task-1-2', title: 'B2' },
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(result.subtasks!.map((st) => st.title)).toEqual(['A2', 'B2']);
+    });
+
+    it('updateSubtasksInFile applies partial matches and reports missing', () => {
+      const filePath = seedWithSubtasks([{ id: 'task-1-1', title: 'A' }]);
+
+      const result = updateSubtasksInFile(filePath, [
+        { id: 'task-1-1', title: 'A2' },
+        { id: 'task-1-9', title: 'ghost' },
+      ]);
+
+      expect(result.success).toBe(true);
+      expect(result.missing).toEqual(['task-1-9']);
+    });
+
+    it('rejects delete/toggle/update on a task with no subtasks', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      expect(deleteSubtasksFromFile(filePath, 'all').success).toBe(false);
+      expect(toggleSubtasksInFile(filePath, 'all').success).toBe(false);
+      expect(updateSubtasksInFile(filePath, [{ id: 'task-1-1', title: 'x' }]).success).toBe(false);
+    });
+  });
+
+  // ==========================================================================
+  // completeTaskFile epic gate
+  // ==========================================================================
+
+  describe('completeTaskFile epic gate', () => {
+    it('blocks on an active parentId-linked child', () => {
+      seedTask('task-10', 'todo', { title: 'Linked child', parentId: 'epic-1' });
+      const epicPath = seedTask('epic-1', 'done', { type: 'epic' });
+
+      const result = completeTaskFile(epicPath, logsDir, { legacyMode: true });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('1 incomplete child task(s)');
+      expect(result.incompleteChildren).toEqual([{ id: 'task-10', title: 'Linked child' }]);
+      expect(fs.existsSync(epicPath)).toBe(true);
+    });
+
+    it('blocks on an active subtasks-array-referenced child', () => {
+      seedTask('task-10', 'todo', { title: 'Referenced child' });
+      const epicPath = seedTask('epic-1', 'done', {
+        type: 'epic',
+        subtasks: [{ id: 'task-10', title: 'ref', completed: false }],
+      });
+
+      const result = completeTaskFile(epicPath, logsDir, { legacyMode: true });
+
+      expect(result.success).toBe(false);
+      expect(result.incompleteChildren!.map((c) => c.id)).toEqual(['task-10']);
+    });
+
+    it('completes with force and reports incompleteChildren on success', () => {
+      seedTask('task-10', 'todo', { title: 'Linked child', parentId: 'epic-1' });
+      const epicPath = seedTask('epic-1', 'done', { type: 'epic' });
+
+      const result = completeTaskFile(epicPath, logsDir, { legacyMode: true, force: true });
+
+      expect(result.success).toBe(true);
+      expect(result.incompleteChildren!.map((c) => c.id)).toEqual(['task-10']);
+      expect(fs.existsSync(epicPath)).toBe(false);
+    });
+
+    it('never blocks on completed or missing children', () => {
+      seedLogTask('task-10', { title: 'Done child', parentId: 'epic-1' });
+      const epicPath = seedTask('epic-1', 'done', { type: 'epic' });
+
+      const result = completeTaskFile(epicPath, logsDir, { legacyMode: true });
+
+      expect(result.success).toBe(true);
+      expect(result.incompleteChildren).toBeUndefined();
+    });
+
+    it('skips the gate entirely for non-epic types', () => {
+      seedTask('task-10', 'todo', { title: 'Child', parentId: 'task-1' });
+      const parentPath = seedTask('task-1', 'done');
+
+      const result = completeTaskFile(parentPath, logsDir, { legacyMode: true });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('records child status labels in the legacy child summary', () => {
+      seedTask('task-10', 'todo', { title: 'Active child', parentId: 'epic-1' });
+      seedLogTask('task-11', { title: 'Done child', parentId: 'epic-1' });
+      const epicPath = seedTask('epic-1', 'done', { type: 'epic' });
+
+      completeTaskFile(epicPath, logsDir, { legacyMode: true, force: true });
+
+      const body = readTaskFile(path.join(logsDir, 'epic-1.md'))!.body;
+      expect(body).toContain('Summary: 1/2 children completed.');
+      expect(body).toContain('- task-10: Active child (incomplete)');
+      expect(body).toContain('- task-11: Done child (completed)');
+    });
+
+    it('force still writes the completed markdown in legacy mode', () => {
+      seedTask('task-10', 'todo', { title: 'Active child', parentId: 'epic-1' });
+      const epicPath = seedTask('epic-1', 'done', { type: 'epic' });
+
+      completeTaskFile(epicPath, logsDir, { legacyMode: true, force: true });
+
+      expect(readTaskFile(path.join(logsDir, 'epic-1.md'))).not.toBeNull();
+    });
+  });
+
+  // ==========================================================================
+  // addTaskFile additions
+  // ==========================================================================
+
+  describe('addTaskFile additive fields', () => {
+    it('auto-computes position to the end of the column when omitted', () => {
+      seedTask('task-1', 'todo', { position: 0 });
+      seedTask('task-2', 'todo', { position: 1 });
+
+      const result = addTaskFile(tasksDir, { title: 'Third', column: 'todo' });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.position).toBe(2);
+    });
+
+    it('persists a contract passed at creation time', () => {
+      const contract: Contract = { status: 'draft', constraints: ['Be careful'] };
+
+      const result = addTaskFile(tasksDir, { title: 'With contract', column: 'todo', contract });
+
+      expect(result.success).toBe(true);
+      expect(readTaskFile(result.filePath!)!.task.contract).toEqual(contract);
+    });
+
+    it('persists a free-form status field', () => {
+      const result = addTaskFile(tasksDir, {
+        title: 'A plan',
+        column: 'todo',
+        type: 'plan',
+        status: 'draft',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.id).toBe('plan-1');
+      expect(readTaskFile(result.filePath!)!.task.status).toBe('draft');
+    });
+  });
+
+  // ==========================================================================
+  // TaskFilters.type
+  // ==========================================================================
+
+  describe('listTasks type filter', () => {
+    it('returns only documents of the requested type', () => {
+      seedTask('task-1', 'todo');
+      seedTask('plan-1', 'todo', { type: 'plan' });
+      seedTask('epic-1', 'todo', { type: 'epic' });
+
+      const plans = listTasks(tasksDir, { type: 'plan' });
+
+      expect(plans.map((d) => d.task.id)).toEqual(['plan-1']);
+    });
+
+    it('treats untyped documents as type "task"', () => {
+      seedTask('task-1', 'todo');
+      seedTask('plan-1', 'todo', { type: 'plan' });
+
+      const tasks = listTasks(tasksDir, { type: 'task' });
+
+      expect(tasks.map((d) => d.task.id)).toEqual(['task-1']);
+    });
+  });
+
+  // ==========================================================================
+  // Contract attach / activate
+  // ==========================================================================
+
+  describe('attachTaskContract', () => {
+    it('builds a draft contract by default', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      const result = attachTaskContract(filePath, { deliverableSpecs: 'file:src/a.ts:Impl' });
+
+      expect(result.success).toBe(true);
+      expect(result.task!.contract!.status).toBe('draft');
+      expect(result.task!.contract!.deliverables).toEqual([
+        { type: 'file', path: 'src/a.ts', description: 'Impl' },
+      ]);
+    });
+
+    it('builds a ready contract when ready is set', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      const result = attachTaskContract(filePath, { ready: true });
+
+      expect(result.task!.contract!.status).toBe('ready');
+      expect(result.task!.contract!.metrics!.readyAt).toBeDefined();
+    });
+
+    it('propagates an invalid deliverable spec as a thrown error', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      expect(() => attachTaskContract(filePath, { deliverableSpecs: 'bogus' })).toThrow(
+        /Invalid deliverable format/
+      );
+    });
+  });
+
+  describe('activateTaskContract', () => {
+    it('rejects a task with no contract', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      const result = activateTaskContract(filePath);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-1 has no contract');
+    });
+
+    it('rejects a contract that is not in draft', () => {
+      const filePath = seedTask('task-1', 'todo', { contract: { status: 'ready' } });
+
+      const result = activateTaskContract(filePath);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not in draft status (current: ready)');
+    });
+
+    it('flips draft to ready and stamps metrics.readyAt', () => {
+      const filePath = seedTask('task-1', 'todo', { contract: { status: 'draft' } });
+
+      const result = activateTaskContract(filePath);
+
+      expect(result.success).toBe(true);
+      expect(result.task!.contract!.status).toBe('ready');
+      expect(result.task!.contract!.metrics!.readyAt).toBeDefined();
+      expect(readTaskFile(filePath)!.task.contract!.status).toBe('ready');
+    });
+  });
+
+  describe('activateTaskContractsByParent', () => {
+    it('activates only draft children and leaves other statuses untouched', () => {
+      seedTask('task-1', 'todo', { parentId: 'epic-1', contract: { status: 'draft' } });
+      seedTask('task-2', 'todo', { parentId: 'epic-1', contract: { status: 'in_progress' } });
+      seedTask('task-3', 'todo', { parentId: 'epic-2', contract: { status: 'draft' } });
+
+      const result = activateTaskContractsByParent(tasksDir, 'epic-1');
+
+      expect(result.activated).toEqual(['task-1']);
+      expect(readTaskFile(path.join(tasksDir, 'task-2.md'))!.task.contract!.status).toBe('in_progress');
+      expect(readTaskFile(path.join(tasksDir, 'task-3.md'))!.task.contract!.status).toBe('draft');
+    });
+
+    it('returns an empty array rather than failing when nothing matches', () => {
+      const result = activateTaskContractsByParent(tasksDir, 'epic-nope');
+      expect(result.activated).toEqual([]);
     });
   });
 

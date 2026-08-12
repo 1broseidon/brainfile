@@ -16,7 +16,7 @@ import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { readTasksDir, writeTaskFile, type TaskDocument } from '@brainfile/core';
+import { readTasksDir, writeTaskFile, scoreTaskDocument, type TaskDocument } from '@brainfile/core';
 import {
   isV2,
   getV2Dirs,
@@ -179,16 +179,10 @@ function searchLogs(dirs: V2Dirs, query: string, logger: Logger): LogResult {
 
   for (const doc of logDocs) {
     const task = doc.task;
-    const description = extractDescription(doc.body);
     const logContent = extractLog(doc.body);
-    const fullText = [
-      task.title,
-      task.description || '',
-      description || '',
-      logContent || '',
-    ].join(' ').toLowerCase();
 
-    if (fullText.includes(queryLower)) {
+    // Matching decision is core's; the match-context snippet below is presentation.
+    if (scoreTaskDocument(doc, queryLower) > 0) {
       // Find match context
       let matchContext = '';
       if (task.title.toLowerCase().includes(queryLower)) {

@@ -190,6 +190,35 @@ export function getTasksWithIncompleteSubtasks(board: Board): Task[] {
   );
 }
 
+export interface IncompleteSubtasksResult {
+  hasIncomplete: boolean;
+  completed: number;
+  total: number;
+  incomplete: Array<{ id: string; title: string }>;
+}
+
+/**
+ * Summarize a single task's subtask completion state.
+ * @param task - Task to inspect
+ * @returns Counts plus the list of incomplete subtasks
+ */
+export function getIncompleteSubtasksSummary(task: Task): IncompleteSubtasksResult {
+  if (!task.subtasks || task.subtasks.length === 0) {
+    return { hasIncomplete: false, completed: 0, total: 0, incomplete: [] };
+  }
+
+  const incomplete = task.subtasks
+    .filter((st) => !st.completed)
+    .map((st) => ({ id: st.id, title: st.title }));
+
+  return {
+    hasIncomplete: incomplete.length > 0,
+    completed: task.subtasks.length - incomplete.length,
+    total: task.subtasks.length,
+    incomplete,
+  };
+}
+
 /**
  * Find overdue tasks
  * @param board - Board to query

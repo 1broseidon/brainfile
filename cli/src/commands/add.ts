@@ -1,16 +1,16 @@
 import * as path from 'path';
 import {
-  writeTaskFile,
+  addTaskFile,
   readTaskFile,
   readTasksDir,
-  generateNextFileTaskId,
   taskFileName,
+  type Contract,
   type Task,
 } from '@brainfile/core';
 import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, missingRequired, columnNotFound, validationError, operationFailed } from '../utils/cli-error';
-import { buildContract, normalizeToArray } from '../utils/contractSpec';
+import { buildContract, normalizeToArray } from '@brainfile/core';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import {
   ensureV2Dirs,
@@ -90,10 +90,6 @@ function findActiveTaskById(boardDir: string, taskId: string): Task | null {
   return found?.task || null;
 }
 
-function nextPositionForColumn(boardDir: string, columnId: string): number {
-  return readTasksDir(boardDir).filter((doc) => doc.task.column === columnId).length;
-}
-
 function createV2TaskFile(
   dirs: { boardDir: string; logsDir: string },
   input: {
@@ -108,39 +104,33 @@ function createV2TaskFile(
     relatedFiles?: string[];
     subtaskTitles?: string[];
     parentId?: string;
-    contract?: unknown;
+    contract?: Contract;
   },
 ): Task {
-  const typePrefix = input.type || 'task';
-  const taskId = generateNextFileTaskId(dirs.boardDir, dirs.logsDir, typePrefix);
-  const position = nextPositionForColumn(dirs.boardDir, input.columnId);
+  const result = addTaskFile(
+    dirs.boardDir,
+    {
+      title: input.title,
+      column: input.columnId,
+      ...(input.type && input.type !== 'task' && { type: input.type }),
+      priority: input.priority,
+      tags: input.tags,
+      assignee: input.assignee,
+      dueDate: input.dueDate,
+      relatedFiles: input.relatedFiles,
+      subtasks: input.subtaskTitles?.map((t) => t.trim()).filter(Boolean),
+      parentId: input.parentId,
+      contract: input.contract,
+    },
+    composeBody(input.description),
+    dirs.logsDir,
+  );
 
-  const subtasks = input.subtaskTitles?.map((title, index) => ({
-    id: `${taskId}-${index + 1}`,
-    title: title.trim(),
-    completed: false,
-  })).filter((subtask) => subtask.title.length > 0);
+  if (!result.success || !result.task) {
+    throw operationFailed(result.error || `Failed to create task: ${input.title}`);
+  }
 
-  const task: Task & { parentId?: string } = {
-    id: taskId,
-    title: input.title,
-    ...(input.type && input.type !== 'task' && { type: input.type }),
-    column: input.columnId,
-    position,
-    ...(input.priority && { priority: input.priority }),
-    ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
-    ...(input.assignee && { assignee: input.assignee }),
-    ...(input.dueDate && { dueDate: input.dueDate }),
-    ...(input.relatedFiles && input.relatedFiles.length > 0 && { relatedFiles: input.relatedFiles }),
-    ...(subtasks && subtasks.length > 0 && { subtasks }),
-    ...(input.parentId && input.parentId.trim().length > 0 && { parentId: input.parentId.trim() }),
-    ...(input.contract ? { contract: input.contract as any } : {}),
-    createdAt: new Date().toISOString(),
-  };
-
-  const taskPath = path.join(dirs.boardDir, taskFileName(taskId));
-  writeTaskFile(taskPath, task, composeBody(input.description));
-  return task;
+  return result.task;
 }
 
 /**
@@ -204,7 +194,7 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
     validationCommands.length > 0 ||
     constraints.length > 0;
 
-  let contract: unknown;
+  let contract: Contract | undefined;
   if (shouldAttachContract) {
     try {
       contract = buildContract({

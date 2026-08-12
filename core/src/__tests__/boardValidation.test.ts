@@ -1,4 +1,4 @@
-import { getBoardTypes, validateColumn, validateType } from "../boardValidation";
+import { getBoardTypes, isTypeCompletable, validateColumn, validateType } from "../boardValidation";
 import type { BoardConfig } from "../types";
 
 function createBoard(overrides: Partial<BoardConfig> = {}): BoardConfig {
@@ -65,6 +65,25 @@ describe("boardValidation", () => {
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Column 'backlog' is not defined.");
       expect(result.error).toContain("Available columns: todo, done");
+    });
+  });
+
+  describe("isTypeCompletable", () => {
+    it("treats the implicit task type as always completable", () => {
+      expect(isTypeCompletable(undefined, undefined)).toBe(true);
+      expect(isTypeCompletable("task", { task: { idPrefix: "task", completable: false } })).toBe(true);
+    });
+
+    it("defaults a custom type to completable", () => {
+      expect(isTypeCompletable("epic", { epic: { idPrefix: "epic" } })).toBe(true);
+    });
+
+    it("honors completable: false on a custom type", () => {
+      expect(isTypeCompletable("adr", { adr: { idPrefix: "adr", completable: false } })).toBe(false);
+    });
+
+    it("defaults to completable when the types config is missing", () => {
+      expect(isTypeCompletable("plan", undefined)).toBe(true);
     });
   });
 

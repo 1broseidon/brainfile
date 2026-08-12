@@ -7,51 +7,6 @@ export interface McpOptions {
   file: string;
 }
 
-export interface TypeEntry {
-  idPrefix: string;
-  completable?: boolean;
-  schema?: string;
-}
-
-export type TypesConfig = Record<string, TypeEntry>;
-
-export function sanitizeTypesConfig(raw: unknown): TypesConfig {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {};
-  }
-
-  const out: TypesConfig = {};
-  for (const [name, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      continue;
-    }
-
-    const entry = value as Record<string, unknown>;
-    const idPrefix = typeof entry.idPrefix === 'string' && entry.idPrefix.trim()
-      ? entry.idPrefix.trim()
-      : name;
-
-    const normalized: TypeEntry = { idPrefix };
-    if (typeof entry.completable === 'boolean') normalized.completable = entry.completable;
-    if (typeof entry.schema === 'string' && entry.schema.trim()) normalized.schema = entry.schema.trim();
-
-    out[name] = normalized;
-  }
-
-  return out;
-}
-
-export function isTaskCompletable(taskType: string | undefined, rawTypes: unknown): boolean {
-  const resolvedType = taskType || 'task';
-  if (resolvedType === 'task') {
-    return true;
-  }
-
-  const types = sanitizeTypesConfig(rawTypes);
-  const typeConfig = types[resolvedType];
-  return typeConfig?.completable !== false;
-}
-
 export function resolveBrainfile(filePath: string): string {
   return path.resolve(filePath);
 }

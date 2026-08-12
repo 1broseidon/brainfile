@@ -1,13 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
-import * as path from 'path';
-import {
-  readTasksDir,
-  readTaskFile as coreReadTaskFile,
-  writeTaskFile as coreWriteTaskFile,
-  completeTaskFile as coreCompleteTaskFile,
-  taskFileName,
-} from '@brainfile/core';
+import { findTask, moveTaskFileToColumn } from '@brainfile/core';
 import {
   getV2Dirs,
 } from '../../utils/v2-detect';
@@ -16,7 +9,6 @@ import { mcpCheckIncompleteSubtasks } from '../../utils/errorHandler';
 import {
   requireV2,
   mcpStructuredError,
-  isTaskCompletable,
 } from '../helpers';
 
 export function registerTaskMoveTool(server: McpServer, defaultFile: string): void {
@@ -62,37 +54,21 @@ export function registerTaskMoveTool(server: McpServer, defaultFile: string): vo
         );
       }
       const resolvedTargetColumn: ColumnConfig = targetColumn || { id: column, title: column };
-      let nextPosition = readTasksDir(dirs.boardDir).filter(t => t.task.column === resolvedTargetColumn.id).length;
       const results: Array<{ taskId: string; success: boolean; message?: string; warning?: string; error?: string }> = [];
 
       for (const id of taskIds) {
-        const taskPath = path.join(dirs.boardDir, taskFileName(id));
-        const doc = coreReadTaskFile(taskPath);
-        if (!doc) {
-          results.push({ taskId: id, success: false, error: `Task not found: ${id}` });
+        const before = findTask(dirs.boardDir, id);
+        const sourceColumn = before?.task.column || '';
+
+        const result = moveTaskFileToColumn(dirs, board, id, column);
+        if (!result.success || !result.task) {
+          results.push({ taskId: id, success: false, error: result.error || `Failed to move task: ${id}` });
           continue;
         }
 
-        const sourceColumn = doc.task.column || '';
-        doc.task.column = resolvedTargetColumn.id;
-        doc.task.position = nextPosition++;
-        doc.task.updatedAt = new Date().toISOString();
-        coreWriteTaskFile(taskPath, doc.task, doc.body);
-
-        const shouldAutoComplete =
-          resolvedTargetColumn.completionColumn === true &&
-          isTaskCompletable(doc.task.type, board.types);
-        if (shouldAutoComplete) {
-          const completeResult = coreCompleteTaskFile(taskPath, dirs.logsDir);
-          if (!completeResult.success) {
-            results.push({ taskId: id, success: false, error: completeResult.error || `Failed to complete task: ${id}` });
-            continue;
-          }
-        }
-
-        const warning = mcpCheckIncompleteSubtasks(doc.task, resolvedTargetColumn);
+        const warning = mcpCheckIncompleteSubtasks(result.task, resolvedTargetColumn);
         let message = `Task ${id} moved from "${sourceColumn}" to "${resolvedTargetColumn.title}"`;
-        if (shouldAutoComplete) {
+        if (result.autoCompleted) {
           message += '\nTask auto-completed and moved to logs/.';
         }
         results.push({ taskId: id, success: true, message, warning: warning?.warning });

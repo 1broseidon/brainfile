@@ -13,6 +13,25 @@ export function getBoardTypes(board: BoardConfig): TypesConfig {
 }
 
 /**
+ * Returns whether a task of the given type may be auto-completed.
+ *
+ * The implicit `task` type is always completable. Any other type is
+ * completable unless its board config entry sets `completable: false`.
+ */
+export function isTypeCompletable(
+  taskType: string | undefined,
+  types: TypesConfig | undefined,
+): boolean {
+  const resolvedType = taskType || "task";
+  if (resolvedType === "task") {
+    return true;
+  }
+
+  const typeConfig = (types ?? {})[resolvedType];
+  return typeConfig?.completable !== false;
+}
+
+/**
  * Validates a type name against board config strict mode.
  */
 export function validateType(board: BoardConfig, typeName: string): BoardValidationResult {
