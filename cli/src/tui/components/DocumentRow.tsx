@@ -39,6 +39,11 @@ export function buildChips(row: DocRow): Chip[] {
   const chips: Chip[] = [];
   const { task } = row;
 
+  // Collapsed parent: `N hidden` leads, ahead of the usual precedence (§A1).
+  if (row.collapsed && row.childCount) {
+    chips.push({ text: `${row.childCount} hidden`, color: PALETTE.textMuted });
+  }
+
   const contractState = getContractState(task);
   if (contractState) {
     chips.push({ text: contractState, color: getContractStateColor(contractState) });
@@ -75,7 +80,15 @@ export interface DocumentRowProps {
 export function DocumentRow({ row, selected, width, idWidth }: DocumentRowProps) {
   const { task, depth, orphanParentId } = row;
 
-  const glyph = getTypeGlyph(task.type);
+  // Parents-with-children get the ▾/▸ collapse-state glyph in place of their
+  // type glyph; every other row (including a childless epic) keeps its type
+  // glyph unchanged (§A1).
+  const hasChildren = Boolean(row.childCount);
+  const glyph = hasChildren
+    ? row.collapsed
+      ? GLYPHS.parentCollapsed
+      : GLYPHS.parentExpanded
+    : getTypeGlyph(task.type);
   const indent = `${pad(1)}${pad(depth * 2)}`;
   const glyphCell = `${glyph || ' '} `;
   const idCell = `${task.id.padEnd(idWidth)}  `;

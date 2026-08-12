@@ -10,8 +10,15 @@ export type { DocumentRowProps } from './DocumentRow.js';
 export { DocumentList } from './DocumentList.js';
 export type { DocumentListProps } from './DocumentList.js';
 
-export { DetailView, buildBodyLines } from './DetailView.js';
-export type { DetailViewProps } from './DetailView.js';
+export {
+  DetailView,
+  buildBodyLines,
+  computeDetailLayout,
+  MAX_DELIVERABLES,
+  MAX_VALIDATION_COMMANDS,
+  MAX_ACTIVITY_ENTRIES,
+} from './DetailView.js';
+export type { DetailViewProps, DetailLayout } from './DetailView.js';
 
 export { HelpOverlay } from './HelpOverlay.js';
 export type { HelpOverlayProps } from './HelpOverlay.js';

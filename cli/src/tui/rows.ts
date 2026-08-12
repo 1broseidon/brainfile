@@ -19,6 +19,15 @@ export interface DocRow {
   depth: number;
   /** Parent id to surface as `← epic-1` when the parent is not a visible row. */
   orphanParentId?: string;
+  /**
+   * Number of direct children this doc has *in the current view* (whether or
+   * not they are currently rendered). `undefined`/0 means "not a parent" —
+   * DocumentRow uses this to decide whether the row gets the `▾`/`▸`
+   * collapse glyph instead of its type glyph (v3.1 §A1).
+   */
+  childCount?: number;
+  /** True when a parent-with-children row is currently collapsed. */
+  collapsed?: boolean;
 }
 
 /**
@@ -28,8 +37,13 @@ export interface DocRow {
  * beneath their parent. A document is only ever emitted once, and a `parentId`
  * cycle (or a document that is its own parent) cannot loop because emission is
  * tracked by id.
+ *
+ * `collapsedIds` (v3.1 §A1) suppresses a parent's children rows without
+ * removing the parent — the parent row instead carries `childCount` and
+ * `collapsed: true` so the row/chip layer can render the `▸` glyph and the
+ * `N hidden` chip.
  */
-export function buildRows(tasks: Task[]): DocRow[] {
+export function buildRows(tasks: Task[], collapsedIds?: ReadonlySet<string>): DocRow[] {
   const visibleIds = new Set(tasks.map((t) => t.id));
   const emitted = new Set<string>();
   const rows: DocRow[] = [];
@@ -53,13 +67,25 @@ export function buildRows(tasks: Task[]): DocRow[] {
     if (parentVisible) continue;
 
     emitted.add(task.id);
+    const children = childrenOf.get(task.id) ?? [];
+    const isCollapsed = children.length > 0 && Boolean(collapsedIds?.has(task.id));
+
     rows.push({
       task,
       depth: 0,
       orphanParentId: parentId && !parentVisible ? parentId : undefined,
+      childCount: children.length > 0 ? children.length : undefined,
+      collapsed: children.length > 0 ? isCollapsed : undefined,
     });
 
-    for (const child of childrenOf.get(task.id) ?? []) {
+    if (isCollapsed) {
+      // Hidden, not dropped: mark them emitted so the leftover/cycle pass
+      // below doesn't sweep them up as orphan roots.
+      for (const child of children) emitted.add(child.id);
+      continue;
+    }
+
+    for (const child of children) {
       if (emitted.has(child.id)) continue;
       emitted.add(child.id);
       rows.push({ task: child, depth: 1 });
@@ -75,6 +101,21 @@ export function buildRows(tasks: Task[]): DocRow[] {
   }
 
   return rows;
+}
+
+/**
+ * Flat render for an active type-cycle filter (v3.1 §A2): every matching doc
+ * at depth 0, with a `← parent` reference whenever `parentId` is set — even if
+ * the parent survives the same filter — rather than re-running the
+ * parent/child pull-up. "No orphan-parent indentation games": one rule
+ * instead of two overlapping hierarchy mechanisms.
+ */
+export function buildFlatRows(tasks: Task[]): DocRow[] {
+  return tasks.map((task) => ({
+    task,
+    depth: 0,
+    orphanParentId: task.parentId && task.parentId !== task.id ? task.parentId : undefined,
+  }));
 }
 
 /**

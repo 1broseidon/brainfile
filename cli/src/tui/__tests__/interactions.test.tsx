@@ -31,7 +31,9 @@ describe('filter', () => {
 
     const rule = headerRule(h);
     expect(rule).toContain('/p:high');
-    expect(rule).toContain('1/12 match "p:high"');
+    // Denominator is every document on the board (17: the original 12-doc
+    // fixture plus the 5-doc detail-v2 fixture added for §B1/§B2 tests).
+    expect(rule).toContain('1/17 match "p:high"');
 
     const frame = plain(h.frame());
     expect(frame).toContain('task-8');

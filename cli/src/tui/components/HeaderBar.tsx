@@ -29,6 +29,8 @@ export interface HeaderBarProps {
   totalCount?: number;
   /** Label shown instead of column tabs for the rules and logs panels. */
   panelLabel?: string;
+  /** Active type-cycle filter (§A2), e.g. `plan`. Omitted/`'all'` renders nothing. */
+  activeType?: string;
 }
 
 export function HeaderBar({
@@ -41,30 +43,37 @@ export function HeaderBar({
   matchCount,
   totalCount,
   panelLabel,
+  activeType,
 }: HeaderBarProps) {
   const affordances = '/ filter  ? help';
   const boardTitle = truncate(title, 24);
   const separator = ` ${GLYPHS.pointer} `;
+  const typeLabel = activeType && activeType !== 'all' ? ` · ${activeType}` : '';
 
   // Width of the tab strip, computed rather than measured so the affordances
   // can be right-aligned inside a single truncating Text row.
-  const tabsWidth = panelLabel
-    ? panelLabel.length
-    : columns.reduce((sum, column, index) => {
-        const active = index === activeColumnIndex;
-        return (
-          sum +
-          (index > 0 ? 3 : 0) +
-          `${column.title} ${column.tasks?.length ?? 0}`.length +
-          (active ? 1 : 0)
-        );
-      }, 0);
+  const tabsWidth =
+    (panelLabel
+      ? panelLabel.length
+      : columns.reduce((sum, column, index) => {
+          const active = index === activeColumnIndex;
+          return (
+            sum +
+            (index > 0 ? 3 : 0) +
+            `${column.title} ${column.tasks?.length ?? 0}`.length +
+            (active ? 1 : 0)
+          );
+        }, 0)) + typeLabel.length;
 
   const used = boardTitle.length + separator.length + tabsWidth;
   const gap = Math.max(1, width - 1 - used - affordances.length - 1);
 
   return (
-    <Box flexDirection="column">
+    // flexShrink={0}: a detail v2 pane can legitimately render taller than the
+    // nominal viewport (§B1's many optional sections). Without this, yoga
+    // shrinks *this* sibling instead of letting the column overflow, and the
+    // header silently loses rows rather than the frame simply growing.
+    <Box flexDirection="column" flexShrink={0}>
       <Box paddingLeft={1} width={width}>
         <Text wrap="truncate">
           <Text color={PALETTE.text} bold>
@@ -92,6 +101,7 @@ export function HeaderBar({
               );
             })
           )}
+          {typeLabel ? <Text color={PALETTE.textDim}>{typeLabel}</Text> : null}
           <Text>{pad(gap)}</Text>
           <Text color={PALETTE.textMuted}>{affordances}</Text>
         </Text>

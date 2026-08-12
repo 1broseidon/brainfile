@@ -73,8 +73,28 @@ export interface AppState {
   /** Incremental filter query, fed to core `searchTasksRanked`. */
   filterQuery: string;
 
-  /** Focused subtask row inside the detail view (space toggles it). */
-  selectedSubtaskIndex: number;
+  /**
+   * Collapsed parent ids (§A1). Persisted to `.brainfile/state/tui.json`;
+   * loaded once at mount and kept in sync with the file on every toggle.
+   */
+  collapsedIds: Set<string>;
+
+  /**
+   * Active type-cycle filter (§A2): `'all'` or a document type. Composes with
+   * `filterQuery` (AND). In-memory only — not persisted.
+   */
+  activeTypeFilter: string;
+
+  /**
+   * Detail drill-down stack (§B2): document ids, root first, current last.
+   * Empty outside detail mode. `enter` on a child stop pushes; `esc` pops one
+   * level (or leaves detail mode entirely from the root).
+   */
+  detailPath: string[];
+  /** Flat-cursor index across the current detail doc's children then subtasks. */
+  detailCursor: number;
+  /** Body scroll offset (lines), cursor-independent (§B2). */
+  detailScroll: number;
 
   // Overlay state
   moveTargetIndex: number;

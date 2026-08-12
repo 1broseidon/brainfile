@@ -27,7 +27,10 @@ describe('board list — wide', () => {
   });
 
   it('gives every document type its glyph in column 1, and a plain task none', () => {
-    expect(lineWith(h.frame(), 'epic-1')).toMatch(/^ ▸ epic-1\b/);
+    // epic-1 has visible children and is expanded by default (§A1), so it
+    // carries the collapse-state glyph (▾) rather than its static type
+    // glyph — see `collapse.test.tsx` for the collapsed (▸) state.
+    expect(lineWith(h.frame(), 'epic-1')).toMatch(/^ ▾ epic-1\b/);
     expect(lineWith(h.frame(), 'spec-4')).toMatch(/^ ◆ spec-4\b/);
     expect(lineWith(h.frame(), 'adr-1')).toMatch(/^ ● adr-1\b/);
     expect(lineWith(h.frame(), 'plan-1')).toMatch(/^ ⎘ plan-1\b/);
@@ -150,7 +153,7 @@ describe('board list — narrow', () => {
   afterAll(() => h.teardown());
 
   it('renders the same glyphs, indentation and chips below the detail breakpoint', () => {
-    expect(lineWith(h.frame(), 'epic-1')).toMatch(/^ ▸ epic-1\b/);
+    expect(lineWith(h.frame(), 'epic-1')).toMatch(/^ ▾ epic-1\b/);
     expect(lineWith(h.frame(), 'adr-1')).toMatch(/^ ● adr-1\b/);
     expect(lineWith(h.frame(), 'task-4')).toMatch(/^ {3}task-4\b/);
 

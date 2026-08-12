@@ -21,16 +21,34 @@ import { pad, truncate } from '../text.js';
 export function browseActions(selected: Task | undefined): string[] {
   const actions = ['↵ detail', 'm move'];
   if (isCompletable(selected)) actions.push('c complete');
-  actions.push('a add', 'tab column', 'q quit');
+  actions.push('a add', 't type', 'tab column', 'q quit');
   return actions;
 }
 
-/** Actions offered inside the detail view (design §4.2 footer). */
-export function detailActions(selected: Task | undefined): string[] {
+/** Context detail v2's footer needs to decide which actions are valid (§B2). */
+export interface DetailFooterContext {
+  task: Task | undefined;
+  hasParent: boolean;
+  hasChildren: boolean;
+  hasSubtasks: boolean;
+  bodyOverflows: boolean;
+}
+
+/**
+ * Actions offered inside the detail view (v3.1 §B2 footer):
+ * `↵ open child · space toggle · u/d scroll · p parent · e edit · m move ·
+ * esc back` — each item appears only when applicable to the document
+ * currently in view (no `p` without a parent, no `space` without subtasks,
+ * never `c complete` on a non-completable type — existing rule).
+ */
+export function detailActions(ctx: DetailFooterContext): string[] {
   const actions: string[] = [];
-  if (selected?.subtasks?.length) actions.push('space toggle subtask');
+  if (ctx.hasChildren) actions.push('↵ open child');
+  if (ctx.hasSubtasks) actions.push('space toggle');
+  if (ctx.bodyOverflows) actions.push('u/d scroll');
+  if (ctx.hasParent) actions.push('p parent');
   actions.push('e edit', 'm move');
-  if (isCompletable(selected)) actions.push('c complete');
+  if (isCompletable(ctx.task)) actions.push('c complete');
   actions.push('esc back');
   return actions;
 }
@@ -63,7 +81,9 @@ export function FooterBar({
   const gap = Math.max(1, width - 2 - text.length - chip.length);
 
   return (
-    <Box flexDirection="column">
+    // flexShrink={0}: see HeaderBar's matching comment — the footer must not
+    // be the thing that silently loses rows when detail v2 overflows.
+    <Box flexDirection="column" flexShrink={0}>
       {showRule ? (
         <Box paddingLeft={1} width={width}>
           <Text color={PALETTE.textDim}>{RULE.repeat(Math.max(1, width - 2))}</Text>

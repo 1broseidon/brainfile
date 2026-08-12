@@ -86,6 +86,12 @@ export const GLYPHS = {
   subtaskOpen: '◻',
   subtaskDone: '☑',
   orphanParent: '←',
+  /** Board-list row glyph for a parent-with-children that is expanded (§A1). */
+  parentExpanded: '▾',
+  /** Board-list row glyph for a parent-with-children that is collapsed (§A1). */
+  parentCollapsed: '▸',
+  /** Detail body scroll indicator (§B2), e.g. `↕ 2/9`. */
+  scroll: '↕',
 } as const;
 
 export type ContractState =

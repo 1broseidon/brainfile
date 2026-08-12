@@ -16,6 +16,9 @@ import type { AppState, StatusMessage, BoardColumn, RuleType, ViewMode } from '.
 import type { Task } from '@brainfile/core';
 import type { DocRow } from '../rows.js';
 import { isCompletable } from '../utils.js';
+import { buildDetailStops, clampDetailCursor } from '../detailStops.js';
+import { computeDetailLayout } from '../components/DetailView.js';
+import { writeTuiState } from '../tuiState.js';
 import {
   editTaskInEditor,
   moveTaskAction,
@@ -33,6 +36,7 @@ import {
   restoreTaskAction,
   deleteArchivedTaskAction,
   loadLogs,
+  type ActivityEntry,
 } from '../actions.js';
 
 const RULE_TYPES: RuleType[] = ['always', 'never', 'prefer', 'context'];
@@ -46,6 +50,18 @@ interface UseKeyboardNavigationProps {
   loadBrainfile: (forceRefresh?: boolean) => void;
   filePath: string;
   allColumns: BoardColumn[];
+  /** Every task on the board, unfiltered — for parent/child lookups (§B1/§B2). */
+  allBoardTasks: Task[];
+  /** `t`-cycle options for the current board (§A2), `'all'` first. */
+  typeCycleOptions: string[];
+  /** The document currently drilled into in the detail view, if any (§B2). */
+  detailTask: Task | undefined;
+  detailChildren: Task[];
+  detailParent: Task | undefined;
+  detailActivity: ActivityEntry[];
+  /** Same width/height `DetailView` renders with, so scroll math agrees (§B2). */
+  detailWidth: number;
+  detailHeight: number;
 }
 
 /** How long a status toast stays on screen. */
@@ -60,6 +76,14 @@ export function useKeyboardNavigation({
   loadBrainfile,
   filePath,
   allColumns,
+  allBoardTasks,
+  typeCycleOptions,
+  detailTask,
+  detailChildren,
+  detailParent,
+  detailActivity,
+  detailWidth,
+  detailHeight,
 }: UseKeyboardNavigationProps) {
   const { exit } = useApp();
 
@@ -95,8 +119,29 @@ export function useKeyboardNavigation({
   const currentTask: Task | undefined = rows[state.selectedTaskIndex]?.task;
   const maxRowIndex = Math.max(0, rows.length - 1);
 
+  // An overlay (move / delete / complete-confirm) opened from the detail view
+  // targets the drilled-into doc, not the list's own selection — they can
+  // differ after `enter` on a child stop or a `p` parent jump (§B2).
+  const overlayTarget: Task | undefined = state.detailPath.length > 0 ? detailTask : currentTask;
+
   const setMode = (mode: ViewMode, extra: Partial<AppState> = {}) =>
     setState((prev) => ({ ...prev, mode, ...extra }));
+
+  /**
+   * Return from a move/delete/complete-confirm overlay: resume the detail
+   * view it was opened from, unless the action removed the doc that detail
+   * was showing (delete, or a completion that went through) — in that case
+   * there is nothing left to resume, so fall back to the list.
+   */
+  const closeOverlay = (opts: { docRemoved?: boolean } = {}) => {
+    const clearDetail = opts.docRemoved || state.detailPath.length === 0;
+    setState((prev) => ({
+      ...prev,
+      mode: clearDetail ? 'browse' : 'detail',
+      detailPath: clearDetail ? [] : prev.detailPath,
+      completeConfirm: null,
+    }));
+  };
 
   /**
    * `c complete`. Core refuses to complete an epic with active children unless
@@ -107,7 +152,7 @@ export function useKeyboardNavigation({
     const result = archiveTaskAction(filePath, task.id, { force });
     if (result.success) {
       showStatus(result.message || `Completed ${task.id}`, 'success');
-      setMode('browse', { completeConfirm: null });
+      closeOverlay({ docRemoved: true });
       loadBrainfile(true);
       return;
     }
@@ -122,7 +167,7 @@ export function useKeyboardNavigation({
       return;
     }
     showStatus(result.error || 'Failed to complete', 'error');
-    setMode('browse', { completeConfirm: null });
+    closeOverlay();
   };
 
   useInput((input, key) => {
@@ -145,11 +190,11 @@ export function useKeyboardNavigation({
             showStatus(result.error || 'Failed to complete', 'error');
           }
         }
-        setMode('browse', { completeConfirm: null });
+        closeOverlay({ docRemoved: true });
         return;
       }
       if (input === 'n' || input === 'N' || key.escape) {
-        setMode('browse', { completeConfirm: null });
+        closeOverlay();
         showStatus('Complete cancelled', 'info');
       }
       return;
@@ -158,20 +203,20 @@ export function useKeyboardNavigation({
     // ── Delete confirmation ───────────────────────────────────────────────
     if (state.mode === 'delete-confirm') {
       if (input === 'y' || input === 'Y') {
-        if (currentTask) {
-          const result = deleteTaskAction(filePath, currentTask.id);
+        if (overlayTarget) {
+          const result = deleteTaskAction(filePath, overlayTarget.id);
           if (result.success) {
-            showStatus(`Deleted ${currentTask.id}`, 'success');
+            showStatus(`Deleted ${overlayTarget.id}`, 'success');
             loadBrainfile(true);
           } else {
             showStatus(result.error || 'Failed to delete', 'error');
           }
         }
-        setMode('browse');
+        closeOverlay({ docRemoved: true });
         return;
       }
       if (input === 'n' || input === 'N' || key.escape) {
-        setMode('browse');
+        closeOverlay();
         showStatus('Delete cancelled', 'info');
       }
       return;
@@ -180,7 +225,7 @@ export function useKeyboardNavigation({
     // ── Move (column picker) ──────────────────────────────────────────────
     if (state.mode === 'move') {
       if (key.escape) {
-        setMode('browse');
+        closeOverlay();
         return;
       }
       if (key.upArrow || key.leftArrow || input === 'k' || input === 'h') {
@@ -196,8 +241,8 @@ export function useKeyboardNavigation({
       }
       if (key.return) {
         const targetColumn = allColumns[state.moveTargetIndex];
-        if (currentTask && targetColumn) {
-          const result = moveTaskAction(filePath, currentTask.id, targetColumn.id);
+        if (overlayTarget && targetColumn) {
+          const result = moveTaskAction(filePath, overlayTarget.id, targetColumn.id);
           if (result.success) {
             showStatus(result.message || `Moved to ${targetColumn.title}`, 'success');
             loadBrainfile(true);
@@ -205,7 +250,7 @@ export function useKeyboardNavigation({
             showStatus(result.error || 'Failed to move', 'error');
           }
         }
-        setMode('browse');
+        closeOverlay();
         return;
       }
       const num = Number.parseInt(input, 10);
@@ -278,28 +323,97 @@ export function useKeyboardNavigation({
       return;
     }
 
-    // ── Detail ────────────────────────────────────────────────────────────
+    // ── Detail v2 (§B2 — the flat-cursor, locked decision) ────────────────
     if (state.mode === 'detail') {
-      const subtasks = currentTask?.subtasks ?? [];
+      // `detailStops.ts` is the single source of truth for what the cursor is
+      // on — children first, then subtasks — shared with `DetailView`'s render
+      // so the two can never disagree about what `enter`/`space` act on.
+      const stops = detailTask ? buildDetailStops(detailTask, detailChildren) : [];
+      const cursor = clampDetailCursor(state.detailCursor, stops.length);
+      const stop = stops[cursor];
+      const layout = detailTask
+        ? computeDetailLayout(detailTask, detailWidth, detailHeight, detailChildren, detailActivity)
+        : null;
 
-      if (key.escape || input === 'q') {
-        if (input === 'q') {
-          exit();
-          return;
+      if (input === 'q') {
+        exit();
+        return;
+      }
+      // `esc` pops one breadcrumb level; from the root, it returns to the list.
+      if (key.escape) {
+        if (state.detailPath.length > 1) {
+          setState((prev) => ({
+            ...prev,
+            detailPath: prev.detailPath.slice(0, -1),
+            detailCursor: 0,
+            detailScroll: 0,
+          }));
+        } else {
+          setMode('browse', { detailPath: [] });
         }
-        setMode('browse');
         return;
       }
       if (input === '?') {
         setMode('help');
         return;
       }
+
+      // Body scroll is cursor-independent: half the visible height, never
+      // triggered by j/k (predictability over cleverness — §B2).
+      if (input === 'd') {
+        if (layout) {
+          const maxScroll = Math.max(0, layout.bodyLines.length - layout.bodyBudget);
+          const step = Math.max(1, Math.floor(layout.bodyBudget / 2));
+          setState((prev) => ({
+            ...prev,
+            detailScroll: Math.min(maxScroll, prev.detailScroll + step),
+          }));
+        }
+        return;
+      }
+      if (input === 'u') {
+        if (layout) {
+          const step = Math.max(1, Math.floor(layout.bodyBudget / 2));
+          setState((prev) => ({ ...prev, detailScroll: Math.max(0, prev.detailScroll - step) }));
+        }
+        return;
+      }
+
+      // Flat cursor: every child row, then every subtask row.
+      if (key.downArrow || input === 'j') {
+        setState((prev) => ({
+          ...prev,
+          detailCursor: Math.min(clampDetailCursor(prev.detailCursor, stops.length) + 1, Math.max(0, stops.length - 1)),
+        }));
+        return;
+      }
+      if (key.upArrow || input === 'k') {
+        setState((prev) => ({
+          ...prev,
+          detailCursor: Math.max(0, clampDetailCursor(prev.detailCursor, stops.length) - 1),
+        }));
+        return;
+      }
+
+      // `enter` on a child stop drills in; the breadcrumb grows.
+      if (key.return) {
+        if (stop?.kind === 'child') {
+          setState((prev) => ({
+            ...prev,
+            detailPath: [...prev.detailPath, stop.task.id],
+            detailCursor: 0,
+            detailScroll: 0,
+          }));
+        }
+        return;
+      }
+
+      // `space` toggles the subtask under the cursor (existing action wiring).
       if (input === ' ') {
-        const subtask = subtasks[state.selectedSubtaskIndex];
-        if (currentTask && subtask) {
-          const result = toggleSubtaskAction(filePath, currentTask.id, subtask.id);
+        if (stop?.kind === 'subtask' && detailTask) {
+          const result = toggleSubtaskAction(filePath, detailTask.id, stop.subtask.id);
           if (result.success) {
-            showStatus(`Toggled ${subtask.id}`, 'success');
+            showStatus(`Toggled ${stop.subtask.id}`, 'success');
             loadBrainfile(true);
           } else {
             showStatus(result.error || 'Failed to toggle', 'error');
@@ -309,30 +423,35 @@ export function useKeyboardNavigation({
         }
         return;
       }
-      if (key.downArrow || input === 'j') {
-        setState((prev) => ({
-          ...prev,
-          selectedSubtaskIndex: Math.min(prev.selectedSubtaskIndex + 1, Math.max(0, subtasks.length - 1)),
-        }));
+
+      // `p` jumps to the parent's detail, when one exists.
+      if (input === 'p') {
+        if (!detailTask?.parentId || !detailParent) {
+          showStatus('No parent', 'info');
+          return;
+        }
+        const parentId = detailParent.id;
+        setState((prev) => {
+          const stack = prev.detailPath;
+          const nextPath =
+            stack.length > 1 && stack[stack.length - 2] === parentId
+              ? stack.slice(0, -1)
+              : [...stack.slice(0, -1), parentId];
+          return { ...prev, detailPath: nextPath, detailCursor: 0, detailScroll: 0 };
+        });
         return;
       }
-      if (key.upArrow || input === 'k') {
-        setState((prev) => ({
-          ...prev,
-          selectedSubtaskIndex: Math.max(0, prev.selectedSubtaskIndex - 1),
-        }));
-        return;
-      }
-      if (input === 'm' && currentTask) {
+
+      if (input === 'm' && detailTask) {
         setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
         return;
       }
-      if (input === 'c' && currentTask && isCompletable(currentTask)) {
-        completeTask(currentTask, false);
+      if (input === 'c' && detailTask && isCompletable(detailTask)) {
+        completeTask(detailTask, false);
         return;
       }
-      if (input === 'e' && currentTask) {
-        const result = editTaskInEditor(filePath, currentTask.id);
+      if (input === 'e' && detailTask) {
+        const result = editTaskInEditor(filePath, detailTask.id);
         if (result.success) {
           showStatus(result.message || 'Task updated', 'success');
           loadBrainfile(true);
@@ -340,15 +459,6 @@ export function useKeyboardNavigation({
           showStatus(result.error || 'Edit failed', 'error');
         }
         return;
-      }
-      if (input === 'p' && currentTask) {
-        const result = cyclePriorityAction(filePath, currentTask.id);
-        if (result.success) {
-          showStatus(result.message || 'Priority updated', 'success');
-          loadBrainfile(true);
-        } else {
-          showStatus(result.error || 'Failed to update priority', 'error');
-        }
       }
       return;
     }
@@ -518,14 +628,43 @@ export function useKeyboardNavigation({
         setMode('filter', { filterQuery: '', selectedTaskIndex: 0 });
         return;
       }
+      // Type-cycle (§A2): all → task → epic → spec → plan → adr → all,
+      // restricted to types the board actually declares.
+      if (input === 't') {
+        if (typeCycleOptions.length > 1) {
+          const idx = typeCycleOptions.indexOf(state.activeTypeFilter);
+          const next = typeCycleOptions[(idx < 0 ? 0 : idx + 1) % typeCycleOptions.length];
+          setState((prev) => ({ ...prev, activeTypeFilter: next, selectedTaskIndex: 0 }));
+        }
+        return;
+      }
+      // Collapse/expand (§A1): only a no-op-free toggle when the row has
+      // children currently rendered under it.
+      if (input === ' ') {
+        const row = rows[state.selectedTaskIndex];
+        if (row && (row.childCount ?? 0) > 0) {
+          const id = row.task.id;
+          setState((prev) => {
+            const next = new Set(prev.collapsedIds);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            writeTuiState(filePath, { collapsed: Array.from(next) });
+            return { ...prev, collapsedIds: next };
+          });
+        }
+        return;
+      }
       if (input === 'r') {
         loadBrainfile(true);
         showStatus('Reloaded', 'info');
         return;
       }
       if (key.return) {
-        if (currentTask) setMode('detail', { selectedSubtaskIndex: 0 });
-        else showStatus('No document selected', 'info');
+        if (currentTask) {
+          setMode('detail', { detailPath: [currentTask.id], detailCursor: 0, detailScroll: 0 });
+        } else {
+          showStatus('No document selected', 'info');
+        }
         return;
       }
       if (input === 'a' || input === 'n') {

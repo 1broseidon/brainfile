@@ -25,6 +25,19 @@ export function truncate(text: string | undefined, maxWidth: number): string {
 export const safeTruncate = truncate;
 
 /**
+ * Truncate to `maxWidth` from the START, prefixing `…` — used for the detail
+ * breadcrumb (v3.1 §B1), where the document you're looking at (the tail) is
+ * more useful to keep on screen than where you came from.
+ */
+export function truncateStart(text: string | undefined, maxWidth: number): string {
+  if (!text) return ' ';
+  if (maxWidth <= 0) return ' ';
+  if (maxWidth <= 1) return text.slice(-1) || ' ';
+  if (text.length <= maxWidth) return text;
+  return `…${text.slice(text.length - (maxWidth - 1))}`;
+}
+
+/**
  * Wrap text to `maxWidth`, breaking over-long words. Used for detail bodies.
  */
 export function wrapText(text: string, maxWidth: number): string[] {

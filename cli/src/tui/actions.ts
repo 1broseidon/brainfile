@@ -32,6 +32,8 @@ import {
   readTasksDir,
   formatTaskForGitHub,
   formatTaskForLinear,
+  parseNotes,
+  readLedger,
   type Board,
   type Task,
   type TaskPatch,
@@ -1170,6 +1172,62 @@ export function deleteRuleAction(
 // =============================================================================
 // ARCHIVE OPERATIONS
 // =============================================================================
+
+// =============================================================================
+// DETAIL v2 — ACTIVITY (read-only)
+// =============================================================================
+
+export interface ActivityEntry {
+  /** ISO timestamp, when the entry carries one. */
+  at?: string;
+  text: string;
+}
+
+/**
+ * Recent activity for the detail view's `activity` section (v3.1 §B1): the
+ * task's `## Log` entries — core's `parseNotes` already understands both
+ * historical log-line formats — merged with any ledger record for this id,
+ * newest first, capped to `limit`.
+ *
+ * Read-only and best-effort: an unreadable task file, a missing ledger, or a
+ * v1 (non-v2) board all degrade to an empty list rather than surfacing as an
+ * error. Ledger records only exist for archived work, so an active task
+ * having none is the common case, not a gap (the known exception is
+ * task-11-style: no ledger merge is possible before a doc is ever archived).
+ */
+export function getTaskActivity(filePath: string, taskId: string, limit = 5): ActivityEntry[] {
+  if (!isV2(filePath)) return [];
+
+  try {
+    const dirs = getV2Dirs(filePath);
+    const doc = findTask(dirs.boardDir, taskId) ?? findTask(dirs.logsDir, taskId);
+
+    const entries: ActivityEntry[] = [];
+
+    if (doc) {
+      for (const note of parseNotes(doc.body)) {
+        entries.push({
+          at: note.at,
+          text: note.agent ? `[${note.agent}] ${note.text}` : note.text,
+        });
+      }
+    }
+
+    try {
+      for (const record of readLedger(dirs.logsDir)) {
+        if (record.id !== taskId) continue;
+        entries.push({ at: record.completedAt, text: `completed · ${record.summary}` });
+      }
+    } catch {
+      // Ledger is optional context; absence degrades silently.
+    }
+
+    entries.sort((a, b) => (Date.parse(b.at ?? '') || 0) - (Date.parse(a.at ?? '') || 0));
+    return entries.slice(0, limit);
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Load logs from the logs file

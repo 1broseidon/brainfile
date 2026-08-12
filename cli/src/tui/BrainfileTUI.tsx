@@ -19,10 +19,13 @@ import { searchTasksRanked } from '@brainfile/core';
 import { PALETTE } from './theme.js';
 import type { AppState, TUIProps, LayoutMode, BoardColumn } from './types.js';
 import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
-import { buildRows } from './rows.js';
+import { buildRows, buildFlatRows } from './rows.js';
+import { getDocType } from './utils.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
-import { loadLogs } from './actions.js';
+import { loadLogs, getTaskActivity } from './actions.js';
+import { readTuiState } from './tuiState.js';
+import { getTypeCycleOptions } from './typeCycle.js';
 import {
   HeaderBar,
   FooterBar,
@@ -30,6 +33,7 @@ import {
   detailActions,
   DocumentList,
   DetailView,
+  computeDetailLayout,
   HelpOverlay,
   StatusMessageDisplay,
   MoveOverlay,
@@ -40,7 +44,7 @@ import {
   LogsPanel,
 } from './components/index.js';
 
-const initialState: AppState = {
+const baseInitialState: Omit<AppState, 'collapsedIds'> = {
   board: null,
   error: null,
   lastUpdated: new Date(),
@@ -49,7 +53,10 @@ const initialState: AppState = {
   selectedTaskIndex: 0,
   mode: 'browse',
   filterQuery: '',
-  selectedSubtaskIndex: 0,
+  activeTypeFilter: 'all',
+  detailPath: [],
+  detailCursor: 0,
+  detailScroll: 0,
   moveTargetIndex: 0,
   newTaskTitle: '',
   completeConfirm: null,
@@ -93,7 +100,12 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   const isTooSmall = termWidth < LAYOUT.MIN_WIDTH || termHeight < LAYOUT.MIN_HEIGHT;
   const layoutMode: LayoutMode = termWidth >= LAYOUT.DETAIL_PANE_MIN_WIDTH ? 'wide' : 'narrow';
 
-  const [state, setState] = useState<AppState>(initialState);
+  // Lazy initializer: collapsed-row state is read from `.brainfile/state/tui.json`
+  // once, at mount, keyed on the (stable-per-session) filePath prop (§A1).
+  const [state, setState] = useState<AppState>(() => ({
+    ...baseInitialState,
+    collapsedIds: new Set(readTuiState(filePath).collapsed),
+  }));
 
   const viewportHeight = Math.max(termHeight - HEADER_ROWS - FOOTER_ROWS, 3);
 
@@ -108,9 +120,26 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     });
   }, [state.board]);
 
+  const typeCycleOptions = useMemo(() => getTypeCycleOptions(state.board), [state.board]);
+  const activeTypeFilter = typeCycleOptions.includes(state.activeTypeFilter)
+    ? state.activeTypeFilter
+    : 'all';
+  const typeFilterActive = activeTypeFilter !== 'all';
+
+  /** Type-cycle filter (§A2), applied before search so both compose (AND). */
+  const typeFilteredColumns = useMemo<BoardColumn[]>(() => {
+    if (!typeFilterActive) return orderedColumns as BoardColumn[];
+    return orderedColumns.map((column) => ({
+      ...column,
+      tasks: (column.tasks ?? []).filter((task) => getDocType(task) === activeTypeFilter),
+    })) as BoardColumn[];
+  }, [orderedColumns, typeFilterActive, activeTypeFilter]);
+
+  // Column tab counts reflect the type filter, but not the search filter or
+  // collapse (§A1/§A2) — this is the denominator for "x/y match" too.
   const totalCount = useMemo(
-    () => orderedColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
-    [orderedColumns],
+    () => typeFilteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
+    [typeFilteredColumns],
   );
 
   const filterQuery = state.filterQuery.trim();
@@ -122,13 +151,13 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
    * we keep it per column.
    */
   const filteredColumns = useMemo<BoardColumn[]>(() => {
-    if (!hasFilter) return orderedColumns as BoardColumn[];
-    return orderedColumns.map((column) => {
+    if (!hasFilter) return typeFilteredColumns;
+    return typeFilteredColumns.map((column) => {
       const docs = (column.tasks ?? []).map((task) => ({ task, body: task.description ?? '' }));
       const matches = searchTasksRanked(docs, filterQuery);
       return { ...column, tasks: matches.map((match) => match.doc.task) };
     }) as BoardColumn[];
-  }, [orderedColumns, hasFilter, filterQuery]);
+  }, [typeFilteredColumns, hasFilter, filterQuery]);
 
   const matchCount = useMemo(
     () => filteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
@@ -140,7 +169,16 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     Math.max(0, filteredColumns.length - 1),
   );
   const currentColumn = filteredColumns[activeColumnIndex];
-  const rows = useMemo(() => buildRows(currentColumn?.tasks ?? []), [currentColumn]);
+  // Under a type filter, render flat (§A2) — no pull-up-under-parent, no
+  // collapse (there is rarely a visible parent to collapse into). Otherwise,
+  // the normal hierarchy + collapse-state list (§A1).
+  const rows = useMemo(
+    () =>
+      typeFilterActive
+        ? buildFlatRows(currentColumn?.tasks ?? [])
+        : buildRows(currentColumn?.tasks ?? [], state.collapsedIds),
+    [currentColumn, typeFilterActive, state.collapsedIds],
+  );
   const maxRowIndex = Math.max(0, rows.length - 1);
   const selectedIndex = Math.min(state.selectedTaskIndex, maxRowIndex);
   const selectedTask: Task | undefined = rows[selectedIndex]?.task;
@@ -149,9 +187,42 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     () => orderedColumns.flatMap((column) => column.tasks ?? []),
     [orderedColumns],
   );
-  const parentTask = selectedTask?.parentId
-    ? allBoardTasks.find((task) => task.id === selectedTask.parentId)
+
+  // ── Detail v2 (§B1/§B2): resolve the current drill-down document ─────────
+  // Resolved off `detailPath`, not `state.mode === 'detail'`: an overlay
+  // (move/delete/complete-confirm) opened *from* the detail view leaves
+  // `mode` pointing at the overlay while `detailPath` still names the doc the
+  // overlay should act on, which may differ from the list's own selection
+  // after a drill-down (§B2 `enter`) or a `p` parent jump.
+  const detailTaskId = state.detailPath[state.detailPath.length - 1];
+  const detailTask: Task | undefined =
+    state.detailPath.length > 0 ? allBoardTasks.find((t) => t.id === detailTaskId) : undefined;
+  const detailChildren = useMemo(
+    () => (detailTask ? allBoardTasks.filter((t) => t.parentId === detailTask.id) : []),
+    [allBoardTasks, detailTask],
+  );
+  const detailParent = detailTask?.parentId
+    ? allBoardTasks.find((t) => t.id === detailTask.parentId)
     : undefined;
+  const detailColumnLabel = useMemo(() => {
+    if (!detailTask) return '';
+    return orderedColumns.find((c) => c.tasks?.some((t) => t.id === detailTask.id))?.id ?? '';
+  }, [orderedColumns, detailTask]);
+  // Reads the task file + ledger fresh whenever the doc or the board reloads;
+  // best-effort and read-only (getTaskActivity degrades to [] on any failure).
+  const detailActivity = useMemo(
+    () => (detailTask ? getTaskActivity(filePath, detailTask.id) : []),
+    [detailTask, filePath, state.lastUpdated],
+  );
+
+  const detailOpen = state.mode === 'detail' && Boolean(detailTask);
+  const fullscreenDetailMode = detailOpen && layoutMode === 'narrow';
+  const detailPaneWidth = Math.floor(termWidth * LAYOUT.DETAIL_PANE_FRACTION);
+  const detailViewWidth = fullscreenDetailMode ? termWidth : detailPaneWidth;
+  const detailViewHeight = fullscreenDetailMode ? termHeight - FOOTER_ROWS : viewportHeight;
+  const detailLayout = detailTask
+    ? computeDetailLayout(detailTask, detailViewWidth, detailViewHeight, detailChildren, detailActivity)
+    : null;
 
   // Keep the selection in bounds when the board or the filter changes.
   useEffect(() => {
@@ -178,6 +249,14 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     loadBrainfile,
     filePath,
     allColumns: orderedColumns as BoardColumn[],
+    allBoardTasks,
+    typeCycleOptions,
+    detailTask,
+    detailChildren,
+    detailParent,
+    detailActivity,
+    detailWidth: detailViewWidth,
+    detailHeight: detailViewHeight,
   });
 
   if (isTooSmall) {
@@ -218,36 +297,48 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   // display title — the header tabs already carry the titles (design §4.1/§4.2).
   const columnLabel = currentColumn?.id ?? '';
   const columnName = currentColumn?.title ?? '';
-  const detailOpen = state.mode === 'detail' && Boolean(selectedTask);
   const fullscreenDetail = detailOpen && layoutMode === 'narrow';
 
+  const detailFooterCtx = {
+    task: detailTask,
+    hasParent: Boolean(detailParent),
+    hasChildren: detailChildren.length > 0,
+    hasSubtasks: (detailTask?.subtasks?.length ?? 0) > 0,
+    bodyOverflows: detailLayout?.bodyOverflows ?? false,
+  };
+
   // Narrow detail replaces the list entirely (design §4.2).
-  if (fullscreenDetail && selectedTask) {
+  if (fullscreenDetail && detailTask) {
     return (
       <Box flexDirection="column" width={termWidth} height={termHeight}>
         <DetailView
-          task={selectedTask}
-          columnLabel={columnLabel}
+          task={detailTask}
+          columnLabel={detailColumnLabel}
           width={termWidth}
           height={termHeight - FOOTER_ROWS}
-          selectedSubtaskIndex={state.selectedSubtaskIndex}
-          parent={parentTask}
+          breadcrumb={state.detailPath}
+          parent={detailParent}
+          children={detailChildren}
+          activity={detailActivity}
+          cursor={state.detailCursor}
+          scrollOffset={state.detailScroll}
         />
         <Box flexGrow={1} />
-        <Box height={1}>
+        <Box height={1} flexShrink={0}>
           <StatusMessageDisplay message={state.statusMessage} />
         </Box>
-        <FooterBar width={termWidth} actions={detailActions(selectedTask)} stateChip={columnLabel} />
+        <FooterBar
+          width={termWidth}
+          actions={detailActions(detailFooterCtx)}
+          stateChip={detailColumnLabel}
+        />
       </Box>
     );
   }
 
-  const detailPaneWidth = Math.floor(termWidth * LAYOUT.DETAIL_PANE_FRACTION);
   const listWidth = detailOpen ? termWidth - detailPaneWidth : termWidth;
 
-  const footerActions = detailOpen
-    ? detailActions(selectedTask)
-    : browseActions(selectedTask);
+  const footerActions = detailOpen ? detailActions(detailFooterCtx) : browseActions(selectedTask);
 
   return (
     <Box flexDirection="column" width={termWidth} height={termHeight}>
@@ -263,9 +354,10 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
         panelLabel={
           state.activePanel === 'rules' ? 'rules' : state.activePanel === 'logs' ? 'logs' : undefined
         }
+        activeType={activeTypeFilter}
       />
 
-      <Box flexGrow={1} flexDirection="column">
+      <Box flexGrow={1} flexShrink={0} flexDirection="column">
         {state.activePanel === 'board' ? (
           <BoardContent
             state={state}
@@ -276,8 +368,11 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
             detailPaneWidth={detailPaneWidth}
             detailOpen={detailOpen}
             selectedTask={selectedTask}
-            parentTask={parentTask}
-            columnLabel={columnLabel}
+            detailTask={detailTask}
+            detailParent={detailParent}
+            detailChildren={detailChildren}
+            detailActivity={detailActivity}
+            detailColumnLabel={detailColumnLabel}
             columnName={columnName}
             columns={orderedColumns as BoardColumn[]}
             termWidth={termWidth}
@@ -313,7 +408,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
         ) : null}
       </Box>
 
-      <Box height={1}>
+      <Box height={1} flexShrink={0}>
         <StatusMessageDisplay message={state.statusMessage} />
       </Box>
 
@@ -340,8 +435,11 @@ function BoardContent({
   detailPaneWidth,
   detailOpen,
   selectedTask,
-  parentTask,
-  columnLabel,
+  detailTask,
+  detailParent,
+  detailChildren,
+  detailActivity,
+  detailColumnLabel,
   columnName,
   columns,
   termWidth,
@@ -355,30 +453,38 @@ function BoardContent({
   detailPaneWidth: number;
   detailOpen: boolean;
   selectedTask: Task | undefined;
-  parentTask: Task | undefined;
-  columnLabel: string;
+  detailTask: Task | undefined;
+  detailParent: Task | undefined;
+  detailChildren: Task[];
+  detailActivity: ReturnType<typeof getTaskActivity>;
+  detailColumnLabel: string;
   columnName: string;
   columns: BoardColumn[];
   termWidth: number;
   hasFilter: boolean;
 }) {
-  if (state.mode === 'move' && selectedTask) {
+  // A move/delete confirm can be opened either from the list (target =
+  // list selection) or from the detail view (target = the doc currently
+  // drilled into, which may not be the list's selection — §B2 drill-down).
+  const overlayTarget = state.detailPath.length > 0 ? detailTask : selectedTask;
+
+  if (state.mode === 'move' && overlayTarget) {
     return (
       <MoveOverlay
         columns={columns}
         selectedIndex={state.moveTargetIndex}
-        taskId={selectedTask.id}
-        taskTitle={selectedTask.title}
+        taskId={overlayTarget.id}
+        taskTitle={overlayTarget.title}
         width={termWidth}
       />
     );
   }
 
-  if (state.mode === 'delete-confirm' && selectedTask) {
+  if (state.mode === 'delete-confirm' && overlayTarget) {
     return (
       <DeleteConfirmOverlay
-        taskId={selectedTask.id}
-        taskTitle={selectedTask.title}
+        taskId={overlayTarget.id}
+        taskTitle={overlayTarget.title}
         width={termWidth}
       />
     );
@@ -402,21 +508,31 @@ function BoardContent({
     />
   );
 
-  if (!detailOpen || !selectedTask) return list;
+  if (!detailOpen || !detailTask) return list;
 
   return (
-    <Box flexDirection="row" flexGrow={1}>
-      <Box width={listWidth} flexDirection="column">
+    // flexShrink={0} down this whole chain: detail v2 can render more lines
+    // than the nominal viewport (a doc with children + subtasks + a full
+    // contract + activity easily does, in a modest terminal). Letting yoga
+    // shrink to fit corrupts the layout — rows silently lose height and their
+    // text vanishes — rather than the frame simply growing taller, which ink
+    // and real terminals handle fine.
+    <Box flexDirection="row" flexGrow={1} flexShrink={0}>
+      <Box width={listWidth} flexDirection="column" flexShrink={0}>
         {list}
       </Box>
-      <Box width={detailPaneWidth} flexDirection="column">
+      <Box width={detailPaneWidth} flexDirection="column" flexShrink={0}>
         <DetailView
-          task={selectedTask}
-          columnLabel={columnLabel}
+          task={detailTask}
+          columnLabel={detailColumnLabel}
           width={detailPaneWidth}
           height={viewportHeight}
-          selectedSubtaskIndex={state.selectedSubtaskIndex}
-          parent={parentTask}
+          breadcrumb={state.detailPath}
+          parent={detailParent}
+          children={detailChildren}
+          activity={detailActivity}
+          cursor={state.detailCursor}
+          scrollOffset={state.detailScroll}
         />
       </Box>
     </Box>

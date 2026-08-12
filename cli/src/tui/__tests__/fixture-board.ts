@@ -32,6 +32,17 @@ export interface FixtureBoard {
 const CONFIG = `---
 title: brainfile
 schema: https://brainfile.md/v2/board.json
+types:
+  task:
+    idPrefix: task
+  epic:
+    idPrefix: epic
+  spec:
+    idPrefix: spec
+  adr:
+    idPrefix: adr
+  plan:
+    idPrefix: plan
 columns:
   - id: backlog
     title: Backlog
@@ -45,6 +56,9 @@ columns:
   - id: review
     title: Review
     order: 3
+  - id: later
+    title: Later
+    order: 4
 ---
 `;
 
@@ -187,6 +201,94 @@ const TASKS: Array<{ task: Task; body?: string }> = [
       column: 'backlog',
       position: 0,
       tags: ['agents'],
+    },
+  },
+  // ── Detail v2 fixture (v3.1 §B1/§B2) ─────────────────────────────────────
+  // A dedicated column ('later') so these documents never shift the counts
+  // the board-list suite asserts on ('Backlog 1', 'To Do 11*', ...): a
+  // depth-2 hierarchy (epic-9 → task-50 → 3 children) plus subtasks, a full
+  // contract (deliverables over the 3-item cap, validation over the 2-item
+  // cap, feedback), a body long enough to force the scroll `↕` indicator at
+  // any reasonable test viewport, and `## Log` entries for the activity
+  // section.
+  {
+    task: {
+      id: 'epic-9',
+      title: 'Detail v2 rollout',
+      type: 'epic',
+      column: 'later',
+      position: 0,
+      tags: ['tui'],
+    },
+  },
+  {
+    task: {
+      id: 'task-50',
+      title: 'Prune supervisor remnants from docs',
+      parentId: 'epic-9',
+      column: 'later',
+      position: 1,
+      tags: ['docs'],
+      priority: 'medium',
+      assignee: 'claude',
+      createdAt: '2026-08-11T12:00:00.000Z',
+      relatedFiles: ['docs/guides/orchestration.md'],
+      subtasks: [
+        { id: 'st-x', title: 'sweep guides', completed: false },
+        { id: 'st-y', title: 'verify links', completed: true },
+      ],
+      contract: {
+        status: 'failed',
+        version: 1,
+        deliverables: [
+          { type: 'file', path: 'docs/guides/orchestration.md', description: 'rewrite' },
+          { type: 'test', path: 'cli/src/tui/__tests__/detail-v2.test.tsx', description: 'coverage' },
+          { type: 'file', path: 'cli/src/tui/components/DetailView.tsx', description: 'implementation' },
+          { type: 'doc', path: 'README.md', description: 'should not render — 4th deliverable' },
+        ],
+        validation: {
+          commands: ['npm test -w cli', 'npm run typecheck', 'npm run build'],
+        },
+        feedback: 'Missing regression test for the scroll indicator.',
+      } as never,
+    },
+    body: [
+      '## Description',
+      Array.from(
+        { length: 24 },
+        (_, i) => `Line ${i + 1} of a long body used to exercise detail-view scrolling.`,
+      ).join('\n\n'),
+      '',
+      '## Log',
+      '- 2026-08-12T09:00:00.000Z [claude]: moved todo → in-progress',
+      '- 2026-08-11T22:00:00.000Z [pm]: contract attached',
+    ].join('\n'),
+  },
+  {
+    task: {
+      id: 'task-51',
+      title: 'Triage marketing board',
+      parentId: 'task-50',
+      column: 'later',
+      position: 2,
+    },
+  },
+  {
+    task: {
+      id: 'task-52',
+      title: 'Verify contract deliverables',
+      parentId: 'task-50',
+      column: 'later',
+      position: 3,
+    },
+  },
+  {
+    task: {
+      id: 'task-53',
+      title: 'Write activity section tests',
+      parentId: 'task-50',
+      column: 'later',
+      position: 4,
     },
   },
 ];
