@@ -11,6 +11,9 @@ import {
   taskFileName,
   type Board,
   type Task,
+  MissingDependencyError,
+  DependencyCycleError,
+  topologicalSort,
 } from '@brainfile/core';
 import { missingRequired, operationFailed, validationError } from '../utils/cli-error';
 import { buildContract } from '../utils/contractSpec';
@@ -147,31 +150,13 @@ export interface ContractGraphCommandResult {
   graph: string;
 }
 
-interface DependencyGraphNode {
-  id: string;
-  dependsOn?: readonly string[];
-}
-
-class MissingDependencyError extends Error {
-  readonly taskId: string;
-  readonly dependencyId: string;
-
-  constructor(taskId: string, dependencyId: string) {
-    super(`Task ${taskId} depends on missing task ${dependencyId}`);
-    this.name = 'MissingDependencyError';
-    this.taskId = taskId;
-    this.dependencyId = dependencyId;
+function normalizeDependencyIds(dependsOn?: string[]): string[] | undefined {
+  if (!Array.isArray(dependsOn)) {
+    return undefined;
   }
-}
 
-class DependencyCycleError extends Error {
-  readonly cycle: string[];
-
-  constructor(cycle: string[]) {
-    super(`Dependency cycle detected: ${cycle.join(' -> ')}`);
-    this.name = 'DependencyCycleError';
-    this.cycle = cycle;
-  }
+  const normalized = [...new Set(dependsOn.map((value) => value.trim()).filter(Boolean))];
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 function isUnsafeTaskId(taskId: string): boolean {
@@ -187,15 +172,6 @@ function isUnsafeTaskId(taskId: string): boolean {
   return /[\\/]/.test(taskId);
 }
 
-function normalizeDependencyIds(dependsOn?: string[]): string[] | undefined {
-  if (!Array.isArray(dependsOn)) {
-    return undefined;
-  }
-
-  const normalized = [...new Set(dependsOn.map((value) => value.trim()).filter(Boolean))];
-  return normalized.length > 0 ? normalized : undefined;
-}
-
 function taskDependsOn(task: Task | undefined): string[] | undefined {
   const rawDependsOn = (task as { dependsOn?: unknown } | undefined)?.dependsOn;
   if (!Array.isArray(rawDependsOn)) {
@@ -203,57 +179,6 @@ function taskDependsOn(task: Task | undefined): string[] | undefined {
   }
 
   return rawDependsOn.filter((value): value is string => typeof value === 'string');
-}
-
-function topologicalSort(nodes: readonly DependencyGraphNode[]): string[] {
-  const dependenciesById = new Map<string, string[]>();
-
-  for (const node of nodes) {
-    if (dependenciesById.has(node.id)) {
-      throw new Error(`Duplicate graph node: ${node.id}`);
-    }
-
-    dependenciesById.set(node.id, normalizeDependencyIds(node.dependsOn ? [...node.dependsOn] : undefined) ?? []);
-  }
-
-  const state = new Map<string, 'visiting' | 'done'>();
-  const stack: string[] = [];
-  const order: string[] = [];
-
-  const visit = (taskId: string): void => {
-    const currentState = state.get(taskId);
-    if (currentState === 'done') {
-      return;
-    }
-
-    if (currentState === 'visiting') {
-      const cycleStart = stack.indexOf(taskId);
-      const cycle = cycleStart >= 0
-        ? [...stack.slice(cycleStart), taskId]
-        : [taskId, taskId];
-      throw new DependencyCycleError(cycle);
-    }
-
-    state.set(taskId, 'visiting');
-    stack.push(taskId);
-
-    for (const dependencyId of dependenciesById.get(taskId) ?? []) {
-      if (!dependenciesById.has(dependencyId)) {
-        throw new MissingDependencyError(taskId, dependencyId);
-      }
-      visit(dependencyId);
-    }
-
-    stack.pop();
-    state.set(taskId, 'done');
-    order.push(taskId);
-  };
-
-  for (const taskId of dependenciesById.keys()) {
-    visit(taskId);
-  }
-
-  return order;
 }
 
 function boardTasks(board: Board): Task[] {

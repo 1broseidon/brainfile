@@ -18,7 +18,7 @@ import {
   getV2Dirs,
   readV2BoardConfig,
 } from '../../utils/v2-detect';
-import { validateColumn } from '../../utils/strict-validation';
+import { validateColumn } from '@brainfile/core';
 import { mcpCheckIncompleteSubtasks } from '../../utils/errorHandler';
 import {
   readBoard,
@@ -56,7 +56,7 @@ export function registerTaskMoveTool(server: McpServer, defaultFile: string): vo
         let targetColumn = board.columns.find(c => c.id === column);
         if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
         const targetColumnId = targetColumn?.id || column;
-        const columnValidation = validateColumn(board, targetColumnId);
+        const columnValidation = validateColumn(board as unknown as Parameters<typeof validateColumn>[0], targetColumnId);
         if (!columnValidation.valid) {
           return mcpStructuredError(
             columnValidation.error || `Invalid column: ${targetColumnId}`,

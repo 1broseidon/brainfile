@@ -19,7 +19,7 @@ import {
   composeBody,
 } from '../utils/v2-detect';
 import { assertV2Brainfile } from '../utils/v2-only';
-import { validateType } from '../utils/strict-validation';
+import { validateType } from '@brainfile/core';
 import { lintValidationCommands } from '../validation/command-lint';
 
 export const ADD_COMMAND_HELP = `
@@ -166,7 +166,7 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
   const dirs = ensureV2Dirs(filePath);
   const board = readV2BoardConfig(filePath);
   const typeName = options.type || 'task';
-  const typeValidation = validateType(board, typeName);
+  const typeValidation = validateType(board as unknown as Parameters<typeof validateType>[0], typeName);
   if (!typeValidation.valid) {
     throw new CLIError(typeValidation.error || `Invalid type: ${typeName}`);
   }

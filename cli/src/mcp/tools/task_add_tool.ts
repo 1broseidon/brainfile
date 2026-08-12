@@ -19,7 +19,7 @@ import {
   composeBody,
 } from '../../utils/v2-detect';
 import { buildContract } from '../../utils/contractSpec';
-import { validateType } from '../../utils/strict-validation';
+import { validateType } from '@brainfile/core';
 import { readBoard, writeBoard, mcpStructuredError } from '../helpers';
 
 export function registerTaskAddTool(server: McpServer, defaultFile: string): void {
@@ -81,7 +81,7 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
           const dirs = ensureV2Dirs(filePath);
           const board = readV2BoardConfig(filePath);
           const typePrefix = docType || 'task';
-          const typeValidation = validateType(board, typePrefix);
+          const typeValidation = validateType(board as unknown as Parameters<typeof validateType>[0], typePrefix);
           if (!typeValidation.valid) {
             return mcpStructuredError(
               typeValidation.error || `Invalid type: ${typePrefix}`,

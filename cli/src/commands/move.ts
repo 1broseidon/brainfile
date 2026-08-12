@@ -5,7 +5,7 @@ import { CLIError, fileNotFound, parseFailure, missingRequired, operationFailed,
 import { defaultLogger, type Logger } from '../utils/logger';
 import { getIncompleteSubtasksWarning } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
-import { validateColumn } from '../utils/strict-validation';
+import { validateColumn } from '@brainfile/core';
 import {
   readTasksDir,
   writeTaskFile,
@@ -197,7 +197,7 @@ function moveCommandV2(options: MoveOptions, filePath: string, logger: Logger): 
 
   // Strict boards must target a configured column; non-strict boards allow any column ID.
   const targetColumnId = configuredTargetColumn?.id || options.column;
-  const columnValidation = validateColumn(board, targetColumnId);
+  const columnValidation = validateColumn(board as unknown as Parameters<typeof validateColumn>[0], targetColumnId);
   if (!columnValidation.valid) {
     throw new CLIError(columnValidation.error || `Invalid column: ${targetColumnId}`);
   }
