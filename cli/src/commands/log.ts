@@ -231,25 +231,41 @@ function searchLogs(dirs: V2Dirs, query: string, logger: Logger): LogResult {
 function listRecentLogs(dirs: V2Dirs, logger: Logger): LogResult {
   const logDocs = readTasksDir(dirs.logsDir);
 
-  // Sort by completedAt descending
-  logDocs.sort((a, b) => {
-    const aDate = a.task.completedAt || '';
-    const bDate = b.task.completedAt || '';
-    return bDate.localeCompare(aDate);
-  });
+  // Union in ledger records that have no markdown archive. Under the
+  // dual-artifact model both always exist, but boards touched by the
+  // pre-2026-08-13 destructive --logs-to-ledger may have ledger-only history.
+  const seenIds = new Set(logDocs.map((d) => d.task.id));
+  const entries: Array<{ id: string; title: string; completedAt?: string; ledgerOnly?: boolean }> =
+    logDocs.map((d) => ({ id: d.task.id, title: d.task.title, completedAt: d.task.completedAt }));
+  const ledgerPath = path.join(dirs.logsDir, 'ledger.jsonl');
+  if (fs.existsSync(ledgerPath)) {
+    for (const line of fs.readFileSync(ledgerPath, 'utf-8').split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const record = JSON.parse(trimmed);
+        if (record?.id && !seenIds.has(record.id)) {
+          seenIds.add(record.id);
+          entries.push({ id: record.id, title: record.title ?? record.id, completedAt: record.completedAt, ledgerOnly: true });
+        }
+      } catch { /* skip malformed lines */ }
+    }
+  }
+
+  entries.sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
 
   logger.log('');
-  logger.log(chalk.bold(`Recently completed tasks (${logDocs.length})`));
+  logger.log(chalk.bold(`Recently completed tasks (${entries.length})`));
   logger.log(chalk.gray('─'.repeat(50)));
 
-  if (logDocs.length === 0) {
+  if (entries.length === 0) {
     logger.log(chalk.gray('  No completed tasks found.'));
   } else {
-    for (const doc of logDocs.slice(0, 20)) {
-      const task = doc.task;
-      logger.log(`  ${chalk.gray(`[${task.id}]`)} ${chalk.white(task.title)}`);
-      if (task.completedAt) {
-        logger.log(`    ${chalk.gray('Completed:')} ${task.completedAt}`);
+    for (const entry of entries.slice(0, 20)) {
+      const marker = entry.ledgerOnly ? chalk.gray(' (ledger only)') : '';
+      logger.log(`  ${chalk.gray(`[${entry.id}]`)} ${chalk.white(entry.title)}${marker}`);
+      if (entry.completedAt) {
+        logger.log(`    ${chalk.gray('Completed:')} ${entry.completedAt}`);
       }
       logger.log('');
     }
@@ -257,10 +273,6 @@ function listRecentLogs(dirs: V2Dirs, logger: Logger): LogResult {
 
   return {
     success: true,
-    tasks: logDocs.map(doc => ({
-      id: doc.task.id,
-      title: doc.task.title,
-      completedAt: doc.task.completedAt,
-    })),
+    tasks: entries.map(({ id, title, completedAt }) => ({ id, title, completedAt })),
   };
 }

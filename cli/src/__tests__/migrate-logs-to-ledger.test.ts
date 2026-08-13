@@ -50,7 +50,7 @@ describe('migrate --logs-to-ledger', () => {
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('migrates log .md files into ledger.jsonl and removes them', () => {
+  it('backfills log .md files into ledger.jsonl and keeps them', () => {
     const { logsDir } = setupV2Workspace(tempDir);
     writeLogTask(logsDir, 'task-1', 'First completed task');
     writeLogTask(logsDir, 'task-2', 'Second completed task', { tags: ['bug'] });
@@ -62,8 +62,9 @@ describe('migrate --logs-to-ledger', () => {
     expect(records.map((r) => r.id).sort()).toEqual(['task-1', 'task-2']);
     expect(records[0].completedAt).toBe('2026-01-15T12:00:00Z');
 
-    expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(false);
-    expect(fs.existsSync(path.join(logsDir, 'task-2.md'))).toBe(false);
+    // Dual-artifact model: markdown archives survive the backfill.
+    expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(true);
+    expect(fs.existsSync(path.join(logsDir, 'task-2.md'))).toBe(true);
   });
 
   it('skips log tasks already in the ledger', () => {
@@ -86,7 +87,7 @@ describe('migrate --logs-to-ledger', () => {
     expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(true);
   });
 
-  it('removes stale .md files with --force when already in ledger', () => {
+  it('keeps .md files even with --force when already in ledger', () => {
     const { logsDir } = setupV2Workspace(tempDir);
     writeLogTask(logsDir, 'task-1', 'Already tracked');
 
@@ -99,7 +100,7 @@ describe('migrate --logs-to-ledger', () => {
 
     migrateCommand({ logsToLedger: true, force: true });
 
-    expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(false);
+    expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(true);
     expect(readLedger(logsDir).length).toBe(1);
   });
 
@@ -133,8 +134,8 @@ describe('migrate --logs-to-ledger', () => {
     expect(renamedTask).not.toBeNull();
     expect(renamedTask!.task.title).toBe('Duplicate board task');
 
-    // Log .md file should be cleaned up
-    expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(false);
+    // Markdown archive is kept under the dual-artifact model.
+    expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(true);
   });
 
   it('handles epic- and adr- prefixed tasks', () => {

@@ -366,10 +366,6 @@ function migrateLogsToLedger(options: MigrateOptions): void {
 
     if (existingLedgerIds.has(taskId)) {
       console.log(chalk.gray(`  Skip: ${taskId} (already in ledger)`));
-      if (options.force) {
-        fs.rmSync(doc.filePath!, { force: true });
-        console.log(chalk.gray(`    Removed stale log file: ${path.basename(doc.filePath!)}`));
-      }
       skippedCount++;
       continue;
     }
@@ -395,23 +391,22 @@ function migrateLogsToLedger(options: MigrateOptions): void {
       conflictCount++;
     }
 
-    fs.rmSync(doc.filePath!, { force: true });
-    console.log(chalk.gray(`  Migrated: ${taskId}`));
+    // Dual-artifact model: the ledger record is the queryable history and the
+    // markdown file is the human-readable archive — both are kept. (This flag
+    // deleted the .md files before 2026-08-13, which lost archived bodies.)
+    console.log(chalk.gray(`  Backfilled: ${taskId}`));
   }
 
   console.log('');
-  console.log(chalk.green(`Logs-to-ledger migration complete.`));
-  console.log(chalk.gray(`  Migrated to ledger:  ${migratedCount}`));
+  console.log(chalk.green(`Ledger backfill complete (markdown archives kept).`));
+  console.log(chalk.gray(`  Backfilled to ledger: ${migratedCount}`));
   if (skippedCount > 0) {
     console.log(chalk.gray(`  Skipped (in ledger): ${skippedCount}`));
   }
   if (conflictCount > 0) {
     console.log(chalk.yellow(`  ID conflicts fixed:  ${conflictCount} board task(s) renamed`));
   }
-  if (skippedCount > 0 && !options.force) {
-    console.log('');
-    console.log(chalk.gray('Tip: Use --force to also remove stale .md files that are already in the ledger.'));
-  }
+
 }
 
 function backupAndRemoveLegacyRoot(rootBrainfilePath: string, dotDir: string): string {
