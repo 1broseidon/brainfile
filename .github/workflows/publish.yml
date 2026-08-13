@@ -8,13 +8,15 @@ name: Publish to npm
 # staged-only by ~Jan 2027). The NPM_TOKEN fallback below remains for emergencies;
 # expect token publishes to require staged human 2FA approval on npmjs.com.
 
+# Tag-driven: pushing a v* (or legacy brainfile@*) tag runs tests, publishes
+# both packages, and creates the GitHub Release from the tag.
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['v*', 'brainfile@*']
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write # create the GitHub Release from the tag
   id-token: write # OIDC: trusted publishing + provenance
 
 jobs:
@@ -33,6 +35,18 @@ jobs:
         run: |
           npm install -g npm@^11.5.1
           npm --version
+
+      - name: Guard — tag matches package versions
+        if: github.ref_type == 'tag'
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          V="${TAG#brainfile@}"; V="${V#v}"
+          PKG=$(node -p "require('./cli/package.json').version")
+          CORE=$(node -p "require('./core/package.json').version")
+          if [ "$V" != "$PKG" ] || [ "$V" != "$CORE" ]; then
+            echo "Tag $TAG ($V) does not match cli ($PKG) / core ($CORE) versions" >&2
+            exit 1
+          fi
 
       - name: Install
         run: npm ci
@@ -73,3 +87,11 @@ jobs:
           else
             npm publish -w cli --provenance --access public
           fi
+
+      - name: Create GitHub Release from tag
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "brainfile ${GITHUB_REF_NAME#v}" --generate-notes
