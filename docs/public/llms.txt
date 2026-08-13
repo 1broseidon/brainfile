@@ -14,14 +14,14 @@
 
 ```
 .brainfile/
-├── brainfile.md        # Board config (columns, types, rules)
+├── brainfile.md        # Board config (columns, types, agent.instructions)
 ├── board/              # Active task files
 │   ├── task-1.md
 │   ├── epic-1.md
 │   └── adr-1.md
 └── logs/               # Completed history
     ├── ledger.jsonl    # Primary completion record
-    └── task-2.md       # (legacy) Archived task
+    └── task-2.md       # Archived task markdown (written on complete)
 ```
 
 ## Task File Format
@@ -83,8 +83,8 @@ Detailed requirements and context go here.
 ### Board Config (`.brainfile/brainfile.md`)
 - `title`: Project name
 - `columns` (required): Array of {id, title} objects
-- `types`: Document type definitions with allowed columns
-- `rules`: Project rules (always, never, prefer, context categories)
+- `types`: Document type definitions
+- `agent.instructions`: Standing project guidance (replaces the removed `rules` block)
 
 ## CLI Commands
 
@@ -97,11 +97,13 @@ brainfile show --task task-1                      # view task details
 brainfile add --title "Task name"                 # create task
 brainfile add --title "Fix bug" -p high --tags bug  # with metadata
 brainfile move --task task-1 --column in-progress # move between columns
-brainfile complete --task task-1                  # done (appends to ledger.jsonl and archives)
+brainfile complete --task task-1                  # ledger.jsonl + logs/<id>.md
+brainfile brief --agent codex                     # per-agent delta orientation
 brainfile patch --task task-1 -p critical         # update fields
 brainfile subtask --add "Write tests" --task task-1   # add subtask
 brainfile subtask --toggle sub-1 --task task-1    # toggle completion
-brainfile archive --task task-1                   # archive task
+brainfile archive --task task-1                   # complete locally (same as complete)
+brainfile archive --task task-1 --to github       # export a completed task
 brainfile delete --task task-1                    # permanently remove
 ```
 
@@ -110,31 +112,17 @@ brainfile delete --task task-1                    # permanently remove
 If connected via MCP (`.mcp.json`), these tools are available:
 
 ```
-list_tasks          List/filter tasks by column, tag, priority, contract status
+list_tasks          List/filter tasks by column, tag, type
 get_task            Get full task details by ID
-search_tasks        Search by query, assignee, priority
-add_task            Create a task (supports with_contract, deliverables, constraints)
-move_task           Move task to a different column
-patch_task          Update specific fields
-delete_task         Remove a task
-add_subtask         Add subtask to a task
-toggle_subtask      Mark subtask complete/incomplete
-delete_subtask      Remove a subtask
-bulk_set_subtasks   Set multiple subtasks complete/incomplete at once
-complete_all_subtasks  Mark all subtasks in a task as done
-archive_task        Archive to local, GitHub Issues, or Linear
-restore_task        Restore archived task
-bulk_move_tasks     Move multiple tasks at once
-bulk_patch_tasks    Patch multiple tasks at once
-bulk_delete_tasks   Delete multiple tasks
-bulk_archive_tasks  Archive multiple tasks
-contract_pickup     Claim a contract (sets status to in_progress)
-contract_deliver    Mark contract as delivered
-contract_validate   Check deliverables and run validation commands
-attach_contract     Add contract to existing task
-list_rules          List project rules
-add_rule            Add a project rule
-delete_rule         Remove a project rule
+search              Search, list recent completions, or view one entry
+task_add            Create a task (supports with_contract, deliverables, constraints)
+task_move           Move one task or many to a column
+task_patch          Update fields on one task or many
+task_delete         Remove a task
+task_complete       Complete (ledger + logs/) or export to GitHub/Linear
+subtask             Add/toggle/delete/update subtasks (action=)
+contract            attach/pickup/deliver/validate/graph/activate
+brief               Per-agent delta orientation (agent=, peek?)
 ```
 
 ## Contracts
@@ -160,10 +148,10 @@ brainfile add --title "Add auth" \
 ```
 
 ### Agent Workflow
-1. `contract_pickup` or `brainfile contract pickup --task ID` — claim it
+1. `contract` `action: pickup` or `brainfile contract pickup --task ID` — claim it
 2. Implement the deliverables
-3. `contract_deliver` or `brainfile contract deliver --task ID` — mark delivered
-4. PM validates: `contract_validate` or `brainfile contract validate --task ID`
+3. `contract` `action: deliver` or `brainfile contract deliver --task ID` — mark delivered
+4. PM validates: `contract` `action: validate` or `brainfile contract validate --task ID`
 
 ### Contract Fields
 - `status`: ready | in_progress | delivered | done | failed | blocked
@@ -172,27 +160,11 @@ brainfile add --title "Add auth" \
 - `constraints`: Implementation rules
 - `feedback`: Rework guidance (added after failed validation)
 
-## Rules System
+## Project guidance
 
-Projects define rules in the board config:
+Standing guidance belongs in `agent.instructions` on the board config, not a `rules:` block (removed by adr-2). Accepted ADRs live in `logs/` after `brainfile adr promote` and appear in `brainfile brief`.
 
-```yaml
-rules:
-  always:
-    - id: 1
-      rule: write tests for all new features
-  never:
-    - id: 1
-      rule: commit directly to main
-  prefer:
-    - id: 1
-      rule: functional components over class components
-  context:
-    - id: 1
-      rule: this is a TypeScript monorepo
-```
-
-Rules are injected into agent context automatically via MCP.
+A legacy `rules:` block still parses; `brainfile lint --fix` folds it into `agent.instructions`.
 
 ## Best Practices
 

@@ -160,8 +160,7 @@ brainfile add --title "Implement API" \
 
 ### PM Agent Lifecycle
 
-1. **Validate**: `brainfile contract validate -t task-1` (auto-checks deliverables and runs commands)
-2. **Complete**: `brainfile complete -t task-1` (after validation passes)
+1. **Validate**: `brainfile contract validate -t task-1` (checks deliverables, runs commands, and on success archives to `logs/` + `ledger.jsonl`)
 
 See the [Agent Contracts Guide](/guides/contracts) for the full lifecycle and best practices.
 :::
@@ -171,10 +170,13 @@ See the [Agent Contracts Guide](/guides/contracts) for the full lifecycle and be
 ## Archive & Restore
 
 ```bash
-# Archive a task
+# Complete locally (ledger + logs/<id>.md) — same as brainfile complete
 brainfile archive --task task-5
 
-# Restore from archive
+# Export an already-completed task to GitHub or Linear
+brainfile archive --task task-5 --to github
+
+# Restore from a v1 archive file (not logs/)
 brainfile restore --task task-5 --column todo
 ```
 

@@ -14,11 +14,11 @@
  *     the factory rather than the module singleton avoids depending on when
  *     `theme.ts` first happened to be imported.
  *  2. **Selection does not depend on colour** — `DocumentRow` is invoked
- *     directly and its element tree inspected: the selected row is marked with
- *     `inverse` and carries no `color`/`backgroundColor` anywhere. Inverse is
- *     the one attribute the gate does not touch, which is exactly why the gate
- *     lives at the prop layer rather than on `chalk.level` — zeroing the level
- *     would kill `inverse` along with colour, taking the selection bar with it.
+ *     directly and its element tree inspected: the selected row carries
+ *     `GLYPHS.cursor` in column 1 (visible when chalk strips inverse) and
+ *     `inverse={true}` (reverse video when chalk.level > 0). It carries no
+ *     `color`/`backgroundColor`. Inverse still goes through chalk inside ink,
+ *     so the glyph is the mechanism that survives NO_COLOR / FORCE_COLOR=0.
  *
  * Plus a legibility check on a real frame, which in this environment is already
  * an unstyled frame: glyphs, indentation, IDs and titles must all still carry
@@ -106,6 +106,15 @@ describe('NO_COLOR (§C2 / P4)', () => {
     const renderRow = (selected: boolean, archived = false) =>
       collectProps(DocumentRow({ row: makeRow(), selected, width: 80, idWidth: 8, archived }));
 
+    it('puts the cursor glyph on a selected row and not on an unselected one', () => {
+      const texts = (selected: boolean) =>
+        renderRow(selected)
+          .flatMap((p) => (typeof p.children === 'string' ? [p.children] : []));
+
+      expect(texts(true)).toContain(GLYPHS.cursor);
+      expect(texts(false)).not.toContain(GLYPHS.cursor);
+    });
+
     it('marks the selected row with inverse', () => {
       expect(renderRow(true).some((p) => p.inverse === true)).toBe(true);
     });
@@ -157,6 +166,8 @@ describe('NO_COLOR (§C2 / P4)', () => {
 
       // Type glyphs (the structural signal colour never carried).
       expect(frame).toContain('▸');
+      // Selection is a character, not a colour — visible under chalk.level 0.
+      expect(lineWith(h.frame(), 'epic-1')).toMatch(/^▌/);
       // IDs and titles.
       expect(frame).toContain('epic-1');
       expect(frame).toContain('Post-migration cleanup');

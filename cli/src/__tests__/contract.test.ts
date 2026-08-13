@@ -112,8 +112,9 @@ columns:
     expect(fs.existsSync(path.join(workspace.boardDir, 'task-1.md'))).toBe(false);
 
     const ledgerPath = path.join(workspace.logsDir, 'ledger.jsonl');
-    expect(fs.existsSync(ledgerPath)).toBe(true);
+    expect(fs.existsSync(path.join(workspace.logsDir, 'ledger.jsonl'))).toBe(true);
     expect(fs.readFileSync(ledgerPath, 'utf-8')).toContain('"contractStatus":"done"');
+    expect(fs.existsSync(path.join(workspace.logsDir, 'task-1.md'))).toBe(true);
   });
 
   it('validate should stop on first failing command and set status to failed', () => {

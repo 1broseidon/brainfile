@@ -26,9 +26,11 @@ export function getTypeCycleOptions(board: Board | null): string[] {
   // shape) doesn't declare it statically, but the parsed object still carries
   // it — the same `(board as any).x` pattern actions.ts already uses for
   // `archive.destination`.
-  const configured = new Set(
-    Object.keys((board as unknown as { types?: Record<string, unknown> } | null)?.types ?? {}),
+  const configured = Object.keys(
+    (board as unknown as { types?: Record<string, unknown> } | null)?.types ?? {},
   );
-  const available = FIXED_TYPE_ORDER.filter((type) => type === 'task' || configured.has(type));
-  return ['all', ...available, DONE_FILTER];
+  const configuredSet = new Set(configured);
+  const known = FIXED_TYPE_ORDER.filter((type) => type === 'task' || configuredSet.has(type));
+  const extra = configured.filter((type) => !FIXED_TYPE_ORDER.includes(type)).sort();
+  return ['all', ...known, ...extra, DONE_FILTER];
 }

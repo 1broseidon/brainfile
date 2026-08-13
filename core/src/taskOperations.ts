@@ -97,7 +97,10 @@ export interface TaskFilters {
 }
 
 export interface CompleteTaskFileOptions {
-  /** Keep legacy behavior: move completed task markdown file into logs/. */
+  /**
+   * @deprecated Markdown is always archived to `logs/<id>.md` alongside the
+   * ledger record. Callers may still pass this; it has no effect.
+   */
   legacyMode?: boolean;
   summary?: string;
   filesChanged?: string[];
@@ -280,45 +283,12 @@ function rollbackLedgerAppend(logsDir: string, appendedRecord: ReturnType<typeof
   }
 }
 
-function completeTaskFileLegacy(
-  taskPath: string,
-  logsDir: string,
+function archivedBody(
   doc: TaskDocument,
-  completedTask: Task,
   childStates?: ChildTaskSummary[],
-): TaskOperationResult {
-  const baseName = path.basename(taskPath);
-  const destPath = path.join(logsDir, baseName);
-  let completedBody = doc.body;
-
-  if (doc.task.type === 'epic') {
-    const childTasksSection = buildChildTasksSection(childStates ?? []);
-    completedBody = appendBodySection(doc.body, childTasksSection);
-  }
-
-  if (fs.existsSync(destPath)) {
-    return { success: false, error: `Task already exists in logs: ${doc.task.id}` };
-  }
-
-  try {
-    fs.mkdirSync(logsDir, { recursive: true });
-    writeTaskFileExclusive(destPath, completedTask, completedBody);
-  } catch (err) {
-    return { success: false, error: `Failed to complete task: ${err}` };
-  }
-
-  try {
-    fs.unlinkSync(taskPath);
-    return { success: true, task: completedTask, filePath: destPath };
-  } catch (err) {
-    // Roll back the new log file to avoid duplicated active/completed copies.
-    try {
-      fs.unlinkSync(destPath);
-    } catch {
-      // Best effort rollback.
-    }
-    return { success: false, error: `Failed to finalize completion: ${err}` };
-  }
+): string {
+  if (doc.task.type !== 'epic') return doc.body;
+  return appendBodySection(doc.body, buildChildTasksSection(childStates ?? []));
 }
 
 /**
@@ -352,8 +322,8 @@ export function generateNextFileTaskId(boardDir: string, logsDir?: string, typeP
   if (logsDir) {
     scanDir(logsDir);
 
-    // Also scan ledger.jsonl — tasks completed via the non-legacy path
-    // only exist there, not as .md files in logs/.
+    // Also scan ledger.jsonl so IDs completed before markdown archival was
+    // unified (or whose .md was later deleted) still increment the sequence.
     try {
       for (const record of readLedger(logsDir)) {
         const match = record.id.match(pattern);
@@ -581,7 +551,7 @@ export function moveTaskFileToColumn(
     return { success: true, task, filePath, column: resolvedColumn };
   }
 
-  const completeResult = completeTaskFile(filePath, dirs.logsDir, { legacyMode: true });
+  const completeResult = completeTaskFile(filePath, dirs.logsDir);
   if (!completeResult.success || !completeResult.task) {
     return {
       success: false,
@@ -860,13 +830,17 @@ export function updateSubtasksInFile(
 }
 
 /**
- * Complete a task by appending to `logs/ledger.jsonl` and removing board file.
- * Legacy mode can still move markdown files into logs/.
+ * Complete a task: append `logs/ledger.jsonl`, archive the markdown to
+ * `logs/<id>.md`, then remove the board file.
+ *
+ * Both artifacts are required. `brainfile log` / `search` / the TUI `done`
+ * stop read markdown; `brief` and ID generation read the ledger. Writing only
+ * one of them made completed work disappear from half the product.
  *
  * @param taskPath - Absolute path to the task file in board/
  * @param logsDir - Absolute path to the logs directory
  * @param options - Optional completion behavior and ledger details
- * @returns TaskOperationResult with the completed task
+ * @returns TaskOperationResult with the completed task; `filePath` is the archived markdown
  */
 export function completeTaskFile(
   taskPath: string,
@@ -911,14 +885,13 @@ export function completeTaskFile(
     updatedAt: now,
   };
 
-  if (options.legacyMode) {
-    const legacyResult = completeTaskFileLegacy(taskPath, logsDir, doc, completedTask, childStates);
-    return incompleteChildren && legacyResult.success
-      ? { ...legacyResult, incompleteChildren }
-      : legacyResult;
+  const destPath = path.join(logsDir, path.basename(taskPath));
+  if (fs.existsSync(destPath)) {
+    return { success: false, error: `Task already exists in logs: ${doc.task.id}` };
   }
 
-  const record = buildLedgerRecord(completedTask, doc.body, {
+  const completedBody = archivedBody(doc, childStates);
+  const record = buildLedgerRecord(completedTask, completedBody, {
     summary: options.summary,
     filesChanged: options.filesChanged,
     completedAt: now,
@@ -926,11 +899,18 @@ export function completeTaskFile(
     validationAttempts: options.validationAttempts,
   });
 
-  let ledgerPath: string;
   try {
-    ledgerPath = appendLedgerRecord(logsDir, record);
+    appendLedgerRecord(logsDir, record);
   } catch (err) {
     return { success: false, error: `Failed to append ledger record: ${err}` };
+  }
+
+  try {
+    fs.mkdirSync(logsDir, { recursive: true });
+    writeTaskFileExclusive(destPath, completedTask, completedBody);
+  } catch (err) {
+    rollbackLedgerAppend(logsDir, record);
+    return { success: false, error: `Failed to complete task: ${err}` };
   }
 
   try {
@@ -938,10 +918,15 @@ export function completeTaskFile(
     return {
       success: true,
       task: completedTask,
-      filePath: ledgerPath,
+      filePath: destPath,
       ...(incompleteChildren && { incompleteChildren }),
     };
   } catch (err) {
+    try {
+      fs.unlinkSync(destPath);
+    } catch {
+      // Best effort rollback of the new log file.
+    }
     rollbackLedgerAppend(logsDir, record);
     return { success: false, error: `Failed to finalize completion: ${err}` };
   }

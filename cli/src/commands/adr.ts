@@ -100,7 +100,7 @@ export function adrPromoteCommand(
   logger.log(chalk.green('ADR promoted!'));
   logger.log('');
   logger.log(chalk.gray(`  ADR:         ${task.id} - ${task.title}`));
-  logger.log(chalk.gray(`  Status:      accepted`));
+  logger.log(chalk.gray(`  Status:      promoted`));
   logger.log(chalk.gray(`  Moved to:    logs/${task.id}.md`));
 
   return {

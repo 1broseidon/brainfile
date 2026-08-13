@@ -38,7 +38,7 @@ export function registerListTasksTool(server: McpServer, defaultFile: string): v
             const taskType = task.type || 'task';
             if (taskType !== filterType) continue;
           }
-          tasks.push({ id: task.id, title: task.title, column: col.title, priority: task.priority, tags: task.tags, assignee: task.assignee });
+          tasks.push({ id: task.id, title: task.title, column: col.id, priority: task.priority, tags: task.tags, assignee: task.assignee });
         }
       }
       const output = { tasks, count: tasks.length };

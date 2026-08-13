@@ -78,7 +78,8 @@ export interface DocumentRowProps {
   /**
    * Archived doc (`done` stop). Dims the title to muted so completed work reads
    * as past tense next to live work (§B2). Selection still inverts — selection
-   * always wins visually, and inverse is the one indicator NO_COLOR keeps.
+   * always wins visually. Selection also puts `GLYPHS.cursor` in column 1 so a
+   * NO_COLOR terminal (chalk.level 0, inverse stripped) can still see the row.
    */
   archived?: boolean;
 }
@@ -95,7 +96,10 @@ export function DocumentRow({ row, selected, width, idWidth, archived = false }:
       ? GLYPHS.parentCollapsed
       : GLYPHS.parentExpanded
     : getTypeGlyph(task.type);
-  const indent = `${pad(1)}${pad(depth * 2)}`;
+  // First column is a glyph when selected (`▌`) and a space otherwise. Inverse
+  // still paints on colour terminals, but chalk.level 0 (NO_COLOR / FORCE_COLOR=0)
+  // strips ink's inverse — the character is what a no-colour terminal can see.
+  const indent = `${selected ? GLYPHS.cursor : ' '}${pad(depth * 2)}`;
   const glyphCell = `${glyph || ' '} `;
   const idCell = `${task.id.padEnd(idWidth)}  `;
   const leftWidth = indent.length + glyphCell.length + idCell.length;

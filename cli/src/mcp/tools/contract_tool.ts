@@ -135,10 +135,12 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           commands: result.commandResults,
           warnings: result.warnings,
         };
+        // Failed validation is a successful tool result (`ok: false`), not a
+        // tool error. `isError: true` would skip outputSchema checks and hide
+        // deliverable/command details from clients that drop error payloads.
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
           structuredContent: output,
-          isError: !result.ok,
         };
       }
 

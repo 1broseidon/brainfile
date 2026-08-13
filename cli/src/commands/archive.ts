@@ -1,11 +1,8 @@
 /**
  * Archive command for Brainfile CLI
  *
- * Exports completed tasks (from logs/) to:
- * - github: Create closed GitHub Issue
- * - linear: Create completed Linear issue
- *
- * Local archiving is handled by `brainfile complete` (tasks move to logs/).
+ * Local (`--to local`, the default): complete the task (ledger + logs/<id>.md).
+ * External: export an already-completed task from logs/ to GitHub or Linear.
  *
  * @packageDocumentation
  */
@@ -13,8 +10,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  completeTaskFile,
   formatTaskForGitHub,
   formatTaskForLinear,
+  readTasksDir,
+  taskFileName,
   type Board,
   type Task,
 } from '@brainfile/core';
@@ -33,7 +33,6 @@ import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { createGitHubIssue, isGitHubAuthenticated } from '../utils/github-auth';
 import { createLinearIssue, isLinearAuthenticated, getLinearTeams } from '../utils/linear-auth';
-import { readTasksDir, taskFileName } from '@brainfile/core';
 import {
   getV2Dirs,
   findV2Task,
@@ -86,7 +85,14 @@ export async function archiveCommand(options: ArchiveOptions) {
     const destination = parsedDest.type;
 
     if (destination === 'local') {
-      operationError('Local archive is not supported for v2 boards. Use "brainfile complete" to move tasks to logs/.');
+      if (options.all) {
+        console.log(chalk.yellow('Note:') + ' --all with local destination has no effect (tasks complete into logs/ via brainfile complete).');
+        return;
+      }
+      if (options.task) {
+        await completeLocalV2(filePath, options.task, options.dryRun);
+      }
+      return;
     }
 
     // Validate destination auth if needed
@@ -116,6 +122,38 @@ export async function archiveCommand(options: ArchiveOptions) {
   } catch (error) {
     handleError(error);
   }
+}
+
+function completeLocalV2(filePath: string, taskId: string, dryRun?: boolean): void {
+  const dirs = getV2Dirs(filePath);
+  const onBoard = findV2Task(dirs, taskId, false);
+  if (onBoard && !onBoard.isLog) {
+    if (dryRun) {
+      console.log(chalk.yellow('DRY RUN') + ' - No changes will be made');
+      console.log('');
+      console.log(`Would complete ${chalk.cyan(taskId)} (ledger + logs/${taskId}.md)`);
+      return;
+    }
+    const result = completeTaskFile(onBoard.filePath, dirs.logsDir);
+    if (!result.success) {
+      operationError(result.error || `Failed to complete task: ${taskId}`);
+      return;
+    }
+    console.log(chalk.green('Task completed!'));
+    console.log('');
+    console.log(chalk.gray(`  Task:     ${taskId}`));
+    console.log(chalk.gray(`  Moved to: logs/${taskId}.md`));
+    return;
+  }
+
+  const inLogs = findV2Task(dirs, taskId, true);
+  if (inLogs?.isLog) {
+    console.log(chalk.yellow('Already completed.') + ` ${taskId} is in logs/.`);
+    console.log('Export it with: ' + chalk.cyan(`brainfile archive --task ${taskId} --to github|linear`));
+    return;
+  }
+
+  operationError(`Task not found: ${taskId}`);
 }
 
 // ============================================================================

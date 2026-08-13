@@ -173,6 +173,7 @@ describe('complete', () => {
     expect(fs.existsSync(path.join(h.fixture.boardDir, 'epic-1.md'))).toBe(false);
     const ledger = fs.readFileSync(path.join(h.fixture.logsDir, 'ledger.jsonl'), 'utf-8');
     expect(ledger).toContain('"epic-1"');
+    expect(fs.existsSync(path.join(h.fixture.logsDir, 'epic-1.md'))).toBe(true);
   });
 
   it('leaves the board alone when the confirmation is declined', async () => {
@@ -184,6 +185,7 @@ describe('complete', () => {
   it('completes a childless document straight away, with no confirmation', async () => {
     await h.press('g', 'j', 'j', 'j', 'j', 'c'); // task-4
     expect(fs.existsSync(path.join(h.fixture.boardDir, 'task-4.md'))).toBe(false);
+    expect(fs.existsSync(path.join(h.fixture.logsDir, 'task-4.md'))).toBe(true);
   });
 
   it('refuses to complete an adr', async () => {

@@ -71,7 +71,7 @@ function completeV2(filePath: string, taskId: string, force: boolean, logger: Lo
   const { doc, filePath: taskPath } = found;
   const task = doc.task;
 
-  const result = completeTaskFile(taskPath, dirs.logsDir, { legacyMode: true, force });
+  const result = completeTaskFile(taskPath, dirs.logsDir, { force });
 
   if (!result.success) {
     if (result.incompleteChildren?.length) {

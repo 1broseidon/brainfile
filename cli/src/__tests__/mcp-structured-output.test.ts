@@ -130,7 +130,7 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toEqual({
       tasks: expect.arrayContaining([
-        expect.objectContaining({ id: 'task-1', title: 'First wire task', column: 'To Do' }),
+        expect.objectContaining({ id: 'task-1', title: 'First wire task', column: 'todo' }),
       ]),
       count: 2,
     });
@@ -241,12 +241,41 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
     expect((pickedUp.structuredContent as any).markdown).toBe(WireClient.text(pickedUp));
 
     const validated = await client.callTool('contract', { action: 'validate', task: 'task-1' });
+    expect(validated.isError).toBeFalsy();
     expect(validated.structuredContent).toMatchObject({
       action: 'validate',
       ok: false, // the deliverable does not exist in the fixture
       status: 'failed',
     });
     expect(Array.isArray((validated.structuredContent as any).deliverables)).toBe(true);
+  });
+
+  test('contract validate succeeds with a path-only deliverable without tripping output validation', async () => {
+    const workspaceRoot = path.dirname(path.dirname(brainfilePath));
+    const boardDir = path.join(path.dirname(brainfilePath), 'board');
+    fs.writeFileSync(path.join(workspaceRoot, 'ok.txt'), 'ok');
+    writeTaskFile(
+      path.join(boardDir, 'task-path.md'),
+      {
+        id: 'task-path',
+        title: 'Path-only deliverable',
+        column: 'todo',
+        contract: {
+          status: 'delivered',
+          deliverables: [{ path: 'ok.txt' } as any],
+        },
+      } as Task,
+      '',
+    );
+
+    const result = await client.callTool('contract', { action: 'validate', task: 'task-path' });
+    expect(WireClient.text(result) ?? '').not.toContain('Output validation error');
+    expect(result.isError).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({
+      action: 'validate',
+      ok: true,
+      status: 'done',
+    });
   });
 
   test('task_complete returns completedAt as a real field, not just prose', async () => {

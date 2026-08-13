@@ -278,7 +278,7 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('archive')
-    .description('Archive a task (locally or to GitHub/Linear)')
+    .description('Complete a task locally, or export a completed task to GitHub/Linear')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to archive')
     .option('--to <destination>', 'Archive destination: local, github, or linear')

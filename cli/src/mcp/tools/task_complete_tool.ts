@@ -57,7 +57,7 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
           if (!found) {
             return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
           }
-          const result = completeTaskFile(found.filePath, dirs.logsDir, { legacyMode: true });
+          const result = completeTaskFile(found.filePath, dirs.logsDir, {});
           if (!result.success) {
             const detail = result.incompleteChildren?.length
               ? `\nIncomplete children:\n${result.incompleteChildren.map(c => `  - ${c.id}: ${c.title}`).join('\n')}`

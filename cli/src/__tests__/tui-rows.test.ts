@@ -11,7 +11,7 @@
  */
 import type { Task } from '@brainfile/core';
 import { buildRows, windowRows } from '../tui/rows';
-import { getContractStateColor, PALETTE, getTypeGlyph } from '../tui/theme';
+import { getContractStateColor, PALETTE, getTypeGlyph, makePalette } from '../tui/theme';
 import { isCompletable, getSubtaskProgress, getContractState, getDocType } from '../tui/utils';
 
 const task = (overrides: Partial<Task> & { id: string }): Task =>
@@ -104,9 +104,17 @@ describe('contract state colours', () => {
   });
 
   it('gives each state a distinct colour except the shared failed/blocked red', () => {
-    const colors = ['draft', 'ready', 'in_progress', 'delivered', 'done', 'failed'].map(
-      getContractStateColor,
-    );
+    // Assert against an ungated palette so NO_COLOR in the test env does not
+    // collapse every entry to undefined and hide a mapping collision.
+    const palette = makePalette(false);
+    const colors = [
+      palette.contractDraft,
+      palette.contractReady,
+      palette.contractInProgress,
+      palette.contractDelivered,
+      palette.contractDone,
+      palette.contractFailed,
+    ];
     expect(new Set(colors).size).toBe(6);
   });
 });

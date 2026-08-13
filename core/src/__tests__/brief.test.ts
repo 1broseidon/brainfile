@@ -326,6 +326,7 @@ describe('buildBrief', () => {
       const config = lane(result, 'config').items;
 
       expect(config).toHaveLength(1);
+      expect(config[0].text).toBe('Board config changed');
       expect(config[0].why).toBe('brainfile.md changed since last brief');
       // Must not name a specific rule — that diff does not exist.
       expect(config[0].text).not.toMatch(/Write tests first|Commit secrets/);
@@ -500,8 +501,9 @@ describe('brief state', () => {
 
   it('sanitizes agent names into safe filenames', () => {
     expect(sanitizeAgentFilename('Codex')).toBe('codex');
-    expect(sanitizeAgentFilename('../../etc/passwd')).toBe('.._.._etc_passwd');
-    expect(sanitizeAgentFilename('agent name!')).toBe('agent_name_');
+    expect(sanitizeAgentFilename('../../etc/passwd')).toBe('.._2f.._2fetc_2fpasswd');
+    expect(sanitizeAgentFilename('agent name!')).toBe('agent_20name_21');
+    expect(sanitizeAgentFilename('agent a')).not.toBe(sanitizeAgentFilename('agent_a'));
     expect(sanitizeAgentFilename('  ')).toBe('_');
   });
 });

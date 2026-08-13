@@ -49,11 +49,10 @@ const RAW_PALETTE = {
  * empty string is falsy in JS, which happens to be exactly the spec's rule.
  *
  * Gating happens HERE, at the prop layer, rather than by forcing `chalk.level`
- * to 0 globally. That distinction is load-bearing: chalk gates `inverse` behind
- * the same single `level` check as colour, so zeroing the level would erase the
- * selection bar along with the palette. Returning `undefined` for every colour
- * leaves ink's `<Text color={undefined}>` unstyled — the exact value the views
- * already pass for a selected row — while `inverse` keeps working untouched.
+ * to 0 globally. Ink still applies `inverse` through `chalk.inverse`, and chalk
+ * level 0 (NO_COLOR / FORCE_COLOR=0) is a no-op — so selection also puts a
+ * cursor glyph in column 1 of `DocumentRow`. The palette gate keeps colour
+ * props `undefined`; the glyph is what a no-colour terminal can actually see.
  *
  * The Proxy means all ~107 `PALETTE.x` call sites need no change, and the check
  * is a plain runtime read at module init, so it survives the esbuild bundle

@@ -247,11 +247,14 @@ export function useKeyboardNavigation({
           if (result.success) {
             showStatus(result.message || `Completed ${target.id}`, 'success');
             loadBrainfile(true);
+            closeOverlay({ docRemoved: true });
           } else {
             showStatus(result.error || 'Failed to complete', 'error');
+            closeOverlay();
           }
+        } else {
+          closeOverlay();
         }
-        closeOverlay({ docRemoved: true });
         return;
       }
       if (input === 'n' || input === 'N' || key.escape) {
@@ -269,11 +272,14 @@ export function useKeyboardNavigation({
           if (result.success) {
             showStatus(`Deleted ${overlayTarget.id}`, 'success');
             loadBrainfile(true);
+            closeOverlay({ docRemoved: true });
           } else {
             showStatus(result.error || 'Failed to delete', 'error');
+            closeOverlay();
           }
+        } else {
+          closeOverlay();
         }
-        closeOverlay({ docRemoved: true });
         return;
       }
       if (input === 'n' || input === 'N' || key.escape) {

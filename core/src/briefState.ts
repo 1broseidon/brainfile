@@ -30,8 +30,17 @@ export interface BriefState {
  * sanitized to prevent path traversal and invalid-filename characters.
  */
 export function sanitizeAgentFilename(agentName: string): string {
-  const cleaned = agentName.trim().toLowerCase().replace(/[^a-z0-9._-]/g, '_');
-  // Guard against names that sanitize to something empty or path-meaningful.
+  const trimmed = agentName.trim().toLowerCase();
+  let cleaned = '';
+  for (const ch of trimmed) {
+    if (/[a-z0-9._-]/.test(ch)) {
+      cleaned += ch;
+    } else {
+      // Hex-encode anything else so `agent a` and `agent_a` cannot collide,
+      // and `../` cannot traverse.
+      cleaned += `_${ch.charCodeAt(0).toString(16).padStart(2, '0')}`;
+    }
+  }
   if (cleaned.length === 0 || cleaned === '.' || cleaned === '..') return '_';
   return cleaned;
 }

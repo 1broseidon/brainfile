@@ -37,7 +37,7 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`move`](#move) | Move task between columns |
 | [`patch`](#patch) | Update task fields |
 | [`delete`](#delete) | Permanently delete a task |
-| [`archive`](#archive) | Archive a task |
+| [`archive`](#archive) | Complete locally, or export completed work to GitHub/Linear |
 | [`restore`](#restore) | Restore from archive |
 | [`subtask`](#subtask) | Manage subtasks |
 | [`lint`](#lint) | Validate and fix syntax |
@@ -49,6 +49,7 @@ brainfile mcp           # Start MCP server for AI assistants
 | [`adr`](#adr) | ADR lifecycle management |
 | [`types`](#types) | Document type management |
 | [`search`](#search) | Search tasks and logs |
+| [`brief`](#brief) | Per-agent delta orientation |
 | [`log`](#log) | View completed task logs |
 | [`note`](#note) | Append a timestamped note to a task log |
 | [`migrate`](#migrate) | Move brainfile to .brainfile/ directory |
@@ -227,21 +228,23 @@ brainfile delete --task task-1 --force
 
 ## archive
 
-Archive a task locally or to an external service (GitHub Issues, Linear).
+Complete a task locally (same as `brainfile complete`: ledger + `logs/<id>.md`), or export an already-completed task from `logs/` to GitHub Issues or Linear.
 
 ```bash
-brainfile archive --task task-1
-brainfile archive --task task-1 --to github
+brainfile archive --task task-1                 # complete locally
+brainfile archive --task task-1 --to github     # export from logs/ to GitHub
 brainfile archive --all --to linear --dry-run
 ```
+
+If the task is already in `logs/`, a local archive tells you so and points at `--to github|linear` for export.
 
 **Options:**
 | Option | Description |
 |--------|-------------|
 | `-f, --file <path>` | Path to brainfile file (auto-detect by default) |
-| `-t, --task <id>` | Task ID to archive |
-| `--to <destination>` | Archive destination: `local`, `github`, or `linear` |
-| `--all` | Archive all tasks from local archive to external service |
+| `-t, --task <id>` | Task ID to complete or export |
+| `--to <destination>` | `local` (default, completes the task), `github`, or `linear` |
+| `--all` | Export all completed tasks from `logs/` to GitHub or Linear |
 | `--dry-run` | Preview what would be created without making changes |
 
 ---
@@ -342,12 +345,16 @@ brainfile tui          # Explicit TUI command
 
 | Key | Action |
 |-----|--------|
-| `TAB` / `Shift+TAB` | Navigate columns |
-| `j`/`k` or `↑`/`↓` | Navigate tasks |
-| `Enter` | Expand/collapse task |
-| `/` | Search tasks |
-| `?` | Show help |
-| `r` | Refresh |
+| `j` / `k` or `↑` / `↓` | Move selection |
+| `h` / `l` or `TAB` | Cycle column |
+| `Enter` | Open detail (Enter on a child drills in) |
+| `esc` | Back / clear filter |
+| `t` | Cycle document type, including `done` (completed `logs/`) |
+| `space` | Collapse/expand a parent, or toggle a subtask in detail |
+| `c` | Complete |
+| `e` | Edit the document in `$EDITOR` |
+| `/` | Filter |
+| `?` | Help |
 | `q` | Quit |
 
 ---
@@ -485,6 +492,28 @@ Inspect and manage board document types.
 brainfile types list
 brainfile types add epic --completable true --id-prefix epic
 ```
+
+---
+
+## brief
+
+Per-agent orientation: what changed that this agent should care about.
+
+The first call for an agent is a full orientation (board title, `agent.instructions`, accepted ADRs, assigned tasks, latest notes, recent completions). Later calls are a delta against that agent's checkpoint in `.brainfile/state/<agent>.json` (gitignored). `--peek` reads without advancing the checkpoint.
+
+```bash
+brainfile brief --agent codex
+brainfile brief --agent codex --peek
+brainfile brief --agent codex --json
+```
+
+**Options:**
+| Option | Description |
+|--------|-------------|
+| `-f, --file <path>` | Path to brainfile file (auto-detect by default) |
+| `--agent <name>` | Agent identifier (required — state is per-agent) |
+| `--peek` | Read without marking the brief as seen |
+| `--json` | Machine-readable `{version, kind, data}` envelope |
 
 ---
 

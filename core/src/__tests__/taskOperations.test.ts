@@ -439,7 +439,7 @@ describe('taskOperations', () => {
   });
 
   describe('completeTaskFile', () => {
-    it('appends to ledger and removes active task file by default', () => {
+    it('appends to ledger, archives markdown, and removes the board file', () => {
       const filePath = seedTask(
         'task-1',
         'done',
@@ -458,8 +458,14 @@ describe('taskOperations', () => {
       expect(result.task!.position).toBeUndefined();
       expect(fs.existsSync(filePath)).toBe(false);
 
+      const destPath = path.join(logsDir, 'task-1.md');
+      expect(result.filePath).toBe(destPath);
+      expect(fs.existsSync(destPath)).toBe(true);
+      const archived = readTaskFile(destPath);
+      expect(archived).not.toBeNull();
+      expect(archived!.body).toContain('Implemented the final piece.');
+
       const ledgerPath = path.join(logsDir, 'ledger.jsonl');
-      expect(result.filePath).toBe(ledgerPath);
       expect(fs.existsSync(ledgerPath)).toBe(true);
 
       const lines = fs.readFileSync(ledgerPath, 'utf-8').trim().split('\n');
@@ -480,7 +486,7 @@ describe('taskOperations', () => {
       expect(fs.existsSync(path.join(newLogsDir, 'ledger.jsonl'))).toBe(true);
     });
 
-    it('supports legacy mode by moving markdown file to logs/', () => {
+    it('still archives markdown when legacyMode is passed (deprecated, no-op flag)', () => {
       const filePath = seedTask('task-1', 'done', {}, '## Log\n- Started work\n');
 
       completeTaskFile(filePath, logsDir, { legacyMode: true });
@@ -489,6 +495,7 @@ describe('taskOperations', () => {
       expect(doc).not.toBeNull();
       expect(doc!.body).toContain('## Log');
       expect(doc!.body).toContain('Started work');
+      expect(fs.existsSync(path.join(logsDir, 'ledger.jsonl'))).toBe(true);
     });
 
     it('fails in legacy mode when destination log file already exists', () => {

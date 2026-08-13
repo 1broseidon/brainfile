@@ -5,7 +5,7 @@
 
 Version: 2.0
 Schema: https://brainfile.md/v2
-Last Updated: 2026-08-11
+Last Updated: 2026-08-13
 
 ---
 
@@ -51,12 +51,12 @@ brainfile init
 `
 
 This creates the .brainfile/ directory with:
-  - .brainfile/brainfile.md — Board configuration (columns, types, rules)
+  - .brainfile/brainfile.md — Board configuration (columns, types)
   - .brainfile/board/ — Active task files
   - .brainfile/logs/ — Completion history (ledger.jsonl) and archives
 
 .brainfile/
-├── brainfile.md    ← Board config (columns, types, rules)
+├── brainfile.md    ← Board config (columns, types)
 ├── board/          ← Active task files go here
 └── logs/           ← Completed history (ledger and archived files)
 
@@ -747,8 +747,7 @@ Worker Agent Lifecycle
   Deliver: brainfile contract deliver -t task-1
 
 PM Agent Lifecycle
-  Validate: brainfile contract validate -t task-1 (auto-checks deliverables and runs commands)
-  Complete: brainfile complete -t task-1 (after validation passes)
+  Validate: brainfile contract validate -t task-1 (checks deliverables, runs commands, and on success archives to logs/ + ledger.jsonl)
 
 See the Agent Contracts Guide for the full lifecycle and best practices.
 :::
@@ -759,11 +758,15 @@ Archive & Restore
 
 `
 
-Archive a task
+Complete locally (ledger + logs/<id>.md) — same as brainfile complete
 
 brainfile archive --task task-5
 
-Restore from archive
+Export an already-completed task to GitHub or Linear
+
+brainfile archive --task task-5 --to github
+
+Restore from a v1 archive file (not logs/)
 
 brainfile restore --task task-5 --column todo
 `
@@ -884,7 +887,7 @@ Restart your AI assistant after adding or changing MCP configuration.
 
 Available Tools
 
-The MCP server registers 10 tools. Several are action-based or accept arrays, so a single tool covers what would otherwise be many — task_move and task_patch accept one task ID or an array (bulk), subtask and contract dispatch on an action parameter.
+The MCP server registers 11 tools. Several are action-based or accept arrays, so a single tool covers what would otherwise be many — task_move and task_patch accept one task ID or an array (bulk), subtask and contract dispatch on an action parameter.
 
 Task Management
 
@@ -915,6 +918,25 @@ A single action-based tool. Set action to add, toggle, delete, or update.
 | title / titles | update | New title(s) |
 | completed | toggle | Set explicit state instead of flipping |
 | all | toggle, delete | Target every subtask in the task |
+
+Agent Briefs — brief
+
+Per-agent attention primitive: "what changed that I should care about?" State is
+per agent, stored locally in .brainfile/state/<agent>.json (gitignored).
+
+| Tool | Key parameters | Description |
+|------|----------------|-------------|
+| brief | agent, peek?, file? | Get what changed for one agent since its last brief |
+
+The first call for an agent returns a full orientation (agent instructions,
+accepted ADRs and
+instructions, assigned tasks, latest notes, recent completions). Every later call
+returns a delta: new notes, task changes, completions, and whether the board
+config changed. Pass peek: true to read without marking the brief as seen.
+
+Notes are detected independently of updatedAt, because adding a note does not
+bump it. Contract states are reported as current truth — Brainfile records no
+prior status, so a brief never claims a transition it cannot know.
 
 Agent Contracts — contract
 
@@ -1448,11 +1470,6 @@ types:                     # Custom document types
 agent:
   instructions: []
   llmNotes: string
-rules:
-  always: []
-  never: []
-  prefer: []
-  context: []
 ---
 `
 
@@ -1526,7 +1543,6 @@ Board Fields
 | strict | boolean | No | Enforce type validation |
 | types | object | No | Custom document types |
 | agent | object | No | AI agent instructions |
-| rules | object | No | Project rules |
 | columns | array | Yes | Workflow columns |
 | statsConfig | object | No | Statistics configuration |
 
@@ -1618,27 +1634,14 @@ agent:
 
 ---
 
-Rules Block
+Rules Block (removed)
 
-Project rules for AI and human reference:
+rules was removed by adr-2. Project guidance belongs in agent.instructions,
+which is the block agents are already told to read.
 
-`
-rules:
-  always:
-  - id: 1
-      rule: write tests for new features
-  - id: 2
-      rule: update task status as you work
-  never:
-  - id: 1
-      rule: commit directly to main
-  prefer:
-  - id: 1
-      rule: functional patterns over classes
-  context:
-  - id: 1
-      rule: TypeScript monorepo with Jest
-`
+Legacy files are still accepted: a rules: block parses without error, and
+brainfile lint --fix folds each entry into agent.instructions (prefixed by
+its former category) and removes the block.
 
 ---
 
@@ -1761,10 +1764,7 @@ agent:
   instructions:
   - Update task status as you work
   - Preserve all IDs
-rules:
-  always:
-  - id: 1
-      rule: write tests for new features
+  - Write tests for new features
 ---
 
 My Project
@@ -1955,10 +1955,6 @@ Location Finding
 Brainfile.findTaskLocation(content: string, taskId: string): Location
 
 Find line number of a task in source.
-
-Brainfile.findRuleLocation(content: string, ruleId: number, ruleType: RuleType): Location
-
-Find line number of a rule in source.
 
 ---
 
@@ -2260,7 +2256,6 @@ interface Board {
   protocolVersion?: string;
   schema?: string;
   agent?: AgentInstructions;
-  rules?: Rules;
   columns: Column[];
   archive?: Task[];      // legacy compat
   strict?: boolean;      // v2: enforce type validation
@@ -2465,21 +2460,21 @@ interface AgentInstructions {
 }
 `
 
-Rules
+Rules (removed)
 
-`
-interface Rules {
-  always?: Rule[];
-  never?: Rule[];
-  prefer?: Rule[];
-  context?: Rule[];
-}
+::: warning Removed in v2
+The Rules and Rule interfaces were removed by adr-2 and are no longer
+exported from @brainfile/core or @brainfile/core/browser. The rules field
+is gone from Board, BoardConfig, and Journal, and the addRule,
+deleteRule, and findRuleLocation methods no longer exist.
 
-interface Rule {
-  id: number;
-  rule: string;
-}
-`
+Project guidance now lives in AgentInstructions, which
+agents already read.
+
+A legacy rules: block still parses without error, and brainfile lint warns
+about it. brainfile lint --fix folds each entry into agent.instructions,
+prefixed by its old category, and removes the block.
+:::
 
 SerializeOptions
 
@@ -2591,7 +2586,7 @@ Commands
 | move | Move task between columns |
 | patch | Update task fields |
 | delete | Permanently delete a task |
-| archive | Archive a task |
+| archive | Complete locally, or export completed work to GitHub/Linear |
 | restore | Restore from archive |
 | subtask | Manage subtasks |
 | lint | Validate and fix syntax |
@@ -2601,9 +2596,9 @@ Commands
 | complete | Complete a task (append to ledger.jsonl and archive to logs/) |
 | contract | Manage agent-to-agent contracts |
 | adr | ADR lifecycle management |
-| rules | Manage project rules |
 | types | Document type management |
 | search | Search tasks and logs |
+| brief | Per-agent delta orientation |
 | log | View completed task logs |
 | note | Append a timestamped note to a task log |
 | migrate | Move brainfile to .brainfile/ directory |
@@ -2782,21 +2777,23 @@ Options:
 
 archive
 
-Archive a task locally or to an external service (GitHub Issues, Linear).
+Complete a task locally (same as brainfile complete: ledger + logs/<id>.md), or export an already-completed task from logs/ to GitHub Issues or Linear.
 
 `
-brainfile archive --task task-1
-brainfile archive --task task-1 --to github
+brainfile archive --task task-1                 # complete locally
+brainfile archive --task task-1 --to github     # export from logs/ to GitHub
 brainfile archive --all --to linear --dry-run
 `
+
+If the task is already in logs/, a local archive tells you so and points at --to github|linear for export.
 
 Options:
 | Option | Description |
 |--------|-------------|
 | -f, --file <path> | Path to brainfile file (auto-detect by default) |
-| -t, --task <id> | Task ID to archive |
-| --to <destination> | Archive destination: local, github, or linear |
-| --all | Archive all tasks from local archive to external service |
+| -t, --task <id> | Task ID to complete or export |
+| --to <destination> | local (default, completes the task), github, or linear |
+| --all | Export all completed tasks from logs/ to GitHub or Linear |
 | --dry-run | Preview what would be created without making changes |
 
 ---
@@ -2897,12 +2894,16 @@ Keyboard Controls:
 
 | Key | Action |
 |-----|--------|
-| TAB / Shift+TAB | Navigate columns |
-| j/k or ↑/↓ | Navigate tasks |
-| Enter | Expand/collapse task |
-| / | Search tasks |
-| ? | Show help |
-| r | Refresh |
+| j / k or ↑ / ↓ | Move selection |
+| h / l or TAB | Cycle column |
+| Enter | Open detail (Enter on a child drills in) |
+| esc | Back / clear filter |
+| t | Cycle document type, including done (completed logs/) |
+| space | Collapse/expand a parent, or toggle a subtask in detail |
+| c | Complete |
+| e | Edit the document in $EDITOR |
+| / | Filter |
+| ? | Help |
 | q | Quit |
 
 ---
@@ -3017,28 +3018,17 @@ adr
 Manage Architecture Decision Records.
 
 `
-brainfile adr promote -t adr-1 --category always
+brainfile adr promote -t adr-1
 `
+
+Promoting marks the ADR accepted and moves it to logs/. Accepted ADRs appear
+in the board lane of brainfile brief.
 
 Options (promote):
 | Option | Description |
 |--------|-------------|
 | -f, --file <path> | Path to brainfile file (auto-detect by default) |
 | -t, --task <id> | ADR task ID to promote (required) |
-| --category <category> | Rule category (prefer \| always \| never \| context) |
-
----
-
-rules
-
-Manage project rules.
-
-`
-brainfile rules                          # List all rules
-brainfile rules list --category always   # Filter by category
-brainfile rules add always "Write tests" # Add a rule
-brainfile rules delete always 1          # Delete rule by ID
-`
 
 ---
 
@@ -3050,6 +3040,28 @@ Inspect and manage board document types.
 brainfile types list
 brainfile types add epic --completable true --id-prefix epic
 `
+
+---
+
+brief
+
+Per-agent orientation: what changed that this agent should care about.
+
+The first call for an agent is a full orientation (board title, agent.instructions, accepted ADRs, assigned tasks, latest notes, recent completions). Later calls are a delta against that agent's checkpoint in .brainfile/state/<agent>.json (gitignored). --peek reads without advancing the checkpoint.
+
+`
+brainfile brief --agent codex
+brainfile brief --agent codex --peek
+brainfile brief --agent codex --json
+`
+
+Options:
+| Option | Description |
+|--------|-------------|
+| -f, --file <path> | Path to brainfile file (auto-detect by default) |
+| --agent <name> | Agent identifier (required — state is per-agent) |
+| --peek | Read without marking the brief as seen |
+| --json | Machine-readable {version, kind, data} envelope |
 
 ---
 
@@ -3367,7 +3379,7 @@ Available Schemas
 
 | Schema | v2 URL | Purpose |
 |--------|--------|---------|
-| Base | /v2/base.json | Shared fields (title, agent, rules) |
+| Base | /v2/base.json | Shared fields (title, agent) |
 | Board | /v2/board.json | Board configuration (columns, types) |
 | Task | /v2/task.json | Standalone task documents |
 | Contract | /v2/contract.json | Task contract object (task.contract) |
@@ -3380,7 +3392,7 @@ These are the built-in types, but Brainfile is not limited to them. You can defi
 
 Board (Default)
 
-Board configuration defines columns, document types, and project rules. Tasks are standalone files in .brainfile/board/.
+Board configuration defines columns and document types. Tasks are standalone files in .brainfile/board/.
 
 ``
 ---
@@ -3566,11 +3578,6 @@ agent:
   instructions: []
   llmNotes: string
   tools: {}
-rules:
-  always: []
-  never: []
-  prefer: []
-  context: []
 ---
 `
 

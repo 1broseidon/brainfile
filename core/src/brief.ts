@@ -465,7 +465,7 @@ function deltaLanes(
   if (mtime !== null && mtime > lastBriefAtMs) {
     const at = new Date(mtime).toISOString();
     configItems.push({
-      text: 'Board config or rules changed',
+      text: 'Board config changed',
       why: 'brainfile.md changed since last brief',
       at,
     });

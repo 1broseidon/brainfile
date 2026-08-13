@@ -5,8 +5,18 @@
  * (task, epic, spec, adr, plan), and its board config declares `types` for
  * all five — exactly what `t`'s cycle is read from.
  */
+import { getTypeCycleOptions, DONE_FILTER } from '../typeCycle.js';
 import { plain } from './fixture-board.js';
 import { mount, ESC, WIDE, type Harness } from './helpers.js';
+
+describe('getTypeCycleOptions', () => {
+  it('includes custom board types after the known set, then done', () => {
+    const board = { types: { epic: {}, spike: {}, adr: {} } } as any;
+    expect(getTypeCycleOptions(board)).toEqual([
+      'all', 'task', 'epic', 'adr', 'spike', DONE_FILTER,
+    ]);
+  });
+});
 
 const headerLine = (h: Harness) => plain(h.frame()).split('\n')[0];
 

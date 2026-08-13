@@ -76,6 +76,10 @@ columns:
     // Should NOT contain column or position
     expect(logContent).not.toMatch(/^column:/m);
     expect(logContent).not.toMatch(/^position:/m);
+
+    const ledgerPath = path.join(logsDir, 'ledger.jsonl');
+    expect(fs.existsSync(ledgerPath)).toBe(true);
+    expect(fs.readFileSync(ledgerPath, 'utf-8')).toContain('"id":"task-1"');
   });
 
   it('should throw CLIError when task is missing', () => {

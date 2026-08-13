@@ -13,7 +13,7 @@ npm install @brainfile/core
 ## v2 Architecture: Files & Folders
 
 Brainfile v2 uses a directory-based structure:
-- **Board Config**: `.brainfile/brainfile.md` (columns, types, rules)
+- **Board Config**: `.brainfile/brainfile.md` (columns, types, agent instructions)
 - **Active Tasks**: `.brainfile/board/*.md` (individual task files)
 - **Completion History**: `.brainfile/logs/ledger.jsonl` (unified log) + archived `.md` files
 
@@ -65,7 +65,7 @@ appendLog(".brainfile/board/task-1.md", "Deployed to staging", "codex");
 
 ### Board Configuration
 
-Parse the `brainfile.md` configuration file to understand columns, types, and rules.
+Parse the `brainfile.md` configuration file to understand columns, types, and agent instructions.
 
 ```typescript
 import { Brainfile, readV2BoardConfig } from "@brainfile/core";
@@ -157,7 +157,7 @@ interface Task {
 interface Board {
   columns: Column[];
   archive?: Task[];
-  // ... inherits BrainfileBase fields (title, rules, agent, etc.)
+  // ... inherits BrainfileBase fields (title, agent, etc.)
 }
 
 // v2 board config (columns + types, no embedded tasks)
@@ -165,7 +165,7 @@ interface BoardConfig {
   columns: ColumnConfig[];
   strict?: boolean;
   types?: TypesConfig;
-  // ... inherits BrainfileBase fields (title, rules, agent, etc.)
+  // ... inherits BrainfileBase fields (title, agent, etc.)
 }
 
 // Per-type configuration (used in strict mode)

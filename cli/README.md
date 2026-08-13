@@ -17,9 +17,9 @@ brainfile init
 ```
 
 This creates the standard v2 structure:
-- `.brainfile/brainfile.md` (Configuration, rules, definitions)
+- `.brainfile/brainfile.md` (Configuration: columns, types, agent instructions)
 - `.brainfile/board/` (Active tasks)
-- `.brainfile/logs/` (Completed task files)
+- `.brainfile/logs/` (Completed task files and `ledger.jsonl`)
 
 The board comes pre-configured with `To Do` and `In Progress` columns.
 
@@ -157,23 +157,17 @@ brainfile contract validate -t task-45
 
 ## ADR Promotion
 
-Architecture Decision Records (ADRs) are first-class task files. You can promote an ADR into a project rule.
+Architecture Decision Records (ADRs) are first-class task files. Promote an ADR to mark it accepted and archive it to `logs/`. Accepted ADRs show up in `brainfile brief`.
 
 ```bash
 # 1. Create an ADR
 brainfile add -t "Use Postgres for all user data" --type adr -c todo
 
-# 2. Promote it to a rule
-brainfile adr promote -t adr-1 --category always
+# 2. Promote it
+brainfile adr promote -t adr-1
 ```
 
-**Categories:**
-- `always`: Strict rules (e.g., "Always use TypeScript")
-- `never`: Prohibitions (e.g., "Never commit secrets")
-- `prefer`: Guidelines (e.g., "Prefer functional components")
-- `context`: informational context
-
-Promoted rules are added to `.brainfile/brainfile.md`, and the promoted ADR file moves to `.brainfile/logs/`.
+The ADR file moves to `.brainfile/logs/` with `status: promoted`. Project guidance belongs in `agent.instructions` (or `brainfile lint --fix` will fold a legacy `rules:` block there).
 
 ## TUI (Terminal UI)
 
@@ -184,22 +178,20 @@ brainfile          # No arguments launches the TUI
 brainfile tui      # Explicit subcommand also works
 ```
 
-### Panels
-- **Tasks (`1`)**: Kanban view of active tasks.
-- **Rules (`2`)**: Active rules and configuration.
-- **Logs (`3`)**: Completed task files.
+Completed work is the `done` stop on `t` (type-cycle), not a separate panel. `e` opens the document in `$EDITOR`.
 
 ### Keyboard Shortcuts
 | Key | Action |
 |-----|--------|
-| `tab` / `shift+tab` | Next / previous column in wide mode |
 | `j` / `k` | Down / up |
-| `enter` | Expand or collapse the selected task |
-| `n` | New task |
-| `m` | Move task |
-| `e` | Edit task in `$EDITOR` |
-| `/` | Search |
-| `?` | Show help |
+| `h` / `l` / `tab` | Cycle column |
+| `enter` | Open detail |
+| `t` | Cycle type, including `done` |
+| `space` | Collapse parent / toggle subtask in detail |
+| `c` | Complete |
+| `e` | Edit in `$EDITOR` |
+| `/` | Filter |
+| `?` | Help |
 | `q` | Quit |
 
 ## AI Integration

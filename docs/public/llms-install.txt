@@ -12,7 +12,7 @@ brainfile init
 ```
 
 This creates `.brainfile/` with:
-- `brainfile.md` — board config (columns, types, rules)
+- `brainfile.md` — board config (columns, types, agent instructions)
 - `board/` — active task files
 - `logs/` — completion history (`ledger.jsonl`) and archives
 

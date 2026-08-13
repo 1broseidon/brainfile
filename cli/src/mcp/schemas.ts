@@ -47,6 +47,9 @@ const taskSummaryShape = {
   assignee: z.string().optional(),
 };
 
+// `column` is the column *id* (same as `get_task`), so a subsequent `task_move`
+// can pass the value back without resolving titles.
+
 const subtaskSchema = z.looseObject({
   id: z.string(),
   title: z.string(),
@@ -226,7 +229,10 @@ export const subtaskOutputSchema = z.discriminatedUnion('action', [
 // ── contract ───────────────────────────────────────────────────────────────
 
 const deliverableSchema = z.looseObject({
-  type: z.string(),
+  // Hand-edited YAML often omits `type` (path-only deliverables). Required here
+  // would fail output validation on a successful validate after the task was
+  // already completed.
+  type: z.string().optional(),
   path: z.string(),
   description: z.string().optional(),
 });

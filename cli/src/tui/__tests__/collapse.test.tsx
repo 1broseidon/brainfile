@@ -28,7 +28,7 @@ describe('list collapse/expand (§A1)', () => {
   afterEach(() => h.teardown());
 
   it('is expanded by default: ▾ glyph, children visible, no state file written yet', () => {
-    expect(lineWith(h.frame(), 'epic-1')).toMatch(/^ ▾ epic-1\b/);
+    expect(lineWith(h.frame(), 'epic-1')).toMatch(/^▌▾ epic-1\b/);
     expect(plain(h.frame())).toContain('Triage marketing board');
     expect(readTuiStateFile(h)?.collapsed ?? []).not.toContain('epic-1');
   });
@@ -37,7 +37,7 @@ describe('list collapse/expand (§A1)', () => {
     await h.press(SPACE);
 
     const row = lineWith(h.frame(), 'epic-1');
-    expect(row).toMatch(/^ ▸ epic-1\b/);
+    expect(row).toMatch(/^▌▸ epic-1\b/);
     expect(row).toContain('3 hidden');
     expect(plain(h.frame())).not.toContain('Triage marketing board');
     expect(plain(h.frame())).not.toContain('Prune supervisor remnants');
@@ -49,7 +49,7 @@ describe('list collapse/expand (§A1)', () => {
     await h.press(SPACE);
     await h.press(SPACE);
 
-    expect(lineWith(h.frame(), 'epic-1')).toMatch(/^ ▾ epic-1\b/);
+    expect(lineWith(h.frame(), 'epic-1')).toMatch(/^▌▾ epic-1\b/);
     expect(plain(h.frame())).toContain('Triage marketing board');
     expect(readTuiStateFile(h)?.collapsed ?? []).not.toContain('epic-1');
   });
@@ -99,7 +99,7 @@ describe('list collapse/expand — survives a restart (§A1)', () => {
       );
       await tick(200);
       const row = lineWith(second.lastFrame(), 'epic-1');
-      expect(row).toMatch(/^ ▸ epic-1\b/);
+      expect(row).toMatch(/^▌▸ epic-1\b/);
       expect(row).toContain('3 hidden');
       second.unmount();
     } finally {
