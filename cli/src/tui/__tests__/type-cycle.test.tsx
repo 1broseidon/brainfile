@@ -5,15 +5,15 @@
  * (task, epic, spec, adr, plan), and its board config declares `types` for
  * all five — exactly what `t`'s cycle is read from.
  */
-import { getTypeCycleOptions, DONE_FILTER } from '../typeCycle.js';
+import { getTypeCycleOptions } from '../typeCycle.js';
 import { plain } from './fixture-board.js';
 import { mount, ESC, WIDE, type Harness } from './helpers.js';
 
 describe('getTypeCycleOptions', () => {
-  it('includes custom board types after the known set, then done', () => {
+  it('includes custom board types after the known set', () => {
     const board = { types: { epic: {}, spike: {}, adr: {} } } as any;
     expect(getTypeCycleOptions(board)).toEqual([
-      'all', 'task', 'epic', 'adr', 'spike', DONE_FILTER,
+      'all', 'task', 'epic', 'adr', 'spike',
     ]);
   });
 });
@@ -73,9 +73,7 @@ describe('type-cycle (§A2)', () => {
     await h.press('t', 't', 't', 't'); // plan
     await h.press('t'); // adr
     expect(headerLine(h)).toContain(' · adr');
-    await h.press('t'); // done — the completed-history stop (adr-2 §B2)
-    expect(headerLine(h)).toContain('done');
-    await h.press('t'); // all
+    await h.press('t'); // all — done is no longer a cycle stop (L toggle)
 
     expect(headerLine(h)).not.toContain(' · ');
     const frame = plain(h.frame());

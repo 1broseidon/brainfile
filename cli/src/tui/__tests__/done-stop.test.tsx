@@ -1,6 +1,6 @@
 /**
- * The `done` stop (§B2) — completed history as a type-cycle stop rather than a
- * panel.
+ * The done view (`L` toggle) — completed history in the same list, orthogonal
+ * to the type cycle rather than a stop on it.
  *
  * The old 1/2/3 LogsPanel is gone; `logs/` is now just another row source for
  * the same DocumentList and DetailView. What has to hold: the rows come from
@@ -10,13 +10,12 @@
 import { mount, tick, ENTER, TAB, type Harness } from './helpers.js';
 import { plain, lineWith } from './fixture-board.js';
 
-/** Cycle `t` until the header shows the `done` stop, or give up loudly. */
+/** The done view is the `L` toggle (orthogonal to the `t` type cycle). */
 async function toDone(h: Harness): Promise<void> {
-  for (let i = 0; i < 10; i += 1) {
-    if (headerLine(h).includes('done')) return;
-    await h.press('t');
+  await h.press('L');
+  if (!headerLine(h).includes('done')) {
+    throw new Error(`L did not enter the done view; header: ${headerLine(h)}`);
   }
-  throw new Error(`never reached the done stop; header: ${headerLine(h)}`);
 }
 
 function headerLine(h: Harness): string {
@@ -108,9 +107,9 @@ describe('done stop (§B2)', () => {
     expect(frame).not.toContain('spec-90');
   });
 
-  it('leaves the board untouched when cycling back to all', async () => {
+  it('leaves the board untouched when toggling back with L', async () => {
     await toDone(h);
-    await h.press('t'); // wraps to `all`
+    await h.press('L'); // back to the board view exactly as it was
 
     const frame = plain(h.frame());
     expect(frame).toContain('epic-1');

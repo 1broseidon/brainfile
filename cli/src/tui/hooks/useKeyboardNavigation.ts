@@ -554,6 +554,12 @@ export function useKeyboardNavigation({
       setMode('filter', { filterQuery: '', selectedTaskIndex: 0 });
       return;
     }
+    // Done toggle (`L`): flips between board columns and completed history,
+    // preserving the column/type/selection view you left. Orthogonal to `t`.
+    if (input === 'L') {
+      setState((prev) => ({ ...prev, doneView: !prev.doneView, selectedTaskIndex: 0 }));
+      return;
+    }
     // Type-cycle (§A2): all → task → epic → spec → plan → adr → all,
     // restricted to types the board actually declares.
     if (input === 't') {

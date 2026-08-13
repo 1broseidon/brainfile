@@ -152,10 +152,7 @@ describe('live refresh (§C4 / P3)', () => {
   });
 
   it('survives a refresh in the done stop, keyed by id', async () => {
-    for (let i = 0; i < 10; i += 1) {
-      if (plain(h.frame()).split('\n')[0]?.includes('done')) break;
-      await h.press('t');
-    }
+    await h.press('L');
     await h.press('j'); // second archived doc
     const before = await selectedIdViaDetail(h);
     expect(before).toBeTruthy();
@@ -192,10 +189,7 @@ describe('live refresh (§C4 / P3)', () => {
     expect(plain(h.frame())).not.toContain('task-4');
 
     // …and present in the done stop.
-    for (let i = 0; i < 10; i += 1) {
-      if (plain(h.frame()).split('\n')[0]?.includes('done')) break;
-      await h.press('t');
-    }
+    await h.press('L');
     expect(plain(h.frame())).toContain('task-4');
   });
 

@@ -5,7 +5,6 @@ import * as chokidar from 'chokidar';
 import { Brainfile, hashBoardContent } from '@brainfile/core';
 import { isV2, getV2Dirs, buildBoardFromV2 } from '../../utils/v2-detect.js';
 import { loadLogs } from '../actions.js';
-import { DONE_FILTER } from '../typeCycle.js';
 import type { AppState } from '../types.js';
 
 function getV2ChangeSignature(filePath: string): string {
@@ -103,7 +102,7 @@ export function useBrainfileLoader(
           // Both branches re-resolve BY ID, never by index: an external
           // insert/delete above the cursor must not slide the selection onto a
           // different document.
-          if (prev.activeTypeFilter === DONE_FILTER) {
+          if (prev.doneView) {
             const prevLogId = prev.logs[prev.selectedTaskIndex]?.id;
             const foundIdx = prevLogId ? logs.findIndex((t) => t.id === prevLogId) : -1;
             // Deleted out from under the cursor → clamp into bounds (C4).

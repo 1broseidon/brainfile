@@ -67,6 +67,8 @@ export interface AppState {
    * `filterQuery` (AND). In-memory only — not persisted.
    */
   activeTypeFilter: string;
+  /** `L` toggle — list rows come from logs/ instead of board columns. */
+  doneView: boolean;
 
   /**
    * Detail drill-down stack (§B2): document ids, root first, current last.

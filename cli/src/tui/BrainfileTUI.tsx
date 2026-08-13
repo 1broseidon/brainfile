@@ -28,7 +28,7 @@ import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
 import { getTaskActivity } from './actions.js';
 import { readTuiState } from './tuiState.js';
-import { getTypeCycleOptions, DONE_FILTER } from './typeCycle.js';
+import { getTypeCycleOptions } from './typeCycle.js';
 import {
   HeaderBar,
   FooterBar,
@@ -54,6 +54,7 @@ const baseInitialState: Omit<AppState, 'collapsedIds'> = {
   mode: 'browse',
   filterQuery: '',
   activeTypeFilter: 'all',
+  doneView: false,
   detailPath: [],
   detailCursor: 0,
   detailScroll: 0,
@@ -116,7 +117,11 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     return {
       ...baseInitialState,
       collapsedIds: new Set(persisted.collapsed),
-      activeTypeFilter: persisted.lastTypeFilter ?? baseInitialState.activeTypeFilter,
+      // 'done' was a pseudo-type before the L toggle; never resume into it.
+      activeTypeFilter:
+        persisted.lastTypeFilter && persisted.lastTypeFilter !== 'done'
+          ? persisted.lastTypeFilter
+          : baseInitialState.activeTypeFilter,
     };
   });
 
@@ -139,15 +144,16 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     : 'all';
   const typeFilterActive = activeTypeFilter !== 'all';
   /**
-   * The `done` stop (§B2): rows come from `logs/`, not from board columns, so
-   * the whole column pipeline (tabs, `h`/`l` cycling, per-column counts) is
-   * bypassed. Archived docs are read-mostly — no move, no complete.
+   * Done view (`L` toggle): rows come from `logs/`, not from board columns, so
+   * the column pipeline (tabs, `h`/`l`, per-column counts) is bypassed.
+   * Orthogonal to the type cycle — both compose. Archived docs are
+   * read-mostly — no move, no complete.
    */
-  const doneView = activeTypeFilter === DONE_FILTER;
+  const doneView = state.doneView;
 
   /** Type-cycle filter (§A2), applied before search so both compose (AND). */
   const typeFilteredColumns = useMemo<BoardColumn[]>(() => {
-    if (!typeFilterActive || doneView) return orderedColumns as BoardColumn[];
+    if (!typeFilterActive) return orderedColumns as BoardColumn[];
     return orderedColumns.map((column) => ({
       ...column,
       tasks: (column.tasks ?? []).filter((task) => getDocType(task) === activeTypeFilter),
@@ -160,7 +166,9 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   const totalCount = useMemo(
     () =>
       doneView
-        ? state.logs.length
+        ? (typeFilterActive
+            ? state.logs.filter((task) => getDocType(task) === activeTypeFilter).length
+            : state.logs.length)
         : typeFilteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
     [typeFilteredColumns, doneView, state.logs],
   );
@@ -182,13 +190,16 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     }) as BoardColumn[];
   }, [typeFilteredColumns, hasFilter, filterQuery]);
 
-  /** Archived docs, search-filtered the same way board columns are (§B2). */
+  /** Archived docs — type-filtered then search-filtered, same as columns. */
   const filteredLogs = useMemo<Task[]>(() => {
     if (!doneView) return [];
-    if (!hasFilter) return state.logs;
-    const docs = state.logs.map((task) => ({ task, body: task.description ?? '' }));
+    const typed = typeFilterActive
+      ? state.logs.filter((task) => getDocType(task) === activeTypeFilter)
+      : state.logs;
+    if (!hasFilter) return typed;
+    const docs = typed.map((task) => ({ task, body: task.description ?? '' }));
     return searchTasksRanked(docs, filterQuery).map((match) => match.doc.task);
-  }, [doneView, state.logs, hasFilter, filterQuery]);
+  }, [doneView, state.logs, typeFilterActive, activeTypeFilter, hasFilter, filterQuery]);
 
   const matchCount = useMemo(
     () =>
@@ -359,7 +370,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   // The state chip and detail state line use the column *id* (`todo`), not its
   // display title — the header tabs already carry the titles (design §4.1/§4.2).
   // Under `done` there is no column, so the chip names the stop itself.
-  const columnLabel = doneView ? DONE_FILTER : (currentColumn?.id ?? '');
+  const columnLabel = doneView ? 'done' : (currentColumn?.id ?? '');
   const columnName = currentColumn?.title ?? '';
   const fullscreenDetail = detailOpen && layoutMode === 'narrow';
 
@@ -425,8 +436,8 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
         totalCount={totalCount}
         // `done` replaces the column tabs (there are none) rather than
         // appending a `· done` suffix to them — one indicator, not two (P9).
-        panelLabel={doneView ? DONE_FILTER : undefined}
-        activeType={doneView ? 'all' : activeTypeFilter}
+        panelLabel={doneView ? 'done' : undefined}
+        activeType={typeFilterActive ? activeTypeFilter : 'all'}
       />
 
       <Box flexGrow={1} flexShrink={0} flexDirection="column">

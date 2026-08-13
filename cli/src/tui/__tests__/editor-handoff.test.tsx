@@ -106,10 +106,7 @@ describe('$EDITOR handoff (§C1 / P8)', () => {
   });
 
   it('edits an ARCHIVED document — e is not a board mutation', async () => {
-    for (let i = 0; i < 10; i += 1) {
-      if (plain(h.frame()).split('\n')[0]?.includes('done')) break;
-      await h.press('t');
-    }
+    await h.press('L');
 
     await h.press('e');
     await tick(400);

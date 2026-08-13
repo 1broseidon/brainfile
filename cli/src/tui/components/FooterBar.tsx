@@ -26,11 +26,11 @@ import { pad, truncate } from '../text.js';
  * mutation. Restoring stays a CLI verb this round.
  */
 export function browseActions(selected: Task | undefined, archived = false): string[] {
-  if (archived) return ['↵ detail', 'e edit', 't type', 'q quit'];
+  if (archived) return ['↵ detail', 'e edit', 't type', 'L board', 'q quit'];
 
   const actions = ['↵ detail', 'm move'];
   if (isCompletable(selected)) actions.push('c complete');
-  actions.push('a add', 't type', 'tab column', 'q quit');
+  actions.push('a add', 't type', 'L done', 'tab column', 'q quit');
   return actions;
 }
 

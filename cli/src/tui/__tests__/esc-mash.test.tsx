@@ -128,10 +128,7 @@ describe('Esc always retreats (P5)', () => {
     await mashFrom(
       'done → detail',
       async () => {
-        for (let i = 0; i < 10; i += 1) {
-          if (plain(h.frame()).split('\n')[0]?.includes('done')) break;
-          await h.press('t');
-        }
+        await h.press('L');
         await h.press(ENTER); // detail on an archived doc
         await h.press('/'); // and a filter on top of that
         for (const ch of 'ship') await h.press(ch);
