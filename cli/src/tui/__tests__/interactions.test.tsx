@@ -26,6 +26,8 @@ describe('filter', () => {
   it('opens inline in the header rule line and narrows incrementally', async () => {
     await h.press('/');
     expect(headerRule(h)).toContain('/');
+    // Empty query is just the input — no `17/17 match ""`.
+    expect(headerRule(h)).not.toContain('match');
 
     await h.press('p', ':', 'h', 'i', 'g', 'h');
 
@@ -46,14 +48,14 @@ describe('filter', () => {
     const frame = plain(h.frame());
     expect(frame).toContain('epic-1');
     expect(frame).not.toContain('task-4');
-    expect(headerRule(h)).toContain('match "type:epic"');
+    expect(headerRule(h)).toContain('matches "type:epic"');
   });
 
   it('ranks free text rather than plain substring filtering', async () => {
     await h.press('/', 'c', 'l', 'e', 'a', 'n', 'u', 'p');
     const frame = plain(h.frame());
     expect(frame).toContain('epic-1');
-    expect(headerRule(h)).toMatch(/match "cleanup"/);
+    expect(headerRule(h)).toMatch(/matches "cleanup"/);
   });
 
   it('updates the column counts in the header while filtered', async () => {
@@ -83,27 +85,48 @@ describe('help', () => {
   });
   afterEach(() => h.teardown());
 
-  it('is a single condensed pane grouped by nav / actions / filter', async () => {
+  it('is a single condensed pane grouped by list / detail / actions / filter', async () => {
     await h.press('?');
     const frame = plain(h.frame());
     expect(frame).toContain('help');
-    expect(frame).toContain('nav');
+    expect(frame).toContain('list');
+    expect(frame).toContain('detail');
     expect(frame).toContain('actions');
     expect(frame).toContain('filter');
-    expect(frame).toContain('any key to dismiss');
+    expect(frame).toContain('any key dismisses');
+    expect(frame).toContain('q quit');
+    // Dual-meaning keys are split by mode, not jammed onto one line.
+    expect(frame).toContain('priority');
+    expect(frame).toContain('parent');
+    expect(frame).toContain('collapse');
+    expect(frame).toContain('toggle subtask');
     // no pagination affordance survives from v2
     expect(frame).not.toMatch(/page \d/i);
   });
 
   it('dismisses on any key, and that key does not also fire its action', async () => {
     await h.press('?');
-    expect(plain(h.frame())).toContain('any key to dismiss');
+    expect(plain(h.frame())).toContain('any key dismisses');
 
     await h.press('a'); // 'a' would normally open the add overlay
     const frame = plain(h.frame());
-    expect(frame).not.toContain('any key to dismiss');
+    expect(frame).not.toContain('any key dismisses');
     expect(frame).not.toContain('title…');
     expect(frame).toContain('↵ detail');
+  });
+
+  it('returns to detail when opened from detail, instead of dropping the pane', async () => {
+    await h.press(ENTER);
+    expect(footerOf(h)).toContain('esc back');
+
+    await h.press('?');
+    expect(plain(h.frame())).toContain('any key dismisses');
+
+    await h.press('x');
+    const frame = plain(h.frame());
+    expect(frame).not.toContain('any key dismisses');
+    expect(footerOf(h)).toContain('esc back');
+    expect(frame).toContain('description');
   });
 });
 

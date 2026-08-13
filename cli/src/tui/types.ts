@@ -16,8 +16,8 @@ export const LAYOUT = {
 
 /**
  * Every mode the TUI can be in. adr-2 collapsed the 1/2/3 panel system, so the
- * rules- and logs-panel modes are gone; completed work is a stop on the `t`
- * type-cycle rendered by the ordinary list and detail views (§B2).
+ * rules- and logs-panel modes are gone; completed work is the `L` done view,
+ * rendered by the ordinary list and detail views (§B2).
  */
 export type ViewMode =
   | 'browse'
@@ -53,6 +53,12 @@ export interface AppState {
   selectedTaskIndex: number;
 
   mode: ViewMode;
+  /**
+   * Mode to restore when help dismisses. `?` from detail must return to
+   * detail — falling back to browse left a stale `detailPath` that later
+   * overlays would act on.
+   */
+  helpReturn: ViewMode | null;
   /** Incremental filter query, fed to core `searchTasksRanked`. */
   filterQuery: string;
 
@@ -72,8 +78,9 @@ export interface AppState {
 
   /**
    * Detail drill-down stack (§B2): document ids, root first, current last.
-   * Empty outside detail mode. `enter` on a child stop pushes; `esc` pops one
-   * level (or leaves detail mode entirely from the root).
+   * Empty unless a detail view is open (or help was opened from one).
+   * `enter` on a child stop pushes; `esc` pops one level (or leaves detail
+   * mode entirely from the root).
    */
   detailPath: string[];
   /** Flat-cursor index across the current detail doc's children then subtasks. */
@@ -97,7 +104,7 @@ export interface AppState {
   reloadFlash: boolean;
 
   /**
-   * Documents read from `logs/` for the `done` type-cycle stop (§B2). Refreshed
+   * Documents read from `logs/` for the `L` done view (§B2). Refreshed
    * by the loader alongside the board, since chokidar already watches logsDir.
    */
   logs: Task[];

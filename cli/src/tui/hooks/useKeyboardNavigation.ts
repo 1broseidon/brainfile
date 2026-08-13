@@ -10,7 +10,7 @@
  * adr-2 retired three groups: `[`/`]` (h/l and tab are the column cycle, and a
  * key that silently duplicates another is muscle-memory noise — rubric P2);
  * `1`/`2`/`3` (there are no panels left to switch between); and every
- * rules/logs modal mode. Completed work is the `done` stop on `t`.
+ * rules/logs modal mode. Completed work is the `L` done view.
  */
 import { spawnSync } from 'child_process';
 import { useCallback, useEffect, useRef } from 'react';
@@ -34,6 +34,7 @@ import {
   resolveTaskFilePath,
   type ActivityEntry,
 } from '../actions.js';
+import { STATUS } from '../copy.js';
 
 interface UseKeyboardNavigationProps {
   state: AppState;
@@ -147,7 +148,7 @@ export function useKeyboardNavigation({
       }
 
       if (!isRawModeSupported) {
-        showStatus('$EDITOR requires an interactive terminal', 'error');
+        showStatus(STATUS.editorNeedsTty, 'error');
         return;
       }
 
@@ -162,7 +163,10 @@ export function useKeyboardNavigation({
           loadBrainfile(true);
         })
         .catch((err: unknown) => {
-          showStatus(`Editor failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+          showStatus(
+            STATUS.editorFailed(err instanceof Error ? err.message : String(err)),
+            'error',
+          );
         });
     },
     [filePath, showStatus, suspendTerminal, loadBrainfile, isRawModeSupported],
@@ -212,7 +216,7 @@ export function useKeyboardNavigation({
   const completeTask = (task: Task, force: boolean) => {
     const result = archiveTaskAction(filePath, task.id, { force });
     if (result.success) {
-      showStatus(result.message || `Completed ${task.id}`, 'success');
+      showStatus(STATUS.completed(task.id), 'success');
       closeOverlay({ docRemoved: true });
       loadBrainfile(true);
       return;
@@ -227,14 +231,34 @@ export function useKeyboardNavigation({
       });
       return;
     }
-    showStatus(result.error || 'Failed to complete', 'error');
+    showStatus(result.error || STATUS.completeFailed, 'error');
     closeOverlay();
   };
 
+  const openHelp = () => {
+    setState((prev) => ({
+      ...prev,
+      mode: 'help',
+      helpReturn: prev.mode === 'help' ? prev.helpReturn : prev.mode,
+    }));
+  };
+
+  const closeHelp = () => {
+    setState((prev) => ({
+      ...prev,
+      mode: prev.helpReturn && prev.helpReturn !== 'help' ? prev.helpReturn : 'browse',
+      helpReturn: null,
+    }));
+  };
+
   useInput((input, key) => {
-    // ── Help: any key dismisses (and is consumed) ─────────────────────────
+    // ── Help: any key dismisses (and is consumed); q still quits ──────────
     if (state.mode === 'help') {
-      setMode('browse');
+      if (input === 'q' || (key.ctrl && input === 'c')) {
+        exit();
+        return;
+      }
+      closeHelp();
       return;
     }
 
@@ -245,11 +269,11 @@ export function useKeyboardNavigation({
         if (target) {
           const result = archiveTaskAction(filePath, target.id, { force: true });
           if (result.success) {
-            showStatus(result.message || `Completed ${target.id}`, 'success');
+            showStatus(STATUS.completed(target.id), 'success');
             loadBrainfile(true);
             closeOverlay({ docRemoved: true });
           } else {
-            showStatus(result.error || 'Failed to complete', 'error');
+            showStatus(result.error || STATUS.completeFailed, 'error');
             closeOverlay();
           }
         } else {
@@ -259,7 +283,7 @@ export function useKeyboardNavigation({
       }
       if (input === 'n' || input === 'N' || key.escape) {
         closeOverlay();
-        showStatus('Complete cancelled', 'info');
+        showStatus(STATUS.completeCancelled, 'info');
       }
       return;
     }
@@ -270,11 +294,11 @@ export function useKeyboardNavigation({
         if (overlayTarget) {
           const result = deleteTaskAction(filePath, overlayTarget.id);
           if (result.success) {
-            showStatus(`Deleted ${overlayTarget.id}`, 'success');
+            showStatus(STATUS.deleted(overlayTarget.id), 'success');
             loadBrainfile(true);
             closeOverlay({ docRemoved: true });
           } else {
-            showStatus(result.error || 'Failed to delete', 'error');
+            showStatus(result.error || STATUS.deleteFailed, 'error');
             closeOverlay();
           }
         } else {
@@ -284,7 +308,7 @@ export function useKeyboardNavigation({
       }
       if (input === 'n' || input === 'N' || key.escape) {
         closeOverlay();
-        showStatus('Delete cancelled', 'info');
+        showStatus(STATUS.deleteCancelled, 'info');
       }
       return;
     }
@@ -311,10 +335,10 @@ export function useKeyboardNavigation({
         if (overlayTarget && targetColumn) {
           const result = moveTaskAction(filePath, overlayTarget.id, targetColumn.id);
           if (result.success) {
-            showStatus(result.message || `Moved to ${targetColumn.title}`, 'success');
+            showStatus(result.message || STATUS.moved(targetColumn.title), 'success');
             loadBrainfile(true);
           } else {
-            showStatus(result.error || 'Failed to move', 'error');
+            showStatus(result.error || STATUS.moveFailed, 'error');
           }
         }
         closeOverlay();
@@ -336,7 +360,7 @@ export function useKeyboardNavigation({
       if (key.return) {
         const title = state.newTaskTitle.trim();
         if (!title) {
-          showStatus('Title required', 'error');
+          showStatus(STATUS.titleRequired, 'error');
           return; // stay in the overlay rather than discarding what was typed
         }
 
@@ -344,7 +368,7 @@ export function useKeyboardNavigation({
         if (column) {
           const result = addTaskAction(filePath, column.id, { title });
           if (result.success) {
-            showStatus(result.message || 'Task added', 'success');
+            showStatus(result.message || STATUS.addedGeneric, 'success');
             loadBrainfile(true);
             // `N` continues into $EDITOR on the document just created.
             // `addTaskAction` reports `Added <id>`; that id is what to open.
@@ -353,7 +377,7 @@ export function useKeyboardNavigation({
               if (newId) openInEditor(newId);
             }
           } else {
-            showStatus(result.error || 'Failed to add task', 'error');
+            showStatus(result.error || STATUS.addFailed, 'error');
           }
         }
         setMode('browse', { newTaskTitle: '', addThenEdit: false });
@@ -428,7 +452,7 @@ export function useKeyboardNavigation({
         return;
       }
       if (input === '?') {
-        setMode('help');
+        openHelp();
         return;
       }
 
@@ -488,19 +512,19 @@ export function useKeyboardNavigation({
           // The underlying action only resolves board files, so without this
           // an archived doc answers "not found" — technically true, and
           // useless. Say the real reason instead (§B2).
-          showStatus('Completed documents are read-only here', 'info');
+          showStatus(STATUS.readOnly, 'info');
           return;
         }
         if (stop?.kind === 'subtask' && detailTask) {
           const result = toggleSubtaskAction(filePath, detailTask.id, stop.subtask.id);
           if (result.success) {
-            showStatus(`Toggled ${stop.subtask.id}`, 'success');
+            showStatus(STATUS.toggled(stop.subtask.id), 'success');
             loadBrainfile(true);
           } else {
-            showStatus(result.error || 'Failed to toggle', 'error');
+            showStatus(result.error || STATUS.toggleFailed, 'error');
           }
         } else {
-          showStatus('No subtasks', 'info');
+          showStatus(STATUS.noSubtasks, 'info');
         }
         return;
       }
@@ -508,7 +532,7 @@ export function useKeyboardNavigation({
       // `p` jumps to the parent's detail, when one exists.
       if (input === 'p') {
         if (!detailTask?.parentId || !detailParent) {
-          showStatus('No parent', 'info');
+          showStatus(STATUS.noParent, 'info');
           return;
         }
         const parentId = detailParent.id;
@@ -547,7 +571,7 @@ export function useKeyboardNavigation({
       return;
     }
     if (input === '?') {
-      setMode('help');
+      openHelp();
       return;
     }
     if (input === '/') {
@@ -590,14 +614,14 @@ export function useKeyboardNavigation({
     }
     if (input === 'r') {
       loadBrainfile(true);
-      showStatus('Reloaded', 'info');
+      showStatus(STATUS.reloaded, 'info');
       return;
     }
     if (key.return) {
       if (currentTask) {
         setMode('detail', { detailPath: [currentTask.id], detailCursor: 0, detailScroll: 0 });
       } else {
-        showStatus('No document selected', 'info');
+        showStatus(STATUS.noDocument, 'info');
       }
       return;
     }
@@ -607,7 +631,7 @@ export function useKeyboardNavigation({
     // that produces no feedback is indistinguishable from a dropped one).
     if (input === 'a' || input === 'n') {
       if (doneView) {
-        showStatus('Completed documents are read-only here', 'info');
+        showStatus(STATUS.readOnly, 'info');
         return;
       }
       setMode('add', { newTaskTitle: '', addThenEdit: false });
@@ -615,11 +639,11 @@ export function useKeyboardNavigation({
     }
     if (input === 'm') {
       if (doneView) {
-        showStatus('Completed documents are read-only here', 'info');
+        showStatus(STATUS.readOnly, 'info');
         return;
       }
       if (!currentTask) {
-        showStatus('No document selected', 'error');
+        showStatus(STATUS.noDocument, 'error');
         return;
       }
       setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
@@ -627,15 +651,15 @@ export function useKeyboardNavigation({
     }
     if (input === 'c') {
       if (doneView) {
-        showStatus('Already completed', 'info');
+        showStatus(STATUS.alreadyCompleted, 'info');
         return;
       }
       if (!currentTask) {
-        showStatus('No document selected', 'error');
+        showStatus(STATUS.noDocument, 'error');
         return;
       }
       if (!isCompletable(currentTask)) {
-        showStatus(`${currentTask.id} cannot be completed`, 'info');
+        showStatus(STATUS.cannotComplete(currentTask.id), 'info');
         return;
       }
       completeTask(currentTask, false);
@@ -643,11 +667,11 @@ export function useKeyboardNavigation({
     }
     if (input === 'd') {
       if (doneView) {
-        showStatus('Completed documents are read-only here', 'info');
+        showStatus(STATUS.readOnly, 'info');
         return;
       }
       if (!currentTask) {
-        showStatus('No document selected', 'error');
+        showStatus(STATUS.noDocument, 'error');
         return;
       }
       setMode('delete-confirm');
@@ -657,7 +681,7 @@ export function useKeyboardNavigation({
     // mutates no board state (§B2).
     if (input === 'e') {
       if (!currentTask) {
-        showStatus('No document selected', 'error');
+        showStatus(STATUS.noDocument, 'error');
         return;
       }
       openInEditor(currentTask.id);
@@ -666,15 +690,15 @@ export function useKeyboardNavigation({
     if (input === 'p') {
       if (!currentTask) return;
       if (doneView) {
-        showStatus('Completed documents are read-only here', 'info');
+        showStatus(STATUS.readOnly, 'info');
         return;
       }
       const result = cyclePriorityAction(filePath, currentTask.id);
       if (result.success) {
-        showStatus(result.message || 'Priority updated', 'success');
+        showStatus(result.message || STATUS.priorityUpdated('updated'), 'success');
         loadBrainfile(true);
       } else {
-        showStatus(result.error || 'Failed to update priority', 'error');
+        showStatus(result.error || STATUS.priorityFailed, 'error');
       }
       return;
     }
@@ -682,7 +706,7 @@ export function useKeyboardNavigation({
       if (!currentTask) return;
       const result = copyToClipboard(currentTask.id);
       showStatus(
-        result.success ? `Copied ${currentTask.id}` : result.error || 'Copy failed',
+        result.success ? STATUS.copied(currentTask.id) : result.error || STATUS.copyFailed,
         result.success ? 'success' : 'error',
       );
       return;
@@ -697,7 +721,7 @@ export function useKeyboardNavigation({
     // was already required to get this far).
     if (input === 'N') {
       if (doneView) {
-        showStatus('Completed documents are read-only here', 'info');
+        showStatus(STATUS.readOnly, 'info');
         return;
       }
       setMode('add', { newTaskTitle: '', addThenEdit: true });
@@ -706,21 +730,21 @@ export function useKeyboardNavigation({
     if (input === 'A') {
       if (!currentTask) return;
       if (doneView) {
-        showStatus('Completed documents are read-only here', 'info');
+        showStatus(STATUS.readOnly, 'info');
         return;
       }
-      showStatus('Moving to logs...', 'info');
+      showStatus(STATUS.archiving, 'info');
       archiveTaskActionAsync(filePath, currentTask.id)
         .then((result) => {
           showStatus(
             result.success
-              ? result.message || 'Task moved to logs'
-              : result.error || 'Move to logs failed',
+              ? result.message || STATUS.archived(currentTask.id)
+              : result.error || STATUS.archiveFailed,
             result.success ? 'success' : 'error',
           );
           if (result.success) loadBrainfile(true);
         })
-        .catch((err) => showStatus(`Move to logs failed: ${err}`, 'error'));
+        .catch((err) => showStatus(`${STATUS.archiveFailed}: ${err}`, 'error'));
       return;
     }
 

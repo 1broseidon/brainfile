@@ -378,8 +378,8 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('tui')
-    .description('Launch interactive Terminal UI for task management')
-    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .description('Launch the interactive board')
+    .option('-f, --file <path>', 'Path to the board file (auto-detected by default)', 'brainfile.md')
     .action((options) => {
       // `program.parse()` is synchronous, so the action's promise is floating —
       // handle rejection here, the same way the auto-launch branch above does.

@@ -346,13 +346,18 @@ brainfile tui          # Explicit TUI command
 | Key | Action |
 |-----|--------|
 | `j` / `k` or `↑` / `↓` | Move selection |
-| `h` / `l` or `TAB` | Cycle column |
+| `h` / `l` or `Tab` | Cycle column |
 | `Enter` | Open detail (Enter on a child drills in) |
 | `esc` | Back / clear filter |
-| `t` | Cycle document type, including `done` (completed `logs/`) |
-| `space` | Collapse/expand a parent, or toggle a subtask in detail |
+| `t` | Cycle document type (`task`, `epic`, `spec`, `plan`, `adr`) |
+| `L` | Toggle done view (completed `logs/`) |
+| `space` | Collapse a parent, or toggle a subtask in detail |
+| `a` / `n` | Add a document (title only) |
+| `N` | Add, then open in `$EDITOR` |
+| `m` | Move to a column |
 | `c` | Complete |
 | `e` | Edit the document in `$EDITOR` |
+| `p` | Cycle priority (list) or jump to parent (detail) |
 | `/` | Filter |
 | `?` | Help |
 | `q` | Quit |

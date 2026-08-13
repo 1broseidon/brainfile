@@ -7,8 +7,8 @@
  * beside a detail pane (wide), a fullscreen detail (narrow), or an overlay.
  *
  * adr-2 collapsed the old 1/2/3 panel system: there is ONE list. Completed work
- * is the `done` stop on the `t` type-cycle, sourced from `logs/` and rendered
- * dim by the same DocumentList and DetailView as everything else (§B2).
+ * is the `L` done view, sourced from `logs/` and rendered dim by the same
+ * DocumentList and DetailView as everything else (§B2).
  *
  * Filtering runs through core `searchTasksRanked`, so the TUI ranks results the
  * same way `brainfile search` and the MCP `search` tool do, and inherits the
@@ -20,6 +20,7 @@ import type { Task } from '@brainfile/core';
 import { searchTasksRanked } from '@brainfile/core';
 
 import { PALETTE } from './theme.js';
+import { CHROME, EMPTY } from './copy.js';
 import type { AppState, TUIProps, LayoutMode, BoardColumn } from './types.js';
 import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
 import { buildRows, buildFlatRows } from './rows.js';
@@ -52,6 +53,7 @@ const baseInitialState: Omit<AppState, 'collapsedIds'> = {
   activeColumnIndex: 0,
   selectedTaskIndex: 0,
   mode: 'browse',
+  helpReturn: null,
   filterQuery: '',
   activeTypeFilter: 'all',
   doneView: false,
@@ -336,9 +338,9 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   if (isTooSmall) {
     return (
       <Box flexDirection="column" width={termWidth} height={termHeight} paddingLeft={1}>
-        <Text color={PALETTE.error}>Terminal too small</Text>
+        <Text color={PALETTE.error}>{CHROME.tooSmall}</Text>
         <Text color={PALETTE.textMuted}>
-          Minimum {LAYOUT.MIN_WIDTH}x{LAYOUT.MIN_HEIGHT} · current {termWidth}x{termHeight}
+          Minimum {LAYOUT.MIN_WIDTH}×{LAYOUT.MIN_HEIGHT} · current {termWidth}×{termHeight}
         </Text>
       </Box>
     );
@@ -347,9 +349,9 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   if (state.error) {
     return (
       <Box flexDirection="column" paddingLeft={1}>
-        <Text color={PALETTE.error}>Error</Text>
+        <Text color={PALETTE.error}>{CHROME.errorTitle}</Text>
         <Text color={PALETTE.textSecondary}>{state.error}</Text>
-        <Text color={PALETTE.textMuted}>q quit · r retry</Text>
+        <Text color={PALETTE.textMuted}>{CHROME.errorHint}</Text>
       </Box>
     );
   }
@@ -357,7 +359,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   if (!state.board) {
     return (
       <Box paddingLeft={1}>
-        <Text color={PALETTE.textMuted}>Loading…</Text>
+        <Text color={PALETTE.textMuted}>{CHROME.loading}</Text>
       </Box>
     );
   }
@@ -460,6 +462,8 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
           termWidth={termWidth}
           hasFilter={hasFilter}
           archived={doneView}
+          typeFilter={typeFilterActive ? activeTypeFilter : undefined}
+          thenEdit={state.addThenEdit}
         />
       </Box>
 
@@ -496,6 +500,8 @@ function BoardContent({
   termWidth,
   hasFilter,
   archived,
+  typeFilter,
+  thenEdit,
 }: {
   state: AppState;
   rows: ReturnType<typeof buildRows>;
@@ -514,8 +520,11 @@ function BoardContent({
   columns: BoardColumn[];
   termWidth: number;
   hasFilter: boolean;
-  /** Whole list is archived (`done` stop) — rows render dim (§B2). */
+  /** Whole list is archived (`done` view) — rows render dim (§B2). */
   archived: boolean;
+  /** Active type-cycle filter, when not `all`. */
+  typeFilter?: string;
+  thenEdit: boolean;
 }) {
   // A move/delete confirm can be opened either from the list (target =
   // list selection) or from the detail view (target = the doc currently
@@ -549,7 +558,7 @@ function BoardContent({
   }
 
   if (state.mode === 'add') {
-    return <AddOverlay title={state.newTaskTitle} columnName={columnName} />;
+    return <AddOverlay title={state.newTaskTitle} columnName={columnName} thenEdit={thenEdit} />;
   }
 
   const list = (
@@ -561,10 +570,12 @@ function BoardContent({
       archived={archived}
       emptyMessage={
         hasFilter
-          ? 'No matches · esc to clear'
+          ? EMPTY.noMatches
           : archived
-            ? 'Nothing completed yet'
-            : 'No documents in this column'
+            ? EMPTY.nothingCompleted
+            : typeFilter
+              ? EMPTY.noType(typeFilter)
+              : EMPTY.emptyColumn
       }
     />
   );

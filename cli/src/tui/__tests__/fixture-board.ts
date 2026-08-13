@@ -294,9 +294,9 @@ const TASKS: Array<{ task: Task; body?: string }> = [
 ];
 
 /**
- * Completed documents, written to `logs/`. These are what the `done` stop on
- * the `t` type-cycle renders (§B2) — one plain task and one typed doc, both
- * carrying `completedAt` so the detail view's archived banner has a date.
+ * Completed documents, written to `logs/`. These are what the `L` done view
+ * renders (§B2) — one plain task and one typed doc, both carrying
+ * `completedAt` so the detail view's archived banner has a date.
  */
 const LOGS: Array<{ task: Task; body?: string }> = [
   {

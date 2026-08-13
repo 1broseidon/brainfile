@@ -178,16 +178,18 @@ brainfile          # No arguments launches the TUI
 brainfile tui      # Explicit subcommand also works
 ```
 
-Completed work is the `done` stop on `t` (type-cycle), not a separate panel. `e` opens the document in `$EDITOR`.
+Completed work is the `L` done view, not a column and not a stop on `t`. `e` opens the document in `$EDITOR`.
 
 ### Keyboard Shortcuts
 | Key | Action |
 |-----|--------|
-| `j` / `k` | Down / up |
+| `j` / `k` | Move selection |
 | `h` / `l` / `tab` | Cycle column |
 | `enter` | Open detail |
-| `t` | Cycle type, including `done` |
+| `t` | Cycle type |
+| `L` | Toggle done view |
 | `space` | Collapse parent / toggle subtask in detail |
+| `a` | Add |
 | `c` | Complete |
 | `e` | Edit in `$EDITOR` |
 | `/` | Filter |

@@ -11,6 +11,7 @@ import type { DocRow } from '../rows.js';
 import { windowRows } from '../rows.js';
 import { PALETTE } from '../theme.js';
 import { DocumentRow } from './DocumentRow.js';
+import { EMPTY } from '../copy.js';
 
 export interface DocumentListProps {
   rows: DocRow[];
@@ -29,7 +30,7 @@ export function DocumentList({
   viewportHeight,
   width,
   archived = false,
-  emptyMessage = 'No documents',
+  emptyMessage = EMPTY.noDocuments,
 }: DocumentListProps) {
   if (rows.length === 0) {
     return (

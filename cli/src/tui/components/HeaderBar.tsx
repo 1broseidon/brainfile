@@ -15,6 +15,7 @@ import { Box, Text } from 'ink';
 import { PALETTE, RULE, GLYPHS } from '../theme.js';
 import type { BoardColumn } from '../types.js';
 import { truncate, pad } from '../text.js';
+import { CHROME, matchCountLabel } from '../copy.js';
 
 export interface HeaderBarProps {
   title: string;
@@ -28,7 +29,7 @@ export interface HeaderBarProps {
   matchCount?: number;
   totalCount?: number;
   /**
-   * Label shown instead of column tabs for the `done` type-cycle stop, whose
+   * Label shown instead of column tabs for the `L` done view, whose
    * rows come from `logs/` and are not column-organized.
    */
   panelLabel?: string;
@@ -48,7 +49,7 @@ export function HeaderBar({
   panelLabel,
   activeType,
 }: HeaderBarProps) {
-  const affordances = '/ filter  ? help';
+  const affordances = CHROME.filterAffordance;
   const boardTitle = truncate(title, 24);
   const separator = ` ${GLYPHS.pointer} `;
   const typeLabel = activeType && activeType !== 'all' ? ` · ${activeType}` : '';
@@ -140,7 +141,7 @@ function FilterLine({
   const count =
     matchCount === undefined || totalCount === undefined
       ? ''
-      : `${matchCount}/${totalCount} match "${query}"`;
+      : matchCountLabel(matchCount, totalCount, query);
   const input = `/${query}`;
   const gap = Math.max(1, width - 2 - input.length - 1 - count.length);
 

@@ -16,6 +16,7 @@ import type { Task } from '@brainfile/core';
 import { PALETTE, RULE } from '../theme.js';
 import { isCompletable } from '../utils.js';
 import { pad, truncate } from '../text.js';
+import { itemCountLabel } from '../copy.js';
 
 /**
  * Actions offered while browsing the list.
@@ -85,14 +86,19 @@ export function FooterBar({
   stateChip,
   showRule = true,
 }: FooterBarProps) {
+  // Pin `q quit` on the right so a squeezed footer loses `tab column`
+  // before it loses the way out.
+  const quit = actions.includes('q quit') ? 'q quit' : '';
+  const shown = quit ? actions.filter((action) => action !== 'q quit') : actions;
   const left =
     itemCount === undefined
-      ? actions.join(' · ')
-      : [`${itemCount} item${itemCount === 1 ? '' : 's'}`, ...actions].join(' · ');
+      ? shown.join(' · ')
+      : [itemCountLabel(itemCount), ...shown].join(' · ');
   const chip = stateChip ?? '';
-  const available = Math.max(1, width - 2 - chip.length - 2);
+  const right = [quit, chip].filter(Boolean).join('  ');
+  const available = Math.max(1, width - 2 - right.length - 2);
   const text = truncate(left, available);
-  const gap = Math.max(1, width - 2 - text.length - chip.length);
+  const gap = Math.max(1, width - 2 - text.length - right.length);
 
   return (
     // flexShrink={0}: see HeaderBar's matching comment — the footer must not
@@ -107,6 +113,8 @@ export function FooterBar({
         <Text wrap="truncate">
           <Text color={PALETTE.textMuted}>{text}</Text>
           <Text>{pad(gap)}</Text>
+          {quit ? <Text color={PALETTE.textMuted}>{quit}</Text> : null}
+          {quit && chip ? <Text>{pad(2)}</Text> : null}
           <Text color={PALETTE.textSecondary}>{chip || ' '}</Text>
         </Text>
       </Box>

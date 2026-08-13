@@ -50,7 +50,7 @@ Default columns are `To Do` and `In Progress`.
 brainfile          # No arguments launches the TUI
 brainfile tui      # Explicit subcommand also works
 ```
-Navigate with keyboard: `TAB` for columns, `j`/`k` for tasks, `Enter` to expand, `q` to quit.
+Navigate with keyboard: `Tab` for columns, `j`/`k` to move, `Enter` for detail, `?` for help, `q` to quit.
 :::
 
 ::: tip CLI Commands

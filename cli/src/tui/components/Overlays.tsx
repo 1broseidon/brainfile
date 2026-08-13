@@ -11,6 +11,7 @@ import { Box, Text } from 'ink';
 import { PALETTE, GLYPHS } from '../theme.js';
 import type { StatusMessage as StatusMessageType, BoardColumn, CompleteConfirmTarget } from '../types.js';
 import { truncate } from '../text.js';
+import { incompleteChildrenLabel } from '../copy.js';
 
 export interface StatusMessageProps {
   message: StatusMessageType | null;
@@ -91,7 +92,7 @@ export function DeleteConfirmOverlay({ taskId, taskTitle, width }: DeleteConfirm
         <Text color={PALETTE.text}>{truncate(taskTitle, Math.max(1, width - taskId.length - 6))}</Text>
       </Text>
       <Box marginTop={1} paddingLeft={2}>
-        <Text color={PALETTE.textMuted}>This cannot be undone.</Text>
+        <Text color={PALETTE.textMuted}>Deletes the file. This cannot be undone.</Text>
       </Box>
       <Box marginTop={1} paddingLeft={2}>
         <Text color={PALETTE.textMuted}>y delete · n cancel</Text>
@@ -122,9 +123,7 @@ export function CompleteConfirmOverlay({ target, width }: CompleteConfirmOverlay
       </Text>
       <Box marginTop={1} paddingLeft={2}>
         <Text color={PALETTE.textMuted}>
-          {`${target.incompleteChildren.length} incomplete child task${
-            target.incompleteChildren.length === 1 ? '' : 's'
-          }:`}
+          {incompleteChildrenLabel(target.incompleteChildren.length)}
         </Text>
       </Box>
       <Box flexDirection="column" paddingLeft={4}>
@@ -147,12 +146,16 @@ export function CompleteConfirmOverlay({ target, width }: CompleteConfirmOverlay
 export interface AddOverlayProps {
   title: string;
   columnName: string;
+  /** Opened by `N`: create, then hand the new file to $EDITOR. */
+  thenEdit?: boolean;
 }
 
-export function AddOverlay({ title, columnName }: AddOverlayProps) {
+export function AddOverlay({ title, columnName, thenEdit = false }: AddOverlayProps) {
   return (
     <Box flexDirection="column" flexGrow={1} paddingLeft={1}>
-      <Text color={PALETTE.textMuted}>{`add to ${columnName}`}</Text>
+      <Text color={PALETTE.textMuted}>
+        {thenEdit ? `add to ${columnName}, then edit` : `add to ${columnName}`}
+      </Text>
       <Box marginTop={1} paddingLeft={2}>
         <Text wrap="truncate">
           <Text color={title ? PALETTE.text : PALETTE.textMuted}>{title || 'title…'}</Text>
@@ -160,7 +163,9 @@ export function AddOverlay({ title, columnName }: AddOverlayProps) {
         </Text>
       </Box>
       <Box marginTop={1} paddingLeft={2}>
-        <Text color={PALETTE.textMuted}>↵ create · esc cancel</Text>
+        <Text color={PALETTE.textMuted}>
+          {thenEdit ? '↵ create and edit · esc cancel' : '↵ create · esc cancel'}
+        </Text>
       </Box>
     </Box>
   );
