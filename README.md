@@ -56,7 +56,9 @@ One file per document means clean diffs, painless merges, and history for free. 
 
 - **MCP server** — `brainfile mcp` exposes board operations (`list_tasks`, `task_add`, `task_move`, `task_patch`, `subtask`, `contract`, `search`, …) to Claude, Cursor, or any MCP client, so agents read and update the same board you see in the TUI.
 - **Contracts** — a task can carry a contract: deliverables, validation commands, and constraints. Agents pick up (`brainfile contract pickup`), deliver, and you validate (`brainfile contract validate`) — which actually runs the validation commands. "Please do X" becomes verifiable.
-- **Agent instructions** — project guidance lives in `agent.instructions` in the board config, one place agents are told to read before working.
+- **Agent instructions** — board-scoped guidance lives in `agent.instructions` in the board config (one place agents are told to read before working). Repo-wide coding style still belongs in `AGENTS.md` / `CLAUDE.md` / similar — see [AI Agent Integration](https://brainfile.md/agents/integration#agentsmd-and-coding-preferences).
+
+You describe the feature in chat; the agent drives the board via MCP. A short calculator-style walk-through is in the [Quick Start](https://brainfile.md/quick-start#first-project-you-talk-the-agent-drives).
 
 ## This repository
 
