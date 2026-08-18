@@ -5,7 +5,7 @@
 
 Version: 2.0
 Schema: https://brainfile.md/v2
-Last Updated: 2026-08-13
+Last Updated: 2026-08-18
 
 ---
 
@@ -70,7 +70,7 @@ Default columns are To Do and In Progress.
 brainfile          # No arguments launches the TUI
 brainfile tui      # Explicit subcommand also works
 `
-Navigate with keyboard: TAB for columns, j/k for tasks, Enter to expand, q to quit.
+Navigate with keyboard: Tab for columns, j/k to move, Enter for detail, ? for help, q to quit.
 :::
 
 ::: tip CLI Commands
@@ -107,6 +107,27 @@ Your assistant can now list tasks, create new ones, move them between columns, u
 
 ---
 
+First project (you talk, the agent drives)
+
+You do not need to type every brainfile CLI command yourself. After install + MCP (steps above), describe what you want in chat — the agent creates board tasks, implements the code, and updates status through tools.
+
+Example: ask your agent for a tiny calculator:
+
+> Set up brainfile if it isn't already, then build a simple calculator web page (index.html + vanilla JS) with add, subtract, multiply, and divide. Track the work on the board with a contract: deliverables for the HTML/JS files, and validate with a quick smoke check (e.g. open the page or a small node script that exercises the math). When you're done, mark the contract delivered so I can validate.
+
+What typically happens next (via MCP or CLI — you stay in the conversation):
+  Board — brainfile init (if needed), then a task with a contract (deliverables + validation).
+  Build — the agent implements the calculator files.
+  Hand-off — contract deliver, then you (or a PM agent) run contract validate / complete.
+
+Same pattern scales to a notepad app, a small API, or a multi-agent split (Claude plans contracts; a cheaper/local model implements). For roles and rework loops, see Agent Workflows.
+
+::: tip Still useful to know the CLI
+The TUI and CLI are for you when you want to inspect or nudge the board. Day-to-day agent work goes through MCP tools — the CLI examples elsewhere in these docs are the same operations, not a requirement that you type them by hand.
+:::
+
+---
+
 Agent Coordination (Optional)
 
 Brainfile allows you to create Contracts for your AI assistants. A contract defines exactly what an agent needs to deliver.
@@ -133,12 +154,13 @@ sequenceDiagram
     Worker->>Board: brainfile contract deliver
     PM->>Board: brainfile contract validate
     Board-->>PM: ✓ done
-``
+`
 
 ---
 
 Next Steps
   - Getting Started with Contracts — Define deliverables for AI agents
+  - AI Agent Integration — MCP, hooks, and how brainfile relates to AGENTS.md`
   - CLI Commands — Full command reference and TUI guide
   - MCP Integration — Connect your AI assistant directly
   - Board Format Reference — File format and schema details
@@ -633,36 +655,31 @@ brainfile ./path/to/brainfile.md
 
 TUI Layout
 
-The interactive board displays your columns side by side, with tasks flowing through your workflow:
+One list at a time, one column at a time. The header shows every column with a live count; * marks the column you are in. On a wide terminal, Enter opens a detail pane beside the list. On a narrow terminal, detail replaces the list until you press Esc.
 
-<div style="text-align: center; margin: 1.5em 0;">
-<svg viewBox="0 0 560 90" xmlns="http://www.w3.org/2000/svg" style="max-width: 540px; width: 100%;">
-  <defs><marker id="tui-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(92,200,255,0.4)" /></marker></defs>
-  <rect x="10" y="10" width="150" height="70" rx="6" fill="#0a0a0e" stroke="#2a2a38" stroke-width="2" />
-  <text x="85" y="35" fill="#a0a0b0" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="middle">To Do</text>
-  <text x="85" y="56" fill="#585868" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" dominant-baseline="middle">task-1, task-2</text>
-  <line x1="160" y1="45" x2="195" y2="45" stroke="rgba(92,200,255,0.4)" stroke-width="2" marker-end="url(#tui-arrow)" />
-  <rect x="200" y="10" width="150" height="70" rx="6" fill="#0a0a0e" stroke="#5cc8ff" stroke-width="2" />
-  <text x="275" y="35" fill="#5cc8ff" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="middle">In Progress</text>
-  <text x="275" y="56" fill="#585868" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" dominant-baseline="middle">task-3</text>
-  <line x1="350" y1="45" x2="385" y2="45" stroke="rgba(92,200,255,0.4)" stroke-width="2" marker-end="url(#tui-arrow)" />
-  <rect x="390" y="10" width="150" height="70" rx="6" fill="#0a0a0e" stroke="#2a2a38" stroke-width="2" />
-  <text x="465" y="35" fill="#a0a0b0" font-family="JetBrains Mono, monospace" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="middle">Done</text>
-  <text x="465" y="56" fill="#585868" font-family="JetBrains Mono, monospace" font-size="10" text-anchor="middle" dominant-baseline="middle">task-4</text>
-</svg>
-</div>
+Completed work is not a column. Press L to toggle the done view (logs/).
 
 Keyboard Controls
 
 ::: tip Keyboard Quick Reference
 | Key | Action |
 |-----|--------|
-| TAB / Shift+TAB | Navigate between columns |
-| j / k or ↑ / ↓ | Navigate tasks |
-| Enter | Expand/collapse task details |
-| / | Search tasks |
-| ? | Show help |
-| r | Refresh |
+| j / k or ↑ / ↓ | Move selection |
+| h / l or Tab | Cycle column |
+| Enter | Open detail (Enter on a child drills in) |
+| esc | Back / clear filter |
+| t | Cycle document type (task, epic, spec, plan, adr) |
+| L | Toggle done view (completed logs/) |
+| space | Collapse a parent, or toggle a subtask in detail |
+| a / n | Add a document (title only) |
+| N | Add, then open in $EDITOR |
+| m | Move to a column |
+| c | Complete |
+| e | Edit the document in $EDITOR |
+| p | Cycle priority (list) or jump to parent (detail) |
+| d | Delete (list) or scroll the body (detail) |
+| / | Filter (p:, #, @, type:, contract:, due:) |
+| ? | Help |
 | q | Quit |
 :::
 
@@ -2895,13 +2912,18 @@ Keyboard Controls:
 | Key | Action |
 |-----|--------|
 | j / k or ↑ / ↓ | Move selection |
-| h / l or TAB | Cycle column |
+| h / l or Tab | Cycle column |
 | Enter | Open detail (Enter on a child drills in) |
 | esc | Back / clear filter |
-| t | Cycle document type, including done (completed logs/) |
-| space | Collapse/expand a parent, or toggle a subtask in detail |
+| t | Cycle document type (task, epic, spec, plan, adr) |
+| L | Toggle done view (completed logs/) |
+| space | Collapse a parent, or toggle a subtask in detail |
+| a / n | Add a document (title only) |
+| N | Add, then open in $EDITOR |
+| m | Move to a column |
 | c | Complete |
 | e | Edit the document in $EDITOR |
+| p | Cycle priority (list) or jump to parent (detail) |
 | / | Filter |
 | ? | Help |
 | q | Quit |

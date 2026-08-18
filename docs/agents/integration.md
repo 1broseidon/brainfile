@@ -102,7 +102,7 @@ brainfile hooks uninstall claude-code --scope all
 
 ## Manual Instructions
 
-For simple integration without MCP or hooks, add to your agent config file (`CLAUDE.md`, `.cursorrules`, etc.):
+For simple integration without MCP or hooks, add to your agent config file (`CLAUDE.md`, `.cursorrules`, `AGENTS.md`, etc.):
 
 ```markdown
 # Task Management Rules
@@ -112,6 +112,18 @@ For simple integration without MCP or hooks, add to your agent config file (`CLA
 - Check .brainfile/brainfile.md for agent instructions and board config
 - Task files live in `.brainfile/board/` (active) and `.brainfile/logs/` (completion history with `ledger.jsonl`)
 ```
+
+### `AGENTS.md` and coding preferences
+
+[`AGENTS.md`](https://agents.md/) (and similar files like `CLAUDE.md` / `.cursorrules`) are **repo-level coding style and behavior guides**. Brainfile does not replace them and does not generate them.
+
+| Concern | Where it lives |
+|---------|----------------|
+| How to write code (style, security, docs norms) | `AGENTS.md` / tool-specific agent files |
+| What work is in flight (tasks, contracts, validation) | `.brainfile/` board + MCP/CLI |
+| Short board-scoped reminders agents should read before working | `agent.instructions` / `agent.llmNotes` in `.brainfile/brainfile.md`, or per-agent bodies under `.brainfile/agents/` |
+
+Keep style prefs in `AGENTS.md` (or your tool's equivalent). Optionally mirror a few project-specific lines into `agent.instructions` or an agent file body so workers that brief from the board see them. Brainfile stays the coordination layer — not a generic software-practices template.
 
 ---
 
