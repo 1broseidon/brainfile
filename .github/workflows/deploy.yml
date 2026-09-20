@@ -1,9 +1,9 @@
-name: Deploy docs to GitHub Pages
+name: Deploy brainfile.md to GitHub Pages
 
 on:
   push:
     branches: [main]
-    paths: ['docs/**', '.github/workflows/deploy.yml']
+    paths: ['MANUAL.md', 'site/**', '.github/workflows/deploy.yml']
   workflow_dispatch:
 
 permissions:
@@ -20,19 +20,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the version chip comes from `git describe --tags`
       - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: 'npm'
-          cache-dependency-path: docs/package-lock.json
+          cache-dependency-path: site/package-lock.json
       - name: Install
-        run: cd docs && npm ci
-      - name: Build VitePress
-        run: cd docs && npm run build
+        run: cd site && npm ci
+      - name: Build
+        run: cd site && npm run build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # star count, never fails the build
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: 'docs/.vitepress/dist'
+          path: 'site/dist'
 
   deploy:
     environment:

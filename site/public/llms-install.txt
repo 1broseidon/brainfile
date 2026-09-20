@@ -1,0 +1,142 @@
+# brainfile — agent bootstrap
+
+You are setting up brainfile, a task board for people and coding agents. Every task is a Markdown file in the repo. No database, no platform, no account.
+
+## 1. Install
+
+Run these two commands in the project root (Node 20 or newer):
+
+```
+npm install -g brainfile
+brainfile init
+```
+
+This creates `.brainfile/` with:
+- `brainfile.md` — board config (columns, document types, agent instructions)
+- `board/` — active documents, one file each
+- `logs/` — completion history (`ledger.jsonl`) and archived task files
+
+## 2. Connect the MCP server
+
+Create or add to `.mcp.json` in the project root:
+
+```json
+{
+  "mcpServers": {
+    "brainfile": {
+      "command": "npx",
+      "args": ["brainfile", "mcp"]
+    }
+  }
+}
+```
+
+Restart the agent afterwards. The server speaks MCP over stdio and exposes the tools in section 4.
+
+## 3. CLI commands
+
+```
+brainfile brief --agent <name>                    # start of every session: what changed since last time
+brainfile list                                    # all tasks
+brainfile list -c todo                            # filter by column
+brainfile list --contract ready                   # contracts waiting for pickup
+brainfile show -t task-1 --json                   # one task, as JSON
+brainfile add -t "Task name"                      # create a task
+brainfile add -t "Fix bug" -p high --tags bug     # with metadata
+brainfile move -t task-1 -c in-progress           # move between columns
+brainfile note -t task-1 "What you learned"       # append to the task log
+brainfile complete -t task-1                      # done: ledger.jsonl + logs/task-1.md
+brainfile patch -t task-1 -p critical             # update fields
+brainfile subtask -t task-1 --add "Write tests"   # add a subtask
+brainfile subtask -t task-1 --toggle sub-1        # toggle a subtask
+brainfile search <query>                          # active tasks and completed logs
+```
+
+## 4. MCP tools (if connected)
+
+```
+list_tasks      — list board documents, filtered by column, tag or type
+get_task        — one document by ID, in full
+search          — search tasks and logs, list recent completions, or view one entry
+task_add        — create a document (type, contract parts via with_contract)
+task_move       — move one task or many to a column
+task_patch      — update fields on one task or many (null removes a field)
+task_complete   — complete to the ledger, or export to GitHub/Linear
+task_delete     — remove a task
+subtask         — action= add | toggle | delete | update
+contract        — action= attach | pickup | deliver | validate | graph | activate
+brief           — per-agent delta since the last brief (agent=, peek?)
+```
+
+## 5. Contracts
+
+A contract is what an agent must deliver and how it is verified.
+
+Lifecycle: draft → ready → in_progress → delivered → done (or failed; the owner adds feedback and sets it back to ready for rework)
+
+Create a task with a contract:
+
+```
+brainfile add -t "Add rate limiting" \
+  --assignee codex \
+  -p high \
+  --with-contract --ready \
+  --deliverable "file:src/rateLimiter.ts:Implementation" \
+  --deliverable "test:src/__tests__/rateLimiter.test.ts:Tests" \
+  --validation "npm test -- rateLimiter" \
+  --validation "npm run build" \
+  --constraint "Use token bucket algorithm" \
+  --constraint "Must be non-blocking"
+```
+
+Deliverables are `type:path:description`; the type is one of file, test, docs, design, research.
+
+Agent workflow:
+1. `brainfile contract pickup -t task-1` — claim it; prints the brief to work from
+2. Implement the deliverables listed in the contract
+3. `brainfile contract deliver -t task-1` — mark as delivered
+4. The owner runs `brainfile contract validate -t task-1` — checks the files exist and runs the validation commands
+
+## 6. Task file format
+
+Each task is a Markdown file in `.brainfile/board/`:
+
+```yaml
+---
+id: task-1
+type: task
+title: Add rate limiting
+column: in-progress
+priority: high
+assignee: codex
+tags: [backend, api]
+relatedFiles:
+  - src/api/gateway.ts
+contract:
+  status: in_progress
+  deliverables:
+    - type: file
+      path: src/rateLimiter.ts
+    - type: test
+      path: src/__tests__/rateLimiter.test.ts
+  validation:
+    commands:
+      - npm test -- rateLimiter
+  constraints:
+    - Use token bucket algorithm
+---
+
+## Description
+Detailed requirements go here.
+```
+
+Rules: never regenerate an ID; prefer the CLI or MCP tools over editing files by hand; complete tasks with `brainfile complete` so the ledger stays the record.
+
+## 7. What to do next
+
+You are now set up. For ongoing reference:
+
+- Quick reference: https://brainfile.md/llms.txt
+- The full manual as Markdown: https://brainfile.md/llms-full.txt
+- Board format: https://brainfile.md/#the-board-on-disk
+- Source: https://github.com/1broseidon/brainfile

@@ -54,16 +54,13 @@ Brainfile is transitioning to a multi-repository architecture under the `github.
 ### Current Monorepo Structure
 
 ```
-brainfile/ (monorepo - will be split)
-├── brainfile.schema.json       # → brainfile/protocol
-├── docs/                       # → brainfile/protocol
-│   └── protocol.md
-├── packages/
-│   ├── brainfile-core/         # → brainfile/core
-│   └── brainfile-cli/          # → brainfile/cli
-├── vscode-extension/           # → brainfile/vscode
-├── example/                    # → brainfile/protocol
-└── brainfile.md                # Project task board
+brainfile/
+├── cli/                        # the brainfile CLI, TUI and MCP server (npm: brainfile)
+├── core/                       # parser, schemas and operations (npm: @brainfile/core)
+├── site/                       # the brainfile.md page, built from MANUAL.md
+│   └── public/                 # /v1 and /v2 schemas, llms.txt, llms-install.txt
+├── MANUAL.md                   # the manual — one page for people and agents
+└── .github/workflows/          # CI, release, and the Pages deploy
 ```
 
 ## Types of Contributions
@@ -73,9 +70,9 @@ brainfile/ (monorepo - will be split)
 Changes to the Brainfile protocol require careful consideration:
 
 1. **Propose First**: Open an issue describing the change
-2. **Update Schema**: Modify `brainfile.schema.json`
+2. **Update Schema**: Modify the schemas in `cli/src/schemas/` and the served copies in `site/public/v2/`
 3. **Version Bump**: Update `protocolVersion` in schema
-4. **Update Docs**: Modify `docs/protocol.md`
+4. **Update Docs**: Modify `MANUAL.md` (rendered at brainfile.md)
 5. **Add Tests**: Ensure parsers handle the change
 6. **Backward Compatibility**: Consider impact on existing tools
 

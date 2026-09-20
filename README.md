@@ -64,13 +64,13 @@ One file per document means clean diffs, painless merges, and history for free. 
 |------|---------|------|
 | [`cli/`](cli) | [`brainfile`](https://www.npmjs.com/package/brainfile) | the CLI, TUI, and MCP server |
 | [`core/`](core) | [`@brainfile/core`](https://www.npmjs.com/package/@brainfile/core) | parser, schema, and operations library |
-| [`docs/`](docs) | — | the documentation site → [brainfile.md](https://brainfile.md) |
+| [`site/`](site) | — | the manual at [brainfile.md](https://brainfile.md), rendered from [`MANUAL.md`](MANUAL.md) |
 
 The board schema ships inside the CLI (`cli/src/schemas/`); the copies served at [brainfile.md/v2/board.json](https://brainfile.md/v2/board.json) exist so board frontmatter can reference a stable URL.
 
 ## Docs
 
-Full documentation at **[brainfile.md](https://brainfile.md)** — quick start, contract guides, CLI and MCP reference. For agents: [brainfile.md/llms-install.txt](https://brainfile.md/llms-install.txt).
+Everything is one page at **[brainfile.md](https://brainfile.md)** — install, a quickstart, the board format, every command, contracts, the TUI and the MCP server. The same text is [`MANUAL.md`](MANUAL.md) here and [brainfile.md/llms-full.txt](https://brainfile.md/llms-full.txt) for agents; the setup procedure for an agent is [brainfile.md/llms-install.txt](https://brainfile.md/llms-install.txt).
 
 ## License
 

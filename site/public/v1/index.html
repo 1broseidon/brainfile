@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>v1 Schema Directory | Brainfile</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --c-bg: #ffffff;
+            --c-bg-soft: #f6f6f7;
+            --c-text: #213547;
+            --c-text-2: #476582;
+            --c-text-3: #90a4ae;
+            --c-divider: rgba(60, 60, 67, 0.12);
+            --c-brand: #646cff;
+            --c-green: #10b981;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --c-bg: #1a1a1a;
+                --c-bg-soft: #242424;
+                --c-text: rgba(255, 255, 255, 0.87);
+                --c-text-2: rgba(255, 255, 255, 0.6);
+                --c-text-3: rgba(255, 255, 255, 0.38);
+                --c-divider: rgba(84, 84, 84, 0.48);
+            }
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--c-bg);
+            color: var(--c-text);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 688px;
+            margin: 0 auto;
+            padding: 64px 24px;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: var(--c-text-2);
+            margin-bottom: 48px;
+        }
+        .subtitle a { color: var(--c-brand); text-decoration: none; }
+        .subtitle a:hover { text-decoration: underline; }
+        h2 {
+            font-size: 14px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--c-text-3);
+            margin: 48px 0 16px;
+        }
+        .list { display: flex; flex-direction: column; gap: 1px; background: var(--c-divider); border-radius: 8px; overflow: hidden; }
+        .item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: var(--c-bg-soft);
+        }
+        .item-main { flex: 1; }
+        .item-title {
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .item-desc {
+            font-size: 14px;
+            color: var(--c-text-2);
+            margin-top: 2px;
+        }
+        .badge {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+        }
+        .badge-stable { background: rgba(16, 185, 129, 0.15); color: var(--c-green); }
+        code {
+            font-family: ui-monospace, monospace;
+            font-size: 13px;
+            background: var(--c-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .meta { font-size: 13px; color: var(--c-text-3); margin-top: 4px; }
+        .meta a { color: var(--c-brand); text-decoration: none; }
+        .meta a:hover { text-decoration: underline; }
+        .links { display: flex; flex-direction: column; gap: 8px; }
+        .links a {
+            color: var(--c-text-2);
+            text-decoration: none;
+            font-size: 14px;
+        }
+        .links a:hover { color: var(--c-brand); }
+        .tip {
+            font-size: 14px;
+            color: var(--c-text-2);
+            padding: 12px 16px;
+            background: var(--c-bg-soft);
+            border-radius: 6px;
+            margin-bottom: 32px;
+        }
+        .tip a { color: var(--c-brand); text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>v1 Schema Directory</h1>
+        <p class="subtitle">Official schemas for <a href="https://brainfile.md">Brainfile</a> task management</p>
+
+        <div class="tip">
+            Programmatic access: <a href="/v1/index.json"><code>GET /v1/index.json</code></a>
+        </div>
+
+        <h2>Schemas</h2>
+        <div class="list">
+            <div class="item">
+                <div class="item-main">
+                    <div class="item-title">base.json <span class="badge badge-stable">stable</span></div>
+                    <div class="item-desc">Shared fields for all brainfiles</div>
+                    <div class="meta"><code>https://brainfile.md/v1/base.json</code></div>
+                </div>
+            </div>
+            <div class="item">
+                <div class="item-main">
+                    <div class="item-title">board.json <span class="badge badge-stable">stable</span></div>
+                    <div class="item-desc">Kanban boards with columns and tasks</div>
+                    <div class="meta"><code>https://brainfile.md/v1/board.json</code> &middot; <a href="/example/board.md">example</a></div>
+                </div>
+            </div>
+        </div>
+
+        <h2>Links</h2>
+        <div class="links">
+            <a href="https://brainfile.md/#the-board-on-disk">Documentation</a>
+            <a href="https://github.com/brainfile/protocol">GitHub</a>
+            <a href="https://www.npmjs.com/package/@brainfile/core">npm</a>
+        </div>
+    </div>
+</body>
+</html>

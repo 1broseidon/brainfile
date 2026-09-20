@@ -1,0 +1,12 @@
+{
+  "name": "brainfile-site",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "prebuild": "node scripts/fetch-stars.mjs"
+  },
+  "devDependencies": {
+    "marked": "^18.0.13"
+  }
+}
