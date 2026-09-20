@@ -4,8 +4,25 @@ Markdown task boards for you and your coding agents. Every task, epic, plan
 and decision is a plain Markdown file in your repo; you work the board from a
 CLI or a TUI, and your agents work it through an MCP server.
 
-No database, no platform, no account. The board diffs, merges and reviews like
-the rest of the code, and an agent reads it the way it reads any other file.
+For people, it replaces the board in a browser tab with files in the repo,
+worked from a CLI or a TUI. For agents, it is a board they can read and work
+through an MCP server, with contracts that say what done means.
+
+```console title="Install"
+$ npm install -g brainfile
+$ brainfile init
+```
+
+```console title="Or hand it to your agent"
+Install brainfile and set up a board in this repo for me.
+1. Run: npm install -g brainfile
+2. Run `brainfile init` at the repo root.
+3. Add the MCP server to .mcp.json:
+   {"mcpServers":{"brainfile":{"command":"npx","args":["brainfile","mcp"]}}}
+4. Run `brainfile brief --agent <your name>` and tell me what the board says.
+From here on, track work on the board: `brainfile add` before you start,
+`brainfile note` as you learn things, `brainfile complete` when you are done.
+```
 
 ## Overview
 
@@ -36,25 +53,9 @@ task is a file, `git blame`, pull requests and code review already work on it.
 
 ## Install
 
-brainfile is an npm package. It needs Node 20 or newer.
-
-```console title="Install"
-$ npm install -g brainfile
-$ brainfile init
-```
-
-If you are pointing a coding agent at a repo, hand it this instead.
-
-```console title="Or hand it to your agent"
-Set up brainfile in this repo for me.
-1. Run: npm install -g brainfile
-2. Run `brainfile init` at the repo root.
-3. Add the MCP server to .mcp.json:
-   {"mcpServers":{"brainfile":{"command":"npx","args":["brainfile","mcp"]}}}
-4. Run `brainfile brief --agent <your name>` and tell me what the board says.
-From here on, track work on the board: `brainfile add` before you start,
-`brainfile note` as you learn things, `brainfile complete` when you are done.
-```
+brainfile is an npm package; it needs Node 20 or newer. `npm install -g
+brainfile` puts the command on your PATH, and `brainfile init` creates the
+board. The other routes are below.
 
 #### npx — no global install
 
@@ -79,11 +80,11 @@ refuses to overwrite its own outputs unless you pass `--force`.
 
 #### chain — the rest of the toolkit
 
-brainfile is one of the [chain.sh](https://chain.sh) tools. The `chain` skill
-installs the set for a coding agent in one step:
+brainfile is one of the [chain.sh](https://chain.sh) tools. One command installs
+the set:
 
 ```console
-$ npx skills add 1broseidon/skills --skill chain
+$ curl -fsSL https://chain.sh/bootstrap.sh | sh
 ```
 
 ## Quickstart
@@ -294,32 +295,42 @@ type gets an ID prefix, a completable flag and an optional schema. With
 
 ## Choosing a command
 
-| Command | Use it when |
+| The question | Use |
 | --- | --- |
-| `init` | Starting a board in a repo. |
-| `tui` | You want to see the board and work it by keyboard. |
-| `add`, `move`, `patch`, `complete` | The daily loop: create, advance, edit, finish. |
-| `list`, `show`, `search` | Reading the board or the history. |
-| `note`, `log` | Writing to a task's log, or reading what was done. |
-| `subtask` | Breaking a task into checkable steps. |
-| `contract` | Handing work to an agent with deliverables and validation. |
-| `brief` | An agent is starting a session and needs what changed since its last one. |
-| `mcp`, `hooks` | Wiring brainfile into a coding agent. |
-| `plan`, `adr`, `types` | Plans, decisions and custom document types. |
-| `template`, `lint`, `schema` | Task templates, config validation, the bundled schemas. |
-| `archive`, `restore`, `auth` | Exporting completed work to GitHub or Linear, and bringing it back. |
-| `migrate`, `config` | Upgrading a v1 board, and the user-level config file. |
+| Start a board in this repo | `init` |
+| See the board and work it by keyboard | `tui` |
+| Create a task | `add` |
+| Advance a task to another column | `move` |
+| Change a task's fields | `patch` |
+| Finish a task and record it | `complete` |
+| Read the whole board | `list` |
+| Read one task in full | `show` |
+| Find something, active or done | `search` |
+| Write down what you learned while working | `note` |
+| Break a task into steps | `subtask` |
+| Hand work to an agent, with deliverables and validation | `contract` |
+| Orient an agent at the start of a session | `brief` |
+| Let an agent work the board as tools | `mcp` |
+| Keep an agent updating the board | `hooks` |
+| Read what was done on a task | `log` |
+| Record a plan or a decision | `plan`, `adr` |
+| Export finished work to GitHub or Linear, or bring it back | `archive`, `restore` |
+| Upgrade a v1 board | `migrate` |
 
 > Every command that touches a task takes `-t <id>`. Every command finds the
 > board by walking up from the current directory, preferring
 > `.brainfile/brainfile.md` and falling back to `brainfile.md`, `.brainfile.md`
-> and `.bb.md`; pass `-f <path>` to point at another one.
+> and `.bb.md`; pass `-f <path>` to point at another one. Custom types, task
+> templates, linting, the schemas and the config file are in
+> [Commands](#commands).
 
 ## Commands
 
-All flags are as printed by `brainfile <command> --help`. Commands that accept
-`--json` say so; `list` does not have one yet, so scripts and agents should use
-`show --json`, `brief --json` or the MCP tools instead.
+Twenty-eight commands, in four groups. `-t <id>` names the task and
+`-f <path>` the board; everything else is per-command, and every flag is as
+printed by `brainfile <command> --help`. Expand a row for its flags. Commands
+that accept `--json` say so; `list` does not have one yet, so scripts and
+agents should use `show --json`, `brief --json` or the MCP tools instead.
 
 ### The board
 
@@ -758,10 +769,10 @@ them into the repo instead of the user's home.
 
 ### Bootstrap files
 
-Two files on this domain are written for agents rather than people:
-[/llms-install.txt](/llms-install.txt) is the setup procedure, and
-[/llms-full.txt](/llms-full.txt) is this manual as plain Markdown.
-[/llms.txt](/llms.txt) is the short index.
+Three files on this domain are written for agents rather than people:
+[/llms.txt](/llms.txt) is the short index, [/llms-full.txt](/llms-full.txt)
+is this manual as plain Markdown, and
+[/llms-install.txt](/llms-install.txt) is the setup procedure.
 
 ## Notes
 
