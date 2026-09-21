@@ -3,7 +3,9 @@ name: Deploy brainfile.md to GitHub Pages
 on:
   push:
     branches: [main]
-    paths: ['MANUAL.md', 'site/**', '.github/workflows/deploy.yml']
+    paths: ['MANUAL.md', 'CHANGELOG.md', 'site/**', '.github/workflows/deploy.yml']
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
