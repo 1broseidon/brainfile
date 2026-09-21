@@ -1,9 +1,13 @@
-name: Deploy brainfile.md to GitHub Pages
+name: Deploy Docs
 
+# brainfile.md is a GitHub Pages site printed by inkcap from MANUAL.md. The
+# version chip comes from git tags, so the workflow also runs when a release
+# is published; the star count is baked in as a fallback and kept live by
+# the page itself.
 on:
   push:
     branches: [main]
-    paths: ['MANUAL.md', 'CHANGELOG.md', 'site/**', '.github/workflows/deploy.yml']
+    paths: ['MANUAL.md', 'CHANGELOG.md', 'site/**', '.github/workflows/docs.yml']
   release:
     types: [published]
   workflow_dispatch:
@@ -14,20 +18,20 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0 # the version chip comes from `git describe --tags`
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
-          node-version: '24'
-          cache: 'npm'
+          node-version: 24
+          cache: npm
           cache-dependency-path: site/package-lock.json
       - name: Install
         run: cd site && npm ci
@@ -38,7 +42,7 @@ jobs:
       - uses: actions/configure-pages@v4
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: 'site/dist'
+          path: site/dist
 
   deploy:
     environment:
