@@ -316,6 +316,7 @@ type gets an ID prefix, a completable flag and an optional schema. With
 | Record a plan or a decision | `plan`, `adr` |
 | Export finished work to GitHub or Linear, or bring it back | `archive`, `restore` |
 | Share the board with another machine or person | `sync` |
+| See where the board lives and who has it | `where` |
 | Upgrade a v1 board, or move a board onto its own branch | `migrate` |
 
 > Every command that touches a task takes `-t <id>`. Every command finds the
@@ -617,6 +618,18 @@ the code branch (`git subtree split`), imports a gitignored one as a fresh
 branch, and folds a standalone board repository into the surrounding
 repository. `--to-plain` leaves the branch intact.
 
+#### where — Where the board lives and who has it
+
+```console
+$ brainfile where
+$ brainfile where --json
+```
+
+Prints the board's location, how it is stored (plain files, a branch of this
+repository, or its own repository), the remote it is shared through, when it
+last synced, and how many changes are waiting to be sent. It never touches
+the network, so it is always safe to run.
+
 #### sync — Share a board through a git remote
 
 ```console
@@ -730,6 +743,30 @@ and go into the ledger when the task completes.
 
 ## Sharing a board
 
+The short version:
+
+| Where you run `init` | Where the board lives | Who has it |
+| --- | --- | --- |
+| A folder without git | `.brainfile/`, plain files | This machine |
+| Inside a git repository | `.brainfile/`, saved as commits on a separate `brainfile` branch | This machine, until you run `sync --set-remote` |
+| Anywhere, with `-g` | `~/.brainfile/`, its own small repository | This machine, until you run `sync --set-remote` |
+
+In every case the board is ordinary files in `.brainfile/` that you and your
+agents read directly. Nothing leaves the machine until you name a remote, and
+`brainfile where` always tells you where the board is, how it is stored, who
+else has it, and whether any changes are waiting to be sent:
+
+```console
+$ brainfile where
+Board     .brainfile/
+Stored    as commits on the 'brainfile' branch of this repository
+          Kept out of your code branch, its commits and pull requests.
+Shared    through origin (git@github.com:me/app.git), branch 'brainfile'
+          Last synced 2m ago. Nothing waiting to be sent.
+          Changes are sent automatically after each edit.
+          Anyone who can read origin can read this board.
+```
+
 A board is a folder of Markdown. That is what makes it easy to read, and what
 made it hard to share: committed next to the code, every task move lands on a
 feature branch and a pull request; gitignored, it never leaves the machine.
@@ -762,10 +799,12 @@ branch, board included, and once it is on origin anyone with access to the
 repository can browse it there. The point is a clean main, not privacy; for
 private notes next to public code use a separate remote (below).
 
-Two clones of the repository, or two worktrees of it, share the branch. A
-fresh clone materializes the board on first use: the branch is fetched with
-the rest of the repository once it has been pushed, and the CLI checks it out
-into `.brainfile/` when the directory is missing.
+Two worktrees of the repository share the board directly. A clone gets it
+once the branch has been pushed: git fetches the branch with everything else,
+and the first `brainfile` command checks it out into `.brainfile/`, says so
+(`Checked out the shared board from origin into .brainfile/`), and sends
+changes back to the remote it came from. Someone who never runs `brainfile`
+never sees the folder.
 
 Outside a repository, `init --tracked` makes the board its own small
 repository; the home board `brainfile init -g` is always one. Both take the

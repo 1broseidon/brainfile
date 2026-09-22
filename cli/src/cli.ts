@@ -15,6 +15,7 @@ import { lintCommand } from './commands/lint';
 import { initCommand } from './commands/init';
 import { migrateCommand } from './commands/migrate';
 import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
+import { whereCommand } from './commands/where';
 import { mergeDriverCommand } from './commands/merge-driver';
 /**
  * The TUI is loaded on demand, never at module scope.
@@ -92,7 +93,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'sync', 'merge-driver', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'sync', 'where', 'merge-driver', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -362,6 +363,13 @@ Brainfile file resolution (when you don't pass --file):
     .addOption(new Option('--wait <ms>', 'Sleep before syncing (autosync child)').hideHelp())
     .action((options) => { syncCommand(options); });
   syncCmd.addHelpText('after', `\n${SYNC_COMMAND_HELP}`);
+
+  program
+    .command('where')
+    .description('Where the board lives, how it is stored, and who else has it (never touches the network)')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output as JSON')
+    .action((options) => { whereCommand(options); });
 
   program
     .command('merge-driver', { hidden: true })

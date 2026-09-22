@@ -63,8 +63,10 @@ export interface SyncResult {
   pushed: number;
   /** Files left with conflict markers for a human. */
   conflicts: string[];
-  /** One-line, user-facing explanation when `ok` is false. */
+  /** One-line, technical explanation when `ok` is false. */
   warning?: string;
+  /** Why it failed, for plain-language messages (see `syncMessage`). */
+  failure?: 'offline' | 'rejected' | 'conflict' | 'error';
 }
 
 export interface SyncState {
@@ -97,9 +99,14 @@ export function boardRemote(dotDir: string): string | null {
 export function boardRemoteBranch(dotDir: string): string {
   const configured = configGet(dotDir, REMOTE_BRANCH_CONFIG_KEY);
   if (configured) return configured;
-  if (boardRepoKind(dotDir) === 'linked') return boardBranch(dotDir);
   if (path.resolve(dotDir) === path.resolve(homeBoardDir())) return 'home';
-  return path.basename(path.dirname(path.resolve(dotDir))) || boardBranch(dotDir);
+  // A standalone board is named after the folder it sits in; anything else
+  // (a linked board, or a code repo whose board is not checked out yet) uses
+  // the board branch name.
+  if (boardRepoKind(dotDir) === 'standalone' && path.basename(path.resolve(dotDir)) === '.brainfile') {
+    return path.basename(path.dirname(path.resolve(dotDir))) || boardBranch(dotDir);
+  }
+  return boardBranch(dotDir);
 }
 
 export function boardAutosync(dotDir: string): AutosyncMode {
@@ -299,7 +306,7 @@ export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult
   // Never sync a board that is mid-merge: a human owns it until it is clean.
   const stuck = unmergedFiles(dotDir);
   if (stuck.length > 0) {
-    return finish(dotDir, { ...result, ok: false, conflicts: stuck, warning: `unresolved conflicts: ${stuck.join(', ')}` });
+    return finish(dotDir, { ...result, ok: false, failure: 'conflict', conflicts: stuck, warning: `unresolved conflicts: ${stuck.join(', ')}` });
   }
 
   commitHandEdits(dotDir);
@@ -312,7 +319,7 @@ export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult
     if (fetch.ok) {
       fetched = true;
     } else if (!isMissingRemoteRef(fetch.stderr)) {
-      return finish(dotDir, { ...result, ok: false, warning: `fetch from ${remote} failed: ${firstLine(fetch.stderr)}` });
+      return finish(dotDir, { ...result, ok: false, failure: 'offline', warning: `fetch from ${remote} failed: ${firstLine(fetch.stderr)}` });
     }
     if (fetched && !git(['merge-base', '--is-ancestor', 'FETCH_HEAD', 'HEAD'], dotDir).ok) {
       const before = git(['rev-parse', 'HEAD'], dotDir).stdout;
@@ -325,13 +332,14 @@ export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult
           return finish(dotDir, {
             ...result,
             ok: false,
+            failure: 'conflict',
             conflicts: remaining,
             warning: `merge left conflicts in ${remaining.join(', ')} — resolve them in ${dotDir}, then run sync again`,
           });
         }
         const commit = git([...id.args, 'commit', '--quiet', '--no-edit', '--no-verify'], dotDir, id.env);
         if (!commit.ok) {
-          return finish(dotDir, { ...result, ok: false, warning: `merge commit failed: ${firstLine(commit.stderr)}` });
+          return finish(dotDir, { ...result, ok: false, failure: 'error', warning: `merge commit failed: ${firstLine(commit.stderr)}` });
         }
       }
       // Count what came from the remote rather than our own merge commit.
@@ -340,7 +348,7 @@ export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult
   }
 
   if (push) {
-    const ahead = fetched ? commitCount(dotDir, 'FETCH_HEAD..HEAD') : commitCount(dotDir, 'HEAD');
+    const ahead = fetched ? commitCount(dotDir, 'FETCH_HEAD..HEAD') : pendingChanges(dotDir);
     if (ahead > 0) {
       const pushed = git(['push', '--quiet', remote, `HEAD:refs/heads/${remoteBranch}`], dotDir);
       if (!pushed.ok) {
@@ -348,6 +356,7 @@ export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult
         return finish(dotDir, {
           ...result,
           ok: false,
+          failure: rejected ? 'rejected' : 'offline',
           warning: rejected
             ? `push to ${remote} rejected (the remote moved) — run sync again`
             : `push to ${remote} failed: ${firstLine(pushed.stderr)}`,
@@ -380,15 +389,68 @@ export function secondsSinceSync(dotDir: string, now = Date.now()): number | nul
 }
 
 /**
- * Short status for a header: `synced 12s ago`, `synced 3m ago`, `sync failed`.
- * Null when the board is not shared (plain, or no remote).
+ * Short status for a header: `synced 12s ago`, `local only` for a tracked
+ * board nobody else has, `not synced · saved locally` after a failure. Null
+ * for a plain board.
  */
 export function syncStatusLabel(dotDir: string, now = Date.now()): string | null {
-  if (!isTrackedBoard(dotDir) || !boardRemote(dotDir)) return null;
+  if (!isTrackedBoard(dotDir)) return null;
+  if (!boardRemote(dotDir)) return 'local only';
   const state = readSyncState(dotDir);
   if (!state) return 'not synced yet';
-  if (!state.ok) return 'sync failed';
+  if (!state.ok) return 'not synced · saved locally';
   const seconds = secondsSinceSync(dotDir, now) ?? 0;
   const age = seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.round(seconds / 60)}m` : `${Math.round(seconds / 3600)}h`;
   return `synced ${age} ago`;
+}
+
+/**
+ * Commits on this machine the remote has not seen yet, judged against the
+ * last-known remote position (no network). Null when the board is not shared.
+ */
+export function pendingChanges(dotDir: string): number {
+  const remote = boardRemote(dotDir);
+  if (!remote) return 0;
+  const tracking = `refs/remotes/${remote}/${boardRemoteBranch(dotDir)}`;
+  const known = git(['rev-parse', '--verify', '--quiet', tracking], dotDir).ok;
+  return commitCount(dotDir, known ? `${tracking}..HEAD` : 'HEAD');
+}
+
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/**
+ * The one sentence a person needs after a sync: what moved, or why nothing
+ * did and that nothing was lost. `detail` is the technical cause, if any.
+ */
+export function syncMessage(result: SyncResult): { text: string; tone: 'ok' | 'warn'; detail?: string } {
+  if (result.skipped === 'not-tracked') {
+    return { tone: 'warn', text: 'This board is plain files on this machine and is not shared. To share it: brainfile migrate --to-branch' };
+  }
+  if (result.skipped === 'no-remote') {
+    return { tone: 'warn', text: 'This board is only on this machine. To share it: brainfile sync --set-remote origin' };
+  }
+  const remote = result.remote ?? 'the remote';
+  if (!result.ok) {
+    switch (result.failure) {
+      case 'conflict':
+        return {
+          tone: 'warn',
+          text: `Two edits collided in ${result.conflicts.join(', ')}. Open the file in .brainfile/, keep the right version, then run brainfile sync. Nothing else is shared until then.`,
+        };
+      case 'rejected':
+        return { tone: 'warn', text: `Someone shared changes through ${remote} at the same moment. Run brainfile sync again to combine them. Nothing was lost.` };
+      case 'offline':
+        return {
+          tone: 'warn',
+          text: `Couldn't reach ${remote}. Nothing was lost: your changes are saved on this machine and will be sent on the next sync.`,
+          detail: result.warning,
+        };
+      default:
+        return { tone: 'warn', text: `Sync with ${remote} stopped. Your changes are saved on this machine.`, detail: result.warning };
+    }
+  }
+  const parts: string[] = [];
+  if (result.pulled > 0) parts.push(`received ${plural(result.pulled, 'change')}`);
+  if (result.pushed > 0) parts.push(`sent ${plural(result.pushed, 'change')}`);
+  return { tone: 'ok', text: parts.length ? `Shared through ${remote}: ${parts.join(', ')}.` : `Up to date with ${remote}.` };
 }

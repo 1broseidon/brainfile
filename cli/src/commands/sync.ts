@@ -27,6 +27,7 @@ import {
   setBoardAutosync,
   setBoardRemote,
   syncBoard,
+  syncMessage,
 } from '../utils/board-sync';
 
 export interface SyncCommandOptions {
@@ -49,22 +50,13 @@ Examples:
   brainfile sync --set-remote git@host:me/boards.git --remote-branch myproject
   brainfile sync --autosync full              Also fetch before reads (default: push after writes)
 
-The board never syncs with origin unless you say so: boards are often private
-notes living next to public code.`;
+Nothing leaves this machine until you choose a remote. \`brainfile where\` shows
+where the board lives and who has it.`;
 
 function describe(result: SyncResult): string {
-  if (result.skipped === 'not-tracked') {
-    return `${chalk.yellow('Board is a plain directory.')} Track it first: ${chalk.cyan('brainfile migrate --to-branch')}`;
-  }
-  if (result.skipped === 'no-remote') {
-    return `${chalk.yellow('No remote set.')} Share this board with: ${chalk.cyan('brainfile sync --set-remote <name|url>')}`;
-  }
-  const where = `${result.remote}/${result.remoteBranch}`;
-  if (!result.ok) return chalk.yellow(`Sync incomplete (${where}): ${result.warning ?? 'unknown error'}`);
-  const parts: string[] = [];
-  if (result.pulled > 0) parts.push(`pulled ${result.pulled}`);
-  if (result.pushed > 0) parts.push(`pushed ${result.pushed}`);
-  return chalk.green(parts.length ? `Synced with ${where}: ${parts.join(', ')}.` : `Up to date with ${where}.`);
+  const message = syncMessage(result);
+  const text = message.tone === 'ok' ? chalk.green(message.text) : chalk.yellow(message.text);
+  return message.detail ? `${text}\n${chalk.gray(`  (${message.detail})`)}` : text;
 }
 
 function sleep(ms: number): void {
@@ -89,14 +81,14 @@ export function syncCommand(options: SyncCommandOptions, logger: Logger = defaul
     } catch (error) {
       throw validationError(error instanceof Error ? error.message : String(error));
     }
-    logger.log(chalk.green(`Board remote: ${setting.remote}${setting.url ? ` (${setting.url})` : ''}, branch '${setting.remoteBranch}'.`));
+    logger.log(chalk.green(`This board is now shared through ${setting.remote}${setting.url ? ` (${setting.url})` : ''}, branch '${setting.remoteBranch}'.`));
+    logger.log(chalk.gray(`  Changes are sent automatically after each edit. Anyone who can read ${setting.remote} can read the board.`));
     if (!dotDir) {
       dotDir = materializeBoardWorktree(cwd);
       if (!dotDir) {
-        logger.log(chalk.yellow(`No board found on ${setting.remote}/${setting.remoteBranch}.`) + chalk.gray(' Create one with: brainfile init'));
+        logger.log(chalk.yellow(`There is no board on ${setting.remote} yet (looked for branch '${setting.remoteBranch}').`) + chalk.gray(' Start one with: brainfile init'));
         return undefined;
       }
-      logger.log(chalk.gray(`  Board checked out at ${dotDir}`));
     }
   } else if (options.remoteBranch !== undefined) {
     throw validationError('--remote-branch needs --set-remote');

@@ -23,6 +23,7 @@ const EXCLUDE_MARKER = '# brainfile: board worktree (managed by `brainfile`)';
 const FALLBACK_IDENTITY_NAME = 'brainfile';
 const FALLBACK_IDENTITY_EMAIL = 'brainfile@localhost';
 const MAX_MESSAGE_LENGTH = 72;
+const BOARD_SUBDIRS = ['board', 'logs'];
 
 export interface GitResult {
   ok: boolean;
@@ -181,6 +182,17 @@ export function materializeBoardWorktree(cwd: string): string | null {
     : git(['worktree', 'add', '--quiet', '--track', '-b', branch, target, upstream as string], cwd);
   if (!r.ok) return null;
   ensureExcludeEntry(cwd);
+  // Boards shared before empty directories were kept arrive without them.
+  for (const sub of BOARD_SUBDIRS) fs.mkdirSync(path.join(target, sub), { recursive: true });
+  const cameFrom = upstream ? upstream.slice(0, upstream.indexOf('/')) : null;
+  // The board arrived through this remote, so that is where it goes back to.
+  if (cameFrom && !configuredRemote) git(['config', 'brainfile.remote', cameFrom], cwd);
+  const relative = path.relative(process.cwd(), target) || '.';
+  process.stderr.write(
+    cameFrom
+      ? `Checked out the shared board from ${cameFrom} into ${relative}/\n`
+      : `Checked out the board from the '${branch}' branch into ${relative}/\n`
+  );
   return target;
 }
 
@@ -300,8 +312,26 @@ export interface CommitBoardOptions {
  * commit was made, false when the board is plain or nothing changed. Never
  * throws: a failed commit must not fail the mutation it records.
  */
+/**
+ * git does not store empty directories, and a board without `board/` reads
+ * as legacy on the other side. Keep both alive with a `.gitkeep`.
+ */
+export function ensureBoardDirs(dotDir: string): void {
+  for (const sub of BOARD_SUBDIRS) {
+    const dir = path.join(dotDir, sub);
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      const keep = path.join(dir, '.gitkeep');
+      if (!fs.existsSync(keep)) fs.writeFileSync(keep, '', 'utf-8');
+    } catch {
+      /* best effort */
+    }
+  }
+}
+
 export function commitBoard(dotDir: string, options: CommitBoardOptions): boolean {
   if (!isTrackedBoard(dotDir)) return false;
+  ensureBoardDirs(dotDir);
   // A merge a human still owns must not be committed with its markers.
   if (unmergedFiles(dotDir).length > 0) return false;
   if (!git(['add', '-A'], dotDir).ok) return false;

@@ -26,6 +26,11 @@ All notable changes to this project are documented here. Format follows
 - Autosync: after a remote is set, mutations push a few seconds later from a
   detached process; `full` also fetches before stale reads. `brief` (CLI and
   MCP) syncs first unless `--offline`. The TUI header shows `synced Ns ago`.
+- `brainfile where` — where the board lives, how it is stored, who else has
+  it, and how many changes are waiting to be sent. Offline and read-only.
+  Every storage message (init, migrate, sync, brief) now says in plain words
+  where the board is and that nothing is lost when a sync fails; the TUI
+  header shows `local only` for a board nobody else has.
 - `brainfile migrate --to-branch [--commit]` moves a committed board onto the
   branch with its history (`git subtree split`), imports a gitignored one, or
   folds a standalone board repository in; `--to-plain` reverses it.
@@ -35,7 +40,10 @@ All notable changes to this project are documented here. Format follows
 ### Changed
 - Board discovery stops at the repository root, then looks for the worktree
   on the board branch (materializing it when the branch exists locally or on
-  the configured remote) before falling back to legacy file names.
+  the configured remote) before falling back to legacy file names. A clone
+  that checks the board out from a remote announces it and keeps sending
+  changes to that remote; `board/` and `logs/` carry a `.gitkeep` so an empty
+  board survives the trip.
 
 ## [0.20.0] - 2026-08-13
 

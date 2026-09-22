@@ -7,6 +7,7 @@
 import { commitBoard, commitHandEdits, describeCommandForCommit, resolveAgentName } from './board-repo';
 import { tryResolveBoardDir } from './brainfile-path';
 import { fetchBeforeRead } from './board-autosync';
+import { syncMessage } from './board-sync';
 
 interface CommandLike {
   name(): string;
@@ -16,7 +17,7 @@ interface CommandLike {
 }
 
 /** Long-running or board-unrelated commands that manage their own commits, or none. */
-const SKIP_COMMANDS = new Set(['mcp', 'tui', 'hooks', 'auth', 'sync', 'merge-driver']);
+const SKIP_COMMANDS = new Set(['mcp', 'tui', 'hooks', 'auth', 'sync', 'merge-driver', 'where']);
 
 export function topLevelCommandName(command: CommandLike): string {
   let cursor: CommandLike = command;
@@ -40,7 +41,7 @@ export function beforeCommand(command: CommandLike): boolean {
   const committed = commitHandEdits(dotDir);
   // autosync=full: reads see other machines' work when the last sync is stale.
   const fetched = fetchBeforeRead(dotDir);
-  if (fetched && !fetched.ok && fetched.warning) process.stderr.write(`warning: ${fetched.warning}\n`);
+  if (fetched && !fetched.ok) process.stderr.write(`${syncMessage(fetched).text}\n`);
   return committed;
 }
 

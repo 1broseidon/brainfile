@@ -30,7 +30,7 @@ import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, missingRequired, operationFailed } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { ExitCode } from '../utils/errorHandler';
-import { syncBoard } from '../utils/board-sync';
+import { syncBoard, syncMessage } from '../utils/board-sync';
 import * as path from 'path';
 
 export interface BriefOptions {
@@ -107,8 +107,8 @@ function runBrief(options: BriefOptions): BriefCommandResult {
   // failures are a one-line warning: the brief itself never fails over them.
   if (!options.offline) {
     const sync = syncBoard(path.dirname(filePath), { agent });
-    if (!sync.skipped && !sync.ok && sync.warning) {
-      process.stderr.write(`warning: ${sync.warning}\n`);
+    if (!sync.skipped && !sync.ok) {
+      process.stderr.write(`${syncMessage(sync).text}\n`);
     }
   }
 

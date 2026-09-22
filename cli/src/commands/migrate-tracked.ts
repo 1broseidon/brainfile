@@ -77,7 +77,8 @@ function verifyAndFinish(aside: string, dotDir: string): void {
   // The board branch gains `.gitattributes` (merge strategies) during the
   // move; every original file must still be present.
   const before = listBoardFiles(aside);
-  const after = listBoardFiles(dotDir).filter((f) => f !== '.gitattributes' || before.includes(f));
+  const added = (f: string) => (f === '.gitattributes' || f.endsWith('/.gitkeep')) && !before.includes(f);
+  const after = listBoardFiles(dotDir).filter((f) => !added(f));
   if (before.join('\n') !== after.join('\n')) {
     restoreAside(aside, dotDir);
     throw new Error('Board contents differ after migration; the original directory was restored.');
@@ -109,7 +110,7 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
     registerMergeDriver(dotDir);
     commitBoard(dotDir, { message: 'import board' });
     console.log(chalk.green('Board is now its own git repository.'));
-    console.log(chalk.gray(`  ${dotDir} — every change is a commit. Local-only until you set a remote.`));
+    printMigratedStory(dotDir, null);
     return;
   }
 
@@ -155,9 +156,9 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
     if (options.commit) {
       const commit = git(['commit', '--quiet', '--no-verify', '-m', `chore: move the board to the ${branch} branch`], repoRoot);
       if (!commit.ok) throw new Error(`Could not commit the removal on the code branch: ${commit.stderr}`);
-      console.log(chalk.gray('  Removal committed on the code branch.'));
+      console.log(chalk.gray('  The old copy on your code branch was removed in a commit; the board itself is on its own branch.'));
     } else {
-      console.log(chalk.gray('  The board is staged for removal from the code branch. Commit it:'));
+      console.log(chalk.gray('  Your code branch still tracks the old copy. It is staged to be dropped there (the board itself is safe). Commit that:'));
       console.log(chalk.cyan(`    git commit -m "chore: move the board to the ${branch} branch"`));
     }
   } else if (kind === 'standalone') {
@@ -196,9 +197,23 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
     ensureExcludeEntry(repoRoot);
     console.log(chalk.green(`Board imported onto branch '${branch}'.`));
   }
-  console.log(chalk.gray(`  ${dotDir} — every change is now a commit. Local-only until you set a remote.`));
-  console.log(chalk.gray(`  Note: git push --all or --mirror would publish the '${branch}' branch too.`));
-  console.log(chalk.gray('  Share it: ') + chalk.cyan('brainfile sync --set-remote <name|url>'));
+  printMigratedStory(dotDir, branch);
+}
+
+function printMigratedStory(dotDir: string, branch: string | null): void {
+  const say = (text = '') => console.log(text ? `  ${text}` : '');
+  say();
+  say(`Same files, same place: ${path.relative(process.cwd(), dotDir) || '.'}/`);
+  if (branch) {
+    say(`Every change is now a git commit on a separate '${branch}' branch, kept out`);
+    say('of your code and pull requests. Only on this machine until you share it.');
+    say(chalk.gray('(A plain git push never sends it; git push --all or --mirror would.)'));
+  } else {
+    say('Every change is now a git commit. It is only on this machine until you share it.');
+  }
+  say();
+  say(`${chalk.gray('Share it:')}   ${chalk.cyan('brainfile sync --set-remote origin')}`);
+  say(`${chalk.gray('Check it:')}   ${chalk.cyan('brainfile where')}`);
 }
 
 export function migrateToPlain(options: MigrateTrackedOptions = {}): void {

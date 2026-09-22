@@ -142,11 +142,11 @@ export function initCommand(options: InitOptions) {
       fs.mkdirSync(path.join(dotDir, 'board'), { recursive: true });
       fs.mkdirSync(path.join(dotDir, 'logs'), { recursive: true });
 
-      console.log(chalk.green('Brainfile already initialized (v2).'));
-      console.log(chalk.gray(`  ${filePath}`));
+      console.log(chalk.green(`A board already exists at ${displayPath(dotDir)}/`));
       if (mode !== 'plain' && boardRepoKind(dotDir) === null) {
-        console.log(chalk.gray('  This board is a plain directory. To track it on its own branch: ') + chalk.cyan('brainfile migrate --to-branch'));
+        console.log(chalk.gray('  It is plain files. To keep it on its own branch and share it: ') + chalk.cyan('brainfile migrate --to-branch'));
       }
+      console.log(chalk.gray('  Where it lives and who has it: ') + chalk.cyan('brainfile where'));
       return;
     }
 
@@ -190,33 +190,45 @@ export function initCommand(options: InitOptions) {
       commitBoard(dotDir, { message: 'init board' });
     }
 
-    console.log(chalk.green('Brainfile initialized successfully!'));
-    console.log('');
-    console.log(chalk.gray(`  Created: ${filePath}`));
-    console.log(chalk.gray(`  Created: ${boardDir}/`));
-    console.log(chalk.gray(`  Created: ${logsDir}/`));
-    if (mode === 'linked') {
-      console.log('');
-      console.log(chalk.gray(`  Storage: git worktree on branch '${boardBranch(plan.repoRoot as string)}' — every change is a commit.`));
-      console.log(chalk.gray('  Hidden from the code branch via .git/info/exclude; local-only until you set a remote.'));
-      console.log(chalk.gray(`  Note: git push --all or --mirror would publish the '${boardBranch(plan.repoRoot as string)}' branch too.`));
-      if (plan.movedToRoot) {
-        console.log(chalk.gray(`  Placed at the repository root (${plan.repoRoot}). Use --here for a plain board in this directory.`));
-      }
-    } else if (mode === 'standalone') {
-      console.log('');
-      console.log(chalk.gray('  Storage: its own git repository — every change is a commit. Local-only until you set a remote.'));
-    }
-    if (mode !== 'plain') {
-      console.log(chalk.gray('  Share it: ') + chalk.cyan('brainfile sync --set-remote <name|url>'));
-    }
-    console.log('');
-    console.log(chalk.gray('Next steps:'));
-    console.log(chalk.gray('  1. Edit your brainfile to customize your project'));
-    console.log(chalk.gray('  2. Add tasks: brainfile add --title "Your task"'));
-    console.log(chalk.gray('  3. View tasks: brainfile list'));
+    printStorageStory(mode, dotDir, plan.repoRoot ? boardBranch(plan.repoRoot) : null, plan.movedToRoot === true);
   } catch (error) {
     console.error(chalk.red('Error:'), error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
+}
+
+function displayPath(dir: string): string {
+  const relative = path.relative(process.cwd(), dir);
+  return relative && !relative.startsWith('..') ? relative : dir;
+}
+
+/**
+ * What a person needs right after init: where the board is, who has it, and
+ * the one command to change that. Plain words first; git terms only where
+ * they are the literal answer.
+ */
+export function printStorageStory(mode: 'plain' | 'linked' | 'standalone', dotDir: string, branch: string | null, movedToRoot: boolean): void {
+  const say = (text = '') => console.log(text ? `  ${text}` : '');
+  console.log(chalk.green(`Board created at ${displayPath(dotDir)}/`));
+  say();
+  if (mode === 'plain') {
+    say('Plain files on this machine. Read and edit them directly, or use the commands below.');
+  } else if (mode === 'linked') {
+    say('Only on this machine for now. Every change is a git commit on a');
+    say(`separate '${branch}' branch, kept out of your code and pull requests.`);
+    say(chalk.gray(`(A plain git push never sends it; git push --all or --mirror would.)`));
+    if (movedToRoot) say(chalk.gray('Created at the repository root so every checkout finds it. Use --here --plain for a folder board here.'));
+  } else {
+    say('Only on this machine for now. Every change is a git commit in its');
+    say(`own small repository inside ${displayPath(dotDir)}/.`);
+  }
+  say();
+  if (mode !== 'plain') {
+    say(`${chalk.gray('Share it:')}   ${chalk.cyan('brainfile sync --set-remote origin')}`);
+    say(`${chalk.gray('Check it:')}   ${chalk.cyan('brainfile where')}`);
+    say();
+  }
+  console.log(chalk.gray('Next:'));
+  say(chalk.cyan('brainfile add --title "Your first task"'));
+  say(chalk.cyan('brainfile list'));
 }

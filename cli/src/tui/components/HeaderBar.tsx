@@ -112,7 +112,7 @@ export function HeaderBar({
           {typeLabel ? <Text color={PALETTE.textDim}>{typeLabel}</Text> : null}
           <Text>{pad(gap)}</Text>
           {status ? (
-            <Text color={statusLabel?.includes('failed') ? PALETTE.warning : PALETTE.textDim}>{status}</Text>
+            <Text color={statusLabel?.startsWith('not synced ·') ? PALETTE.warning : PALETTE.textDim}>{status}</Text>
           ) : null}
           <Text color={PALETTE.textMuted}>{affordances}</Text>
         </Text>

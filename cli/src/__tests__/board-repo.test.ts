@@ -87,6 +87,7 @@ describe('board on a branch (spec-9 phase 1)', () => {
     originalCwd = process.cwd();
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(process.stderr, 'write').mockImplementation(() => true);
   });
 
   afterEach(() => {
@@ -215,7 +216,7 @@ describe('board on a branch (spec-9 phase 1)', () => {
     const resolved = resolveCliBrainfilePath();
     expect(resolved).toBe(path.join(clone, '.brainfile', 'brainfile.md'));
     expect(boardRepoKind(path.join(clone, '.brainfile'))).toBe('linked');
-    expect(fs.readdirSync(path.join(clone, '.brainfile', 'board')).length).toBe(1);
+    expect(fs.readdirSync(path.join(clone, '.brainfile', 'board')).filter((f) => f.endsWith('.md'))).toHaveLength(1);
     expect(subjects(path.join(clone, '.brainfile'))[0]).toBe('add: Shared task');
     expect(run(['status', '--porcelain'], clone)).toBe('');
     expect(excludeFile(clone)).toContain('.brainfile/');
@@ -246,14 +247,14 @@ describe('board on a branch (spec-9 phase 1)', () => {
     migrateCommand({ toBranch: true });
     expect(boardRepoKind(dotDir)).toBe('linked');
     expect(subjects(dotDir)).toEqual(['import board']);
-    expect(fs.readdirSync(path.join(dotDir, 'board'))).toEqual(filesBefore);
+    expect(fs.readdirSync(path.join(dotDir, 'board')).filter((f) => f !== '.gitkeep')).toEqual(filesBefore);
     expect(run(['status', '--porcelain'], repo)).toBe('');
     expect(excludeFile(repo)).toContain('.brainfile/');
     expect(fs.existsSync(`${dotDir}.migrating`)).toBe(false);
 
     migrateCommand({ toPlain: true });
     expect(boardRepoKind(dotDir)).toBeNull();
-    expect(fs.readdirSync(path.join(dotDir, 'board'))).toEqual(filesBefore);
+    expect(fs.readdirSync(path.join(dotDir, 'board')).filter((f) => f !== '.gitkeep')).toEqual(filesBefore);
     expect(run(['rev-parse', '--verify', 'refs/heads/brainfile'], repo)).toMatch(/^[0-9a-f]{40}$/);
     expect(excludeFile(repo)).not.toContain('.brainfile/');
   });
@@ -277,7 +278,7 @@ describe('board on a branch (spec-9 phase 1)', () => {
     expect(run(['ls-files', '.brainfile'], repo)).toBe('');
     expect(run(['log', '-1', '--format=%s'], repo)).toContain('brainfile branch');
     expect(run(['status', '--porcelain'], repo)).toBe('');
-    expect(fs.readdirSync(path.join(dotDir, 'board')).length).toBe(1);
+    expect(fs.readdirSync(path.join(dotDir, 'board')).filter((f) => f.endsWith('.md'))).toHaveLength(1);
   });
 
   it('migrate --to-branch folds a standalone board repository into the surrounding repo', () => {
