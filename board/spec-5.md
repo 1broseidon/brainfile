@@ -1,0 +1,17 @@
+---
+id: spec-5
+title: "Web board: first non-CLI frontend on browser-safe core"
+type: spec
+column: backlog
+position: 1
+tags:
+  - product
+  - web
+  - frontend
+createdAt: "2026-08-12T04:28:46.895Z"
+description: "Follows spec-9 (board on a branch, shipped in phases 1-3). The board is now a synced worktree with per-mutation commits, a merge driver and autosync, so the scope question answers itself: read-first 'brainfile serve' over the board worktree; mutations go through the same core layer and commit like the CLI does (commitBoard + autosync push); live updates from the existing file watcher plus the autosync fetch (autosync=full) instead of a bespoke poller. This is the human-facing surface for people on other machines who will not install a CLI; the shared state problem it used to imply is already solved by the branch. Original note: validate the thin-frontend platform with a real second frontend; core already ships a browser-safe entrypoint (Apr 2026); reuses the V2 mutation layer, searchTasksRanked, and diffBoards/hashBoard realtime diffing. Local server first; static export optional."
+updatedAt: "2026-09-22T05:04:42.708Z"
+---
+
+## Description
+Validate the thin-frontend platform with a real second frontend: minimal read-first web board (brainfile serve → local web UI, or static export). core already ships a browser-safe entrypoint (Apr 2026). Reuses the V2 mutation layer + searchTasksRanked + realtime diffing (diffBoards/hashBoard were built for exactly this). Scope decision: read-only viewer vs mutating app; local server vs hosted. After inbox design, unless it becomes the demo vehicle for relaunch.

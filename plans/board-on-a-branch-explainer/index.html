@@ -1,0 +1,480 @@
+<!-- Folio · slug: explainer-board-on-a-branch · kind: explainer · bundle: single-file · host: local -->
+<!-- deps: none · data: spec-9 binding spec (observed 2026-09-21) · publish: none -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Board on a branch · brainfile spec-9</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%233b63c4'/%3E%3Cpath d='M9 8v16M9 12c0-3 4-4 7-4h7M23 8v5c0 3-4 4-7 4' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  --font-display: ui-serif, Georgia, "Iowan Old Style", serif;
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-paper:      oklch(98% 0.006 90);
+  --color-paper-2:    oklch(95% 0.008 90);
+  --color-rule:       oklch(87% 0.010 90);
+  --color-ink:        oklch(22% 0.020 80);
+  --color-ink-2:      oklch(44% 0.012 80);
+  --color-muted:      oklch(56% 0.010 80);
+  --color-accent:     oklch(52% 0.170 255);
+  --color-accent-soft:oklch(93% 0.040 255);
+  --color-accent-ink: oklch(99% 0.004 90);
+  --color-focus:      oklch(52% 0.170 255);
+
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 24px; --space-6: 32px; --space-7: 48px; --space-8: 72px;
+  --radius-sm: 4px; --radius-md: 8px; --radius-lg: 14px;
+  --shadow-sm: 0 1px 2px oklch(22% 0.02 80 / 0.06);
+  --page-max: 1040px;
+  --measure: 66ch;
+  --border-thin: 1px;
+  --type--1: clamp(0.875rem, 0.82rem + 0.2vw, 0.95rem);
+  --type-0: clamp(1rem, 0.94rem + 0.3vw, 1.125rem);
+  --type-1: clamp(1.35rem, 1.12rem + 1vw, 1.8rem);
+  --type-2: clamp(2rem, 1.45rem + 2.8vw, 3.2rem);
+  --type-3: clamp(2.5rem, 1.7rem + 4vw, 4.4rem);
+  --leading-body: 1.6; --leading-tight: 1.12;
+}
+[data-theme="dark"] {
+  --color-paper:      oklch(16% 0.008 80);
+  --color-paper-2:    oklch(20% 0.010 80);
+  --color-rule:       oklch(31% 0.012 80);
+  --color-ink:        oklch(96% 0.005 90);
+  --color-ink-2:      oklch(78% 0.010 80);
+  --color-muted:      oklch(66% 0.010 80);
+  --color-accent:     oklch(74% 0.140 255);
+  --color-accent-soft:oklch(28% 0.050 255);
+  --color-accent-ink: oklch(16% 0.02 80);
+  --color-focus:      oklch(76% 0.140 255);
+}
+
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body { margin: 0; background: var(--color-paper); color: var(--color-ink); font-family: var(--font-body); font-size: var(--type-0); line-height: var(--leading-body); }
+main { width: min(var(--page-max), calc(100% - var(--space-6))); margin: var(--space-7) auto var(--space-8); }
+h1, h2, h3 { font-family: var(--font-display); font-style: normal; line-height: var(--leading-tight); font-weight: 700; }
+h1 { margin: 0 0 var(--space-4); font-size: var(--type-2); max-width: 22ch; }
+h2 { margin: 0 0 var(--space-3); font-size: var(--type-1); }
+h3 { margin: 0 0 var(--space-1); font-size: var(--type-0); font-family: var(--font-body); }
+p, li, dd { max-width: var(--measure); }
+a { color: inherit; text-decoration-color: var(--color-accent); }
+code { font-family: var(--font-mono); font-size: 0.92em; background: var(--color-paper-2); padding: 0 var(--space-1); border-radius: var(--radius-sm); }
+.kicker { max-width: none; margin: 0 0 var(--space-2); font-family: var(--font-mono); font-size: var(--type--1); color: var(--color-muted); letter-spacing: 0.02em; }
+.lede { color: var(--color-ink-2); font-size: calc(var(--type-0) * 1.1); margin: 0; }
+section { margin-top: var(--space-8); }
+section + section.tight { margin-top: var(--space-7); }
+
+/* scenario switcher */
+.scenarios { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-4) 0 var(--space-5); }
+.scenarios button { font: inherit; font-size: var(--type--1); color: var(--color-ink); background: var(--color-paper-2); border: var(--border-thin) solid var(--color-rule); border-radius: 999px; padding: var(--space-2) var(--space-4); cursor: pointer; min-height: 44px; }
+.scenarios button[aria-pressed="true"] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-accent-ink); }
+.scenarios button:focus-visible, .theme-toggle:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+
+.panes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-5); align-items: start; }
+.pane { margin: 0; border: var(--border-thin) solid var(--color-rule); border-radius: var(--radius-lg); background: var(--color-paper); padding: var(--space-4) var(--space-4) var(--space-3); }
+.pane.after { border-color: var(--color-accent); }
+.pane figcaption { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); margin-bottom: var(--space-3); }
+.pane figcaption b { font-family: var(--font-display); font-size: var(--type-1); white-space: nowrap; }
+.pane figcaption span { color: var(--color-muted); font-size: var(--type--1); }
+.pane.after figcaption b { color: var(--color-accent); }
+.cap { margin: var(--space-3) 0 0; font-size: var(--type--1); color: var(--color-ink-2); min-height: 3.2em; }
+
+/* diagrams */
+.diagram { width: 100%; height: auto; display: block; font-family: var(--font-body); }
+.diagram .region { fill: none; stroke: var(--color-rule); stroke-dasharray: 3 4; }
+.diagram .box { fill: var(--color-paper-2); stroke: var(--color-rule); }
+.diagram .inner { fill: var(--color-paper); }
+.diagram .accent { stroke: var(--color-accent); stroke-width: 1.5; }
+.diagram .soft { fill: var(--color-accent-soft); }
+.diagram .dashed { stroke-dasharray: 4 3; }
+.diagram .pill { fill: var(--color-paper); stroke: var(--color-rule); }
+.diagram .pill-accent { fill: var(--color-accent-soft); stroke: var(--color-accent); }
+.diagram text { fill: var(--color-ink); font-size: 11px; }
+.diagram .t-b { font-weight: 700; font-size: 12px; }
+.diagram .t-m { font-size: 12px; }
+.diagram .t-s { font-size: 10.5px; fill: var(--color-ink-2); }
+.diagram .t-k { font-size: 10.5px; fill: var(--color-muted); letter-spacing: 0.06em; }
+.diagram .t-accent { fill: var(--color-accent); }
+.diagram .t-mono { font-family: var(--font-mono); font-size: 10px; fill: var(--color-ink-2); }
+.diagram .arrow { fill: none; stroke: var(--color-ink-2); stroke-width: 1.5; }
+.diagram .arrow.accent { stroke: var(--color-accent); }
+.diagram .mk-ink { fill: var(--color-ink-2); }
+.diagram .mk-accent { fill: var(--color-accent); }
+.diagram .dot { fill: var(--color-accent); }
+.diagram [data-s] { transition: opacity 0.25s ease; }
+.diagram .dim { opacity: 0.18; }
+
+/* table */
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: var(--type--1); }
+th, td { text-align: left; vertical-align: top; padding: var(--space-3) var(--space-4) var(--space-3) 0; border-bottom: var(--border-thin) solid var(--color-rule); }
+th { font-weight: 700; color: var(--color-ink-2); font-size: var(--type--1); }
+thead th:nth-child(3) { color: var(--color-accent); }
+td:first-child { font-weight: 700; width: 20%; }
+td:nth-child(2) { color: var(--color-ink-2); width: 38%; }
+
+/* steps */
+.steps { border-left: var(--border-thin) solid var(--color-rule); padding-left: var(--space-5); display: grid; gap: var(--space-6); margin-top: var(--space-5); }
+.step { display: grid; grid-template-columns: minmax(0, 4.5rem) minmax(0, 1fr); gap: var(--space-4); }
+.step-number { font-family: var(--font-display); font-size: var(--type-3); line-height: 1; color: var(--color-accent); }
+.step h3 { font-family: var(--font-display); font-size: var(--type-1); margin-bottom: var(--space-2); }
+.step p { margin: 0 0 var(--space-2); color: var(--color-ink-2); }
+.step pre { margin: var(--space-2) 0 0; padding: var(--space-2) var(--space-3); background: var(--color-paper-2); border-radius: var(--radius-md); font-family: var(--font-mono); font-size: var(--type--1); white-space: pre-wrap; overflow-wrap: anywhere; max-width: none; }
+
+/* journeys */
+.journeys { display: grid; gap: var(--space-5); margin-top: var(--space-5); }
+.journey { display: grid; grid-template-columns: minmax(0, 13rem) minmax(0, 1fr); gap: var(--space-4); padding-top: var(--space-4); border-top: var(--border-thin) solid var(--color-rule); }
+.journey .tag { font-family: var(--font-mono); color: var(--color-accent); font-size: var(--type--1); }
+.journey h3 { font-family: var(--font-display); font-size: var(--type-1); margin: var(--space-1) 0 var(--space-2); }
+.journey .cost { color: var(--color-muted); font-size: var(--type--1); }
+.journey ul { margin: 0; padding-left: 1.1em; }
+.journey li { margin-bottom: var(--space-2); color: var(--color-ink-2); }
+.journey li b { color: var(--color-ink); font-weight: 700; }
+
+/* verified */
+.checks { list-style: none; padding: 0; margin: var(--space-4) 0 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-6); }
+.checks li { position: relative; padding-left: var(--space-5); color: var(--color-ink-2); font-size: var(--type--1); }
+.checks li::before { content: "✓"; position: absolute; left: 0; top: 0; font-weight: 700; color: var(--color-ink); }
+.note { color: var(--color-muted); font-size: var(--type--1); }
+
+footer { margin-top: var(--space-8); padding-top: var(--space-4); border-top: var(--border-thin) solid var(--color-rule); color: var(--color-muted); font-size: var(--type--1); }
+footer code { background: transparent; padding: 0; }
+
+.theme-toggle { position: fixed; top: var(--space-4); right: var(--space-4); border: var(--border-thin) solid var(--color-rule); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); background: var(--color-paper-2); color: var(--color-ink); font: inherit; font-size: var(--type--1); min-height: 44px; cursor: pointer; }
+
+@media (max-width: 760px) {
+  .panes { grid-template-columns: minmax(0, 1fr); }
+  .pane { overflow-x: auto; }
+  .diagram { min-width: 560px; }
+  .journey { grid-template-columns: minmax(0, 1fr); }
+  .checks { grid-template-columns: minmax(0, 1fr); }
+  .step { grid-template-columns: minmax(0, 1fr); }
+  .step-number { font-size: var(--type-2); }
+  main { margin-top: var(--space-8); }
+}
+</style>
+</head>
+<body>
+<button class="theme-toggle" type="button" aria-pressed="false">Theme</button>
+<main>
+  <header>
+    <p class="kicker">brainfile · spec-9 · 2026-09-21 · proposed, not yet built</p>
+    <h1>Board on a branch</h1>
+    <p class="lede">Today the board lives inside the code's working tree, so every worktree and every machine keeps its own stale copy. Spec-9 moves it to its own branch of the same repo: the same files, their own history, one copy shared by every worktree, synced through whatever remote you choose. Or none.</p>
+  </header>
+
+  <section aria-labelledby="h-compare">
+    <h2 id="h-compare">The same four situations, before and after</h2>
+    <p>Pick a situation. Everything that doesn't take part in it fades out on both sides.</p>
+    <div class="scenarios" role="group" aria-label="Scenario">
+      <button type="button" data-s="all" aria-pressed="true">Everything</button>
+      <button type="button" data-s="same-tree" aria-pressed="false">Single tree</button>
+      <button type="button" data-s="worktree" aria-pressed="false">Linked worktree</button>
+      <button type="button" data-s="machine" aria-pressed="false">Second machine</button>
+      <button type="button" data-s="private" aria-pressed="false">Private ideas, public code</button>
+    </div>
+
+    <div class="panes">
+      <figure class="pane before">
+        <figcaption><b>Today</b><span>board files inside the code tree</span></figcaption>
+        <svg class="diagram" viewBox="0 0 600 420" role="img" aria-labelledby="t-before">
+          <title id="t-before">Today: each working tree and each machine holds its own copy of the board</title>
+          <defs>
+            <marker id="arr-b-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ink" d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+          <text class="t-k" x="20" y="22">LAPTOP</text>
+          <rect class="region" x="12" y="30" width="284" height="378" rx="8"/>
+          <text class="t-k" x="360" y="22">DESKTOP / TEAMMATE</text>
+          <rect class="region" x="352" y="30" width="236" height="378" rx="8"/>
+
+          <!-- main worktree (neutral) -->
+          <rect class="box" x="24" y="52" width="260" height="142" rx="6"/>
+          <text class="t-b" x="36" y="72">main worktree · branch main</text>
+          <text class="t-m" x="36" y="94">src/</text>
+          <rect class="box inner" x="36" y="106" width="236" height="76" rx="5"/>
+          <text class="t-m" x="46" y="124">.brainfile/board/task-3.md · todo</text>
+          <text class="t-s" x="46" y="144">committed → rides along in code commits</text>
+          <text class="t-s" x="46" y="160">gitignored → exists on this tree only</text>
+
+          <!-- feature worktree -->
+          <g data-s="worktree">
+            <rect class="box" x="24" y="212" width="260" height="112" rx="6"/>
+            <text class="t-b" x="36" y="232">feature worktree · Orca agent</text>
+            <text class="t-m" x="36" y="254">src/</text>
+            <rect class="box inner dashed" x="36" y="266" width="236" height="48" rx="5"/>
+            <text class="t-s" x="46" y="284">no .brainfile/ here,</text>
+            <text class="t-s" x="46" y="300">or a copy frozen at branch time</text>
+          </g>
+
+          <!-- Linear -->
+          <g data-s="machine private">
+            <rect class="box dashed" x="24" y="344" width="260" height="52" rx="6"/>
+            <text class="t-b" x="36" y="364">Linear</text>
+            <text class="t-s" x="36" y="382">re-entered by hand · a second source of truth</text>
+          </g>
+
+          <!-- desktop clone -->
+          <g data-s="machine">
+            <rect class="box" x="364" y="52" width="212" height="142" rx="6"/>
+            <text class="t-b" x="376" y="72">clone · branch main</text>
+            <text class="t-m" x="376" y="94">src/</text>
+            <rect class="box inner dashed" x="376" y="106" width="188" height="76" rx="5"/>
+            <text class="t-m" x="384" y="124">.brainfile/ · task-3 · todo</text>
+            <text class="t-s" x="384" y="144">stale until someone pushes</text>
+            <text class="t-s" x="384" y="160">the board inside a code commit</text>
+            <text class="t-s" x="364" y="222">agents here can't see what</text>
+            <text class="t-s" x="364" y="238">agents on the laptop did</text>
+            <path class="arrow" d="M288 122 H360" marker-start="url(#arr-b-ink)" marker-end="url(#arr-b-ink)"/>
+            <text class="t-s" x="300" y="112">push/pull</text>
+            <text class="t-s" x="302" y="138">only path</text>
+          </g>
+        </svg>
+        <p class="cap" data-cap="before">Board state is versioned with code, so it is stale everywhere except the tree that last touched it.</p>
+      </figure>
+
+      <figure class="pane after">
+        <figcaption><b>With spec-9</b><span>a worktree on the board's own branch</span></figcaption>
+        <svg class="diagram" viewBox="0 0 600 420" role="img" aria-labelledby="t-after">
+          <title id="t-after">With spec-9: one board per repo on its own branch, shared by every worktree and synced to a chosen remote</title>
+          <defs>
+            <marker id="arr-a-ink" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-ink" d="M0 0L10 5L0 10z"/></marker>
+            <marker id="arr-a-acc" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="mk-accent" d="M0 0L10 5L0 10z"/></marker>
+          </defs>
+          <text class="t-k" x="20" y="22">LAPTOP</text>
+          <rect class="region" x="12" y="30" width="284" height="378" rx="8"/>
+          <text class="t-k" x="360" y="22">REMOTES · ANY HOST, OR NONE</text>
+          <rect class="region" x="352" y="30" width="236" height="176" rx="8"/>
+          <text class="t-k" x="360" y="218">DESKTOP / TEAMMATE</text>
+          <rect class="region" x="352" y="226" width="236" height="182" rx="8"/>
+
+          <!-- .git (neutral) -->
+          <rect class="box" x="24" y="52" width="260" height="58" rx="6"/>
+          <text class="t-b" x="36" y="72">.git · shared by every worktree</text>
+          <rect class="pill" x="36" y="82" width="100" height="20" rx="10"/>
+          <text class="t-s" x="46" y="96">refs/heads/main</text>
+          <rect class="pill pill-accent" x="146" y="82" width="126" height="20" rx="10"/>
+          <text class="t-s t-accent" x="156" y="96">refs/heads/brainfile</text>
+
+          <!-- main worktree (neutral) -->
+          <rect class="box" x="24" y="126" width="132" height="122" rx="6"/>
+          <text class="t-b" x="36" y="146">main worktree</text>
+          <text class="t-m" x="36" y="168">src/</text>
+          <rect class="box inner accent" x="34" y="178" width="112" height="58" rx="5"/>
+          <text class="t-m" x="42" y="196">.brainfile/</text>
+          <text class="t-s" x="42" y="211">on branch brainfile</text>
+          <text class="t-s" x="42" y="226">task-3 in-progress</text>
+
+          <!-- feature worktree -->
+          <g data-s="worktree">
+            <rect class="box" x="164" y="126" width="120" height="122" rx="6"/>
+            <text class="t-b" x="174" y="146">feature worktree</text>
+            <text class="t-s" x="174" y="160">Orca agent</text>
+            <text class="t-m" x="174" y="182">src/</text>
+            <text class="t-s" x="174" y="202">no copy needed</text>
+            <path class="arrow accent" d="M172 216 H150" marker-end="url(#arr-a-acc)"/>
+            <text class="t-s" x="174" y="236">git worktree list</text>
+          </g>
+
+          <!-- commit strip -->
+          <g data-s="same-tree">
+            <rect class="box" x="24" y="264" width="260" height="90" rx="6"/>
+            <text class="t-b" x="36" y="284">brainfile branch</text>
+            <text class="t-s" x="140" y="284">one commit per change</text>
+            <circle class="dot" cx="44" cy="303" r="3.5"/><text class="t-mono" x="54" y="307">8fd241d  add task-12          codex</text>
+            <circle class="dot" cx="44" cy="321" r="3.5"/><text class="t-mono" x="54" y="325">97809af  move task-3          claude</text>
+            <circle class="dot" cx="44" cy="339" r="3.5"/><text class="t-mono" x="54" y="343">634be04  note task-3          claude</text>
+          </g>
+          <text class="t-s" x="24" y="378">Plain folders: the board is its own repo.</text>
+          <text class="t-s" x="24" y="394">brainfile init -g → ~/.brainfile home board</text>
+
+          <!-- remotes -->
+          <g data-s="private">
+            <rect class="box" x="364" y="52" width="212" height="58" rx="6"/>
+            <text class="t-b" x="376" y="72">origin · public code</text>
+            <text class="t-s" x="376" y="92">receives main only</text>
+            <path class="arrow" d="M298 80 H360" marker-end="url(#arr-a-ink)"/>
+            <text class="t-s" x="302" y="72">push main</text>
+          </g>
+          <g data-s="machine private">
+            <rect class="box accent soft" x="364" y="128" width="212" height="58" rx="6"/>
+            <text class="t-b" x="376" y="148">board remote · private</text>
+            <text class="t-s" x="376" y="168">receives brainfile · never assumed</text>
+            <path class="arrow accent" d="M298 156 H360" marker-end="url(#arr-a-acc)"/>
+            <text class="t-s t-accent" x="312" y="148">sync</text>
+          </g>
+
+          <!-- desktop clone -->
+          <g data-s="machine">
+            <rect class="box" x="364" y="246" width="212" height="150" rx="6"/>
+            <text class="t-b" x="376" y="266">clone · branch main</text>
+            <text class="t-m" x="376" y="288">src/</text>
+            <rect class="box inner accent" x="376" y="300" width="188" height="58" rx="5"/>
+            <text class="t-m" x="384" y="318">.brainfile/ · same board</text>
+            <text class="t-s" x="384" y="333">created on first command</text>
+            <text class="t-s" x="384" y="348">task-3 in-progress · claude</text>
+            <text class="t-s" x="376" y="382">brief syncs before it reads</text>
+            <path class="arrow accent" d="M552 188 V242" marker-end="url(#arr-a-acc)"/>
+            <text class="t-s t-accent" x="560" y="219">sync</text>
+          </g>
+        </svg>
+        <p class="cap" data-cap="after">One board per repo with its own history, shared by every worktree and synced to the remote you choose.</p>
+      </figure>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-table">
+    <h2 id="h-table">What changes, what stays</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th scope="col">Situation</th><th scope="col">Today</th><th scope="col">With spec-9</th></tr></thead>
+        <tbody>
+          <tr><td>Where the board lives</td><td>Inside the code working tree, committed or gitignored.</td><td>A linked worktree on the <code>brainfile</code> branch, hidden from the code branch through <code>.git/info/exclude</code>. The code branch is never touched.</td></tr>
+          <tr><td>A task move</td><td>An edit in the tree, swept into whatever code commit comes next, or never committed.</td><td>One commit on the board branch, authored as the agent that made it.</td></tr>
+          <tr><td>A linked worktree</td><td>No board, or a copy frozen at branch time.</td><td>The same board, found through <code>git worktree list</code>. No setup, no sync.</td></tr>
+          <tr><td>A second machine</td><td>Stale until someone pushes the board inside a code commit.</td><td><code>brainfile sync</code>: fetch, merge, push of one branch. A fresh clone gets the board with one command.</td></tr>
+          <tr><td>Private ideas next to public code</td><td>Ignore the board and lose sharing, or commit it and publish it.</td><td>The board remote is separate and never assumed. Origin only ever sees code.</td></tr>
+          <tr><td>History</td><td><code>git blame</code> only if the board was committed on the code branch.</td><td>Always. <code>git log</code> inside <code>.brainfile/</code> is the audit trail, per task.</td></tr>
+          <tr><td>Two people edit one task</td><td>A merge conflict at pull-request time.</td><td>A field-level merge driver, union for the ledger. Rare, and a human sees ordinary conflict markers when it isn't.</td></tr>
+          <tr><td>Daily use</td><td>Works well for one developer in one tree.</td><td>Identical. Adoption is one <code>migrate --to-branch</code>.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-steps">
+    <h2 id="h-steps">How it works, in five moves</h2>
+    <div class="steps">
+      <section class="step">
+        <div class="step-number">01</div>
+        <div>
+          <h3>Give the board its own branch</h3>
+          <p>An orphan branch with unrelated history, checked out as a linked worktree at the path the board already uses. The CLI hides it from the code branch with an exclude entry, so no gitignore commit is needed.</p>
+          <pre>git worktree add --orphan -b brainfile .brainfile</pre>
+        </div>
+      </section>
+      <section class="step">
+        <div class="step-number">02</div>
+        <div>
+          <h3>Commit every change, as the agent</h3>
+          <p>Each add, move, note, or completion becomes one small commit. Agents never think about committing, and blame on a task file answers who wrote what.</p>
+          <pre>move task-3: todo -&gt; in-progress · author claude &lt;claude@brainfile.local&gt;</pre>
+        </div>
+      </section>
+      <section class="step">
+        <div class="step-number">03</div>
+        <div>
+          <h3>Share across worktrees for free</h3>
+          <p>Every worktree of a repo shares one git directory, and a branch can only be checked out once. Any command from any worktree asks git where the board is and finds the same directory.</p>
+          <pre>git worktree list --porcelain   # → the worktree on refs/heads/brainfile</pre>
+        </div>
+      </section>
+      <section class="step">
+        <div class="step-number">04</div>
+        <div>
+          <h3>Sync through the remote you choose</h3>
+          <p>Fetch, merge without rewriting anyone's commits, push. Brief syncs before it reads. Offline works and catches up later. No remote is ever assumed, so a private board can sit next to public code.</p>
+          <pre>brainfile sync --set-remote git@github.com:you/boards.git</pre>
+        </div>
+      </section>
+      <section class="step">
+        <div class="step-number">05</div>
+        <div>
+          <h3>Same trick outside a repo</h3>
+          <p>In a plain folder the board is a standalone repo with the same commits and sync. A home board at <code>~/.brainfile</code> is your system-wide todo, addressed with <code>-g</code>. Discovery stops at a repo's toplevel, so a project never silently writes into it.</p>
+          <pre>brainfile init -g && brainfile sync -g --set-remote &lt;private url&gt;</pre>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-journeys">
+    <h2 id="h-journeys">Three places you'd use it</h2>
+    <div class="journeys">
+      <article class="journey">
+        <div><span class="tag">A</span><h3>Repo with git</h3><p class="cost">Cost: one command to adopt, none per day.</p></div>
+        <ul>
+          <li><b>New project:</b> init at the repo root creates the branch, the worktree, and the exclude entry.</li>
+          <li><b>Existing board:</b> committed boards keep their history through a subtree split. Gitignored boards, like brainfile's own, import in one commit.</li>
+          <li><b>Orca worktrees:</b> found through the worktree list. The TUI watcher already sees every agent's writes because it is one directory.</li>
+          <li><b>Second machine:</b> board on origin, the clone already has it. Board on a private remote, one extra command.</li>
+        </ul>
+      </article>
+      <article class="journey">
+        <div><span class="tag">B</span><h3>Folder without git</h3><p class="cost">Cost: zero unless you opt in.</p></div>
+        <ul>
+          <li><b>Plain stays plain.</b> Today's directory board keeps working with no warnings.</li>
+          <li><b>Opt in:</b> the board directory becomes a standalone repo. Same commits, same sync to any remote.</li>
+          <li><b>Later becomes a repo:</b> a local fetch folds the board's history in as the <code>brainfile</code> branch. Nothing lost.</li>
+        </ul>
+      </article>
+      <article class="journey">
+        <div><span class="tag">C</span><h3>Home board</h3><p class="cost">Cost: one command per machine.</p></div>
+        <ul>
+          <li><b>Create:</b> <code>brainfile init -g</code> makes <code>~/.brainfile</code> using the standalone machinery.</li>
+          <li><b>Address:</b> <code>-g</code> on any command, an environment variable for agents, an MCP instance pinned to it for morning or scheduled agents.</li>
+          <li><b>Discovery:</b> a repo without a board says so instead of writing into your personal todo. Outside any repo the home board is reachable and says so.</li>
+          <li><b>End state:</b> one private boards repo with a branch per project plus home, and a web board served over it.</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-verified" class="tight">
+    <h2 id="h-verified">Checked in a scratch repo</h2>
+    <p class="note">Every mechanism the design depends on was run against real git 2.43 on 2026-09-21 before the spec was written.</p>
+    <ol class="checks">
+      <li>Orphan worktree inside the main tree, hidden by the exclude file. Outer status stays clean.</li>
+      <li>A linked code worktree finds the board through the worktree list.</li>
+      <li>Board pushed to a different remote than the code. Origin holds only main.</li>
+      <li>Second machine: clone, add the board remote, fetch, create the worktree. Agent author names survive.</li>
+      <li>Concurrent edits on two machines merge without rewriting history.</li>
+      <li>A worktree inside the git directory is allowed, for bare-repo layouts.</li>
+      <li>A standalone board repo in a plain folder pushes as its own branch of a shared boards remote.</li>
+      <li>A standalone board folds into a later outer repo through a local-path fetch, history intact.</li>
+    </ol>
+  </section>
+
+  <footer>
+    Binding spec: <code>.brainfile/plans/2026-09-21-board-on-a-branch-spec.md</code> · board item <code>spec-9</code> · Phase 1 ships same-machine sharing with zero sync; phase 2 adds sync and the merge driver; phase 3 adds autosync, the TUI indicator, and the manual.
+  </footer>
+</main>
+<script>
+(() => {
+  const root = document.documentElement;
+  const toggle = document.querySelector('.theme-toggle');
+  const read = () => { try { return localStorage.getItem('folio-theme'); } catch { return null; } };
+  const write = v => { try { localStorage.setItem('folio-theme', v); } catch {} };
+  const apply = v => { root.dataset.theme = v; toggle.setAttribute('aria-pressed', String(v === 'dark')); };
+  apply(read() || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  toggle.addEventListener('click', () => { const next = root.dataset.theme === 'dark' ? 'light' : 'dark'; apply(next); write(next); });
+
+  const captions = {
+    'all':       ['Board state is versioned with code, so it is stale everywhere except the tree that last touched it.',
+                  'One board per repo with its own history, shared by every worktree and synced to the remote you choose.'],
+    'same-tree': ['Works great. This is the single-developer case brainfile was built for.',
+                  'Identical to today, plus one commit per change with the agent as author.'],
+    'worktree':  ['Linked worktrees have no board, or a copy frozen at branch time. Agents in Orca worktrees are blind.',
+                  'Any command from a linked worktree finds the board through the worktree list. Zero setup, no sync.'],
+    'machine':   ['The only transport is pushing the code branch. Nobody commits a task move, so you re-enter it in Linear.',
+                  'Sync fetches, merges, and pushes one branch. A fresh clone gets the board with one command.'],
+    'private':   ['Ideas and text next to public code: gitignore the board and lose sharing, or commit it and publish it.',
+                  'Origin receives only main. The board goes to a private remote, or nowhere. No remote is ever assumed.']
+  };
+  const buttons = [...document.querySelectorAll('.scenarios button')];
+  const marked = [...document.querySelectorAll('.diagram [data-s]')];
+  const capBefore = document.querySelector('[data-cap="before"]');
+  const capAfter = document.querySelector('[data-cap="after"]');
+  const setScenario = s => {
+    buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.s === s)));
+    marked.forEach(el => el.classList.toggle('dim', s !== 'all' && !el.dataset.s.split(' ').includes(s)));
+    capBefore.textContent = captions[s][0];
+    capAfter.textContent = captions[s][1];
+  };
+  buttons.forEach(b => b.addEventListener('click', () => setScenario(b.dataset.s)));
+})();
+</script>
+</body>
+</html>
