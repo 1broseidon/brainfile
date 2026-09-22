@@ -197,6 +197,8 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
     console.log(chalk.green(`Board imported onto branch '${branch}'.`));
   }
   console.log(chalk.gray(`  ${dotDir} — every change is now a commit. Local-only until you set a remote.`));
+  console.log(chalk.gray(`  Note: git push --all or --mirror would publish the '${branch}' branch too.`));
+  console.log(chalk.gray('  Share it: ') + chalk.cyan('brainfile sync --set-remote <name|url>'));
 }
 
 export function migrateToPlain(options: MigrateTrackedOptions = {}): void {

@@ -756,6 +756,12 @@ claude  add: Swap the parser cache
 Files edited by hand are committed as `edit: <files>` before the next command
 runs, so they are never folded into someone else's commit.
 
+The branch is hidden, not secret: a plain `git push` sends only your code
+branch, but `git push --all`, `--mirror` and mirroring tools push every local
+branch, board included, and once it is on origin anyone with access to the
+repository can browse it there. The point is a clean main, not privacy; for
+private notes next to public code use a separate remote (below).
+
 Two clones of the repository, or two worktrees of it, share the branch. A
 fresh clone materializes the board on first use: the branch is fetched with
 the rest of the repository once it has been pushed, and the CLI checks it out

@@ -199,6 +199,7 @@ export function initCommand(options: InitOptions) {
       console.log('');
       console.log(chalk.gray(`  Storage: git worktree on branch '${boardBranch(plan.repoRoot as string)}' — every change is a commit.`));
       console.log(chalk.gray('  Hidden from the code branch via .git/info/exclude; local-only until you set a remote.'));
+      console.log(chalk.gray(`  Note: git push --all or --mirror would publish the '${boardBranch(plan.repoRoot as string)}' branch too.`));
       if (plan.movedToRoot) {
         console.log(chalk.gray(`  Placed at the repository root (${plan.repoRoot}). Use --here for a plain board in this directory.`));
       }
