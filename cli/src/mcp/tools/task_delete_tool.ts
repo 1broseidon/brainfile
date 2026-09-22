@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
 import * as fs from 'fs';
 import { getV2Dirs, findV2Task } from '../../utils/v2-detect';
@@ -17,7 +18,7 @@ export function registerTaskDeleteTool(server: McpServer, defaultFile: string): 
             }),
       outputSchema: taskDeleteOutputSchema
     },
-    async ({ file, task }) => {
+    withBoardCommit('task_delete', defaultFile, async ({ file, task }) => {
       const filePath = file || defaultFile;
 
       const guard = requireV2(filePath);
@@ -39,5 +40,5 @@ export function registerTaskDeleteTool(server: McpServer, defaultFile: string): 
         return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
       }
     }
-  );
+  ));
 }

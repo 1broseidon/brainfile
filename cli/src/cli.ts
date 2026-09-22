@@ -1,17 +1,21 @@
 #!/usr/bin/env node
 
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { renderCliError } from './utils/cli-error';
 import { readFileSync, existsSync } from 'fs';
 import { join, sep } from 'path';
 import { listCommand, LIST_COMMAND_HELP } from './commands/list';
 import { showCommand } from './commands/show';
 import { addCommand, ADD_COMMAND_HELP } from './commands/add';
+import { beforeCommand, afterCommand } from './utils/board-commit-hooks';
+import { installAutosync } from './utils/board-autosync';
 import { moveCommand } from './commands/move';
 import { templateCommand } from './commands/template';
 import { lintCommand } from './commands/lint';
 import { initCommand } from './commands/init';
 import { migrateCommand } from './commands/migrate';
+import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
+import { mergeDriverCommand } from './commands/merge-driver';
 /**
  * The TUI is loaded on demand, never at module scope.
  *
@@ -88,7 +92,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'sync', 'merge-driver', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -138,7 +142,15 @@ if (tuiCheck.launch) {
   program
     .name('brainfile')
     .description('Command-line interface for Brainfile task management')
-    .version(packageJson.version);
+    .version(packageJson.version)
+    .option('-g, --global', 'Use the home board at ~/.brainfile instead of discovering one');
+
+  // Board-on-a-branch (spec-9): hand edits are committed on their own before a
+  // command runs; whatever the command changed is committed after it, authored
+  // as the acting agent (BRAINFILE_AGENT or --agent). No-ops on plain boards.
+  installAutosync();
+  program.hook('preAction', (_program, actionCommand) => { beforeCommand(actionCommand); });
+  program.hook('postAction', (_program, actionCommand) => { afterCommand(actionCommand); });
 
   program.addHelpText('after', `
 Common workflows:
@@ -165,10 +177,11 @@ Contract workflow (PM ↔ Agent):
   brainfile contract validate -t task-123
 
 Brainfile file resolution (when you don't pass --file):
-  1) .brainfile/brainfile.md
-  2) brainfile.md
-  3) .brainfile.md
-  4) .bb.md
+  1) .brainfile/brainfile.md, walking up to the repository root
+  2) inside a git repo: the worktree on the board branch ('brainfile'),
+     created from the branch when it exists but is not checked out
+  3) legacy: brainfile.md, .brainfile.md, .bb.md
+  -g / --global: the home board at ~/.brainfile
 `.trimEnd());
 
   // Register commands
@@ -177,6 +190,9 @@ Brainfile file resolution (when you don't pass --file):
     .description('Initialize a new .brainfile/brainfile.md in the current directory')
     .option('-f, --file <path>', 'Path to brainfile file', '.brainfile/brainfile.md')
     .option('--force', 'Overwrite existing file')
+    .option('--tracked', 'Store the board as its own git branch (default inside a git repo) or repository')
+    .option('--plain', 'Plain directory, no git tracking, even inside a git repo')
+    .option('--here', 'Inside a git repo: create the board in this directory instead of the repo root')
     .action(initCommand);
 
   program
@@ -186,6 +202,9 @@ Brainfile file resolution (when you don't pass --file):
     .option('--force', 'Overwrite existing migration outputs (task files/backups)')
     .option('--v2', 'Deprecated alias; migration now targets v2 by default')
     .option('--logs-to-ledger', 'Backfill logs/*.md into ledger.jsonl, keeping the markdown archives (resolves ID conflicts with board)')
+    .option('--to-branch', 'Move the board onto its own git branch (or repository outside a repo); history is kept')
+    .option('--to-plain', 'Turn a tracked board back into a plain directory (the branch is left intact)')
+    .option('--commit', 'With --to-branch on a committed board: also commit its removal from the code branch')
     .action(migrateCommand);
 
   const listCmd = program
@@ -326,8 +345,33 @@ Brainfile file resolution (when you don't pass --file):
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('--agent <name>', 'Agent identifier (required — brief state is per-agent)')
     .option('--peek', 'Read the brief without marking it as seen')
+    .option('--offline', 'Skip syncing a shared board before the brief')
     .option('--json', 'Output as JSON')
     .action((options) => { briefCommand(options); });
+
+  const syncCmd = program
+    .command('sync')
+    .description('Share a tracked board through a git remote: fetch, merge, push')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--pull', 'Fetch and merge only')
+    .option('--push', 'Push only')
+    .option('--set-remote <name|url>', 'Remote to sync with: an existing remote name, or a URL registered as remote "board"')
+    .option('--remote-branch <name>', 'Branch on the remote (default: board branch; folder name for a standalone board; "home" for -g)')
+    .option('--autosync <mode>', 'off | push (after writes, default once a remote is set) | full (also fetch before reads)')
+    .option('--json', 'Output as JSON')
+    .addOption(new Option('--wait <ms>', 'Sleep before syncing (autosync child)').hideHelp())
+    .action((options) => { syncCommand(options); });
+  syncCmd.addHelpText('after', `\n${SYNC_COMMAND_HELP}`);
+
+  program
+    .command('merge-driver', { hidden: true })
+    .description('git merge driver for board files (registered as merge.brainfile.driver)')
+    .argument('<base>', 'Common ancestor (%O)')
+    .argument('<ours>', 'Current version; receives the result (%A)')
+    .argument('<theirs>', 'Other version (%B)')
+    .action((base: string, ours: string, theirs: string) => {
+      process.exitCode = mergeDriverCommand({ base, ours, theirs });
+    });
 
   program
     .command('search')

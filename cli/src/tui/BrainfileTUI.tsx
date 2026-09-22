@@ -26,6 +26,7 @@ import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
 import { buildRows, buildFlatRows } from './rows.js';
 import { getDocType } from './utils.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
+import { useSyncStatus } from './hooks/useSyncStatus.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
 import { getTaskActivity } from './actions.js';
 import { readTuiState } from './tuiState.js';
@@ -130,6 +131,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   const viewportHeight = Math.max(termHeight - HEADER_ROWS - FOOTER_ROWS, 3);
 
   const { loadBrainfile } = useBrainfileLoader(filePath, state, setState);
+  const syncStatus = useSyncStatus(filePath, state.lastUpdated);
 
   const orderedColumns = useMemo(() => {
     if (!state.board) return [];
@@ -440,6 +442,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
         // appending a `· done` suffix to them — one indicator, not two (P9).
         panelLabel={doneView ? 'done' : undefined}
         activeType={typeFilterActive ? activeTypeFilter : 'all'}
+        statusLabel={syncStatus}
       />
 
       <Box flexGrow={1} flexShrink={0} flexDirection="column">

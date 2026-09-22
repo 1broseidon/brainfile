@@ -78,3 +78,26 @@ describe('utils/files', () => {
     });
   });
 });
+
+describe('findBrainfile stopAtGitRoot', () => {
+  it('does not resolve a board above a repository root when asked to stop there', () => {
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-stop-'));
+    try {
+      fs.mkdirSync(path.join(base, '.brainfile'), { recursive: true });
+      fs.writeFileSync(path.join(base, '.brainfile', 'brainfile.md'), '---\ntitle: Home\n---\n', 'utf-8');
+      const repoSub = path.join(base, 'repo', 'src');
+      fs.mkdirSync(repoSub, { recursive: true });
+      fs.mkdirSync(path.join(base, 'repo', '.git'));
+
+      expect(findBrainfile(repoSub)?.projectRoot).toBe(base);
+      expect(findBrainfile(repoSub, { stopAtGitRoot: true })).toBeNull();
+
+      // A board at the repository root itself is still found: the boundary is inclusive.
+      fs.mkdirSync(path.join(base, 'repo', '.brainfile'), { recursive: true });
+      fs.writeFileSync(path.join(base, 'repo', '.brainfile', 'brainfile.md'), '---\ntitle: Repo\n---\n', 'utf-8');
+      expect(findBrainfile(repoSub, { stopAtGitRoot: true })?.projectRoot).toBe(path.join(base, 'repo'));
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
+  });
+});

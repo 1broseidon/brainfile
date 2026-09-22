@@ -4,6 +4,8 @@ import { buildBrief, readBriefState, writeBriefState } from '@brainfile/core';
 import { getV2Dirs } from '../../utils/v2-detect';
 import { requireV2, resolveBrainfile } from '../helpers';
 import { briefOutputSchema } from '../schemas';
+import { syncBoard } from '../../utils/board-sync';
+import * as path from 'path';
 
 /**
  * `brief` — "what changed that I should care about?" for one agent.
@@ -28,10 +30,11 @@ export function registerBriefTool(server: McpServer, defaultFile: string): void 
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
         agent: z.string().describe('Agent identifier (required — brief state is per-agent)'),
         peek: z.boolean().optional().describe('Read the brief without marking it as seen'),
+        offline: z.boolean().optional().describe('Skip syncing a shared board before the brief'),
       }),
       outputSchema: briefOutputSchema,
     },
-    async ({ file, agent, peek }) => {
+    async ({ file, agent, peek, offline }) => {
       const filePath = file || defaultFile;
 
       const guard = requireV2(filePath);
@@ -46,6 +49,8 @@ export function registerBriefTool(server: McpServer, defaultFile: string): void 
       }
 
       const resolvedPath = resolveBrainfile(filePath);
+      if (!offline) syncBoard(path.dirname(resolvedPath), { agent: agentName });
+
       const dirs = getV2Dirs(resolvedPath);
       const isPeek = peek === true;
 

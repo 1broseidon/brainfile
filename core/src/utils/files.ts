@@ -41,7 +41,24 @@ function existsFile(p: string): boolean {
  * 3) `.brainfile.md` (legacy hidden)
  * 4) `.bb.md` (legacy)
  */
-export function findBrainfile(startDir: string = process.cwd()): FoundBrainfile | null {
+export interface FindBrainfileOptions {
+  /**
+   * Stop walking up at the first directory that contains a `.git` entry (a
+   * repository root, or a linked worktree's root). A repository without a
+   * board then resolves to nothing instead of silently falling through to a
+   * board above it, such as a home board.
+   */
+  stopAtGitRoot?: boolean;
+}
+
+function isGitBoundary(dir: string): boolean {
+  return fs.existsSync(path.join(dir, '.git'));
+}
+
+export function findBrainfile(
+  startDir: string = process.cwd(),
+  options: FindBrainfileOptions = {}
+): FoundBrainfile | null {
   let currentDir = path.resolve(startDir);
   const root = path.parse(currentDir).root;
 
@@ -66,6 +83,7 @@ export function findBrainfile(startDir: string = process.cwd()): FoundBrainfile 
       return { absolutePath: bbLegacy, projectRoot: currentDir, kind: 'bb' };
     }
 
+    if (options.stopAtGitRoot && isGitBoundary(currentDir)) break;
     if (currentDir === root) break;
     const parent = path.dirname(currentDir);
     if (parent === currentDir) break;
@@ -83,6 +101,8 @@ export interface ResolveBrainfilePathOptions {
   filePath?: string;
   /** Starting directory used for auto-discovery and relative resolution */
   startDir?: string;
+  /** Passed through to `findBrainfile`: do not discover boards above a repository root. */
+  stopAtGitRoot?: boolean;
 }
 
 /**
@@ -101,7 +121,7 @@ export function resolveBrainfilePath(options: ResolveBrainfilePathOptions = {}):
     filePath === `./${BRAINFILE_BASENAME}`;
 
   if (isDefaultPlaceholder) {
-    const found = findBrainfile(startDir);
+    const found = findBrainfile(startDir, { stopAtGitRoot: options.stopAtGitRoot });
     if (found) return found.absolutePath;
     return toAbsolute(filePath ?? BRAINFILE_BASENAME);
   }

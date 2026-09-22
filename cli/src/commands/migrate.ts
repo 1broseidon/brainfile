@@ -16,6 +16,7 @@ import { ensureDotBrainfileGitignore } from '@brainfile/core';
 import { removeLegacyStateFile } from '../utils/dot-brainfile';
 import { ensureV2Dirs } from '../utils/v2-detect';
 import { probeWorkspaceFormat, type WorkspaceProbe } from '../utils/workspace-format';
+import { migrateToBranch, migrateToPlain } from './migrate-tracked';
 
 interface MigrateOptions {
   /** Migration root directory (defaults to cwd) */
@@ -26,6 +27,12 @@ interface MigrateOptions {
   v2?: boolean;
   /** Migrate logs/*.md files into ledger.jsonl and clean up */
   logsToLedger?: boolean;
+  /** Move the board onto its own git branch / repository (spec-9). */
+  toBranch?: boolean;
+  /** Turn a tracked board back into a plain directory. */
+  toPlain?: boolean;
+  /** With --to-branch on a committed board: also commit the removal on the code branch. */
+  commit?: boolean;
 }
 
 /**
@@ -33,6 +40,14 @@ interface MigrateOptions {
  */
 export function migrateCommand(options: MigrateOptions = {}) {
   try {
+    if (options.toBranch) {
+      migrateToBranch({ dir: options.dir, commit: options.commit });
+      return;
+    }
+    if (options.toPlain) {
+      migrateToPlain({ dir: options.dir });
+      return;
+    }
     if (options.logsToLedger) {
       migrateLogsToLedger(options);
       return;

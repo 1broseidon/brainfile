@@ -4,6 +4,39 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions are synced across
 `brainfile` (CLI) and `@brainfile/core`.
 
+## [Unreleased]
+
+### Added
+- Board on a branch (spec-9). Inside a git repository `brainfile init` now
+  stores `.brainfile/` as a linked worktree on an orphan `brainfile` branch,
+  hidden from the code branch via `.git/info/exclude`; outside one,
+  `--tracked` makes it its own repository, and `-g` targets a home board at
+  `~/.brainfile`. Every mutation (CLI, MCP tools, TUI) is one commit authored
+  as the acting agent; hand edits are committed as `edit: <files>`.
+- `brainfile sync [--pull|--push] [--set-remote <name|url>] [--remote-branch
+  <name>] [--autosync off|push|full]` — fetch, fast-forward or merge, push,
+  entirely inside the board worktree. No remote is ever assumed; `origin` is
+  a choice. `--set-remote` in a fresh clone checks the board out from the
+  remote.
+- `brainfile merge-driver` (registered as `merge.brainfile.driver`, selected
+  by `.gitattributes` on the board branch): frontmatter merges field by field
+  with the later `updatedAt` winning and ties going to the incoming side; log
+  and note lists union by timestamp; `ledger.jsonl` merges by line union;
+  complete-vs-edit keeps the completion and appends the edit to the archive.
+- Autosync: after a remote is set, mutations push a few seconds later from a
+  detached process; `full` also fetches before stale reads. `brief` (CLI and
+  MCP) syncs first unless `--offline`. The TUI header shows `synced Ns ago`.
+- `brainfile migrate --to-branch [--commit]` moves a committed board onto the
+  branch with its history (`git subtree split`), imports a gitignored one, or
+  folds a standalone board repository in; `--to-plain` reverses it.
+- `@brainfile/core`: `findBrainfile`/`resolveBrainfilePath` accept
+  `stopAtGitRoot`; `parseFrontmatter`/`serializeFrontmatter` are exported.
+
+### Changed
+- Board discovery stops at the repository root, then looks for the worktree
+  on the board branch (materializing it when the branch exists locally or on
+  the configured remote) before falling back to legacy file names.
+
 ## [0.20.0] - 2026-08-13
 
 ### Added

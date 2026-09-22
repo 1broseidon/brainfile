@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
 import {
   addSubtasksToFile,
@@ -29,7 +30,7 @@ export function registerSubtaskTool(server: McpServer, defaultFile: string): voi
             }),
       outputSchema: subtaskOutputSchema
     },
-    async ({ action, file, task, subtask, subtasks, title, titles, completed, all }) => {
+    withBoardCommit('subtask', defaultFile, async ({ action, file, task, subtask, subtasks, title, titles, completed, all }) => {
       const filePath = file || defaultFile;
       const listParam = subtasks ?? (subtask ? [subtask] : []);
       const useAll = all === true;
@@ -204,5 +205,5 @@ export function registerSubtaskTool(server: McpServer, defaultFile: string): voi
 
       return { content: [{ type: 'text' as const, text: `Error: Unknown action: ${action}` }], isError: true };
     }
-  );
+  ));
 }

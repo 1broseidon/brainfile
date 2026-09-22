@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -28,7 +29,7 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
             }),
       outputSchema: taskCompleteOutputSchema
     },
-    async ({ file, task, destination }) => {
+    withBoardCommit('task_complete', defaultFile, async ({ file, task, destination }) => {
       const filePath = file || defaultFile;
 
       try {
@@ -170,5 +171,5 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
         return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
       }
     }
-  );
+  ));
 }

@@ -1,5 +1,6 @@
 import { serveStdio } from "@modelcontextprotocol/server/stdio";
 import { McpServer } from "@modelcontextprotocol/server";
+import * as path from 'path';
 
 // Resolved at runtime from dist/commands/ — avoids widening tsc rootDir for a JSON import.
 const cliVersion: string = require('../../package.json').version;
@@ -9,6 +10,7 @@ import {
   resolveBrainfilePath,
 } from '@brainfile/core';
 import { findGitRoot, type McpOptions } from '../mcp/helpers';
+import { findTrackedBoardDir, materializeBoardWorktree } from '../utils/board-repo';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { registerListTasksTool } from '../mcp/tools/list_tasks_tool';
 import { registerGetTaskTool } from '../mcp/tools/get_task_tool';
@@ -90,6 +92,16 @@ export async function mcpCommand(options: McpOptions) {
             console.error(`[brainfile-mcp] Discovered from git root: ${defaultFile}`);
           }
         }
+      }
+    }
+
+    // Strategy 2b: the board lives on its own branch (spec-9) — the worktree
+    // checked out on it, created from the local or origin branch if needed.
+    if (defaultFile === 'brainfile.md') {
+      const tracked = findTrackedBoardDir(process.cwd()) ?? materializeBoardWorktree(process.cwd());
+      if (tracked) {
+        defaultFile = path.join(tracked, 'brainfile.md');
+        console.error(`[brainfile-mcp] Found tracked board: ${defaultFile}`);
       }
     }
 

@@ -48,6 +48,8 @@ export { parseSchemaHints, loadSchemaHints } from './schemaHints';
 
 // Export serializer
 export { BrainfileSerializer } from './serializer';
+export { parseFrontmatter, serializeFrontmatter } from './frontmatter';
+export type { FrontmatterDocument } from './frontmatter';
 export type { SerializeOptions } from './serializer';
 
 // Export validator

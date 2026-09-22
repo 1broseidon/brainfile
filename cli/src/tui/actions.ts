@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
+import { scheduleBoardCommit } from '../utils/board-repo';
 import {
   Brainfile,
   findTaskById,
@@ -153,6 +154,7 @@ export function moveTaskAction(
     );
     if (!moveResult.success) return { success: false, error: moveResult.error };
 
+    scheduleBoardCommit(filePath, `move ${taskId}: ${targetColumn.id}`);
     return {
       success: true,
       message: moveResult.autoCompleted
@@ -167,6 +169,7 @@ export function moveTaskAction(
   const writeResult = writeBrainfile(filePath, result.board!);
   if (!writeResult.success) return writeResult;
 
+  scheduleBoardCommit(filePath, `move ${taskId}: ${targetColumn.id}`);
   return { success: true, message: `Moved to ${targetColumn.title}` };
 }
 
@@ -187,6 +190,7 @@ export function deleteTaskAction(filePath: string, taskId: string): ActionResult
     const result = deleteTaskFile(located.taskPath);
     if (!result.success) return { success: false, error: result.error };
 
+    scheduleBoardCommit(filePath, `delete ${taskId}`);
     return { success: true, message: `Deleted ${taskId}` };
   }
 
@@ -196,6 +200,7 @@ export function deleteTaskAction(filePath: string, taskId: string): ActionResult
   const writeResult = writeBrainfile(filePath, result.board!);
   if (!writeResult.success) return writeResult;
 
+  scheduleBoardCommit(filePath, `delete ${taskId}`);
   return { success: true, message: `Deleted ${taskId}` };
 }
 
@@ -246,6 +251,7 @@ export function archiveTaskAction(
       };
     }
 
+    scheduleBoardCommit(filePath, `complete ${taskId}`);
     return { success: true, message: `Moved ${taskId} to logs` };
   }
 
@@ -306,6 +312,7 @@ export function archiveTaskAction(
     };
   }
 
+  scheduleBoardCommit(filePath, `complete ${taskId}`);
   return { success: true, message: `Moved ${taskId} to logs` };
 }
 
@@ -488,6 +495,7 @@ export function patchTaskAction(
     });
     if (!result.success) return { success: false, error: result.error };
 
+    scheduleBoardCommit(filePath, `patch ${taskId}`);
     return { success: true, message: `Updated ${taskId}` };
   }
 
@@ -500,6 +508,7 @@ export function patchTaskAction(
   const writeResult = writeBrainfile(filePath, result.board!);
   if (!writeResult.success) return writeResult;
 
+  scheduleBoardCommit(filePath, `patch ${taskId}`);
   return { success: true, message: `Updated ${taskId}` };
 }
 
@@ -523,6 +532,7 @@ export function cyclePriorityAction(filePath: string, taskId: string): ActionRes
     const result = patchTaskFile(located.taskPath, { priority: nextPriority ?? null });
     if (!result.success) return { success: false, error: result.error };
 
+    scheduleBoardCommit(filePath, `patch ${taskId}: priority ${nextPriority || 'none'}`);
     return { success: true, message: `Priority: ${nextPriority || 'none'}` };
   }
 
@@ -543,6 +553,7 @@ export function cyclePriorityAction(filePath: string, taskId: string): ActionRes
   const writeResult = writeBrainfile(filePath, result.board!);
   if (!writeResult.success) return writeResult;
 
+  scheduleBoardCommit(filePath, `patch ${taskId}: priority ${nextPriority || 'none'}`);
   return { success: true, message: `Priority: ${nextPriority || 'none'}` };
 }
 
@@ -566,6 +577,7 @@ export function toggleSubtaskAction(
       };
     }
 
+    scheduleBoardCommit(filePath, `subtask toggle ${subtaskId}`);
     return { success: true, message: `Toggled ${subtaskId}` };
   }
 
@@ -578,6 +590,7 @@ export function toggleSubtaskAction(
   const writeResult = writeBrainfile(filePath, result.board!);
   if (!writeResult.success) return writeResult;
 
+  scheduleBoardCommit(filePath, `subtask toggle ${subtaskId}`);
   return { success: true, message: `Toggled ${subtaskId}` };
 }
 
@@ -614,6 +627,7 @@ export function addTaskAction(
     );
 
     if (!result.success) return { success: false, error: result.error };
+    scheduleBoardCommit(filePath, `add ${result.task?.id || 'task'}`);
     return { success: true, message: `Added ${result.task?.id || 'task'}` };
   }
 
@@ -627,6 +641,7 @@ export function addTaskAction(
   const newColumn = result.board!.columns.find(c => c.id === column.id);
   const newTask = newColumn?.tasks[newColumn.tasks.length - 1];
 
+  scheduleBoardCommit(filePath, `add ${newTask?.id || 'task'}`);
   return { success: true, message: `Added ${newTask?.id || 'task'}` };
 }
 

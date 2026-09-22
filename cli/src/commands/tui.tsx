@@ -4,6 +4,8 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import { BrainfileTUI } from '../tui/index.js';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { fetchBeforeRead, installAutosync } from '../utils/board-autosync';
+import * as path from 'path';
 import { shouldSuggestV2Migration, markV2MigrationHintShown } from '../utils/v2-detect';
 
 interface TuiOptions {
@@ -35,6 +37,12 @@ export async function tuiCommand(options: TuiOptions) {
     console.log('');
     markV2MigrationHintShown(filePath);
   }
+
+  // Shared boards: push the TUI's commits in the background; in `full`
+  // mode, catch up with other machines before the first render.
+  installAutosync();
+  const fetched = fetchBeforeRead(path.dirname(filePath));
+  if (fetched && !fetched.ok && fetched.warning) console.error(chalk.yellow(`warning: ${fetched.warning}`));
 
   const { waitUntilExit } = render(<BrainfileTUI filePath={filePath} />);
 

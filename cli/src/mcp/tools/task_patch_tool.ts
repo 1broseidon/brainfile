@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
 import * as path from 'path';
 import {
@@ -32,7 +33,7 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
             }),
       outputSchema: taskPatchOutputSchema
     },
-    async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles, parentId }) => {
+    withBoardCommit('task_patch', defaultFile, async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles, parentId }) => {
       const filePath = file || defaultFile;
       const rawTaskIds = taskId ?? task;
       if (!rawTaskIds) {
@@ -104,5 +105,5 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
         isError: failureCount > 0 && successCount === 0,
       };
     }
-  );
+  ));
 }

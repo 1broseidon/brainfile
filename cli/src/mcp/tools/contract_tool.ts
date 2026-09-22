@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
 import {
   attachTaskContract,
@@ -49,7 +50,7 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
             }),
       outputSchema: contractOutputSchema
     },
-    async ({ action, file, task, parentId, ready: attachReady, deliverables, validation_commands, constraints, tasks, activate }) => {
+    withBoardCommit('contract', defaultFile, async ({ action, file, task, parentId, ready: attachReady, deliverables, validation_commands, constraints, tasks, activate }) => {
       const filePath = file || defaultFile;
 
       // ── attach ─────────────────────────────────────────────────────────────
@@ -212,5 +213,5 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
 
       return { content: [{ type: 'text' as const, text: `Error: Unknown action: ${action}` }], isError: true };
     }
-  );
+  ));
 }

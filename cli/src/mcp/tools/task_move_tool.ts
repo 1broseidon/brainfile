@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
 import { findTask, moveTaskFileToColumn } from '@brainfile/core';
 import {
@@ -26,7 +27,7 @@ export function registerTaskMoveTool(server: McpServer, defaultFile: string): vo
             }),
       outputSchema: taskMoveOutputSchema
     },
-    async ({ file, taskId, task, column }) => {
+    withBoardCommit('task_move', defaultFile, async ({ file, taskId, task, column }) => {
       const filePath = file || defaultFile;
       const rawTaskIds = taskId ?? task;
       if (!rawTaskIds) {
@@ -102,5 +103,5 @@ export function registerTaskMoveTool(server: McpServer, defaultFile: string): vo
         isError: failureCount > 0 && successCount === 0,
       };
     }
-  );
+  ));
 }

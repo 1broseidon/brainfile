@@ -35,6 +35,8 @@ export interface HeaderBarProps {
   panelLabel?: string;
   /** Active type-cycle filter (§A2), e.g. `plan`. Omitted/`'all'` renders nothing. */
   activeType?: string;
+  /** Shared-board status, e.g. `synced 12s ago`; sits left of the affordances. */
+  statusLabel?: string;
 }
 
 export function HeaderBar({
@@ -48,6 +50,7 @@ export function HeaderBar({
   totalCount,
   panelLabel,
   activeType,
+  statusLabel,
 }: HeaderBarProps) {
   const affordances = CHROME.filterAffordance;
   const boardTitle = truncate(title, 24);
@@ -69,8 +72,9 @@ export function HeaderBar({
           );
         }, 0)) + typeLabel.length;
 
+  const status = statusLabel ? `${statusLabel}  ` : '';
   const used = boardTitle.length + separator.length + tabsWidth;
-  const gap = Math.max(1, width - 1 - used - affordances.length - 1);
+  const gap = Math.max(1, width - 1 - used - status.length - affordances.length - 1);
 
   return (
     // flexShrink={0}: a detail v2 pane can legitimately render taller than the
@@ -107,6 +111,9 @@ export function HeaderBar({
           )}
           {typeLabel ? <Text color={PALETTE.textDim}>{typeLabel}</Text> : null}
           <Text>{pad(gap)}</Text>
+          {status ? (
+            <Text color={statusLabel?.includes('failed') ? PALETTE.warning : PALETTE.textDim}>{status}</Text>
+          ) : null}
           <Text color={PALETTE.textMuted}>{affordances}</Text>
         </Text>
       </Box>

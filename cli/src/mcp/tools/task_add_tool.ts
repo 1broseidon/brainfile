@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
 import { addTaskFile } from '@brainfile/core';
 import {
@@ -42,7 +43,7 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
             }),
       outputSchema: taskAddOutputSchema
     },
-    async ({
+    withBoardCommit('task_add', defaultFile, async ({
       file,
       column,
       title,
@@ -142,5 +143,5 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
         return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
       }
     }
-  );
+  ));
 }

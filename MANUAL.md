@@ -315,14 +315,18 @@ type gets an ID prefix, a completable flag and an optional schema. With
 | Read what was done on a task | `log` |
 | Record a plan or a decision | `plan`, `adr` |
 | Export finished work to GitHub or Linear, or bring it back | `archive`, `restore` |
-| Upgrade a v1 board | `migrate` |
+| Share the board with another machine or person | `sync` |
+| Upgrade a v1 board, or move a board onto its own branch | `migrate` |
 
 > Every command that touches a task takes `-t <id>`. Every command finds the
-> board by walking up from the current directory, preferring
-> `.brainfile/brainfile.md` and falling back to `brainfile.md`, `.brainfile.md`
-> and `.bb.md`; pass `-f <path>` to point at another one. Custom types, task
-> templates, linting, the schemas and the config file are in
-> [Commands](#commands).
+> board by walking up from the current directory to the repository root,
+> preferring `.brainfile/brainfile.md`; inside a git repository it then looks
+> for the worktree on the board branch and checks it out if the branch exists
+> but has no directory yet (see [Sharing a board](#sharing-a-board)). Legacy
+> names `brainfile.md`, `.brainfile.md` and `.bb.md` still resolve. Pass
+> `-f <path>` to point at another board, or `-g` for the home board in
+> `~/.brainfile`. Custom types, task templates, linting, the schemas and the
+> config file are in [Commands](#commands).
 
 ## Commands
 
@@ -338,12 +342,21 @@ agents should use `show --json`, `brief --json` or the MCP tools instead.
 
 ```console
 $ brainfile init
-$ brainfile init --force   # overwrite an existing config
+$ brainfile init --force    # overwrite an existing config
+$ brainfile init --plain    # a plain directory, even inside a git repository
+$ brainfile init --here     # inside a repository: this directory, not its root
+$ brainfile init -g         # the home board at ~/.brainfile
 ```
 
 Writes `brainfile.md` with two columns and the default agent instructions,
 creates `board/` and `logs/`, and adds a `.gitignore` that excludes `state/`,
 where per-agent brief state lives.
+
+Inside a git repository the board is created at the repository root as a
+worktree on its own `brainfile` branch, hidden from the code branch through
+`.git/info/exclude`; outside one, `--tracked` makes it its own repository.
+Either way every change becomes a commit. `--plain` opts out. See
+[Sharing a board](#sharing-a-board).
 
 #### list — List tasks, optionally filtered
 
@@ -477,12 +490,15 @@ Columns, detail view, filters and every write operation from the keyboard. See
 $ brainfile brief --agent claude
 $ brainfile brief --agent claude --peek    # read without marking seen
 $ brainfile brief --agent claude --json
+$ brainfile brief --agent claude --offline # skip the sync a shared board does first
 ```
 
 The first brief for a name prints the board title, the agent instructions and
 accepted ADRs, then the agent's tasks. Later briefs are deltas: new notes, task
 changes and completions since the last one. State is per agent, kept in
-`.brainfile/state/` and ignored by git.
+`.brainfile/state/` and ignored by git. A shared board syncs before the brief
+so it reflects other machines; a sync failure is one warning line, never an
+error.
 
 #### contract — pickup, deliver, validate, attach, graph, activate
 
@@ -586,13 +602,35 @@ $ brainfile schema update        # check brainfile.md for a newer version
 Bundled with the CLI, so validation works offline. Update checks run at most
 once a day and never block.
 
-#### migrate — Upgrade a v1 board
+#### migrate — Upgrade a v1 board, or change how it is stored
 
 ```console
 $ brainfile migrate --dir ./old-project
+$ brainfile migrate --to-branch            # move the board onto its own branch
+$ brainfile migrate --to-branch --commit   # ...and commit its removal from the code branch
+$ brainfile migrate --to-plain             # back to a plain directory
 ```
 
-Flags: `--dir`, `--force`, `--logs-to-ledger`.
+Flags: `--dir`, `--force`, `--logs-to-ledger`, `--to-branch`, `--to-plain`,
+`--commit`. `--to-branch` keeps the board's history when it was committed on
+the code branch (`git subtree split`), imports a gitignored one as a fresh
+branch, and folds a standalone board repository into the surrounding
+repository. `--to-plain` leaves the branch intact.
+
+#### sync — Share a board through a git remote
+
+```console
+$ brainfile sync                                  # fetch, merge, push
+$ brainfile sync --pull                           # one direction
+$ brainfile sync --set-remote origin              # the code remote
+$ brainfile sync --set-remote git@host:me/boards.git --remote-branch myproject
+$ brainfile sync --autosync full                  # off | push | full
+```
+
+Fetches the board branch, fast-forwards or merges with the board-aware merge
+driver, and pushes. Runs entirely inside the board directory; the code tree is
+never touched. `--set-remote` in a repository that has no board yet checks the
+board out from that remote. Details in [Sharing a board](#sharing-a-board).
 
 #### archive, restore — Export completed work, or bring it back
 
@@ -690,6 +728,92 @@ and go into the ledger when the task completes.
 > under an epic, review the set, then `contract activate --parent epic-1` turns
 > all of them ready in one step.
 
+## Sharing a board
+
+A board is a folder of Markdown. That is what makes it easy to read, and what
+made it hard to share: committed next to the code, every task move lands on a
+feature branch and a pull request; gitignored, it never leaves the machine.
+So the board lives on its own git branch instead, and the code branch never
+sees it.
+
+### The branch
+
+`brainfile init` inside a repository creates `.brainfile/` as a linked
+worktree on an orphan branch named `brainfile` (`git config brainfile.branch`
+renames it). The directory is hidden through `.git/info/exclude`, so `git
+status` on the code branch stays clean and the board never appears in a pull
+request. Every command that changes the board makes one commit on that branch,
+authored as the acting agent (`--agent` or `BRAINFILE_AGENT`), so `git log`
+inside `.brainfile/` is the board's history:
+
+```console
+$ git -C .brainfile log --format='%an  %s' -3
+codex   move task-7: review
+claude  note task-7: Bounded by bytes, not entries
+claude  add: Swap the parser cache
+```
+
+Files edited by hand are committed as `edit: <files>` before the next command
+runs, so they are never folded into someone else's commit.
+
+Two clones of the repository, or two worktrees of it, share the branch. A
+fresh clone materializes the board on first use: the branch is fetched with
+the rest of the repository once it has been pushed, and the CLI checks it out
+into `.brainfile/` when the directory is missing.
+
+Outside a repository, `init --tracked` makes the board its own small
+repository; the home board `brainfile init -g` is always one. Both take the
+same `sync` commands.
+
+### The remote
+
+The board never syncs anywhere until you choose a remote, because boards are
+often private notes living next to public code:
+
+| You want | Run |
+| --- | --- |
+| The team sees the board with the code | `brainfile sync --set-remote origin` |
+| A private board next to public code | `brainfile sync --set-remote git@host:me/boards.git` |
+| One private repository holding many boards | `--set-remote <url> --remote-branch <project>` |
+
+A URL is registered as a git remote named `board`. The branch on the remote
+defaults to the board branch inside a repository, the folder name for a
+standalone board, and `home` for the home board, so one "boards" repository
+can carry a branch per project. The setting is git config
+(`brainfile.remote`, `brainfile.remoteBranch`), so it is per clone and never
+committed.
+
+`sync` fetches, fast-forwards or merges, then pushes. Once a remote is set,
+every mutation schedules a push a few seconds later in the background
+(`brainfile.autosync = push`). `full` also fetches before a read when the last
+sync is older than a minute; `off` leaves everything to explicit `sync`.
+`brief` always syncs first unless `--offline`. Network failures are one line
+on stderr; a mutation never fails because the network did. The TUI shows
+`synced 12s ago` in its header while a remote is set.
+
+### Conflicts
+
+Two machines moving the same task is a merge, not a problem. `.gitattributes`
+on the board branch routes board files through the `brainfile merge-driver`
+git driver, which merges frontmatter field by field: a field changed on one
+side takes that side; changed on both, the later `updatedAt` wins, and a tie
+goes to the incoming side so every machine converges on the same answer. Log
+entries and note lists union, ordered by timestamp. `ledger.jsonl` merges by
+line union, so two completions keep both records. A task completed on one
+machine and edited on another stays completed, with the edit appended to the
+archived file as a log entry.
+
+Anything else, such as two rewrites of the same description paragraph, is left
+with ordinary git markers inside `.brainfile/`; `sync` names the file and
+stops pushing until it is resolved.
+
+### Moving an existing board
+
+`brainfile migrate --to-branch` moves a board that is committed with the code
+onto the branch with its history, or imports a gitignored one as a fresh
+branch. `--commit` also commits the removal from the code branch. `migrate
+--to-plain` reverses it. Neither touches any other file in the repository.
+
 ## The TUI
 
 `brainfile tui` opens the board in the terminal: columns across, a detail view
@@ -778,9 +902,11 @@ is this manual as plain Markdown, and
 
 ### One file per document, on purpose
 
-Every task is its own file so that two people, or two agents, editing the board
-at once produce a merge instead of a conflict, and so that a task's history is
-its git history. Keep IDs stable; the CLI never reuses one.
+Every task is its own file so that a task's history is its git history and a
+merge touches one small file at a time. The board's own branch is what lets
+two people, or two agents on different machines, edit at once: their commits
+merge field by field (see [Sharing a board](#sharing-a-board)) instead of
+colliding on a feature branch. Keep IDs stable; the CLI never reuses one.
 
 ### The config never holds tasks
 
