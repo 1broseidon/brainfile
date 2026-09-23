@@ -52,6 +52,24 @@ Detailed requirements...
 
 One file per document means clean diffs, painless merges, and history for free. Completing a task appends a record to `logs/ledger.jsonl` and archives the file to `logs/`.
 
+## Where your board lives
+
+Always in `.brainfile/`, as ordinary files you and your agents read directly. What changes is how it is kept:
+
+| Where you run `brainfile init` | How the board is kept | Who has it |
+| --- | --- | --- |
+| A folder without git | Plain files | This machine |
+| Inside a git repository | Every change is a commit on a separate `brainfile` branch, kept out of your code and pull requests | This machine, until you share it |
+
+Nothing leaves your machine until you choose a remote:
+
+```bash
+brainfile sync --set-remote origin    # or a private repo URL
+brainfile where                       # where the board is, who has it, what is waiting to be sent
+```
+
+After that, changes are sent in the background and teammates who clone the repo get the board the first time they run `brainfile`. Already have a board committed with your code? `brainfile migrate --to-branch` moves it, history included.
+
 ## Working with agents
 
 - **MCP server** — `brainfile mcp` exposes board operations (`list_tasks`, `task_add`, `task_move`, `task_patch`, `subtask`, `contract`, `search`, …) to Claude, Cursor, or any MCP client, so agents read and update the same board you see in the TUI.

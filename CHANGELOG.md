@@ -4,51 +4,56 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions are synced across
 `brainfile` (CLI) and `@brainfile/core`.
 
-## [Unreleased]
+## [0.21.0] - 2026-09-22
+
+Share a board without a service. Inside a git repository the board now lives
+on its own `brainfile` branch: still ordinary files in `.brainfile/`, every
+change a commit, kept out of your code and pull requests, and shared through
+any git remote you choose. Nothing leaves your machine until you choose one.
 
 ### Added
-- Board on a branch (spec-9). Inside a git repository `brainfile init` now
-  stores `.brainfile/` as a linked worktree on an orphan `brainfile` branch,
-  hidden from the code branch via `.git/info/exclude`; outside one,
-  `--tracked` makes it its own repository, and `-g` targets a home board at
-  `~/.brainfile`. Every mutation (CLI, MCP tools, TUI) is one commit authored
-  as the acting agent; hand edits are committed as `edit: <files>`.
-- `brainfile sync [--pull|--push] [--set-remote <name|url>] [--remote-branch
-  <name>] [--autosync off|push|full]` — fetch, fast-forward or merge, push,
-  entirely inside the board worktree. No remote is ever assumed; `origin` is
-  a choice. `--set-remote` in a fresh clone checks the board out from the
-  remote.
-- `brainfile merge-driver` (registered as `merge.brainfile.driver`, selected
-  by `.gitattributes` on the board branch): frontmatter merges field by field
-  with the later `updatedAt` winning and ties going to the incoming side; log
-  and note lists union by timestamp; `ledger.jsonl` merges by line union;
-  complete-vs-edit keeps the completion and appends the edit to the archive.
-- Autosync: after a remote is set, mutations push a few seconds later from a
-  detached process; `full` also fetches before stale reads. `brief` (CLI and
-  MCP) syncs first unless `--offline`. The TUI header shows `synced Ns ago`.
-- `brainfile where` — where the board lives, how it is stored, who else has
+- Board on a branch. Inside a git repository `brainfile init` stores
+  `.brainfile/` as a worktree on an orphan `brainfile` branch, hidden from the
+  code branch via `.git/info/exclude`. Outside one, `init --tracked` makes the
+  board its own small repository, and `-g` targets a home board at
+  `~/.brainfile`. Every change from the CLI, the MCP tools and the TUI is one
+  commit authored as the acting agent; hand edits commit as `edit: <files>`.
+- `brainfile where`: where the board lives, how it is stored, who else has
   it, and how many changes are waiting to be sent. Offline and read-only.
-  Every storage message (init, migrate, sync, brief) now says in plain words
-  where the board is and that nothing is lost when a sync fails; the TUI
-  header shows `local only` for a board nobody else has.
-- `brainfile migrate --to-branch [--commit]` moves a committed board onto the
-  branch with its history (`git subtree split`), imports a gitignored one, or
-  folds a standalone board repository in; `--to-plain` reverses it. The board
-  arrives as it is on disk: uncommitted edits, new or partly force-added files
-  and deletions land as one `import uncommitted board changes` commit, every
-  file is checked by content before the old copy is removed, and a failure
-  rolls back the branch, worktree and index so the repository is left as it
-  was.
-- `@brainfile/core`: `findBrainfile`/`resolveBrainfilePath` accept
-  `stopAtGitRoot`; `parseFrontmatter`/`serializeFrontmatter` are exported.
+- `brainfile sync [--pull|--push] [--set-remote <name|url>] [--remote-branch
+  <name>] [--autosync off|push|full]`: fetch, merge and push the board branch,
+  entirely inside `.brainfile/`. No remote is ever assumed; a URL is
+  registered as remote `board`, so a private board can sit next to public
+  code.
+- Autosync. Once a remote is set, changes are pushed a few seconds after each
+  edit from a background process; `full` also fetches before stale reads.
+  `brief` (CLI and MCP) syncs first unless `--offline`. The TUI header shows
+  `synced 12s ago`, `local only`, or `not synced · saved locally`.
+- A clone gets the board on its first `brainfile` command, says so, and sends
+  changes back to the remote it came from.
+- `brainfile merge-driver`, selected by `.gitattributes` on the board branch.
+  Frontmatter merges field by field (the later `updatedAt` wins, ties go to
+  the incoming side), log and note lists union by timestamp, `ledger.jsonl`
+  merges by line, and a task completed on one machine while edited on another
+  stays completed with the edit appended to its archive.
+- `brainfile migrate --to-branch [--commit]` moves an existing board onto the
+  branch: history included when it was committed with the code, uncommitted
+  edits and new files included always, every file checked by content before
+  the old copy is removed, and a full rollback on failure. `--to-plain`
+  reverses it.
+- `@brainfile/core`: `findBrainfile` and `resolveBrainfilePath` accept
+  `stopAtGitRoot`; `parseFrontmatter` and `serializeFrontmatter` are exported.
 
 ### Changed
-- Board discovery stops at the repository root, then looks for the worktree
-  on the board branch (materializing it when the branch exists locally or on
-  the configured remote) before falling back to legacy file names. A clone
-  that checks the board out from a remote announces it and keeps sending
-  changes to that remote; `board/` and `logs/` carry a `.gitkeep` so an empty
-  board survives the trip.
+- `brainfile init` inside a git repository now creates the branch-backed
+  board, at the repository root. Pass `--plain` for a plain folder in the
+  current directory, as before. Existing boards are untouched until you run
+  `migrate --to-branch`.
+- Board discovery stops at the repository root instead of walking into
+  parent directories, then looks for the board branch. A board kept above a
+  repository is no longer picked up from inside it; pass `-f <path>`.
+- Storage messages from init, migrate, sync and brief say in plain words where
+  the board is, who has it, and that nothing is lost when a sync fails.
 
 ## [0.20.0] - 2026-08-13
 

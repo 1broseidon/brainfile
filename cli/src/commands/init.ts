@@ -217,7 +217,7 @@ export function printStorageStory(mode: 'plain' | 'linked' | 'standalone', dotDi
     say('Only on this machine for now. Every change is a git commit on a');
     say(`separate '${branch}' branch, kept out of your code and pull requests.`);
     say(chalk.gray(`(A plain git push never sends it; git push --all or --mirror would.)`));
-    if (movedToRoot) say(chalk.gray('Created at the repository root so every checkout finds it. Use --here --plain for a folder board here.'));
+    if (movedToRoot) say(chalk.gray('Created at the repository root so every checkout finds it. Use --plain for a folder board in this directory.'));
   } else {
     say('Only on this machine for now. Every change is a git commit in its');
     say(`own small repository inside ${displayPath(dotDir)}/.`);
