@@ -4,6 +4,51 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions are synced across
 `brainfile` (CLI) and `@brainfile/core`.
 
+## [Unreleased]
+
+Shared boards stop showing up as a branch on the remote, and the board
+records which agent made each change without being told.
+
+### Changed
+- `sync` stores the board on the remote as `refs/brainfile/<name>` instead of
+  a branch. It is pushed, fetched and kept like any other ref, but hosts list
+  only branches, so autosync no longer triggers GitHub's "had recent pushes /
+  Compare & pull request" banner, and the board stays out of the branch list
+  and `git branch -a`. The last-known remote position is kept under
+  `refs/brainfile/remotes/`, where `git fetch --prune` never touches it.
+- `--remote-branch` is now `--board-name` (default `board` inside a
+  repository), stored as `brainfile.boardName`. The old flag and config key
+  still work.
+- A fresh clone finds the shared board with one lookup on its first
+  `brainfile` command, since a plain clone no longer downloads it. The lookup
+  never prompts, gives up after a few seconds, and a miss is remembered for ten
+  minutes.
+- `sync --json` and `where --json` report `remoteRef` in place of
+  `remoteBranch`; `where` also reports `webUrl`.
+
+- Board commits are always authored by your git user. The acting agent is
+  recorded on the board instead: a `[codex]` or `[claude]` suffix on the
+  commit message, and the `[name]` on notes.
+
+### Added
+- Agent detection. Without `--agent` or `BRAINFILE_AGENT`, brainfile names
+  the agent from the nearest agent CLI above the command (claude, codex,
+  cursor-agent, gemini, opencode and others), falling back to the variables
+  agents set for their commands (Codex's `CODEX_THREAD_ID`, Claude Code's
+  `CLAUDECODE`) where a sandbox hides the process tree. Commands you type get
+  no tag; your notes carry your git `user.name`. `BRAINFILE_DETECT_AGENT=off`
+  keeps only explicit names.
+- `where` and `sync --set-remote` say where the board is stored on the remote
+  and, for GitHub remotes, link to its history
+  (`https://github.com/<owner>/<repo>/commits/refs/brainfile/board`).
+
+### Upgrading
+- Boards shared by 0.21.0 move themselves: the first `sync` merges the
+  `brainfile` branch from the remote, publishes it under `refs/brainfile/`,
+  and deletes the branch (only if nobody pushed to it in the meantime).
+  Upgrade every machine that shares the board; a 0.21.0 machine keeps pushing
+  to the branch.
+
 ## [0.21.0] - 2026-09-22
 
 Share a board without a service. Inside a git repository the board now lives

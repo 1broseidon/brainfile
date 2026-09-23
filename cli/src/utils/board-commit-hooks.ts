@@ -2,9 +2,10 @@
  * Commander hooks that turn every CLI mutation into one commit on a tracked
  * board (spec-9). `beforeCommand` commits hand edits on their own so they are
  * never folded into the command's commit; `afterCommand` commits whatever the
- * command changed, authored as the acting agent.
+ * command changed, authored by the git user and tagged with the agent, if any.
  */
-import { commitBoard, commitHandEdits, describeCommandForCommit, resolveAgentName } from './board-repo';
+import { commitBoard, commitHandEdits, describeCommandForCommit } from './board-repo';
+import { detectAgent } from './actor';
 import { tryResolveBoardDir } from './brainfile-path';
 import { fetchBeforeRead } from './board-autosync';
 import { syncMessage } from './board-sync';
@@ -48,5 +49,5 @@ export function beforeCommand(command: CommandLike): boolean {
 export function afterCommand(command: CommandLike): boolean {
   const dotDir = boardDirForCommand(command);
   if (!dotDir) return false;
-  return commitBoard(dotDir, { message: describeCommandForCommit(command), agent: resolveAgentName() });
+  return commitBoard(dotDir, { message: describeCommandForCommit(command), agent: detectAgent()?.name });
 }

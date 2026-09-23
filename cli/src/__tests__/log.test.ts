@@ -1,3 +1,4 @@
+import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -181,6 +182,22 @@ columns:
 
     expect(result.entry).toContain('[claude]');
     expect(result.entry).toContain('Debugging complete');
+  });
+
+  it('attributes a note to the detected agent, else the git user, when --agent is absent', () => {
+    const repo = path.dirname(brainfilePath);
+    spawnSync('git', ['init', '--quiet'], { cwd: repo });
+    spawnSync('git', ['config', 'user.name', 'Tester'], { cwd: repo });
+    const saved = process.env.BRAINFILE_AGENT;
+    try {
+      process.env.BRAINFILE_AGENT = 'codex';
+      expect(logNoteCommand({ file: brainfilePath, task: 'task-5', message: 'From an agent' }, logger).entry).toContain('[codex] From an agent');
+      delete process.env.BRAINFILE_AGENT;
+      expect(logNoteCommand({ file: brainfilePath, task: 'task-5', message: 'From a person' }, logger).entry).toContain('[Tester] From a person');
+    } finally {
+      if (saved === undefined) delete process.env.BRAINFILE_AGENT;
+      else process.env.BRAINFILE_AGENT = saved;
+    }
   });
 
   it('should throw CLIError when task ID is missing', () => {

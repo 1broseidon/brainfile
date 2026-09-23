@@ -22,7 +22,8 @@ import { fetchBeforeRead, installAutosync, schedulePush } from '../utils/board-a
 import {
   boardAutosync,
   boardRemote,
-  boardRemoteBranch,
+  boardRemoteName,
+  boardWebUrl,
   readSyncState,
   registerMergeDriver,
   syncBoard,
@@ -63,7 +64,7 @@ function run(args: string[], cwd: string): string {
 }
 
 function refs(bare: string): string[] {
-  return run(['for-each-ref', '--format=%(refname:short)'], bare).split('\n').filter(Boolean);
+  return run(['for-each-ref', '--format=%(refname)'], bare).split('\n').filter(Boolean);
 }
 
 function makeBare(dir: string): string {
@@ -238,20 +239,20 @@ describe('board sync (spec-9 phase 2)', () => {
     expect(boardRemote(dotDir)).toBeNull();
     expect(boardAutosync(dotDir)).toBe('off');
     expect(syncBoard(dotDir).skipped).toBe('no-remote');
-    expect(refs(codeRemote)).toEqual(['main']);
+    expect(refs(codeRemote)).toEqual(['refs/heads/main']);
   });
 
   it('--set-remote with a URL registers the board remote; origin never receives board refs', () => {
     const dotDir = boardInA();
     expect(boardRemote(dotDir)).toBe('board');
     expect(run(['remote', 'get-url', 'board'], repoA)).toBe(boardsRemote);
-    expect(boardRemoteBranch(dotDir)).toBe('brainfile');
+    expect(boardRemoteName(dotDir)).toBe('board');
     expect(boardAutosync(dotDir)).toBe('push');
     expect(run(['config', '--get', 'merge.brainfile.driver'], dotDir)).toContain('merge-driver %O %A %B');
     expect(fs.readFileSync(path.join(dotDir, '.gitattributes'), 'utf-8')).toContain('logs/ledger.jsonl merge=union');
 
-    expect(refs(boardsRemote)).toEqual(['brainfile']);
-    expect(refs(codeRemote)).toEqual(['main']);
+    expect(refs(boardsRemote)).toEqual(['refs/brainfile/board']);
+    expect(refs(codeRemote)).toEqual(['refs/heads/main']);
     expect(readSyncState(dotDir)?.ok).toBe(true);
   });
 
@@ -264,7 +265,7 @@ describe('board sync (spec-9 phase 2)', () => {
   it('a fresh clone materializes the board from the remote and sees new work after sync', () => {
     const dotA = boardInA();
     addCommand({ file: 'brainfile.md', title: 'Shared task', column: 'todo' });
-    commitBoard(dotA, { message: 'add task-1', agent: 'a' });
+    commitBoard(dotA, { message: 'add task-1' });
     const pushed = syncCommand({});
     expect(pushed?.pushed).toBe(1);
 
@@ -275,7 +276,7 @@ describe('board sync (spec-9 phase 2)', () => {
 
     process.chdir(repoA);
     addCommand({ file: 'brainfile.md', title: 'Second task', column: 'todo' });
-    commitBoard(dotA, { message: 'add task-2', agent: 'a' });
+    commitBoard(dotA, { message: 'add task-2' });
     syncCommand({});
 
     process.chdir(repoB);
@@ -287,13 +288,13 @@ describe('board sync (spec-9 phase 2)', () => {
   it('brief syncs a shared board first unless --offline', () => {
     const dotA = boardInA();
     addCommand({ file: 'brainfile.md', title: 'Seen by brief', column: 'todo' });
-    commitBoard(dotA, { message: 'add task-1', agent: 'a' });
+    commitBoard(dotA, { message: 'add task-1' });
     syncCommand({});
     const dotB = boardInB();
 
     process.chdir(repoA);
     addCommand({ file: 'brainfile.md', title: 'Added after clone', column: 'todo' });
-    commitBoard(dotA, { message: 'add task-2', agent: 'a' });
+    commitBoard(dotA, { message: 'add task-2' });
     syncCommand({});
 
     process.chdir(repoB);
@@ -306,7 +307,7 @@ describe('board sync (spec-9 phase 2)', () => {
   withDriver('a both-move conflict resolves to the later move on every machine', () => {
     const dotA = boardInA();
     addCommand({ file: 'brainfile.md', title: 'Contested', column: 'todo' });
-    commitBoard(dotA, { message: 'add task-1', agent: 'a' });
+    commitBoard(dotA, { message: 'add task-1' });
     syncCommand({});
     const dotB = boardInB();
 
@@ -315,12 +316,12 @@ describe('board sync (spec-9 phase 2)', () => {
     // B's own side would leave 'review', so this proves the driver ran.
     process.chdir(repoB);
     moveCommand({ file: 'brainfile.md', task: 'task-1', column: 'review' });
-    commitBoard(dotB, { message: 'move task-1', agent: 'b' });
+    commitBoard(dotB, { message: 'move task-1' });
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
 
     process.chdir(repoA);
     moveCommand({ file: 'brainfile.md', task: 'task-1', column: 'in-progress' });
-    commitBoard(dotA, { message: 'move task-1', agent: 'a' });
+    commitBoard(dotA, { message: 'move task-1' });
     syncCommand({});
 
     process.chdir(repoB);
@@ -343,18 +344,18 @@ describe('board sync (spec-9 phase 2)', () => {
     const dotA = boardInA();
     addCommand({ file: 'brainfile.md', title: 'Done by A', column: 'todo' });
     addCommand({ file: 'brainfile.md', title: 'Done by B', column: 'todo' });
-    commitBoard(dotA, { message: 'add tasks', agent: 'a' });
+    commitBoard(dotA, { message: 'add tasks' });
     syncCommand({});
     const dotB = boardInB();
 
     process.chdir(repoA);
     completeCommand({ file: 'brainfile.md', task: 'task-1' });
-    commitBoard(dotA, { message: 'complete task-1', agent: 'a' });
+    commitBoard(dotA, { message: 'complete task-1' });
     syncCommand({});
 
     process.chdir(repoB);
     completeCommand({ file: 'brainfile.md', task: 'task-2' });
-    commitBoard(dotB, { message: 'complete task-2', agent: 'b' });
+    commitBoard(dotB, { message: 'complete task-2' });
     const merged = syncCommand({});
     expect(merged?.ok).toBe(true);
     expect(ledgerIds(dotB)).toEqual(['task-1', 'task-2']);
@@ -379,7 +380,7 @@ describe('board sync (spec-9 phase 2)', () => {
       addCommand({ file: 'brainfile.md', title: 'Pushed in the background', column: 'todo' });
       expect(afterCommand(fakeCommand('add', { file: 'brainfile.md', title: 'Pushed in the background' }))).toBe(true);
       const head = run(['rev-parse', 'HEAD'], dotA);
-      expect(waitFor(() => run(['rev-parse', 'brainfile'], boardsRemote) === head, 15000)).toBe(true);
+      expect(waitFor(() => run(['rev-parse', 'refs/brainfile/board'], boardsRemote) === head, 15000)).toBe(true);
       expect(fs.existsSync(path.join(dotA, 'state', 'autosync.lock'))).toBe(false);
     });
 
@@ -397,13 +398,13 @@ describe('board sync (spec-9 phase 2)', () => {
     it('full mode fetches before a read once the last sync is stale', () => {
       const dotA = boardInA();
       addCommand({ file: 'brainfile.md', title: 'First', column: 'todo' });
-      commitBoard(dotA, { message: 'add task-1', agent: 'a' });
+      commitBoard(dotA, { message: 'add task-1' });
       syncCommand({});
       const dotB = boardInB();
 
       process.chdir(repoA);
       addCommand({ file: 'brainfile.md', title: 'Second', column: 'todo' });
-      commitBoard(dotA, { message: 'add task-2', agent: 'a' });
+      commitBoard(dotA, { message: 'add task-2' });
       syncCommand({});
 
       process.chdir(repoB);
@@ -417,7 +418,7 @@ describe('board sync (spec-9 phase 2)', () => {
       fs.writeFileSync(path.join(dotB, 'state', 'sync.json'), JSON.stringify(state));
       beforeCommand(fakeCommand('list', { file: 'brainfile.md' }));
       expect(fs.existsSync(path.join(dotB, 'board', 'task-2.md'))).toBe(true);
-      expect(run(['rev-parse', 'brainfile'], boardsRemote)).toBe(run(['rev-parse', 'HEAD'], dotA));
+      expect(run(['rev-parse', 'refs/brainfile/board'], boardsRemote)).toBe(run(['rev-parse', 'HEAD'], dotA));
     });
 
     it('formats a header status that always says whether the board is shared', () => {
@@ -431,7 +432,7 @@ describe('board sync (spec-9 phase 2)', () => {
       syncCommand({ setRemote: boardsRemote });
       expect(syncStatusLabel(dotDir)).toMatch(/^synced \d+s ago$/);
       expect(syncStatusLabel(dotDir, Date.now() + 5 * 60_000)).toBe('synced 5m ago');
-      fs.writeFileSync(path.join(dotDir, 'state', 'sync.json'), JSON.stringify({ at: new Date().toISOString(), remote: 'board', remoteBranch: 'brainfile', ok: false }));
+      fs.writeFileSync(path.join(dotDir, 'state', 'sync.json'), JSON.stringify({ at: new Date().toISOString(), remote: 'board', remoteRef: 'refs/brainfile/board', ok: false }));
       expect(syncStatusLabel(dotDir)).toBe('not synced · saved locally');
     });
   });
@@ -458,7 +459,9 @@ describe('board sync (spec-9 phase 2)', () => {
       syncCommand({ setRemote: 'origin' });
 
       // The empty board travels with its directories intact.
-      expect(run(['ls-tree', '-r', '--name-only', 'origin/brainfile'], repoA).split('\n')).toEqual(
+      // On origin the board is a ref, never a branch.
+      expect(refs(codeRemote)).toEqual(['refs/brainfile/board', 'refs/heads/main']);
+      expect(run(['ls-tree', '-r', '--name-only', 'refs/brainfile/remotes/origin/board'], repoA).split('\n')).toEqual(
         expect.arrayContaining(['board/.gitkeep', 'logs/.gitkeep']),
       );
 
@@ -472,7 +475,7 @@ describe('board sync (spec-9 phase 2)', () => {
       const dotC = path.join(repoC, '.brainfile');
       expect(fs.existsSync(path.join(dotC, 'logs'))).toBe(true);
       expect(boardRemote(dotC)).toBe('origin');
-      commitBoard(dotC, { message: 'add from clone', agent: 'c' });
+      commitBoard(dotC, { message: 'add from clone' });
       expect(syncCommand({})?.pushed).toBe(1);
 
       process.chdir(repoA);
@@ -480,12 +483,12 @@ describe('board sync (spec-9 phase 2)', () => {
       expect(fs.existsSync(path.join(dotA, 'board', 'task-1.md'))).toBe(true);
     });
 
-    it('--set-remote from a repo with no board yet looks for the brainfile branch, not the folder name', () => {
+    it('--set-remote from a repo with no board yet looks for refs/brainfile/board, not the folder name', () => {
       boardInA();
       process.chdir(repoB);
       const logs: string[] = [];
       syncCommand({ setRemote: boardsRemote }, { log: (m: string) => logs.push(m), error: () => {}, warn: () => {} } as never);
-      expect(logs.join('\n')).toContain("branch 'brainfile'");
+      expect(logs.join('\n')).toContain('stored there as refs/brainfile/board, not a branch');
       expect(findTrackedBoardDir(repoB)).toBe(path.join(repoB, '.brainfile'));
     });
 
@@ -498,14 +501,15 @@ describe('board sync (spec-9 phase 2)', () => {
 
       syncCommand({ setRemote: boardsRemote });
       addCommand({ file: 'brainfile.md', title: 'Not sent yet', column: 'todo' });
-      commitBoard(dotDir, { message: 'add task-1', agent: 'a' });
+      commitBoard(dotDir, { message: 'add task-1' });
       const report = whereCommand({}, quiet);
-      expect(report).toMatchObject({ storage: 'branch', remote: 'board', remoteBranch: 'brainfile', pendingChanges: 1 });
+      expect(report).toMatchObject({ storage: 'branch', remote: 'board', remoteRef: 'refs/brainfile/board', webUrl: null, pendingChanges: 1 });
 
       const lines: string[] = [];
       whereCommand({}, { log: (m: string) => lines.push(m), error: () => {}, warn: () => {} } as never);
       const text = lines.join('\n');
       expect(text).toMatch(/Stored\s+as commits on the 'brainfile' branch/);
+      expect(text).toMatch(/Stored there as refs\/brainfile\/board, not a branch/);
       expect(text).toMatch(/1 change waiting to be sent/);
       expect(text).toMatch(/Anyone who can read board can read this board/);
     });
@@ -517,6 +521,131 @@ describe('board sync (spec-9 phase 2)', () => {
         .toBe('Shared through origin: received 1 change, sent 2 changes.');
       expect(syncMessage({ ok: false, failure: 'conflict', remote: 'origin', pulled: 0, pushed: 0, conflicts: ['board/task-3.md'] }).text)
         .toMatch(/^Two edits collided in board\/task-3\.md/);
+    });
+  });
+
+  describe('refs/brainfile storage (0.21.1)', () => {
+    /** Push a board the way 0.21.0 did: as a branch, with only the remote configured. */
+    function legacyBoardInA(): string {
+      process.chdir(repoA);
+      initCommand({});
+      const dotA = path.join(repoA, '.brainfile');
+      addCommand({ file: 'brainfile.md', title: 'Before the move', column: 'todo' });
+      commitBoard(dotA, { message: 'add task-1' });
+      run(['remote', 'add', 'board', boardsRemote], repoA);
+      run(['config', 'brainfile.remote', 'board'], repoA);
+      if (hasBundle) registerMergeDriver(dotA, driverCommand);
+      run(['push', '--quiet', 'board', 'HEAD:refs/heads/brainfile'], dotA);
+      return dotA;
+    }
+
+    it('pushes to refs/brainfile/<name> and never creates a branch on the remote', () => {
+      process.chdir(repoA);
+      initCommand({});
+      syncCommand({ setRemote: 'origin' });
+      expect(run(['ls-remote', '--heads', codeRemote], repoA).split('\n').map((l) => l.split('\t')[1])).toEqual(['refs/heads/main']);
+      expect(run(['ls-remote', codeRemote, 'refs/brainfile/*'], repoA)).toMatch(/\trefs\/brainfile\/board$/);
+      // Nothing under refs/remotes either, so `git branch -a` stays clean.
+      expect(run(['branch', '-r'], repoA)).not.toMatch(/brainfile|board/);
+    });
+
+    it('--board-name picks the name, and a clone discovers it without being told', () => {
+      process.chdir(repoA);
+      initCommand({});
+      addCommand({ file: 'brainfile.md', title: 'Named', column: 'todo' });
+      commitBoard(path.join(repoA, '.brainfile'), { message: 'add task-1' });
+      syncCommand({ setRemote: 'origin', boardName: 'planning' });
+      expect(refs(codeRemote)).toEqual(['refs/brainfile/planning', 'refs/heads/main']);
+      expect(() => syncCommand({ setRemote: 'origin', boardName: 'bad/name' })).toThrow(/not a usable board name/);
+
+      const repoC = makeClone(codeRemote, path.join(base, 'C'));
+      process.chdir(repoC);
+      addCommand({ file: 'brainfile.md', title: 'From C', column: 'todo' });
+      const dotC = path.join(repoC, '.brainfile');
+      expect(fs.existsSync(path.join(dotC, 'board', 'task-1.md'))).toBe(true);
+      expect(boardRemoteName(dotC)).toBe('planning');
+      commitBoard(dotC, { message: 'add from C' });
+      expect(syncCommand({})?.pushed).toBe(1);
+      expect(refs(codeRemote)).toEqual(['refs/brainfile/planning', 'refs/heads/main']);
+    });
+
+    it('remembers a miss so later commands do not ask the remote again, but --set-remote always asks', () => {
+      const repoC = makeClone(codeRemote, path.join(base, 'C'));
+      process.chdir(repoC);
+      expect(() => addCommand({ file: 'brainfile.md', title: 'No board', column: 'todo' })).toThrow();
+      expect(fs.existsSync(path.join(repoC, '.git', 'brainfile-probe.json'))).toBe(true);
+
+      // A board appears on origin after the miss was recorded.
+      process.chdir(repoA);
+      initCommand({});
+      syncCommand({ setRemote: 'origin' });
+
+      process.chdir(repoC);
+      expect(() => addCommand({ file: 'brainfile.md', title: 'Still cached', column: 'todo' })).toThrow();
+      syncCommand({ setRemote: 'origin' });
+      expect(findTrackedBoardDir(repoC)).toBe(path.join(repoC, '.brainfile'));
+      expect(fs.existsSync(path.join(repoC, '.git', 'brainfile-probe.json'))).toBe(false);
+    });
+
+    it('moves a board 0.21.0 pushed as a branch, merging what other machines added', () => {
+      const dotA = legacyBoardInA();
+
+      // A 0.21.0 machine B checked the branch out and added work of its own.
+      process.chdir(repoB);
+      run(['remote', 'add', 'board', boardsRemote], repoB);
+      run(['config', 'brainfile.remote', 'board'], repoB);
+      run(['fetch', '--quiet', 'board'], repoB);
+      addCommand({ file: 'brainfile.md', title: 'Added on B', column: 'todo' });
+      const dotB = path.join(repoB, '.brainfile');
+      if (hasBundle) registerMergeDriver(dotB, driverCommand);
+      expect(fs.existsSync(path.join(dotB, 'board', 'task-1.md'))).toBe(true);
+      commitBoard(dotB, { message: 'add task-2' });
+      run(['push', '--quiet', 'board', 'HEAD:refs/heads/brainfile'], dotB);
+
+      // A upgrades and syncs: B's work comes in, the board moves, the branch goes.
+      process.chdir(repoA);
+      moveCommand({ file: 'brainfile.md', task: 'task-1', column: 'in-progress' });
+      commitBoard(dotA, { message: 'move task-1' });
+      const lines: string[] = [];
+      const moved = syncCommand({}, { log: (m: string) => lines.push(m), error: () => {}, warn: () => {} } as never);
+      expect(moved?.ok).toBe(true);
+      expect(moved?.movedFromBranch).toBe('brainfile');
+      expect(lines.join('\n')).toMatch(/Moved the board off the 'brainfile' branch on board; it now lives in refs\/brainfile\/board/);
+      expect(refs(boardsRemote)).toEqual(['refs/brainfile/board']);
+      expect(run(['branch', '-r'], repoA)).not.toMatch(/brainfile/);
+      expect(fs.existsSync(path.join(dotA, 'board', 'task-2.md'))).toBe(true);
+      expect(column(dotA, 'task-1')).toBe('in-progress');
+
+      // The next sync does not look for the branch again.
+      expect(run(['config', '--get', 'brainfile.legacyBranchChecked'], repoA)).toBe('board');
+      expect(syncCommand({})?.movedFromBranch).toBeUndefined();
+
+      // B, upgraded too, finds the branch gone and follows the new ref.
+      process.chdir(repoB);
+      const followed = syncCommand({});
+      expect(followed?.ok).toBe(true);
+      expect(run(['rev-parse', 'HEAD'], dotB)).toBe(run(['rev-parse', 'HEAD'], dotA));
+      expect(run(['branch', '-r'], repoB)).not.toMatch(/brainfile/);
+    });
+
+    it('a push-only sync still performs the one-time move', () => {
+      const dotA = legacyBoardInA();
+      const pushed = syncBoard(dotA, { pull: false, push: true });
+      expect(pushed.ok).toBe(true);
+      expect(pushed.movedFromBranch).toBe('brainfile');
+      expect(refs(boardsRemote)).toEqual(['refs/brainfile/board']);
+    });
+
+    it('links GitHub remotes to the board history and nothing else', () => {
+      const ref = 'refs/brainfile/board';
+      const page = 'https://github.com/me/app/commits/refs/brainfile/board';
+      expect(boardWebUrl('https://github.com/me/app.git', ref)).toBe(page);
+      expect(boardWebUrl('https://github.com/me/app', ref)).toBe(page);
+      expect(boardWebUrl('git@github.com:me/app.git', ref)).toBe(page);
+      expect(boardWebUrl('ssh://git@github.com/me/app.git', ref)).toBe(page);
+      expect(boardWebUrl('git@gitlab.com:me/app.git', ref)).toBeNull();
+      expect(boardWebUrl('/tmp/boards.git', ref)).toBeNull();
+      expect(boardWebUrl(null, ref)).toBeNull();
     });
   });
 });

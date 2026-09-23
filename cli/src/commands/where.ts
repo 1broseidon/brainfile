@@ -13,7 +13,8 @@ import { boardBranch, boardRepoKind, git, gitToplevel, homeBoardDir } from '../u
 import { effectiveAutosync } from '../utils/board-autosync';
 import {
   boardRemote,
-  boardRemoteBranch,
+  boardRemoteRef,
+  boardWebUrl,
   pendingChanges,
   readSyncState,
   secondsSinceSync,
@@ -31,7 +32,10 @@ export interface WhereReport {
   repository: string | null;
   remote: string | null;
   remoteUrl: string | null;
-  remoteBranch: string | null;
+  /** Where the board lives on the remote, e.g. `refs/brainfile/board`. */
+  remoteRef: string | null;
+  /** A web page showing the board's history, for hosts that have one. */
+  webUrl: string | null;
   autosync: 'off' | 'push' | 'full' | null;
   lastSyncSecondsAgo: number | null;
   lastSyncOk: boolean | null;
@@ -50,14 +54,17 @@ export function whereReport(dotDir: string): WhereReport {
   const storage = kind === 'linked' ? 'branch' : kind === 'standalone' ? 'repository' : 'plain';
   const remote = kind ? boardRemote(dotDir) : null;
   const state = remote ? readSyncState(dotDir) : null;
+  const remoteUrl = remote ? git(['remote', 'get-url', remote], dotDir).stdout || null : null;
+  const remoteRef = remote ? boardRemoteRef(dotDir) : null;
   return {
     path: dotDir,
     storage,
     branch: kind === 'linked' ? boardBranch(dotDir) : null,
     repository: kind === 'linked' ? gitToplevel(path.dirname(dotDir)) : null,
     remote,
-    remoteUrl: remote ? git(['remote', 'get-url', remote], dotDir).stdout || null : null,
-    remoteBranch: remote ? boardRemoteBranch(dotDir) : null,
+    remoteUrl,
+    remoteRef,
+    webUrl: remoteRef ? boardWebUrl(remoteUrl, remoteRef) : null,
     autosync: remote ? effectiveAutosync(dotDir) : null,
     lastSyncSecondsAgo: remote ? secondsSinceSync(dotDir) : null,
     lastSyncOk: state ? state.ok : null,
@@ -99,7 +106,9 @@ export function whereCommand(options: WhereOptions, logger: Logger = defaultLogg
   }
 
   const url = report.remoteUrl ? ` (${report.remoteUrl})` : '';
-  logger.log(`${label('Shared')}  through ${report.remote}${url}, branch '${report.remoteBranch}'`);
+  logger.log(`${label('Shared')}  through ${report.remote}${url}`);
+  more(chalk.gray(`Stored there as ${report.remoteRef}, not a branch, so it stays out of branch lists and pull requests.`));
+  if (report.webUrl) more(chalk.gray(`On the web: ${report.webUrl}`));
   const last = report.lastSyncSecondsAgo === null
     ? ''
     : report.lastSyncOk === false

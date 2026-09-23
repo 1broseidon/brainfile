@@ -3,7 +3,7 @@
  *
  *   brainfile sync                        fetch, merge, push
  *   brainfile sync --pull | --push        one direction only
- *   brainfile sync --set-remote <name|url> [--remote-branch <name>]
+ *   brainfile sync --set-remote <name|url> [--board-name <name>]
  *   brainfile sync --autosync off|push|full
  *
  * With `--set-remote` in a repository that has no board yet, the board is
@@ -16,14 +16,15 @@ import { BRAINFILE_BASENAME } from '@brainfile/core';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { operationFailed, validationError } from '../utils/cli-error';
 import { resolveCliBrainfilePath, tryResolveBoardDir } from '../utils/brainfile-path';
-import { gitToplevel, isTrackedBoard, materializeBoardWorktree, resolveAgentName } from '../utils/board-repo';
+import { gitToplevel, isTrackedBoard, materializeBoardWorktree } from '../utils/board-repo';
 import { clearPushLock } from '../utils/board-autosync';
 import {
   type AutosyncMode,
   type SyncResult,
   boardAutosync,
   boardRemote,
-  boardRemoteBranch,
+  boardRemoteRef,
+  boardWebUrl,
   setBoardAutosync,
   setBoardRemote,
   syncBoard,
@@ -35,6 +36,8 @@ export interface SyncCommandOptions {
   pull?: boolean;
   push?: boolean;
   setRemote?: string;
+  boardName?: string;
+  /** 0.21.0 spelling of `boardName`. */
   remoteBranch?: string;
   autosync?: string;
   json?: boolean;
@@ -44,18 +47,23 @@ export interface SyncCommandOptions {
 
 export const SYNC_COMMAND_HELP = `
 Examples:
-  brainfile sync                              Fetch, merge and push the board branch
+  brainfile sync                              Fetch, merge and push the board
   brainfile sync --pull                       Bring in other machines' changes only
   brainfile sync --set-remote origin          Share the board through the code remote
-  brainfile sync --set-remote git@host:me/boards.git --remote-branch myproject
+  brainfile sync --set-remote git@host:me/boards.git --board-name myproject
   brainfile sync --autosync full              Also fetch before reads (default: push after writes)
 
-Nothing leaves this machine until you choose a remote. \`brainfile where\` shows
-where the board lives and who has it.`;
+Nothing leaves this machine until you choose a remote. On the remote the board
+is stored as refs/brainfile/<name>, not as a branch, so it never appears in the
+branch list or pull requests. \`brainfile where\` shows where the board lives
+and who has it.`;
 
 function describe(result: SyncResult): string {
   const message = syncMessage(result);
-  const text = message.tone === 'ok' ? chalk.green(message.text) : chalk.yellow(message.text);
+  let text = message.tone === 'ok' ? chalk.green(message.text) : chalk.yellow(message.text);
+  if (result.movedFromBranch && result.remoteRef) {
+    text += `\n${chalk.gray(`  Moved the board off the '${result.movedFromBranch}' branch on ${result.remote}; it now lives in ${result.remoteRef}, outside your branches.`)}`;
+  }
   return message.detail ? `${text}\n${chalk.gray(`  (${message.detail})`)}` : text;
 }
 
@@ -70,6 +78,7 @@ export function syncCommand(options: SyncCommandOptions, logger: Logger = defaul
   // The autosync child owns the pending-push lock; release it however we end.
   if (dotDir && options.wait !== undefined) clearPushLock(dotDir);
 
+  const boardName = options.boardName ?? options.remoteBranch;
   if (options.setRemote !== undefined) {
     const cwd = dotDir ?? gitToplevel(process.cwd());
     if (!cwd) {
@@ -77,21 +86,24 @@ export function syncCommand(options: SyncCommandOptions, logger: Logger = defaul
     }
     let setting;
     try {
-      setting = setBoardRemote(cwd, options.setRemote, options.remoteBranch);
+      setting = setBoardRemote(cwd, options.setRemote, boardName);
     } catch (error) {
       throw validationError(error instanceof Error ? error.message : String(error));
     }
-    logger.log(chalk.green(`This board is now shared through ${setting.remote}${setting.url ? ` (${setting.url})` : ''}, branch '${setting.remoteBranch}'.`));
+    logger.log(chalk.green(`This board is now shared through ${setting.remote}${setting.url ? ` (${setting.url})` : ''}.`));
+    logger.log(chalk.gray(`  It is stored there as ${setting.remoteRef}, not a branch, so it stays out of branch lists and pull requests.`));
     logger.log(chalk.gray(`  Changes are sent automatically after each edit. Anyone who can read ${setting.remote} can read the board.`));
+    const web = boardWebUrl(setting.url, setting.remoteRef);
+    if (web) logger.log(chalk.gray(`  See it on the web: ${web}`));
     if (!dotDir) {
-      dotDir = materializeBoardWorktree(cwd);
+      dotDir = materializeBoardWorktree(cwd, { fresh: true });
       if (!dotDir) {
-        logger.log(chalk.yellow(`There is no board on ${setting.remote} yet (looked for branch '${setting.remoteBranch}').`) + chalk.gray(' Start one with: brainfile init'));
+        logger.log(chalk.yellow(`There is no board on ${setting.remote} yet (looked for ${setting.remoteRef}).`) + chalk.gray(' Start one with: brainfile init'));
         return undefined;
       }
     }
-  } else if (options.remoteBranch !== undefined) {
-    throw validationError('--remote-branch needs --set-remote');
+  } else if (boardName !== undefined) {
+    throw validationError('--board-name needs --set-remote');
   }
 
   if (!dotDir) {
@@ -114,14 +126,13 @@ export function syncCommand(options: SyncCommandOptions, logger: Logger = defaul
   const result = syncBoard(dotDir, {
     pull: !pushOnly,
     push: !pullOnly,
-    agent: resolveAgentName(),
   });
 
   if (options.json) {
     logger.log(JSON.stringify({
       ...result,
       remote: result.remote ?? boardRemote(dotDir),
-      remoteBranch: result.remoteBranch ?? boardRemoteBranch(dotDir),
+      remoteRef: result.remoteRef ?? boardRemoteRef(dotDir),
       autosync: boardAutosync(dotDir),
     }, null, 2));
   } else {

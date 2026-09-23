@@ -37,6 +37,12 @@ const inkMapper = {
 
 const moduleFileExtensions = ['ts', 'tsx', 'js', 'jsx', 'json', 'node'];
 
+// Agent detection reads the process tree and agent environment variables; a
+// suite run inside Claude or Codex must not see a different actor than CI.
+// Workers and every git/CLI child inherit this. Tests that exercise detection
+// call its functions directly.
+process.env.BRAINFILE_DETECT_AGENT = process.env.BRAINFILE_DETECT_AGENT || 'off';
+
 module.exports = {
   collectCoverageFrom: [
     'src/**/*.ts',

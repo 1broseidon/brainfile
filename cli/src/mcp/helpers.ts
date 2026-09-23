@@ -71,6 +71,7 @@ export function findGitRoot(startDir: string): string | null {
 // ── Board-on-a-branch (spec-9): one commit per mutating tool call ─────────
 
 import { commitBoard, isTrackedBoard } from '../utils/board-repo';
+import { detectAgent } from '../utils/actor';
 
 type ToolInput = Record<string, unknown>;
 
@@ -89,8 +90,9 @@ function describeToolCall(toolName: string, input: ToolInput): string {
 
 /**
  * Wrap a mutating tool handler so a successful call commits the board when it
- * is tracked. A failed commit never fails the tool. The acting agent comes
- * from `BRAINFILE_AGENT`, which the MCP host sets per agent.
+ * is tracked. A failed commit never fails the tool. The commit is authored by
+ * the git user and tagged with the agent (`BRAINFILE_AGENT`, else the MCP
+ * host detected from the process tree).
  */
 export function withBoardCommit<I extends ToolInput, R, E>(
   toolName: string,
@@ -104,10 +106,7 @@ export function withBoardCommit<I extends ToolInput, R, E>(
         const filePath = typeof input.file === 'string' && input.file ? input.file : defaultFile;
         const dotDir = path.dirname(resolveBrainfile(filePath));
         if (isTrackedBoard(dotDir)) {
-          commitBoard(dotDir, {
-            message: describeToolCall(toolName, input),
-            agent: process.env.BRAINFILE_AGENT ?? null,
-          });
+          commitBoard(dotDir, { message: describeToolCall(toolName, input), agent: detectAgent()?.name });
         }
       }
     } catch {

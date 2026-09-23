@@ -49,7 +49,7 @@ export function registerBriefTool(server: McpServer, defaultFile: string): void 
       }
 
       const resolvedPath = resolveBrainfile(filePath);
-      if (!offline) syncBoard(path.dirname(resolvedPath), { agent: agentName });
+      if (!offline) syncBoard(path.dirname(resolvedPath));
 
       const dirs = getV2Dirs(resolvedPath);
       const isPeek = peek === true;

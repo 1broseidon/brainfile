@@ -179,7 +179,7 @@ describe('board on a branch (spec-9 phase 1)', () => {
     expect(subjects(dotDir)).toEqual(['init board']);
   });
 
-  it('every command becomes one commit on the board branch, authored as the agent', () => {
+  it('every command becomes one commit on the board branch, authored by the git user and tagged with the agent', () => {
     const repo = path.join(base, 'repo');
     makeRepo(repo);
     process.chdir(repo);
@@ -193,8 +193,9 @@ describe('board on a branch (spec-9 phase 1)', () => {
     expect(afterCommand(command)).toBe(true);
     delete process.env.BRAINFILE_AGENT;
 
-    expect(subjects(dotDir)[0]).toBe('add: Fix login');
-    expect(lastAuthor(dotDir)).toBe('codex');
+    // The git user is the author; the agent is recorded on the message.
+    expect(subjects(dotDir)[0]).toBe('add: Fix login [codex]');
+    expect(lastAuthor(dotDir)).toBe('Tester');
     expect(run(['status', '--porcelain'], dotDir)).toBe('');
     // A second run with nothing changed commits nothing.
     expect(afterCommand(command)).toBe(false);

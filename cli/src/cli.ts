@@ -148,7 +148,8 @@ if (tuiCheck.launch) {
 
   // Board-on-a-branch (spec-9): hand edits are committed on their own before a
   // command runs; whatever the command changed is committed after it, authored
-  // as the acting agent (BRAINFILE_AGENT or --agent). No-ops on plain boards.
+  // by the git user and tagged with the acting agent (see utils/actor). No-ops
+  // on plain boards.
   installAutosync();
   program.hook('preAction', (_program, actionCommand) => { beforeCommand(actionCommand); });
   program.hook('postAction', (_program, actionCommand) => { afterCommand(actionCommand); });
@@ -336,7 +337,7 @@ Brainfile file resolution (when you don't pass --file):
     .description('Append a timestamped note to a task log')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to add note to (required)')
-    .option('--agent <name>', 'Agent name for attribution')
+    .option('--agent <name>', 'Who wrote it (default: the detected agent, else your git user.name)')
     .argument('[message]', 'Log message to append')
     .action((message, options) => { logNoteCommand({ ...options, message }); });
 
@@ -357,7 +358,8 @@ Brainfile file resolution (when you don't pass --file):
     .option('--pull', 'Fetch and merge only')
     .option('--push', 'Push only')
     .option('--set-remote <name|url>', 'Remote to sync with: an existing remote name, or a URL registered as remote "board"')
-    .option('--remote-branch <name>', 'Branch on the remote (default: board branch; folder name for a standalone board; "home" for -g)')
+    .option('--board-name <name>', 'Name on the remote, stored as refs/brainfile/<name> (default: "board"; folder name for a standalone board; "home" for -g)')
+    .addOption(new Option('--remote-branch <name>', '0.21.0 spelling of --board-name').hideHelp())
     .option('--autosync <mode>', 'off | push (after writes, default once a remote is set) | full (also fetch before reads)')
     .option('--json', 'Output as JSON')
     .addOption(new Option('--wait <ms>', 'Sleep before syncing (autosync child)').hideHelp())

@@ -8,26 +8,38 @@
  * linked worktree, its own for a standalone repository):
  *
  *   brainfile.remote        remote name to sync with (never defaults to origin)
- *   brainfile.remoteBranch  branch on that remote (see `boardRemoteBranch`)
+ *   brainfile.boardName     name on that remote, stored as refs/brainfile/<name>
+ *                           (see `boardRemoteName`; 0.21.0's remoteBranch is
+ *                           still read)
  *   brainfile.autosync      off | push | full
+ *
+ * On the remote the board is a ref, not a branch, so it never shows up in the
+ * host's branch list or "recent pushes" banner. See BOARD_REF_NAMESPACE.
  */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
+  BOARD_NAME_CONFIG_KEY,
+  DEFAULT_BOARD_NAME,
+  LEGACY_REMOTE_BRANCH_CONFIG_KEY,
   boardBranch,
   boardRepoKind,
+  boardTrackingRef,
   commitBoard,
   commitHandEdits,
   git,
+  gitNetwork,
   homeBoardDir,
   isTrackedBoard,
+  remoteBoardRef,
   unmergedFiles,
 } from './board-repo';
 import { summarizeFieldChanges } from '../commands/merge-driver';
 
 export const REMOTE_CONFIG_KEY = 'brainfile.remote';
-export const REMOTE_BRANCH_CONFIG_KEY = 'brainfile.remoteBranch';
+/** Set once this machine has looked for (and moved) a board 0.21.0 pushed as a branch. */
+export const LEGACY_CHECKED_CONFIG_KEY = 'brainfile.legacyBranchChecked';
 export const AUTOSYNC_CONFIG_KEY = 'brainfile.autosync';
 /** Remote name used when `--set-remote` is given a URL instead of a name. */
 export const URL_REMOTE_NAME = 'board';
@@ -47,7 +59,6 @@ export type AutosyncMode = 'off' | 'push' | 'full';
 export interface SyncOptions {
   pull?: boolean;
   push?: boolean;
-  agent?: string | null;
 }
 
 export interface SyncResult {
@@ -56,7 +67,8 @@ export interface SyncResult {
   /** Set when sync did not run at all. */
   skipped?: 'not-tracked' | 'no-remote';
   remote?: string;
-  remoteBranch?: string;
+  /** Where the board lives on the remote, e.g. `refs/brainfile/board`. */
+  remoteRef?: string;
   /** Commits brought in from the remote. */
   pulled: number;
   /** Commits sent to the remote. */
@@ -67,12 +79,14 @@ export interface SyncResult {
   warning?: string;
   /** Why it failed, for plain-language messages (see `syncMessage`). */
   failure?: 'offline' | 'rejected' | 'conflict' | 'error';
+  /** Set when a board 0.21.0 had pushed as a branch was moved to `remoteRef`. */
+  movedFromBranch?: string;
 }
 
 export interface SyncState {
   at: string;
   remote: string;
-  remoteBranch: string;
+  remoteRef: string;
   ok: boolean;
   warning?: string;
 }
@@ -91,22 +105,36 @@ export function boardRemote(dotDir: string): string | null {
 }
 
 /**
- * Branch name on the remote. Defaults keep the "one private boards repo, one
- * branch per project" pattern from colliding: the board branch name inside a
- * repo, the parent folder's basename for a standalone board, `home` for the
- * global board.
+ * Name of the board on the remote (`refs/brainfile/<name>`). Defaults keep
+ * the "one private boards repo, one board per project" pattern from
+ * colliding: `board` for a board inside a code repository, the parent
+ * folder's basename for a standalone board, `home` for the global board.
  */
-export function boardRemoteBranch(dotDir: string): string {
-  const configured = configGet(dotDir, REMOTE_BRANCH_CONFIG_KEY);
+export function boardRemoteName(dotDir: string): string {
+  const configured = configGet(dotDir, BOARD_NAME_CONFIG_KEY) ?? configGet(dotDir, LEGACY_REMOTE_BRANCH_CONFIG_KEY);
   if (configured) return configured;
+  return defaultName(dotDir, DEFAULT_BOARD_NAME);
+}
+
+function defaultName(dotDir: string, inRepo: string): string {
   if (path.resolve(dotDir) === path.resolve(homeBoardDir())) return 'home';
   // A standalone board is named after the folder it sits in; anything else
-  // (a linked board, or a code repo whose board is not checked out yet) uses
-  // the board branch name.
+  // (a linked board, or a code repo whose board is not checked out yet) is
+  // the repository's board.
   if (boardRepoKind(dotDir) === 'standalone' && path.basename(path.resolve(dotDir)) === '.brainfile') {
-    return path.basename(path.dirname(path.resolve(dotDir))) || boardBranch(dotDir);
+    return path.basename(path.dirname(path.resolve(dotDir))) || inRepo;
   }
-  return boardBranch(dotDir);
+  return inRepo;
+}
+
+/** Full ref of the board on the remote, e.g. `refs/brainfile/board`. */
+export function boardRemoteRef(dotDir: string): string {
+  return remoteBoardRef(boardRemoteName(dotDir));
+}
+
+/** The branch 0.21.0 pushed this board to, for the one-time move. */
+function legacyRemoteBranch(dotDir: string): string {
+  return configGet(dotDir, LEGACY_REMOTE_BRANCH_CONFIG_KEY) ?? defaultName(dotDir, boardBranch(dotDir));
 }
 
 export function boardAutosync(dotDir: string): AutosyncMode {
@@ -131,7 +159,7 @@ export function looksLikeRemoteUrl(target: string): boolean {
 export interface RemoteSetting {
   remote: string;
   url: string | null;
-  remoteBranch: string;
+  remoteRef: string;
 }
 
 /**
@@ -140,7 +168,7 @@ export interface RemoteSetting {
  * `cwd` may be the board directory or, when no board exists yet, the code
  * repository the board will be materialized into.
  */
-export function setBoardRemote(cwd: string, target: string, remoteBranch?: string): RemoteSetting {
+export function setBoardRemote(cwd: string, target: string, boardName?: string): RemoteSetting {
   const trimmed = target.trim();
   if (!trimmed) throw new Error('remote is required');
   let remote: string;
@@ -158,13 +186,16 @@ export function setBoardRemote(cwd: string, target: string, remoteBranch?: strin
       throw new Error(`'${remote}' is not a git remote here.${hint} Pass a URL to add one.`);
     }
   }
+  if (boardName !== undefined && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(boardName)) {
+    throw new Error(`'${boardName}' is not a usable board name: use letters, digits, '.', '_' or '-'.`);
+  }
   configSet(cwd, REMOTE_CONFIG_KEY, remote);
-  if (remoteBranch) configSet(cwd, REMOTE_BRANCH_CONFIG_KEY, remoteBranch);
+  if (boardName) configSet(cwd, BOARD_NAME_CONFIG_KEY, boardName);
   registerMergeDriver(cwd);
   return {
     remote,
     url: git(['remote', 'get-url', remote], cwd).stdout || null,
-    remoteBranch: remoteBranch ?? boardRemoteBranch(cwd),
+    remoteRef: boardRemoteRef(cwd),
   };
 }
 
@@ -237,18 +268,13 @@ function commitCount(dotDir: string, range: string): number {
   return r.ok ? Number.parseInt(r.stdout, 10) || 0 : 0;
 }
 
-function identity(dotDir: string, agent?: string | null): { args: string[]; env: NodeJS.ProcessEnv } {
+/** Merge commits use the git user, with a fallback when none is configured. */
+function identityArgs(dotDir: string): string[] {
   const args: string[] = ['-c', 'commit.gpgsign=false'];
   if (!git(['config', '--get', 'user.email'], dotDir).ok) {
     args.push('-c', 'user.name=brainfile', '-c', 'user.email=brainfile@localhost');
   }
-  const env: NodeJS.ProcessEnv = {};
-  const name = agent?.replace(/[\r\n<>]/g, '').trim();
-  if (name) {
-    env.GIT_AUTHOR_NAME = name;
-    env.GIT_AUTHOR_EMAIL = `${name}@brainfile.local`;
-  }
-  return { args, env };
+  return args;
 }
 
 /**
@@ -295,20 +321,64 @@ export function resolveCompleteVersusEdit(dotDir: string): string[] {
   return resolved;
 }
 
+type MergeOutcome = { ok: true; pulled: number } | { ok: false; result: SyncResult };
+
+/** Bring `incoming` into HEAD: nothing, a fast-forward, or a merge commit. */
+function mergeIncoming(dotDir: string, incoming: string, result: SyncResult): MergeOutcome {
+  if (git(['merge-base', '--is-ancestor', incoming, 'HEAD'], dotDir).ok) return { ok: true, pulled: 0 };
+  const before = git(['rev-parse', 'HEAD'], dotDir).stdout;
+  const id = identityArgs(dotDir);
+  const merge = git([...id, 'merge', '--quiet', '--no-edit', incoming], dotDir);
+  if (!merge.ok) {
+    resolveCompleteVersusEdit(dotDir);
+    const remaining = unmergedFiles(dotDir);
+    if (remaining.length > 0) {
+      return {
+        ok: false,
+        result: {
+          ...result,
+          ok: false,
+          failure: 'conflict',
+          conflicts: remaining,
+          warning: `merge left conflicts in ${remaining.join(', ')} — resolve them in ${dotDir}, then run sync again`,
+        },
+      };
+    }
+    const commit = git([...id, 'commit', '--quiet', '--no-edit', '--no-verify'], dotDir);
+    if (!commit.ok) {
+      return { ok: false, result: { ...result, ok: false, failure: 'error', warning: `merge commit failed: ${firstLine(commit.stderr)}` } };
+    }
+  }
+  // Count what came from the remote rather than our own merge commit.
+  return { ok: true, pulled: commitCount(dotDir, `${before}..${incoming}`) };
+}
+
+function legacyChecked(dotDir: string, remote: string): boolean {
+  return configGet(dotDir, LEGACY_CHECKED_CONFIG_KEY) === remote;
+}
+
 /**
  * fetch → fast-forward or merge → push. Runs entirely inside the board
  * directory. Never throws; network failures come back as `warning`.
+ *
+ * The first sync with a remote also looks for a board that 0.21.0 pushed as
+ * a branch: it is merged in, published under refs/brainfile/, and the old
+ * branch is deleted from the remote once nothing on it can be lost.
  */
 export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult {
-  const pull = options.pull ?? true;
   const push = options.push ?? true;
   const result: SyncResult = { ok: true, pulled: 0, pushed: 0, conflicts: [] };
   if (!isTrackedBoard(dotDir)) return { ...result, skipped: 'not-tracked' };
   const remote = boardRemote(dotDir);
   if (!remote) return { ...result, skipped: 'no-remote' };
-  const remoteBranch = boardRemoteBranch(dotDir);
+  const name = boardRemoteName(dotDir);
+  const remoteRef = remoteBoardRef(name);
+  const tracking = boardTrackingRef(remote, name);
   result.remote = remote;
-  result.remoteBranch = remoteBranch;
+  result.remoteRef = remoteRef;
+  const checkLegacy = !legacyChecked(dotDir, remote);
+  // The one-time legacy check needs the remote's state even for a push.
+  const pull = (options.pull ?? true) || checkLegacy;
 
   // Never sync a board that is mid-merge: a human owns it until it is clean.
   const stuck = unmergedFiles(dotDir);
@@ -321,43 +391,40 @@ export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult
   registerMergeDriver(dotDir);
 
   let fetched = false;
+  let legacy: { branch: string; sha: string } | null = null;
+  let legacyAbsent = false;
   if (pull) {
-    const fetch = git(['fetch', '--quiet', remote, remoteBranch], dotDir);
+    const fetch = git(['fetch', '--quiet', '--no-tags', remote, `+${remoteRef}:${tracking}`], dotDir);
     if (fetch.ok) {
       fetched = true;
     } else if (!isMissingRemoteRef(fetch.stderr)) {
       return finish(dotDir, { ...result, ok: false, failure: 'offline', warning: `fetch from ${remote} failed: ${firstLine(fetch.stderr)}` });
+    } else {
+      // Gone from the remote (or never there): forget the stale position.
+      git(['update-ref', '-d', tracking], dotDir);
     }
-    if (fetched && !git(['merge-base', '--is-ancestor', 'FETCH_HEAD', 'HEAD'], dotDir).ok) {
-      const before = git(['rev-parse', 'HEAD'], dotDir).stdout;
-      const id = identity(dotDir, options.agent);
-      const merge = git([...id.args, 'merge', '--quiet', '--no-edit', 'FETCH_HEAD'], dotDir, id.env);
-      if (!merge.ok) {
-        resolveCompleteVersusEdit(dotDir);
-        const remaining = unmergedFiles(dotDir);
-        if (remaining.length > 0) {
-          return finish(dotDir, {
-            ...result,
-            ok: false,
-            failure: 'conflict',
-            conflicts: remaining,
-            warning: `merge left conflicts in ${remaining.join(', ')} — resolve them in ${dotDir}, then run sync again`,
-          });
-        }
-        const commit = git([...id.args, 'commit', '--quiet', '--no-edit', '--no-verify'], dotDir, id.env);
-        if (!commit.ok) {
-          return finish(dotDir, { ...result, ok: false, failure: 'error', warning: `merge commit failed: ${firstLine(commit.stderr)}` });
-        }
+    if (checkLegacy) {
+      const branch = legacyRemoteBranch(dotDir);
+      const old = git(['fetch', '--quiet', '--no-tags', remote, `refs/heads/${branch}`], dotDir);
+      if (old.ok) {
+        legacy = { branch, sha: git(['rev-parse', 'FETCH_HEAD'], dotDir).stdout };
+      } else if (isMissingRemoteRef(old.stderr)) {
+        legacyAbsent = true;
       }
-      // Count what came from the remote rather than our own merge commit.
-      result.pulled = commitCount(dotDir, `${before}..FETCH_HEAD`);
+    }
+    for (const incoming of [fetched ? tracking : null, legacy?.sha ?? null]) {
+      if (!incoming) continue;
+      const merged = mergeIncoming(dotDir, incoming, result);
+      if (!merged.ok) return finish(dotDir, merged.result);
+      result.pulled += merged.pulled;
     }
   }
 
   if (push) {
-    const ahead = fetched ? commitCount(dotDir, 'FETCH_HEAD..HEAD') : pendingChanges(dotDir);
+    const known = git(['rev-parse', '--verify', '--quiet', tracking], dotDir).ok;
+    const ahead = commitCount(dotDir, known ? `${tracking}..HEAD` : 'HEAD');
     if (ahead > 0) {
-      const pushed = git(['push', '--quiet', remote, `HEAD:refs/heads/${remoteBranch}`], dotDir);
+      const pushed = git(['push', '--quiet', remote, `HEAD:${remoteRef}`], dotDir);
       if (!pushed.ok) {
         const rejected = /rejected|non-fast-forward|fetch first/i.test(pushed.stderr);
         return finish(dotDir, {
@@ -369,8 +436,26 @@ export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult
             : `push to ${remote} failed: ${firstLine(pushed.stderr)}`,
         });
       }
+      git(['update-ref', tracking, 'HEAD'], dotDir);
       result.pushed = ahead;
     }
+    if (legacy && git(['merge-base', '--is-ancestor', legacy.sha, tracking], dotDir).ok) {
+      // Everything on the old branch is now under refs/brainfile/; the lease
+      // keeps a 0.21.0 machine's push made in the meantime from being lost.
+      const removed = git(
+        ['push', '--quiet', `--force-with-lease=refs/heads/${legacy.branch}:${legacy.sha}`, remote, `:refs/heads/${legacy.branch}`],
+        dotDir
+      );
+      if (removed.ok) {
+        git(['update-ref', '-d', `refs/remotes/${remote}/${legacy.branch}`], dotDir);
+        result.movedFromBranch = legacy.branch;
+        configSet(dotDir, LEGACY_CHECKED_CONFIG_KEY, remote);
+      }
+    }
+  }
+  if (legacyAbsent) {
+    git(['update-ref', '-d', `refs/remotes/${remote}/${legacyRemoteBranch(dotDir)}`], dotDir);
+    configSet(dotDir, LEGACY_CHECKED_CONFIG_KEY, remote);
   }
 
   return finish(dotDir, result);
@@ -380,7 +465,7 @@ function finish(dotDir: string, result: SyncResult): SyncResult {
   writeSyncState(dotDir, {
     at: new Date().toISOString(),
     remote: result.remote ?? '',
-    remoteBranch: result.remoteBranch ?? '',
+    remoteRef: result.remoteRef ?? '',
     ok: result.ok,
     ...(result.warning ? { warning: result.warning } : {}),
   });
@@ -418,9 +503,20 @@ export function syncStatusLabel(dotDir: string, now = Date.now()): string | null
 export function pendingChanges(dotDir: string): number {
   const remote = boardRemote(dotDir);
   if (!remote) return 0;
-  const tracking = `refs/remotes/${remote}/${boardRemoteBranch(dotDir)}`;
+  const tracking = boardTrackingRef(remote, boardRemoteName(dotDir));
   const known = git(['rev-parse', '--verify', '--quiet', tracking], dotDir).ok;
   return commitCount(dotDir, known ? `${tracking}..HEAD` : 'HEAD');
+}
+
+/**
+ * A page where people can see the board on the web, for hosts that show refs
+ * outside branches: GitHub's commit history accepts a full ref name. Null for
+ * other hosts.
+ */
+export function boardWebUrl(remoteUrl: string | null, remoteRef: string): string | null {
+  if (!remoteUrl) return null;
+  const m = /^(?:https:\/\/(?:[^@/]+@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(remoteUrl);
+  return m ? `https://github.com/${m[1]}/${m[2]}/commits/${remoteRef}` : null;
 }
 
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;

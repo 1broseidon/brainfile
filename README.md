@@ -68,7 +68,7 @@ brainfile sync --set-remote origin    # or a private repo URL
 brainfile where                       # where the board is, who has it, what is waiting to be sent
 ```
 
-After that, changes are sent in the background and teammates who clone the repo get the board the first time they run `brainfile`. Already have a board committed with your code? `brainfile migrate --to-branch` moves it, history included.
+After that, changes are sent in the background and teammates who clone the repo get the board the first time they run `brainfile`. On the remote the board is stored as `refs/brainfile/board`, not a branch, so it never clutters the branch list or shows up as a pull request. Already have a board committed with your code? `brainfile migrate --to-branch` moves it, history included.
 
 ## Working with agents
 

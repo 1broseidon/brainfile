@@ -16,6 +16,7 @@ import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { resolveActor } from '../utils/actor';
 import { readTasksDir, writeTaskFile, scoreTaskDocument, type TaskDocument } from '@brainfile/core';
 import {
   isV2,
@@ -112,7 +113,9 @@ export function logNoteCommand(options: LogNoteOptions, logger: Logger = default
 
   const { doc, filePath: taskPath } = found;
   const timestamp = new Date().toISOString();
-  const agentPrefix = options.agent ? `[${options.agent}] ` : '';
+  // Who wrote it: --agent, else the detected agent, else the git user.
+  const actor = options.agent?.trim() || resolveActor(path.dirname(filePath))?.name;
+  const agentPrefix = actor ? `[${actor}] ` : '';
   const entry = `- ${timestamp}: ${agentPrefix}${options.message}`;
 
   // Extract existing sections from body

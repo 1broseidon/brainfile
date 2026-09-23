@@ -106,7 +106,7 @@ function runBrief(options: BriefOptions): BriefCommandResult {
   // A shared board syncs first so the brief reflects other machines. Sync
   // failures are a one-line warning: the brief itself never fails over them.
   if (!options.offline) {
-    const sync = syncBoard(path.dirname(filePath), { agent });
+    const sync = syncBoard(path.dirname(filePath));
     if (!sync.skipped && !sync.ok) {
       process.stderr.write(`${syncMessage(sync).text}\n`);
     }

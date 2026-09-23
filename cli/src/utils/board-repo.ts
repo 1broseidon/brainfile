@@ -5,7 +5,7 @@
  * repository: inside a project repo it is a linked worktree checked out on the
  * board branch (default `brainfile`, an orphan branch with its own history);
  * outside any repo it is a standalone repository. Either way every mutation
- * becomes one commit, authored as the acting agent, and the board is shared
+ * becomes one commit, authored by the git user, and the board is shared
  * by every worktree of the project because linked worktrees share one git
  * directory.
  *
@@ -18,6 +18,36 @@ import { spawnSync } from 'child_process';
 
 export const DEFAULT_BOARD_BRANCH = 'brainfile';
 export const BOARD_BRANCH_CONFIG_KEY = 'brainfile.branch';
+
+/**
+ * On a remote, a board is stored under `refs/brainfile/<name>` rather than as
+ * a branch: hosts list, badge and offer pull requests for branches only, so
+ * the board stays out of the project's branch list while still being pushed,
+ * fetched and kept like any other ref. Locally the last-known remote position
+ * lives under `refs/brainfile/remotes/<remote>/<name>`, outside `refs/remotes/`
+ * so a user's `git fetch --prune` never deletes it.
+ */
+export const BOARD_REF_NAMESPACE = 'refs/brainfile';
+export const BOARD_NAME_CONFIG_KEY = 'brainfile.boardName';
+/** 0.21.0 key: the branch the board was pushed to. Still read as the name. */
+export const LEGACY_REMOTE_BRANCH_CONFIG_KEY = 'brainfile.remoteBranch';
+/** Default name for a board that lives in a code repository. */
+export const DEFAULT_BOARD_NAME = 'board';
+
+export function remoteBoardRef(name: string): string {
+  return `${BOARD_REF_NAMESPACE}/${name}`;
+}
+
+export function boardTrackingRef(remote: string, name: string): string {
+  return `${BOARD_REF_NAMESPACE}/remotes/${remote}/${name}`;
+}
+
+/** A network git call that never prompts and gives up instead of hanging. */
+const NETWORK_TIMEOUT_MS = 8000;
+const NO_PROMPT_ENV: NodeJS.ProcessEnv = { GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: 'echo', SSH_ASKPASS: 'echo' };
+export function gitNetwork(args: string[], cwd: string): GitResult {
+  return git(args, cwd, NO_PROMPT_ENV, NETWORK_TIMEOUT_MS);
+}
 const EXCLUDE_ENTRY = '.brainfile/';
 const EXCLUDE_MARKER = '# brainfile: board worktree (managed by `brainfile`)';
 const FALLBACK_IDENTITY_NAME = 'brainfile';
@@ -33,12 +63,13 @@ export interface GitResult {
 }
 
 /** Run git synchronously. Never throws; a missing git binary is `ok: false`. */
-export function git(args: string[], cwd: string, env?: NodeJS.ProcessEnv): GitResult {
+export function git(args: string[], cwd: string, env?: NodeJS.ProcessEnv, timeoutMs?: number): GitResult {
   const result = spawnSync('git', args, {
     cwd,
     encoding: 'utf-8',
     env: env ? { ...process.env, ...env } : process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
+    ...(timeoutMs ? { timeout: timeoutMs, killSignal: 'SIGKILL' as const } : {}),
   });
   return {
     ok: result.status === 0,
@@ -137,33 +168,120 @@ export function findTrackedBoardDir(cwd: string): string | null {
   return fs.existsSync(path.join(hit.path, 'brainfile.md')) ? hit.path : null;
 }
 
+/** How long a failed lookup for a board on the remote is remembered. */
+const PROBE_MISS_TTL_MS = 10 * 60_000;
+
+function probeMissFile(cwd: string): string | null {
+  const common = gitCommonDir(cwd);
+  return common ? path.join(common, 'brainfile-probe.json') : null;
+}
+
+function recentProbeMiss(cwd: string, remote: string): boolean {
+  const file = probeMissFile(cwd);
+  if (!file) return false;
+  try {
+    const miss = JSON.parse(fs.readFileSync(file, 'utf-8')) as { remote?: string; at?: number };
+    return miss.remote === remote && typeof miss.at === 'number' && Date.now() - miss.at < PROBE_MISS_TTL_MS;
+  } catch {
+    return false;
+  }
+}
+
+function recordProbeMiss(cwd: string, remote: string): void {
+  const file = probeMissFile(cwd);
+  if (!file) return;
+  try {
+    fs.writeFileSync(file, JSON.stringify({ remote, at: Date.now() }), 'utf-8');
+  } catch {
+    /* only a cache */
+  }
+}
+
+function clearProbeMiss(cwd: string): void {
+  const file = probeMissFile(cwd);
+  if (file) fs.rmSync(file, { force: true });
+}
+
 /**
- * Resolution step 4: the board branch exists locally but no worktree has it
- * checked out (a fresh clone, or the directory was removed). Create the
- * worktree at `<main worktree>/.brainfile` — or inside the common git dir for
- * bare layouts — and hide it from the code branch. Returns the new board
- * directory, or null when there is nothing to materialize.
+ * Board names published on `remote` (`refs/brainfile/<name>`), or null when
+ * the remote could not be asked. One network round trip.
  */
-export function materializeBoardWorktree(cwd: string): string | null {
-  const branch = boardBranch(cwd);
-  const hasLocal = git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], cwd).ok;
-  // The configured board remote wins; `origin/<branch>` is the fresh-clone case.
+export function listRemoteBoards(cwd: string, remote: string): string[] | null {
+  const r = gitNetwork(['ls-remote', '--quiet', remote, `${BOARD_REF_NAMESPACE}/*`], cwd);
+  if (!r.ok) return null;
+  const names: string[] = [];
+  for (const line of r.stdout.split('\n')) {
+    const ref = line.split('\t')[1] ?? '';
+    const name = ref.slice(BOARD_REF_NAMESPACE.length + 1);
+    if (ref.startsWith(`${BOARD_REF_NAMESPACE}/`) && name && !name.includes('/')) names.push(name);
+  }
+  return names;
+}
+
+export interface MaterializeOptions {
+  /** Ask the remote even if a recent lookup found nothing (after `--set-remote`). */
+  fresh?: boolean;
+}
+
+/**
+ * Where to start a board that is not checked out yet: the local branch, the
+ * board published on the remote (`refs/brainfile/<name>`, fetched on
+ * demand), or a board a 0.21.0 machine pushed as a plain branch.
+ */
+function findBoardStart(cwd: string, branch: string, options: MaterializeOptions): { ref: string; remote: string | null; name?: string } | null {
+  if (git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], cwd).ok) return { ref: branch, remote: null };
   const configuredRemote = git(['config', '--get', 'brainfile.remote'], cwd).stdout || null;
-  const configuredBranch = git(['config', '--get', 'brainfile.remoteBranch'], cwd).stdout || branch;
-  let upstream: string | null = null;
-  if (!hasLocal) {
-    if (configuredRemote) {
-      const ref = `${configuredRemote}/${configuredBranch}`;
-      if (!git(['rev-parse', '--verify', '--quiet', `refs/remotes/${ref}`], cwd).ok) {
-        git(['fetch', '--quiet', configuredRemote, configuredBranch], cwd);
+  const remote = configuredRemote ?? (git(['remote', 'get-url', 'origin'], cwd).ok ? 'origin' : null);
+  if (!remote) return null;
+  const configuredName =
+    git(['config', '--get', BOARD_NAME_CONFIG_KEY], cwd).stdout ||
+    git(['config', '--get', LEGACY_REMOTE_BRANCH_CONFIG_KEY], cwd).stdout ||
+    null;
+
+  // Already fetched once (a previous attempt, or sync), no network needed.
+  const knownName = configuredName ?? DEFAULT_BOARD_NAME;
+  const known = boardTrackingRef(remote, knownName);
+  if (git(['rev-parse', '--verify', '--quiet', known], cwd).ok) return { ref: known, remote, name: knownName };
+
+  if (options.fresh || !recentProbeMiss(cwd, remote)) {
+    const names = listRemoteBoards(cwd, remote);
+    const name = names === null
+      ? null
+      : configuredName
+        ? (names.includes(configuredName) ? configuredName : null)
+        : names.includes(DEFAULT_BOARD_NAME)
+          ? DEFAULT_BOARD_NAME
+          : names.length === 1 ? names[0] : null;
+    if (name) {
+      const tracking = boardTrackingRef(remote, name);
+      if (gitNetwork(['fetch', '--quiet', '--no-tags', remote, `+${remoteBoardRef(name)}:${tracking}`], cwd).ok) {
+        clearProbeMiss(cwd);
+        return { ref: tracking, remote, name };
       }
-      if (git(['rev-parse', '--verify', '--quiet', `refs/remotes/${ref}`], cwd).ok) upstream = ref;
-    }
-    if (!upstream && git(['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`], cwd).ok) {
-      upstream = `origin/${branch}`;
     }
   }
-  if (!hasLocal && !upstream) return null;
+
+  // A board shared by 0.21.0 is a branch on the remote; a clone already has it.
+  const legacyBranch = configuredName ?? branch;
+  const legacy = `refs/remotes/${remote}/${legacyBranch}`;
+  if (!git(['rev-parse', '--verify', '--quiet', legacy], cwd).ok && configuredRemote && (options.fresh || !recentProbeMiss(cwd, remote))) {
+    gitNetwork(['fetch', '--quiet', '--no-tags', remote, `+refs/heads/${legacyBranch}:${legacy}`], cwd);
+  }
+  if (git(['rev-parse', '--verify', '--quiet', legacy], cwd).ok) return { ref: legacy, remote };
+
+  recordProbeMiss(cwd, remote);
+  return null;
+}
+
+/**
+ * Resolution step 4: the board is not checked out anywhere (a fresh clone,
+ * or the directory was removed). Create the worktree at
+ * `<main worktree>/.brainfile` — or inside the common git dir for bare
+ * layouts — and hide it from the code branch. Returns the new board
+ * directory, or null when there is nothing to materialize.
+ */
+export function materializeBoardWorktree(cwd: string, options: MaterializeOptions = {}): string | null {
+  const branch = boardBranch(cwd);
   const worktrees = listWorktrees(cwd);
   if (worktrees.length === 0) return null;
   if (worktrees.some((w) => w.branch === `refs/heads/${branch}`)) return null;
@@ -177,20 +295,26 @@ export function materializeBoardWorktree(cwd: string): string | null {
     target = path.join(main.path, '.brainfile');
   }
   if (fs.existsSync(target)) return null;
-  const r = hasLocal
-    ? git(['worktree', 'add', '--quiet', target, branch], cwd)
-    : git(['worktree', 'add', '--quiet', '--track', '-b', branch, target, upstream as string], cwd);
+  const start = findBoardStart(cwd, branch, options);
+  if (!start) return null;
+  const r = start.remote
+    ? git(['worktree', 'add', '--quiet', '--no-track', '-b', branch, target, start.ref], cwd)
+    : git(['worktree', 'add', '--quiet', target, branch], cwd);
   if (!r.ok) return null;
   ensureExcludeEntry(cwd);
   // Boards shared before empty directories were kept arrive without them.
   for (const sub of BOARD_SUBDIRS) fs.mkdirSync(path.join(target, sub), { recursive: true });
-  const cameFrom = upstream ? upstream.slice(0, upstream.indexOf('/')) : null;
-  // The board arrived through this remote, so that is where it goes back to.
-  if (cameFrom && !configuredRemote) git(['config', 'brainfile.remote', cameFrom], cwd);
+  if (start.remote) {
+    // The board arrived through this remote, so that is where it goes back to.
+    if (!git(['config', '--get', 'brainfile.remote'], cwd).stdout) git(['config', 'brainfile.remote', start.remote], cwd);
+    if (start.name && start.name !== DEFAULT_BOARD_NAME && !git(['config', '--get', BOARD_NAME_CONFIG_KEY], cwd).stdout) {
+      git(['config', BOARD_NAME_CONFIG_KEY, start.name], cwd);
+    }
+  }
   const relative = path.relative(process.cwd(), target) || '.';
   process.stderr.write(
-    cameFrom
-      ? `Checked out the shared board from ${cameFrom} into ${relative}/\n`
+    start.remote
+      ? `Checked out the shared board from ${start.remote} into ${relative}/\n`
       : `Checked out the board from the '${branch}' branch into ${relative}/\n`
   );
   return target;
@@ -279,10 +403,6 @@ function identityArgs(dotDir: string): string[] {
   return args;
 }
 
-function sanitizeAgent(agent: string): string {
-  return agent.replace(/[<>\r\n]/g, '').trim();
-}
-
 type CommitListener = (dotDir: string) => void;
 const commitListeners: CommitListener[] = [];
 
@@ -303,7 +423,7 @@ function notifyCommitted(dotDir: string): void {
 
 export interface CommitBoardOptions {
   message: string;
-  /** Acting agent; becomes the commit author. The committer stays the git user. */
+  /** The agent acting, recorded as a `[name]` suffix; the author stays the git user. */
   agent?: string | null;
 }
 
@@ -341,17 +461,12 @@ export function commitBoard(dotDir: string, options: CommitBoardOptions): boolea
   if (unmergedFiles(dotDir).length > 0) return false;
   if (!git(['add', '-A'], dotDir).ok) return false;
   if (!boardIsDirty(dotDir)) return false;
-  const env: NodeJS.ProcessEnv = {};
-  const agent = options.agent ? sanitizeAgent(options.agent) : '';
-  if (agent) {
-    env.GIT_AUTHOR_NAME = agent;
-    env.GIT_AUTHOR_EMAIL = `${agent}@brainfile.local`;
-  }
-  const message = oneLine(options.message);
+  const agent = options.agent?.replace(/[[\]<>\r\n]/g, '').trim();
+  const suffix = agent ? ` [${agent}]` : '';
+  const message = oneLine(options.message, suffix);
   const r = git(
     [...identityArgs(dotDir), '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--no-verify', '-m', message],
-    dotDir,
-    env
+    dotDir
   );
   if (r.ok) notifyCommitted(dotDir);
   return r.ok;
@@ -376,15 +491,6 @@ export function commitHandEdits(dotDir: string): boolean {
   return commitBoard(dotDir, { message: `edit: ${summary}` });
 }
 
-/** The acting agent: `BRAINFILE_AGENT`, else `--agent <name>` on the command line. */
-export function resolveAgentName(argv: string[] = process.argv): string | null {
-  if (process.env.BRAINFILE_AGENT) return process.env.BRAINFILE_AGENT;
-  const flag = argv.indexOf('--agent');
-  if (flag >= 0 && argv[flag + 1] && !argv[flag + 1].startsWith('-')) return argv[flag + 1];
-  const inline = argv.find((a) => a.startsWith('--agent='));
-  return inline ? inline.slice('--agent='.length) : null;
-}
-
 /** The home board: `~/.brainfile`, addressed with `-g` / `--global` or `BRAINFILE_GLOBAL=1`. */
 export function homeBoardDir(): string {
   return path.join(os.homedir(), '.brainfile');
@@ -395,9 +501,11 @@ export function isGlobalBoardRequested(argv: string[] = process.argv): boolean {
   return argv.includes('-g') || argv.includes('--global');
 }
 
-function oneLine(message: string): string {
+/** One line of at most MAX_MESSAGE_LENGTH, keeping `suffix` whole at the end. */
+function oneLine(message: string, suffix = ''): string {
   const flat = message.replace(/\s+/g, ' ').trim();
-  return flat.length > MAX_MESSAGE_LENGTH ? `${flat.slice(0, MAX_MESSAGE_LENGTH - 1)}…` : flat;
+  const room = Math.max(1, MAX_MESSAGE_LENGTH - suffix.length);
+  return `${flat.length > room ? `${flat.slice(0, room - 1)}…` : flat}${suffix}`;
 }
 
 interface CommandLike {
@@ -430,7 +538,7 @@ export function describeCommandForCommit(command: CommandLike): string {
 
 // ── Debounced commits for long-running frontends (TUI) ──────────────────────
 
-const pendingCommits = new Map<string, { messages: string[]; agent: string | null }>();
+const pendingCommits = new Map<string, { messages: string[] }>();
 let flushTimer: NodeJS.Timeout | null = null;
 let exitHookInstalled = false;
 
@@ -438,7 +546,7 @@ let exitHookInstalled = false;
 export function scheduleBoardCommit(brainfilePath: string, message: string, delayMs = 2000): void {
   const dotDir = path.dirname(path.resolve(brainfilePath));
   if (!isTrackedBoard(dotDir)) return;
-  const entry = pendingCommits.get(dotDir) ?? { messages: [], agent: resolveAgentName() };
+  const entry = pendingCommits.get(dotDir) ?? { messages: [] };
   entry.messages.push(message);
   pendingCommits.set(dotDir, entry);
   if (flushTimer) clearTimeout(flushTimer);
@@ -459,7 +567,7 @@ export function flushBoardCommits(): void {
   for (const [dotDir, entry] of pendingCommits) {
     const [first, ...rest] = entry.messages;
     const message = rest.length === 0 ? first : `${first} (+${rest.length} more)`;
-    commitBoard(dotDir, { message, agent: entry.agent });
+    commitBoard(dotDir, { message });
   }
   pendingCommits.clear();
 }

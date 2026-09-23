@@ -464,7 +464,10 @@ $ brainfile note -t task-1 "Bounded by bytes, not entries"
 $ brainfile note -t task-1 --agent codex "Tests pass on the new cache"
 ```
 
-Notes stay with the task and become the ledger `summary` when it completes.
+Each note is tagged with who wrote it: `--agent` when given, otherwise the
+agent running the command if brainfile can tell (see [Who did
+what](#who-did-what)), otherwise your git `user.name`. Notes stay with the task
+and become the ledger `summary` when it completes.
 
 #### log — Read completed work
 
@@ -638,12 +641,12 @@ the network, so it is always safe to run.
 $ brainfile sync                                  # fetch, merge, push
 $ brainfile sync --pull                           # one direction
 $ brainfile sync --set-remote origin              # the code remote
-$ brainfile sync --set-remote git@host:me/boards.git --remote-branch myproject
+$ brainfile sync --set-remote git@host:me/boards.git --board-name myproject
 $ brainfile sync --autosync full                  # off | push | full
 ```
 
-Fetches the board branch, fast-forwards or merges with the board-aware merge
-driver, and pushes. Runs entirely inside the board directory; the code tree is
+Fetches the board, fast-forwards or merges with the board-aware merge driver,
+and pushes it to `refs/brainfile/<name>` on the remote. Runs entirely inside the board directory; the code tree is
 never touched. `--set-remote` in a repository that has no board yet checks the
 board out from that remote. Details in [Sharing a board](#sharing-a-board).
 
@@ -763,7 +766,9 @@ $ brainfile where
 Board     .brainfile/
 Stored    as commits on the 'brainfile' branch of this repository
           Kept out of your code branch, its commits and pull requests.
-Shared    through origin (git@github.com:me/app.git), branch 'brainfile'
+Shared    through origin (git@github.com:me/app.git)
+          Stored there as refs/brainfile/board, not a branch, so it stays out of branch lists and pull requests.
+          On the web: https://github.com/me/app/commits/refs/brainfile/board
           Last synced 2m ago. Nothing waiting to be sent.
           Changes are sent automatically after each edit.
           Anyone who can read origin can read this board.
@@ -782,31 +787,50 @@ worktree on an orphan branch named `brainfile` (`git config brainfile.branch`
 renames it). The directory is hidden through `.git/info/exclude`, so `git
 status` on the code branch stays clean and the board never appears in a pull
 request. Every command that changes the board makes one commit on that branch,
-authored as the acting agent (`--agent` or `BRAINFILE_AGENT`), so `git log`
-inside `.brainfile/` is the board's history:
+authored by your git user, so `git log` inside `.brainfile/` is the board's
+history:
 
 ```console
 $ git -C .brainfile log --format='%an  %s' -3
-codex   move task-7: review
-claude  note task-7: Bounded by bytes, not entries
-claude  add: Swap the parser cache
+george  move task-7: review [codex]
+george  note task-7: Bounded by bytes, not entries [claude]
+george  add: Swap the parser cache
 ```
 
 Files edited by hand are committed as `edit: <files>` before the next command
 runs, so they are never folded into someone else's commit.
 
-The branch is hidden, not secret: a plain `git push` sends only your code
-branch, but `git push --all`, `--mirror` and mirroring tools push every local
-branch, board included, and once it is on origin anyone with access to the
-repository can browse it there. The point is a clean main, not privacy; for
-private notes next to public code use a separate remote (below).
+#### Who did what
 
-Two worktrees of the repository share the board directly. A clone gets it
-once the branch has been pushed: git fetches the branch with everything else,
-and the first `brainfile` command checks it out into `.brainfile/`, says so
-(`Checked out the shared board from origin into .brainfile/`), and sends
-changes back to the remote it came from. Someone who never runs `brainfile`
-never sees the folder.
+When an agent makes the change, the commit message ends with its name in
+brackets, and notes carry the same name. brainfile works out the agent in
+this order:
+
+1. `--agent <name>` or `BRAINFILE_AGENT`, when the agent says who it is.
+2. The nearest agent CLI above the command: `claude`, `codex`,
+   `cursor-agent`, `gemini`, `opencode`, `goose`, `droid`, `crush`, `aider`,
+   `cline`, `amp`, `qwen` or `copilot`.
+3. Variables agents set for the commands they run, for sandboxes that hide
+   the process tree (Codex's `CODEX_THREAD_ID`, Claude Code's `CLAUDECODE`).
+
+Commands you type yourself get no tag, and your notes carry your git
+`user.name`. Desktop apps and editors don't count as agents, because their
+built-in terminals are yours. `BRAINFILE_DETECT_AGENT=off` keeps only names
+given explicitly.
+
+The branch is hidden, not secret. A plain `git push` sends only your code
+branch, but `git push --all`, `--mirror` and mirroring tools push every local
+branch, the board included. Once the board is on a remote, anyone who can read
+that remote can read it. The point is a clean main, not privacy; for private
+notes next to public code use a separate remote (below).
+
+Two worktrees of the repository share the board directly. A clone gets it the
+first time you run `brainfile` there: brainfile asks the remote once for a
+shared board, checks it out into `.brainfile/`, says so (`Checked out the
+shared board from origin into .brainfile/`), and sends changes back to the
+remote it came from. If the remote has no board, brainfile does not ask again
+for ten minutes; `sync --set-remote` always asks. Someone who never runs
+`brainfile` never sees the folder.
 
 Outside a repository, `init --tracked` makes the board its own small
 repository; the home board `brainfile init -g` is always one. Both take the
@@ -821,14 +845,25 @@ often private notes living next to public code:
 | --- | --- |
 | The team sees the board with the code | `brainfile sync --set-remote origin` |
 | A private board next to public code | `brainfile sync --set-remote git@host:me/boards.git` |
-| One private repository holding many boards | `--set-remote <url> --remote-branch <project>` |
+| One private repository holding many boards | `--set-remote <url> --board-name <project>` |
 
-A URL is registered as a git remote named `board`. The branch on the remote
-defaults to the board branch inside a repository, the folder name for a
-standalone board, and `home` for the home board, so one "boards" repository
-can carry a branch per project. The setting is git config
-(`brainfile.remote`, `brainfile.remoteBranch`), so it is per clone and never
+A URL is registered as a git remote named `board`.
+
+On the remote the board is stored as `refs/brainfile/<name>`, a git ref that
+is not a branch. It is pushed, fetched and kept like any other ref, but hosts
+only list branches, so it never shows up in the branch list, a "recent
+pushes" banner or a pull request, and a plain `git clone` or `git fetch` does
+not download it. On GitHub, `brainfile where` prints a link to the board's
+history. The name defaults to `board` inside a repository, the folder name
+for a standalone board, and `home` for the home board, so one "boards"
+repository can carry a board per project. The setting is git config
+(`brainfile.remote`, `brainfile.boardName`), so it is per clone and never
 committed.
+
+Boards shared by 0.21.0 were pushed as a `brainfile` branch. The first `sync`
+from a newer version merges that branch in, publishes the board under
+`refs/brainfile/`, and deletes the old branch from the remote. Upgrade every
+machine that shares the board: a 0.21.0 machine keeps pushing to the branch.
 
 `sync` fetches, fast-forwards or merges, then pushes. Once a remote is set,
 every mutation schedules a push a few seconds later in the background
