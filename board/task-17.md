@@ -29,3 +29,6 @@ Fix:
 - verifyAndFinish compares contents (hash each file), not just names, before deleting the aside copy.
 - On any failure after the split: `git worktree remove --force` (or prune), delete the branch the migration created, and `git reset -q -- <relDotDir>` so the index is back where it started.
 - Tests: uncommitted edit preserved; untracked task preserved; ignored-but-present files preserved; failure leaves no branch, no worktree entry, no staged change.
+
+## Log
+- 2026-09-23T03:10:52.269Z: [claude] Picked up. Working on branch fix/migrate-to-branch-data-loss in worktree ../brainfile-migrate-fix (from local main cf61f36). Plan: mirror aside contents (incl. deletions) over the split worktree + import commit; content-hash verify; one rollback helper (worktree, branch, index, aside) shared by all --to-branch paths.
