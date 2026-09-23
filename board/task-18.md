@@ -26,9 +26,9 @@ subtasks:
     completed: true
   - id: task-18-6
     title: docs + changelog
-    completed: false
+    completed: true
 createdAt: "2026-09-23T18:34:23.176Z"
-updatedAt: "2026-09-23T18:46:29.242Z"
+updatedAt: "2026-09-23T18:46:29.520Z"
 ---
 
 ## Description
