@@ -1,8 +1,6 @@
 ---
 id: task-18
 title: Store shared boards under refs/brainfile/ instead of a remote branch
-column: review
-position: 0
 priority: high
 tags:
   - sync
@@ -31,7 +29,8 @@ subtasks:
     title: commits authored by git user; agent detected and recorded on board
     completed: true
 createdAt: "2026-09-23T18:34:23.176Z"
-updatedAt: "2026-09-23T19:27:42.241Z"
+updatedAt: "2026-09-23T20:15:28.693Z"
+completedAt: "2026-09-23T20:15:28.693Z"
 ---
 
 ## Description
