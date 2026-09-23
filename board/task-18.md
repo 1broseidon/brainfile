@@ -1,7 +1,7 @@
 ---
 id: task-18
 title: Store shared boards under refs/brainfile/ instead of a remote branch
-column: in-progress
+column: review
 position: 0
 priority: high
 tags:
@@ -28,7 +28,7 @@ subtasks:
     title: docs + changelog
     completed: true
 createdAt: "2026-09-23T18:34:23.176Z"
-updatedAt: "2026-09-23T18:46:29.520Z"
+updatedAt: "2026-09-23T18:46:29.787Z"
 ---
 
 ## Description
