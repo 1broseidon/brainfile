@@ -1,0 +1,23 @@
+---
+id: task-16
+title: "complete: let callers supply filesChanged for the ledger"
+column: todo
+position: 5
+priority: medium
+tags:
+  - ledger
+  - cli
+  - mcp
+  - provenance
+relatedFiles:
+  - cli/src/commands/complete.ts
+  - cli/src/mcp/tools/task_complete_tool.ts
+  - core/src/taskOperations.ts
+  - core/src/ledger.ts
+createdAt: "2026-09-23T03:04:32.175Z"
+---
+
+## Description
+The ledger record has filesChanged and core accepts it (core/src/taskOperations.ts:106, 896; core/src/ledger.ts:347), but neither `brainfile complete` (cli/src/commands/complete.ts:74) nor the MCP task_complete tool passes it. Every record therefore falls back to defaultFilesChanged: contract deliverable paths, else relatedFiles, else `<id>.md` (core/src/ledger.ts:177-189). The ledger records what the task claimed it would touch, not what it touched, which undermines file-history queries over the ledger.
+
+Add `brainfile complete --files <a,b>` and `--files -` (newline-separated paths on stdin, so any tool's output can be piped in, e.g. a git diff --name-only), and a filesChanged argument on the MCP tool. Optionally default to `git diff --name-only <base>` when the task recorded a base commit at pickup.
