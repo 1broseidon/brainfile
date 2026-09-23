@@ -316,17 +316,22 @@ export interface CommitBoardOptions {
  * git does not store empty directories, and a board without `board/` reads
  * as legacy on the other side. Keep both alive with a `.gitkeep`.
  */
-export function ensureBoardDirs(dotDir: string): void {
+export function ensureBoardDirs(dotDir: string): boolean {
+  let created = false;
   for (const sub of BOARD_SUBDIRS) {
     const dir = path.join(dotDir, sub);
     try {
       fs.mkdirSync(dir, { recursive: true });
       const keep = path.join(dir, '.gitkeep');
-      if (!fs.existsSync(keep)) fs.writeFileSync(keep, '', 'utf-8');
+      if (!fs.existsSync(keep)) {
+        fs.writeFileSync(keep, '', 'utf-8');
+        created = true;
+      }
     } catch {
       /* best effort */
     }
   }
+  return created;
 }
 
 export function commitBoard(dotDir: string, options: CommitBoardOptions): boolean {
@@ -358,6 +363,13 @@ export function commitBoard(dotDir: string, options: CommitBoardOptions): boolea
  */
 export function commitHandEdits(dotDir: string): boolean {
   if (!isTrackedBoard(dotDir)) return false;
+  // Boards created before the .gitkeep files existed get them in their own
+  // commit, not folded into whatever command happens to run next.
+  // git lists a directory holding only new files as `board/`, not its contents.
+  const keepOnly = (f: string) => f.endsWith('.gitkeep') || BOARD_SUBDIRS.some((sub) => f === `${sub}/`);
+  if (ensureBoardDirs(dotDir) && boardDirtyFiles(dotDir).every(keepOnly)) {
+    commitBoard(dotDir, { message: 'chore: keep board/ and logs/ in git' });
+  }
   const files = boardDirtyFiles(dotDir);
   if (files.length === 0) return false;
   const summary = files.length <= 3 ? files.join(', ') : `${files.length} files`;

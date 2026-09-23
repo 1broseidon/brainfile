@@ -200,6 +200,25 @@ describe('board on a branch (spec-9 phase 1)', () => {
     expect(afterCommand(command)).toBe(false);
   });
 
+  it('a board from before .gitkeep gets them in their own commit, not under the next command', () => {
+    const repo = path.join(base, 'repo');
+    makeRepo(repo);
+    process.chdir(repo);
+    initCommand({});
+    const dotDir = path.join(repo, '.brainfile');
+    // An older board: the directories exist on disk, git has no .gitkeep.
+    run(['rm', '--quiet', '--cached', 'board/.gitkeep', 'logs/.gitkeep'], dotDir);
+    fs.rmSync(path.join(dotDir, 'board', '.gitkeep'));
+    fs.rmSync(path.join(dotDir, 'logs', '.gitkeep'));
+    run(['commit', '--quiet', '-m', 'older board'], dotDir);
+
+    beforeCommand(fakeCommand(['list'], { file: 'brainfile.md' }));
+    afterCommand(fakeCommand(['list'], { file: 'brainfile.md' }));
+
+    expect(subjects(dotDir).slice(0, 2)).toEqual(['chore: keep board/ and logs/ in git', 'older board']);
+    expect(run(['status', '--porcelain'], dotDir)).toBe('');
+  });
+
   it('hand edits are committed on their own before a command runs', () => {
     const repo = path.join(base, 'repo');
     makeRepo(repo);
@@ -304,7 +323,8 @@ describe('board on a branch (spec-9 phase 1)', () => {
     migrateCommand({ toBranch: true, commit: true });
 
     expect(boardRepoKind(dotDir)).toBe('linked');
-    expect(subjects(dotDir)).toEqual(['board: add task', 'board: initial']);
+    expect(subjects(dotDir)).toEqual(['chore: merge attributes', 'board: add task', 'board: initial']);
+    expect(fs.readFileSync(path.join(dotDir, '.gitattributes'), 'utf-8')).toContain('board/*.md merge=brainfile');
     expect(run(['ls-files', '.brainfile'], repo)).toBe('');
     expect(run(['log', '-1', '--format=%s'], repo)).toContain('brainfile branch');
     expect(run(['status', '--porcelain'], repo)).toBe('');
@@ -361,7 +381,7 @@ describe('board on a branch (spec-9 phase 1)', () => {
       expect(boardRepoKind(dotDir)).toBe('linked');
       expect(fs.readFileSync(firstTask, 'utf-8')).toContain('Edited but never committed.');
       expect(snapshotDir(dotDir)).toMatchObject(expected);
-      expect(subjects(dotDir)).toEqual(['import uncommitted board changes', 'board: initial']);
+      expect(subjects(dotDir)).toEqual(['chore: merge attributes', 'import uncommitted board changes', 'board: initial']);
       expect(run(['status', '--porcelain'], dotDir)).toBe('');
       expect(run(['status', '--porcelain'], repo)).toBe('');
       expect(fs.existsSync(`${dotDir}.migrating`)).toBe(false);
@@ -404,7 +424,7 @@ describe('board on a branch (spec-9 phase 1)', () => {
       for (const file of Object.keys(expected).filter((f) => !f.startsWith('state/'))) {
         expect(tracked).toContain(file);
       }
-      expect(subjects(dotDir)).toEqual(['import uncommitted board changes', 'board: force-add some of it']);
+      expect(subjects(dotDir)).toEqual(['chore: merge attributes', 'import uncommitted board changes', 'board: force-add some of it']);
       expect(run(['ls-files', '.brainfile'], repo)).toBe('');
       expect(run(['status', '--porcelain'], repo)).toBe('');
     });
@@ -421,14 +441,15 @@ describe('board on a branch (spec-9 phase 1)', () => {
 
       expect(fs.existsSync(firstTask)).toBe(false);
       expect(boardFiles(dotDir)).not.toContain(relGone);
-      expect(run(['show', `HEAD~1:${relGone}`], dotDir)).toContain('Committed task');
-      expect(subjects(dotDir)[0]).toBe('import uncommitted board changes');
+      expect(run(['show', `HEAD~2:${relGone}`], dotDir)).toContain('Committed task');
+      expect(subjects(dotDir)[1]).toBe('import uncommitted board changes');
     });
 
     it('commits nothing extra when the board has no uncommitted changes', () => {
       committedBoard();
       migrateToBranch({ commit: true });
-      expect(subjects(dotDir)).toEqual(['board: initial']);
+      // Only the merge setup every tracked board needs; no import commit.
+      expect(subjects(dotDir)).toEqual(['chore: merge attributes', 'board: initial']);
       expect(run(['status', '--porcelain'], repo)).toBe('');
     });
 

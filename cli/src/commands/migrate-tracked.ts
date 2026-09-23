@@ -287,6 +287,10 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
           }
           uncommittedImported = true;
         }
+        // History carried over; the merge setup every tracked board needs did not.
+        ensureBoardAttributes(dotDir);
+        registerMergeDriver(dotDir);
+        commitBoard(dotDir, { message: 'chore: merge attributes' });
       } else {
         createOrphanBoardWorktree(repoRoot, dotDir, branch);
         mirrorBoardContents(aside, dotDir);
