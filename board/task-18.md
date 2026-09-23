@@ -27,8 +27,11 @@ subtasks:
   - id: task-18-6
     title: docs + changelog
     completed: true
+  - id: task-18-7
+    title: commits authored by git user; agent detected and recorded on board
+    completed: false
 createdAt: "2026-09-23T18:34:23.176Z"
-updatedAt: "2026-09-23T18:46:29.787Z"
+updatedAt: "2026-09-23T19:27:41.931Z"
 ---
 
 ## Description
