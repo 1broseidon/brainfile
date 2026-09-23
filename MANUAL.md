@@ -616,7 +616,9 @@ Flags: `--dir`, `--force`, `--logs-to-ledger`, `--to-branch`, `--to-plain`,
 `--commit`. `--to-branch` keeps the board's history when it was committed on
 the code branch (`git subtree split`), imports a gitignored one as a fresh
 branch, and folds a standalone board repository into the surrounding
-repository. `--to-plain` leaves the branch intact.
+repository. Board changes not yet committed come along as one more commit on
+the branch. If any step fails, the migration undoes itself and the repository
+is left as it was. `--to-plain` leaves the branch intact.
 
 #### where — Where the board lives and who has it
 

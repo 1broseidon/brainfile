@@ -33,7 +33,12 @@ All notable changes to this project are documented here. Format follows
   header shows `local only` for a board nobody else has.
 - `brainfile migrate --to-branch [--commit]` moves a committed board onto the
   branch with its history (`git subtree split`), imports a gitignored one, or
-  folds a standalone board repository in; `--to-plain` reverses it.
+  folds a standalone board repository in; `--to-plain` reverses it. The board
+  arrives as it is on disk: uncommitted edits, new or partly force-added files
+  and deletions land as one `import uncommitted board changes` commit, every
+  file is checked by content before the old copy is removed, and a failure
+  rolls back the branch, worktree and index so the repository is left as it
+  was.
 - `@brainfile/core`: `findBrainfile`/`resolveBrainfilePath` accept
   `stopAtGitRoot`; `parseFrontmatter`/`serializeFrontmatter` are exported.
 
