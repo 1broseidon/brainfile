@@ -3,15 +3,20 @@
  *
  * Moves an existing board between plain-directory storage and tracked storage
  * (a linked worktree on the board branch inside a repo, or a standalone
- * repository outside one). Every path preserves the board's files; the
- * committed-on-main case preserves its history through `git subtree split`.
+ * repository outside one). Every path preserves the board's files as they are
+ * on disk, uncommitted edits included; the committed-on-main case also
+ * preserves its history through `git subtree split`. A failed `--to-branch`
+ * rolls back everything it did, so the repository is left as it was found.
  */
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import chalk from 'chalk';
 import { findBrainfile } from '@brainfile/core';
 import {
   boardBranch,
+  boardIsDirty,
   boardRepoKind,
   commitBoard,
   createOrphanBoardWorktree,
@@ -44,22 +49,38 @@ function locateBoard(rootDir: string): string {
 function copyBoardContents(from: string, to: string): void {
   for (const entry of fs.readdirSync(from)) {
     if (SKIP_TOP_LEVEL.has(entry)) continue;
-    fs.cpSync(path.join(from, entry), path.join(to, entry), { recursive: true, force: true });
+    // verbatimSymlinks: a relative link must not be rewritten to point into the copy being deleted.
+    fs.cpSync(path.join(from, entry), path.join(to, entry), { recursive: true, force: true, verbatimSymlinks: true });
   }
 }
 
-function listBoardFiles(dir: string): string[] {
-  const out: string[] = [];
+/**
+ * Make `to` hold exactly what `from` holds on disk (its `.git` aside): files
+ * edited, added, or deleted since the last commit all carry over.
+ */
+function mirrorBoardContents(from: string, to: string): void {
+  for (const entry of fs.readdirSync(to)) {
+    if (SKIP_TOP_LEVEL.has(entry)) continue;
+    fs.rmSync(path.join(to, entry), { recursive: true, force: true });
+  }
+  copyBoardContents(from, to);
+}
+
+/** Every board file (local-only `state/` excluded) mapped to a sha256 of its contents. */
+function hashBoardFiles(dir: string): Map<string, string> {
+  const out = new Map<string, string>();
   const walk = (current: string, prefix: string) => {
     for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
       if (prefix === '' && (SKIP_TOP_LEVEL.has(entry.name) || entry.name === STATE_DIR)) continue;
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) walk(path.join(current, entry.name), rel);
-      else out.push(rel);
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) walk(full, rel);
+      else if (entry.isSymbolicLink()) out.set(rel, `link:${fs.readlinkSync(full)}`);
+      else out.set(rel, crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex'));
     }
   };
   walk(dir, '');
-  return out.sort();
+  return out;
 }
 
 function asidePath(dotDir: string): string {
@@ -73,19 +94,129 @@ function restoreAside(aside: string, dotDir: string): void {
   fs.renameSync(aside, dotDir);
 }
 
-function verifyAndFinish(aside: string, dotDir: string): void {
-  // The board branch gains `.gitattributes` (merge strategies) during the
-  // move; every original file must still be present.
-  const before = listBoardFiles(aside);
-  const added = (f: string) => (f === '.gitattributes' || f.endsWith('/.gitkeep')) && !before.includes(f);
-  const after = listBoardFiles(dotDir).filter((f) => !added(f));
-  if (before.join('\n') !== after.join('\n')) {
-    restoreAside(aside, dotDir);
-    throw new Error('Board contents differ after migration; the original directory was restored.');
+/**
+ * Every original file must be in the migrated board with the same contents.
+ * The move may add `.gitattributes` (merge strategies, appended to an
+ * existing one) and `.gitkeep` files; nothing else may differ. Throws on a
+ * mismatch and leaves both copies in place for the caller to roll back.
+ */
+function verifyBoardContents(aside: string, dotDir: string): void {
+  const before = hashBoardFiles(aside);
+  const after = hashBoardFiles(dotDir);
+  const problems: string[] = [];
+  for (const [file, hash] of before) {
+    if (!after.has(file)) problems.push(`missing ${file}`);
+    else if (after.get(file) === hash) continue;
+    else if (file === '.gitattributes' && attributesExtend(aside, dotDir)) continue;
+    else problems.push(`changed ${file}`);
   }
-  const state = path.join(aside, STATE_DIR);
-  if (fs.existsSync(state)) fs.cpSync(state, path.join(dotDir, STATE_DIR), { recursive: true, force: true });
-  fs.rmSync(aside, { recursive: true, force: true });
+  for (const file of after.keys()) {
+    if (before.has(file)) continue;
+    if (file === '.gitattributes' || file.endsWith('/.gitkeep')) continue;
+    problems.push(`unexpected ${file}`);
+  }
+  if (problems.length > 0) {
+    const shown = problems.slice(0, 5).join(', ');
+    const more = problems.length > 5 ? ` (+${problems.length - 5} more)` : '';
+    throw new Error(`Board contents differ after migration: ${shown}${more}.`);
+  }
+}
+
+function attributesExtend(aside: string, dotDir: string): boolean {
+  const lines = (dir: string) => fs.readFileSync(path.join(dir, '.gitattributes'), 'utf-8').split('\n').map((l) => l.trim());
+  const after = new Set(lines(dotDir));
+  return lines(aside).every((line) => after.has(line));
+}
+
+/** Staged changes under `relPath` as a binary patch, untrimmed so it applies back verbatim. */
+function stagedPatch(relPath: string, repoRoot: string): string {
+  const r = spawnSync('git', ['diff', '--cached', '--binary', '--', relPath], { cwd: repoRoot, encoding: 'utf-8' });
+  return r.status === 0 ? r.stdout : '';
+}
+
+/** `git apply --cached` with a patch on stdin. */
+function applyToIndex(patch: string, repoRoot: string): boolean {
+  const r = spawnSync('git', ['apply', '--cached', '--binary', '-'], { cwd: repoRoot, input: patch, encoding: 'utf-8' });
+  return r.status === 0;
+}
+
+/**
+ * Undo log for `--to-branch`. Each step that changes the repository records
+ * itself; `undo()` reverses them so a failure leaves the repo as it was found.
+ */
+class MigrationRollback {
+  private branchMayExist = false;
+  private indexChanged = false;
+  private stagedBefore = '';
+  private movedAside = false;
+
+  constructor(
+    private readonly repoRoot: string,
+    private readonly dotDir: string,
+    private readonly aside: string,
+    private readonly branch: string,
+    private readonly relDotDir: string
+  ) {}
+
+  /** Call just before anything may create the board branch (it did not exist when the migration started). */
+  creatingBranch(): void {
+    this.branchMayExist = true;
+  }
+
+  /** Call just before unstaging the board from the code branch. */
+  changingIndex(): void {
+    // Board changes the user had already staged are put back as they were.
+    this.stagedBefore = stagedPatch(this.relDotDir, this.repoRoot);
+    this.indexChanged = true;
+  }
+
+  moveAside(): void {
+    fs.renameSync(this.dotDir, this.aside);
+    this.movedAside = true;
+  }
+
+  /** Reverse every recorded step. Returns what could not be undone (empty when fully restored). */
+  undo(): string[] {
+    const problems: string[] = [];
+    const attempt = (what: string, step: () => void) => {
+      try {
+        step();
+      } catch (error) {
+        problems.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+    // Once the original is aside, whatever sits at dotDir was made by this
+    // migration. Judge by what exists, not by what reported success: `git
+    // worktree add` can register the worktree and still fail (a failing
+    // post-checkout hook, for one).
+    if (this.movedAside && boardRepoKind(this.dotDir) === 'linked') {
+      attempt('remove the board worktree', () => {
+        const removed = git(['worktree', 'remove', '--force', this.dotDir], this.repoRoot);
+        if (!removed.ok) fs.rmSync(this.dotDir, { recursive: true, force: true });
+      });
+    }
+    if (this.movedAside) attempt(`move ${this.aside} back`, () => restoreAside(this.aside, this.dotDir));
+    // The branch did not exist before, so a worktree still claiming it is ours and now stale.
+    if (this.branchMayExist && listWorktrees(this.repoRoot).some((w) => w.branch === `refs/heads/${this.branch}`)) {
+      git(['worktree', 'prune'], this.repoRoot);
+    }
+    if (this.branchMayExist && git(['rev-parse', '--verify', '--quiet', `refs/heads/${this.branch}`], this.repoRoot).ok) {
+      attempt(`delete branch '${this.branch}'`, () => {
+        const deleted = git(['branch', '-D', this.branch], this.repoRoot);
+        if (!deleted.ok) throw new Error(deleted.stderr);
+      });
+    }
+    if (this.indexChanged) {
+      attempt(`restore the index for ${this.relDotDir}`, () => {
+        const reset = git(['reset', '-q', '--', this.relDotDir], this.repoRoot);
+        if (!reset.ok) throw new Error(reset.stderr);
+        if (this.stagedBefore && !applyToIndex(this.stagedBefore, this.repoRoot)) {
+          throw new Error('could not re-stage the board changes that were staged before');
+        }
+      });
+    }
+    return problems;
+  }
 }
 
 export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
@@ -127,32 +258,88 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
   const relDotDir = path.relative(repoRoot, dotDir).split(path.sep).join('/');
   const trackedOnCodeBranch = git(['ls-files', '--error-unmatch', relDotDir], repoRoot).ok;
   const aside = asidePath(dotDir);
+  const rollback = new MigrationRollback(repoRoot, dotDir, aside, branch, relDotDir);
+  let done: string;
+  let uncommittedImported = false;
 
-  if (trackedOnCodeBranch) {
-    // History-preserving split of the board's commits onto the new branch.
-    const split = git(['subtree', 'split', '--quiet', `--prefix=${relDotDir}`, '-b', branch], repoRoot);
-    if (!split.ok) {
-      console.log(chalk.yellow('git subtree is unavailable; importing the board without its history.'));
-    }
-    const rm = git(['rm', '-r', '--quiet', '--cached', relDotDir], repoRoot);
-    if (!rm.ok) throw new Error(`git rm --cached failed: ${rm.stderr}`);
-    fs.renameSync(dotDir, aside);
-    if (split.ok) {
-      const add = git(['worktree', 'add', '--quiet', dotDir, branch], repoRoot);
-      if (!add.ok) {
-        restoreAside(aside, dotDir);
-        throw new Error(`git worktree add failed: ${add.stderr}`);
+  try {
+    if (trackedOnCodeBranch) {
+      // History-preserving split of the board's commits onto the new branch.
+      rollback.creatingBranch();
+      const split = git(['subtree', 'split', '--quiet', `--prefix=${relDotDir}`, '-b', branch], repoRoot);
+      if (!split.ok) {
+        console.log(chalk.yellow('git subtree is unavailable; importing the board without its history.'));
       }
-    } else {
-      createOrphanBoardWorktree(repoRoot, dotDir, branch);
-      copyBoardContents(aside, dotDir);
+      rollback.changingIndex();
+      const rm = git(['rm', '-r', '--quiet', '--cached', relDotDir], repoRoot);
+      if (!rm.ok) throw new Error(`git rm --cached failed: ${rm.stderr}`);
+      rollback.moveAside();
+      if (split.ok) {
+        const add = git(['worktree', 'add', '--quiet', dotDir, branch], repoRoot);
+        if (!add.ok) throw new Error(`git worktree add failed: ${add.stderr || `exit status ${add.status}`}.`);
+        // The split carries committed history only. Bring the board over as it
+        // is on disk (uncommitted edits, new or git-ignored files, deletions)
+        // and record the difference as one commit on top of that history.
+        mirrorBoardContents(aside, dotDir);
+        if (boardIsDirty(dotDir)) {
+          if (!commitBoard(dotDir, { message: 'import uncommitted board changes' }) || boardIsDirty(dotDir)) {
+            throw new Error('Could not commit the uncommitted board changes on the board branch.');
+          }
+          uncommittedImported = true;
+        }
+      } else {
+        createOrphanBoardWorktree(repoRoot, dotDir, branch);
+        mirrorBoardContents(aside, dotDir);
+        ensureBoardAttributes(dotDir);
+        registerMergeDriver(dotDir);
+        commitBoard(dotDir, { message: 'import board' });
+      }
+      verifyBoardContents(aside, dotDir);
+      done = `Board moved to branch '${branch}'${split.ok ? ' with its history' : ''}.`;
+    } else if (kind === 'standalone') {
+      // Fold the standalone repository's history into the outer repo as the board branch.
+      rollback.creatingBranch();
+      const fetch = git(['fetch', '--quiet', dotDir, `HEAD:refs/heads/${branch}`], repoRoot);
+      if (!fetch.ok) throw new Error(`Could not import the board's history: ${fetch.stderr}`);
+      rollback.moveAside();
+      const add = git(['worktree', 'add', '--quiet', dotDir, branch], repoRoot);
+      if (!add.ok) throw new Error(`git worktree add failed: ${add.stderr || `exit status ${add.status}`}.`);
+      // Uncommitted work in the standalone repo comes along too.
+      mirrorBoardContents(aside, dotDir);
       ensureBoardAttributes(dotDir);
       registerMergeDriver(dotDir);
       commitBoard(dotDir, { message: 'import board' });
+      verifyBoardContents(aside, dotDir);
+      done = `Board history folded into branch '${branch}'.`;
+    } else {
+      // Plain, untracked (usually gitignored) directory: import as an orphan branch.
+      rollback.moveAside();
+      rollback.creatingBranch();
+      createOrphanBoardWorktree(repoRoot, dotDir, branch);
+      mirrorBoardContents(aside, dotDir);
+      ensureBoardAttributes(dotDir);
+      registerMergeDriver(dotDir);
+      commitBoard(dotDir, { message: 'import board' });
+      verifyBoardContents(aside, dotDir);
+      done = `Board imported onto branch '${branch}'.`;
     }
-    verifyAndFinish(aside, dotDir);
-    ensureExcludeEntry(repoRoot);
-    console.log(chalk.green(`Board moved to branch '${branch}'${split.ok ? ' with its history' : ''}.`));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const leftovers = rollback.undo();
+    throw new Error(
+      leftovers.length === 0
+        ? `${message} Nothing was changed: the board is back where it was.`
+        : `${message} Rolling back was incomplete; could not ${leftovers.join('; ')}. The original board is in ${fs.existsSync(aside) ? aside : dotDir}.`
+    );
+  }
+
+  fs.rmSync(aside, { recursive: true, force: true });
+  ensureExcludeEntry(repoRoot);
+  console.log(chalk.green(done));
+  if (uncommittedImported) {
+    console.log(chalk.gray('  Board changes that were not committed yet came along as one more commit on that branch.'));
+  }
+  if (trackedOnCodeBranch) {
     if (options.commit) {
       const commit = git(['commit', '--quiet', '--no-verify', '-m', `chore: move the board to the ${branch} branch`], repoRoot);
       if (!commit.ok) throw new Error(`Could not commit the removal on the code branch: ${commit.stderr}`);
@@ -161,41 +348,6 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
       console.log(chalk.gray('  Your code branch still tracks the old copy. It is staged to be dropped there (the board itself is safe). Commit that:'));
       console.log(chalk.cyan(`    git commit -m "chore: move the board to the ${branch} branch"`));
     }
-  } else if (kind === 'standalone') {
-    // Fold the standalone repository's history into the outer repo as the board branch.
-    const fetch = git(['fetch', '--quiet', dotDir, `HEAD:refs/heads/${branch}`], repoRoot);
-    if (!fetch.ok) throw new Error(`Could not import the board's history: ${fetch.stderr}`);
-    fs.renameSync(dotDir, aside);
-    const add = git(['worktree', 'add', '--quiet', dotDir, branch], repoRoot);
-    if (!add.ok) {
-      git(['branch', '-D', branch], repoRoot);
-      restoreAside(aside, dotDir);
-      throw new Error(`git worktree add failed: ${add.stderr}`);
-    }
-    // Uncommitted work in the standalone repo comes along too.
-    copyBoardContents(aside, dotDir);
-    ensureBoardAttributes(dotDir);
-    registerMergeDriver(dotDir);
-    commitBoard(dotDir, { message: 'import board' });
-    verifyAndFinish(aside, dotDir);
-    ensureExcludeEntry(repoRoot);
-    console.log(chalk.green(`Board history folded into branch '${branch}'.`));
-  } else {
-    // Plain, untracked (usually gitignored) directory: import as an orphan branch.
-    fs.renameSync(dotDir, aside);
-    try {
-      createOrphanBoardWorktree(repoRoot, dotDir, branch);
-    } catch (error) {
-      restoreAside(aside, dotDir);
-      throw error;
-    }
-    copyBoardContents(aside, dotDir);
-    ensureBoardAttributes(dotDir);
-    registerMergeDriver(dotDir);
-    commitBoard(dotDir, { message: 'import board' });
-    verifyAndFinish(aside, dotDir);
-    ensureExcludeEntry(repoRoot);
-    console.log(chalk.green(`Board imported onto branch '${branch}'.`));
   }
   printMigratedStory(dotDir, branch);
 }

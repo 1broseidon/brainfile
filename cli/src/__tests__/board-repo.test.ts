@@ -10,6 +10,8 @@ import { spawnSync } from 'child_process';
 import { initCommand } from '../commands/init';
 import { addCommand } from '../commands/add';
 import { migrateCommand } from '../commands/migrate';
+import { migrateToBranch } from '../commands/migrate-tracked';
+import * as boardRepo from '../utils/board-repo';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import {
   boardRepoKind,
@@ -35,6 +37,34 @@ function makeRepo(dir: string): void {
   run(['commit', '--quiet', '-m', 'code'], dir);
 }
 
+/** Every file under `dir` (`.git` aside) with its contents, for exact before/after comparison. */
+function snapshotDir(dir: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (current: string, prefix: string) => {
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      if (entry.name === '.git') continue;
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) walk(path.join(current, entry.name), rel);
+      else out[rel] = fs.readFileSync(path.join(current, entry.name), 'utf-8');
+    }
+  };
+  walk(dir, '');
+  return out;
+}
+
+/** The repository-level state a failed migration must leave untouched. */
+function repoState(repo: string) {
+  return {
+    head: run(['rev-parse', 'HEAD'], repo),
+    status: run(['status', '--porcelain', '--untracked-files=all', '--ignored'], repo),
+    staged: run(['diff', '--cached', '--name-status'], repo),
+    branches: run(['branch', '--format=%(refname:short)'], repo),
+    worktrees: run(['worktree', 'list', '--porcelain'], repo),
+    board: snapshotDir(path.join(repo, '.brainfile')),
+  };
+}
+
+const boardFiles = (dotDir: string): string[] => run(['ls-files'], dotDir).split('\n').filter(Boolean);
 const subjects = (dotDir: string): string[] => run(['log', '--format=%s'], dotDir).split('\n').filter(Boolean);
 const lastAuthor = (dotDir: string): string => run(['log', '-1', '--format=%an'], dotDir);
 const excludeFile = (repo: string): string => {
@@ -301,6 +331,182 @@ describe('board on a branch (spec-9 phase 1)', () => {
     expect(boardRepoKind(dotDir)).toBe('linked');
     expect(subjects(dotDir)).toContain('init board');
     expect(run(['status', '--porcelain'], folder)).toBe('');
+  });
+
+  describe('migrate --to-branch on a board committed on the code branch keeps what is on disk', () => {
+    let repo: string;
+    let dotDir: string;
+    let firstTask: string;
+
+    /** A board committed on main with one task: the `git subtree split` path. */
+    function committedBoard(): void {
+      repo = path.join(base, 'repo');
+      makeRepo(repo);
+      process.chdir(repo);
+      initCommand({ plain: true });
+      addCommand({ file: 'brainfile.md', title: 'Committed task', column: 'todo' });
+      run(['add', '-A'], repo);
+      run(['commit', '--quiet', '-m', 'board: initial'], repo);
+      dotDir = path.join(repo, '.brainfile');
+      firstTask = path.join(dotDir, 'board', fs.readdirSync(path.join(dotDir, 'board')).find((f) => f.endsWith('.md')) as string);
+    }
+
+    it('keeps an uncommitted edit to a committed task', () => {
+      committedBoard();
+      fs.appendFileSync(firstTask, '\nEdited but never committed.\n');
+      const expected = snapshotDir(dotDir);
+
+      migrateToBranch({ commit: true });
+
+      expect(boardRepoKind(dotDir)).toBe('linked');
+      expect(fs.readFileSync(firstTask, 'utf-8')).toContain('Edited but never committed.');
+      expect(snapshotDir(dotDir)).toMatchObject(expected);
+      expect(subjects(dotDir)).toEqual(['import uncommitted board changes', 'board: initial']);
+      expect(run(['status', '--porcelain'], dotDir)).toBe('');
+      expect(run(['status', '--porcelain'], repo)).toBe('');
+      expect(fs.existsSync(`${dotDir}.migrating`)).toBe(false);
+    });
+
+    it('keeps a task that was never committed', () => {
+      committedBoard();
+      addCommand({ file: 'brainfile.md', title: 'Brand new task', column: 'todo' });
+      const expected = snapshotDir(dotDir);
+
+      migrateToBranch({});
+
+      expect(snapshotDir(dotDir)).toMatchObject(expected);
+      expect(boardFiles(dotDir).filter((f) => f.startsWith('board/') && f.endsWith('.md'))).toHaveLength(2);
+      expect(run(['status', '--porcelain'], dotDir)).toBe('');
+      // Without --commit the removal from the code branch is only staged.
+      expect(run(['diff', '--cached', '--name-only'], repo)).toContain('.brainfile/');
+    });
+
+    it('keeps board files the code branch ignores (a partly force-added board)', () => {
+      repo = path.join(base, 'repo');
+      makeRepo(repo);
+      process.chdir(repo);
+      fs.writeFileSync(path.join(repo, '.gitignore'), '.brainfile/\n');
+      initCommand({ plain: true });
+      addCommand({ file: 'brainfile.md', title: 'Force-added task', column: 'todo' });
+      dotDir = path.join(repo, '.brainfile');
+      const [forced] = fs.readdirSync(path.join(dotDir, 'board')).filter((f) => f.endsWith('.md'));
+      run(['add', '.gitignore'], repo);
+      run(['add', '-f', '.brainfile/brainfile.md', `.brainfile/board/${forced}`], repo);
+      run(['commit', '--quiet', '-m', 'board: force-add some of it'], repo);
+      addCommand({ file: 'brainfile.md', title: 'Only on disk', column: 'todo' });
+      fs.writeFileSync(path.join(dotDir, 'logs', 'notes.md'), 'ignored but present\n');
+      const expected = snapshotDir(dotDir);
+
+      migrateToBranch({ commit: true });
+
+      expect(snapshotDir(dotDir)).toMatchObject(expected);
+      const tracked = boardFiles(dotDir);
+      for (const file of Object.keys(expected).filter((f) => !f.startsWith('state/'))) {
+        expect(tracked).toContain(file);
+      }
+      expect(subjects(dotDir)).toEqual(['import uncommitted board changes', 'board: force-add some of it']);
+      expect(run(['ls-files', '.brainfile'], repo)).toBe('');
+      expect(run(['status', '--porcelain'], repo)).toBe('');
+    });
+
+    it('keeps a committed file deleted when it was removed from disk', () => {
+      committedBoard();
+      addCommand({ file: 'brainfile.md', title: 'Second task', column: 'todo' });
+      run(['add', '-A'], repo);
+      run(['commit', '--quiet', '-m', 'board: second task'], repo);
+      const relGone = `board/${path.basename(firstTask)}`;
+      fs.rmSync(firstTask);
+
+      migrateToBranch({ commit: true });
+
+      expect(fs.existsSync(firstTask)).toBe(false);
+      expect(boardFiles(dotDir)).not.toContain(relGone);
+      expect(run(['show', `HEAD~1:${relGone}`], dotDir)).toContain('Committed task');
+      expect(subjects(dotDir)[0]).toBe('import uncommitted board changes');
+    });
+
+    it('commits nothing extra when the board has no uncommitted changes', () => {
+      committedBoard();
+      migrateToBranch({ commit: true });
+      expect(subjects(dotDir)).toEqual(['board: initial']);
+      expect(run(['status', '--porcelain'], repo)).toBe('');
+    });
+
+    it('a failure after the split leaves no branch, no worktree, no staged change, and the board intact', () => {
+      committedBoard();
+      fs.appendFileSync(firstTask, '\nUncommitted.\n');
+      addCommand({ file: 'brainfile.md', title: 'Untracked task', column: 'todo' });
+      // A board change the user had already staged must come back staged.
+      fs.appendFileSync(path.join(dotDir, 'brainfile.md'), '\nStaged edit.\n');
+      run(['add', '.brainfile/brainfile.md'], repo);
+      const before = repoState(repo);
+      jest.spyOn(boardRepo, 'commitBoard').mockImplementation(() => {
+        throw new Error('simulated commit failure');
+      });
+
+      expect(() => migrateToBranch({ commit: true })).toThrow(/simulated commit failure.*Nothing was changed/);
+
+      expect(repoState(repo)).toEqual(before);
+      expect(boardRepoKind(dotDir)).toBeNull();
+      expect(fs.existsSync(`${dotDir}.migrating`)).toBe(false);
+      expect(spawnSync('git', ['rev-parse', '--verify', '--quiet', 'refs/heads/brainfile'], { cwd: repo }).status).not.toBe(0);
+
+      // Nothing is left behind that would block a second attempt.
+      jest.restoreAllMocks();
+      jest.spyOn(console, 'log').mockImplementation(() => {});
+      migrateToBranch({ commit: true });
+      expect(boardRepoKind(dotDir)).toBe('linked');
+      expect(fs.readFileSync(firstTask, 'utf-8')).toContain('Uncommitted.');
+      expect(fs.readFileSync(path.join(dotDir, 'brainfile.md'), 'utf-8')).toContain('Staged edit.');
+    });
+
+    it('rolls back a worktree that git registered before failing (post-checkout hook)', () => {
+      committedBoard();
+      fs.appendFileSync(firstTask, '\nUncommitted.\n');
+      const hook = path.join(repo, '.git', 'hooks', 'post-checkout');
+      fs.mkdirSync(path.dirname(hook), { recursive: true });
+      fs.writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+      const before = repoState(repo);
+
+      expect(() => migrateToBranch({})).toThrow(/git worktree add failed.*Nothing was changed/);
+      expect(repoState(repo)).toEqual(before);
+
+      fs.rmSync(hook);
+      migrateToBranch({});
+      expect(boardRepoKind(dotDir)).toBe('linked');
+      expect(fs.readFileSync(firstTask, 'utf-8')).toContain('Uncommitted.');
+    });
+
+    it('rolls back when the migrated board does not match the original', () => {
+      committedBoard();
+      fs.appendFileSync(firstTask, '\nUncommitted.\n');
+      const before = repoState(repo);
+      const realCommit = boardRepo.commitBoard;
+      jest.spyOn(boardRepo, 'commitBoard').mockImplementation((dir, options) => {
+        // Corrupt the migrated copy behind the migration's back.
+        fs.writeFileSync(path.join(dir, 'board', path.basename(firstTask)), 'clobbered\n');
+        return realCommit(dir, options);
+      });
+
+      expect(() => migrateToBranch({})).toThrow(/Board contents differ after migration: changed board\/task-.*\.md/);
+      expect(repoState(repo)).toEqual(before);
+    });
+  });
+
+  it('migrate --to-branch rolls back an untracked plain board import that fails', () => {
+    const repo = path.join(base, 'repo');
+    makeRepo(repo);
+    process.chdir(repo);
+    initCommand({ plain: true });
+    addCommand({ file: 'brainfile.md', title: 'Existing work', column: 'todo' });
+    const before = repoState(repo);
+    jest.spyOn(boardRepo, 'commitBoard').mockImplementation(() => {
+      throw new Error('simulated commit failure');
+    });
+
+    expect(() => migrateToBranch({})).toThrow(/Nothing was changed/);
+    expect(repoState(repo)).toEqual(before);
+    expect(fs.existsSync(path.join(repo, '.brainfile.migrating'))).toBe(false);
   });
 
   it('commitBoard is a no-op on a plain board', () => {
