@@ -4,7 +4,7 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions are synced across
 `brainfile` (CLI) and `@brainfile/core`.
 
-## [Unreleased]
+## [0.21.1] - 2026-09-23
 
 Shared boards stop showing up as a branch on the remote, and the board
 records which agent made each change without being told.
