@@ -1,8 +1,6 @@
 ---
 id: task-17
 title: migrate --to-branch loses uncommitted board edits and leaves partial state on failure
-column: review
-position: 0
 priority: critical
 tags:
   - bug
@@ -12,7 +10,8 @@ tags:
 relatedFiles:
   - cli/src/commands/migrate-tracked.ts
 createdAt: "2026-09-23T03:05:55.594Z"
-updatedAt: "2026-09-23T03:19:49.370Z"
+updatedAt: "2026-09-23T03:40:47.304Z"
+completedAt: "2026-09-23T03:40:47.304Z"
 ---
 
 ## Description
