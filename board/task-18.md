@@ -14,7 +14,7 @@ subtasks:
     completed: true
   - id: task-18-2
     title: fresh-clone discovery
-    completed: false
+    completed: true
   - id: task-18-3
     title: 0.21.0 branch migration
     completed: false
@@ -28,7 +28,7 @@ subtasks:
     title: docs + changelog
     completed: false
 createdAt: "2026-09-23T18:34:23.176Z"
-updatedAt: "2026-09-23T18:46:28.140Z"
+updatedAt: "2026-09-23T18:46:28.412Z"
 ---
 
 ## Description
