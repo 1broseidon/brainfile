@@ -169,11 +169,18 @@ export function setBoardRemote(cwd: string, target: string, remoteBranch?: strin
 }
 
 /**
- * Register the field-level merge driver in the board's git config. Idempotent;
- * `command` exists for tests, which cannot rely on `brainfile` being on PATH.
+ * Register the field-level merge driver in the board's git config.
+ *
+ * Without an explicit `command` this only fills in a missing driver: a
+ * driver someone configured on purpose (an absolute path to the CLI, or a
+ * test's built bundle) is never overwritten by the next sync.
  */
-export function registerMergeDriver(cwd: string, command = DEFAULT_MERGE_DRIVER_COMMAND): boolean {
+export function registerMergeDriver(cwd: string, command?: string): boolean {
   const current = configGet(cwd, `merge.${MERGE_DRIVER_NAME}.driver`);
+  if (command === undefined) {
+    if (current) return false;
+    command = DEFAULT_MERGE_DRIVER_COMMAND;
+  }
   if (current === command) return false;
   configSet(cwd, `merge.${MERGE_DRIVER_NAME}.name`, 'brainfile board merge (field-level, last writer wins)');
   return configSet(cwd, `merge.${MERGE_DRIVER_NAME}.driver`, command);

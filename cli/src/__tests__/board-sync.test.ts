@@ -310,25 +310,32 @@ describe('board sync (spec-9 phase 2)', () => {
     syncCommand({});
     const dotB = boardInB();
 
+    // B moves first and does not sync; A moves later and pushes. When B
+    // syncs, the incoming (later) move must win. A merge that silently kept
+    // B's own side would leave 'review', so this proves the driver ran.
+    process.chdir(repoB);
+    moveCommand({ file: 'brainfile.md', task: 'task-1', column: 'review' });
+    commitBoard(dotB, { message: 'move task-1', agent: 'b' });
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+
     process.chdir(repoA);
     moveCommand({ file: 'brainfile.md', task: 'task-1', column: 'in-progress' });
     commitBoard(dotA, { message: 'move task-1', agent: 'a' });
     syncCommand({});
 
     process.chdir(repoB);
-    moveCommand({ file: 'brainfile.md', task: 'task-1', column: 'review' });
-    commitBoard(dotB, { message: 'move task-1', agent: 'b' });
     const merged = syncCommand({});
     expect(merged?.ok).toBe(true);
     expect(merged?.conflicts).toEqual([]);
-    expect(column(dotB, 'task-1')).toBe('review');
+    expect(column(dotB, 'task-1')).toBe('in-progress');
+    expect(run(['config', '--get', 'merge.brainfile.driver'], dotB)).toBe(driverCommand);
     expect(run(['status', '--porcelain'], dotB)).toBe('');
     expect(run(['log', '-1', '--format=%P'], dotB).split(' ')).toHaveLength(2);
 
     process.chdir(repoA);
     const back = syncCommand({});
     expect(back?.ok).toBe(true);
-    expect(column(dotA, 'task-1')).toBe('review');
+    expect(column(dotA, 'task-1')).toBe('in-progress');
     expect(run(['rev-parse', 'HEAD'], dotA)).toBe(run(['rev-parse', 'HEAD'], dotB));
   });
 

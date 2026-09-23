@@ -35,7 +35,10 @@ any git remote you choose. Nothing leaves your machine until you choose one.
   Frontmatter merges field by field (the later `updatedAt` wins, ties go to
   the incoming side), log and note lists union by timestamp, `ledger.jsonl`
   merges by line, and a task completed on one machine while edited on another
-  stays completed with the edit appended to its archive.
+  stays completed with the edit appended to its archive. The driver is
+  registered as `brainfile merge-driver` only when none is configured, so a
+  custom one (for example an absolute path when `brainfile` is not on PATH)
+  is kept.
 - `brainfile migrate --to-branch [--commit]` moves an existing board onto the
   branch: history included when it was committed with the code, uncommitted
   edits and new files included always, every file checked by content before
