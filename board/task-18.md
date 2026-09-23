@@ -1,0 +1,36 @@
+---
+id: task-18
+title: Store shared boards under refs/brainfile/ instead of a remote branch
+column: in-progress
+position: 0
+priority: high
+tags:
+  - sync
+  - cli
+  - ux
+subtasks:
+  - id: task-18-1
+    title: sync uses refs/brainfile
+    completed: false
+  - id: task-18-2
+    title: fresh-clone discovery
+    completed: false
+  - id: task-18-3
+    title: 0.21.0 branch migration
+    completed: false
+  - id: task-18-4
+    title: where/sync wording + GitHub link
+    completed: false
+  - id: task-18-5
+    title: tests
+    completed: false
+  - id: task-18-6
+    title: docs + changelog
+    completed: false
+createdAt: "2026-09-23T18:34:23.176Z"
+---
+
+## Description
+GitHub shows a 'had recent pushes / Compare & pull request' banner for every autosync push because the board is pushed to refs/heads/brainfile. Verified on a throwaway repo (1broseidon/brainfile-ref-test): a push to refs/brainfile/board is stored and fetchable but not a branch, so no banner, no branch list entry. Treat the remote as a free filestore.
+
+Plan: push/fetch refs/brainfile/<name> (default 'board' for repo boards), tracking ref refs/brainfile/remotes/<remote>/<name> locally (not refs/remotes, so user prune never touches it), fresh-clone discovery via one guarded network lookup (timeout, no prompts, cached miss), one-time migration of 0.21.0 boards pushed as a branch (merge it in, push new ref, delete the old branch with a lease), where/sync wording, docs, changelog. Ship as 0.21.1.
