@@ -29,9 +29,9 @@ subtasks:
     completed: true
   - id: task-18-7
     title: commits authored by git user; agent detected and recorded on board
-    completed: false
+    completed: true
 createdAt: "2026-09-23T18:34:23.176Z"
-updatedAt: "2026-09-23T19:27:41.931Z"
+updatedAt: "2026-09-23T19:27:42.241Z"
 ---
 
 ## Description
