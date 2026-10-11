@@ -9,6 +9,7 @@ import {
   getLogFilePath,
   findV2Task,
   extractDescription,
+  replaceDescription,
   extractLog,
   composeBody,
   readV2BoardConfig,
@@ -129,6 +130,28 @@ describe('workspace helpers', () => {
     expect(composeBody(undefined, undefined)).toBe('');
     expect(composeBody('Only description')).toBe('## Description\nOnly description\n');
     expect(composeBody(undefined, 'Only log')).toBe('## Log\nOnly log\n');
+  });
+
+  it('keeps headings and dividers that belong to the description', () => {
+    const description = 'Intro.\n\n## Status\n\nStill open.\n\n---\n\nAfter the rule.';
+    const body = composeBody(description, '- 2026-01-01 started');
+
+    expect(extractDescription(body)).toBe(description);
+    expect(extractLog(body)).toBe('- 2026-01-01 started');
+    expect(extractDescription(`${composeBody(description)}\n## Child Tasks\nNone.\n`)).toBe(description);
+  });
+
+  it('replaces or removes the description section in place', () => {
+    const body = composeBody('Old.\n\n## Notes\nold notes', '- 2026-01-01 started');
+
+    const replaced = replaceDescription(body, 'New.\n\n## Status\nnew');
+    expect(extractDescription(replaced!)).toBe('New.\n\n## Status\nnew');
+    expect(extractLog(replaced!)).toBe('- 2026-01-01 started');
+
+    const removed = replaceDescription(body, null);
+    expect(removed).toBe('## Log\n- 2026-01-01 started\n');
+
+    expect(replaceDescription('## Log\n- x\n', 'Anything')).toBeNull();
   });
 
   it('reads config-only board and ensures columns have tasks arrays', () => {

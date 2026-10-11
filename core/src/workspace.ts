@@ -121,11 +121,33 @@ export function findV2Task(
 }
 
 /**
+ * The description section of a task body. It runs to the next section
+ * brainfile writes itself (`## Log`, `## Child Tasks`) or the end, so a
+ * description may carry headings of its own.
+ */
+const DESCRIPTION_SECTION = /## Description\n([\s\S]*?)(?=\n## (?:Log|Child Tasks)[ \t]*(?:\n|$)|\n*$)/;
+
+/**
  * Extract the description section from a task document body.
  */
 export function extractDescription(body: string): string | undefined {
-  const match = body.match(/## Description\n([\s\S]*?)(?=\n## |\n*$)/);
+  const match = body.match(DESCRIPTION_SECTION);
   return match ? match[1].trim() || undefined : undefined;
+}
+
+/**
+ * Replace the description section of a task body, or remove it when the
+ * description is empty. Returns null when the body has no description section.
+ */
+export function replaceDescription(body: string, description: string | null): string | null {
+  const match = DESCRIPTION_SECTION.exec(body);
+  if (!match) return null;
+
+  const before = body.slice(0, match.index);
+  const rest = body.slice(match.index + match[0].length).replace(/^\n+/, '');
+  const text = description?.trim();
+  if (!text) return `${before}${rest}`;
+  return rest ? `${before}## Description\n${text}\n\n${rest}` : `${before}## Description\n${text}\n`;
 }
 
 /**
