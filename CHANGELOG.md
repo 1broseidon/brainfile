@@ -4,7 +4,9 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions are synced across
 `brainfile` (CLI) and `@brainfile/core`.
 
-## [Unreleased]
+## [0.21.2] - 2026-10-11
+
+Descriptions come back whole, headings, dividers and all.
 
 ### Fixed
 - A task description may carry headings and dividers of its own. Reading one
