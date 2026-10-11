@@ -78,6 +78,23 @@ describe('taskFile', () => {
       expect(parseTaskContent(content)).toBeNull();
     });
 
+    it('keeps an indented --- inside a block scalar as content', () => {
+      const content = '---\nid: task-1\ntitle: T\ndescription: |-\n  Before.\n\n  ---\n\n  After.\n---\n\n## Description\nBody\n';
+      const result = parseTaskContent(content);
+
+      expect(result).not.toBeNull();
+      expect(result!.task.description).toBe('Before.\n\n---\n\nAfter.');
+      expect(result!.body).toBe('## Description\nBody\n');
+    });
+
+    it('round-trips a description containing a divider', () => {
+      const task = { id: 'task-1', title: 'T', column: 'todo', description: 'Before.\n\n---\n\nAfter.' } as any;
+      const result = parseTaskContent(serializeTaskContent(task, '## Log\n- x\n'));
+
+      expect(result!.task.description).toBe('Before.\n\n---\n\nAfter.');
+      expect(result!.body).toBe('## Log\n- x\n');
+    });
+
     it('returns null when id is missing', () => {
       const content = '---\ntitle: No ID\n---\n';
       expect(parseTaskContent(content)).toBeNull();

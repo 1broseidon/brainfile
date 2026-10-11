@@ -1213,6 +1213,20 @@ describe('taskOperations', () => {
       expect(readTaskFile(filePath)!.task[field]).toBeUndefined();
     });
 
+    it('edits a description that lives in the body, keeping one copy', () => {
+      const filePath = seedTask('task-1', 'todo');
+      const doc = readTaskFile(filePath)!;
+      writeTaskFile(filePath, doc.task, '## Description\nOld.\n\n## Log\n- 2026-01-01: started\n');
+
+      patchTaskFile(filePath, { description: 'New.\n\n## Status\n\n---\n\nstill open' });
+      const patched = readTaskFile(filePath)!;
+      expect(patched.task.description).toBeUndefined();
+      expect(patched.body).toBe('## Description\nNew.\n\n## Status\n\n---\n\nstill open\n\n## Log\n- 2026-01-01: started\n');
+
+      patchTaskFile(filePath, { description: null });
+      expect(readTaskFile(filePath)!.body).toBe('## Log\n- 2026-01-01: started\n');
+    });
+
     it('sets and clears priority', () => {
       const filePath = seedTask('task-1', 'todo');
 

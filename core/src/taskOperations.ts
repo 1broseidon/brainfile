@@ -13,6 +13,7 @@ import * as path from 'path';
 import type { BoardConfig, Subtask, Task, TaskDocument } from './types';
 import type { Contract, ContractStatus, ContractMetrics } from './types/contract';
 import type { V2Dirs } from './workspace';
+import { replaceDescription } from './workspace';
 import { isTypeCompletable, validateColumn } from './boardValidation';
 import { buildContract } from './contractSpec';
 import { generateNextSubtaskId } from './idGen';
@@ -596,7 +597,16 @@ export function patchTaskFile(taskPath: string, patch: TaskFilePatch): TaskOpera
     }
   };
 
-  applyField('description', patch.description);
+  // A description written into the body by `add` is edited there, so the
+  // file never holds two copies that disagree.
+  let body = doc.body;
+  const inBody = patch.description === undefined ? null : replaceDescription(body, patch.description);
+  if (inBody !== null) {
+    body = inBody;
+    delete task.description;
+  } else {
+    applyField('description', patch.description);
+  }
   applyField('priority', patch.priority);
   applyField('tags', patch.tags);
   applyField('assignee', patch.assignee);
@@ -608,7 +618,7 @@ export function patchTaskFile(taskPath: string, patch: TaskFilePatch): TaskOpera
   task.updatedAt = new Date().toISOString();
 
   try {
-    writeTaskFile(taskPath, task, doc.body);
+    writeTaskFile(taskPath, task, body);
     return { success: true, task, filePath: taskPath };
   } catch (err) {
     return { success: false, error: `Failed to write task file: ${err}` };

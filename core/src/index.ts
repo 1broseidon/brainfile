@@ -334,6 +334,7 @@ export {
   getLogFilePath,
   findV2Task,
   extractDescription,
+  replaceDescription,
   extractLog,
   composeBody,
   readV2BoardConfig,

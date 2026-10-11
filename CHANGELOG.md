@@ -4,6 +4,20 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions are synced across
 `brainfile` (CLI) and `@brainfile/core`.
 
+## [Unreleased]
+
+### Fixed
+- A task description may carry headings and dividers of its own. Reading one
+  stopped at its first `## ` heading, so `show`, `list --json`, search and the
+  MCP tools returned only the text above it; it now runs to the `## Log` or
+  `## Child Tasks` section brainfile writes itself.
+- A `---` line inside a multi-line frontmatter value (a description saved by
+  `patch`) no longer ends the frontmatter early. Only an unindented `---`
+  closes it.
+- `patch --description` edits the description where `add` wrote it, in the
+  body, instead of adding a second copy to the frontmatter that the body's
+  stale one then sat beside.
+
 ## [0.21.1] - 2026-09-23
 
 Shared boards stop showing up as a branch on the remote, and the board

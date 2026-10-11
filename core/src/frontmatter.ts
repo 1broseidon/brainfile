@@ -18,9 +18,11 @@ export function parseFrontmatter<T>(content: string): FrontmatterDocument<T> | n
     return null;
   }
 
+  // The closing delimiter starts the line. An indented `---` is content: a
+  // divider inside a YAML block scalar such as a multi-line description.
   let endIndex = -1;
   for (let i = 1; i < lines.length; i++) {
-    if (lines[i].trim() === '---') {
+    if (lines[i].trimEnd() === '---') {
       endIndex = i;
       break;
     }
