@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { initials, tagHue } from '../lib/format';
+  import { hueOf, initials } from '../lib/format';
 
   let { name, size = 18 }: { name?: string; size?: number } = $props();
 </script>
@@ -10,8 +10,8 @@
     title={name}
     style:width="{size}px"
     style:height="{size}px"
-    style:font-size="{Math.round(size * (size < 20 ? 0.52 : 0.42))}px"
-    style:--hue={tagHue(name)}
+    style:font-size="{Math.round(size * (size < 20 ? 0.56 : 0.42))}px"
+    style:--hue={hueOf(name)}
   >
     {size < 20 ? initials(name).slice(0, 1) : initials(name)}
   </span>
@@ -28,10 +28,8 @@
     justify-content: center;
     flex: none;
     border-radius: 50%;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    color: hsl(var(--hue) 70% 88%);
-    background: hsl(var(--hue) 38% 32%);
-    box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+    font-weight: 650;
+    color: var(--face-ink);
+    background: oklch(var(--face-l) var(--face-c) var(--hue));
   }
 </style>

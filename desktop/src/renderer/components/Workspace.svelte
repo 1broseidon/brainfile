@@ -1,6 +1,8 @@
 <script lang="ts">
   import { api, app } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
+  import Mark from './Mark.svelte';
+  import { tildify } from '../lib/format';
   import ListView from './ListView.svelte';
   import BoardView from './BoardView.svelte';
   import TaskDetail from './TaskDetail.svelte';
@@ -41,13 +43,7 @@
     <div class="drag strip"></div>
     <div class="center">
       <div class="empty">
-        <div class="art">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true">
-            <rect x="4" y="10" width="14" height="36" rx="3.5" stroke="var(--ink-4)" stroke-width="1.5" />
-            <rect x="21" y="10" width="14" height="26" rx="3.5" stroke="var(--ink-3)" stroke-width="1.5" />
-            <rect x="38" y="10" width="14" height="18" rx="3.5" fill="var(--accent)" fill-opacity="0.18" stroke="var(--accent)" stroke-width="1.5" />
-          </svg>
-        </div>
+        <div class="art"><Mark size={36} /></div>
         <h1>Add your first project</h1>
         <p>
           A project is a repository, or any folder, with a Brainfile board. Brainfile finds the board in
@@ -98,6 +94,7 @@
   {:else if board}
     <header class="bar drag">
       <span class="title">{board.title}</span>
+      <span class="path mono">{tildify(project.path)}</span>
       <span class="sep"></span>
       <div class="segmented no-drag" role="tablist">
         <button role="tab" aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
@@ -116,9 +113,9 @@
         disabled={!board.sync.remote || board.sync.busy}
         onclick={sync}
       >
-        <span class="spin"><Icon name={board.sync.remote ? 'sync' : board.storage === 'plain' ? 'folder' : 'git'} size={13} /></span>
-        {board.sync.busy ? 'Syncing…' : (board.sync.label ?? 'Plain files')}
-        {#if board.sync.pending > 0}<span class="pending tabular">{board.sync.pending}</span>{/if}
+        <span class="dot" class:shared={!!board.sync.remote}></span>
+        <span class="mono">{board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')}</span>
+        {#if board.sync.pending > 0}<span class="pending mono tabular">↑{board.sync.pending}</span>{/if}
       </button>
       <button class="btn no-drag" onclick={() => (app.composer = {})}>
         <Icon name="plus" size={14} />New task
@@ -153,9 +150,9 @@
     margin: var(--inset) var(--inset) var(--inset) 0;
     display: flex;
     flex-direction: column;
-    border-radius: 10px;
-    background: var(--pane);
-    box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.4);
+    border-radius: var(--r-pane);
+    background: var(--canvas);
+    box-shadow: var(--top-light), 0 0 0 var(--hairline) var(--line);
     overflow: hidden;
     position: relative;
   }
@@ -163,26 +160,31 @@
   .strip {
     position: absolute;
     inset: 0 0 auto;
-    height: var(--header-h);
+    height: var(--bar-h);
   }
 
   .bar {
-    height: var(--header-h);
+    height: var(--bar-h);
     flex: none;
     display: flex;
     align-items: center;
     gap: var(--s3);
-    padding: 0 var(--s3) 0 var(--s5);
-    border-bottom: 0.5px solid var(--line);
+    padding: 0 var(--s2) 0 var(--s5);
+    border-bottom: var(--hairline) solid var(--line);
   }
 
   .title {
-    font-weight: 600;
+    font-weight: 650;
     letter-spacing: -0.01em;
   }
 
+  .path {
+    color: var(--ink-4);
+    margin-left: calc(-1 * var(--s1));
+  }
+
   .sep {
-    width: 0.5px;
+    width: var(--hairline);
     height: 16px;
     background: var(--line-strong);
   }
@@ -196,9 +198,8 @@
     display: flex;
     padding: 2px;
     gap: 2px;
-    border-radius: var(--r-md);
-    background: rgba(255, 255, 255, 0.04);
-    box-shadow: inset 0 0 0 0.5px var(--line);
+    border-radius: var(--r-control);
+    background: var(--well);
   }
 
   .segmented button {
@@ -207,11 +208,10 @@
     align-items: center;
     gap: 6px;
     padding: 0 var(--s2);
-    border-radius: var(--r-sm);
-    font-size: var(--text-sm);
+    border-radius: var(--r-chip);
     font-weight: 500;
     color: var(--ink-3);
-    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
   }
 
   .segmented button:hover {
@@ -220,56 +220,58 @@
 
   .segmented button.on {
     color: var(--ink);
-    background: rgba(255, 255, 255, 0.09);
-    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
+    background: var(--raised);
+    box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
   }
 
   .sync {
     height: 28px;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--s2);
     padding: 0 var(--s2);
-    border-radius: var(--r-md);
-    font-size: var(--text-sm);
+    border-radius: var(--r-control);
     color: var(--ink-3);
   }
 
   .sync:not(:disabled):hover {
-    background: var(--hover-strong);
+    background: var(--fill-hover);
     color: var(--ink-2);
   }
 
   .sync.warn {
-    color: var(--status-progress);
+    color: var(--warn);
   }
 
-  .spin {
-    display: inline-flex;
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1.5px var(--ink-4);
   }
 
-  .sync.busy .spin {
-    animation: spin 0.9s linear infinite;
+  .dot.shared {
+    background: var(--c-done);
+    box-shadow: none;
   }
 
-  @keyframes spin {
+  .sync.warn .dot {
+    background: var(--warn);
+  }
+
+  .sync.busy .dot {
+    background: var(--accent);
+    animation: pulse 1s var(--ease) infinite alternate;
+  }
+
+  @keyframes pulse {
     to {
-      transform: rotate(360deg);
+      opacity: 0.3;
     }
   }
 
   .pending {
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--ink);
-    background: rgba(255, 255, 255, 0.1);
+    color: var(--ink-2);
   }
 
   .content {
@@ -287,7 +289,7 @@
   }
 
   .empty {
-    max-width: 420px;
+    max-width: 440px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -295,39 +297,34 @@
   }
 
   .art {
-    margin-bottom: var(--s6);
+    margin-bottom: var(--s5);
   }
 
   h1 {
     margin: 0;
-    font-size: var(--text-lg);
-    font-weight: 600;
+    font-size: var(--t-read);
+    line-height: 24px;
+    font-weight: 650;
     letter-spacing: -0.01em;
   }
 
   p {
     margin: var(--s2) 0 var(--s6);
     color: var(--ink-2);
-    line-height: 1.6;
+    line-height: 22px;
   }
 
   code {
     font-family: var(--mono);
-    font-size: 0.88em;
+    font-size: var(--t-meta);
     padding: 1px 5px;
-    border-radius: var(--r-sm);
-    background: rgba(255, 255, 255, 0.06);
+    border-radius: var(--r-chip);
+    background: var(--fill-code);
     color: var(--ink);
   }
 
   .actions {
     display: flex;
     gap: var(--s2);
-  }
-
-  .keys {
-    font-size: var(--text-xs);
-    opacity: 0.7;
-    margin-left: 2px;
   }
 </style>

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
-  import { columnProgress } from '../lib/format';
+  import { asTree, columnProgress } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import TaskRow from './TaskRow.svelte';
@@ -8,14 +8,23 @@
 
   let { board }: { board: BoardSnapshot } = $props();
 
-  let collapsed = $state<Record<string, boolean>>({});
+  let folded = $state<Record<string, boolean>>({});
+  let hidden = $state<Record<string, boolean>>({});
   let dropTarget = $state<string | null>(null);
 
   const groups = $derived(
-    board.columns.map((column) => ({
-      column,
-      tasks: board.tasks.filter((t) => t.column === column.id),
-    }))
+    board.columns.map((column) => {
+      const rows = asTree(board.tasks.filter((t) => t.column === column.id));
+      // Drop the descendants of a collapsed parent.
+      const visible: typeof rows = [];
+      let skipBelow = Infinity;
+      for (const row of rows) {
+        if (row.depth > skipBelow) continue;
+        skipBelow = hidden[row.task.id] ? row.depth : Infinity;
+        visible.push(row);
+      }
+      return { column, rows: visible, count: rows.length };
+    })
   );
 
   function drop(e: DragEvent, column: string): void {
@@ -26,7 +35,7 @@
 </script>
 
 <div class="list" role="table">
-  {#each groups as { column, tasks } (column.id)}
+  {#each groups as { column, rows, count } (column.id)}
     <section
       class="group"
       class:drop={dropTarget === column.id}
@@ -38,33 +47,43 @@
       ondragleave={() => (dropTarget = null)}
       ondrop={(e) => drop(e, column.id)}
     >
-      <header class="group-head">
-        <button class="toggle" onclick={() => (collapsed[column.id] = !collapsed[column.id])}>
-          <span class="chev" class:open={!collapsed[column.id]}><Icon name="chevron" size={12} stroke={1.8} /></span>
+      <header class="head">
+        <button class="fold" onclick={() => (folded[column.id] = !folded[column.id])}>
           <StatusIcon progress={columnProgress(board.columns, column.id)} />
           <span class="name">{column.title}</span>
-          <span class="count tabular">{tasks.length}</span>
+          <span class="count mono tabular">{count}</span>
+          <span class="chev" class:open={!folded[column.id]}><Icon name="chevron" size={12} stroke={1.8} /></span>
         </button>
         <button class="icon-btn add" title="New task in {column.title}" onclick={() => (app.composer = { column: column.id })}>
           <Icon name="plus" size={14} />
         </button>
       </header>
-      {#if !collapsed[column.id]}
-        {#each tasks as task (task.id)}
-          <TaskRow {task} columns={board.columns} />
+      {#if !folded[column.id]}
+        {#each rows as row (row.task.id)}
+          <TaskRow
+            task={row.task}
+            columns={board.columns}
+            depth={row.depth}
+            children={row.children}
+            collapsed={!!hidden[row.task.id]}
+            ontoggle={() => (hidden[row.task.id] = !hidden[row.task.id])}
+          />
         {/each}
+        {#if rows.length === 0}
+          <button class="empty" onclick={() => (app.composer = { column: column.id })}>Nothing here</button>
+        {/if}
       {/if}
     </section>
   {/each}
 
   {#if board.completed.length}
     <section class="group">
-      <header class="group-head">
-        <button class="toggle" onclick={() => (app.showCompleted = !app.showCompleted)}>
-          <span class="chev" class:open={app.showCompleted}><Icon name="chevron" size={12} stroke={1.8} /></span>
+      <header class="head">
+        <button class="fold" onclick={() => (app.showCompleted = !app.showCompleted)}>
           <StatusIcon progress={1} />
-          <span class="name">Completed</span>
-          <span class="count tabular">{board.completed.length}</span>
+          <span class="name">Done</span>
+          <span class="count mono tabular">{board.completed.length}</span>
+          <span class="chev" class:open={app.showCompleted}><Icon name="chevron" size={12} stroke={1.8} /></span>
         </button>
       </header>
       {#if app.showCompleted}
@@ -80,63 +99,82 @@
   .list {
     height: 100%;
     overflow-y: auto;
-    padding-bottom: var(--s10);
+    padding: var(--s2) 0 var(--s12);
   }
 
-  .group.drop .group-head {
-    background: var(--selected);
+  .group + .group {
+    margin-top: var(--s3);
   }
 
-  .group-head {
+  .head {
     position: sticky;
     top: 0;
     z-index: 1;
-    height: 36px;
+    height: 40px;
     display: flex;
     align-items: center;
-    padding: 0 var(--s4) 0 var(--s2);
-    background: #121316;
-    border-bottom: 0.5px solid var(--line);
-    transition: background var(--fast) var(--ease);
+    padding: 0 var(--s5) 0 var(--s4);
+    background: var(--canvas);
   }
 
-  .toggle {
+  .group.drop .head {
+    background: color-mix(in oklch, var(--canvas), var(--accent) 8%);
+  }
+
+  .fold {
     flex: 1;
     height: 100%;
     display: flex;
     align-items: center;
     gap: var(--s2);
+    padding-left: 6px;
     text-align: left;
   }
 
+  .name {
+    font-weight: 600;
+    margin-left: 2px;
+  }
+
+  .count {
+    color: var(--ink-4);
+  }
+
   .chev {
-    width: 16px;
     display: inline-flex;
-    justify-content: center;
-    color: var(--ink-3);
-    transition: transform var(--base) var(--ease);
+    color: var(--ink-4);
+    opacity: 0;
+    transition: transform var(--d-open) var(--ease), opacity var(--d-press) var(--ease);
   }
 
   .chev.open {
     transform: rotate(90deg);
   }
 
-  .name {
-    font-weight: 550;
-  }
-
-  .count {
-    color: var(--ink-3);
-    font-size: var(--text-sm);
+  .head:hover .chev,
+  .chev:not(.open) {
+    opacity: 1;
   }
 
   .add {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     opacity: 0;
   }
 
-  .group-head:hover .add {
+  .head:hover .add {
     opacity: 1;
+  }
+
+  .empty {
+    height: var(--row-h);
+    padding-left: 54px;
+    color: var(--ink-4);
+    text-align: left;
+    width: 100%;
+  }
+
+  .empty:hover {
+    color: var(--ink-3);
   }
 </style>

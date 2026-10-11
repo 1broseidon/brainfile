@@ -129,7 +129,8 @@ ipcMain.handle(CHANNEL.invoke, async (_event, method: string, ...args: unknown[]
 // ── Window ──────────────────────────────────────────────────────────────────
 
 function createWindow(): void {
-  nativeTheme.themeSource = 'dark';
+  const forced = process.env.BRAINFILE_THEME;
+  nativeTheme.themeSource = forced === 'light' || forced === 'dark' ? forced : 'system';
   win = new BrowserWindow({
     width: 1440,
     height: 920,
@@ -138,10 +139,9 @@ function createWindow(): void {
     show: false,
     title: 'Brainfile',
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 16, y: 17 },
-    vibrancy: 'sidebar',
-    visualEffectState: 'followWindow',
-    backgroundColor: '#00000000',
+    trafficLightPosition: { x: 18, y: 15 },
+    // The well (tokens.css), so a resize never flashes another colour.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0b0f' : '#e8e7ee',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -167,7 +167,6 @@ function createWindow(): void {
 function captureAndQuit(target: BrowserWindow, file: string): void {
   target.webContents.once('did-finish-load', async () => {
     await new Promise((r) => setTimeout(r, 1500));
-    await target.webContents.executeJavaScript("document.documentElement.classList.add('capture')");
     const script = process.env.BRAINFILE_CAPTURE_SCRIPT;
     if (script) {
       await target.webContents.executeJavaScript(script).catch((err) => console.error(err));

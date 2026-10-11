@@ -1,7 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
-  import { projectHue } from '../lib/format';
   import Icon from './Icon.svelte';
+  import Mark from './Mark.svelte';
   import type { Project } from '../../shared/api';
 
   function count(project: Project): number | null {
@@ -9,81 +9,71 @@
     return board ? board.tasks.length : null;
   }
 
-  function stateHint(project: Project): string | null {
+  function hint(project: Project): string | null {
     switch (project.state.status) {
       case 'no-board':
-        return 'No board';
+        return 'no board';
       case 'legacy':
         return 'v1';
       case 'missing':
-        return 'Missing';
+        return 'missing';
       case 'error':
-        return 'Error';
+        return 'error';
       default:
         return null;
     }
   }
+
+  function storageIcon(project: Project): 'git' | 'folder' {
+    return project.state.status === 'ready' && project.state.storage !== 'plain' ? 'git' : 'folder';
+  }
 </script>
 
 <aside class="sidebar">
-  <div class="top drag"></div>
+  <div class="lights drag"></div>
 
-  <div class="brand">
-    <span class="mark">
-      <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-        <rect x="1" y="1" width="16" height="16" rx="4.5" fill="var(--accent)" />
-        <path d="M5.5 6.5h7M5.5 9h7M5.5 11.5h4" stroke="white" stroke-width="1.5" stroke-linecap="round" />
-      </svg>
-    </span>
-    <span class="name">Brainfile</span>
+  <div class="brand drag">
+    <Mark size={16} />
+    <span class="wordmark">brainfile</span>
   </div>
 
-  <button class="search no-drag" onclick={() => (app.paletteOpen = true)}>
+  <button class="search" onclick={() => (app.paletteOpen = true)}>
     <Icon name="search" size={14} />
-    <span>Search or jump to…</span>
+    <span>Search</span>
     <kbd>⌘K</kbd>
   </button>
 
-  <div class="section">
-    <div class="section-head">
-      <span>Projects</span>
-      <button class="icon-btn small" title="Add project (⌘O)" onclick={() => app.addProject()}>
-        <Icon name="plus" size={14} />
+  <div class="head">
+    <span>Projects</span>
+    <button class="icon-btn small" title="Add project  ⌘O" onclick={() => app.addProject()}>
+      <Icon name="plus" size={14} />
+    </button>
+  </div>
+
+  <nav class="projects">
+    {#each app.projects as project, i (project.id)}
+      {@const active = project.id === app.activeId}
+      {@const note = hint(project)}
+      {@const n = count(project)}
+      <button class="project" class:active class:dim={note !== null} title={project.path} onclick={() => app.select(project.id)}>
+        <span class="kind"><Icon name={storageIcon(project)} size={14} /></span>
+        <span class="label">{project.name}</span>
+        {#if note}
+          <span class="meta mono">{note}</span>
+        {:else if n !== null}
+          <span class="meta mono tabular">{n}</span>
+        {:else if i < 9}
+          <span class="meta mono key">⌘{i + 1}</span>
+        {/if}
       </button>
-    </div>
-
-    <nav class="projects">
-      {#each app.projects as project, i (project.id)}
-        {@const active = project.id === app.activeId}
-        {@const hint = stateHint(project)}
-        {@const n = count(project)}
-        <button
-          class="project"
-          class:active
-          class:dim={hint !== null}
-          title={project.path}
-          onclick={() => app.select(project.id)}
-        >
-          <span class="glyph" style:--hue={projectHue(project.name)}>{project.name.slice(0, 1).toUpperCase()}</span>
-          <span class="label">{project.name}</span>
-          {#if hint}
-            <span class="meta hint">{hint}</span>
-          {:else if n !== null}
-            <span class="meta tabular">{n}</span>
-          {:else if i < 9}
-            <span class="meta shortcut">⌘{i + 1}</span>
-          {/if}
-        </button>
-      {/each}
-    </nav>
-
+    {/each}
     {#if app.loaded && app.projects.length === 0}
-      <button class="add-first" onclick={() => app.addProject()}>
-        <Icon name="plus" size={14} />
-        Add a project
+      <button class="project add" onclick={() => app.addProject()}>
+        <span class="kind"><Icon name="plus" size={14} /></span>
+        <span class="label">Add a project</span>
       </button>
     {/if}
-  </div>
+  </nav>
 </aside>
 
 <style>
@@ -92,33 +82,29 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    padding: 0 var(--s3) var(--s3);
-    gap: var(--s1);
+    padding: 0 var(--s2) var(--s3) var(--s3);
   }
 
-  .top {
-    height: 40px;
+  .lights {
+    height: var(--bar-h);
     flex: none;
-    margin: 0 calc(-1 * var(--s3));
+    margin-right: calc(-1 * var(--s2));
   }
 
   .brand {
-    height: 32px;
+    height: 28px;
     display: flex;
     align-items: center;
-    gap: var(--s2);
+    gap: 7px;
     padding: 0 var(--s2);
-    margin-bottom: var(--s1);
+    margin-bottom: var(--s3);
   }
 
-  .mark {
-    display: inline-flex;
-  }
-
-  .name {
-    font-weight: 600;
-    font-size: var(--text-md);
-    letter-spacing: -0.01em;
+  .wordmark {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    color: var(--ink);
   }
 
   .search {
@@ -126,17 +112,15 @@
     display: flex;
     align-items: center;
     gap: var(--s2);
-    padding: 0 var(--s2);
-    border-radius: var(--r-md);
+    padding: 0 6px 0 var(--s2);
+    border-radius: var(--r-control);
     color: var(--ink-3);
-    font-size: var(--text-md);
-    background: rgba(255, 255, 255, 0.035);
-    box-shadow: inset 0 0 0 0.5px var(--line);
-    transition: background var(--fast) var(--ease);
+    background: var(--canvas);
+    box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
+    transition: color var(--d-press) var(--ease);
   }
 
   .search:hover {
-    background: rgba(255, 255, 255, 0.06);
     color: var(--ink-2);
   }
 
@@ -145,27 +129,21 @@
     text-align: left;
   }
 
-  .section {
-    margin-top: var(--s4);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-
-  .section-head {
+  .head {
     height: 28px;
+    margin-top: var(--s5);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 var(--s1) 0 var(--s2);
-    font-size: var(--text-sm);
+    padding: 0 0 0 var(--s2);
+    font-size: var(--t-meta);
     font-weight: 500;
     color: var(--ink-3);
   }
 
   .icon-btn.small {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
   }
 
   .projects {
@@ -176,44 +154,51 @@
   }
 
   .project {
+    position: relative;
     height: 30px;
     display: flex;
     align-items: center;
     gap: var(--s2);
     padding: 0 var(--s2);
-    border-radius: var(--r-md);
+    border-radius: var(--r-control);
     color: var(--ink-2);
     text-align: left;
-    transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
   }
 
   .project:hover {
-    background: var(--hover-strong);
+    background: var(--fill-hover);
     color: var(--ink);
   }
 
   .project.active {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--fill-active);
     color: var(--ink);
+  }
+
+  /* The TUI's ▌ cursor. */
+  .project.active::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: 1px;
+    background: var(--accent);
   }
 
   .project.dim .label {
     color: var(--ink-3);
   }
 
-  .glyph {
-    width: 18px;
-    height: 18px;
-    flex: none;
+  .kind {
     display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 5px;
-    font-size: 10px;
-    font-weight: 650;
-    color: hsl(var(--hue) 80% 90%);
-    background: hsl(var(--hue) 45% 36%);
-    box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14);
+    color: var(--ink-3);
+  }
+
+  .project.active .kind {
+    color: var(--ink-2);
   }
 
   .label {
@@ -225,31 +210,19 @@
   }
 
   .meta {
-    font-size: var(--text-xs);
-    color: var(--ink-3);
+    color: var(--ink-4);
   }
 
-  .meta.shortcut {
+  .meta.key {
     opacity: 0;
-    transition: opacity var(--fast) var(--ease);
+    transition: opacity var(--d-press) var(--ease);
   }
 
-  .project:hover .meta.shortcut {
+  .project:hover .meta.key {
     opacity: 1;
   }
 
-  .add-first {
-    height: 30px;
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    padding: 0 var(--s2);
-    border-radius: var(--r-md);
+  .project.add {
     color: var(--ink-3);
-  }
-
-  .add-first:hover {
-    background: var(--hover-strong);
-    color: var(--ink);
   }
 </style>

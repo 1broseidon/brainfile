@@ -1,6 +1,6 @@
 <script lang="ts">
   import { api, app } from '../lib/state.svelte';
-  import { columnProgress, projectHue } from '../lib/format';
+  import { columnProgress, tildify } from '../lib/format';
   import Icon, { type IconName } from './Icon.svelte';
   import StatusIcon from './StatusIcon.svelte';
 
@@ -10,7 +10,7 @@
     label: string;
     hint?: string;
     icon?: IconName;
-    hue?: number;
+    detail?: string;
     progress?: number;
     run: () => void;
   }
@@ -71,7 +71,8 @@
       section: 'Projects',
       label: p.name,
       hint: i < 9 ? `⌘${i + 1}` : undefined,
-      hue: projectHue(p.name),
+      icon: 'git',
+      detail: tildify(p.path),
       run: () => app.select(p.id),
     }));
     const board = app.board;
@@ -83,7 +84,7 @@
             key: `t:${t.id}`,
             section: 'Tasks',
             label: t.title,
-            hint: t.id,
+            detail: t.id,
             progress: t.completedAt ? 1 : columnProgress(board.columns, t.column),
             run: () => (app.openTaskId = t.id),
           }))
@@ -131,7 +132,7 @@
 <div class="overlay" role="presentation" onmousedown={close}></div>
 <div class="palette" role="dialog" aria-label="Command menu">
   <div class="field">
-    {#if app.active}<span class="scope">{app.active.name}</span>{/if}
+    {#if app.active}<span class="scope mono">{app.active.name}</span>{/if}
     <input bind:this={input} bind:value={query} {onkeydown} placeholder="Type a command or search tasks…" spellcheck="false" />
   </div>
   <div class="results" bind:this={list}>
@@ -143,14 +144,13 @@
         <span class="lead">
           {#if entry.icon}
             <Icon name={entry.icon} size={15} />
-          {:else if entry.hue !== undefined}
-            <span class="glyph" style:--hue={entry.hue}>{entry.label.slice(0, 1).toUpperCase()}</span>
           {:else if entry.progress !== undefined}
             <StatusIcon progress={entry.progress} />
           {/if}
         </span>
         <span class="label">{entry.label}</span>
-        {#if entry.hint}<span class="hint tabular">{entry.hint}</span>{/if}
+        {#if entry.detail}<span class="detail mono">{entry.detail}</span>{/if}
+        {#if entry.hint}<kbd class="hint">{entry.hint}</kbd>{/if}
       </button>
     {/each}
     {#if entries.length === 0}
@@ -164,8 +164,8 @@
     position: fixed;
     inset: 0;
     z-index: 50;
-    background: var(--overlay);
-    animation: fade var(--base) var(--ease);
+    background: var(--scrim);
+    animation: fade var(--d-open) var(--ease);
   }
 
   @keyframes fade {
@@ -184,11 +184,11 @@
     transform: translateX(-50%);
     display: flex;
     flex-direction: column;
-    border-radius: var(--r-xl);
-    background: var(--popover);
-    box-shadow: var(--shadow-modal);
+    border-radius: var(--r-pane);
+    background: var(--pop);
+    box-shadow: var(--shadow-float);
     overflow: hidden;
-    animation: rise var(--base) var(--ease);
+    animation: rise var(--d-open) var(--ease);
   }
 
   @keyframes rise {
@@ -212,17 +212,17 @@
     padding: 0 var(--s2);
     display: inline-flex;
     align-items: center;
-    border-radius: var(--r-sm);
-    font-size: var(--text-xs);
+    border-radius: var(--r-chip);
+    font-size: var(--t-micro);
     color: var(--ink-2);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--fill-active);
   }
 
   input {
     height: 44px;
     border: 0;
     background: transparent;
-    font-size: var(--text-lg);
+    font-size: var(--t-read);
   }
 
   input::placeholder {
@@ -236,7 +236,7 @@
 
   .section {
     padding: var(--s2) var(--s2) var(--s1);
-    font-size: var(--text-xs);
+    font-size: var(--t-micro);
     font-weight: 500;
     color: var(--ink-3);
   }
@@ -248,12 +248,12 @@
     align-items: center;
     gap: var(--s3);
     padding: 0 var(--s3);
-    border-radius: var(--r-md);
+    border-radius: var(--r-control);
     text-align: left;
   }
 
   .entry.active {
-    background: var(--hover-strong);
+    background: var(--fill-active);
   }
 
   .lead {
@@ -263,18 +263,6 @@
     color: var(--ink-2);
   }
 
-  .glyph {
-    width: 18px;
-    height: 18px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 5px;
-    font-size: 10px;
-    font-weight: 650;
-    color: hsl(var(--hue) 80% 90%);
-    background: hsl(var(--hue) 45% 36%);
-  }
 
   .label {
     flex: 1;
@@ -283,8 +271,16 @@
     text-overflow: ellipsis;
   }
 
+  .detail {
+    color: var(--ink-4);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 40%;
+  }
+
   .hint {
-    font-size: var(--text-sm);
+    font-size: var(--t-meta);
     color: var(--ink-3);
   }
 

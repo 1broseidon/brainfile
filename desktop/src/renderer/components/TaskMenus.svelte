@@ -55,7 +55,7 @@
       onclose={close}
     >
       {#snippet icon(item)}
-        <PriorityIcon priority={item.value as Priority | null} />
+        <PriorityIcon priority={item.value as Priority | null} placeholder />
       {/snippet}
     </Menu>
   {:else if menu.kind === 'assignee'}
@@ -100,7 +100,7 @@
     width: 12px;
     height: 12px;
     border-radius: 3px;
-    box-shadow: inset 0 0 0 1.5px var(--ink-3);
+    box-shadow: inset 0 0 0 1.5px var(--ink-4);
   }
 
   .tagbox.on {

@@ -88,7 +88,7 @@
   }
 </script>
 
-<div class="scrim" role="presentation" onmousedown={onclose}></div>
+<div class="catch" role="presentation" onmousedown={onclose}></div>
 <div class="menu" bind:this={el} style:left="{left}px" style:top="{top}px" role="listbox" tabindex="-1">
   <div class="filter">
     <input bind:this={input} bind:value={query} {placeholder} {onkeydown} spellcheck="false" />
@@ -127,7 +127,7 @@
 </div>
 
 <style>
-  .scrim {
+  .catch {
     position: fixed;
     inset: 0;
     z-index: 40;
@@ -140,11 +140,11 @@
     max-height: 340px;
     display: flex;
     flex-direction: column;
-    border-radius: var(--r-lg);
-    background: var(--popover);
-    box-shadow: var(--shadow-pop);
+    border-radius: var(--r-card);
+    background: var(--pop);
+    box-shadow: var(--shadow-float);
     overflow: hidden;
-    animation: pop var(--base) var(--ease);
+    animation: pop var(--d-open) var(--ease);
   }
 
   @keyframes pop {
@@ -164,7 +164,7 @@
     padding: 0 var(--s3);
     background: transparent;
     border: 0;
-    font-size: var(--text-md);
+    font-size: var(--t-body);
   }
 
   .filter input::placeholder {
@@ -183,13 +183,13 @@
     align-items: center;
     gap: var(--s2);
     padding: 0 var(--s2);
-    border-radius: var(--r-md);
+    border-radius: var(--r-control);
     text-align: left;
     color: var(--ink);
   }
 
   .item.active {
-    background: var(--hover-strong);
+    background: var(--fill-active);
   }
 
   .icon {
@@ -214,7 +214,7 @@
   .num {
     width: 14px;
     text-align: right;
-    font-size: var(--text-xs);
+    font-size: var(--t-micro);
     color: var(--ink-3);
   }
 

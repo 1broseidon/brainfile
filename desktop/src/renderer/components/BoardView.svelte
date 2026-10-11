@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
-  import { columnProgress, shortDate, tagHue } from '../lib/format';
+  import { columnProgress, kindGlyph, shortDate } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import PriorityIcon from './PriorityIcon.svelte';
@@ -40,7 +40,7 @@
       <header class="head">
         <StatusIcon progress={columnProgress(board.columns, column.id)} />
         <span class="name">{column.title}</span>
-        <span class="count tabular">{tasks.length}</span>
+        <span class="count mono tabular">{tasks.length}</span>
         <span class="spacer"></span>
         <button class="icon-btn small" title="New task in {column.title}" onclick={() => (app.composer = { column: column.id })}>
           <Icon name="plus" size={14} />
@@ -49,6 +49,7 @@
 
       <div class="cards">
         {#each tasks as task (task.id)}
+          {@const subDone = task.subtasks?.filter((s) => s.completed).length ?? 0}
           <button
             class="card"
             class:selected={app.selectedTaskId === task.id}
@@ -63,28 +64,30 @@
             onmouseenter={() => (app.selectedTaskId = task.id)}
             onclick={() => (app.openTaskId = task.id)}
           >
-            <div class="card-top">
-              <span class="id tabular">{task.id}</span>
-              <Avatar name={task.assignee} size={18} />
+            <div class="top">
+              {#if kindGlyph(task.type)}<span class="glyph">{kindGlyph(task.type)}</span>{/if}
+              <span class="id mono">{task.id}</span>
+              <span class="spacer"></span>
+              {#if task.assignee}<Avatar name={task.assignee} size={18} />{/if}
             </div>
             <div class="title">{task.title}</div>
-            <div class="card-meta">
-              {#if task.priority}
-                <span class="chip-sm"><PriorityIcon priority={task.priority} size={12} /></span>
-              {/if}
-              {#if task.subtasks?.length}
-                <span class="chip-sm tabular">
-                  <StatusIcon size={12} progress={task.subtasks.filter((s) => s.completed).length / task.subtasks.length} />
-                  {task.subtasks.filter((s) => s.completed).length}/{task.subtasks.length}
-                </span>
-              {/if}
-              {#each (task.tags ?? []).slice(0, 2) as tag (tag)}
-                <span class="chip-sm"><i style:--hue={tagHue(tag)}></i>{tag}</span>
-              {/each}
-              {#if task.dueDate}
-                <span class="chip-sm"><Icon name="calendar" size={12} />{shortDate(task.dueDate)}</span>
-              {/if}
-            </div>
+            {#if task.priority || task.contractStatus || task.subtasks?.length || task.tags?.length || task.dueDate}
+              <div class="meta">
+                {#if task.priority}<PriorityIcon priority={task.priority} size={13} />{/if}
+                {#if task.contractStatus}
+                  <span class="contract" data-status={task.contractStatus}>{task.contractStatus.replace('_', ' ')}</span>
+                {/if}
+                {#if task.subtasks?.length}
+                  <span class="mono sub tabular" class:complete={subDone === task.subtasks.length}>
+                    {subDone}/{task.subtasks.length}
+                  </span>
+                {/if}
+                {#each (task.tags ?? []).slice(0, 2) as tag (tag)}
+                  <span class="tag">{tag}</span>
+                {/each}
+                {#if task.dueDate}<span class="mono due">{shortDate(task.dueDate)}</span>{/if}
+              </div>
+            {/if}
           </button>
         {/each}
         {#if tasks.length === 0}
@@ -102,40 +105,40 @@
     height: 100%;
     display: flex;
     gap: var(--s3);
-    padding: var(--s3) var(--s4) 0;
+    padding: var(--s2) var(--s4) 0;
     overflow-x: auto;
   }
 
   .column {
-    width: 312px;
+    width: 304px;
     flex: none;
     display: flex;
     flex-direction: column;
     min-height: 0;
-    border-radius: var(--r-lg);
-    transition: background var(--fast) var(--ease);
+    border-radius: var(--r-card);
+    transition: background var(--d-press) var(--ease);
   }
 
   .column.drop {
-    background: rgba(122, 132, 230, 0.06);
+    background: var(--fill-selected);
   }
 
   .head {
-    height: 36px;
+    height: 40px;
     flex: none;
     display: flex;
     align-items: center;
     gap: var(--s2);
-    padding: 0 var(--s1) 0 var(--s2);
+    padding: 0 2px 0 var(--s2);
   }
 
   .name {
-    font-weight: 550;
+    font-weight: 600;
+    margin-left: 2px;
   }
 
   .count {
-    color: var(--ink-3);
-    font-size: var(--text-sm);
+    color: var(--ink-4);
   }
 
   .spacer {
@@ -143,55 +146,63 @@
   }
 
   .icon-btn.small {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
   }
 
   .cards {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--s2);
     padding: 2px 2px var(--s6);
     overflow-y: auto;
   }
 
   .card {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px var(--s3) var(--s3);
-    border-radius: var(--r-lg);
-    background: var(--pane-raised);
-    box-shadow: inset 0 0 0 0.5px var(--line-strong), 0 1px 2px rgba(0, 0, 0, 0.25);
+    gap: var(--s2);
+    padding: var(--s3);
+    border-radius: var(--r-card);
+    background: var(--raised);
+    box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
     text-align: left;
-    transition: background var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+    transition: background var(--d-press) var(--ease), box-shadow var(--d-press) var(--ease);
   }
 
-  .card:hover,
+  .card:hover {
+    background: var(--pop);
+  }
+
   .card.selected {
-    background: #18191d;
-    box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 1px 2px rgba(0, 0, 0, 0.25);
+    box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line-strong);
   }
 
   .card.dragging {
     opacity: 0.4;
   }
 
-  .card-top {
+  .top {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    gap: 6px;
+    height: 18px;
+  }
+
+  .glyph {
+    font-size: 11px;
+    color: var(--ink-3);
   }
 
   .id {
-    font-size: var(--text-sm);
-    color: var(--ink-3);
+    color: var(--ink-4);
   }
 
   .title {
     font-weight: 500;
-    line-height: 1.4;
+    line-height: 20px;
     display: -webkit-box;
     -webkit-line-clamp: 3;
     line-clamp: 3;
@@ -199,45 +210,35 @@
     overflow: hidden;
   }
 
-  .card-meta {
+  .meta {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--s1);
-    margin-top: 2px;
-  }
-
-  .chip-sm {
-    height: 22px;
-    padding: 0 6px;
-    display: inline-flex;
     align-items: center;
-    gap: 5px;
-    border-radius: var(--r-md);
-    font-size: var(--text-xs);
-    color: var(--ink-2);
-    box-shadow: inset 0 0 0 0.5px var(--line-strong);
+    gap: var(--s1) var(--s3);
   }
 
-  .chip-sm i {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: hsl(var(--hue) 65% 60%);
+  .sub,
+  .due {
+    color: var(--ink-3);
+  }
+
+  .sub.complete {
+    color: var(--accent-ink);
   }
 
   .empty {
-    height: 40px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--r-lg);
+    border-radius: var(--r-card);
     color: var(--ink-4);
     box-shadow: inset 0 0 0 1px var(--line);
-    transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+    transition: color var(--d-press) var(--ease), background var(--d-press) var(--ease);
   }
 
   .empty:hover {
     color: var(--ink-2);
-    background: var(--hover);
+    background: var(--fill-hover);
   }
 </style>

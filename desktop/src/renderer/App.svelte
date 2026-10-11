@@ -124,16 +124,16 @@
     bottom: var(--s6);
     max-width: 420px;
     padding: 10px var(--s4);
-    border-radius: var(--r-lg);
-    background: var(--popover);
-    box-shadow: var(--shadow-pop);
+    border-radius: var(--r-card);
+    background: var(--pop);
+    box-shadow: var(--shadow-float);
     color: var(--ink);
-    font-size: var(--text-md);
-    animation: in var(--base) var(--ease);
+    font-size: var(--t-body);
+    animation: in var(--d-open) var(--ease);
   }
 
   .toast.warn {
-    box-shadow: var(--shadow-pop), inset 3px 0 0 var(--status-progress);
+    box-shadow: var(--shadow-float), inset 3px 0 0 var(--warn);
   }
 
   @keyframes in {

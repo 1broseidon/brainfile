@@ -1,53 +1,97 @@
 /*
- * Design tokens. One dark theme, on a 4px grid. The sidebar sits on the
- * window's vibrancy; everything you work in sits on one opaque inset pane.
+ * The window's tokens. Every colour, length, face and easing the window uses
+ * is named here once; the system they serve is locked in desktop/design.md.
+ * Dark is designed first; light re-values the same names, so nothing else in
+ * the tree knows there are two.
  */
+
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+
 :root {
-  /* Ground */
-  --pane: #0e0f11;
-  --pane-raised: #141518;
-  --pane-sunken: #0b0c0d;
-  --hover: rgba(255, 255, 255, 0.035);
-  --hover-strong: rgba(255, 255, 255, 0.06);
-  --selected: rgba(122, 132, 230, 0.12);
-  --overlay: rgba(4, 5, 6, 0.6);
-  --popover: #18191c;
+  color-scheme: dark;
 
-  /* Lines */
-  --line: rgba(255, 255, 255, 0.065);
-  --line-strong: rgba(255, 255, 255, 0.1);
-  --line-focus: rgba(122, 132, 230, 0.55);
+  /* ------------------------------------------------------------- planes
+   * Depth is lightness. One lane, hue 285 with a trace of chroma, so the
+   * greys lean toward the violet and the window reads as one material. */
+  --well: oklch(12% 0.008 285); /* the ground: behind the sidebar, in the gaps */
+  --canvas: oklch(15.5% 0.008 285); /* the pane you work in */
+  --raised: oklch(19% 0.009 285); /* a card, a group, a field */
+  --pop: oklch(22.5% 0.01 285); /* a menu, the palette, the composer */
+  --pressed: oklch(26% 0.01 285); /* a pop surface under the pointer */
 
-  /* Ink */
-  --ink: #e6e7ea;
-  --ink-2: #a0a2aa;
-  --ink-3: #6e7079;
-  --ink-4: #4b4d55;
+  /* A raised surface catches one pixel of light along its top. */
+  --top-light: inset 0 1px 0 oklch(100% 0 0 / 0.045);
 
-  /* Signal */
-  --accent: #7a84e6;
-  --accent-strong: #8b94f0;
-  --accent-ink: #ffffff;
-  --danger: #eb5757;
+  /* ---------------------------------------------------------------- ink
+   * Four voices: says, explains, annotates, furniture. */
+  --ink: oklch(95% 0.006 285);
+  --ink-2: oklch(77% 0.01 285);
+  --ink-3: oklch(60% 0.012 285);
+  --ink-4: oklch(45% 0.012 285);
 
-  --status-backlog: #6e7079;
-  --status-todo: #c3c5cc;
-  --status-progress: #f0bf4c;
-  --status-review: #4cb782;
-  --status-done: #7a84e6;
-  --priority-urgent: #f2994a;
+  /* Fills are alpha so one rule reads right on every plane. */
+  --fill-hover: oklch(100% 0 0 / 0.045);
+  --fill-active: oklch(100% 0 0 / 0.08);
+  --fill-selected: oklch(74% 0.115 290 / 0.1);
+  --fill-code: oklch(100% 0 0 / 0.055);
 
-  /* Type */
-  --font: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
-  --mono: 'SF Mono', ui-monospace, Menlo, monospace;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-md: 13px;
-  --text-lg: 15px;
-  --text-xl: 20px;
-  --text-2xl: 24px;
+  /* ---------------------------------------------------------- hairlines
+   * A line is a plane's edge, never a divider between rows. */
+  --line: oklch(100% 0 0 / 0.07);
+  --line-strong: oklch(100% 0 0 / 0.13);
+  --hairline: 1px;
 
-  /* Space (4px grid) */
+  /* ------------------------------------------------------------- signal
+   * Brainfile violet, the manual's #A796E3. Focus, selection, the primary
+   * action, done. Never decoration. */
+  --accent: oklch(74% 0.115 290);
+  --accent-hover: oklch(79% 0.1 290);
+  --on-accent: oklch(20% 0.05 290);
+  --accent-soft: oklch(74% 0.115 290 / 0.16);
+  --accent-ink: oklch(78% 0.1 290);
+
+  /* Priority, from the TUI: critical red, high amber, medium blue. */
+  --p-urgent: oklch(68% 0.19 25);
+  --p-high: oklch(78% 0.15 70);
+  --p-medium: oklch(70% 0.13 250);
+  --p-low: var(--ink-3);
+
+  /* Contract state, from the TUI. Mono text only, never a fill. */
+  --c-draft: var(--ink-3);
+  --c-ready: oklch(78% 0.12 215);
+  --c-progress: oklch(80% 0.14 85);
+  --c-delivered: oklch(72% 0.17 330);
+  --c-done: oklch(76% 0.15 150);
+  --c-failed: oklch(68% 0.19 25);
+
+  --warn: oklch(80% 0.14 80);
+  --danger: oklch(68% 0.19 25);
+
+  /* People: seven hues at one lightness and chroma. */
+  --face-l: 70%;
+  --face-c: 0.09;
+  --face-ink: oklch(18% 0.02 285);
+
+  /* ---------------------------------------------------------- elevation
+   * One thing floats at a time. */
+  --shadow-float:
+    0 0 0 var(--hairline) oklch(100% 0 0 / 0.09),
+    0 1px 2px oklch(0% 0 0 / 0.3),
+    0 16px 40px -8px oklch(0% 0 0 / 0.6);
+  --scrim: oklch(8% 0.01 285 / 0.55);
+
+  /* ---------------------------------------------------------------- type */
+  --sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'JetBrains Mono Variable', 'SF Mono', ui-monospace, monospace;
+  --t-micro: 11px;
+  --t-meta: 12px;
+  --t-body: 13px;
+  --t-read: 15px;
+  --t-title: 20px;
+  --t-display: 26px;
+
+  /* --------------------------------------------------------------- space */
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
@@ -56,24 +100,88 @@
   --s6: 24px;
   --s8: 32px;
   --s10: 40px;
+  --s12: 48px;
 
-  /* Shape */
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 8px;
-  --r-xl: 12px;
+  /* ------------------------------------------------------------- radius
+   * Concentric from the window inward. */
+  --r-chip: 4px;
+  --r-control: 6px;
+  --r-card: 8px;
+  --r-pane: 10px;
 
-  /* Chrome */
-  --sidebar-w: 244px;
-  --header-h: 48px;
-  --row-h: 38px;
+  /* ------------------------------------------------------------- chrome */
+  --sidebar-w: 232px;
+  --bar-h: 44px;
+  --row-h: 36px;
   --inset: 8px;
+  --id-w: 76px;
 
-  /* Motion */
+  /* ------------------------------------------------------------- motion */
   --ease: cubic-bezier(0.2, 0, 0, 1);
-  --fast: 90ms;
-  --base: 160ms;
+  --d-press: 90ms;
+  --d-open: 140ms;
+  --d-move: 220ms;
+}
 
-  --shadow-pop: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
-  --shadow-modal: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 24px 64px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+
+    --well: oklch(93% 0.006 285);
+    --canvas: oklch(99% 0.002 285);
+    --raised: oklch(97% 0.004 285);
+    --pop: oklch(100% 0 0);
+    --pressed: oklch(95.5% 0.006 285);
+    --top-light: inset 0 1px 0 oklch(100% 0 0 / 0.7);
+
+    --ink: oklch(21% 0.012 285);
+    --ink-2: oklch(42% 0.012 285);
+    --ink-3: oklch(56% 0.012 285);
+    --ink-4: oklch(70% 0.01 285);
+
+    --fill-hover: oklch(21% 0.012 285 / 0.045);
+    --fill-active: oklch(21% 0.012 285 / 0.08);
+    --fill-selected: oklch(48% 0.14 290 / 0.08);
+    --fill-code: oklch(21% 0.012 285 / 0.055);
+
+    --line: oklch(21% 0.012 285 / 0.08);
+    --line-strong: oklch(21% 0.012 285 / 0.15);
+
+    /* The manual's #5B47A6: violet as ink must go deeper on white. */
+    --accent: oklch(52% 0.15 290);
+    --accent-hover: oklch(47% 0.15 290);
+    --on-accent: oklch(99% 0.01 290);
+    --accent-soft: oklch(52% 0.15 290 / 0.12);
+    --accent-ink: oklch(48% 0.14 290);
+
+    --p-urgent: oklch(57% 0.2 27);
+    --p-high: oklch(66% 0.16 60);
+    --p-medium: oklch(55% 0.15 255);
+
+    --c-ready: oklch(56% 0.11 215);
+    --c-progress: oklch(62% 0.14 75);
+    --c-delivered: oklch(55% 0.19 330);
+    --c-done: oklch(55% 0.14 150);
+    --c-failed: oklch(57% 0.2 27);
+
+    --warn: oklch(64% 0.15 75);
+    --danger: oklch(57% 0.2 27);
+
+    --face-l: 78%;
+    --face-c: 0.09;
+    --face-ink: oklch(24% 0.03 285);
+
+    --shadow-float:
+      0 0 0 var(--hairline) oklch(21% 0.012 285 / 0.1),
+      0 1px 2px oklch(21% 0.012 285 / 0.08),
+      0 16px 40px -8px oklch(21% 0.012 285 / 0.22);
+    --scrim: oklch(21% 0.012 285 / 0.24);
+  }
+}
+
+/* A hairline is one device pixel. */
+@media (min-resolution: 2dppx) {
+  :root {
+    --hairline: 0.5px;
+  }
 }

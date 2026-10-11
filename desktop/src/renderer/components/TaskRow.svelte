@@ -1,19 +1,46 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
-  import { columnProgress, shortDate, tagHue } from '../lib/format';
+  import { columnProgress, kindGlyph, shortDate } from '../lib/format';
   import type { ColumnView, TaskView } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import PriorityIcon from './PriorityIcon.svelte';
   import Avatar from './Avatar.svelte';
 
-  let { task, columns, done = false }: { task: TaskView; columns: ColumnView[]; done?: boolean } = $props();
+  let {
+    task,
+    columns,
+    done = false,
+    depth = 0,
+    children = 0,
+    collapsed = false,
+    ontoggle,
+  }: {
+    task: TaskView;
+    columns: ColumnView[];
+    done?: boolean;
+    depth?: number;
+    children?: number;
+    collapsed?: boolean;
+    ontoggle?: () => void;
+  } = $props();
 
   const selected = $derived(app.selectedTaskId === task.id);
-  const subtaskDone = $derived(task.subtasks?.filter((s) => s.completed).length ?? 0);
+  const subDone = $derived(task.subtasks?.filter((s) => s.completed).length ?? 0);
   const progress = $derived(done ? 1 : columnProgress(columns, task.column));
+  const glyph = $derived(children > 0 ? (collapsed ? '▸' : '▾') : kindGlyph(task.type));
 
-  function stop(e: Event): void {
+  // The TUI's signal chips: contract state, then sub-tasks, then tags; three at most.
+  const chips = $derived.by(() => {
+    const out: { kind: 'contract' | 'subtasks' | 'tag'; text: string }[] = [];
+    if (task.contractStatus) out.push({ kind: 'contract', text: task.contractStatus.replace('_', ' ') });
+    if (task.subtasks?.length) out.push({ kind: 'subtasks', text: `${subDone}/${task.subtasks.length}` });
+    for (const tag of task.tags ?? []) out.push({ kind: 'tag', text: tag });
+    return out.slice(0, 3);
+  });
+
+  function pick(kind: 'status' | 'priority' | 'assignee', e: MouseEvent): void {
     e.stopPropagation();
+    if (!done) app.openMenu(kind, task.id, e.currentTarget as Element);
   }
 </script>
 
@@ -30,97 +57,130 @@
   onclick={() => (app.openTaskId = task.id)}
   onkeydown={() => {}}
 >
-  <button
-    class="cell priority"
-    title="Priority (P)"
-    disabled={done}
-    onclick={(e) => {
-      stop(e);
-      app.openMenu('priority', task.id, e.currentTarget);
-    }}
-  >
-    <PriorityIcon priority={task.priority} />
-  </button>
-  <span class="id tabular">{task.id}</span>
-  <button
-    class="cell status"
-    title="Status (S)"
-    disabled={done}
-    onclick={(e) => {
-      stop(e);
-      app.openMenu('status', task.id, e.currentTarget);
-    }}
-  >
+  <button class="cell" title="Status  S" onclick={(e) => pick('status', e)}>
     <StatusIcon {progress} />
   </button>
-  <span class="title">
-    {#if task.type && task.type !== 'task'}<span class="type">{task.type}</span>{/if}
-    <span class="text">{task.title}</span>
-    {#if task.subtasks?.length}
-      <span class="sub tabular">{subtaskDone}/{task.subtasks.length}</span>
+  <button class="cell" title="Priority  P" onclick={(e) => pick('priority', e)}>
+    <PriorityIcon priority={task.priority} />
+  </button>
+  <span class="lead" style:padding-left="{depth * 20}px">
+    {#if children > 0}
+      <button
+        class="glyph toggle"
+        title={collapsed ? 'Show children' : 'Hide children'}
+        onclick={(e) => {
+          e.stopPropagation();
+          ontoggle?.();
+        }}>{glyph}</button
+      >
+    {:else}
+      <span class="glyph">{glyph}</span>
     {/if}
+    <span class="id mono">{task.id}</span>
   </span>
-  <span class="tags">
-    {#each (task.tags ?? []).slice(0, 3) as tag (tag)}
-      <span class="tag" style:--hue={tagHue(tag)}><i></i>{tag}</span>
+  <span class="title">{task.title}</span>
+  <span class="chips">
+    {#each chips as chip (chip.kind + chip.text)}
+      {#if chip.kind === 'contract'}
+        <span class="contract" data-status={task.contractStatus}>{chip.text}</span>
+      {:else if chip.kind === 'subtasks'}
+        <span class="mono sub tabular" class:complete={subDone === task.subtasks?.length}>{chip.text}</span>
+      {:else}
+        <span class="tag">{chip.text}</span>
+      {/if}
     {/each}
-    {#if (task.tags?.length ?? 0) > 3}<span class="tag more">+{task.tags!.length - 3}</span>{/if}
   </span>
-  {#if task.contractStatus}
-    <span class="contract" data-status={task.contractStatus}>{task.contractStatus.replace('_', ' ')}</span>
+  {#if done || task.dueDate}
+    <span class="date mono tabular">{done ? shortDate(task.completedAt) : shortDate(task.dueDate)}</span>
   {/if}
-  <span class="date tabular" class:due={!done && !!task.dueDate}>{done ? shortDate(task.completedAt) : shortDate(task.dueDate)}</span>
-  <button
-    class="cell assignee"
-    title={task.assignee ?? 'Assign (A)'}
-    disabled={done}
-    onclick={(e) => {
-      stop(e);
-      app.openMenu('assignee', task.id, e.currentTarget);
-    }}
-  >
+  <button class="cell" class:unassigned={!task.assignee} title={task.assignee ?? 'Assign  A'} onclick={(e) => pick('assignee', e)}>
     <Avatar name={task.assignee} />
   </button>
 </div>
 
 <style>
   .row {
+    position: relative;
     height: var(--row-h);
     display: flex;
     align-items: center;
-    gap: var(--s2);
-    padding: 0 var(--s6) 0 var(--s4);
-    border-bottom: 0.5px solid var(--line);
-    transition: background var(--fast) var(--ease);
+    gap: var(--s1);
+    padding: 0 var(--s5) 0 var(--s4);
+    transition: background var(--d-press) var(--ease);
+  }
+
+  .row:hover {
+    background: var(--fill-hover);
   }
 
   .row.selected {
-    background: var(--hover);
+    background: var(--fill-selected);
   }
 
-  .row.done .text {
-    color: var(--ink-2);
+  /* The TUI's ▌ cursor. */
+  .row.selected::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 2px;
+    border-radius: 0 1px 1px 0;
+    background: var(--accent);
+  }
+
+  .row.done .title {
+    color: var(--ink-3);
   }
 
   .cell {
-    width: 24px;
-    height: 24px;
+    width: 26px;
+    height: 26px;
     flex: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border-radius: var(--r-sm);
+    border-radius: var(--r-chip);
   }
 
-  .cell:not(:disabled):hover {
-    background: var(--hover-strong);
+  .row:not(.done) .cell:hover {
+    background: var(--fill-active);
+  }
+
+  /* An empty assignee says nothing until you reach for it. */
+  .cell.unassigned {
+    opacity: 0;
+  }
+
+  .row:hover .cell.unassigned,
+  .row.selected .cell.unassigned {
+    opacity: 1;
+  }
+
+  .lead {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    margin-left: var(--s1);
+  }
+
+  .glyph {
+    width: 16px;
+    flex: none;
+    font-size: 11px;
+    line-height: 16px;
+    color: var(--ink-3);
+    text-align: left;
+  }
+
+  .glyph.toggle:hover {
+    color: var(--ink);
   }
 
   .id {
-    width: 64px;
+    width: var(--id-w);
     flex: none;
-    font-size: var(--text-sm);
-    color: var(--ink-3);
+    color: var(--ink-4);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -129,106 +189,33 @@
   .title {
     flex: 1;
     min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    padding-left: 2px;
-  }
-
-  .text {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     font-weight: 450;
   }
 
-  .type {
+  .chips {
     flex: none;
-    font-size: var(--text-xs);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--ink-3);
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    margin: 0 var(--s2) 0 var(--s4);
   }
 
   .sub {
-    flex: none;
-    font-size: var(--text-xs);
     color: var(--ink-3);
   }
 
-  .tags {
-    display: flex;
-    gap: var(--s1);
-    flex: none;
-  }
-
-  .tag {
-    height: 22px;
-    padding: 0 var(--s2);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    border-radius: 11px;
-    font-size: var(--text-sm);
-    color: var(--ink-2);
-    box-shadow: inset 0 0 0 0.5px var(--line-strong);
-  }
-
-  .tag i {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: hsl(var(--hue) 65% 60%);
-  }
-
-  .tag.more {
-    padding: 0 6px;
-  }
-
-  .contract {
-    flex: none;
-    height: 20px;
-    padding: 0 6px;
-    display: inline-flex;
-    align-items: center;
-    border-radius: var(--r-sm);
-    font-size: var(--text-xs);
-    font-weight: 500;
-    color: var(--ink-2);
-    background: rgba(255, 255, 255, 0.05);
-  }
-
-  .contract[data-status='in_progress'],
-  .contract[data-status='reworking'],
-  .contract[data-status='ready'] {
-    color: var(--status-progress);
-    background: rgba(240, 191, 76, 0.1);
-  }
-
-  .contract[data-status='delivered'] {
-    color: var(--status-review);
-    background: rgba(76, 183, 130, 0.1);
-  }
-
-  .contract[data-status='failed'] {
-    color: var(--danger);
-    background: rgba(235, 87, 87, 0.1);
-  }
-
-  .date:empty {
-    display: none;
-  }
-
-  .date.due {
-    color: var(--ink-2);
+  .sub.complete {
+    color: var(--accent-ink);
   }
 
   .date {
-    width: 56px;
+    width: 52px;
     flex: none;
     text-align: right;
-    font-size: var(--text-sm);
     color: var(--ink-3);
+    margin-right: var(--s2);
   }
 </style>

@@ -1,4 +1,4 @@
-import type { ColumnView, Priority } from '../../shared/api';
+import type { ColumnView, Priority, TaskView } from '../../shared/api';
 
 export const PRIORITIES: { id: Priority | null; label: string }[] = [
   { id: null, label: 'No priority' },
@@ -12,10 +12,22 @@ export function priorityLabel(priority?: Priority | null): string {
   return PRIORITIES.find((p) => p.id === (priority ?? null))?.label ?? 'No priority';
 }
 
+/** Document kinds, as the TUI draws them in column 1. A plain task has none. */
+const KIND_GLYPHS: Record<string, string> = {
+  epic: '▸',
+  spec: '◆',
+  adr: '●',
+  plan: '⎘',
+};
+
+export function kindGlyph(type?: string): string {
+  return type ? (KIND_GLYPHS[type.toLowerCase()] ?? (type === 'task' ? '' : '◇')) : '';
+}
+
 const BACKLOG = /backlog|icebox|someday/i;
 
 /**
- * Where a column sits on the way to done, for its status icon: -1 for a
+ * Where a column sits on the way to done, for its checkbox: -1 for a
  * backlog, 0 for the first open column, 1 for a completion column, and the
  * columns between spread evenly.
  */
@@ -29,20 +41,33 @@ export function columnProgress(columns: ColumnView[], columnId: string): number 
   return open.length <= 1 ? 0 : at / open.length;
 }
 
-export function statusColor(progress: number): string {
-  if (progress < 0) return 'var(--status-backlog)';
-  if (progress >= 1) return 'var(--status-done)';
-  if (progress <= 0) return 'var(--status-todo)';
-  if (progress < 0.6) return 'var(--status-progress)';
-  return 'var(--status-review)';
+/** Tasks in TUI order: each parent followed by its children in the same list, indented. */
+export function asTree(tasks: TaskView[]): { task: TaskView; depth: number; children: number }[] {
+  const ids = new Set(tasks.map((t) => t.id));
+  const kids = new Map<string, TaskView[]>();
+  for (const t of tasks) {
+    if (t.parentId && ids.has(t.parentId)) {
+      const list = kids.get(t.parentId) ?? [];
+      list.push(t);
+      kids.set(t.parentId, list);
+    }
+  }
+  const out: { task: TaskView; depth: number; children: number }[] = [];
+  const walk = (t: TaskView, depth: number) => {
+    const children = kids.get(t.id) ?? [];
+    out.push({ task: t, depth, children: children.length });
+    for (const c of children) walk(c, depth + 1);
+  };
+  for (const t of tasks) if (!t.parentId || !ids.has(t.parentId)) walk(t, 0);
+  return out;
 }
 
-const TAG_HUES = [212, 262, 330, 24, 48, 142, 178, 292];
+const FACE_HUES = [20, 70, 140, 195, 250, 300, 340];
 
-export function tagHue(tag: string): number {
+export function hueOf(name: string): number {
   let h = 0;
-  for (const ch of tag) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return TAG_HUES[h % TAG_HUES.length];
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return FACE_HUES[h % FACE_HUES.length];
 }
 
 export function initials(name: string): string {
@@ -57,9 +82,8 @@ export function shortDate(iso?: string): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  const now = new Date();
   const label = `${MONTHS[d.getMonth()]} ${d.getDate()}`;
-  return d.getFullYear() === now.getFullYear() ? label : `${label}, ${d.getFullYear()}`;
+  return d.getFullYear() === new Date().getFullYear() ? label : `${label} ${d.getFullYear()}`;
 }
 
 export function relativeTime(iso?: string): string {
@@ -74,6 +98,7 @@ export function relativeTime(iso?: string): string {
   return shortDate(iso);
 }
 
-export function projectHue(name: string): number {
-  return tagHue(name);
+/** `~/Projects/x` for a path under home. */
+export function tildify(p: string): string {
+  return p.replace(/^\/Users\/[^/]+/, '~').replace(/^\/private\/tmp/, '/tmp');
 }

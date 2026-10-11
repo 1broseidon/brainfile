@@ -82,7 +82,7 @@
 <div class="overlay" role="presentation" onmousedown={close}></div>
 <div class="composer" role="dialog" aria-label="New task" tabindex="-1" {onkeydown}>
   <header>
-    <span class="scope">{board.title}</span>
+    <span class="scope mono">{board.title}</span>
     <Icon name="chevron" size={12} />
     <span>New task</span>
     <span class="spacer"></span>
@@ -109,7 +109,7 @@
       <StatusIcon progress={columnProgress(board.columns, column)} size={13} />{columnTitle}
     </button>
     <button class="chip" onclick={(e) => open('priority', e)}>
-      <PriorityIcon {priority} size={13} />{priority ? priorityLabel(priority) : 'Priority'}
+      <PriorityIcon {priority} size={13} placeholder />{priority ? priorityLabel(priority) : 'Priority'}
     </button>
     <button class="chip" onclick={(e) => open('assignee', e)}>
       <Avatar name={assignee ?? undefined} size={14} />{assignee ?? 'Assignee'}
@@ -154,7 +154,7 @@
     onpick={(v) => (priority = v as Priority | null)}
     onclose={() => (picker = null)}
   >
-    {#snippet icon(item)}<PriorityIcon priority={item.value as Priority | null} />{/snippet}
+    {#snippet icon(item)}<PriorityIcon priority={item.value as Priority | null} placeholder />{/snippet}
   </Menu>
 {:else if picker?.kind === 'assignee'}
   <Menu
@@ -184,8 +184,8 @@
     position: fixed;
     inset: 0;
     z-index: 30;
-    background: var(--overlay);
-    animation: fade var(--base) var(--ease);
+    background: var(--scrim);
+    animation: fade var(--d-open) var(--ease);
   }
 
   @keyframes fade {
@@ -203,10 +203,10 @@
     transform: translateX(-50%);
     display: flex;
     flex-direction: column;
-    border-radius: var(--r-xl);
-    background: var(--popover);
-    box-shadow: var(--shadow-modal);
-    animation: rise var(--base) var(--ease);
+    border-radius: var(--r-pane);
+    background: var(--pop);
+    box-shadow: var(--shadow-float);
+    animation: rise var(--d-open) var(--ease);
   }
 
   @keyframes rise {
@@ -223,7 +223,7 @@
     gap: var(--s2);
     padding: 0 var(--s2) 0 var(--s5);
     color: var(--ink-3);
-    font-size: var(--text-sm);
+    font-size: var(--t-meta);
   }
 
   .scope {
@@ -231,9 +231,9 @@
     padding: 0 var(--s2);
     display: inline-flex;
     align-items: center;
-    border-radius: var(--r-sm);
+    border-radius: var(--r-chip);
     color: var(--ink-2);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--fill-active);
   }
 
   header span:last-of-type:not(.spacer):not(.scope) {
@@ -249,7 +249,7 @@
     margin: var(--s2) var(--s5) 0;
     border: 0;
     background: transparent;
-    font-size: var(--text-xl);
+    font-size: var(--t-title);
     font-weight: 600;
     letter-spacing: -0.015em;
   }
@@ -259,7 +259,7 @@
     border: 0;
     background: transparent;
     resize: none;
-    font-size: var(--text-lg);
+    font-size: var(--t-read);
     line-height: 1.55;
   }
 
@@ -293,7 +293,7 @@
     align-items: center;
     gap: var(--s2);
     color: var(--ink-2);
-    font-size: var(--text-sm);
+    font-size: var(--t-meta);
   }
 
   .more input {
@@ -304,9 +304,9 @@
     width: 26px;
     height: 16px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.12);
+    background: var(--line-strong);
     position: relative;
-    transition: background var(--base) var(--ease);
+    transition: background var(--d-open) var(--ease);
   }
 
   .switch::after {
@@ -317,8 +317,8 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background: #fff;
-    transition: transform var(--base) var(--ease);
+    background: var(--ink);
+    transition: transform var(--d-open) var(--ease);
   }
 
   .more input:checked + .switch {
@@ -326,11 +326,12 @@
   }
 
   .more input:checked + .switch::after {
+    background: var(--on-accent);
     transform: translateX(10px);
   }
 
   .keys {
-    font-size: var(--text-xs);
+    font-size: var(--t-micro);
     opacity: 0.7;
     margin-left: 2px;
   }
