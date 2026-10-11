@@ -56,6 +56,8 @@
   }
 </script>
 
+<!-- A focusable separator is the ARIA pattern for a resizable splitter. -->
+<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 <div
   class="gutter"
   class:dragging
