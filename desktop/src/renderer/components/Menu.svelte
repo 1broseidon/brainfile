@@ -164,7 +164,7 @@
     padding: 0 var(--s3);
     background: transparent;
     border: 0;
-    font-size: var(--t-body);
+    font-size: var(--t-md);
   }
 
   .filter input::placeholder {
@@ -214,7 +214,7 @@
   .num {
     width: 14px;
     text-align: right;
-    font-size: var(--t-micro);
+    font-size: var(--t-xs);
     color: var(--ink-3);
   }
 

@@ -31,7 +31,7 @@
         key: 'view',
         section: 'Actions',
         label: app.view === 'list' ? 'Switch to board view' : 'Switch to list view',
-        hint: '⌘B',
+        hint: 'V',
         icon: app.view === 'list' ? 'board' : 'list',
         run: () => app.toggleView(),
       });
@@ -213,7 +213,7 @@
     display: inline-flex;
     align-items: center;
     border-radius: var(--r-chip);
-    font-size: var(--t-micro);
+    font-size: var(--t-xs);
     color: var(--ink-2);
     background: var(--fill-active);
   }
@@ -236,7 +236,7 @@
 
   .section {
     padding: var(--s2) var(--s2) var(--s1);
-    font-size: var(--t-micro);
+    font-size: var(--t-xs);
     font-weight: 500;
     color: var(--ink-3);
   }
@@ -280,7 +280,7 @@
   }
 
   .hint {
-    font-size: var(--t-meta);
+    font-size: var(--t-sm);
     color: var(--ink-3);
   }
 

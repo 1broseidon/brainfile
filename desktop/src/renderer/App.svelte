@@ -1,11 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { app } from './lib/state.svelte';
+  import { app, RAIL, TASK_PANE } from './lib/state.svelte';
+  import Titlebar from './components/Titlebar.svelte';
   import Sidebar from './components/Sidebar.svelte';
+  import Gutter from './components/Gutter.svelte';
   import Workspace from './components/Workspace.svelte';
+  import TaskDetail from './components/TaskDetail.svelte';
   import Palette from './components/Palette.svelte';
   import Composer from './components/Composer.svelte';
   import TaskMenus from './components/TaskMenus.svelte';
+
+  let width = $state(window.innerWidth);
+
+  /** The task pane lies over the board, on the float shadow, when the board would be left too narrow beside it. */
+  const overlay = $derived(width - (app.layout.railOpen ? app.layout.rail : 0) - app.layout.pane - 32 < 520);
 
   onMount(() => {
     void app.init();
@@ -22,6 +30,7 @@
     const at = tasks.findIndex((t) => t.id === app.selectedTaskId);
     const next = at < 0 ? (step > 0 ? 0 : tasks.length - 1) : Math.min(Math.max(at + step, 0), tasks.length - 1);
     app.selectedTaskId = tasks[next].id;
+    if (app.openTaskId) app.openTaskId = tasks[next].id;
     document.querySelector(`[data-task="${tasks[next].id}"]`)?.scrollIntoView({ block: 'nearest' });
   }
 
@@ -41,14 +50,14 @@
       e.preventDefault();
       return;
     }
-    if (meta && /^[1-9]$/.test(e.key)) {
-      const project = app.projects[Number(e.key) - 1];
-      if (project) void app.select(project.id);
+    if (meta && e.key === 'b') {
+      app.toggleRail();
       e.preventDefault();
       return;
     }
-    if (meta && e.key === 'b' && app.board) {
-      app.toggleView();
+    if (meta && /^[1-9]$/.test(e.key)) {
+      const project = app.projects[Number(e.key) - 1];
+      if (project) void app.select(project.id);
       e.preventDefault();
       return;
     }
@@ -61,33 +70,36 @@
     }
     if (!app.board) return;
 
-    const focused = app.openTaskId ?? app.selectedTaskId;
+    const focused = app.selectedTaskId ?? app.openTaskId;
     switch (e.key) {
       case 'c':
         app.composer = {};
         break;
+      case 'v':
+        app.toggleView();
+        break;
       case 'j':
       case 'ArrowDown':
-        if (!app.openTaskId) moveSelection(1);
+        moveSelection(1);
         break;
       case 'k':
       case 'ArrowUp':
-        if (!app.openTaskId) moveSelection(-1);
+        moveSelection(-1);
         break;
       case 'Enter':
-        if (app.selectedTaskId && !app.openTaskId) app.openTaskId = app.selectedTaskId;
+        if (app.selectedTaskId) app.openTaskId = app.selectedTaskId;
         break;
       case 's':
-        if (focused) app.openMenu('status', focused, app.openTaskId ? null : anchorFor(focused));
+        if (focused) app.openMenu('status', focused, anchorFor(focused));
         break;
       case 'p':
-        if (focused) app.openMenu('priority', focused, app.openTaskId ? null : anchorFor(focused));
+        if (focused) app.openMenu('priority', focused, anchorFor(focused));
         break;
       case 'a':
-        if (focused) app.openMenu('assignee', focused, app.openTaskId ? null : anchorFor(focused));
+        if (focused) app.openMenu('assignee', focused, anchorFor(focused));
         break;
       case 'l':
-        if (focused) app.openMenu('labels', focused, app.openTaskId ? null : anchorFor(focused));
+        if (focused) app.openMenu('labels', focused, anchorFor(focused));
         break;
       default:
         return;
@@ -96,50 +108,95 @@
   }
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} bind:innerWidth={width} />
 
-<div class="shell">
-  <Sidebar />
-  <Workspace />
+<div class="window">
+  <Titlebar />
+  <div class="desk">
+    {#if app.layout.railOpen}
+      <Sidebar />
+      <Gutter
+        side="left"
+        value={app.layout.rail}
+        min={RAIL.min}
+        max={RAIL.max}
+        initial={RAIL.initial}
+        onchange={(w) => (app.layout.rail = w)}
+        oncommit={() => app.saveLayout()}
+      />
+    {:else}
+      <div class="edge"></div>
+    {/if}
+    <Workspace />
+    {#if app.openTaskId && app.board}
+      {#if overlay}
+        <div class="float" style:width="{app.layout.pane}px">
+          <TaskDetail board={app.board} taskId={app.openTaskId} />
+        </div>
+      {:else}
+        <Gutter
+          side="right"
+          value={app.layout.pane}
+          min={TASK_PANE.min}
+          max={TASK_PANE.max}
+          initial={TASK_PANE.initial}
+          onchange={(w) => (app.layout.pane = w)}
+          oncommit={() => app.saveLayout()}
+        />
+        <div class="side" style:width="{app.layout.pane}px">
+          <TaskDetail board={app.board} taskId={app.openTaskId} />
+        </div>
+      {/if}
+    {/if}
+  </div>
 </div>
 
 {#if app.paletteOpen}<Palette />{/if}
 {#if app.composer && app.board}<Composer board={app.board} column={app.composer.column} />{/if}
 <TaskMenus />
 
-{#if app.toast}
-  <div class="toast" class:warn={app.toast.tone === 'warn'} role="status">{app.toast.text}</div>
-{/if}
-
 <style>
-  .shell {
+  .window {
     height: 100%;
     display: flex;
+    flex-direction: column;
   }
 
-  .toast {
-    position: fixed;
-    z-index: 60;
-    right: var(--s6);
-    bottom: var(--s6);
-    max-width: 420px;
-    padding: 10px var(--s4);
-    border-radius: var(--r-card);
-    background: var(--pop);
+  .desk {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    padding-right: var(--gap);
+    position: relative;
+  }
+
+  .edge {
+    width: var(--gap);
+    flex: none;
+  }
+
+  .side {
+    flex: none;
+    display: flex;
+    padding-bottom: var(--gap);
+  }
+
+  .float {
+    position: absolute;
+    top: 0;
+    right: var(--gap);
+    bottom: var(--gap);
+    display: flex;
+    z-index: 20;
+    border-radius: var(--r-pane);
     box-shadow: var(--shadow-float);
-    color: var(--ink);
-    font-size: var(--t-body);
-    animation: in var(--d-open) var(--ease);
+    animation: slide var(--d-move) var(--ease);
   }
 
-  .toast.warn {
-    box-shadow: var(--shadow-float), inset 3px 0 0 var(--warn);
-  }
-
-  @keyframes in {
+  @keyframes slide {
     from {
       opacity: 0;
-      transform: translateY(6px);
+      transform: translateX(12px);
     }
   }
 </style>

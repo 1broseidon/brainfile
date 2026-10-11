@@ -18,6 +18,18 @@ export type MenuKind = 'status' | 'priority' | 'assignee' | 'labels';
 
 const VIEW_KEY = 'brainfile.view';
 const ACTIVE_KEY = 'brainfile.active';
+const LAYOUT_KEY = 'brainfile.layout';
+
+export const RAIL = { min: 180, max: 420, initial: 232 };
+export const TASK_PANE = { min: 380, max: 680, initial: 500 };
+
+function loadLayout(): { rail: number; railOpen: boolean; pane: number } {
+  try {
+    return { rail: RAIL.initial, railOpen: true, pane: TASK_PANE.initial, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') };
+  } catch {
+    return { rail: RAIL.initial, railOpen: true, pane: TASK_PANE.initial };
+  }
+}
 
 function loadViews(): Record<string, ViewMode> {
   try {
@@ -38,8 +50,10 @@ class AppState {
   openTaskId = $state<string | null>(null);
   paletteOpen = $state(false);
   composer = $state<{ column?: string } | null>(null);
-  toast = $state<{ text: string; tone: 'ok' | 'warn' } | null>(null);
   showCompleted = $state(false);
+  layout = $state(loadLayout());
+  /** A problem worth saying, shown in the board's band until it times out. Success is silent. */
+  problem = $state<string | null>(null);
   menu = $state<{ kind: MenuKind; taskId: string; x: number; y: number } | null>(null);
 
   active = $derived(this.projects.find((p) => p.id === this.activeId) ?? null);
@@ -53,7 +67,7 @@ class AppState {
     return board.columns.flatMap((column) => board.tasks.filter((t) => t.column === column.id));
   });
 
-  #toastTimer: ReturnType<typeof setTimeout> | null = null;
+  #problemTimer: ReturnType<typeof setTimeout> | null = null;
 
   async init(): Promise<void> {
     api.onProjectsChanged((projects) => {
@@ -147,10 +161,21 @@ class AppState {
     if (!result.ok) this.notify(result.error, 'warn');
   }
 
+  /** Success is silent; only a problem is said. */
   notify(text: string, tone: 'ok' | 'warn' = 'ok'): void {
-    this.toast = { text, tone };
-    if (this.#toastTimer) clearTimeout(this.#toastTimer);
-    this.#toastTimer = setTimeout(() => (this.toast = null), tone === 'warn' ? 6000 : 3200);
+    if (tone !== 'warn') return;
+    this.problem = text;
+    if (this.#problemTimer) clearTimeout(this.#problemTimer);
+    this.#problemTimer = setTimeout(() => (this.problem = null), 8000);
+  }
+
+  saveLayout(): void {
+    localStorage.setItem(LAYOUT_KEY, JSON.stringify(this.layout));
+  }
+
+  toggleRail(): void {
+    this.layout.railOpen = !this.layout.railOpen;
+    this.saveLayout();
   }
 }
 

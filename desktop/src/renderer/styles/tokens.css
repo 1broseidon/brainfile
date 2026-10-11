@@ -1,95 +1,113 @@
 /*
  * The window's tokens. Every colour, length, face and easing the window uses
- * is named here once; the system they serve is locked in desktop/design.md.
- * Dark is designed first; light re-values the same names, so nothing else in
- * the tree knows there are two.
+ * is named here once; the system is locked in desktop/design.md. It is
+ * Hotline's system (hotline/ui/design.md) in Brainfile's own colours: the
+ * same planes, ink, type, shape and motion, with Brainfile's violet lane and
+ * its mark. Dark is designed first; light re-values the same names.
  */
 
-@import '@fontsource-variable/inter';
-@import '@fontsource-variable/jetbrains-mono';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
 
 :root {
   color-scheme: dark;
 
   /* ------------------------------------------------------------- planes
-   * Depth is lightness. One lane, hue 285 with a trace of chroma, so the
-   * greys lean toward the violet and the window reads as one material. */
-  --well: oklch(12% 0.008 285); /* the ground: behind the sidebar, in the gaps */
-  --canvas: oklch(15.5% 0.008 285); /* the pane you work in */
-  --raised: oklch(19% 0.009 285); /* a card, a group, a field */
-  --pop: oklch(22.5% 0.01 285); /* a menu, the palette, the composer */
-  --pressed: oklch(26% 0.01 285); /* a pop surface under the pointer */
+   * Depth is lightness, not shadow. Five steps in one violet lane (hue 285,
+   * a trace of chroma) so the window reads as one material and the accent
+   * reads as a signal on it rather than a part of it. */
+  --well: oklch(12% 0.009 285); /* the ground: the titlebar strip, behind the rail, in the gaps */
+  --canvas: oklch(16% 0.009 285); /* a pane: the board, a task */
+  --raised: oklch(20% 0.01 285); /* a card, a group */
+  --pop: oklch(24% 0.011 285); /* a menu, the palette, a dialog, a key */
+  --pressed: oklch(28% 0.011 285); /* a pop surface under the pointer */
 
-  /* A raised surface catches one pixel of light along its top. */
-  --top-light: inset 0 1px 0 oklch(100% 0 0 / 0.045);
+  /* A raised surface catches the light along its top edge: felt, not seen. */
+  --top-light: inset 0 1px 0 oklch(100% 0 0 / 0.04);
 
   /* ---------------------------------------------------------------- ink
-   * Four voices: says, explains, annotates, furniture. */
-  --ink: oklch(95% 0.006 285);
-  --ink-2: oklch(77% 0.01 285);
-  --ink-3: oklch(60% 0.012 285);
-  --ink-4: oklch(45% 0.012 285);
+   * Four voices: ink says it, ink-2 explains, ink-3 annotates, ink-4 is
+   * furniture you read only when you look for it. */
+  --ink: oklch(95% 0.005 285);
+  --ink-2: oklch(78% 0.008 285);
+  --ink-3: oklch(62% 0.01 285);
+  --ink-4: oklch(46% 0.01 285);
 
   /* Fills are alpha so one rule reads right on every plane. */
-  --fill-hover: oklch(100% 0 0 / 0.045);
-  --fill-active: oklch(100% 0 0 / 0.08);
-  --fill-selected: oklch(74% 0.115 290 / 0.1);
-  --fill-code: oklch(100% 0 0 / 0.055);
+  --fill-hover: oklch(100% 0 0 / 0.05);
+  --fill-active: oklch(100% 0 0 / 0.09);
+  --fill-selected: oklch(100% 0 0 / 0.08);
+  --fill-code: oklch(100% 0 0 / 0.05);
 
-  /* ---------------------------------------------------------- hairlines
-   * A line is a plane's edge, never a divider between rows. */
-  --line: oklch(100% 0 0 / 0.07);
-  --line-strong: oklch(100% 0 0 / 0.13);
+  /* A line is one device pixel and a plane's edge, never a divider. */
+  --line: oklch(100% 0 0 / 0.09);
+  --line-strong: oklch(100% 0 0 / 0.16);
+  --thumb: oklch(34% 0.01 285);
+  --thumb-hover: oklch(46% 0.01 285);
   --hairline: 1px;
 
   /* ------------------------------------------------------------- signal
-   * Brainfile violet, the manual's #A796E3. Focus, selection, the primary
-   * action, done. Never decoration. */
-  --accent: oklch(74% 0.115 290);
+   * Brainfile violet, the manual's own. On a budget: the primary action,
+   * the tick of done, an add row, a sync in flight. Never a background,
+   * never decoration, never focus. */
+  --accent: oklch(74% 0.12 290);
   --accent-hover: oklch(79% 0.1 290);
-  --on-accent: oklch(20% 0.05 290);
-  --accent-soft: oklch(74% 0.115 290 / 0.16);
-  --accent-ink: oklch(78% 0.1 290);
-
-  /* Priority, from the TUI: critical red, high amber, medium blue. */
-  --p-urgent: oklch(68% 0.19 25);
-  --p-high: oklch(78% 0.15 70);
-  --p-medium: oklch(70% 0.13 250);
-  --p-low: var(--ink-3);
-
-  /* Contract state, from the TUI. Mono text only, never a fill. */
-  --c-draft: var(--ink-3);
-  --c-ready: oklch(78% 0.12 215);
-  --c-progress: oklch(80% 0.14 85);
-  --c-delivered: oklch(72% 0.17 330);
-  --c-done: oklch(76% 0.15 150);
-  --c-failed: oklch(68% 0.19 25);
+  --on-accent: oklch(22% 0.06 290);
+  --accent-soft: oklch(74% 0.12 290 / 0.16);
+  --accent-ink: oklch(78% 0.11 290);
 
   --warn: oklch(80% 0.14 80);
-  --danger: oklch(68% 0.19 25);
+  --danger: oklch(72% 0.17 25);
+  --danger-soft: oklch(72% 0.17 25 / 0.14);
+  --ok: oklch(78% 0.13 160);
 
-  /* People: seven hues at one lightness and chroma. */
-  --face-l: 70%;
-  --face-c: 0.09;
-  --face-ink: oklch(18% 0.02 285);
+  /* Priority, the TUI's signal: urgent red, high amber, medium blue. */
+  --p-urgent: oklch(70% 0.17 30);
+  --p-high: oklch(80% 0.14 75);
+  --p-medium: oklch(72% 0.11 250);
+
+  /* Contract state, the TUI's signal, always as mono text. */
+  --c-ready: oklch(80% 0.1 215);
+  --c-progress: oklch(80% 0.14 85);
+  --c-delivered: oklch(74% 0.14 330);
+  --c-done: var(--ok);
+  --c-failed: var(--danger);
+
+  /* People: seven hues at one lightness and one chroma, below the
+   * accent's, so nobody is louder than the signal. Red is absent. */
+  --face-l: 72%;
+  --face-c: 0.08;
+  --face-ink: oklch(17% 0.02 285);
 
   /* ---------------------------------------------------------- elevation
-   * One thing floats at a time. */
+   * One thing floats at a time: a menu, the palette, a dialog. */
   --shadow-float:
-    0 0 0 var(--hairline) oklch(100% 0 0 / 0.09),
+    0 0 0 var(--hairline) oklch(100% 0 0 / 0.08),
     0 1px 2px oklch(0% 0 0 / 0.3),
-    0 16px 40px -8px oklch(0% 0 0 / 0.6);
-  --scrim: oklch(8% 0.01 285 / 0.55);
+    0 12px 32px -8px oklch(0% 0 0 / 0.55);
+  --scrim: oklch(0% 0 0 / 0.45);
 
-  /* ---------------------------------------------------------------- type */
-  --sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, sans-serif;
-  --mono: 'JetBrains Mono Variable', 'SF Mono', ui-monospace, monospace;
-  --t-micro: 11px;
-  --t-meta: 12px;
-  --t-body: 13px;
-  --t-read: 15px;
-  --t-title: 20px;
-  --t-display: 26px;
+  /* ---------------------------------------------------------------- type
+   * Plex is the window's voice: the sans says things, the mono is the
+   * instrument face for anything measured or typed. Six sizes, fixed
+   * leading, tabular figures everywhere. */
+  --sans: 'IBM Plex Sans', -apple-system, system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  --t-xs: 11px;
+  --lh-xs: 14px;
+  --t-sm: 12px;
+  --lh-sm: 16px;
+  --t-md: 13px;
+  --lh-md: 18px;
+  --t-read: 14px;
+  --lh-read: 22px;
+  --t-lg: 15px;
+  --lh-lg: 20px;
+  --t-xl: 20px;
+  --lh-xl: 26px;
 
   /* --------------------------------------------------------------- space */
   --s1: 4px;
@@ -103,23 +121,27 @@
   --s12: 48px;
 
   /* ------------------------------------------------------------- radius
-   * Concentric from the window inward. */
+   * Concentric from the OS window inward. */
   --r-chip: 4px;
   --r-control: 6px;
   --r-card: 8px;
   --r-pane: 10px;
+  --r-group: 14px;
 
   /* ------------------------------------------------------------- chrome */
-  --sidebar-w: 232px;
-  --bar-h: 44px;
+  --strip-h: 32px;
+  --band-h: 44px;
   --row-h: 36px;
-  --inset: 8px;
-  --id-w: 76px;
+  --control-h: 26px;
+  --field-h: 28px;
+  --gap: 8px;
+  --id-w: 72px;
 
-  /* ------------------------------------------------------------- motion */
-  --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* ------------------------------------------------------------- motion
+   * One curve, three durations, no overshoot. */
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --d-press: 90ms;
-  --d-open: 140ms;
+  --d-open: 130ms;
   --d-move: 220ms;
 }
 
@@ -127,59 +149,61 @@
   :root {
     color-scheme: light;
 
-    --well: oklch(93% 0.006 285);
-    --canvas: oklch(99% 0.002 285);
-    --raised: oklch(97% 0.004 285);
+    --well: oklch(92.5% 0.007 285);
+    --canvas: oklch(98.5% 0.003 285);
+    --raised: oklch(96.5% 0.005 285);
     --pop: oklch(100% 0 0);
-    --pressed: oklch(95.5% 0.006 285);
-    --top-light: inset 0 1px 0 oklch(100% 0 0 / 0.7);
+    --pressed: oklch(95% 0.007 285);
+    --top-light: inset 0 1px 0 oklch(100% 0 0 / 0.6);
 
-    --ink: oklch(21% 0.012 285);
+    --ink: oklch(20% 0.012 285);
     --ink-2: oklch(42% 0.012 285);
     --ink-3: oklch(56% 0.012 285);
-    --ink-4: oklch(70% 0.01 285);
+    --ink-4: oklch(68% 0.01 285);
 
-    --fill-hover: oklch(21% 0.012 285 / 0.045);
-    --fill-active: oklch(21% 0.012 285 / 0.08);
-    --fill-selected: oklch(48% 0.14 290 / 0.08);
-    --fill-code: oklch(21% 0.012 285 / 0.055);
+    --fill-hover: oklch(20% 0.012 285 / 0.06);
+    --fill-active: oklch(20% 0.012 285 / 0.1);
+    --fill-selected: oklch(20% 0.012 285 / 0.08);
+    --fill-code: oklch(20% 0.012 285 / 0.05);
 
-    --line: oklch(21% 0.012 285 / 0.08);
-    --line-strong: oklch(21% 0.012 285 / 0.15);
+    --line: oklch(20% 0.012 285 / 0.1);
+    --line-strong: oklch(20% 0.012 285 / 0.2);
+    --thumb: oklch(80% 0.01 285);
+    --thumb-hover: oklch(68% 0.01 285);
 
-    /* The manual's #5B47A6: violet as ink must go deeper on white. */
-    --accent: oklch(52% 0.15 290);
-    --accent-hover: oklch(47% 0.15 290);
+    /* Violet as a fill reads on white; as words it must go deeper. */
+    --accent: oklch(52% 0.16 290);
+    --accent-hover: oklch(47% 0.16 290);
     --on-accent: oklch(99% 0.01 290);
-    --accent-soft: oklch(52% 0.15 290 / 0.12);
-    --accent-ink: oklch(48% 0.14 290);
-
-    --p-urgent: oklch(57% 0.2 27);
-    --p-high: oklch(66% 0.16 60);
-    --p-medium: oklch(55% 0.15 255);
-
-    --c-ready: oklch(56% 0.11 215);
-    --c-progress: oklch(62% 0.14 75);
-    --c-delivered: oklch(55% 0.19 330);
-    --c-done: oklch(55% 0.14 150);
-    --c-failed: oklch(57% 0.2 27);
+    --accent-soft: oklch(52% 0.16 290 / 0.12);
+    --accent-ink: oklch(48% 0.15 290);
 
     --warn: oklch(64% 0.15 75);
-    --danger: oklch(57% 0.2 27);
+    --danger: oklch(55% 0.19 27);
+    --danger-soft: oklch(55% 0.19 27 / 0.1);
+    --ok: oklch(55% 0.13 160);
+
+    --p-urgent: oklch(57% 0.19 30);
+    --p-high: oklch(66% 0.15 65);
+    --p-medium: oklch(55% 0.13 250);
+
+    --c-ready: oklch(55% 0.1 215);
+    --c-progress: oklch(62% 0.14 75);
+    --c-delivered: oklch(54% 0.17 330);
 
     --face-l: 78%;
-    --face-c: 0.09;
-    --face-ink: oklch(24% 0.03 285);
+    --face-c: 0.08;
+    --face-ink: oklch(22% 0.02 285);
 
     --shadow-float:
-      0 0 0 var(--hairline) oklch(21% 0.012 285 / 0.1),
-      0 1px 2px oklch(21% 0.012 285 / 0.08),
-      0 16px 40px -8px oklch(21% 0.012 285 / 0.22);
-    --scrim: oklch(21% 0.012 285 / 0.24);
+      0 0 0 var(--hairline) oklch(20% 0.012 285 / 0.1),
+      0 1px 2px oklch(20% 0.012 285 / 0.08),
+      0 12px 32px -8px oklch(20% 0.012 285 / 0.22);
+    --scrim: oklch(20% 0.012 285 / 0.28);
   }
 }
 
-/* A hairline is one device pixel. */
+/* A hairline is one device pixel, not one CSS pixel. */
 @media (min-resolution: 2dppx) {
   :root {
     --hairline: 0.5px;

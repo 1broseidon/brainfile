@@ -62,7 +62,7 @@ export function asTree(tasks: TaskView[]): { task: TaskView; depth: number; chil
   return out;
 }
 
-const FACE_HUES = [20, 70, 140, 195, 250, 300, 340];
+const FACE_HUES = [55, 95, 150, 190, 230, 265, 320];
 
 export function hueOf(name: string): number {
   let h = 0;

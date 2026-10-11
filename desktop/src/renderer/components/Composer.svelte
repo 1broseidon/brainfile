@@ -223,7 +223,7 @@
     gap: var(--s2);
     padding: 0 var(--s2) 0 var(--s5);
     color: var(--ink-3);
-    font-size: var(--t-meta);
+    font-size: var(--t-sm);
   }
 
   .scope {
@@ -249,7 +249,7 @@
     margin: var(--s2) var(--s5) 0;
     border: 0;
     background: transparent;
-    font-size: var(--t-title);
+    font-size: var(--t-xl);
     font-weight: 600;
     letter-spacing: -0.015em;
   }
@@ -293,7 +293,7 @@
     align-items: center;
     gap: var(--s2);
     color: var(--ink-2);
-    font-size: var(--t-meta);
+    font-size: var(--t-sm);
   }
 
   .more input {
@@ -331,7 +331,7 @@
   }
 
   .keys {
-    font-size: var(--t-micro);
+    font-size: var(--t-xs);
     opacity: 0.7;
     margin-left: 2px;
   }

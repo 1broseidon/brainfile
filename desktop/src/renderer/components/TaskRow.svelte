@@ -117,17 +117,6 @@
     background: var(--fill-selected);
   }
 
-  /* The TUI's ▌ cursor. */
-  .row.selected::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 6px;
-    bottom: 6px;
-    width: 2px;
-    border-radius: 0 1px 1px 0;
-    background: var(--accent);
-  }
 
   .row.done .title {
     color: var(--ink-3);

@@ -1,111 +1,136 @@
 # Design — the Brainfile window
 
-The locked design system for `desktop/`. Every screen is drawn from this file;
-a screen that drifts from it is a bug, and the cure is to amend this file,
-never to override it locally. The values live in
+The locked design system for `desktop/`. Every screen is drawn from this
+file; a screen that drifts from it is a bug, and the cure is to amend this
+file, never to override it locally. The values live in
 `src/renderer/styles/tokens.css`, with the reasons beside them.
 
-The first pass borrowed Linear's frame: a sidebar, an inset pane, grouped
-rows. This system keeps the frame and gives it Brainfile's own voice, which
-already exists in two places: the TUI (`cli/src/tui/theme.ts`) and the
-manual's violet (`site/inkcap.config.mjs`). The desktop is the TUI's graphic
-sibling, not a different product.
+**Lineage.** This is Hotline's system (`hotline/ui/design.md`): the same
+genre, macrostructure, planes, ink, type, shape, motion and microinteraction
+stance. Two things are Brainfile's own: the colour lane and its accent, and
+the mark. Where the two products need the same answer, take Hotline's; where
+this file is silent, Hotline's file decides.
 
 ## Genre
 
-A board that is a document. Every task is a Markdown file; the window should
-read like a well-set file, not a dashboard. Calm, typographic, dense where it
-counts, empty where emptiness says something.
+Modern-minimal instrument. A desk you sit at all day, not a page you visit.
+Nothing decorates; everything on screen is a thing you can read or press.
 
-## Five rules
+## Macrostructure
 
-1. **Colour is signal only.** The TUI's first rule. The accent marks focus,
-   selection, the primary action and done. Priority and contract state get
-   their own colours because they are signals. Nothing else is coloured: not
-   tags, not projects, not columns, not chrome.
-2. **Structure comes from typography.** A document's kind is a glyph in the
-   first column, blank for a plain task, so typed documents stand out by
-   contrast. Children indent beneath their parent. Separation is whitespace,
-   not rules between rows.
-3. **Two voices.** Inter says things: titles, prose, labels. JetBrains Mono
-   is the voice of anything that is a file or a value: IDs, counts, `#tags`,
-   dates, paths, the sync line. If you could grep for it, it is mono.
-4. **Depth is lightness.** Planes step lighter as they come toward you. One
-   thing floats on a shadow at a time: a menu, the command palette, the
-   composer. Cards and panes do not cast shadows; they catch one pixel of
-   light along their top edge.
-5. **The checkbox is the mark.** The logo is a brain wired with `[ ]` and
-   `[x]`. Status is drawn as that checkbox: dashed for backlog, open for not
-   started, filling from the bottom as a task moves right, and ticked in the
-   accent when done. The brand mark is the same bracketed `[x]`.
+One family, **Workbench**:
 
-## Colour
+- The window's top strip is the well itself: 32px, the traffic lights and
+  then the key that shows and hides the rail (⌘B) in the left corner, the
+  mark alone in the centre, the search at the right.
+- The **rail** stands directly in the well: Projects, one row each, the
+  folder's name over one mono line (`13 open · branch`). Its edge is the
+  gutter beside it, dragged between 180 and 420px, remembered, put back by a
+  double-click, stepped by the arrows.
+- A **pane** is a rounded canvas set 8px into the well with one hairline at
+  its edge and a pixel of light along its top. Panes sit 8px apart. The
+  board is a pane; an open task is a second pane beside it, sized at its own
+  gutter between 380 and 680px. When the board would be left under 520px,
+  the task pane lies over it on the float shadow instead of squeezing it.
+- A pane's **band** is 44px and has no line under it: what scrolls fades out
+  beneath it.
+- Menus, the command palette and the new-task dialog are pop-plane surfaces
+  on the one float shadow, and nothing else floats.
 
-All colours are OKLCH. Planes and ink sit in one lane: hue 285, a trace of
-chroma, so the greys lean faintly toward the accent and the window reads as
-one material.
+## The mark
 
-- **Planes** (dark): well 12% → canvas 15.5% → raised 19% → pop 22.5% →
-  pressed 26%. The well is the window's ground and the sidebar stands in it;
-  the canvas is the pane you work in.
-- **Ink**, four voices: `ink` says it, `ink-2` explains, `ink-3` annotates,
-  `ink-4` is furniture you read only when you look for it.
-- **Accent**, Brainfile violet: `oklch(74% 0.115 290)` in dark (the site's
-  `#A796E3`), `oklch(48% 0.14 290)` as ink in light (the site's `#5B47A6`).
-- **Priority** (from the TUI): urgent red, high amber, medium blue, low ink-3.
-  No priority draws nothing.
-- **Contract state** (from the TUI): draft ink-3, ready cyan, in progress
-  amber, delivered magenta, done green, failed and blocked red. Always as
-  mono text, never as a fill.
-- **People**: an avatar is one of seven hues at one lightness and chroma, so
-  nobody is louder than anybody else.
+The logo is a brain wired with Markdown checkboxes, `[ ]` and `[x]`. The
+window draws it from `logo.png`, traced (`components/Mark.svelte`):
 
-Light re-values the same names; nothing else in the tree knows there are two
-themes. The window follows the system.
+- Above 28px, the whole logo: the brain and its wiring. Empty states use it.
+- At 28px and under, the wiring turns to mush, so it draws the brain's
+  outline holding one ticked box, the shape of done. The titlebar uses it.
 
-## Type
+One shape in one colour. In chrome it is ink-3, the colour of furniture,
+never the accent.
 
-| Token | Size / leading | Use |
-| --- | --- | --- |
-| `--t-micro` | 11 / 16 | section labels, keycaps |
-| `--t-meta` | 12 / 16 | mono meta: IDs, `#tags`, dates, counts |
-| `--t-body` | 13 / 20 | rows, controls, menus |
-| `--t-read` | 15 / 24 | descriptions, the composer |
-| `--t-title` | 20 / 28 | a dialog's title field |
-| `--t-display` | 26 / 32 | a task's title in detail |
+## Theme
 
-The wordmark is lowercase `brainfile`, Inter at 700 with tight tracking, as on
-the OG banner.
+Dark is the designed theme; light re-values the same names and the window
+follows the system. One hue lane, **violet slate at 285** with a trace of
+chroma, so the accent reads as a signal on the material rather than part of
+it.
 
-## Space and shape
+Depth is lightness, five steps: well 12 · canvas 16 · raised 20 · pop 24 ·
+pressed 28. A raised or pop surface carries the top-light. Shadows are not
+structure.
 
-A 4px grid. Radii are concentric from the window inward: pane 10, card 8,
-control 6, chip 4. Nothing inside is rounder than what holds it, except a
-circle.
+Ink is four voices: ink says it, ink-2 explains, ink-3 annotates, ink-4 is
+furniture. Fills and lines are alpha. A hairline is one device pixel and is a
+plane's edge, never a divider between rows.
 
-The window is a 44px well strip (traffic lights, then the pane's own bar), a
-232px sidebar standing in the well, and one canvas pane set 8px into the well
-on three sides.
+The accent is **Brainfile violet**, `oklch(74% 0.12 290)` in dark and
+`oklch(52% 0.16 290)` in light (the manual's `#A796E3` and `#5B47A6`), on a
+budget under 5% of any screen: the primary action (New task, Create board),
+the tick of done, an add row in an empty list, a sync in flight. It is never
+a background, a decoration, or focus.
+
+Signals that are not the accent, each a glyph and a colour, never colour
+alone, all from the TUI: priority (urgent red, high amber, medium blue),
+contract state as a mono word (ready cyan, in progress amber, delivered
+magenta, done green, failed red), sync (a green dot shared, a ring local, a
+breathing violet dot in flight). Warn and danger are text or a soft wash,
+never a fill. Faces are seven hues at one lightness and chroma, below the
+accent's; red is absent.
+
+## Typography
+
+- Body and display: IBM Plex Sans 400 / 500 / 600, always roman.
+- Instrument: IBM Plex Mono 400 / 500, at 11px with +0.04em, for anything
+  measured or typed: an ID, a `#tag`, a count, a date, a path, a contract
+  state, the sync line. Sentence case; nothing is shouted in caps.
+- Six sizes with fixed leading: 11/14 · 12/16 · 13/18 · 14/22 (reading) ·
+  15/20 · 20/26 (a task's title). Tabular figures everywhere.
+- Emphasis is weight, never italic.
+
+## Spacing and shape
+
+A 4px grid. Radii are concentric from the OS window inward: pane 10 · card
+8 · control 6 · chip 4; a circle for a face. A group in a pane column (a
+task's properties) is a surface of its own, set in, and gets 14.
+
+Controls are 26px; a field is 28px and is sunk into its surface (the well's
+colour, an inset hairline); a key is raised (the pop plane, the top-light).
+You press a key and type into a well.
 
 ## Rows
 
-A row is 36px and reads left to right like the TUI's:
+The board reads like the TUI's list. A row is 36px:
 
 ```
-▌ ◆  spec-2    Board sync over refs/brainfile         ready  2/4  #sync   ●
-  │  │         │                                      └ signal chips      └ assignee
-  │  │         └ title, truncates before any chip is dropped
-  │  └ mono ID, ink-4, fixed width
-  └ kind glyph: ▸ epic · ◆ spec · ● adr · ⎘ plan · blank for a task
+[status] [priority] [kind] task-12  Title, which truncates first      ready  2/4  #sync  (face)
 ```
 
-The status checkbox and the priority mark sit before the glyph. At most three
-signal chips, in the TUI's order: contract state, then sub-task progress, then
-tags. A selected row gets a 2px accent rail at its left edge, which is the
-TUI's `▌` cursor, and the selected fill. There are no lines between rows.
+- Status is the logo's checkbox: dashed for backlog, open for not started,
+  filling from the bottom as the task moves right, ticked in violet when
+  done.
+- No priority draws nothing; emptiness is legible.
+- The kind is the TUI's glyph (▸ epic · ◆ spec · ● adr · ⎘ plan), blank for
+  a plain task; a parent with children shows ▾ / ▸ instead and its children
+  indent 20px beneath it.
+- At most three signal chips, in the TUI's order: contract state, sub-tasks,
+  tags.
+- An empty assignee says nothing until the row is reached for.
+- Hover and selection are fills on the row; there are no lines between rows.
 
 ## Motion
 
-Three durations and one curve, no overshoot: 90ms answers a press, 140ms
-opens something small, 220ms moves something across the pane. Nothing moves
-unasked except a sync in flight.
+One curve, `cubic-bezier(0.16, 1, 0.3, 1)`, three durations: 90ms answers a
+press, 130ms opens something small, 220ms moves something across a pane. No
+overshoot, no hover scale. A sync in flight breathes at 1800ms. Reduced
+motion removes every transition and animation.
+
+## Microinteractions stance
+
+- Silent success. The board changing is the confirmation; there are no
+  toasts. A problem is said once, in the board's band, as danger text on a
+  soft wash, and goes away on its own or when pressed.
+- Nothing rings. Keyboard focus is the control's hover fill; a field
+  brightens its own hairline. The accent is not spent on focus.
+- Every state is a glyph and a colour, never colour alone.
+- Destructive actions are danger ink with no fill, behind a system dialog.

@@ -13,9 +13,9 @@ body {
   background: var(--well);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: var(--t-body);
-  line-height: 20px;
-  font-feature-settings: 'cv11', 'ss01', 'ss03';
+  font-size: var(--t-md);
+  line-height: var(--lh-md);
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -webkit-user-select: none;
   user-select: none;
@@ -44,15 +44,14 @@ textarea {
   user-select: text;
 }
 
+/* Nothing rings: keyboard focus is the control's hover fill, and a field
+ * brightens its own hairline. The accent is not spent on focus. */
 :focus {
   outline: none;
 }
 
-/* Fields show focus with their caret; everything else with a ring. */
-:focus-visible:not(input, textarea) {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  border-radius: var(--r-control);
+button:focus-visible {
+  background: var(--fill-hover);
 }
 
 ::selection {
@@ -69,14 +68,14 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--line-strong);
+  background: var(--thumb);
   border: 3px solid transparent;
   background-clip: padding-box;
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: var(--ink-4);
+  background-color: var(--thumb-hover);
 }
 
 ::-webkit-scrollbar-corner {
@@ -91,23 +90,19 @@ textarea {
   -webkit-app-region: no-drag;
 }
 
-/* The second voice: anything that is a file or a value. */
+/* The instrument face: anything measured or typed. */
 .mono {
   font-family: var(--mono);
-  font-size: var(--t-meta);
-  line-height: 16px;
-  font-variant-ligatures: none;
-  letter-spacing: -0.01em;
-}
-
-.tabular {
-  font-variant-numeric: tabular-nums;
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  letter-spacing: 0.04em;
 }
 
 kbd {
   font-family: var(--mono);
-  font-size: var(--t-micro);
+  font-size: var(--t-xs);
   line-height: 1;
+  letter-spacing: 0.04em;
   color: var(--ink-3);
   min-width: 18px;
   height: 18px;
@@ -116,50 +111,65 @@ kbd {
   align-items: center;
   justify-content: center;
   border-radius: var(--r-chip);
-  background: var(--fill-hover);
-  box-shadow: inset 0 0 0 var(--hairline) var(--line-strong);
+  background: var(--pop);
+  box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
 }
 
-/* ------------------------------------------------------------- controls */
+/* ------------------------------------------------------------- controls
+ * You press a key and type into a well. */
 
 .btn {
-  height: 28px;
-  padding: 0 var(--s3);
+  height: var(--control-h);
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
   border-radius: var(--r-control);
   font-weight: 500;
   color: var(--ink);
-  background: var(--raised);
-  box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line-strong);
+  background: var(--pop);
+  box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
   transition: background var(--d-press) var(--ease);
   white-space: nowrap;
 }
 
-.btn:hover {
+.btn:hover,
+.btn:focus-visible {
   background: var(--pressed);
 }
 
+/* One per screen. */
 .btn.primary {
   background: var(--accent);
   color: var(--on-accent);
   box-shadow: var(--top-light);
 }
 
-.btn.primary:hover {
+.btn.primary:hover,
+.btn.primary:focus-visible {
   background: var(--accent-hover);
 }
 
-.btn.ghost {
+.btn.quiet {
   background: transparent;
   box-shadow: none;
   color: var(--ink-2);
 }
 
-.btn.ghost:hover {
+.btn.quiet:hover,
+.btn.quiet:focus-visible {
   background: var(--fill-hover);
   color: var(--ink);
+}
+
+.btn.danger {
+  background: transparent;
+  box-shadow: none;
+  color: var(--danger);
+}
+
+.btn.danger:hover {
+  background: var(--danger-soft);
 }
 
 .btn:disabled {
@@ -168,13 +178,14 @@ kbd {
 
 .btn .keys {
   font-family: var(--mono);
-  font-size: var(--t-micro);
+  font-size: var(--t-xs);
+  letter-spacing: 0.04em;
   opacity: 0.7;
 }
 
 .icon-btn {
-  width: 28px;
-  height: 28px;
+  width: var(--control-h);
+  height: var(--control-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -183,33 +194,53 @@ kbd {
   transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
 }
 
-.icon-btn:hover {
+.icon-btn:hover,
+.icon-btn:focus-visible {
   background: var(--fill-hover);
   color: var(--ink);
 }
 
+/* A field is sunk into its surface. */
+.field {
+  height: var(--field-h);
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--r-control);
+  background: var(--well);
+  box-shadow: inset 0 0 0 var(--hairline) var(--line);
+  transition: box-shadow var(--d-press) var(--ease);
+}
+
+.field:focus,
+.field:focus-within {
+  box-shadow: inset 0 0 0 var(--hairline) var(--line-strong);
+}
+
 .chip {
-  height: 26px;
+  height: var(--control-h);
   padding: 0 var(--s2);
   display: inline-flex;
   align-items: center;
   gap: 6px;
   border-radius: var(--r-control);
   color: var(--ink-2);
-  box-shadow: inset 0 0 0 var(--hairline) var(--line-strong);
+  background: var(--pop);
+  box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
   white-space: nowrap;
 }
 
-button.chip:hover {
-  background: var(--fill-hover);
+button.chip:hover,
+button.chip:focus-visible {
+  background: var(--pressed);
   color: var(--ink);
 }
 
 /* A `#tag`, as the TUI writes it. */
 .tag {
   font-family: var(--mono);
-  font-size: var(--t-meta);
-  line-height: 16px;
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  letter-spacing: 0.04em;
   color: var(--ink-3);
   white-space: nowrap;
 }
@@ -219,13 +250,14 @@ button.chip:hover {
   color: var(--ink-4);
 }
 
-/* Contract state, as mono text in its signal colour. */
+/* Contract state: a glyph-free word in its signal colour. */
 .contract {
   font-family: var(--mono);
-  font-size: var(--t-meta);
-  line-height: 16px;
+  font-size: var(--t-xs);
+  line-height: var(--lh-xs);
+  letter-spacing: 0.04em;
   white-space: nowrap;
-  color: var(--c-draft);
+  color: var(--ink-3);
 }
 
 .contract[data-status='ready'] {
@@ -250,7 +282,6 @@ button.chip:hover {
   color: var(--c-failed);
 }
 
-/* Planes that float. */
 .scrim {
   position: fixed;
   inset: 0;
@@ -261,5 +292,14 @@ button.chip:hover {
 @keyframes fade {
   from {
     opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

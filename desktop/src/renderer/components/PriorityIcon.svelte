@@ -7,7 +7,7 @@
 
   const level = $derived(priority === 'critical' ? 3 : priority === 'high' ? 3 : priority === 'medium' ? 2 : priority === 'low' ? 1 : 0);
   const color = $derived(
-    priority === 'critical' ? 'var(--p-urgent)' : priority === 'high' ? 'var(--p-high)' : priority === 'medium' ? 'var(--p-medium)' : 'var(--p-low)'
+    priority === 'critical' ? 'var(--p-urgent)' : priority === 'high' ? 'var(--p-high)' : priority === 'medium' ? 'var(--p-medium)' : 'var(--ink-3)'
   );
 </script>
 

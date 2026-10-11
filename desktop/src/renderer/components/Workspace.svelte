@@ -5,7 +5,6 @@
   import { tildify } from '../lib/format';
   import ListView from './ListView.svelte';
   import BoardView from './BoardView.svelte';
-  import TaskDetail from './TaskDetail.svelte';
 
   const project = $derived(app.active);
   const board = $derived(app.board);
@@ -40,25 +39,24 @@
   {#if !app.loaded}
     <div class="center"></div>
   {:else if !project}
-    <div class="drag strip"></div>
     <div class="center">
       <div class="empty">
-        <div class="art"><Mark size={36} /></div>
+        <div class="art"><Mark size={72} /></div>
         <h1>Add your first project</h1>
         <p>
           A project is a repository, or any folder, with a Brainfile board. Brainfile finds the board in
           <code>.brainfile/</code> or on the repository's <code>brainfile</code> branch, exactly as the CLI does.
         </p>
         <button class="btn primary" onclick={() => app.addProject()}>
-          <Icon name="folder" size={14} />Add Project<span class="keys">⌘O</span>
+          Add project<span class="keys">⌘O</span>
         </button>
       </div>
     </div>
   {:else if project.state.status !== 'ready'}
-    <div class="drag strip"></div>
     <div class="center">
       <div class="empty">
         {#if project.state.status === 'no-board'}
+          <div class="art"><Mark size={72} /></div>
           <h1>No board in {project.name} yet</h1>
           <p>
             {#if project.state.inRepo}
@@ -72,7 +70,7 @@
             <button class="btn primary" disabled={initializing} onclick={init}>
               {initializing ? 'Creating…' : 'Create board'}
             </button>
-            <button class="btn ghost" onclick={() => app.refreshProject(project.id)}>Check again</button>
+            <button class="btn quiet" onclick={() => app.refreshProject(project.id)}>Check again</button>
           </div>
         {:else if project.state.status === 'legacy'}
           <h1>This board uses the old single-file format</h1>
@@ -89,14 +87,12 @@
         {/if}
       </div>
     </div>
-  {:else if app.openTaskId && board}
-    <TaskDetail {board} taskId={app.openTaskId} />
   {:else if board}
-    <header class="bar drag">
+    <header class="band">
       <span class="title">{board.title}</span>
       <span class="path mono">{tildify(project.path)}</span>
       <span class="sep"></span>
-      <div class="segmented no-drag" role="tablist">
+      <div class="segmented" role="tablist" title="List or board  V">
         <button role="tab" aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
           <Icon name="list" size={14} />List
         </button>
@@ -105,8 +101,13 @@
         </button>
       </div>
       <span class="spacer"></span>
+      {#if app.problem}
+        <button class="problem" title="Dismiss" onclick={() => (app.problem = null)}>
+          <Icon name="close" size={12} />{app.problem}
+        </button>
+      {/if}
       <button
-        class="sync no-drag"
+        class="sync"
         class:busy={board.sync.busy}
         class:warn={!!board.sync.warning}
         title={board.sync.warning ?? `${storageLabel}${board.sync.remote ? ` · shared through ${board.sync.remote}` : ''}`}
@@ -117,8 +118,8 @@
         <span class="mono">{board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')}</span>
         {#if board.sync.pending > 0}<span class="pending mono tabular">↑{board.sync.pending}</span>{/if}
       </button>
-      <button class="btn no-drag" onclick={() => (app.composer = {})}>
-        <Icon name="plus" size={14} />New task
+      <button class="btn primary" onclick={() => (app.composer = {})}>
+        New task<span class="keys">C</span>
       </button>
     </header>
     <div class="content">
@@ -128,7 +129,7 @@
             <h1>Nothing on the board</h1>
             <p>Tasks you, the CLI or your agents add appear here as soon as their files change.</p>
             <button class="btn primary" onclick={() => (app.composer = {})}>
-              <Icon name="plus" size={14} />New task<span class="keys">C</span>
+              New task<span class="keys">C</span>
             </button>
           </div>
         </div>
@@ -147,7 +148,7 @@
   .pane {
     flex: 1;
     min-width: 0;
-    margin: var(--inset) var(--inset) var(--inset) 0;
+    margin-bottom: var(--gap);
     display: flex;
     flex-direction: column;
     border-radius: var(--r-pane);
@@ -157,25 +158,20 @@
     position: relative;
   }
 
-  .strip {
-    position: absolute;
-    inset: 0 0 auto;
-    height: var(--bar-h);
-  }
-
-  .bar {
-    height: var(--bar-h);
+  /* A pane's band has no line under it; what scrolls fades out beneath it. */
+  .band {
+    height: var(--band-h);
     flex: none;
     display: flex;
     align-items: center;
     gap: var(--s3);
-    padding: 0 var(--s2) 0 var(--s5);
-    border-bottom: var(--hairline) solid var(--line);
+    padding: 0 var(--s2) 0 var(--s4);
+    position: relative;
+    z-index: 2;
   }
 
   .title {
-    font-weight: 650;
-    letter-spacing: -0.01em;
+    font-weight: 600;
   }
 
   .path {
@@ -183,23 +179,19 @@
     margin-left: calc(-1 * var(--s1));
   }
 
-  .sep {
-    width: var(--hairline);
-    height: 16px;
-    background: var(--line-strong);
-  }
-
   .spacer {
     flex: 1;
   }
 
   .segmented {
-    height: 28px;
+    height: var(--field-h);
     display: flex;
     padding: 2px;
     gap: 2px;
+    margin-left: var(--s1);
     border-radius: var(--r-control);
     background: var(--well);
+    box-shadow: inset 0 0 0 var(--hairline) var(--line);
   }
 
   .segmented button {
@@ -220,12 +212,28 @@
 
   .segmented button.on {
     color: var(--ink);
-    background: var(--raised);
+    background: var(--pop);
     box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
   }
 
+  .problem {
+    min-width: 0;
+    max-width: 44%;
+    height: var(--control-h);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 var(--s2);
+    border-radius: var(--r-control);
+    color: var(--danger);
+    background: var(--danger-soft);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
   .sync {
-    height: 28px;
+    height: var(--control-h);
     display: inline-flex;
     align-items: center;
     gap: var(--s2);
@@ -243,6 +251,7 @@
     color: var(--warn);
   }
 
+  /* Every state is a glyph and a colour: a ring is local, a dot is shared. */
   .dot {
     width: 6px;
     height: 6px;
@@ -251,7 +260,7 @@
   }
 
   .dot.shared {
-    background: var(--c-done);
+    background: var(--ok);
     box-shadow: none;
   }
 
@@ -261,12 +270,12 @@
 
   .sync.busy .dot {
     background: var(--accent);
-    animation: pulse 1s var(--ease) infinite alternate;
+    animation: breathe 1800ms var(--ease) infinite alternate;
   }
 
-  @keyframes pulse {
+  @keyframes breathe {
     to {
-      opacity: 0.3;
+      opacity: 0.35;
     }
   }
 
@@ -277,6 +286,8 @@
   .content {
     flex: 1;
     min-height: 0;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
   }
 
   .center {
@@ -289,7 +300,7 @@
   }
 
   .empty {
-    max-width: 440px;
+    max-width: 420px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -297,26 +308,27 @@
   }
 
   .art {
-    margin-bottom: var(--s5);
+    margin-bottom: var(--s6);
+    color: var(--ink-4);
   }
 
   h1 {
     margin: 0;
-    font-size: var(--t-read);
-    line-height: 24px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
+    font-size: var(--t-lg);
+    line-height: var(--lh-lg);
+    font-weight: 600;
   }
 
   p {
     margin: var(--s2) 0 var(--s6);
     color: var(--ink-2);
-    line-height: 22px;
+    font-size: var(--t-read);
+    line-height: var(--lh-read);
   }
 
   code {
     font-family: var(--mono);
-    font-size: var(--t-meta);
+    font-size: 0.86em;
     padding: 1px 5px;
     border-radius: var(--r-chip);
     background: var(--fill-code);

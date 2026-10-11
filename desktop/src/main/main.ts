@@ -139,7 +139,7 @@ function createWindow(): void {
     show: false,
     title: 'Brainfile',
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 18, y: 15 },
+    trafficLightPosition: { x: 13, y: 10 },
     // The well (tokens.css), so a resize never flashes another colour.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0b0f' : '#e8e7ee',
     webPreferences: {

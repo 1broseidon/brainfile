@@ -43,7 +43,8 @@ change.
 | ⌘K | Command menu and task search |
 | ⌘O | Add project |
 | ⌘1–⌘9 | Switch project |
-| ⌘B | List / board |
+| ⌘B | Show or hide the projects rail |
+| V | List / board |
 | C | New task |
 | J / K, ↑ / ↓, ↵ | Move through tasks, open one |
 | S, P, A, L | Status, priority, assignee, labels of the selected task |

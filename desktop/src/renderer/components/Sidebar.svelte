@@ -1,51 +1,33 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
+  import { tildify } from '../lib/format';
   import Icon from './Icon.svelte';
-  import Mark from './Mark.svelte';
   import type { Project } from '../../shared/api';
 
-  function count(project: Project): number | null {
-    const board = app.boards[project.id];
-    return board ? board.tasks.length : null;
-  }
-
-  function hint(project: Project): string | null {
+  function line(project: Project): string {
     switch (project.state.status) {
       case 'no-board':
-        return 'no board';
+        return 'no board yet';
       case 'legacy':
-        return 'v1';
+        return 'v1 board, needs migrate';
       case 'missing':
-        return 'missing';
+        return 'folder missing';
       case 'error':
-        return 'error';
-      default:
-        return null;
+        return 'could not read';
+      default: {
+        const board = app.boards[project.id];
+        const storage = project.state.storage === 'linked' ? 'branch' : project.state.storage === 'standalone' ? 'repo' : 'files';
+        return board ? `${board.tasks.length} open · ${storage}` : storage;
+      }
     }
-  }
-
-  function storageIcon(project: Project): 'git' | 'folder' {
-    return project.state.status === 'ready' && project.state.storage !== 'plain' ? 'git' : 'folder';
   }
 </script>
 
-<aside class="sidebar">
-  <div class="lights drag"></div>
-
-  <div class="brand drag">
-    <Mark size={16} />
-    <span class="wordmark">brainfile</span>
-  </div>
-
-  <button class="search" onclick={() => (app.paletteOpen = true)}>
-    <Icon name="search" size={14} />
-    <span>Search</span>
-    <kbd>⌘K</kbd>
-  </button>
-
+<!-- The rail stands directly in the well. -->
+<aside class="rail" style:width="{app.layout.rail}px">
   <div class="head">
     <span>Projects</span>
-    <button class="icon-btn small" title="Add project  ⌘O" onclick={() => app.addProject()}>
+    <button class="icon-btn" title="Add project  ⌘O" onclick={() => app.addProject()}>
       <Icon name="plus" size={14} />
     </button>
   </div>
@@ -53,176 +35,116 @@
   <nav class="projects">
     {#each app.projects as project, i (project.id)}
       {@const active = project.id === app.activeId}
-      {@const note = hint(project)}
-      {@const n = count(project)}
-      <button class="project" class:active class:dim={note !== null} title={project.path} onclick={() => app.select(project.id)}>
-        <span class="kind"><Icon name={storageIcon(project)} size={14} /></span>
-        <span class="label">{project.name}</span>
-        {#if note}
-          <span class="meta mono">{note}</span>
-        {:else if n !== null}
-          <span class="meta mono tabular">{n}</span>
-        {:else if i < 9}
-          <span class="meta mono key">⌘{i + 1}</span>
-        {/if}
+      {@const ready = project.state.status === 'ready'}
+      <button class="project" class:active title={tildify(project.path)} onclick={() => app.select(project.id)}>
+        <span class="name">{project.name}</span>
+        <span class="line mono" class:off={!ready}>{line(project)}</span>
+        {#if i < 9}<span class="key mono">⌘{i + 1}</span>{/if}
       </button>
     {/each}
+
     {#if app.loaded && app.projects.length === 0}
-      <button class="project add" onclick={() => app.addProject()}>
-        <span class="kind"><Icon name="plus" size={14} /></span>
-        <span class="label">Add a project</span>
+      <!-- The one accent in the rail: adding is what an empty list is for. -->
+      <button class="add" onclick={() => app.addProject()}>
+        <Icon name="plus" size={14} />
+        Add a project
       </button>
     {/if}
   </nav>
 </aside>
 
 <style>
-  .sidebar {
-    width: var(--sidebar-w);
+  .rail {
     flex: none;
     display: flex;
     flex-direction: column;
-    padding: 0 var(--s2) var(--s3) var(--s3);
-  }
-
-  .lights {
-    height: var(--bar-h);
-    flex: none;
-    margin-right: calc(-1 * var(--s2));
-  }
-
-  .brand {
-    height: 28px;
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 0 var(--s2);
-    margin-bottom: var(--s3);
-  }
-
-  .wordmark {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -0.035em;
-    color: var(--ink);
-  }
-
-  .search {
-    height: 30px;
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    padding: 0 6px 0 var(--s2);
-    border-radius: var(--r-control);
-    color: var(--ink-3);
-    background: var(--canvas);
-    box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
-    transition: color var(--d-press) var(--ease);
-  }
-
-  .search:hover {
-    color: var(--ink-2);
-  }
-
-  .search span {
-    flex: 1;
-    text-align: left;
+    min-height: 0;
+    padding: 0 0 var(--gap) var(--gap);
   }
 
   .head {
-    height: 28px;
-    margin-top: var(--s5);
+    height: var(--band-h);
+    flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 0 0 var(--s2);
-    font-size: var(--t-meta);
-    font-weight: 500;
-    color: var(--ink-3);
-  }
-
-  .icon-btn.small {
-    width: 24px;
-    height: 24px;
+    padding: 0 var(--s1) 0 var(--s3);
+    font-weight: 600;
   }
 
   .projects {
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
     overflow-y: auto;
   }
 
   .project {
     position: relative;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    padding: 0 var(--s2);
-    border-radius: var(--r-control);
-    color: var(--ink-2);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    row-gap: 2px;
+    padding: 7px var(--s3) 8px;
+    border-radius: var(--r-card);
     text-align: left;
-    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
+    transition: background var(--d-press) var(--ease);
   }
 
-  .project:hover {
+  .project:hover,
+  .project:focus-visible {
     background: var(--fill-hover);
-    color: var(--ink);
   }
 
   .project.active {
-    background: var(--fill-active);
-    color: var(--ink);
+    background: var(--fill-selected);
   }
 
-  /* The TUI's ▌ cursor. */
-  .project.active::before {
-    content: '';
-    position: absolute;
-    left: -6px;
-    top: 8px;
-    bottom: 8px;
-    width: 2px;
-    border-radius: 1px;
-    background: var(--accent);
-  }
-
-  .project.dim .label {
-    color: var(--ink-3);
-  }
-
-  .kind {
-    display: inline-flex;
-    color: var(--ink-3);
-  }
-
-  .project.active .kind {
-    color: var(--ink-2);
-  }
-
-  .label {
-    flex: 1;
+  .name {
+    grid-column: 1;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     font-weight: 500;
+    color: var(--ink);
   }
 
-  .meta {
+  .line {
+    grid-column: 1;
+    color: var(--ink-3);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .line.off {
     color: var(--ink-4);
   }
 
-  .meta.key {
+  .key {
+    grid-column: 2;
+    grid-row: 1;
+    align-self: center;
+    color: var(--ink-4);
     opacity: 0;
     transition: opacity var(--d-press) var(--ease);
   }
 
-  .project:hover .meta.key {
+  .project:hover .key {
     opacity: 1;
   }
 
-  .project.add {
-    color: var(--ink-3);
+  .add {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: 0 var(--s3);
+    border-radius: var(--r-card);
+    color: var(--accent-ink);
+    font-weight: 500;
+  }
+
+  .add:hover {
+    background: var(--fill-hover);
   }
 </style>
