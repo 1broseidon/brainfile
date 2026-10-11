@@ -2,8 +2,8 @@
  * The window's tokens. Every colour, length, face and easing the window uses
  * is named here once; the system is locked in desktop/design.md. It is
  * Hotline's system (hotline/ui/design.md) in Brainfile's own colours: the
- * same planes, ink, type, shape and motion, with Brainfile's violet lane and
- * its mark. Dark is designed first; light re-values the same names.
+ * same planes, ink, type, shape and motion, with Brainfile's warm graphite
+ * lane, its forge-orange accent and its mark. Dark is designed first; light re-values the same names.
  */
 
 @import '@fontsource/ibm-plex-sans/400.css';
@@ -16,14 +16,14 @@
   color-scheme: dark;
 
   /* ------------------------------------------------------------- planes
-   * Depth is lightness, not shadow. Five steps in one violet lane (hue 285,
-   * a trace of chroma) so the window reads as one material and the accent
-   * reads as a signal on it rather than a part of it. */
-  --well: oklch(12% 0.009 285); /* the ground: the titlebar strip, behind the rail, in the gaps */
-  --canvas: oklch(16% 0.009 285); /* a pane: the board, a task */
-  --raised: oklch(20% 0.01 285); /* a card, a group */
-  --pop: oklch(24% 0.011 285); /* a menu, the palette, a dialog, a key */
-  --pressed: oklch(28% 0.011 285); /* a pop surface under the pointer */
+   * Depth is lightness, not shadow. Five steps in one warm graphite lane
+   * (hue 60, a trace of chroma) so the window reads as one material and
+   * the orange reads as a signal on it rather than a part of it. */
+  --well: oklch(12% 0.005 60); /* the ground: the titlebar strip, behind the rail, in the gaps */
+  --canvas: oklch(16% 0.005 60); /* a pane: the board, a task */
+  --raised: oklch(20% 0.006 60); /* a card, a group */
+  --pop: oklch(24% 0.006 60); /* a menu, the palette, a dialog, a key */
+  --pressed: oklch(28% 0.006 60); /* a pop surface under the pointer */
 
   /* A raised surface catches the light along its top edge: felt, not seen. */
   --top-light: inset 0 1px 0 oklch(100% 0 0 / 0.04);
@@ -31,10 +31,10 @@
   /* ---------------------------------------------------------------- ink
    * Four voices: ink says it, ink-2 explains, ink-3 annotates, ink-4 is
    * furniture you read only when you look for it. */
-  --ink: oklch(95% 0.005 285);
-  --ink-2: oklch(78% 0.008 285);
-  --ink-3: oklch(62% 0.01 285);
-  --ink-4: oklch(46% 0.01 285);
+  --ink: oklch(95% 0.004 60);
+  --ink-2: oklch(78% 0.006 60);
+  --ink-3: oklch(62% 0.007 60);
+  --ink-4: oklch(46% 0.007 60);
 
   /* Fills are alpha so one rule reads right on every plane. */
   --fill-hover: oklch(100% 0 0 / 0.05);
@@ -45,28 +45,29 @@
   /* A line is one device pixel and a plane's edge, never a divider. */
   --line: oklch(100% 0 0 / 0.09);
   --line-strong: oklch(100% 0 0 / 0.16);
-  --thumb: oklch(34% 0.01 285);
-  --thumb-hover: oklch(46% 0.01 285);
+  --thumb: oklch(34% 0.006 60);
+  --thumb-hover: oklch(46% 0.006 60);
   --hairline: 1px;
 
   /* ------------------------------------------------------------- signal
-   * Brainfile violet, the manual's own. On a budget: the primary action,
-   * the tick of done, an add row, a sync in flight. Never a background,
-   * never decoration, never focus. */
-  --accent: oklch(74% 0.12 290);
-  --accent-hover: oklch(79% 0.1 290);
-  --on-accent: oklch(22% 0.06 290);
-  --accent-soft: oklch(74% 0.12 290 / 0.16);
-  --accent-ink: oklch(78% 0.11 290);
+   * Forge orange: ember on graphite, the colour of self-hosted dev tooling.
+   * On a budget: the primary action, the tick of done, an add row, a sync in
+   * flight. Never a background, never decoration, never focus. */
+  --accent: oklch(74% 0.15 52);
+  --accent-hover: oklch(79% 0.13 55);
+  --on-accent: oklch(22% 0.06 45);
+  --accent-soft: oklch(74% 0.15 52 / 0.16);
+  --accent-ink: oklch(78% 0.13 55);
 
   --warn: oklch(80% 0.14 80);
   --danger: oklch(72% 0.17 25);
   --danger-soft: oklch(72% 0.17 25 / 0.14);
   --ok: oklch(78% 0.13 160);
 
-  /* Priority, the TUI's signal: urgent red, high amber, medium blue. */
-  --p-urgent: oklch(70% 0.17 30);
-  --p-high: oklch(80% 0.14 75);
+  /* Priority, the TUI's signal: urgent red, high yellow (moved off the
+   * TUI's amber so it never reads as the accent), medium blue. */
+  --p-urgent: oklch(68% 0.19 25);
+  --p-high: oklch(84% 0.14 95);
   --p-medium: oklch(72% 0.11 250);
 
   /* Contract state, the TUI's signal, always as mono text. */
@@ -80,7 +81,7 @@
    * accent's, so nobody is louder than the signal. Red is absent. */
   --face-l: 72%;
   --face-c: 0.08;
-  --face-ink: oklch(17% 0.02 285);
+  --face-ink: oklch(17% 0.02 60);
 
   /* ---------------------------------------------------------- elevation
    * One thing floats at a time: a menu, the palette, a dialog. */
@@ -149,42 +150,42 @@
   :root {
     color-scheme: light;
 
-    --well: oklch(92.5% 0.007 285);
-    --canvas: oklch(98.5% 0.003 285);
-    --raised: oklch(96.5% 0.005 285);
+    --well: oklch(92.5% 0.006 60);
+    --canvas: oklch(98.5% 0.003 60);
+    --raised: oklch(96.5% 0.004 60);
     --pop: oklch(100% 0 0);
-    --pressed: oklch(95% 0.007 285);
+    --pressed: oklch(95% 0.006 60);
     --top-light: inset 0 1px 0 oklch(100% 0 0 / 0.6);
 
-    --ink: oklch(20% 0.012 285);
-    --ink-2: oklch(42% 0.012 285);
-    --ink-3: oklch(56% 0.012 285);
-    --ink-4: oklch(68% 0.01 285);
+    --ink: oklch(20% 0.008 60);
+    --ink-2: oklch(42% 0.008 60);
+    --ink-3: oklch(56% 0.008 60);
+    --ink-4: oklch(68% 0.007 60);
 
-    --fill-hover: oklch(20% 0.012 285 / 0.06);
-    --fill-active: oklch(20% 0.012 285 / 0.1);
-    --fill-selected: oklch(20% 0.012 285 / 0.08);
-    --fill-code: oklch(20% 0.012 285 / 0.05);
+    --fill-hover: oklch(20% 0.008 60 / 0.06);
+    --fill-active: oklch(20% 0.008 60 / 0.1);
+    --fill-selected: oklch(20% 0.008 60 / 0.08);
+    --fill-code: oklch(20% 0.008 60 / 0.05);
 
-    --line: oklch(20% 0.012 285 / 0.1);
-    --line-strong: oklch(20% 0.012 285 / 0.2);
-    --thumb: oklch(80% 0.01 285);
-    --thumb-hover: oklch(68% 0.01 285);
+    --line: oklch(20% 0.008 60 / 0.1);
+    --line-strong: oklch(20% 0.008 60 / 0.2);
+    --thumb: oklch(80% 0.006 60);
+    --thumb-hover: oklch(68% 0.006 60);
 
-    /* Violet as a fill reads on white; as words it must go deeper. */
-    --accent: oklch(52% 0.16 290);
-    --accent-hover: oklch(47% 0.16 290);
-    --on-accent: oklch(99% 0.01 290);
-    --accent-soft: oklch(52% 0.16 290 / 0.12);
-    --accent-ink: oklch(48% 0.15 290);
+    /* Orange as a fill holds on white; as words it must go deeper. */
+    --accent: oklch(57% 0.17 45);
+    --accent-hover: oklch(52% 0.17 43);
+    --on-accent: oklch(99% 0.01 60);
+    --accent-soft: oklch(57% 0.17 45 / 0.12);
+    --accent-ink: oklch(52% 0.16 45);
 
     --warn: oklch(64% 0.15 75);
     --danger: oklch(55% 0.19 27);
     --danger-soft: oklch(55% 0.19 27 / 0.1);
     --ok: oklch(55% 0.13 160);
 
-    --p-urgent: oklch(57% 0.19 30);
-    --p-high: oklch(66% 0.15 65);
+    --p-urgent: oklch(55% 0.2 25);
+    --p-high: oklch(68% 0.14 90);
     --p-medium: oklch(55% 0.13 250);
 
     --c-ready: oklch(55% 0.1 215);
@@ -193,13 +194,13 @@
 
     --face-l: 78%;
     --face-c: 0.08;
-    --face-ink: oklch(22% 0.02 285);
+    --face-ink: oklch(22% 0.02 60);
 
     --shadow-float:
-      0 0 0 var(--hairline) oklch(20% 0.012 285 / 0.1),
-      0 1px 2px oklch(20% 0.012 285 / 0.08),
-      0 12px 32px -8px oklch(20% 0.012 285 / 0.22);
-    --scrim: oklch(20% 0.012 285 / 0.28);
+      0 0 0 var(--hairline) oklch(20% 0.008 60 / 0.1),
+      0 1px 2px oklch(20% 0.008 60 / 0.08),
+      0 12px 32px -8px oklch(20% 0.008 60 / 0.22);
+    --scrim: oklch(20% 0.008 60 / 0.28);
   }
 }
 

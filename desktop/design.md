@@ -7,8 +7,8 @@ file, never to override it locally. The values live in
 
 **Lineage.** This is Hotline's system (`hotline/ui/design.md`): the same
 genre, macrostructure, planes, ink, type, shape, motion and microinteraction
-stance. Two things are Brainfile's own: the colour lane and its accent, and
-the mark. Where the two products need the same answer, take Hotline's; where
+stance. Two things are Brainfile's own: the colour lane and its accent
+(Forge), and the mark. Where the two products need the same answer, take Hotline's; where
 this file is silent, Hotline's file decides.
 
 ## Genre
@@ -52,7 +52,7 @@ never the accent.
 ## Theme
 
 Dark is the designed theme; light re-values the same names and the window
-follows the system. One hue lane, **violet slate at 285** with a trace of
+follows the system. One hue lane, **warm graphite at 60** with a trace of
 chroma, so the accent reads as a signal on the material rather than part of
 it.
 
@@ -64,17 +64,20 @@ Ink is four voices: ink says it, ink-2 explains, ink-3 annotates, ink-4 is
 furniture. Fills and lines are alpha. A hairline is one device pixel and is a
 plane's edge, never a divider between rows.
 
-The accent is **Brainfile violet**, `oklch(74% 0.12 290)` in dark and
-`oklch(52% 0.16 290)` in light (the manual's `#A796E3` and `#5B47A6`), on a
-budget under 5% of any screen: the primary action (New task, Create board),
-the tick of done, an add row in an empty list, a sync in flight. It is never
-a background, a decoration, or focus.
+The accent is **Forge**, ember orange: `oklch(74% 0.15 52)` in dark
+(`#F38C48`) and `oklch(57% 0.17 45)` in light (`#C44C00`). It is the colour
+of self-hosted developer tooling, so the window reads as something that runs
+on your own machine, and it sits far from Linear's indigo and Hotline's mint.
+It is on a budget under 5% of any screen: the primary action (New task,
+Create board), the tick of done, an add row in an empty list, a sync in
+flight. It is never a background, a decoration, or focus.
 
 Signals that are not the accent, each a glyph and a colour, never colour
-alone, all from the TUI: priority (urgent red, high amber, medium blue),
+alone, all from the TUI: priority (urgent red, high yellow, moved off the TUI's
+amber so it never reads as the accent, medium blue),
 contract state as a mono word (ready cyan, in progress amber, delivered
 magenta, done green, failed red), sync (a green dot shared, a ring local, a
-breathing violet dot in flight). Warn and danger are text or a soft wash,
+breathing orange dot in flight). Warn and danger are text or a soft wash,
 never a fill. Faces are seven hues at one lightness and chroma, below the
 accent's; red is absent.
 
@@ -107,7 +110,7 @@ The board reads like the TUI's list. A row is 36px:
 ```
 
 - Status is the logo's checkbox: dashed for backlog, open for not started,
-  filling from the bottom as the task moves right, ticked in violet when
+  filling from the bottom as the task moves right, ticked in orange when
   done.
 - No priority draws nothing; emptiness is legible.
 - The kind is the TUI's glyph (▸ epic · ◆ spec · ● adr · ⎘ plan), blank for

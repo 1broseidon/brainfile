@@ -141,15 +141,19 @@ function createWindow(): void {
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 13, y: 10 },
     // The well (tokens.css), so a resize never flashes another colour.
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0b0f' : '#e8e7ee',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0a09' : '#e9e7e5',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
+      // Captures render offscreen, in sRGB, so screenshots match the tokens.
+      offscreen: !!process.env.BRAINFILE_CAPTURE,
     },
   });
-  win.once('ready-to-show', () => win?.show());
+  win.once('ready-to-show', () => {
+    if (!process.env.BRAINFILE_CAPTURE) win?.show();
+  });
   if (process.env.BRAINFILE_CAPTURE) captureAndQuit(win, process.env.BRAINFILE_CAPTURE);
   win.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
@@ -169,17 +173,12 @@ function captureAndQuit(target: BrowserWindow, file: string): void {
     await new Promise((r) => setTimeout(r, 1500));
     const script = process.env.BRAINFILE_CAPTURE_SCRIPT;
     if (script) {
-      await target.webContents.executeJavaScript(script).catch((err) => console.error(err));
+      const out = await target.webContents.executeJavaScript(script).catch((err) => console.error(err));
+      if (out !== undefined) console.log('capture:', JSON.stringify(out));
       await new Promise((r) => setTimeout(r, 900));
     }
-    // The real window, vibrancy and all, when screen capture is allowed;
-    // the page alone otherwise.
-    const windowId = target.getMediaSourceId().split(':')[1];
-    const shot = require('child_process').spawnSync('screencapture', ['-x', '-o', '-l', windowId, file]);
-    if (shot.status !== 0 || !require('fs').existsSync(file)) {
-      const image = await target.webContents.capturePage();
-      require('fs').writeFileSync(file, image.toPNG());
-    }
+    const image = await target.webContents.capturePage();
+    require('fs').writeFileSync(file, image.toPNG());
     app.quit();
   });
 }
