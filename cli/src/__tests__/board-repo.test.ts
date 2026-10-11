@@ -11,7 +11,9 @@ import { initCommand } from '../commands/init';
 import { addCommand } from '../commands/add';
 import { migrateCommand } from '../commands/migrate';
 import { migrateToBranch } from '../commands/migrate-tracked';
-import * as boardRepo from '../utils/board-repo';
+// Spy where commitBoard is defined: the CLI module re-exports it through
+// read-only bindings, and every caller reaches it through this object.
+import * as boardRepo from '@brainfile/core/dist/repo/boardRepo';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import {
   boardRepoKind,

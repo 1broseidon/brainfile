@@ -3,7 +3,14 @@ module.exports = {
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
   testMatch: ["**/__tests__/**/*.test.ts"],
-  collectCoverageFrom: ["src/**/*.ts", "!src/**/*.d.ts", "!src/__tests__/**"],
+  collectCoverageFrom: [
+    "src/**/*.ts",
+    "!src/**/*.d.ts",
+    "!src/__tests__/**",
+    // Moved from the CLI with their suites, which still live there
+    // (cli/src/__tests__/board-repo, board-sync) and drive them end to end.
+    "!src/repo/{boardRepo,boardSync,merge,autosync}.ts",
+  ],
   coverageThreshold: {
     global: {
       branches: 70,

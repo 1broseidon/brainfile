@@ -71,6 +71,12 @@
       "require": "./dist/realtimeDiff.js",
       "default": "./dist/realtimeDiff.js"
     },
+    "./repo": {
+      "types": "./dist/repo/index.d.ts",
+      "import": "./dist/repo/index.js",
+      "require": "./dist/repo/index.js",
+      "default": "./dist/repo/index.js"
+    },
     "./dist/*": "./dist/*",
     "./package.json": "./package.json"
   },
@@ -105,6 +111,9 @@
       ],
       "realtimeDiff": [
         "dist/realtimeDiff.d.ts"
+      ],
+      "repo": [
+        "dist/repo/index.d.ts"
       ],
       "dist/*": [
         "dist/*"
