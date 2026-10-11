@@ -16,10 +16,20 @@
         return 'could not read';
       default: {
         const board = app.boards[project.id];
-        const storage = project.state.storage === 'linked' ? 'branch' : project.state.storage === 'standalone' ? 'repo' : 'files';
-        return board ? `${board.tasks.length} open · ${storage}` : storage;
+        if (board) return `${board.tasks.length} open`;
+        return project.state.storage === 'linked' ? 'branch' : project.state.storage === 'standalone' ? 'repo' : 'files';
       }
     }
+  }
+
+  /** Where the board lives: on the brainfile branch (or its own repo), or in plain files. */
+  function storageIcon(project: Project): 'git' | 'folder' {
+    return project.state.status === 'ready' && project.state.storage !== 'plain' ? 'git' : 'folder';
+  }
+
+  function storageWord(project: Project): string {
+    if (project.state.status !== 'ready') return '';
+    return project.state.storage === 'linked' ? 'on the brainfile branch' : project.state.storage === 'standalone' ? 'its own repo' : 'plain files';
   }
 </script>
 
@@ -36,7 +46,8 @@
     {#each app.projects as project, i (project.id)}
       {@const active = project.id === app.activeId}
       {@const ready = project.state.status === 'ready'}
-      <button class="project" class:active title={tildify(project.path)} onclick={() => app.select(project.id)}>
+      <button class="project" class:active title="{tildify(project.path)} · {storageWord(project) || line(project)}" onclick={() => app.select(project.id)}>
+        <span class="where"><Icon name={storageIcon(project)} size={14} /></span>
         <span class="name">{project.name}</span>
         <span class="line mono" class:off={!ready}>{line(project)}</span>
         {#if i < 9}<span class="key mono">⌘{i + 1}</span>{/if}
@@ -82,7 +93,8 @@
   .project {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 16px 1fr auto;
+    column-gap: var(--s2);
     row-gap: 2px;
     padding: 7px var(--s3) 8px;
     border-radius: var(--r-card);
@@ -99,8 +111,20 @@
     background: var(--fill-selected);
   }
 
-  .name {
+  .where {
     grid-column: 1;
+    grid-row: 1;
+    display: inline-flex;
+    align-items: center;
+    color: var(--ink-3);
+  }
+
+  .project.active .where {
+    color: var(--ink-2);
+  }
+
+  .name {
+    grid-column: 2;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
@@ -109,7 +133,7 @@
   }
 
   .line {
-    grid-column: 1;
+    grid-column: 2;
     color: var(--ink-3);
     overflow: hidden;
     white-space: nowrap;
@@ -121,7 +145,7 @@
   }
 
   .key {
-    grid-column: 2;
+    grid-column: 3;
     grid-row: 1;
     align-self: center;
     color: var(--ink-4);
