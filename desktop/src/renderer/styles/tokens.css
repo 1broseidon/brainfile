@@ -1,0 +1,79 @@
+/*
+ * Design tokens. One dark theme, on a 4px grid. The sidebar sits on the
+ * window's vibrancy; everything you work in sits on one opaque inset pane.
+ */
+:root {
+  /* Ground */
+  --pane: #0e0f11;
+  --pane-raised: #141518;
+  --pane-sunken: #0b0c0d;
+  --hover: rgba(255, 255, 255, 0.035);
+  --hover-strong: rgba(255, 255, 255, 0.06);
+  --selected: rgba(122, 132, 230, 0.12);
+  --overlay: rgba(4, 5, 6, 0.6);
+  --popover: #18191c;
+
+  /* Lines */
+  --line: rgba(255, 255, 255, 0.065);
+  --line-strong: rgba(255, 255, 255, 0.1);
+  --line-focus: rgba(122, 132, 230, 0.55);
+
+  /* Ink */
+  --ink: #e6e7ea;
+  --ink-2: #a0a2aa;
+  --ink-3: #6e7079;
+  --ink-4: #4b4d55;
+
+  /* Signal */
+  --accent: #7a84e6;
+  --accent-strong: #8b94f0;
+  --accent-ink: #ffffff;
+  --danger: #eb5757;
+
+  --status-backlog: #6e7079;
+  --status-todo: #c3c5cc;
+  --status-progress: #f0bf4c;
+  --status-review: #4cb782;
+  --status-done: #7a84e6;
+  --priority-urgent: #f2994a;
+
+  /* Type */
+  --font: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  --mono: 'SF Mono', ui-monospace, Menlo, monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  /* Space (4px grid) */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 20px;
+  --s6: 24px;
+  --s8: 32px;
+  --s10: 40px;
+
+  /* Shape */
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 8px;
+  --r-xl: 12px;
+
+  /* Chrome */
+  --sidebar-w: 244px;
+  --header-h: 48px;
+  --row-h: 38px;
+  --inset: 8px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --fast: 90ms;
+  --base: 160ms;
+
+  --shadow-pop: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+  --shadow-modal: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 24px 64px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+}
