@@ -19,7 +19,10 @@ subtasks:
   - id: spec-11-2
     title: decide and supersede commands with auto-supersede by claim key; MCP decide
     completed: false
-updatedAt: "2026-10-12T05:36:57.615Z"
+  - id: spec-11-3
+    title: "Local index: node:sqlite FTS5 in state/, mining with hash tracking and .gitignore, fallback to the scan"
+    completed: false
+updatedAt: "2026-10-12T05:36:57.880Z"
 ---
 
 ## Description
