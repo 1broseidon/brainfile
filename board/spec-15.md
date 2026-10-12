@@ -15,7 +15,7 @@ createdAt: "2026-10-12T19:03:41.963Z"
 subtasks:
   - id: spec-15-1
     title: Detect every board a repo has (folder, branch, remote ref, stray worktrees); refuse writes when they disagree
-    completed: false
+    completed: true
   - id: spec-15-2
     title: brainfile where reports all boards with counts and last change; agents get a resolving error on write
     completed: false
@@ -37,7 +37,7 @@ subtasks:
   - id: spec-15-8
     title: Tests on scratch repos reproducing runprism.ai's case end to end
     completed: false
-updatedAt: "2026-10-12T19:21:43.766Z"
+updatedAt: "2026-10-12T19:21:48.683Z"
 ---
 
 ## Description
