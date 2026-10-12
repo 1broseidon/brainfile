@@ -31,7 +31,10 @@ subtasks:
   - id: spec-11-6
     title: check with stance rule and predicates (validUntil, source unchanged, package version); MCP check
     completed: false
-updatedAt: "2026-10-12T05:36:58.711Z"
+  - id: spec-11-7
+    title: "Desktop: Decisions view; decisions carried in Hand to… and chat briefs"
+    completed: false
+updatedAt: "2026-10-12T05:36:58.984Z"
 ---
 
 ## Description
