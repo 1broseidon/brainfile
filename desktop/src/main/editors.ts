@@ -43,7 +43,8 @@ const EDITORS: Editor[] = [
   { id: 'vscode', name: 'Visual Studio Code', ...vscodeLike('Visual Studio Code.app', 'code') },
   { id: 'zed', name: 'Zed', app: 'Zed.app', cli: (bundle) => path.join(bundle, 'Contents/MacOS/cli'), args: (file, line) => [at(file, line)] },
   { id: 'windsurf', name: 'Windsurf', ...vscodeLike('Windsurf.app', 'windsurf') },
-  { id: 'antigravity', name: 'Antigravity', ...vscodeLike('Antigravity.app', 'antigravity') },
+  // The editor is Antigravity IDE; plain Antigravity (2.x) is the agent manager, not an editor.
+  { id: 'antigravity', name: 'Antigravity IDE', ...vscodeLike('Antigravity IDE.app', 'antigravity-ide') },
   {
     id: 'sublime',
     name: 'Sublime Text',
