@@ -17,3 +17,6 @@ updatedAt: "2026-09-21T18:10:46.258Z"
 
 ## Description
 js-yaml 5 removed quotingType from DumpOptions (used in core/src/frontmatter.ts:65 and core/src/serializer.ts:38). Migration needs: find v5 equivalent for quote-style control, plus golden-file tests proving dump output is byte-stable across the upgrade — board files must not churn on rewrite.
+
+## Log
+- 2026-10-12T01:32:47.082Z: [claude] Verified 2026-10-11: still open. Still on js-yaml ^4.1.0, chalk ^4, open ^10, chokidar ^4; TypeScript 7 is out (7.0.2).
