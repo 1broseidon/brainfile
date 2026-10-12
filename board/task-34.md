@@ -9,10 +9,13 @@ tags:
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
-updatedAt: "2026-10-12T21:55:46.362Z"
+updatedAt: "2026-10-12T21:55:46.816Z"
 subtasks:
   - id: task-34-1
     title: "Health rows: problem sentence under the name, Fix / Ask agent keys; long row tooltip dropped, short words (two copies, old copy in main, N unsent…)"
+    completed: false
+  - id: task-34-2
+    title: Host planFix / fixBoard / undoFix (HOST_METHODS, preload, api); logic in host/fix.ts, Fix offered only when the kept copy holds every other copy
     completed: false
 ---
 
