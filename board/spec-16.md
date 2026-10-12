@@ -36,7 +36,10 @@ subtasks:
   - id: spec-16-7
     title: "Phase 3: brainfile dispatch / dispatch status (CLI) and MCP dispatch, dispatch_status"
     completed: false
-updatedAt: "2026-10-12T23:16:21.027Z"
+  - id: spec-16-8
+    title: "Phase 3: brainfile run, a foreground runner; TUI shows live runs"
+    completed: false
+updatedAt: "2026-10-12T23:16:21.491Z"
 ---
 
 ## Description
