@@ -26,3 +26,6 @@ updatedAt: "2026-10-12T22:05:14.436Z"
 
 ## Description
 The desktop app opens large and centered every time. Save the window's bounds (size, position, maximized/fullscreen state) when they change or on close, and restore them on the next launch. If the saved position is no longer on any connected display (monitor unplugged, resolution changed), fall back to the current centered default.
+
+## Log
+- 2026-10-12T22:05:14.751Z: [cursor] Window bounds, maximized, and fullscreen state now persist in userData and restore on launch; a saved rectangle that misses every display falls back to the centered 1440×920 default. The off-display test used a window that still overlapped the primary display; it now sits fully on the unplugged monitor.
