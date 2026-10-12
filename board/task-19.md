@@ -21,7 +21,10 @@ subtasks:
   - id: task-19-4
     title: Work detail shows Rests on (retired marked); rows on a retired decision say 'decision changed'
     completed: false
-updatedAt: "2026-10-12T15:37:34.793Z"
+  - id: task-19-5
+    title: Help overlay, footer hints, NO_COLOR, narrow widths; TUI tests for each; MANUAL + CHANGELOG
+    completed: false
+updatedAt: "2026-10-12T15:37:35.067Z"
 ---
 
 ## Description
