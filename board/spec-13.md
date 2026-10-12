@@ -14,7 +14,10 @@ subtasks:
   - id: spec-13-1
     title: "Parity test: enumerate CLI commands; each maps to an MCP tool or a reasoned exclusion"
     completed: false
-updatedAt: "2026-10-12T05:56:09.374Z"
+  - id: spec-13-2
+    title: note and log tools
+    completed: false
+updatedAt: "2026-10-12T05:56:09.650Z"
 ---
 
 ## Description
