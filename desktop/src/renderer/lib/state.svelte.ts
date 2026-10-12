@@ -51,6 +51,7 @@ const LAYOUT_KEY = 'brainfile.layout';
 const SEEN_KEY = 'brainfile.feedSeen';
 const AGENT_KEY = 'brainfile.lastAgent';
 const MODEL_KEY = 'brainfile.models';
+const PREFS_KEY = 'brainfile.projectPrefs';
 const THREADS_KEY = 'brainfile.threads';
 const THREADS_KEPT = 30;
 
@@ -145,15 +146,25 @@ class AppState {
   /** Each agent's permission modes, as it reports them; null when it has none. */
   modes = $state<Partial<Record<AgentId, AgentModes | null>>>({});
   models = $state<Partial<Record<AgentId, ModelOption[]>>>({});
-  /** The model chosen for each agent; unset means the agent's own default. */
+  /** The model last chosen for each agent anywhere: what a project with no choice of its own starts from. */
   modelChoice = $state<Partial<Record<AgentId, string>>>(load(MODEL_KEY, {}));
+  /** Per project, the agent last used there and the model last chosen for each agent (null: the agent's default). */
+  prefs = $state<Record<string, { agent?: AgentId; models?: Partial<Record<AgentId, string | null>> }>>(load(PREFS_KEY, {}));
 
-  /** Whatever was used last, if it is still here; else the first one installed. */
-  defaultAgent = $derived<AgentId | null>(
-    (this.lastAgent && this.agents.find((a) => a.id === this.lastAgent && a.available)?.id) ||
-      this.agents.find((a) => a.available)?.id ||
-      null
-  );
+  /** The agent last used on this project, if it is still here; else the last used anywhere; else the first installed. */
+  agentFor(projectId: string | null): AgentId | null {
+    const here = (id: AgentId | null | undefined) => (id && this.agents.find((a) => a.id === id && a.available)?.id) || null;
+    return here(projectId ? this.prefs[projectId]?.agent : null) || here(this.lastAgent) || this.agents.find((a) => a.available)?.id || null;
+  }
+
+  defaultAgent = $derived<AgentId | null>(this.agentFor(this.activeId));
+
+  /** The model for an agent on a project: the project's own last choice, else the last chosen anywhere; undefined is the agent's default. */
+  modelFor(agentId: AgentId, projectId: string | null = this.activeId): string | undefined {
+    const mine = projectId ? this.prefs[projectId]?.models : undefined;
+    if (mine && agentId in mine) return mine[agentId] ?? undefined;
+    return this.modelChoice[agentId];
+  }
 
   /** Changes from outside the window, newest first. */
   feed = $state<FeedItem[]>([]);
@@ -240,16 +251,24 @@ class AppState {
     return api.stopRun(runId);
   }
 
-  remember(agentId: AgentId): void {
+  /** Remembers the agent for this project, and as the last used anywhere. */
+  remember(agentId: AgentId, projectId: string | null = this.activeId): void {
     this.lastAgent = agentId;
     localStorage.setItem(AGENT_KEY, agentId);
+    if (!projectId) return;
+    this.prefs[projectId] = { ...this.prefs[projectId], agent: agentId };
+    this.savePrefs();
+  }
+
+  private savePrefs(): void {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(this.prefs));
   }
 
   async dispatch(taskId: string, agentId: AgentId): Promise<void> {
     if (!this.activeId) return;
     this.remember(agentId);
     await this.patch(taskId, { assignee: agentId });
-    const result = await api.dispatch(this.activeId, taskId, agentId, this.modelChoice[agentId]);
+    const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId));
     if (!result.ok) this.notify(result.error, 'warn');
   }
 
@@ -278,10 +297,16 @@ class AppState {
     void this.setSettings({ modes });
   }
 
+  /** Remembers the model for this project's agent, and as the last chosen anywhere. null is the agent's default. */
   chooseModel(agentId: AgentId, model: string | null): void {
     if (model) this.modelChoice[agentId] = model;
     else delete this.modelChoice[agentId];
     localStorage.setItem(MODEL_KEY, JSON.stringify(this.modelChoice));
+    const projectId = this.activeId;
+    if (!projectId) return;
+    const prefs = this.prefs[projectId] ?? {};
+    this.prefs[projectId] = { ...prefs, models: { ...prefs.models, [agentId]: model } };
+    this.savePrefs();
   }
 
   /** The popover opens to a blank page, unless a reply is still on its way. */
@@ -308,7 +333,7 @@ class AppState {
   async askBoard(text: string, agentId: AgentId): Promise<void> {
     const projectId = this.activeId;
     if (!projectId || !text.trim()) return;
-    this.remember(agentId);
+    this.remember(agentId, projectId);
     let thread = this.currentThread;
     if (!thread) {
       thread = { id: `t-${Date.now()}`, agentId, startedAt: Date.now(), lines: [] };
@@ -317,7 +342,7 @@ class AppState {
     }
     const earlier = thread.lines.filter((l) => !l.failed).map((l) => ({ who: l.who, text: l.text }));
     this.addLine(projectId, thread.id, { key: `you-${Date.now()}`, who: 'you', text: text.trim(), at: Date.now() });
-    const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelChoice[agentId], earlier);
+    const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier);
     if (!result.ok) this.addLine(projectId, thread.id, { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true });
   }
 

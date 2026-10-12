@@ -219,7 +219,10 @@ board changes (and in the feed).
 - **Agents** are the installed ones, in this order: Claude Code
   (claude-agent-acp), Codex (codex-acp), Antigravity (the registry's ACP
   server, downloaded once) and Cursor (`cursor-agent acp`). Each runs on the
-  person's own login. The default is whichever was used last, if still here.
+  person's own login. Each project remembers its own: the agent last used
+  there, and for each agent the model last chosen there, in the chat and
+  Hand to… alike. A project with no history starts from the last used
+  anywhere. An old chat reopened from history keeps the agent it began with.
 - **Hand to…** is a muted key on a task. The brief is the task, its body
   and its contract; the agent moves it to In Progress, does the work and
   leaves a log note. At rest, the row's only trace is one mono line,

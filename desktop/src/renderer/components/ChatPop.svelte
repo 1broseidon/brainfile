@@ -17,6 +17,7 @@
   let { projectName }: { projectName: string } = $props();
 
   let text = $state('');
+  /** An old thread reopened keeps its own agent; otherwise the project's last used. */
   let agentId = $state<AgentId | null>(null);
   let picking = $state<'agent' | 'model' | null>(null);
   let view = $state<'chat' | 'history'>('chat');
@@ -28,7 +29,7 @@
   const history = $derived(app.activeId ? (app.threads[app.activeId] ?? []) : []);
   const modelName = $derived.by(() => {
     if (!agent) return '';
-    const chosen = app.modelChoice[agent];
+    const chosen = app.modelFor(agent);
     if (!chosen) return 'default';
     return app.models[agent]?.find((m) => m.value === chosen)?.name ?? chosen;
   });
@@ -37,12 +38,21 @@
     if (!app.chatOpen) view = 'chat';
   });
 
+  // Another board, another agent: each project keeps its own.
+  $effect(() => {
+    void app.activeId;
+    agentId = null;
+  });
+
   function openThread(id: string): void {
     if (app.activeId) app.thread[app.activeId] = id;
+    const thread = history.find((t) => t.id === id);
+    agentId = thread && app.agents.some((a) => a.id === thread.agentId && a.available) ? thread.agentId : null;
     view = 'chat';
   }
 
   function newChat(): void {
+    agentId = null;
     if (app.activeId && !live) app.thread[app.activeId] = null;
     view = 'chat';
     field?.focus();
@@ -107,6 +117,7 @@
                 disabled={!a.available}
                 onclick={() => {
                   agentId = a.id;
+                  app.remember(a.id);
                   picking = null;
                 }}
               >
@@ -152,7 +163,7 @@
                       picking = null;
                     }}
                   >
-                    <span>{m.name}</span>{#if app.modelChoice[agent] === m.value}<Icon name="check" size={12} />{/if}
+                    <span>{m.name}</span>{#if app.modelFor(agent) === m.value}<Icon name="check" size={12} />{/if}
                   </button>
                 {/each}
               {/if}

@@ -66,7 +66,7 @@
             onclick={() => pick(agent.id)}
           >
             <span class="name">{agent.name}</span>
-            <span class="note mono">{agent.available && app.modelChoice[agent.id] ? (app.models[agent.id]?.find((m) => m.value === app.modelChoice[agent.id])?.name ?? app.modelChoice[agent.id]) : agent.note}</span>
+            <span class="note mono">{agent.available && app.modelFor(agent.id) ? (app.models[agent.id]?.find((m) => m.value === app.modelFor(agent.id))?.name ?? app.modelFor(agent.id)) : agent.note}</span>
           </button>
         {/each}
         <p class="foot">The agent gets this task and its contract as its brief, works in the repo, and reports through the board.</p>
