@@ -1,8 +1,6 @@
 ---
 id: task-27
 title: "spec-15 phase 1: detect every board; where reports them; writes refuse when boards disagree"
-column: in-progress
-position: 2
 priority: high
 tags:
   - sync
@@ -13,7 +11,8 @@ parentId: spec-15
 createdAt: "2026-10-12T20:39:18.204Z"
 decisions:
   - decision-1
-updatedAt: "2026-10-12T20:44:49.183Z"
+updatedAt: "2026-10-12T20:52:17.125Z"
+completedAt: "2026-10-12T20:52:17.125Z"
 ---
 
 ## Description
