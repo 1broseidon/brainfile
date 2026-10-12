@@ -1,4 +1,4 @@
-import type { ColumnView, Priority, TaskView } from '../../shared/api';
+import type { ColumnView, DecisionView, Priority, TaskView } from '../../shared/api';
 
 export const PRIORITIES: { id: Priority | null; label: string }[] = [
   { id: null, label: 'No priority' },
@@ -10,18 +10,6 @@ export const PRIORITIES: { id: Priority | null; label: string }[] = [
 
 export function priorityLabel(priority?: Priority | null): string {
   return PRIORITIES.find((p) => p.id === (priority ?? null))?.label ?? 'No priority';
-}
-
-/** Document kinds, as the TUI draws them in column 1. A plain task has none. */
-const KIND_GLYPHS: Record<string, string> = {
-  epic: '▸',
-  spec: '◆',
-  adr: '●',
-  plan: '⎘',
-};
-
-export function kindGlyph(type?: string): string {
-  return type ? (KIND_GLYPHS[type.toLowerCase()] ?? (type === 'task' ? '' : '◇')) : '';
 }
 
 const BACKLOG = /backlog|icebox|someday/i;
@@ -101,4 +89,24 @@ export function relativeTime(iso?: string): string {
 /** `~/Projects/x` for a path under home. */
 export function tildify(p: string): string {
   return p.replace(/^\/Users\/[^/]+/, '~').replace(/^\/private\/tmp/, '/tmp');
+}
+
+/** A decision still standing: current, or a legacy ADR still proposed. */
+export function isLiveDecision(d: DecisionView): boolean {
+  return d.status === 'current' || d.status === 'proposed';
+}
+
+/**
+ * Standing decisions by family, the claim key's first segment: largest family
+ * first, decisions with no claim key last. The view and the keyboard share it.
+ */
+export function decisionGroups(decisions: DecisionView[]): { family: string; decisions: DecisionView[] }[] {
+  const byFamily = new Map<string, DecisionView[]>();
+  for (const d of decisions.filter(isLiveDecision)) {
+    const family = d.claimKey?.split('.')[0] ?? '';
+    byFamily.set(family, [...(byFamily.get(family) ?? []), d]);
+  }
+  return [...byFamily.entries()]
+    .map(([family, list]) => ({ family, decisions: list }))
+    .sort((a, b) => (a.family === '' ? 1 : b.family === '' ? -1 : b.decisions.length - a.decisions.length || a.family.localeCompare(b.family)));
 }

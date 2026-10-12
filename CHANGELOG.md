@@ -4,6 +4,137 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions are synced across
 `brainfile` (CLI) and `@brainfile/core`.
 
+## [Unreleased]
+
+Memory moves onto the board (spec-11): decisions with claim families, one
+search over a local index, a brief that starts every session, and `check`
+before acting. Default types and the graph (spec-12): every board has epics,
+specs, plans, tasks and decisions, and knows how they fit together. MCP
+parity (spec-13): everything the CLI does to a board has an MCP tool, and
+columns get a command of their own.
+
+### Added (spec-13)
+- `brainfile columns`: list (the default, with task counts and `--json`),
+  `add <title>` (`--id`, `--after`/`--before`, `--completion`), `rename
+  <column> <title>` (the ID stays, so its tasks do), `reorder <columns...>`
+  (the ones named first, the rest after) and `remove <column>`, which refuses
+  a column that holds tasks unless `--move-to` names where they go; they
+  move there without being completed. One board commit per change.
+- MCP: eleven more tools, twenty-five in all: `note` (append to a task's log,
+  attributed like `brainfile note`), `log` (one task's log, a search, the
+  most recent), `columns` (the operations above), `board` (read; set the
+  title, agent instructions and `related:` entries), `types` (list with the
+  graph; add with `like`, `idPrefix`, `completable`), `template` (list; use),
+  `lint` (`fix: true`), `sync` (`pull`/`push`), `where`, `retire` and
+  `adr_promote`. Every one has an output schema; every write is one board
+  commit. `list_tasks` reports a document's own `status` and filters by it.
+- The bundled schemas as MCP resources: `brainfile://schema/board` and
+  `brainfile://schema/base`.
+- `brainfile mcp` sends server instructions: use these tools for every board
+  change, never edit `.brainfile/` by hand, start with `brief`, note as you
+  go, `check` before acting; then one line per tool.
+- A parity test enumerates the CLI's commands and fails unless each maps to
+  a tool, a resource, or an exclusion with a reason (`tui`, `mcp`,
+  `merge-driver`, `hooks`, `auth`, `config`, `init`, `migrate`, `restore`,
+  `index`).
+- Core: `addColumn`, `renameColumn`, `reorderColumns`, `removeColumn`,
+  `readBoardSettings` and `updateBoardSettings` (pure, also in
+  `@brainfile/core/browser`), and their `*File` forms with
+  `summarizeColumns`; `removeColumnFile` moves a column's tasks first or
+  refuses.
+
+### Changed (spec-13)
+- The commander program is built by `createProgram()` in `src/program.ts`;
+  `cli.ts` parses it. Nothing changes for the command line.
+
+### Added (spec-11)
+- `brainfile decide -k <claim.key> "text"` records a decision in its claim
+  family (`--kind`, `--stance`/`--subject`, `--holds-while`, `--recheck`,
+  `--valid-until`, `--source` with its sha256, `--package name<op>version`,
+  `--for` work that rests on it). The family's current decision is
+  superseded: status, `supersedes`/`supersededBy` both ways, moved to
+  `logs/`. An empty family lists related ones (same parent key, same words).
+  `supersede <id> "text"` replaces one by hand; `retire <id> --as
+  rejected|stale` lets one go. One board commit per command; no ledger lines.
+- `brainfile check "<action>"` (or a decision ID, `--claim-key`,
+  `--claim-key-prefix`) answers `use`, `review`, `use_replacement` or
+  `no_decision` in recoil's order, with the stance rule and the predicates
+  `validUntil`, source unchanged and package version (package.json,
+  go.mod, pyproject.toml). Exit codes 0, 2, 3, 0; errors 1.
+- A local search index at `.brainfile/state/index.db` (gitignored,
+  rebuildable) on Node's own `node:sqlite` with FTS5: board and logs
+  documents, the ledger, `plans/` and the project's Markdown, via `git
+  ls-files` so `.gitignore` holds. Tracked by size, mtime and sha256; changed
+  files replace their chunks. `brainfile index [--rebuild] [--status]`.
+- MCP: `decide`, `supersede` and `check` (fourteen tools).
+- Core: `decisions` (claim families, stance rule, verdicts; also in
+  `@brainfile/core/browser`), `decideFile`, `supersedeDecisionFile`,
+  `retireDecisionFile` and the file predicates in the main entry, and the new
+  Node-only `@brainfile/core/memory`: `MemoryIndex`, `searchMemory`,
+  `composeBrief`, `checkDecision`, `checkClaimKeyPrefix`.
+- `/v2/decision.json` documents `sourcePath`, `sourceHash` and
+  `packageVersion`.
+
+### Changed (spec-11)
+- `search` (CLI and MCP) uses the index when Node has `node:sqlite` (22.13
+  and later): AND then OR, titles over bodies, current results first and
+  history (completed work, superseded decisions) in its own lane, every hit
+  with its path and line range, and the project's docs alongside the board.
+  Filter tokens work as before. Elsewhere, or with `BRAINFILE_INDEX=off`, the
+  scan answers in the same shape. New: `search --json`, `--limit`,
+  `--no-history`.
+- `brief` prints one budgeted block (about 1,600 characters, `--max-chars`):
+  work resting on a superseded decision and decisions whose predicates broke,
+  current decisions, your tasks (or the work in flight), what changed since
+  your checkpoint, and the docs that bear on your tasks. `--json` adds
+  `sections`, `text`, `maxChars` and `truncated`; `lanes` is unchanged.
+- The SessionStart hook injects that brief (Claude Code:
+  `hookSpecificOutput.additionalContext`) instead of a reminder, from a lean
+  entry that loads neither commander, the MCP server nor the TUI (~150ms
+  warm).
+- `log --recent` and MCP `search recent` leave out decisions retired to
+  `logs/`; they were never completed.
+
+### Added (spec-12)
+- Five built-in types that need no `types:` entry: `epic`, `spec`, `plan`,
+  `task` (alias `issue`) and `decision` (alias `adr`). `brainfile types`
+  prints each with its place in the graph; `types add <name> --like <type>`
+  takes a built-in's place (parents, children, completion rule, glyph).
+- Containment by `parentId`: epic ▸ spec · plan · task, spec ▸ plan · task,
+  plan ▸ task, task ▸ task. `list --tree` prints the outline (`--parent` for a
+  subtree); `show` names the parent and children.
+- `decisions: [ids]` on work: the decisions it rests on. `add --decisions`,
+  `patch --decisions`; `show` lists them with where each stands and says when
+  one is superseded, and a decision shows the work resting on it. The reverse
+  is computed, never written.
+- `patch --parent / --clear-parent` and `--depends-on / --clear-depends-on`;
+  `add --depends-on`; `list --type` and `search --type`, aliases included.
+- MCP: `task_add` and `task_patch` take `decisions` (and `dependsOn`);
+  `list_tasks` takes `tree: true` and lists decisions with `type: "decision"`;
+  `get_task` returns `graph`; `search` takes `type`.
+- `/v2/decision.json`; `task.json` documents `parentId` and `decisions`;
+  `board.json` documents `like`.
+- Core: `docTypes` (registry, `resolveDocType`, `parentFit`) and `docGraph`
+  (`buildDocGraph`, `docPlace`, `checkDocumentLinks`, `lintDocGraph`), both in
+  `@brainfile/core/browser`; `readBoardGraph` and
+  `findWorkOnSupersededDecisions` in the main entry.
+
+### Changed (spec-12)
+- A parent with open children refuses to complete, whatever its type (it was
+  only epics); `--force` still overrides. A decision is never completed.
+- An off-pattern parent (an epic under a task, anything under a decision) is a
+  `lint` warning; on a `strict` board `add`, `patch` and `lint` refuse it. A
+  `parentId` or `dependsOn` loop is always refused.
+- `--type adr` writes `type: decision` with a `decision-N` ID, no column and
+  `status: current`; `--type issue` writes a plain task. Existing `type: adr`
+  files read as decisions and keep their IDs.
+- A strict board accepts the five built-ins without listing them.
+- New IDs use the type's `idPrefix` from `types:`; before, the prefix was
+  always the type name whatever `idPrefix` said.
+- `list` leaves decisions out of the columns (they have none) and says how
+  many; `list --type decision` lists them. `brief` orients against current
+  decisions as well as accepted ADRs.
+
 ## [0.21.2] - 2026-10-11
 
 Descriptions come back whole, headings, dividers and all.

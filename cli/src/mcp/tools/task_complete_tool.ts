@@ -7,6 +7,7 @@ import {
   completeTaskFile,
   formatTaskForGitHub,
   formatTaskForLinear,
+  type TypesConfig,
 } from '@brainfile/core';
 import { getV2Dirs, findV2Task, readV2BoardConfig } from '../../utils/v2-detect';
 import { isGitHubAuthenticated, createGitHubIssue } from '../../utils/github-auth';
@@ -21,7 +22,7 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
     'task_complete',
     {
       title: 'Complete Task',
-      description: 'Complete a task or archive it to local/GitHub/Linear destination',
+      description: 'Complete a task or archive it to local/GitHub/Linear destination. A parent with open children refuses (any container, not only an epic); a decision is never completed.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               task: z.string().describe('Task ID to complete'),
@@ -58,7 +59,8 @@ export function registerTaskCompleteTool(server: McpServer, defaultFile: string)
           if (!found) {
             return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
           }
-          const result = completeTaskFile(found.filePath, dirs.logsDir, {});
+          const types = (readV2BoardConfig(filePath) as { types?: TypesConfig }).types;
+          const result = completeTaskFile(found.filePath, dirs.logsDir, { types });
           if (!result.success) {
             const detail = result.incompleteChildren?.length
               ? `\nIncomplete children:\n${result.incompleteChildren.map(c => `  - ${c.id}: ${c.title}`).join('\n')}`

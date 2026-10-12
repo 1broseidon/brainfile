@@ -14,7 +14,7 @@ import { type Logger, defaultLogger } from '../utils/logger';
 import { missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
-import { completeTaskFile } from '@brainfile/core';
+import { completeTaskFile, readBoardConfig, resolveDocType } from '@brainfile/core';
 import { getV2Dirs, findV2Task } from '../utils/v2-detect';
 
 export interface CompleteOptions {
@@ -70,18 +70,23 @@ function completeV2(filePath: string, taskId: string, force: boolean, logger: Lo
 
   const { doc, filePath: taskPath } = found;
   const task = doc.task;
+  const types = readBoardConfig(filePath)?.config.types;
+  const typeName = resolveDocType(task.type, types).name;
+  const label = typeName.charAt(0).toUpperCase() + typeName.slice(1);
 
-  const result = completeTaskFile(taskPath, dirs.logsDir, { force });
+  // Any parent with open children refuses, not only an epic (spec-12);
+  // a decision is never completed.
+  const result = completeTaskFile(taskPath, dirs.logsDir, { force, types });
 
   if (!result.success) {
     if (result.incompleteChildren?.length) {
-      logger.warn(chalk.yellow(`Epic ${taskId} has incomplete child tasks:`));
+      logger.warn(chalk.yellow(`${label} ${taskId} has incomplete child tasks:`));
       for (const child of result.incompleteChildren) {
         logger.warn(chalk.yellow(`  - ${child.id}: ${child.title}`));
       }
       logger.warn(chalk.yellow('Aborting completion. Re-run with --force to override.'));
       throw operationFailed(
-        `Epic ${taskId} has ${result.incompleteChildren.length} incomplete child task(s). Use --force to override.`
+        `${label} ${taskId} has ${result.incompleteChildren.length} incomplete child task(s). Use --force to override.`
       );
     }
     throw operationFailed(result.error || `Failed to complete task: ${taskId}`);
@@ -90,7 +95,7 @@ function completeV2(filePath: string, taskId: string, force: boolean, logger: Lo
   if (result.incompleteChildren?.length) {
     logger.warn(
       chalk.yellow(
-        `Completing epic ${taskId} with --force despite ${result.incompleteChildren.length} incomplete child task(s).`
+        `Completing ${typeName} ${taskId} with --force despite ${result.incompleteChildren.length} incomplete child task(s).`
       )
     );
   }

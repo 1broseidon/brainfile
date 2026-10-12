@@ -17,14 +17,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import type { Task } from '@brainfile/core';
-import { searchTasksRanked } from '@brainfile/core';
+import { searchTasksRanked, typesMatch } from '@brainfile/core';
 
 import { PALETTE } from './theme.js';
 import { CHROME, EMPTY } from './copy.js';
 import type { AppState, TUIProps, LayoutMode, BoardColumn } from './types.js';
 import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
 import { buildRows, buildFlatRows } from './rows.js';
-import { getDocType } from './utils.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useSyncStatus } from './hooks/useSyncStatus.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
@@ -160,7 +159,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     if (!typeFilterActive) return orderedColumns as BoardColumn[];
     return orderedColumns.map((column) => ({
       ...column,
-      tasks: (column.tasks ?? []).filter((task) => getDocType(task) === activeTypeFilter),
+      tasks: (column.tasks ?? []).filter((task) => typesMatch(task.type, activeTypeFilter)),
     })) as BoardColumn[];
   }, [orderedColumns, typeFilterActive, doneView, activeTypeFilter]);
 
@@ -171,7 +170,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     () =>
       doneView
         ? (typeFilterActive
-            ? state.logs.filter((task) => getDocType(task) === activeTypeFilter).length
+            ? state.logs.filter((task) => typesMatch(task.type, activeTypeFilter)).length
             : state.logs.length)
         : typeFilteredColumns.reduce((sum, column) => sum + (column.tasks?.length ?? 0), 0),
     [typeFilteredColumns, doneView, state.logs],
@@ -198,7 +197,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   const filteredLogs = useMemo<Task[]>(() => {
     if (!doneView) return [];
     const typed = typeFilterActive
-      ? state.logs.filter((task) => getDocType(task) === activeTypeFilter)
+      ? state.logs.filter((task) => typesMatch(task.type, activeTypeFilter))
       : state.logs;
     if (!hasFilter) return typed;
     const docs = typed.map((task) => ({ task, body: task.description ?? '' }));

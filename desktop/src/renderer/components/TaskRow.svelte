@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
-  import { columnProgress, kindGlyph, shortDate } from '../lib/format';
+  import { columnProgress, shortDate } from '../lib/format';
   import type { ColumnView, TaskView } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import PriorityIcon from './PriorityIcon.svelte';
@@ -75,8 +75,8 @@
     >
   {/if}
   <span class="title-block">
-    {#if kindGlyph(task.type) && children === 0}
-      <span class="kind" use:tip={task.type}>{kindGlyph(task.type)}</span>
+    {#if task.glyph && children === 0}
+      <span class="kind" use:tip={task.type ?? task.role}>{task.glyph}</span>
     {/if}
     <span class="title">{task.title}</span>
     <span class="id mono reveal">{task.id}</span>
@@ -86,6 +86,9 @@
   </span>
   {#if task.blockedOn?.length}
     <span class="run mono" use:tip={`Waiting on ${task.blockedOn.join(', ')}`}>blocked</span>
+  {/if}
+  {#if task.restsOnRetired?.length}
+    <span class="run mono" use:tip={`Rests on ${task.restsOnRetired.join(', ')}, since replaced or retired`}>decision changed</span>
   {/if}
   {#if app.runFor(task.id)}
     <span class="run"><Working run={app.runFor(task.id)} rotate={false} /></span>

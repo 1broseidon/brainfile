@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
-  import { columnProgress, kindGlyph, shortDate } from '../lib/format';
+  import { columnProgress, shortDate } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import PriorityIcon from './PriorityIcon.svelte';
@@ -66,7 +66,7 @@
             onclick={() => (app.openTaskId = task.id)}
           >
             <div class="top">
-              {#if kindGlyph(task.type)}<span class="glyph">{kindGlyph(task.type)}</span>{/if}
+              {#if task.glyph}<span class="glyph">{task.glyph}</span>{/if}
               <span class="id mono">{task.id}</span>
               <span class="spacer"></span>
               {#if task.assignee}<Avatar name={task.assignee} size={18} />{/if}

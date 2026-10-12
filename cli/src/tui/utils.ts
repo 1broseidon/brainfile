@@ -1,4 +1,5 @@
 import type { Task } from '@brainfile/core';
+import { docRole } from '@brainfile/core';
 import { PALETTE } from './theme.js';
 
 // Structured search parsing/filtering lives in core so the CLI, MCP tools, and
@@ -42,14 +43,15 @@ export function getDocType(task: Task): string {
  * `c complete` is only offered for documents that represent work.
  *
  * Design §4.1 states the footer shows the actions valid for the selected
- * document — "an adr never shows `c complete`". An ADR is a record of a
- * decision, not a unit of work, so completing it is meaningless. Every other
- * type (task, epic, spec, plan, custom) stays completable; core's own gate
- * decides whether a *particular* document may actually complete.
+ * document — "an adr never shows `c complete`". A decision (alias adr,
+ * spec-12) is a standing choice, not a unit of work, so completing it is
+ * meaningless. Every other type (task, epic, spec, plan, custom) stays
+ * completable; core's own gate decides whether a *particular* document may
+ * actually complete (a parent with open children may not).
  */
 export function isCompletable(task: Task | undefined): boolean {
   if (!task) return false;
-  return getDocType(task) !== 'adr';
+  return docRole(task.type) !== 'decision';
 }
 
 /** `2/5`, or undefined when the document has no checklist. */

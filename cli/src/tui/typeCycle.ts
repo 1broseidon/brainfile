@@ -1,7 +1,7 @@
 /**
  * Type-cycle (`t`) options for the v3.1 list view (§A2).
  *
- * `t` cycles `all → task → epic → spec → plan → adr → all`, restricted to
+ * `t` cycles `all → task → epic → spec → plan → adr/decision → all`, restricted to
  * document types only — completed history is the orthogonal `L` toggle, so
  * the two compose (done view of one type).
  *
@@ -12,10 +12,10 @@
  * is always included even when a board never bothered to declare it, because
  * it is the implicit default type every doc without a `type` field gets.
  */
-import type { Board } from '@brainfile/core';
+import { isTypeAlias, type Board } from '@brainfile/core';
 
 /** Fixed cycle order (excluding `'all'`, which always leads). */
-const FIXED_TYPE_ORDER = ['task', 'epic', 'spec', 'plan', 'adr'];
+const FIXED_TYPE_ORDER = ['task', 'epic', 'spec', 'plan', 'adr', 'decision'];
 
 export function getTypeCycleOptions(board: Board | null): string[] {
   // `types` is a BoardConfig-only field; `Board` (the runtime, task-populated
@@ -26,7 +26,15 @@ export function getTypeCycleOptions(board: Board | null): string[] {
     (board as unknown as { types?: Record<string, unknown> } | null)?.types ?? {},
   );
   const configuredSet = new Set(configured);
-  const known = FIXED_TYPE_ORDER.filter((type) => type === 'task' || configuredSet.has(type));
-  const extra = configured.filter((type) => !FIXED_TYPE_ORDER.includes(type)).sort();
+  // spec-12: the built-ins exist without being listed, so one with documents
+  // on the board gets a stop even when types: does not name it.
+  const present = new Set(
+    (board?.columns ?? []).flatMap((column) => (column.tasks ?? []).map((task) => (task.type || 'task').toLowerCase())),
+  );
+  let known = FIXED_TYPE_ORDER.filter((type) => type === 'task' || configuredSet.has(type) || present.has(type));
+  // adr is an alias of decision: one stop, the canonical one when both appear
+  // (the filter matches either spelling).
+  if (known.includes('adr') && known.includes('decision')) known = known.filter((type) => type !== 'adr');
+  const extra = configured.filter((type) => !FIXED_TYPE_ORDER.includes(type) && !isTypeAlias(type)).sort();
   return ['all', ...known, ...extra];
 }

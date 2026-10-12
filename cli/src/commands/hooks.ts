@@ -14,6 +14,7 @@ import { parseHookInput, shouldOutputJSON } from '../utils/hook-parser';
 import { defaultLogger, type Logger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 import { ExitCode } from '../utils/errorHandler';
+import { sessionStartOutput } from '../hooks/session-start';
 
 /**
  * Read JSON from stdin
@@ -139,23 +140,17 @@ export async function beforePromptCommand(logger: Logger = defaultLogger, stdin?
 }
 
 /**
- * Handle session-start hook event
+ * Handle session-start hook event: inject the agent's brief (spec-11).
+ *
+ * The real binary runs the same code from a lean entry (`dist/hook.mjs`, see
+ * `hooks/session-start.ts`); this is the in-process path for tests and for
+ * anything that calls the command directly.
  */
 export async function sessionStartCommand(logger: Logger = defaultLogger, stdin?: NodeJS.ReadStream) {
   try {
-    await readStdin({ stdin }); // Read input even though we don't use it
-
-    // Find brainfile
-    const brainfilePath = findBrainfile();
-    if (!brainfilePath) {
-      return;
-    }
-
-    // Output welcome message
-    const fileName = brainfilePath.split('/').pop();
-    logger.log(`✅ Brainfile detected: @${fileName}`);
-    logger.log('Remember to update task status as you work.');
-
+    const input = await readStdin({ stdin });
+    const out = sessionStartOutput(input);
+    if (out) logger.log(out);
   } catch (error) {
     // Fail silently
   }

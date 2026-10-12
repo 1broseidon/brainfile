@@ -13,6 +13,8 @@
  *    for the header and footer boundaries.
  */
 
+import { TYPE_GLYPHS as CORE_TYPE_GLYPHS, canonicalTypeName } from '@brainfile/core';
+
 const RAW_PALETTE = {
   // Text hierarchy
   text: '#ffffff',
@@ -81,19 +83,18 @@ export const RULE = '─';
 
 /**
  * Document-type glyphs (column 1). A plain task deliberately renders *no*
- * glyph — the blank column is what makes typed documents stand out.
+ * glyph — the blank column is what makes typed documents stand out. The
+ * table is core's (spec-12); `adr` is kept as a key because it is an alias
+ * of decision and older callers look it up directly.
  */
 export const TYPE_GLYPHS: Record<string, string> = {
-  epic: '▸',
-  spec: '◆',
-  adr: '●',
-  plan: '⎘',
-  task: '',
+  ...CORE_TYPE_GLYPHS,
+  adr: CORE_TYPE_GLYPHS.decision,
 };
 
 export function getTypeGlyph(type?: string): string {
   if (!type) return '';
-  return TYPE_GLYPHS[type.toLowerCase()] ?? '';
+  return TYPE_GLYPHS[canonicalTypeName(type)] ?? '';
 }
 
 /**

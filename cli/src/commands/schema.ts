@@ -42,7 +42,7 @@ export interface SchemaResult {
   updated?: boolean;
 }
 
-interface SchemaInfo {
+export interface SchemaInfo {
   id: string;
   description: string;
   file: string;
@@ -79,7 +79,7 @@ function getBundledSchemasDir(): string {
 }
 
 // Schema metadata
-const BUNDLED_SCHEMAS: SchemaInfo[] = [
+export const BUNDLED_SCHEMAS: SchemaInfo[] = [
   {
     id: 'board',
     description: 'Board structure (columns, tasks, contracts)',
@@ -91,6 +91,22 @@ const BUNDLED_SCHEMAS: SchemaInfo[] = [
     file: 'base.json',
   },
 ];
+
+/**
+ * A bundled schema's JSON text, or null for a name that is not bundled or a
+ * file that is missing. `schema <name>` and the MCP resources
+ * (`brainfile://schema/<name>`) read the same files.
+ */
+export function readBundledSchema(name: string): string | null {
+  const info = BUNDLED_SCHEMAS.find((s) => s.id === name);
+  if (!info) return null;
+  const schemaPath = path.join(getBundledSchemasDir(), info.file);
+  try {
+    return fs.readFileSync(schemaPath, 'utf-8');
+  } catch {
+    return null;
+  }
+}
 
 // ============================================================================
 // Help Text

@@ -11,12 +11,18 @@ export interface Subtask {
   completed: boolean;
 }
 
+/** A document's place in the graph (spec-12): what it is for, whatever it is called. */
+export type DocRole = 'epic' | 'spec' | 'plan' | 'task' | 'decision';
+
 export interface TaskView {
   id: string;
   title: string;
   column: string;
   position?: number;
   type?: string;
+  role: DocRole;
+  /** The TUI's glyph for the document's role; empty for a plain task. */
+  glyph: string;
   priority?: Priority;
   assignee?: string;
   tags?: string[];
@@ -30,6 +36,35 @@ export interface TaskView {
   completedAt?: string;
   /** Dependencies on related boards that are not done yet, as written (`mobile:task-12`). */
   blockedOn?: string[];
+  /** The decisions this work rests on. */
+  decisions?: string[];
+  /** Those of them that have been superseded, rejected or gone stale. */
+  restsOnRetired?: string[];
+}
+
+/** `proposed` is a legacy ADR's status before it was accepted. */
+export type DecisionStatus = 'current' | 'superseded' | 'rejected' | 'stale' | 'proposed';
+
+/** A decision (spec-11): a standing choice, not work. No column; current until replaced. */
+export interface DecisionView {
+  id: string;
+  title: string;
+  claimKey?: string;
+  /** decision, preference, constraint or rule. */
+  kind?: string;
+  status: DecisionStatus;
+  stance?: string;
+  subject?: string;
+  holdsWhile?: string;
+  recheck?: string;
+  validUntil?: string;
+  supersedes: string[];
+  supersededBy?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  /** Open work that rests on it. */
+  restingOn: string[];
 }
 
 /** A dependency, resolved: here, or on a related board. */
@@ -62,6 +97,8 @@ export interface TaskDetail extends TaskView {
   dependencies: DependencyView[];
   /** True when the task lives in logs/ (completed). */
   archived: boolean;
+  /** Set when the document is a decision. */
+  decision?: DecisionView;
 }
 
 export interface ColumnView {
@@ -91,6 +128,8 @@ export interface BoardSnapshot {
   /** Most recent completions from logs/, newest first. */
   completed: TaskView[];
   typeNames: string[];
+  /** Every decision, current and retired, newest first. */
+  decisions: DecisionView[];
   storage: Storage;
   sync: SyncView;
   related: RelatedView[];

@@ -9,6 +9,7 @@
   import AskLine from './AskLine.svelte';
   import ListView from './ListView.svelte';
   import BoardView from './BoardView.svelte';
+  import DecisionsView from './DecisionsView.svelte';
 
   const project = $derived(app.active);
   const board = $derived(app.board);
@@ -117,6 +118,16 @@
         <button role="tab" aria-label="Board" use:tip={'Board  V'} aria-selected={app.view === 'board'} class:on={app.view === 'board'} onclick={() => app.setView('board')}>
           <Icon name="board" size={14} />
         </button>
+        <button
+          role="tab"
+          aria-label="Decisions"
+          use:tip={'Decisions  D'}
+          aria-selected={app.view === 'decisions'}
+          class:on={app.view === 'decisions'}
+          onclick={() => app.setView('decisions')}
+        >
+          <Icon name="decision" size={14} />
+        </button>
       </div>
       <span class="spacer"></span>
       {#each app.asks.filter((a) => a.projectId === project.id).slice(0, 1) as ask (ask.id)}
@@ -146,12 +157,16 @@
         {#if board.sync.pending > 0}<span class="pending mono tabular">↑{board.sync.pending}</span>{/if}
       </button>
       {/if}
-      <button class="icon-btn" use:tip={'New task  C'} aria-label="New task" onclick={() => (app.composer = {})}>
-        <Icon name="plus" size={15} />
-      </button>
+      {#if app.view !== 'decisions'}
+        <button class="icon-btn" use:tip={'New task  C'} aria-label="New task" onclick={() => (app.composer = {})}>
+          <Icon name="plus" size={15} />
+        </button>
+      {/if}
     </header>
     <div class="content">
-      {#if board.tasks.length === 0 && board.completed.length === 0}
+      {#if app.view === 'decisions'}
+        <DecisionsView {board} />
+      {:else if board.tasks.length === 0 && board.completed.length === 0}
         <div class="center">
           <div class="empty">
             <h1>Nothing on the board</h1>

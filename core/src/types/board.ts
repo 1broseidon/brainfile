@@ -37,18 +37,32 @@ export interface ColumnConfig {
 
 /**
  * Per-type configuration entry for board document types.
+ *
+ * The five built-in types (epic, spec, plan, task, decision) exist without an
+ * entry; an entry under one of their names overrides it, and any other name
+ * adds a type of your own (spec-12).
  */
 export interface TypeEntry {
-  /** Prefix used when generating IDs for this type. */
-  idPrefix: string;
-  /** Whether this type can be completed/archived like a task. */
+  /** Prefix used when generating IDs for this type. Defaults to the type name. */
+  idPrefix?: string;
+  /** Whether this type can be completed/archived like a task. A task always can; a decision never can. */
   completable?: boolean;
   /** Optional schema URI/path for the type. */
   schema?: string;
+  /**
+   * The built-in type whose place this one takes: its parents, children,
+   * completion rule and glyph (`bug: { like: task }`). Without it a custom
+   * type behaves as a task.
+   */
+  like?: string;
+
+  /** Extension fields are preserved. */
+  [key: string]: unknown;
 }
 
 /**
- * Map of type name -> type configuration.
+ * Map of type name -> type configuration. Names only additions and overrides:
+ * the built-in types need no entry.
  */
 export interface TypesConfig {
   [typeName: string]: TypeEntry;

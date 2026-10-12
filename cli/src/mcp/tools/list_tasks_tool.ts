@@ -1,52 +1,128 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import * as path from 'path';
 import { z } from 'zod';
+import {
+  decisionStatus,
+  flattenDocTree,
+  resolveDocType,
+  typesMatch,
+  type Task,
+  type TypesConfig,
+} from '@brainfile/core';
 import { describeRelatedBoard, relatedBoards } from '@brainfile/core/repo';
 import { buildBoardFromV2 } from '../../utils/v2-detect';
+import { readOrderedGraph } from '../../utils/graph';
 import { requireV2 } from '../helpers';
 import { listTasksOutputSchema } from '../schemas';
+
+type TaskSummary = {
+  id: string;
+  title: string;
+  column: string;
+  type?: string;
+  parentId?: string;
+  status?: string;
+  priority?: string;
+  tags?: string[];
+  assignee?: string;
+};
 
 export function registerListTasksTool(server: McpServer, defaultFile: string): void {
   server.registerTool(
     'list_tasks',
     {
       title: 'List Tasks',
-      description: 'List all board documents (tasks, epics, specs, adrs, plans), optionally filtered by column, tag, or type. Use type:"plan" to list plan documents.',
+      description: 'List board documents (epics, specs, plans, tasks and the board\'s own types), optionally filtered by column, tag, type or status; aliases work (issue is task, adr is decision). Decisions have no column and are left out unless type names them (type:"decision"). tree:true also returns the outline: open work nested by parentId, in reading order with depth.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               column: z.string().optional().describe('Filter by column ID or name'),
               tag: z.string().optional().describe('Filter by tag'),
-              type: z.string().optional().describe('Filter by document type (e.g., epic, adr, plan). Only returns tasks matching this type.'),
+              type: z.string().optional().describe('Filter by document type (e.g. epic, spec, plan, task, decision; aliases issue and adr work). type:"decision" lists decisions, which are otherwise left out.'),
+              status: z.string().optional().describe('Filter by status: a plan\'s free-form status (draft, active, superseded) or, with type:"decision", current, superseded, rejected or stale'),
+              tree: z.boolean().optional().describe('Also return tree: the containment outline of open work (epic ▸ spec · plan · task), each entry with depth, parentId and children IDs, in reading order.'),
               related: z.union([z.boolean(), z.literal('all')]).optional().describe('Also list open tasks on related boards (related: in brainfile.md): true for the ones this board\'s tasks depend on, "all" for every open task there. Reference them as alias:task-id.'),
             }),
       outputSchema: listTasksOutputSchema
     },
-    async ({ file, column, tag, type: filterType, related }) => {
+    async ({ file, column, tag, type: filterType, status: filterStatus, tree, related }) => {
       const filePath = file || defaultFile;
 
       const guard = requireV2(filePath);
       if (guard) return guard;
 
       const board = buildBoardFromV2(filePath);
-      const tasks: Array<{ id: string; title: string; column: string; priority?: string; tags?: string[]; assignee?: string }> = [];
-      for (const col of board.columns) {
-        if (column) {
-          const matchesId = col.id === column;
-          const matchesName = col.title.toLowerCase() === column.toLowerCase();
-          if (!matchesId && !matchesName) continue;
-        }
-        for (const task of col.tasks) {
+      const types = (board as { types?: TypesConfig }).types;
+      const isDecision = (task: Task) => resolveDocType(task.type, types).role === 'decision';
+      const statusOf = (task: Task): string | undefined => {
+        const value = (task as Task & { status?: unknown }).status;
+        return typeof value === 'string' ? value : undefined;
+      };
+      const summarize = (task: Task, columnId: string): TaskSummary => ({
+        id: task.id,
+        title: task.title,
+        column: columnId,
+        ...(task.type ? { type: task.type } : {}),
+        ...(typeof task.parentId === 'string' && task.parentId ? { parentId: task.parentId } : {}),
+        // A plan's free-form status (draft, active, …); a decision's is set below.
+        ...(statusOf(task) ? { status: statusOf(task) } : {}),
+        priority: task.priority,
+        tags: task.tags,
+        assignee: task.assignee,
+      });
+
+      const graph = (tree || (filterType && resolveDocType(filterType, types).role === 'decision'))
+        ? readOrderedGraph(filePath, board.columns.map((col) => col.id), types)
+        : null;
+
+      const tasks: TaskSummary[] = [];
+      if (filterType && resolveDocType(filterType, types).role === 'decision') {
+        // Decisions have no column: list them on their own, with where they stand.
+        for (const task of graph!.tasks) {
+          if (!isDecision(task) || !typesMatch(task.type, filterType)) continue;
           if (tag && (!task.tags || !task.tags.includes(tag))) continue;
-          if (filterType) {
-            const taskType = task.type || 'task';
-            if (taskType !== filterType) continue;
+          tasks.push({
+            // A decision has no column; a legacy ADR may still carry one.
+            ...summarize(task, task.column ?? (task.completedAt ? 'completed' : 'none')),
+            status: decisionStatus(task as Task & { status?: unknown }),
+          });
+        }
+      } else {
+        for (const col of board.columns) {
+          if (column) {
+            const matchesId = col.id === column;
+            const matchesName = col.title.toLowerCase() === column.toLowerCase();
+            if (!matchesId && !matchesName) continue;
           }
-          tasks.push({ id: task.id, title: task.title, column: col.id, priority: task.priority, tags: task.tags, assignee: task.assignee });
+          for (const task of col.tasks) {
+            if (isDecision(task)) continue;
+            if (tag && (!task.tags || !task.tags.includes(tag))) continue;
+            if (filterType && !typesMatch(task.type, filterType)) continue;
+            tasks.push(summarize(task, col.id));
+          }
         }
       }
+
+      const outline = tree && graph
+        ? flattenDocTree(graph.tree()).map((node) => ({
+            id: node.task.id,
+            title: node.task.title,
+            type: node.type.name,
+            column: node.task.column ?? 'todo',
+            depth: node.depth,
+            ...(typeof node.task.parentId === 'string' && node.task.parentId ? { parentId: node.task.parentId } : {}),
+            children: node.children.map((child) => child.task.id),
+            ...(node.offPattern ? { offPattern: true } : {}),
+            ...(node.detachedFrom ? { detachedFrom: node.detachedFrom.id } : {}),
+          }))
+        : undefined;
+
+      const wanted = filterStatus?.trim().toLowerCase();
+      const listed = wanted ? tasks.filter((task) => (task.status ?? '').toLowerCase() === wanted) : tasks;
+
       const output = {
-        tasks,
-        count: tasks.length,
+        tasks: listed,
+        count: listed.length,
+        ...(outline ? { tree: outline } : {}),
         ...(related ? { related: listRelated(filePath, related === 'all' ? 'all' : 'depends') } : {}),
       };
       return {

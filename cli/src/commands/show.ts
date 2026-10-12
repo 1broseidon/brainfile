@@ -1,4 +1,17 @@
-import { isQualifiedRef, readTasksDir, type Task } from '@brainfile/core';
+import {
+  buildDocGraph,
+  decisionStatus,
+  docPlace,
+  idList,
+  isQualifiedRef,
+  parentFit,
+  readBoardConfig,
+  readTasksDir,
+  type DecisionLink,
+  type DocGraph,
+  type ResolvedDocType,
+  type Task,
+} from '@brainfile/core';
 import {
   describeRelatedBoard,
   describeTaskRefState,
@@ -90,7 +103,15 @@ function showCommandV2(
     .filter((childDoc) => (childDoc.task as any).parentId === task.id)
     .map((childDoc) => childDoc.task.id);
 
-  const columnTitle = isLog ? 'Completed' : (task.column || 'unknown');
+  // The document's place in the graph (spec-12): parent, children, decisions.
+  const types = readBoardConfig(filePath)?.config.types;
+  const graph = buildDocGraph([
+    ...readTasksDir(dirs.boardDir).map((d) => d.task),
+    ...readTasksDir(dirs.logsDir).map((d) => d.task),
+  ], { types });
+  const place = describePlace(graph, task);
+
+  const columnTitle = isLog ? 'Completed' : (task.column || (place.type.role === 'decision' ? 'none' : 'unknown'));
   const archived = isLog;
   const logContent = extractLog(doc.body);
 
@@ -114,10 +135,11 @@ function showCommandV2(
       } : {}),
       ...(task.completedAt && { completedAt: task.completedAt }),
       ...(logContent && { log: logContent }),
+      graph: docPlace(graph, task.id),
     };
     logger.log(JSON.stringify(jsonOutput, null, 2));
   } else {
-    renderTask({ task, columnTitle, archived, childIds, ref, relatedBoard, dependencies, blockers }, logger);
+    renderTask({ task, columnTitle, archived, childIds, ref, relatedBoard, dependencies, blockers, place }, logger);
     if (task.completedAt) {
       logger.log(`${chalk.bold('Completed:')} ${chalk.white(task.completedAt)}`);
     }
@@ -142,10 +164,12 @@ function renderTask(
     relatedBoard?: RelatedBoard;
     dependencies?: ResolvedTaskRef[];
     blockers?: ResolvedTaskRef[];
+    place: Place;
   },
   logger: Logger
 ) {
-  const { task, columnTitle, archived, childIds = [], dependencies = [], blockers = [] } = input;
+  const { task, columnTitle, archived, dependencies = [], blockers = [], place } = input;
+  const isDecision = place.type.role === 'decision';
 
   logger.log('');
   logger.log(`${chalk.bold('Task:')} ${chalk.cyan(input.ref ?? task.id)}`);
@@ -153,9 +177,14 @@ function renderTask(
     logger.log(`${chalk.bold('Board:')} ${chalk.white(describeRelatedBoard(input.relatedBoard))}`);
   }
   logger.log(`${chalk.bold('Title:')} ${chalk.white(task.title)}`);
-  logger.log(`${chalk.bold('Column:')} ${chalk.white(columnTitle)}${archived ? chalk.gray(' (archived)') : ''}`);
+  logger.log(`${chalk.bold('Type:')} ${chalk.white(typeLine(place.type))}`);
+  if (isDecision) {
+    renderDecisionHeader(task, logger);
+  } else {
+    logger.log(`${chalk.bold('Column:')} ${chalk.white(columnTitle)}${archived ? chalk.gray(' (archived)') : ''}`);
+  }
 
-  if (archived) {
+  if (archived && !isDecision) {
     logger.log(`${chalk.bold('Archived:')} ${chalk.yellow('yes')}`);
   }
 
@@ -179,6 +208,17 @@ function renderTask(
 
   if (task.template) {
     logger.log(`${chalk.bold('Template:')} ${chalk.magenta(task.template)}`);
+  }
+
+  if (place.parent) {
+    const parent = place.parent;
+    const detail = parent.task
+      ? `${chalk.white(parent.task.title)} ${chalk.gray(`(${parent.type!.name}${parent.task.completedAt ? ', done' : ''})`)}`
+      : chalk.yellow('not on this board');
+    logger.log(`${chalk.bold('Parent:')} ${chalk.cyan(parent.id)} ${detail}`);
+    if (parent.offPattern) {
+      logger.log(chalk.yellow(`  ⚠ off-pattern: ${parent.offPattern}`));
+    }
   }
 
   if (task.description && task.description.trim().length > 0) {
@@ -207,9 +247,14 @@ function renderTask(
     }
   }
 
-  if (childIds.length > 0) {
+  if (place.children.length > 0) {
+    const open = place.children.filter((c) => !c.task.completedAt).length;
     logger.log('');
-    logger.log(`${chalk.bold('Children:')} ${chalk.white(childIds.join(', '))}`);
+    logger.log(`${chalk.bold('Children:')} ${chalk.gray(`(${place.children.length - open}/${place.children.length} done)`)}`);
+    for (const child of place.children) {
+      const mark = child.task.completedAt ? chalk.green('✓') : chalk.gray('○');
+      logger.log(`  ${mark} ${chalk.white(child.task.id)} ${child.task.title} ${chalk.gray(`(${child.type.name})`)}`);
+    }
   }
 
   if (dependencies.length > 0) {
@@ -221,6 +266,28 @@ function renderTask(
     }
     if (blockers.length > 0) {
       logger.log(`${chalk.bold('Blocked by:')} ${chalk.yellow(blockers.map((b) => b.ref).join(', '))}`);
+    }
+  }
+
+  if (place.decisions.length > 0) {
+    logger.log('');
+    logger.log(chalk.bold('Rests on:'));
+    for (const link of place.decisions) {
+      logger.log(`  ${chalk.magenta('●')} ${chalk.white(link.id)} ${describeDecisionLink(link)}`);
+    }
+    const superseded = place.decisions.filter((link) => link.superseded);
+    if (superseded.length > 0 && !task.completedAt) {
+      const names = superseded.map((l) => (l.supersededBy ? `${l.id} (superseded by ${l.supersededBy})` : l.id)).join(', ');
+      logger.log(chalk.yellow(`⚠ Rests on a superseded decision: ${names}`));
+    }
+  }
+
+  if (place.restedOnBy.length > 0) {
+    logger.log('');
+    logger.log(chalk.bold('Rested on by:'));
+    for (const work of place.restedOnBy) {
+      const mark = work.task.completedAt ? chalk.green('✓') : chalk.gray('○');
+      logger.log(`  ${mark} ${chalk.white(work.task.id)} ${work.task.title} ${chalk.gray(`(${work.type.name})`)}`);
     }
   }
 
@@ -243,6 +310,82 @@ function renderTask(
   }
 
   logger.log('');
+}
+
+/** A document's place in the graph, as `show` presents it. */
+interface Place {
+  type: ResolvedDocType;
+  parent?: { id: string; task?: Task; type?: ResolvedDocType; offPattern?: string };
+  children: Array<{ task: Task; type: ResolvedDocType }>;
+  decisions: DecisionLink[];
+  restedOnBy: Array<{ task: Task; type: ResolvedDocType }>;
+}
+
+function describePlace(graph: DocGraph, task: Task): Place {
+  const type = graph.typeOf(task);
+  const parentId = typeof task.parentId === 'string' && task.parentId.trim() ? task.parentId.trim() : undefined;
+  let parent: Place['parent'];
+  if (parentId) {
+    const parentTask = graph.get(parentId);
+    if (parentTask) {
+      const fit = parentFit(task.type, parentTask.type, graph.types);
+      parent = { id: parentId, task: parentTask, type: graph.typeOf(parentTask), ...(fit.fits ? {} : { offPattern: fit.reason }) };
+    } else {
+      parent = { id: parentId };
+    }
+  }
+  const withType = (t: Task) => ({ task: t, type: graph.typeOf(t) });
+  return {
+    type,
+    parent,
+    children: graph.childrenOf(task.id).map(withType),
+    decisions: graph.decisionsOf(task.id),
+    restedOnBy: type.role === 'decision' ? graph.restingOn(task.id).map(withType) : [],
+  };
+}
+
+function typeLine(type: ResolvedDocType): string {
+  const name = type.glyph ? `${type.glyph} ${type.name}` : type.name;
+  if (type.like) return `${name} ${chalk.gray(`(like ${type.like})`)}`;
+  if (!type.builtIn) return `${name} ${chalk.gray('(behaves as a task)')}`;
+  return name;
+}
+
+function renderDecisionHeader(task: Task, logger: Logger): void {
+  const record = task as Task & Record<string, unknown>;
+  const status = decisionStatus(record);
+  const color = status === 'current' ? chalk.green : chalk.yellow;
+  logger.log(`${chalk.bold('Status:')} ${color(status)}`);
+  const fields: Array<[string, unknown]> = [
+    ['Claim key', record.claimKey],
+    ['Kind', record.kind],
+    ['Stance', record.stance && record.subject ? `${record.stance} ${record.subject}` : record.stance],
+    ['Subject', record.stance ? undefined : record.subject],
+    ['Holds while', record.holdsWhile],
+    ['Recheck', record.recheck],
+    ['Valid until', record.validUntil instanceof Date ? record.validUntil.toISOString().slice(0, 10) : record.validUntil],
+    ['Source', record.sourcePath],
+    ['Package', record.packageVersion],
+  ];
+  for (const [label, value] of fields) {
+    if (typeof value === 'string' && value.trim()) {
+      logger.log(`${chalk.bold(`${label}:`)} ${chalk.white(value)}`);
+    }
+  }
+  const supersedes = idList(record.supersedes);
+  if (supersedes.length > 0) logger.log(`${chalk.bold('Supersedes:')} ${chalk.white(supersedes.join(', '))}`);
+  if (typeof record.supersededBy === 'string' && record.supersededBy.trim()) {
+    logger.log(`${chalk.bold('Superseded by:')} ${chalk.white(record.supersededBy)}`);
+  }
+}
+
+function describeDecisionLink(link: DecisionLink): string {
+  if (link.external) return chalk.gray('(on a related board)');
+  if (!link.found) return chalk.yellow('not on this board');
+  if (!link.isDecision) return `${link.task!.title} ${chalk.yellow('(not a decision)')}`;
+  const by = link.supersededBy ? ` by ${link.supersededBy}` : '';
+  const state = link.status === 'current' ? chalk.green(link.status) : chalk.yellow(`${link.status}${by}`);
+  return `${link.task!.title} ${chalk.gray('(')}${state}${chalk.gray(')')}`;
 }
 
 function formatPriority(priority: string): string {

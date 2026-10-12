@@ -21,7 +21,9 @@
  *   brainfile's filesystem mtime and can only say THAT something changed.
  */
 import * as fs from 'fs';
-import type { Board, Task, TaskDocument } from './types';
+import type { Board, Task, TaskDocument, TypesConfig } from './types';
+import { resolveDocType } from './docTypes';
+import { decisionStatus } from './docGraph';
 import type { LedgerRecord } from './types/ledger';
 import { readTasksDir } from './taskFile';
 import { queryLedger } from './ledger';
@@ -303,17 +305,18 @@ function sortAssigned(docs: TaskDocument[]): TaskDocument[] {
 }
 
 /**
- * Accepted ADRs — the standing decisions an agent must orient against (adr-2
- * replaced the old `rules` block with exactly this).
+ * Standing decisions — what an agent must orient against (adr-2 replaced the
+ * old `rules` block with exactly this). spec-12 folds ADRs into the
+ * `decision` type, so both spellings count.
  *
- * An ADR counts as accepted once `adr promote` has marked it (`status:
- * promoted`, which also moves the file into `logs/`); a board-resident ADR
- * explicitly marked `accepted` counts too, since the status field is free-form
- * and both spellings appear in practice. Board and logs are both searched:
- * promotion archives the doc, so restricting to `board/` would show nothing.
+ * A decision counts while it is current: a `decision` with no status or
+ * `status: current`, or a legacy ADR that `adr promote` marked (`status:
+ * promoted`, which also moved it into `logs/`) or that says `accepted`. A
+ * legacy ADR with no status is still a proposal. Board and logs are both
+ * searched: promotion archives the doc, so restricting to `board/` would show
+ * nothing. Superseded, rejected and stale decisions are left out.
  */
-function acceptedAdrs(dirs: V2Dirs): TaskDocument[] {
-  const ACCEPTED = new Set(['accepted', 'promoted']);
+function standingDecisions(dirs: V2Dirs, types: TypesConfig | undefined): TaskDocument[] {
   const docs: TaskDocument[] = [];
 
   for (const dir of [dirs.boardDir, dirs.logsDir]) {
@@ -324,9 +327,8 @@ function acceptedAdrs(dirs: V2Dirs): TaskDocument[] {
       continue; // A missing/unreadable dir is orientation we simply don't have.
     }
     for (const doc of entries) {
-      const task = doc.task as Task & { status?: string };
-      if ((task.type || '').toLowerCase() !== 'adr') continue;
-      if (!ACCEPTED.has((task.status || '').toLowerCase())) continue;
+      if (resolveDocType(doc.task.type, types).role !== 'decision') continue;
+      if (decisionStatus(doc.task as Task & { status?: unknown }) !== 'current') continue;
       docs.push(doc);
     }
   }
@@ -350,8 +352,9 @@ function fullLanes(
   for (const instruction of board?.agent?.instructions ?? []) {
     orientation.push({ text: instruction, why: 'agent instructions' });
   }
-  for (const doc of acceptedAdrs(dirs)) {
-    orientation.push({ taskId: doc.task.id, text: doc.task.title, why: 'accepted adr' });
+  for (const doc of standingDecisions(dirs, (board as { types?: TypesConfig } | null)?.types)) {
+    const legacyAdr = (doc.task.type || '').toLowerCase() === 'adr';
+    orientation.push({ taskId: doc.task.id, text: doc.task.title, why: legacyAdr ? 'accepted adr' : 'current decision' });
   }
 
   // ── assigned ────────────────────────────────────────────────────────────

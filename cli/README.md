@@ -213,4 +213,4 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-This registers MCP tools to list, read, search, create, update, move, complete, and delete tasks; manage subtasks; and run contract workflows.
+This registers an MCP tool for everything the CLI does to a board: list, read, search, create, update, move, complete and delete tasks; notes and logs; subtasks and contracts; decisions; columns, the board's settings, types and templates; lint, sync and where. The server tells the agent to use them for every board change and never to edit `.brainfile/` by hand.

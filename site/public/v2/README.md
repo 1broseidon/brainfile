@@ -11,7 +11,8 @@ Per-task file architecture. No deprecated fields. Clean break from v1.
 | **task.json** | Standalone task documents |
 | **contract.json** | PM-to-agent contracts |
 | **epic.json** | Epic documents (groups related tasks) |
-| **adr.json** | Architecture Decision Records |
+| **decision.json** | Decisions: standing choices, no column, never completed |
+| **adr.json** | Architecture Decision Records (alias of decision) |
 | **index.json** | Schema directory metadata |
 
 ## Architecture
@@ -22,7 +23,8 @@ Per-task file architecture. No deprecated fields. Clean break from v1.
 ├── board/            # Active task files (validated against task.json)
 │   ├── task-1.md
 │   ├── epic-1.md
-│   └── adr-1.md
+│   ├── spec-1.md
+│   └── decision-1.md
 └── logs/             # Completion history
     ├── ledger.jsonl  # Unified completion log
     └── task-2.md     # (legacy) Archived task
@@ -32,11 +34,19 @@ The board file is config-only: columns, types, metadata. Tasks are standalone `.
 
 ## Document Types
 
-- **task** — Standard unit of work. Always valid, even without a `types` map.
-- **epic** — Groups related tasks via `children` array. Extends task.json.
-- **adr** — Architecture Decision Record with lifecycle status. Extends task.json.
+Five types are built in and need no entry in `board.types`:
 
-Custom types can be defined in `board.types` with their own `idPrefix` and optional schema URL.
+| Type | Goes under | Holds |
+|------|------------|-------|
+| **epic** | top level | spec, plan, task |
+| **spec** | epic | plan, task |
+| **plan** | epic, spec | task |
+| **task** (alias `issue`) | epic, spec, plan, task | task |
+| **decision** (alias `adr`) | never in the tree | nothing; no column, never completed |
+
+`parentId` is the one parent link; `decisions: [ids]` on work names the decisions it rests on (the reverse is computed); `supersedes`/`supersededBy` link decisions. New documents are written with the canonical type (`adr` → `decision`); existing `type: adr` files read as decisions and keep their IDs.
+
+`board.types` names additions and overrides. A type of your own can take a built-in's place with `like` (`bug: { like: task }`); without it a type behaves as a task.
 
 ## Schema URLs
 
@@ -46,6 +56,7 @@ https://brainfile.md/v2/board.json
 https://brainfile.md/v2/task.json
 https://brainfile.md/v2/contract.json
 https://brainfile.md/v2/epic.json
+https://brainfile.md/v2/decision.json
 https://brainfile.md/v2/adr.json
 ```
 

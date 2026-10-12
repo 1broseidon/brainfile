@@ -14,7 +14,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
-import { findV2Task, getV2Dirs } from '@brainfile/core';
+import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
 import type {
   AgentEvent,
@@ -489,6 +489,32 @@ function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], tas
 
 // ── Dispatch and ask ─────────────────────────────────────────────────────────
 
+/** How many standing decisions an agent is told about by name; the rest it can list. */
+const DECISIONS_SHOWN = 15;
+
+/**
+ * The board's standing decisions, one line each, for an agent's first
+ * prompt: the choices it should work within (spec-11). Empty when there are
+ * none, or when the board cannot be read.
+ */
+function standingDecisions(brainfilePath: string): string {
+  try {
+    const types = readBoardConfig(brainfilePath)?.config?.types;
+    const current = readDecisionDocs(getV2Dirs(brainfilePath), types)
+      .map((doc) => summarizeDecision(doc.task))
+      .filter((d) => d.status === 'current');
+    if (current.length === 0) return '';
+    const lines = current.slice(0, DECISIONS_SHOWN).map((d) => `- ${d.id}${d.claimKey ? ` (${d.claimKey})` : ''}: ${d.title}`);
+    if (current.length > DECISIONS_SHOWN) lines.push(`- and ${current.length - DECISIONS_SHOWN} more (\`brainfile list --type decision\`)`);
+    return (
+      `\n\nStanding decisions on this board:\n${lines.join('\n')}\n` +
+      'Work within them. Before going against one, run the brainfile check tool and say so in your reply; record a new lasting choice with decide, which replaces the decision on the same claim key.'
+    );
+  } catch {
+    return '';
+  }
+}
+
 function brief(projectId: string, taskId: string): string {
   const located = locateBoard(projectId, { materialize: false });
   if (!located.found) throw new Error(`No board in ${projectId}`);
@@ -502,6 +528,7 @@ function brief(projectId: string, taskId: string): string {
     `You have been handed ${task.id} on this repository's Brainfile board: "${task.title}".`,
     body.trim() ? `\n${body.trim()}` : '',
     contract,
+    standingDecisions(located.brainfilePath),
     `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did. Do the work in this repository. Finish with a reply of one or two sentences.`,
   ].join('');
 }
@@ -549,7 +576,9 @@ async function ask(
       const past = existing || earlier.length === 0
         ? ''
         : `Earlier in this conversation:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
-      await turn(session, run, existing ? text : ASK_PREAMBLE + past + text);
+      const located = existing ? null : locateBoard(projectId, { materialize: false });
+      const decisions = located?.found ? `${standingDecisions(located.brainfilePath).trim()}\n\n` : '';
+      await turn(session, run, existing ? text : ASK_PREAMBLE + (decisions.trim() ? decisions : '') + past + text);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
     }

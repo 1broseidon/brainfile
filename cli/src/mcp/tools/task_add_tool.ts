@@ -1,13 +1,13 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
-import { addTaskFile } from '@brainfile/core';
+import { addTaskFile, checkDocumentLinks, readBoardGraph, resolveDocType } from '@brainfile/core';
 import {
   ensureV2Dirs,
   composeBody,
 } from '../../utils/v2-detect';
 import { buildContract } from '@brainfile/core';
-import { validateType, readBoardConfig } from '@brainfile/core';
+import { validateType } from '@brainfile/core';
 import { requireV2, mcpStructuredError } from '../helpers';
 import { taskAddOutputSchema } from '../schemas';
 
@@ -16,10 +16,10 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
     'task_add',
     {
       title: 'Add Task',
-      description: 'Add a new board document to a column. Pass type to create an epic, adr, or plan (e.g. type:"plan" with status:"draft" creates a plan document).',
+      description: 'Add a board document. Types: epic, spec, plan, task (alias issue) and decision (alias adr) are built in, plus the board\'s own. parentId must fit (epic holds spec, plan, task; spec holds plan, task; plan holds task; task holds task); an off-pattern parent is a warning, refused on a strict board. A decision has no column. decisions: lists the decisions a piece of work rests on.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-              column: z.string().describe('Column ID or name to add task to'),
+              column: z.string().optional().describe('Column ID or name to add the document to. Required for work; ignored for a decision, which has no column'),
               title: z.string().describe('Task title'),
               description: z.string().optional().describe('Task description'),
               priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Task priority'),
@@ -28,7 +28,7 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
               dueDate: z.string().optional().describe('Due date (YYYY-MM-DD)'),
               subtasks: z.array(z.string()).optional().describe('Subtask titles (IDs auto-generated)'),
               relatedFiles: z.array(z.string()).optional().describe('Related file paths'),
-              type: z.string().optional().describe('Document type (e.g., epic, adr, plan). Determines ID prefix. Default: task'),
+              type: z.string().optional().describe('Document type: epic, spec, plan, task (alias issue), decision (alias adr) or one of the board\'s types. Aliases are written canonically. Determines ID prefix. Default: task'),
               status: z.string().optional().describe('Free-form status, e.g. draft/active/superseded for plan documents'),
               // Contract creation (optional)
               with_contract: z.boolean().optional().describe('Attach a contract to the new task (default status=draft; use ready:true to make immediately dispatchable)'),
@@ -36,7 +36,9 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
               deliverables: z.array(z.string()).optional().describe('Contract deliverables: type:path:description'),
               validation_commands: z.array(z.string()).optional().describe('Contract validation commands'),
               constraints: z.array(z.string()).optional().describe('Contract constraints'),
-              parentId: z.string().optional().describe('Parent task ID for first-class parent-child linking'),
+              parentId: z.string().optional().describe('Parent ID (parentId). Must fit the type: a spec under an epic, a plan under an epic or spec, a task under any of those or a task'),
+              dependsOn: z.array(z.string()).optional().describe('IDs of tasks that come first; alias:task-id for a task on a related board'),
+              decisions: z.array(z.string()).optional().describe('IDs of the decisions this work rests on'),
               // Aliases (some clients prefer camelCase)
               withContract: z.boolean().optional().describe('Alias of with_contract'),
               validationCommands: z.array(z.string()).optional().describe('Alias of validation_commands'),
@@ -57,6 +59,8 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
       type: docType,
       status,
       parentId,
+      dependsOn,
+      decisions,
       with_contract,
       ready: contractReady,
       deliverables,
@@ -72,11 +76,11 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
 
       try {
         const dirs = ensureV2Dirs(filePath);
-        const boardFile = readBoardConfig(filePath);
-        if (!boardFile) {
+        const boardGraph = readBoardGraph(filePath);
+        const board = boardGraph.config;
+        if (!board) {
           return { content: [{ type: 'text' as const, text: `Error: Failed to parse brainfile: ${filePath}` }], isError: true };
         }
-        const board = boardFile.config;
         const typePrefix = docType || 'task';
         const typeValidation = validateType(board, typePrefix);
         if (!typeValidation.valid) {
@@ -86,12 +90,25 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
             typePrefix
           );
         }
+        const isDecision = resolveDocType(typePrefix, board.types).role === 'decision';
 
-        let targetColumn = board.columns.find(c => c.id === column);
-        if (!targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
-        if (!targetColumn) {
+        // A decision has no column (spec-12); work needs one.
+        let targetColumn = isDecision || !column ? undefined : board.columns.find(c => c.id === column);
+        if (!isDecision && column && !targetColumn) targetColumn = board.columns.find(c => c.title.toLowerCase() === column.toLowerCase());
+        if (!isDecision && !targetColumn) {
           const available = board.columns.map(c => `${c.id} (${c.title})`).join(', ');
-          return { content: [{ type: 'text' as const, text: `Error: Column not found: ${column}. Available: ${available}` }], isError: true };
+          const message = column ? `Column not found: ${column}` : 'column is required for work (only a decision has none)';
+          return { content: [{ type: 'text' as const, text: `Error: ${message}. Available: ${available}` }], isError: true };
+        }
+
+        const links = checkDocumentLinks(boardGraph.graph, {
+          type: typePrefix,
+          ...(parentId && { parentId }),
+          ...(dependsOn && dependsOn.length > 0 && { dependsOn }),
+          ...(decisions && decisions.length > 0 && { decisions }),
+        }, { strict: board.strict === true });
+        if (links.errors.length > 0) {
+          return { content: [{ type: 'text' as const, text: `Error: ${links.errors.join('\n')}` }], isError: true };
         }
 
         const wantsContract =
@@ -114,8 +131,8 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
           dirs.boardDir,
           {
             title,
-            column: targetColumn.id,
-            ...(docType && docType !== 'task' && { type: docType }),
+            column: targetColumn?.id,
+            ...(docType && { type: docType }),
             description,
             priority,
             tags,
@@ -124,20 +141,29 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
             relatedFiles,
             subtasks,
             parentId,
+            dependsOn,
+            decisions,
             status,
             contract,
           },
           description ? composeBody(description) : '',
           dirs.logsDir,
+          { types: board.types },
         );
 
         if (!result.success || !result.task) {
           return { content: [{ type: 'text' as const, text: `Error: ${result.error || 'Failed to add task'}` }], isError: true };
         }
 
+        const warnings = links.warnings.length > 0 ? `\nWarning: ${links.warnings.join('\nWarning: ')}` : '';
         return {
-          content: [{ type: 'text' as const, text: `Task added successfully: ${result.task.id} - ${title}` }],
-          structuredContent: { id: result.task.id, title },
+          content: [{ type: 'text' as const, text: `Task added successfully: ${result.task.id} - ${title}${warnings}` }],
+          structuredContent: {
+            id: result.task.id,
+            title,
+            ...(result.task.type ? { type: result.task.type } : {}),
+            ...(links.warnings.length > 0 ? { warnings: links.warnings } : {}),
+          },
         };
       } catch (e) {
         return { content: [{ type: 'text' as const, text: `Error: ${(e as Error).message}` }], isError: true };
