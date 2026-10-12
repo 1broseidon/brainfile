@@ -31,8 +31,8 @@ subtasks:
     completed: true
   - id: spec-13-7
     title: "Docs: MANUAL and llms files list every tool"
-    completed: false
-updatedAt: "2026-10-12T07:46:37.272Z"
+    completed: true
+updatedAt: "2026-10-12T07:49:37.865Z"
 ---
 
 ## Description
