@@ -12,6 +12,11 @@ tags:
   - cli
   - desktop
 createdAt: "2026-10-12T19:03:41.963Z"
+subtasks:
+  - id: spec-15-1
+    title: Detect every board a repo has (folder, branch, remote ref, stray worktrees); refuse writes when they disagree
+    completed: false
+updatedAt: "2026-10-12T19:03:42.274Z"
 ---
 
 ## Description
