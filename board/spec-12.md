@@ -26,11 +26,11 @@ subtasks:
     completed: true
   - id: spec-12-5
     title: "Desktop: outline and glyphs per type; decisions leave the list for their own view"
-    completed: false
+    completed: true
   - id: spec-12-6
     title: "Docs and schemas: MANUAL, site/public/v2 schemas, llms.txt; init writes a short brainfile.md"
     completed: true
-updatedAt: "2026-10-12T06:33:23.699Z"
+updatedAt: "2026-10-12T06:40:02.978Z"
 parentId: epic-2
 ---
 
