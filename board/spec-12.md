@@ -15,7 +15,10 @@ subtasks:
   - id: spec-12-1
     title: "Core: built-in registry of the five with roles, aliases (issue, adr) and like: for custom types"
     completed: false
-updatedAt: "2026-10-12T05:45:06.162Z"
+  - id: spec-12-2
+    title: "Containment: allowed parents per type; parents cannot complete with open children; lint warns, strict refuses"
+    completed: false
+updatedAt: "2026-10-12T05:45:06.444Z"
 ---
 
 ## Description
