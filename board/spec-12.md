@@ -11,6 +11,11 @@ tags:
   - mcp
   - desktop
 createdAt: "2026-10-12T05:45:05.871Z"
+subtasks:
+  - id: spec-12-1
+    title: "Core: built-in registry of the five with roles, aliases (issue, adr) and like: for custom types"
+    completed: false
+updatedAt: "2026-10-12T05:45:06.162Z"
 ---
 
 ## Description
