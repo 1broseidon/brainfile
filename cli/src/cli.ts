@@ -217,6 +217,7 @@ Brainfile file resolution (when you don't pass --file):
     .option('-t, --tag <name>', 'Filter by tag')
     .option('--parent <id>', 'Filter by parent task ID (parentId)')
     .option('--contract <status>', 'Filter by contract status (ready|in_progress|delivered|done|failed)')
+    .option('--related [all]', "Open tasks on related boards this board depends on; 'all' for every open task there")
     .action((options) => { listCommand(options); });
   listCmd.addHelpText('after', `\n${LIST_COMMAND_HELP}`);
 
@@ -600,6 +601,9 @@ Brainfile file resolution (when you don't pass --file):
     .command('graph')
     .description('Attach contracts to multiple tasks as a dependency graph')
     .allowUnknownOption(true)
+    // The graph flags are parsed from argv by parseContractGraphArgs; their
+    // values must not count as positional arguments (commander 14 rejects them).
+    .allowExcessArguments(true)
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('--ready', 'Set attached contracts to status=ready instead of draft')
     .option('--show', 'Print the current task dependency graph')

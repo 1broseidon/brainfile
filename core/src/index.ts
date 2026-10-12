@@ -316,6 +316,20 @@ export {
   ledgerRecordToCompletedRef,
 } from './completed';
 
+// Export related-board reference helpers (spec-10). Resolving a sister board
+// on disk needs git and lives in `@brainfile/core/repo`.
+export {
+  type RelatedConfig,
+  type TaskRef,
+  RELATED_ALIAS_PATTERN,
+  isQualifiedRef,
+  parseTaskRef,
+  formatTaskRef,
+  readRelatedConfig,
+  lintRelatedConfig,
+  lintTaskRefs,
+} from './related';
+
 // Export task dependency graph utilities
 export {
   type DependencyGraphNode,

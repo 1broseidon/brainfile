@@ -12,6 +12,7 @@ import {
   type Contract,
   type Deliverable,
 } from '@brainfile/core';
+import { describeTaskRefState, relatedBoards } from '@brainfile/core/repo';
 import {
   isV2,
   getV2Dirs,
@@ -234,6 +235,14 @@ function pickupContractV2(ctx: ContractRunContext, resolvedFilePath: string): Co
   if (!taskDoc) return { error: `Failed to read task file: ${taskPath}` };
 
   if (!taskDoc.task.contract) return { error: `Task ${ctx.taskId} has no contract` };
+
+  // spec-10: a task that depends on a task on a related board waits until
+  // that task is completed there. A board not on this machine counts as not done.
+  const blockers = relatedBoards(resolvedFilePath).blockers(taskDoc.task);
+  if (blockers.length > 0) {
+    const waits = blockers.map((b) => `${b.ref} — ${describeTaskRefState(b)}`).join('; ');
+    return { error: `Task ${ctx.taskId} is blocked by ${waits}. It can be picked up once ${blockers.length === 1 ? 'that task is' : 'those tasks are'} completed.` };
+  }
 
   const op = pickupTaskContract(taskPath);
   if (!op.success) return { error: op.error || 'Failed to update contract status' };

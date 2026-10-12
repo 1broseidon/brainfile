@@ -50,6 +50,14 @@
       "description": "Effort estimation for planning",
       "enum": ["trivial", "small", "medium", "large", "xlarge"]
     },
+    "dependsOn": {
+      "type": "array",
+      "description": "IDs of tasks that must be completed first. A task on a related board (related: in brainfile.md) is alias:task-id, and blocks this task until it is completed there.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "blockedBy": {
       "type": "array",
       "description": "List of item IDs that block this task",

@@ -49,6 +49,22 @@
             }
           ]
         },
+        "related": {
+          "type": "object",
+          "description": "Sister boards in other repositories, by short name. Each value is the repository folder, relative to this repository's root (the project root, not .brainfile/). A task refers to a task on one as alias:task-id, in dependsOn or anywhere a task ID is taken. A folder that is not on this machine is still valid.",
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "mobile": "../hotline-mobile"
+            }
+          ]
+        },
         "strict": {
           "type": "boolean",
           "description": "Enables strict validation for CLI operations. When true, add rejects unknown task types and move rejects unknown columns. When false (default), unknown types and columns are allowed for backward compatibility. The task type is always implicitly valid even if not listed in types.",

@@ -35,6 +35,16 @@ export {
   topologicalSort,
 } from './graph';
 export type { DependencyGraphNode } from './graph';
+export {
+  RELATED_ALIAS_PATTERN,
+  isQualifiedRef,
+  parseTaskRef,
+  formatTaskRef,
+  readRelatedConfig,
+  lintRelatedConfig,
+  lintTaskRefs,
+} from './related';
+export type { RelatedConfig, TaskRef } from './related';
 export type {
   Board,
   BoardConfig,
