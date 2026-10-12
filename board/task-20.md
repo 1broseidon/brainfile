@@ -10,7 +10,7 @@ tags:
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
 assignee: claude
-updatedAt: "2026-10-12T19:10:17.002Z"
+updatedAt: "2026-10-12T19:10:17.305Z"
 subtasks:
   - id: task-20-1
     title: "Host: completed children travel with their parent past the Done limit"
@@ -23,6 +23,9 @@ subtasks:
     completed: false
   - id: task-20-4
     title: "Board view: parent card shows its children's boxes"
+    completed: false
+  - id: task-20-5
+    title: "Task pane: child tasks include completed ones, ticked"
     completed: false
 ---
 
