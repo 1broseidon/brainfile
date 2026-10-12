@@ -39,7 +39,10 @@ subtasks:
   - id: spec-16-8
     title: "Phase 3: brainfile run, a foreground runner; TUI shows live runs"
     completed: false
-updatedAt: "2026-10-12T23:16:21.491Z"
+  - id: spec-16-9
+    title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
+    completed: false
+updatedAt: "2026-10-12T23:16:21.905Z"
 ---
 
 ## Description
