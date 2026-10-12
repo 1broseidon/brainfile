@@ -9,7 +9,7 @@ tags:
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
-updatedAt: "2026-10-12T21:55:47.699Z"
+updatedAt: "2026-10-12T21:55:48.129Z"
 subtasks:
   - id: task-34-1
     title: "Health rows: problem sentence under the name, Fix / Ask agent keys; long row tooltip dropped, short words (two copies, old copy in main, N unsent…)"
@@ -22,6 +22,9 @@ subtasks:
     completed: false
   - id: task-34-4
     title: Inline Confirm / Cancel before it runs; result line with Undo for 10s that puts folder, branch, checkouts and code branch back
+    completed: false
+  - id: task-34-5
+    title: "Ask agent: opens the project's chat and sends the default agent what was found (where survey, notes) with look / explain / ask, change nothing"
     completed: false
 ---
 
