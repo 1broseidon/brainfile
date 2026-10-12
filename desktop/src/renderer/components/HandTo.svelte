@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
+  import { portal } from '../lib/portal';
   import Icon from './Icon.svelte';
   import Working from './Working.svelte';
   import type { AgentId } from '../../shared/api';
@@ -9,12 +10,20 @@
   let { taskId }: { taskId: string } = $props();
 
   let open = $state(false);
+  let key = $state<HTMLButtonElement>();
+  /** Where the menu opens: under the key, its right edge on the key's, always on screen. */
+  let place = $state({ top: 0, left: 0 });
+  const MENU_W = 280;
   let active = $state(0);
   const offered = $derived(app.agents);
   const run = $derived(app.runFor(taskId));
 
   function toggle(): void {
     open = !open;
+    if (open && key) {
+      const r = key.getBoundingClientRect();
+      place = { top: r.bottom + 4, left: Math.min(Math.max(8, r.right - MENU_W), window.innerWidth - MENU_W - 8) };
+    }
     if (open) {
       active = Math.max(0, offered.findIndex((a) => a.id === app.defaultAgent));
       void app.refreshAgents();
@@ -53,10 +62,10 @@
   <button class="icon-btn" use:tip={'Stop'} onclick={() => app.stopRun(run.id)}><Icon name="stop" size={13} /></button>
 {:else}
   <span class="anchor">
-    <button class="btn quiet" class:on={open} onclick={toggle}><Icon name="hand" size={13} />Hand to…</button>
+    <button class="btn quiet" class:on={open} bind:this={key} onclick={toggle}><Icon name="hand" size={13} />Hand to…</button>
     {#if open}
-      <div class="catch" role="presentation" onmousedown={() => (open = false)}></div>
-      <div class="menu" role="listbox">
+      <div class="catch" role="presentation" use:portal onmousedown={() => (open = false)}></div>
+      <div class="menu" role="listbox" use:portal style:top="{place.top}px" style:left="{place.left}px" style:width="{MENU_W}px">
         <div class="head mono">Hand to</div>
         {#each offered as agent, i (agent.id)}
           <button
@@ -100,12 +109,10 @@
     z-index: var(--z-catch);
   }
 
+  /* Lifted to the body, so no pane clips it. */
   .menu {
-    position: absolute;
+    position: fixed;
     z-index: var(--z-menu);
-    top: calc(100% + 4px);
-    right: 0;
-    width: 280px;
     padding: var(--s1);
     border-radius: var(--r-card);
     background: var(--pop);
