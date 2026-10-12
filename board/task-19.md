@@ -12,7 +12,10 @@ subtasks:
   - id: task-19-1
     title: Decisions leave the column list (no column, no longer fall into one)
     completed: false
-updatedAt: "2026-10-12T15:37:33.984Z"
+  - id: task-19-2
+    title: "Decisions view: standing decisions by claim-key family, history folded; t decision stop + direct key"
+    completed: false
+updatedAt: "2026-10-12T15:37:34.257Z"
 ---
 
 ## Description
