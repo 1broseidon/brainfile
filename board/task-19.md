@@ -23,8 +23,8 @@ subtasks:
     completed: true
   - id: task-19-5
     title: Help overlay, footer hints, NO_COLOR, narrow widths; TUI tests for each; MANUAL + CHANGELOG
-    completed: false
-updatedAt: "2026-10-12T16:03:04.507Z"
+    completed: true
+updatedAt: "2026-10-12T16:12:03.335Z"
 ---
 
 ## Description
