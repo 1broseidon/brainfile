@@ -5,6 +5,7 @@
  */
 import type { Api, BoardSnapshot, Project, TaskView } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
+import { asTree } from './format';
 
 declare global {
   interface Window {
@@ -103,11 +104,11 @@ class AppState {
   board = $derived(this.activeId ? (this.boards[this.activeId] ?? null) : null);
   view = $derived<ViewMode>((this.activeId && this.views[this.activeId]) || 'list');
 
-  /** Tasks in the order the list shows them: by column, then position. */
+  /** Tasks in the order the list shows them: by column, then as the outline (each parent before its children). */
   orderedTasks = $derived.by(() => {
     const board = this.board;
     if (!board) return [] as TaskView[];
-    return board.columns.flatMap((column) => board.tasks.filter((t) => t.column === column.id));
+    return board.columns.flatMap((column) => asTree(board.tasks.filter((t) => t.column === column.id)).map((r) => r.task));
   });
 
   #problemTimer: ReturnType<typeof setTimeout> | null = null;

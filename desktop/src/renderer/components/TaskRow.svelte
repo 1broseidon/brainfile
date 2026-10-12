@@ -46,6 +46,8 @@
      an assignee always show, because they are signals. -->
 <div
   class="row"
+  class:parent={children > 0}
+  style:--depth={depth}
   class:selected
   class:done
   role="row"
@@ -60,17 +62,19 @@
   <button class="cell" use:tip={'Status  S'} onclick={(e) => pick('status', e)}>
     <StatusIcon {progress} />
   </button>
-  <span class="title-block" style:padding-left="{depth * 20}px">
-    {#if children > 0}
-      <button
-        class="toggle"
-        use:tip={collapsed ? 'Show children' : 'Hide children'}
-        onclick={(e) => {
-          e.stopPropagation();
-          ontoggle?.();
-        }}>{collapsed ? '▸' : '▾'}</button
-      >
-    {:else if kindGlyph(task.type)}
+  {#if children > 0}
+    <!-- The parent's ▾ / ▸ hangs in the gutter, so its title stays on the line of its siblings. -->
+    <button
+      class="toggle"
+      use:tip={collapsed ? 'Show children' : 'Hide children'}
+      onclick={(e) => {
+        e.stopPropagation();
+        ontoggle?.();
+      }}>{collapsed ? '▸' : '▾'}</button
+    >
+  {/if}
+  <span class="title-block">
+    {#if kindGlyph(task.type) && children === 0}
       <span class="kind" use:tip={task.type}>{kindGlyph(task.type)}</span>
     {/if}
     <span class="title">{task.title}</span>
@@ -110,7 +114,9 @@
     display: flex;
     align-items: center;
     gap: var(--s1);
-    padding: 0 var(--s4);
+    /* A child steps in by one cell and its gap, so its box sits under its
+       parent's title: the outline reads at a glance. */
+    padding: 0 var(--s4) 0 calc(var(--s4) + var(--depth, 0) * var(--indent));
     transition: background var(--d-press) var(--ease);
   }
 
@@ -167,11 +173,18 @@
   }
 
   .toggle {
-    width: 12px;
-    flex: none;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--depth, 0) * var(--indent));
+    width: var(--s4);
     font-size: var(--t-xs);
     color: var(--ink-3);
-    text-align: left;
+    text-align: center;
+  }
+
+  .parent .title {
+    font-weight: 500;
   }
 
   .toggle:hover {

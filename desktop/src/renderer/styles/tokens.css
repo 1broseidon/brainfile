@@ -138,6 +138,8 @@
   --field-h: 28px;
   --gap: 8px;
   --id-w: 72px;
+  /* One outline step: puts a child's status box, as drawn, under its parent's title. */
+  --indent: 28px;
 
   /* -------------------------------------------------------------- layers
    * Named, so nothing reaches for a bigger number to win. */
