@@ -89,10 +89,10 @@
     {/each}
   </span>
   {#if task.blockedOn?.length}
-    <span class="run mono" use:tip={`Waiting on ${task.blockedOn.join(', ')}`}>blocked</span>
+    <span class="run mono" use:tip={`Waits on ${task.blockedOn.join(', ')}`}>blocked</span>
   {/if}
   {#if task.restsOnRetired?.length}
-    <span class="run mono" use:tip={`Rests on ${task.restsOnRetired.join(', ')}, since replaced or retired`}>decision changed</span>
+    <span class="run mono" use:tip={'Decision replaced'}>decision changed</span>
   {/if}
   {#if app.runFor(task.id)}
     <span class="run"><Working run={app.runFor(task.id)} rotate={false} /></span>

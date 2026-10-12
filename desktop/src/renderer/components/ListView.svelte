@@ -60,7 +60,7 @@
           <span class="count mono tabular">{count}</span>
           <span class="chev" class:open={!app.folded('groups', column.id)}><Icon name="chevron" size={12} stroke={1.8} /></span>
         </button>
-        <button class="icon-btn add" use:tip={`New task in ${column.title}`} onclick={() => (app.composer = { column: column.id })}>
+        <button class="icon-btn add" use:tip={`New task`} onclick={() => (app.composer = { column: column.id })}>
           <Icon name="plus" size={14} />
         </button>
       </header>

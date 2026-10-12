@@ -59,7 +59,7 @@
         {#if d.status === 'proposed'}<span class="mono quiet">proposed</span>{/if}
         {#if d.kind && d.kind !== 'decision'}<span class="mono quiet">{d.kind}</span>{/if}
         {#if expired(d)}
-          <span class="mono warn" use:tip={`Valid until ${shortDate(d.validUntil)}: time to look at it again`}>review</span>
+          <span class="mono warn" use:tip={'Past valid date'}>review</span>
         {:else if d.validUntil}
           <span class="mono quiet" use:tip={'Valid until'}>{shortDate(d.validUntil)}</span>
         {/if}

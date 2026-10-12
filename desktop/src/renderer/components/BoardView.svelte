@@ -51,7 +51,7 @@
         <span class="name">{column.title}</span>
         <span class="count mono tabular">{tasks.length}</span>
         <span class="spacer"></span>
-        <button class="icon-btn small" use:tip={`New task in ${column.title}`} onclick={() => (app.composer = { column: column.id })}>
+        <button class="icon-btn small" use:tip={`New task`} onclick={() => (app.composer = { column: column.id })}>
           <Icon name="plus" size={14} />
         </button>
       </header>
@@ -86,7 +86,7 @@
               <div class="meta">
                 {#if task.priority}<PriorityIcon priority={task.priority} size={13} />{/if}
                 {#if children.length}
-                  <span class="kids" use:tip={`${childrenDone} of ${children.length} child tasks done`}>
+                  <span class="kids" use:tip={`${childrenDone}/${children.length} done`}>
                     {#if children.length <= SHOWN_BOXES}
                       {#each children as child (child.task.id)}
                         <StatusIcon progress={child.done ? 1 : columnProgress(board.columns, child.task.column)} size={12} />

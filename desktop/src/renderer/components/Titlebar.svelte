@@ -20,8 +20,7 @@
   const healthTipText = $derived.by(() => {
     const boards = unsentBoards;
     if (boards.length === 1) return `${projectName(boards[0].id)}: ${healthMeta(boards[0].id)}`;
-    if (app.health.warn) return `${boards.length} boards need a look`;
-    return `Changes not shared yet on ${boards.length} boards`;
+    return app.health.warn ? 'Board issues' : 'Unsent changes';
   });
 
   /** A board's state in a few words for the health list, worst first. */
@@ -103,7 +102,7 @@
       class="feed no-drag"
       class:lit={app.unseen > 0}
       class:open={opened === 'feed'}
-      use:tip={app.unseen > 0 ? `${app.unseen} ${app.unseen === 1 ? 'change' : 'changes'} from agents and other machines` : 'Changes from agents and other machines'}
+      use:tip={app.unseen > 0 ? `${app.unseen} outside changes` : 'Outside changes'}
       onclick={() => toggle('feed')}
     >
       <Icon name="bolt" size={13} />

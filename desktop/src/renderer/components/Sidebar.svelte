@@ -10,7 +10,7 @@
       case 'no-board':
         return 'no board yet';
       case 'legacy':
-        return 'v1 board, needs migrate';
+        return 'needs migrate';
       case 'missing':
         return 'folder missing';
       case 'error':
@@ -52,7 +52,7 @@
 
   function storageWord(project: Project): string {
     if (project.state.status !== 'ready') return '';
-    return project.state.storage === 'linked' ? 'on the brainfile branch' : project.state.storage === 'standalone' ? 'its own repo' : 'plain files';
+    return project.state.storage === 'linked' ? 'branch' : project.state.storage === 'standalone' ? 'own repo' : 'plain files';
   }
 </script>
 

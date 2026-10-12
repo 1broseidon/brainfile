@@ -18,11 +18,8 @@
   let initializing = $state(false);
 
   const storageLabel = $derived(
-    (board?.storage === 'linked'
-      ? "On the 'brainfile' branch"
-      : board?.storage === 'standalone'
-        ? 'Its own git repository'
-        : 'Plain files, not in git') + (board?.sync.remote ? `, shared through ${board.sync.remote}` : ', on this machine only')
+    (board?.storage === 'linked' ? 'brainfile branch' : board?.storage === 'standalone' ? 'own repo' : 'plain files') +
+      (board?.sync.remote ? ` · ${board.sync.remote}` : ' · this Mac')
   );
 
   async function init(): Promise<void> {

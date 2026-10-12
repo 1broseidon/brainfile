@@ -11,16 +11,15 @@
   let { two }: { two: NonNullable<IntegrityView['twoBoards']> } = $props();
 
   const busy = $derived(app.settling !== null);
-  const SAFE = 'Nothing is lost: the board it replaces is saved first (brainfile backups).';
   const tips: Record<SettleChoice, string> = $derived({
-    theirs: two.lossless === 'theirs' ? `It already has everything. ${SAFE}` : `This board's own changes stay only in the backup. ${SAFE}`,
-    merge: `Both boards, document by document; newer edits win, logs are kept from both. ${SAFE}`,
-    keep: two.lossless === 'keep' ? `It already has everything. ${SAFE}` : `The other board's own changes stay only in its history. ${SAFE}`,
+    theirs: two.lossless === 'theirs' ? 'Has everything · safe' : 'Backup, then replace',
+    merge: 'Backup, then merge',
+    keep: two.lossless === 'keep' ? 'Has everything · safe' : 'Backup, then keep',
   });
 </script>
 
 <span class="two">
-  <span class="what" use:tip={`${two.detail} Nothing is written until you choose.`}>{two.message}</span>
+  <span class="what" use:tip={two.detail}>{two.message}</span>
   <button class="btn quiet" class:sure={two.lossless === 'theirs'} disabled={busy} use:tip={tips.theirs} onclick={() => app.settleBoards('theirs')}>{two.useOther}</button>
   <button class="btn quiet" class:sure={two.lossless === 'merge'} disabled={busy} use:tip={tips.merge} onclick={() => app.settleBoards('merge')}>Merge</button>
   <button class="btn quiet" class:sure={two.lossless === 'keep'} disabled={busy} use:tip={tips.keep} onclick={() => app.settleBoards('keep')}>Keep this one</button>
