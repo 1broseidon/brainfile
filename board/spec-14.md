@@ -2,14 +2,14 @@
 id: spec-14
 title: "Dispatch into a worktree: each hand-off on its own branch"
 type: spec
-column: in-progress
+column: review
 position: 0
 tags:
   - desktop
   - dispatch
   - git
 createdAt: "2026-10-12T18:47:59.412Z"
-updatedAt: "2026-10-12T23:12:07.288Z"
+updatedAt: "2026-10-12T23:12:12.067Z"
 assignee: claude
 decisions:
   - decision-2
