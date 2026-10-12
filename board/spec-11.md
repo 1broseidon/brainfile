@@ -25,7 +25,10 @@ subtasks:
   - id: spec-11-4
     title: "One search over the index: current first, history lane, path and line range on every hit"
     completed: false
-updatedAt: "2026-10-12T05:36:58.159Z"
+  - id: spec-11-5
+    title: "brief takes over wake: budgeted lanes; SessionStart hook injects it from a lean entry under 300ms"
+    completed: false
+updatedAt: "2026-10-12T05:36:58.434Z"
 ---
 
 ## Description
