@@ -100,8 +100,10 @@ export interface BoardSurvey {
   conflict: BoardConflict | null;
   /** The local board branch against the remote's copy, when both are known. */
   lineage: LineageState | null;
-  /** Worktrees of the board branch somewhere other than its home at `.brainfile/`. */
+  /** Other worktrees of the board branch somewhere other than its home at `.brainfile/`. */
   strayWorktrees: StrayWorktree[];
+  /** Set to the board's home when this board is itself a checkout of the branch outside it. */
+  outsideHome: string | null;
   /**
    * The code branch also tracks `.brainfile/` while the board lives on its
    * own branch: a second, stale copy that rides along with code commits.
@@ -283,11 +285,13 @@ function currentBranch(worktree: string): string | null {
   return r.ok && r.stdout ? r.stdout : null;
 }
 
-/** Is `rel` (a folder) tracked by the index of the worktree at `root`? */
-function trackedByIndex(root: string, rel: string): boolean {
-  const r = git(['ls-files', '--', rel], root);
+/** Does the code branch checked out at `repoRoot` track `rel`, in its last commit or its index? */
+export function codeBranchTracks(repoRoot: string, rel = '.brainfile'): boolean {
+  if (git(['ls-files', '--error-unmatch', '--', rel], repoRoot).ok) return true;
+  const r = git(['ls-tree', '--name-only', 'HEAD', '--', rel], repoRoot);
   return r.ok && r.stdout.length > 0;
 }
+
 
 /** Paths compared as git reports them: symlinks resolved (`/tmp` is `/private/tmp` on macOS). */
 function real(p: string): string {
@@ -326,7 +330,7 @@ export function surveyBoards(dotDir: string, options: SurveyOptions = {}): Board
   const dir = real(dotDir);
   const kind = boardRepoKind(dir);
   const worktrees = listWorktrees(kind === 'linked' ? dir : path.dirname(dir));
-  const empty: BoardSurvey = { boards: [], conflict: null, lineage: null, strayWorktrees: [], trackedTwice: null };
+  const empty: BoardSurvey = { boards: [], conflict: null, lineage: null, strayWorktrees: [], outsideHome: null, trackedTwice: null };
   const here = readFolder(dir);
   const branch = boardBranch(dir);
   const branchRef = `refs/heads/${branch}`;
@@ -355,15 +359,16 @@ export function surveyBoards(dotDir: string, options: SurveyOptions = {}): Board
   if (!onBoardBranch) {
     const codeRoot = gitToplevel(path.dirname(dir));
     const rel = codeRoot ? path.relative(real(codeRoot), dir).split(path.sep).join('/') : '';
-    if (codeRoot && rel && !rel.startsWith('..') && trackedByIndex(codeRoot, rel)) trackedBy = currentBranch(codeRoot) ?? 'HEAD';
+    if (codeRoot && rel && !rel.startsWith('..') && codeBranchTracks(codeRoot, rel)) trackedBy = currentBranch(codeRoot) ?? 'HEAD';
   }
   const current = currentSighting(kind ?? 'plain', trackedBy);
   const survey: BoardSurvey = { ...empty, boards: [current] };
 
   // Worktrees of the board branch away from its home.
   survey.strayWorktrees = worktrees
-    .filter((w) => w.branch === branchRef && (!home || real(w.path) !== home))
+    .filter((w) => w.branch === branchRef && (!home || real(w.path) !== home) && real(w.path) !== dir)
     .map((w) => ({ path: w.path, missing: !fs.existsSync(w.path) }));
+  if (onBoardBranch && home && home !== dir) survey.outsideHome = home;
 
   // The lineage: the local branch and the remote's copy.
   const remote = boardRemote(cwd) ?? (git(['remote', 'get-url', 'origin'], cwd).ok ? 'origin' : null);
@@ -420,7 +425,7 @@ export function surveyBoards(dotDir: string, options: SurveyOptions = {}): Board
     if (home && home !== dir && fs.existsSync(path.join(home, 'brainfile.md'))) {
       const folder = readFolder(home);
       const homeKind = boardRepoKind(home);
-      const tracked = trackedByIndex(main.path, '.brainfile');
+      const tracked = codeBranchTracks(main.path);
       const s = sighting(
         {
           kind: 'folder',
@@ -435,7 +440,7 @@ export function surveyBoards(dotDir: string, options: SurveyOptions = {}): Board
       survey.boards.push(s);
       const relation = compareContents(here, folder);
       if (relation !== 'same') survey.conflict = describeConflict(current, s, relation);
-    } else if (home && home === dir && trackedByIndex(main.path, '.brainfile')) {
+    } else if (home && home === dir && codeBranchTracks(main.path)) {
       // The code branch still tracks .brainfile/ under the worktree: a stale
       // copy that rides along with code commits. Reported, never written.
       const contents = readTree(main.path, 'HEAD:.brainfile');

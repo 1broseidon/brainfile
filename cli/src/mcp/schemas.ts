@@ -721,6 +721,7 @@ export const whereOutputSchema = z.object({
     resolve: z.string(),
   }).nullable(),
   strayWorktrees: z.array(z.object({ path: z.string(), missing: z.boolean() })),
+  outsideHome: z.string().nullable(),
   trackedTwice: boardSightingSchema.nullable(),
 });
 

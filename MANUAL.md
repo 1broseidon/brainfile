@@ -875,7 +875,10 @@ $ brainfile lint --check   # non-zero exit for CI
 also checks the graph: a parent that is missing, loops or does not fit the
 type, `decisions:` that name nothing or something other than a decision, and
 a `like:` that names no type. Off-pattern links are warnings, and errors on a
-strict board.
+strict board. It also checks where the board lives: two boards that disagree
+are an error; the board branch checked out away from `.brainfile/`, a checkout
+whose folder is gone (`--fix` forgets it), and a code branch still tracking an
+old copy are warnings.
 
 #### index — The local search index
 
@@ -911,17 +914,21 @@ once a day and never block.
 ```console
 $ brainfile migrate --dir ./old-project
 $ brainfile migrate --to-branch            # move the board onto its own branch
-$ brainfile migrate --to-branch --commit   # ...and commit its removal from the code branch
 $ brainfile migrate --to-plain             # back to a plain directory
 ```
 
-Flags: `--dir`, `--force`, `--logs-to-ledger`, `--to-branch`, `--to-plain`,
-`--commit`. `--to-branch` keeps the board's history when it was committed on
-the code branch (`git subtree split`), imports a gitignored one as a fresh
-branch, and folds a standalone board repository into the surrounding
-repository. Board changes not yet committed come along as one more commit on
-the branch. If any step fails, the migration undoes itself and the repository
-is left as it was. `--to-plain` leaves the branch intact.
+Flags: `--dir`, `--force`, `--logs-to-ledger`, `--to-branch`, `--to-plain`.
+`--to-branch` keeps the board's history when it was committed on the code
+branch (`git subtree split`), imports a gitignored one as a fresh branch, and
+folds a standalone board repository into the surrounding repository. Board
+changes not yet committed come along as one more commit on the branch. If any
+step fails, the migration undoes itself and the repository is left as it was.
+When the code branch tracked the board, one commit on it drops `.brainfile/`
+and adds it to `.gitignore` (anything else you had staged stays staged); push
+it like any commit. Run on a board already on its branch, it makes that commit
+if the code branch still tracks an old copy. If a board already lives on the
+`brainfile` branch, this folder and it are two boards, and `--to-branch` says
+so and points to `merge-boards`. `--to-plain` leaves the branch intact.
 
 #### where — Where the board lives and who has it
 
@@ -1255,8 +1262,13 @@ stops pushing until it is resolved.
 
 `brainfile migrate --to-branch` moves a board that is committed with the code
 onto the branch with its history, or imports a gitignored one as a fresh
-branch. `--commit` also commits the removal from the code branch. `migrate
---to-plain` reverses it. Neither touches any other file in the repository.
+branch, and commits the old copy's removal from the code branch (with
+`.brainfile/` added to `.gitignore`). `migrate --to-plain` reverses it.
+Neither touches any other file in the repository.
+
+The branch has one home, `.brainfile/` in the main worktree. A checkout of it
+anywhere else is reported by `where` and `lint`; one whose folder is gone is
+forgotten when the board is next checked out, or by `lint --fix`.
 
 ## Related boards
 

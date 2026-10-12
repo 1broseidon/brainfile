@@ -25,6 +25,7 @@ export {
   isTrackedBoard,
   findTrackedBoardDir,
   listRemoteBoards,
+  pruneLostBoardCheckouts,
   materializeBoardWorktree,
   ensureExcludeEntry,
   removeExcludeEntry,

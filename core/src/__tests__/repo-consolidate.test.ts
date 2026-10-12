@@ -130,7 +130,7 @@ describe('one board out of two (spec-15 phase 2)', () => {
 
     // main stopped tracking it, in one commit, and ignores it.
     expect(git(['ls-files', '.brainfile'], repo)).toBe('');
-    expect(git(['log', '-1', '--format=%s', 'main'], repo)).toMatch(/stop tracking \.brainfile/);
+    expect(git(['log', '-1', '--format=%s', 'main'], repo)).toBe('chore: move the board to the brainfile branch');
     expect(git(['show', 'main:.gitignore'], repo)).toContain('.brainfile/');
     expect(git(['status', '--porcelain'], repo)).toBe('');
 

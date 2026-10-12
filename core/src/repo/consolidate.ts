@@ -30,7 +30,7 @@ import {
   unmergedFiles,
 } from './boardRepo';
 import { boardRemote, boardRemoteName, ensureBoardAttributes, registerMergeDriver } from './boardSync';
-import { type BoardRelation, compareContents, readFolder, readTree } from './boards';
+import { type BoardRelation, codeBranchTracks, compareContents, readFolder, readTree } from './boards';
 import { mergeBoardDocuments, mergeFields } from './merge';
 
 export const BACKUP_NAMESPACE = `${BOARD_REF_NAMESPACE}/backups`;
@@ -303,8 +303,8 @@ export interface UntrackResult {
  * staged work is left alone and not folded in. Null when the code branch does
  * not track `.brainfile/`, or HEAD is not a branch.
  */
-export function untrackBoardOnCodeBranch(repoRoot: string): UntrackResult | null {
-  if (!git(['ls-files', '--error-unmatch', '--', '.brainfile'], repoRoot).ok) return null;
+export function untrackBoardOnCodeBranch(repoRoot: string, rel = '.brainfile'): UntrackResult | null {
+  if (!codeBranchTracks(repoRoot, rel)) return null;
   const branch = git(['symbolic-ref', '--quiet', '--short', 'HEAD'], repoRoot).stdout;
   const head = resolveCommit(repoRoot, 'HEAD');
   if (!branch || !head) return null;
@@ -314,27 +314,29 @@ export function untrackBoardOnCodeBranch(repoRoot: string): UntrackResult | null
   const env = { GIT_INDEX_FILE: index };
   try {
     must(git(['read-tree', head], repoRoot, env), 'read HEAD');
-    must(git(['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', '.brainfile'], repoRoot, env), 'untrack .brainfile/');
+    must(git(['rm', '-r', '-q', '--cached', '--ignore-unmatch', '--', rel], repoRoot, env), `untrack ${rel}/`);
+    const line = `${rel}/`;
+    const isLine = (l: string) => [line, rel, `/${line}`, `/${rel}`].includes(l.trim());
     const before = git(['show', `${head}:.gitignore`], repoRoot);
     const ignored = before.ok ? `${before.stdout}\n` : '';
-    const listed = ignored.split('\n').some((l) => l.trim() === '.brainfile/' || l.trim() === '.brainfile' || l.trim() === '/.brainfile/');
+    const listed = ignored.split('\n').some(isLine);
     if (!listed) {
-      const content = `${ignored.length > 1 ? ignored : ''}.brainfile/\n`;
+      const content = `${ignored.length > 1 ? ignored : ''}${line}\n`;
       const blob = gitRaw(['hash-object', '-w', '--stdin'], repoRoot, content);
       if (!blob.ok) throw new Error(`write .gitignore: ${blob.stderr}`);
       must(git(['update-index', '--add', '--cacheinfo', `100644,${blob.stdout.toString().trim()},.gitignore`], repoRoot, env), 'stage .gitignore');
     }
     const tree = must(git(['write-tree'], repoRoot, env), 'write the tree');
-    const message = `chore: stop tracking .brainfile/; the board lives on its own branch`;
+    const message = `chore: move the board to the ${boardBranch(repoRoot)} branch`;
     const commit = must(git([...identity(repoRoot), 'commit-tree', tree, '-p', head, '-m', message], repoRoot), 'commit');
     must(git(['update-ref', '-m', message, `refs/heads/${branch}`, commit, head], repoRoot), `move ${branch}`);
     // Bring the real index and the working .gitignore along, leaving anything else as it was.
-    git(['reset', '-q', '--', '.brainfile', '.gitignore'], repoRoot);
+    git(['reset', '-q', '--', rel, '.gitignore'], repoRoot);
     if (!listed) {
       const file = path.join(repoRoot, '.gitignore');
       const working = fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : '';
-      if (!working.split(/\r?\n/).some((l) => l.trim() === '.brainfile/' || l.trim() === '.brainfile')) {
-        fs.writeFileSync(file, `${working}${working.length > 0 && !working.endsWith('\n') ? '\n' : ''}.brainfile/\n`, 'utf-8');
+      if (!working.split(/\r?\n/).some(isLine)) {
+        fs.writeFileSync(file, `${working}${working.length > 0 && !working.endsWith('\n') ? '\n' : ''}${line}\n`, 'utf-8');
       }
     }
     return { branch, commit };
@@ -419,7 +421,7 @@ function settle(dotDir: string, makePlan: (ctx: RepoContext) => Plan): SettleRes
   const parents = candidates.filter((p) => !candidates.some((q) => q !== p && isAncestor(ctx.cwd, p, q)));
   const sameTree = (c: string) => git(['rev-parse', `${c}^{tree}`], ctx.cwd).stdout === plan.tree;
   const nothingToDo = !!homeCheckout && parents.length === 1 && parents[0] === localTip && sameTree(localTip!) && ctx.checkouts.length === 1;
-  const untrackNeeded = !ctx.main.bare && git(['ls-files', '--error-unmatch', '--', '.brainfile'], ctx.main.path).ok;
+  const untrackNeeded = !ctx.main.bare && codeBranchTracks(ctx.main.path);
   if (nothingToDo && !untrackNeeded) {
     return { commit: localTip!, dotDir: ctx.home, backups: [], removedCheckouts: [], untracked: null, unchanged: true };
   }

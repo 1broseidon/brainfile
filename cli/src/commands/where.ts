@@ -54,8 +54,10 @@ export interface WhereReport {
   boards: BoardSighting[];
   /** Set when another copy disagrees with this one; writes refuse until it is settled. */
   conflict: BoardConflict | null;
-  /** Checkouts of the board branch away from `.brainfile/`. */
+  /** Other checkouts of the board branch away from `.brainfile/`. */
   strayWorktrees: BoardSurvey['strayWorktrees'];
+  /** Where the board belongs, when this checkout of it is somewhere else. */
+  outsideHome: string | null;
   /** The code branch's own copy of `.brainfile/`, when it still tracks one. */
   trackedTwice: BoardSighting | null;
 }
@@ -93,6 +95,7 @@ export function whereReport(dotDir: string, options: { fetch?: boolean } = {}): 
     boards: survey.boards,
     conflict: survey.conflict,
     strayWorktrees: survey.strayWorktrees,
+    outsideHome: survey.outsideHome,
     trackedTwice: survey.trackedTwice,
   };
 }
@@ -117,13 +120,17 @@ function printBoards(report: WhereReport, logger: Logger): void {
     more(boardConflictRelation(conflict));
     more(`Nothing writes until you choose: ${chalk.cyan(conflict.resolve)}`);
   }
+  if (report.outsideHome) {
+    logger.log(`${label('Also')}  this checkout of the board is outside ${report.outsideHome}, where it belongs`);
+    more(chalk.gray(`Move it home: brainfile adopt refs/heads/${report.branch ?? 'brainfile'}`));
+  }
   for (const stray of report.strayWorktrees) {
     logger.log(
       `${label('Also')}  ${stray.missing
         ? `a checkout of the board branch at ${stray.path} whose folder is gone`
         : `the board branch is also checked out at ${stray.path}`}`
     );
-    more(chalk.gray(stray.missing ? 'Drop it: git worktree prune' : 'It belongs at .brainfile/ only; finish there, then remove this checkout.'));
+    more(chalk.gray(stray.missing ? 'Forget it: brainfile lint --fix' : `It belongs at .brainfile/ only; finish there, then: git worktree remove ${stray.path}`));
   }
   if (report.trackedTwice) {
     const copy = report.trackedTwice;

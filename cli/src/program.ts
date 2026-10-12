@@ -182,9 +182,9 @@ Brainfile file resolution (when you don't pass --file):
     .option('--force', 'Overwrite existing migration outputs (task files/backups)')
     .option('--v2', 'Deprecated alias; migration now targets v2 by default')
     .option('--logs-to-ledger', 'Backfill logs/*.md into ledger.jsonl, keeping the markdown archives (resolves ID conflicts with board)')
-    .option('--to-branch', 'Move the board onto its own git branch (or repository outside a repo); history is kept')
+    .option('--to-branch', 'Move the board onto its own git branch (or repository outside a repo); history is kept, and a code branch that tracked it drops it in one commit')
     .option('--to-plain', 'Turn a tracked board back into a plain directory (the branch is left intact)')
-    .option('--commit', 'With --to-branch on a committed board: also commit its removal from the code branch')
+    .addOption(new Option('--commit', 'Accepted for compatibility: --to-branch now always commits the board\'s removal from the code branch').hideHelp())
     .action(migrateCommand);
 
   const listCmd = program

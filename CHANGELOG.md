@@ -14,6 +14,10 @@ parity (spec-13): everything the CLI does to a board has an MCP tool, and
 columns get a command of their own. The TUI catches up with decisions
 (task-19): a view of their own, their detail, and the work resting on them.
 
+### Changed (spec-15)
+- `migrate --to-branch` always commits the old copy's removal from the code
+  branch; `--commit` is accepted and hidden.
+
 ### Added (spec-15, board integrity)
 - Brainfile looks for every board a repository has: the `.brainfile/` folder
   in the checkout (tracked by the code branch or not), the `brainfile` branch,
@@ -34,6 +38,16 @@ columns get a command of their own. The TUI catches up with decisions
   has everything. Both leave one board on its branch at `.brainfile/`,
   descending from the remote's copy, with the code branch no longer tracking
   `.brainfile/` (one commit).
+- `migrate --to-branch` finishes the move: a code branch that tracked the
+  board drops `.brainfile/` and ignores it in one commit, built so other staged
+  work stays staged; on a board already on its branch it makes that commit if
+  the code branch still tracks an old copy; and when a board already lives on
+  the branch it says the two are two boards and points to `merge-boards`
+  instead of failing on the checkout.
+- One home for the board branch: `where` and `lint` report a checkout of it
+  outside `.brainfile/`; a checkout whose folder is gone is forgotten before
+  the board is checked out (it used to block that) or by `lint --fix`. `lint`
+  reports two boards as an error.
 - Backups: anything that replaces a board saves it first as
   `refs/brainfile/backups/<UTC time>-folder|branch`. `brainfile backups` lists
   them; `brainfile backups restore <name>` puts one back.
