@@ -11,6 +11,9 @@ tags:
 assignee: claude
 parentId: spec-15
 createdAt: "2026-10-12T20:39:18.204Z"
+decisions:
+  - decision-1
+updatedAt: "2026-10-12T20:44:49.183Z"
 ---
 
 ## Description
