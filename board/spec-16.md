@@ -33,7 +33,10 @@ subtasks:
   - id: spec-16-6
     title: "Phase 2: pause, resume, stop the queue from chat, dock and runner"
     completed: false
-updatedAt: "2026-10-12T23:16:20.532Z"
+  - id: spec-16-7
+    title: "Phase 3: brainfile dispatch / dispatch status (CLI) and MCP dispatch, dispatch_status"
+    completed: false
+updatedAt: "2026-10-12T23:16:21.027Z"
 ---
 
 ## Description
