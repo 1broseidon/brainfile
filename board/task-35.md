@@ -1,8 +1,8 @@
 ---
 id: task-35
 title: "Discuss: talk a task over with an agent, and update its spec, before handing it off"
-column: in-progress
-position: 2
+column: review
+position: 1
 description: |-
   A "Discuss" key next to the hand-off key (HandTo) in the task detail. It opens a conversation with an agent about this task, with the task loaded as context, before any work is dispatched.
 
@@ -43,7 +43,7 @@ subtasks:
     completed: true
 createdAt: "2026-10-12T22:24:00.756Z"
 assignee: claude
-updatedAt: "2026-10-12T23:45:40.223Z"
+updatedAt: "2026-10-12T23:45:43.484Z"
 decisions:
   - decision-3
 ---
