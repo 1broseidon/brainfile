@@ -12,16 +12,16 @@ relatedFiles:
 subtasks:
   - id: task-25-1
     title: Persist bounds and maximized/fullscreen state on move/resize/close
-    completed: false
+    completed: true
   - id: task-25-2
     title: Restore saved bounds when creating the BrowserWindow
-    completed: false
+    completed: true
   - id: task-25-3
     title: Fall back to the centered default when the saved bounds are off every display
-    completed: false
+    completed: true
 createdAt: "2026-10-12T19:06:07.091Z"
 assignee: cursor
-updatedAt: "2026-10-12T22:02:33.473Z"
+updatedAt: "2026-10-12T22:05:14.436Z"
 ---
 
 ## Description
