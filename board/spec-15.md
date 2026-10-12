@@ -31,7 +31,10 @@ subtasks:
   - id: spec-15-6
     title: migrate --to-branch untracks .brainfile/ on the code branch and ignores it in one commit
     completed: false
-updatedAt: "2026-10-12T19:03:43.805Z"
+  - id: spec-15-7
+    title: "Desktop: the two-boards line with Use theirs / Merge / Keep, and health covering ahead/behind, stray worktree, tracked-twice"
+    completed: false
+updatedAt: "2026-10-12T19:03:44.112Z"
 ---
 
 ## Description
