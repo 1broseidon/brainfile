@@ -7,7 +7,10 @@ import * as path from 'node:path';
 import { plain, lineWith } from './fixture-board.js';
 import { mount, ENTER, ESC, SPACE, WIDE, NARROW, type Harness } from './helpers.js';
 
-/** Render order of the fixture's `To Do` column (unchanged by the detail-v2 fixture additions). */
+/**
+ * Render order of the fixture's `To Do` column (unchanged by the detail-v2
+ * fixture additions). adr-1 is not in it: a decision has no column (task-19).
+ */
 const TODO_ROWS = [
   'epic-1',
   'task-1',
@@ -17,7 +20,6 @@ const TODO_ROWS = [
   'task-8',
   'task-9',
   'spec-4',
-  'adr-1',
   'plan-1',
   'task-11',
 ];
@@ -160,7 +162,7 @@ describe('detail v2 — sections render only when non-empty', () => {
   it('keeps the list rendered on the left', () => {
     const frame = plain(h.frame());
     expect(frame).toContain('epic-1');
-    expect(frame).toContain('adr-1');
+    expect(frame).toContain('plan-1');
   });
 
   it('renders the breadcrumb as just the id when there is no parent', () => {
@@ -225,13 +227,13 @@ describe('detail v2 — narrow (fullscreen replace)', () => {
     expect(detail).toContain('task-8');
     expect(detail).toContain('subtasks');
     // the list is gone — no other document is on screen
-    expect(detail).not.toContain('adr-1');
+    expect(detail).not.toContain('plan-1');
     expect(detail).not.toContain('epic-1');
     expect(detail).toContain('esc back');
 
     await h.press(ESC);
     const list = plain(h.frame());
-    expect(list).toContain('adr-1');
+    expect(list).toContain('plan-1');
     expect(list).toContain('epic-1');
     expect(list).toContain('↵ detail');
   });

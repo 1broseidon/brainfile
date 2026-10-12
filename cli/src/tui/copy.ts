@@ -37,6 +37,10 @@ export const STATUS = {
   archived: (id: string) => `Archived ${id}`,
   archiving: 'Archiving…',
   archiveFailed: 'Could not archive',
+  decisionsReadOnly: 'Decisions change with brainfile decide, supersede or retire',
+  decisionNoColumn: 'Decisions have no column',
+  cannotOpen: (id: string, why: string) => `${id} is ${why}`,
+  noDecisionHistory: 'No retired decisions',
 } as const;
 
 export const EMPTY = {
@@ -45,6 +49,7 @@ export const EMPTY = {
   emptyColumn: 'No documents in this column · a add',
   noType: (type: string) => `No ${type} documents`,
   noDocuments: 'No documents',
+  noDecisions: 'No decisions yet · brainfile decide records one',
 } as const;
 
 export const CHROME = {

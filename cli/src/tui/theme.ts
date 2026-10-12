@@ -119,6 +119,14 @@ export const GLYPHS = {
   parentCollapsed: '▸',
   /** Detail body scroll indicator (§B2), e.g. `↕ 2/9`. */
   scroll: '↕',
+  /**
+   * A decision that no longer stands (superseded, rejected, stale): the
+   * hollow of the decision glyph `●`, as the desktop draws it (task-19).
+   */
+  retiredDecision: '○',
+  /** Fold glyphs for the decisions view's history heading. */
+  foldOpen: '▾',
+  foldClosed: '▸',
 } as const;
 
 export type ContractState =

@@ -11,7 +11,28 @@ search over a local index, a brief that starts every session, and `check`
 before acting. Default types and the graph (spec-12): every board has epics,
 specs, plans, tasks and decisions, and knows how they fit together. MCP
 parity (spec-13): everything the CLI does to a board has an MCP tool, and
-columns get a command of their own.
+columns get a command of their own. The TUI catches up with decisions
+(task-19): a view of their own, their detail, and the work resting on them.
+
+### Added (task-19)
+- The TUI has a decisions view, on `D` and at the type cycle's `decision`
+  stop: standing decisions grouped by claim-key family, history (superseded,
+  rejected, stale) folded below and opened with `L`. Rows lead with `●`
+  (`○` once retired) and say only a kind other than `decision`, `proposed`,
+  `review` past `validUntil`, or where a retired one went.
+- A decision's detail in the TUI: claim key, kind, stance and subject, holds
+  while, recheck, valid until (`review` once past), replaces and replaced by,
+  and the open work resting on it, each opened from the detail cursor.
+- Work's detail in the TUI lists the decisions it rests on, a retired one
+  marked `superseded → decision-2`; its row says `decision changed`.
+
+### Changed (task-19)
+- The TUI no longer puts decisions in a column (with none they landed in
+  `todo`) or retired decisions in the done view. In the decisions view the
+  board's mutating keys say how decisions change (`decide`, `supersede`,
+  `retire`) instead of acting; `e` still edits.
+- The TUI's detail cursor is drawn as a bar as well as reverse video, so it
+  shows under `NO_COLOR`; archived documents show their description.
 
 ### Added (spec-13)
 - `brainfile columns`: list (the default, with task counts and `--json`),
