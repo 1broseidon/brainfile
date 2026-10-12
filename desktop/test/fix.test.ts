@@ -101,6 +101,9 @@ test('old copy still in main: backs up both, untracks it in one commit, leaves s
   branchBoard(NEW, home);
   fs.writeFileSync(path.join(repo, 'work.txt'), 'staged\n');
   git(['add', 'work.txt'], repo);
+  // Somewhere to push main to, so the result says to.
+  git(['init', '-q', '--bare', path.join(base, 'remote.git')], base);
+  git(['remote', 'add', 'origin', path.join(base, 'remote.git')], repo);
   const before = git(['rev-parse', 'main'], repo);
   assert.ok(surveyBoards(home).trackedTwice);
 
@@ -151,7 +154,8 @@ test("two copies, the branch has everything (runprism.ai): backs up both, uses i
   assert.equal(planFix(home, path.join(stray, 'board')), null);
 
   const applied = applyFix(home, { expected: plan!.words, project: repo });
-  assert.equal(applied.message, 'Using the branch. Push main to share it.');
+  // No remote: nowhere to push main, so nothing about pushing is said.
+  assert.equal(applied.message, 'Using the branch.');
   // Ours first (the folder and the branch with its checkout), then adopt's own.
   assert.ok(applied.backups.length >= 2);
   assert.match(applied.backups[0], /-folder$/);

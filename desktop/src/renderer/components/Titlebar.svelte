@@ -21,7 +21,7 @@
     const boards = unsentBoards;
     if (boards.length === 1) return `${projectName(boards[0].id)}: ${healthMeta(boards[0].id)}`;
     if (app.health.warn) return `${boards.length} boards need a look`;
-    return `Changes not shared yet on ${boards.length} boards`;
+    return `${boards.length} boards to sync`;
   });
 
   /** A board's state in a few words for the health list, worst first. */
@@ -112,7 +112,7 @@
       class="feed no-drag"
       class:lit={app.unseen > 0}
       class:open={opened === 'feed'}
-      use:tip={app.unseen > 0 ? `${app.unseen} ${app.unseen === 1 ? 'change' : 'changes'} from agents and other machines` : 'Changes from agents and other machines'}
+      use:tip={app.unseen > 0 ? `${app.unseen} outside ${app.unseen === 1 ? 'change' : 'changes'}` : 'Outside changes'}
       onclick={() => toggle('feed')}
     >
       <Icon name="bolt" size={13} />
@@ -163,27 +163,30 @@
           {:else if fix?.stage === 'done'}
             {#if fix.undo}
               <div class="keys">
-                <button class="key" use:tip={'Restore the backup'} onclick={() => app.undoFix(project.id)}>Undo</button>
+                <button class="key" use:tip={'Put it back'} onclick={() => app.undoFix(project.id)}>Undo</button>
               </div>
             {/if}
           {:else if fix?.stage === 'running'}
             <!-- Nothing to press while it runs. -->
           {:else if problem}
-            <div class="keys">
-              {#if board?.integrity.fix}
-                <button class="key" use:tip={'Backs up first'} onclick={() => app.proposeFix(project.id)}>Fix</button>
-              {/if}
-              {#if app.agentFor(project.id)}
-                <button
-                  class="key"
-                  use:tip={askTip(project.id)}
-                  onclick={() => {
-                    opened = null;
-                    void app.askAboutBoard(project.id);
-                  }}>Ask agent</button
-                >
-              {/if}
-            </div>
+            <!-- No Fix and no agent to ask: the sentence stands alone. -->
+            {#if board?.integrity.fix || app.agentFor(project.id)}
+              <div class="keys">
+                {#if board?.integrity.fix}
+                  <button class="key" use:tip={'Backs up first'} onclick={() => app.proposeFix(project.id)}>Fix</button>
+                {/if}
+                {#if app.agentFor(project.id)}
+                  <button
+                    class="key"
+                    use:tip={askTip(project.id)}
+                    onclick={() => {
+                      opened = null;
+                      void app.askAboutBoard(project.id);
+                    }}>Ask agent</button
+                  >
+                {/if}
+              </div>
+            {/if}
           {:else if canSync(project.id)}
             <div class="keys" class:side={!line}>
               <button class="key" onclick={() => syncNow(project.id)}>Sync now</button>

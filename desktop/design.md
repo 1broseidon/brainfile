@@ -205,11 +205,13 @@ off course. These rules win over every other section:
   which is almost always: autosync sends a change in seconds. The strip's
   sync key (an icon, no words) appears only when a board needs a look or
   changes have waited longer than a minute to be sent or brought in; its
-  tip says what in a person's words ("runprism.ai: old copy still in
-  main", "3 changes not shared yet"), its list names each board with Sync
-  now, and it takes the warn colour only for a real problem. The feed is
-  the bolt and a count (`⚡ 10`), its tip "changes from agents and other
-  machines". At rest the corner is empty but for the bolt.
+  tip says what in a person's words ("runprism.ai: old copy in main",
+  "runprism.ai: 3 unsent", "2 boards to sync"), its list names each board
+  with Sync now, and it takes the warn colour only for a real problem. The
+  feed is the bolt and a count (`⚡ 10`), its tip "outside changes". At
+  rest the corner is empty but for the bolt.
+- **Tips are two or three words, five at most.** Anything longer is an
+  explanation, and explanations live in the list or the line, never the tip.
 - **No big buttons.** New task is a muted + key in the board's band (C);
   there is no filled primary button at rest. The accent is left for the
   tick of done.
@@ -322,7 +324,8 @@ opens.
   and nothing else runs if one fails; then core's own step: the code
   branch's old copy untracked in one commit (as `migrate --to-branch`), the
   copy that has everything adopted, a lost checkout forgotten. The line then
-  says what was done ("Untracked main's copy. Push main to share it.") with
+  says what was done ("Untracked main's copy.", and "Push main to share
+  it." when there is a remote to push to) with
   Undo for ten seconds, and the board republishes without the problem. An
   unfinished merge, two copies that each have changes, a board that is its
   own repository and a checkout with work in it get no Fix. **Ask agent**
@@ -330,7 +333,7 @@ opens.
   agent what Brainfile found (every copy, its count and last change) with
   one instruction, look, explain the difference in a few lines, and ask how
   to settle it, changing nothing until the person chooses. It is an ordinary
-  chat turn.
+  chat turn, titled by its first line ("Board problem: old copy in main.").
 
 ## Dispatch
 

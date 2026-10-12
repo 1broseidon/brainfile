@@ -80,7 +80,9 @@ test("what was found is said as plain lines, every copy with its count, for an a
   ]);
 
   const brief = problemBrief('runprism.ai', { ...view, fix: { kind: 'untrack', words: "Back up both, then untrack main's copy" } });
-  assert.match(brief, /^Brainfile says the board for runprism\.ai has a problem: old copy in main\.\n/);
+  // The first line is the chat's title: short.
+  assert.match(brief, /^Board problem: old copy in main\.\n/);
+  assert.match(brief, /the board for runprism\.ai lives\. An old copy of \.brainfile\/ \(7 docs\) is still tracked on main\.\n/);
   assert.match(brief, /\n- The copy on main: 7 docs/);
   assert.match(brief, /Brainfile's own safe fix would: Back up both, then untrack main's copy\./);
   assert.match(brief, /explain the difference in a few lines, and ask me how to settle it\./);

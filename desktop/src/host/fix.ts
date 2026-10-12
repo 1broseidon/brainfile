@@ -98,7 +98,7 @@ export interface UndoRecord {
 }
 
 export interface Applied {
-  /** `Untracked main's copy. Push main to share it.` */
+  /** `Untracked main's copy. Push main to share it.` (the push only when there is a remote) */
   message: string;
   backups: string[];
   undo: UndoRecord | null;
@@ -126,6 +126,11 @@ function must(r: ReturnType<typeof git>, what: string): string {
 function commitOf(cwd: string, ref: string): string | null {
   const r = git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], cwd);
   return r.ok && r.stdout ? r.stdout : null;
+}
+
+/** ` Push main to share it.`, when there is somewhere to push it; a repository on this Mac only has nowhere. */
+function pushHint(root: string, branch: string): string {
+  return git(['remote'], root).stdout ? ` Push ${branch} to share it.` : '';
 }
 
 function readOrNull(file: string): string | null {
@@ -312,7 +317,7 @@ export function applyFix(dotDir: string, options: { expected?: string; project?:
     const untracked = untrackBoardOnCodeBranch(repo.root);
     if (!untracked) throw new Error(`${branchHere || 'The code branch'} no longer tracks .brainfile/. Nothing else was changed.`);
     return {
-      message: `Untracked ${untracked.branch}'s copy. Push ${untracked.branch} to share it.`,
+      message: `Untracked ${untracked.branch}'s copy.${pushHint(repo.root, untracked.branch)}`,
       backups,
       undo: {
         root: repo.root,
@@ -345,7 +350,7 @@ export function applyFix(dotDir: string, options: { expected?: string; project?:
         : result.removedCheckouts.length === 1
           ? 'Closed the extra checkout.'
           : `Closed ${result.removedCheckouts.length} extra checkouts.`;
-  const message = result.untracked ? `${done} Push ${result.untracked.branch} to share it.` : done;
+  const message = result.untracked ? `${done}${pushHint(repo.root, result.untracked.branch)}` : done;
   return {
     message,
     backups: [...backups, ...result.backups],

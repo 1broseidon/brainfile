@@ -119,8 +119,9 @@
     field?.focus();
   }
 
+  /** A chat is titled by the first line of its first question. */
   function titleOf(lines: { who: string; text: string }[]): string {
-    return lines.find((l) => l.who === 'you')?.text ?? 'Untitled';
+    return lines.find((l) => l.who === 'you')?.text.split('\n')[0] ?? 'Untitled';
   }
   const live = $derived(app.liveAsk);
   /** The IDs a reply can link to: everything the board in front can open. */

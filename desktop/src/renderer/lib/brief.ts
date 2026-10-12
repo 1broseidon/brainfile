@@ -1,15 +1,17 @@
 /**
  * The first message of a chat that hands a board problem to an agent
  * (task-34): what Brainfile found, in plain text, and the one instruction
- * that matters, to ask before changing anything. Pure, so `node --test`
- * covers it.
+ * that matters, to ask before changing anything. Its first line is short,
+ * since it is the chat's title. Pure, so `node --test` covers it.
  */
 import type { IntegrityView } from '../../shared/api';
 
 export function problemBrief(projectName: string, integrity: IntegrityView): string {
   const found = integrity.found.length ? integrity.found : [integrity.line ?? integrity.short ?? 'Something is off with where this board lives.'];
   const lines = [
-    `Brainfile says the board for ${projectName} has a problem: ${integrity.short ?? 'see below'}.`,
+    `Board problem: ${integrity.short ?? 'where it lives'}.`,
+    '',
+    `Brainfile found a problem with where the board for ${projectName} lives.${integrity.line ? ` ${integrity.line}` : ''}`,
     '',
     'What Brainfile found (as brainfile where reports it):',
     ...found.map((line) => `- ${line}`),
