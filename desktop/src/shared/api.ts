@@ -257,8 +257,12 @@ export interface AgentRun {
   agentId: AgentId;
   kind: 'dispatch' | 'ask';
   taskId?: string;
+  /** The model asked for, when one was; unset is the agent's default. */
+  model?: string;
   /** The chat thread an ask belongs to. */
   threadId?: string;
+  /** A hand-off the chat made: the chat turn (an ask's run) that asked for it (spec-16). */
+  from?: string;
   state: RunState;
   /** What kind of work, one word: reading, editing, running, searching, thinking. */
   activity: string;
@@ -268,6 +272,19 @@ export interface AgentRun {
   endedAt?: number;
   /** What the agent did on the way to its reply, in order: tools it ran and what it said between them. */
   steps?: RunStep[];
+}
+
+/**
+ * Who asked for a hand-off, written on the task as `dispatch:` in its
+ * frontmatter (spec-16), beside the assignee. Core keeps it as an unknown key;
+ * queues and runner claims come later.
+ */
+export interface DispatchRecord {
+  agent: AgentId;
+  model?: string;
+  by: 'chat';
+  /** ISO 8601. */
+  at: string;
 }
 
 /** One step of a turn: a tool the agent ran, or a line it wrote before its answer. */
@@ -404,6 +421,7 @@ export interface Api {
   dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>>;
   /** One turn in a chat thread; earlier lines come along in case the agent's session has gone. */
   /** `context` names what the person has open (a task's ID), so "this" means it. */
+  /** `models` is the person's model for each agent on this board: what the chat's hand-offs use (spec-16). */
   ask(
     projectId: string,
     agentId: AgentId,
@@ -411,7 +429,8 @@ export interface Api {
     threadId: string,
     model?: string,
     earlier?: ChatTurn[],
-    context?: string[]
+    context?: string[],
+    models?: Partial<Record<AgentId, string>>
   ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
   /** The hand-off's branch and what is on it, or null when the task has no worktree. */
@@ -460,8 +479,16 @@ export const AGENT_METHODS = [
   'answerPermission',
 ] as const;
 export type AgentMethod = (typeof AGENT_METHODS)[number];
+/** From main to the agents process: a request, or the host's answer to one the agents process made. */
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
-export type AgentMessage = { kind: 'reply'; id: number; result: unknown } | { kind: 'event'; event: AgentEvent };
+export type HostReply = { kind: 'host-reply'; id: number; result: unknown };
+/** The board writes the agents process may ask main to pass to the host. */
+export const AGENT_HOST_METHODS = ['recordDispatch'] as const;
+export type AgentHostMethod = (typeof AGENT_HOST_METHODS)[number];
+export type AgentMessage =
+  | { kind: 'reply'; id: number; result: unknown }
+  | { kind: 'event'; event: AgentEvent }
+  | { kind: 'host'; id: number; method: AgentHostMethod; args: unknown[] };
 
 /** Methods main forwards to the board host rather than answering itself. */
 export const HOST_METHODS = [
@@ -487,7 +514,7 @@ export const HOST_METHODS = [
 export type HostMethod = (typeof HOST_METHODS)[number];
 
 /** Messages between main and the board host (a utility process). */
-export type HostRequest = { id: number; method: HostMethod | 'locate'; args: unknown[] };
+export type HostRequest = { id: number; method: HostMethod | AgentHostMethod | 'locate'; args: unknown[] };
 export type HostMessage =
   | { kind: 'reply'; id: number; result: unknown }
   | { kind: 'board'; snapshot: BoardSnapshot };

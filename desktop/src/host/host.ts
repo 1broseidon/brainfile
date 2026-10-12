@@ -26,9 +26,11 @@ import {
   moveTaskFileToColumn,
   patchTaskFile,
   readBoardConfig,
+  readTaskFile,
   readTasksDir,
   resolveDocType,
   toggleSubtasksInFile,
+  writeTaskFile,
   type DocGraph,
   type Task,
   type TypesConfig,
@@ -63,6 +65,7 @@ import type {
   BoardSnapshot,
   DecisionView,
   DependencyView,
+  DispatchRecord,
   FixPlan,
   FixResult,
   HostMessage,
@@ -557,6 +560,25 @@ function noteTask(projectId: string, taskId: string, text: string): Result {
   );
 }
 
+/**
+ * A hand-off the chat asked for (spec-16): the agent becomes the assignee, as
+ * Hand to… makes it, and `dispatch:` says who asked, with what and when. Core
+ * keeps the key as it keeps any it does not know; it commits like any change.
+ */
+function recordDispatch(projectId: string, taskId: string, record: DispatchRecord): Result {
+  return mutate(
+    projectId,
+    () => `dispatch ${taskId}: ${record.agent} (asked by ${record.by})`,
+    (board) => {
+      const file = taskPath(board, taskId);
+      const doc = readTaskFile(file);
+      if (!doc) throw new Error(`Could not read ${taskId}`);
+      const dispatch: DispatchRecord = { agent: record.agent, ...(record.model ? { model: record.model } : {}), by: record.by, at: record.at };
+      writeTaskFile(file, { ...doc.task, assignee: record.agent, dispatch, updatedAt: new Date().toISOString() }, doc.body);
+    }
+  );
+}
+
 // ── Sync ────────────────────────────────────────────────────────────────────
 
 async function runSync(board: OpenBoard, work: () => ReturnType<typeof syncBoard> | null): Promise<SyncView> {
@@ -739,6 +761,7 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   deleteTask,
   restoreTask,
   noteTask,
+  recordDispatch,
   syncNow,
   settleBoards,
   planFix,

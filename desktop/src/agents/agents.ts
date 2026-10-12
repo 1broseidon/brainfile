@@ -8,6 +8,8 @@
  * (`brainfile mcp`), so it reads and changes the board through the same tools
  * as the CLI; what it changes reaches the window as ordinary board changes.
  * A hand-off gets its own worktree and branch instead (worktree.ts, spec-14).
+ * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
+ * and `stop`, so a chat can hand work off the way Hand to… does.
  */
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
@@ -18,8 +20,10 @@ import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
 import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
+import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import type {
   AgentEvent,
+  AgentHostMethod,
   AgentId,
   AgentInfo,
   AgentMessage,
@@ -28,7 +32,9 @@ import type {
   AgentRequest,
   AgentRun,
   ChatTurn,
+  DispatchRecord,
   DispatchSettings,
+  HostReply,
   ModelOption,
   PermissionAsk,
   RunStep,
@@ -382,6 +388,8 @@ interface Session {
   /** The agent's permission modes, and the one the session is in. */
   modes: ReturnType<typeof modesOf>;
   mode: string | null;
+  /** A chat session's right to the desk; null for a hand-off or a probe. */
+  deskToken: string | null;
 }
 
 const sessions = new Map<string, Session>();
@@ -441,13 +449,20 @@ function brainfileMcp(): acp.McpServer[] {
   return node ? [{ name: 'brainfile', command: node, args: [cli, 'mcp'], env }] : [{ name: 'brainfile', command: bin, args: ['mcp'], env }];
 }
 
-/** `at` is where the agent works when not the repository itself: a hand-off's worktree. */
-async function open(projectId: string, agentId: AgentId, key: string, model?: string, board = true, at?: string): Promise<Session> {
+/**
+ * `at` is where the agent works when not the repository itself: a hand-off's
+ * worktree. `withDesk` gives a chat session the desk's tools besides the board's.
+ */
+async function open(projectId: string, agentId: AgentId, key: string, model?: string, board = true, at?: string, withDesk = false): Promise<Session> {
   const known = KNOWN.find((k) => k.id === agentId);
   if (!known) throw new Error(`Unknown agent ${agentId}`);
   if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
   const cwd = at ?? (board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId);
-  const launch = await known.launch();
+  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, models: {}, key }) : null;
+  const launch = await known.launch().catch((err) => {
+    if (deskToken) desk.revoke(deskToken);
+    throw err;
+  });
   // The real node first on PATH, so nothing an agent starts finds a shim instead.
   const node = realNode();
   const env = node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
@@ -458,6 +473,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   const why = () => (lastLine(stderr) ? `: ${lastLine(stderr)}` : '');
   child.on('error', (err) => {
     sessions.delete(key);
+    if (deskToken) desk.revoke(deskToken);
     if (session.run) update(session.run, { state: 'failed', error: `${known.name} could not start: ${err.message}`, endedAt: Date.now() });
   });
 
@@ -476,6 +492,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     idle: null,
     modes: null,
     mode: null,
+    deskToken,
   };
   const stream = acp.ndJsonStream(Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>);
   session.connection = new acp.ClientSideConnection(
@@ -503,6 +520,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   );
   child.on('exit', () => {
     sessions.delete(key);
+    if (deskToken) desk.revoke(deskToken);
     if (session.run && (session.run.state === 'working' || session.run.state === 'starting' || session.run.state === 'waiting')) {
       update(session.run, { state: 'failed', error: `${known.name} stopped${why()}`, endedAt: Date.now() });
     }
@@ -514,7 +532,8 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     child.kill();
     throw new Error(`${known.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
   }
-  const created = await session.connection.newSession({ cwd, mcpServers: board ? brainfileMcp() : [] });
+  const mcpServers = board ? [...brainfileMcp(), ...(deskToken ? [deskMcp(deskToken, projectId)] : [])] : [];
+  const created = await session.connection.newSession({ cwd, mcpServers });
   session.sessionId = created.sessionId;
   const models = modelOption(created.configOptions);
   session.modes = modesOf(created);
@@ -555,12 +574,15 @@ async function applyMode(session: Session): Promise<void> {
 
 /** Brainfile's own board tools: `brainfile_list_tasks`, `mcp__brainfile__task_add`, `mcp.brainfile.list_tasks`. */
 const BOARD_TOOL = /^(mcp(__|\.))?brainfile[_.]/i;
+/** The desk's tools (spec-16): `mcp__desk__dispatch`, `desk.runs`, `mcp.desk.stop`. */
+const DESK_TOOL = /^(mcp(__|\.))?desk(__|[_./])(dispatch|runs|stop)\b/i;
 
 async function requestPermission(session: Session, params: acp.RequestPermissionRequest): Promise<acp.RequestPermissionResponse> {
   const allowOnce = params.options.find((o) => o.kind === 'allow_once') ?? params.options.find((o) => o.kind.startsWith('allow'));
   // The dispatcher's own board tools are not asked about: every change they
   // make is a commit on the board, and the board is what it was asked to manage.
-  const boardTool = BOARD_TOOL.test(params.toolCall.title ?? '');
+  // The desk's are the app's own too: a hand-off asks in its pane before it acts.
+  const boardTool = BOARD_TOOL.test(params.toolCall.title ?? '') || DESK_TOOL.test(params.toolCall.title ?? '');
   if ((boardTool || policyFor(session.projectId) !== 'ask') && allowOnce) {
     return { outcome: { outcome: 'selected', optionId: allowOnce.optionId } };
   }
@@ -591,6 +613,7 @@ function answerPermission(askId: string, optionId: string | null): void {
 
 function close(session: Session): void {
   if (session.idle) clearTimeout(session.idle);
+  if (session.deskToken) desk.revoke(session.deskToken);
   sessions.delete(session.key);
   session.child.kill();
 }
@@ -654,8 +677,19 @@ async function turn(session: Session, run: AgentRun, prompt: string): Promise<vo
   }
 }
 
-function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], taskId?: string): AgentRun {
-  const run: AgentRun = { id: `run-${nextId++}`, projectId, agentId, kind, taskId, state: 'starting', activity: 'starting', startedAt: Date.now() };
+function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], taskId?: string, extra: Pick<AgentRun, 'model' | 'from'> = {}): AgentRun {
+  const run: AgentRun = {
+    id: `run-${nextId++}`,
+    projectId,
+    agentId,
+    kind,
+    taskId,
+    ...(extra.model ? { model: extra.model } : {}),
+    ...(extra.from ? { from: extra.from } : {}),
+    state: 'starting',
+    activity: 'starting',
+    startedAt: Date.now(),
+  };
   runs.set(run.id, run);
   emit({ kind: 'run', run: { ...run } });
   return run;
@@ -739,7 +773,17 @@ function brief(projectId: string, taskId: string, worktree: Worktree | null = nu
   ].join('');
 }
 
-async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>> {
+/**
+ * A hand-off: its worktree, its brief, and the agent started on it. Hand to…
+ * and the chat's `dispatch` both come here; `from` is the chat turn that asked.
+ */
+function startDispatch(
+  projectId: string,
+  taskId: string,
+  agentId: AgentId,
+  model?: string,
+  from?: string
+): Result<{ run: AgentRun; worktree: Worktree | null }> {
   let prompt: string;
   let worktree: Worktree | null;
   try {
@@ -748,7 +792,7 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId, mod
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  const run = newRun(projectId, agentId, 'dispatch', taskId);
+  const run = newRun(projectId, agentId, 'dispatch', taskId, { model, from });
   void (async () => {
     try {
       const session = await open(projectId, agentId, run.id, model, true, worktree?.path);
@@ -757,13 +801,92 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId, mod
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
     }
   })();
-  return { ok: true, value: { ...run } };
+  return { ok: true, value: { run: { ...run }, worktree } };
+}
+
+async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>> {
+  const started = startDispatch(projectId, taskId, agentId, model);
+  return started.ok ? { ok: true, value: started.value.run } : started;
+}
+
+// ── The desk: the chat's own dispatch tools (spec-16) ────────────────────────
+
+/** The app's own binary, run as node: no node needed on the Mac, and it reads app.asar. */
+const ELECTRON_BIN = process.env.BRAINFILE_ELECTRON_BIN ?? process.execPath;
+const DESK_SCRIPT = path.join(__dirname, 'desk-mcp.js');
+
+const hostPending = new Map<number, (result: unknown) => void>();
+let nextHostId = 1;
+
+/** A board write through main and the host, so it commits like any other. */
+function callHost<T>(method: AgentHostMethod, ...args: unknown[]): Promise<T> {
+  const id = nextHostId++;
+  return new Promise((resolve) => {
+    hostPending.set(id, resolve as (result: unknown) => void);
+    send({ kind: 'host', id, method, args });
+  });
+}
+
+const desk = new DeskBridge(
+  deskTools({
+    findTask(projectId, taskId) {
+      const located = locateBoard(projectId, { materialize: false });
+      if (!located.found) return null;
+      const found = findV2Task(getV2Dirs(located.brainfilePath), taskId);
+      return found ? { title: found.doc.task.title } : null;
+    },
+    unavailable(agentId) {
+      const known = KNOWN.find((k) => k.id === agentId);
+      if (!known) return `Unknown agent ${agentId}`;
+      return which(known.client) ? null : `${known.name} is not installed on this Mac`;
+    },
+    async start(grant, taskId, agentId, model) {
+      // Who asked goes on the task first, as Hand to… sets the assignee first.
+      const record: DispatchRecord = { agent: agentId, ...(model ? { model } : {}), by: 'chat', at: new Date().toISOString() };
+      const written = await callHost<Result>('recordDispatch', grant.projectId, taskId, record);
+      const started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id);
+      if (!started.ok) return started;
+      return {
+        ok: true,
+        value: { run: started.value.run, branch: started.value.worktree?.branch ?? null, ...(written.ok ? {} : { note: `The board record was not written: ${written.error}` }) },
+      };
+    },
+    runs: () => [...runs.values()],
+    stop: stopRun,
+  })
+);
+
+/** A chat session's token for the desk; null when the desk cannot listen, and the chat goes on without it. */
+async function grantDesk(grant: Parameters<DeskBridge['grant']>[0]): Promise<string | null> {
+  try {
+    await desk.listen();
+    return desk.grant(grant);
+  } catch {
+    return null;
+  }
+}
+
+/** The desk's MCP server for one chat session: the app's binary as node, the socket, the session's token and its board. */
+function deskMcp(token: string, projectId: string): acp.McpServer {
+  return {
+    name: 'desk',
+    command: ELECTRON_BIN,
+    args: [DESK_SCRIPT],
+    env: [
+      { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
+      { name: DESK_ENV.socket, value: desk.socketPath },
+      { name: DESK_ENV.token, value: token },
+      { name: DESK_ENV.project, value: projectId },
+    ],
+  };
 }
 
 const ASK_PREAMBLE =
   'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
   'If those tools are not available, use the `brainfile` command line in this directory instead (`brainfile list`, `brainfile add`, `brainfile move`, `brainfile --help`); do not edit the board’s files by hand. ' +
-  'Do not change code unless asked. Reply briefly, in a sentence or two, with the answer itself. Do not list or mention what you changed on the board, or that you changed nothing: the window shows the board\u2019s changes under your reply.\n\n';
+  'To have work done, hand it to a coding agent with the desk tools: `dispatch` starts an agent on a task in its own worktree, as Hand to… does (agent and model are optional; by default, you and your model), `runs` says what is running, `stop` stops one. ' +
+  'For follow-up work, create the task with the brainfile tools first, then hand it off with dispatch; do not do the work yourself. Ask the person before dispatching more than three tasks at once. ' +
+  'Do not change code unless asked. Reply briefly, in a sentence or two, with the answer itself. Do not list or mention what you changed on the board or handed off, or that you changed nothing: the window shows the board\u2019s changes and hand-offs under your reply.\n\n';
 
 /**
  * What the person has open as they ask, so "this" and "it" mean something:
@@ -785,15 +908,17 @@ async function ask(
   threadId: string,
   model?: string,
   earlier: ChatTurn[] = [],
-  context: string[] = []
+  context: string[] = [],
+  models: Partial<Record<AgentId, string>> = {}
 ): Promise<Result<AgentRun>> {
   const key = `ask:${threadId}:${agentId}:${model ?? ''}`;
-  const run = newRun(projectId, agentId, 'ask');
+  const run = newRun(projectId, agentId, 'ask', undefined, { model });
   run.threadId = threadId;
   void (async () => {
     try {
       const existing = sessions.get(key);
-      const session = existing ?? (await open(projectId, agentId, key, model));
+      const session = existing ?? (await open(projectId, agentId, key, model, true, undefined, true));
+      if (session.deskToken) desk.update(session.deskToken, { models });
       // A thread picked up again after its session was let go carries its own past.
       const past = existing || earlier.length === 0
         ? ''
@@ -861,7 +986,12 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   answerPermission,
 };
 
-parentPort.on('message', async (event: { data: AgentRequest }) => {
+parentPort.on('message', async (event: { data: AgentRequest | HostReply }) => {
+  if ('kind' in event.data) {
+    hostPending.get(event.data.id)?.(event.data.result);
+    hostPending.delete(event.data.id);
+    return;
+  }
   const { id, method, args } = event.data;
   let result: unknown;
   try {
@@ -874,6 +1004,7 @@ parentPort.on('message', async (event: { data: AgentRequest }) => {
 
 process.on('exit', () => {
   for (const session of sessions.values()) session.child.kill();
+  desk.close();
 });
 
 // Let go of the agents when main lets go of this process (a reload, a quit),

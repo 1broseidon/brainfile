@@ -342,7 +342,7 @@
           </div>
         {/if}
       {:else}
-        <p class="empty">Ask about this board, or have it managed: “add a task to…”, “sort To Do by priority”, “split epic-3”.</p>
+        <p class="empty">Ask about this board, or have it managed: “add a task to…”, “split epic-3”, “hand task-3 to Codex”.</p>
       {/each}
       {#if live}
         <p class="status"><Working run={live} /></p>

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
- * Bundle the three Node-side entry points with esbuild: main, the preload
- * (sandboxed, so CommonJS with only `electron` external), and the board host
- * utility process, which carries @brainfile/core inside it.
+ * Bundle the Node-side entry points with esbuild: main, the preload
+ * (sandboxed, so CommonJS with only `electron` external), the board host
+ * utility process, which carries @brainfile/core inside it, the agents
+ * process, and the desk's stdio MCP server, which the chat's agents start
+ * with the app's own binary as node (spec-16).
  */
 import { build, context } from 'esbuild';
 
@@ -14,6 +16,7 @@ const options = {
     preload: 'src/preload/preload.ts',
     host: 'src/host/host.ts',
     agents: 'src/agents/agents.ts',
+    'desk-mcp': 'src/agents/desk-mcp.ts',
   },
   outdir: 'dist-electron',
   bundle: true,

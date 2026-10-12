@@ -8,11 +8,13 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  AGENT_HOST_METHODS,
   AGENT_METHODS,
   CHANNEL,
   HOST_METHODS,
   type AgentMessage,
   type AgentRequest,
+  type HostReply,
   type HostMessage,
   type HostRequest,
   type Project,
@@ -73,12 +75,18 @@ function callHost<T>(method: HostRequest['method'], ...args: unknown[]): Promise
 function startAgents(): UtilityProcess {
   const child = utilityProcess.fork(path.join(__dirname, 'agents.js'), [], {
     serviceName: 'Brainfile Agents',
-    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData') },
+    // The app's own binary runs the desk's MCP server as node (desk-mcp.ts).
+    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData'), BRAINFILE_ELECTRON_BIN: process.execPath },
   });
   child.on('message', (message: AgentMessage) => {
     if (message.kind === 'reply') {
       agentPending.get(message.id)?.(message.result);
       agentPending.delete(message.id);
+    } else if (message.kind === 'host') {
+      // A board write the chat's hand-off makes (spec-16): only the ones named, through the host like any other.
+      const allowed = (AGENT_HOST_METHODS as readonly string[]).includes(message.method);
+      const result = allowed ? callHost(message.method, ...message.args) : Promise.resolve({ ok: false, error: `Not allowed: ${message.method}` });
+      void result.then((value) => child.postMessage({ kind: 'host-reply', id: message.id, result: value } satisfies HostReply));
     } else {
       win?.webContents.send(CHANNEL.agent, message.event);
     }
