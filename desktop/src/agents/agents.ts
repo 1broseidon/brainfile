@@ -9,7 +9,9 @@
  * as the CLI; what it changes reaches the window as ordinary board changes.
  * A hand-off gets its own worktree and branch instead (worktree.ts, spec-14).
  * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
- * and `stop`, so a chat can hand work off the way Hand to… does.
+ * and `stop`, so a chat can hand work off the way Hand to… does. Discuss
+ * (discuss.ts, task-35) is a chat about one task that may change its spec and
+ * nothing else.
  */
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
@@ -21,6 +23,7 @@ import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDeci
 import { locateBoard } from '@brainfile/core/repo';
 import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
+import { discussContext, discussMode, discussPermission, discussPreamble } from './discuss';
 import type {
   AgentEvent,
   AgentHostMethod,
@@ -343,7 +346,7 @@ async function probe(agentId: AgentId): Promise<Result<ModelCache[string]>> {
   const cached = readModels()[agentId];
   if (cached && 'modes' in cached && Date.now() - cached.at < MODELS_TTL_MS) return { ok: true, value: cached };
   try {
-    const session = await open(DATA_DIR, agentId, `probe:${agentId}`, undefined, false);
+    const session = await open(DATA_DIR, agentId, `probe:${agentId}`, undefined, { board: false });
     close(session);
     return { ok: true, value: readModels()[agentId] ?? { at: Date.now(), options: [], modes: null } };
   } catch (err) {
@@ -388,8 +391,10 @@ interface Session {
   /** The agent's permission modes, and the one the session is in. */
   modes: ReturnType<typeof modesOf>;
   mode: string | null;
-  /** A chat session's right to the desk; null for a hand-off or a probe. */
+  /** A chat session's right to the desk; null for a hand-off, a probe or a discussion. */
   deskToken: string | null;
+  /** The task a discussion is about (task-35); null for any other session. */
+  discuss: string | null;
 }
 
 const sessions = new Map<string, Session>();
@@ -449,11 +454,19 @@ function brainfileMcp(): acp.McpServer[] {
   return node ? [{ name: 'brainfile', command: node, args: [cli, 'mcp'], env }] : [{ name: 'brainfile', command: bin, args: ['mcp'], env }];
 }
 
-/**
- * `at` is where the agent works when not the repository itself: a hand-off's
- * worktree. `withDesk` gives a chat session the desk's tools besides the board's.
- */
-async function open(projectId: string, agentId: AgentId, key: string, model?: string, board = true, at?: string, withDesk = false): Promise<Session> {
+interface OpenOptions {
+  /** False for a probe: no board, no tools. */
+  board?: boolean;
+  /** Where the agent works when not the repository itself: a hand-off's worktree. */
+  at?: string;
+  /** Gives a chat session the desk's tools besides the board's. */
+  withDesk?: boolean;
+  /** The task a discussion is about: it reads, and changes only that task's spec. */
+  discuss?: string;
+}
+
+async function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
+  const { board = true, at, withDesk = false, discuss = null } = options;
   const known = KNOWN.find((k) => k.id === agentId);
   if (!known) throw new Error(`Unknown agent ${agentId}`);
   if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
@@ -493,6 +506,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     modes: null,
     mode: null,
     deskToken,
+    discuss,
   };
   const stream = acp.ndJsonStream(Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>);
   session.connection = new acp.ClientSideConnection(
@@ -556,8 +570,9 @@ async function applyMode(session: Session): Promise<void> {
   const modes = session.modes;
   if (!modes) return;
   const chosen = getSettings().modes[session.agentId];
-  const want =
-    policyFor(session.projectId) === 'bypass' && modes.bypass
+  const want = session.discuss
+    ? discussMode(modes)
+    : policyFor(session.projectId) === 'bypass' && modes.bypass
       ? modes.bypass
       : chosen && modes.options.some((m) => m.id === chosen)
         ? chosen
@@ -579,6 +594,15 @@ const DESK_TOOL = /^(mcp(__|\.))?desk(__|[_./])(dispatch|runs|stop)\b/i;
 
 async function requestPermission(session: Session, params: acp.RequestPermissionRequest): Promise<acp.RequestPermissionResponse> {
   const allowOnce = params.options.find((o) => o.kind === 'allow_once') ?? params.options.find((o) => o.kind.startsWith('allow'));
+  // A discussion changes the task's spec and nothing else: the rest is refused before anyone is asked.
+  if (session.discuss) {
+    const verdict = discussPermission(params.toolCall.title ?? '', params.toolCall.kind);
+    if (verdict === 'allow' && allowOnce) return { outcome: { outcome: 'selected', optionId: allowOnce.optionId } };
+    if (verdict === 'refuse') {
+      const reject = params.options.find((o) => o.kind === 'reject_once') ?? params.options.find((o) => o.kind.startsWith('reject'));
+      return reject ? { outcome: { outcome: 'selected', optionId: reject.optionId } } : { outcome: { outcome: 'cancelled' } };
+    }
+  }
   // The dispatcher's own board tools are not asked about: every change they
   // make is a commit on the board, and the board is what it was asked to manage.
   // The desk's are the app's own too: a hand-off asks in its pane before it acts.
@@ -795,7 +819,7 @@ function startDispatch(
   const run = newRun(projectId, agentId, 'dispatch', taskId, { model, from });
   void (async () => {
     try {
-      const session = await open(projectId, agentId, run.id, model, true, worktree?.path);
+      const session = await open(projectId, agentId, run.id, model, { at: worktree?.path });
       await turn(session, run, prompt);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
@@ -917,7 +941,7 @@ async function ask(
   void (async () => {
     try {
       const existing = sessions.get(key);
-      const session = existing ?? (await open(projectId, agentId, key, model, true, undefined, true));
+      const session = existing ?? (await open(projectId, agentId, key, model, { withDesk: true }));
       if (session.deskToken) desk.update(session.deskToken, { models });
       // A thread picked up again after its session was let go carries its own past.
       const past = existing || earlier.length === 0
@@ -927,6 +951,43 @@ async function ask(
       const decisions = !existing && located.found ? `${standingDecisions(located.brainfilePath).trim()}\n\n` : '';
       const looking = located.found ? lookingAt(located.brainfilePath, context) : '';
       await turn(session, run, (existing ? '' : ASK_PREAMBLE + (decisions.trim() ? decisions : '') + past) + looking + text);
+    } catch (err) {
+      update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
+    }
+  })();
+  return { ok: true, value: { ...run } };
+}
+
+/**
+ * One turn in a discussion of a task (task-35): a chat thread about that one
+ * task, whose agent reads freely and changes only the task's spec, with the
+ * person's agreement. It has no desk: the person hands the task off.
+ */
+async function discuss(
+  projectId: string,
+  agentId: AgentId,
+  text: string,
+  threadId: string,
+  taskId: string,
+  model?: string,
+  earlier: ChatTurn[] = []
+): Promise<Result<AgentRun>> {
+  const key = `discuss:${threadId}:${agentId}:${model ?? ''}`;
+  const run = newRun(projectId, agentId, 'ask', taskId, { model });
+  run.threadId = threadId;
+  void (async () => {
+    try {
+      const existing = sessions.get(key);
+      let preamble = '';
+      if (!existing) {
+        const located = locateBoard(projectId, { materialize: false });
+        if (!located.found) throw new Error(`No board in ${projectId}`);
+        // Read before the agent starts, so a task that has gone says so at once.
+        preamble = discussPreamble(discussContext(located.brainfilePath, taskId, standingDecisions(located.brainfilePath)));
+        if (earlier.length) preamble += `Earlier in this discussion:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
+      }
+      const session = existing ?? (await open(projectId, agentId, key, model, { discuss: taskId }));
+      await turn(session, run, preamble + text);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
     }
@@ -979,6 +1040,7 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   setSettings,
   dispatch,
   ask,
+  discuss,
   stopRun,
   review,
   mergeReview: (projectId: string, taskId: string) => settle(projectId, taskId, (title) => mergeReview(projectId, taskId, title)),

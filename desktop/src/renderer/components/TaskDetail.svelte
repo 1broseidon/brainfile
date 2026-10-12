@@ -143,6 +143,12 @@
       <span class="dstate mono" class:retired={decision.status !== 'proposed'}>{decision.status}</span>
     {/if}
     {#if detail && !detail.archived && !decision}
+      {#if !app.runFor(detail.id)}
+        <!-- Talk it over first (task-35): the chat opens on this task; the agent may change its spec, not its code. -->
+        <button class="btn quiet" use:tip={'Talk it over with an agent before handing it off'} onclick={() => detail && app.discussTask(detail.id)}
+          ><Icon name="ask" size={13} />Discuss</button
+        >
+      {/if}
       <HandTo taskId={detail.id} />
       <button class="btn quiet" onclick={complete}><StatusIcon progress={1} size={13} />Complete</button>
       <button class="icon-btn destroy" use:tip={'Delete'} onclick={remove}><Icon name="trash" size={15} /></button>

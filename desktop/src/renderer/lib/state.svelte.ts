@@ -77,6 +77,8 @@ export interface Thread {
   agentId: AgentId;
   startedAt: number;
   lines: ChatLine[];
+  /** A discussion of this task before it is handed off (task-35); unset for a chat about the board. */
+  taskId?: string;
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -562,19 +564,20 @@ class AppState {
     this.saveThreads();
   }
 
-  async askBoard(text: string, agentId: AgentId): Promise<void> {
+  /** `discussing` starts a new thread as a discussion of that task; a thread already open keeps what it is. */
+  async askBoard(text: string, agentId: AgentId, discussing?: string): Promise<void> {
     const projectId = this.activeId;
     if (!projectId || !text.trim()) return;
     this.remember(agentId, projectId);
     let thread = this.currentThread;
     if (!thread) {
-      thread = { id: `t-${Date.now()}`, agentId, startedAt: Date.now(), lines: [] };
+      thread = { id: `t-${Date.now()}`, agentId, startedAt: Date.now(), lines: [], ...(discussing ? { taskId: discussing } : {}) };
       this.threads[projectId] = [thread, ...(this.threads[projectId] ?? [])].slice(0, THREADS_KEPT);
       this.thread[projectId] = thread.id;
     }
     const earlier = thread.lines.filter((l) => !l.failed).map((l) => ({ who: l.who, text: l.text }));
-    // What is open in the pane goes along, so "this" means it.
-    const context = this.openTaskId ? [this.openTaskId] : [];
+    // What is open in the pane goes along, so "this" means it; a discussion is about its own task.
+    const context = this.openTaskId && !thread.taskId ? [this.openTaskId] : [];
     this.addLine(projectId, thread.id, {
       key: `you-${Date.now()}`,
       who: 'you',
@@ -587,7 +590,9 @@ class AppState {
     const models = Object.fromEntries(
       this.agents.map((a) => [a.id, this.modelFor(a.id, projectId)] as const).filter(([, model]) => !!model)
     ) as Partial<Record<AgentId, string>>;
-    const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier, context, models);
+    const result = thread.taskId
+      ? await api.discuss(projectId, agentId, text.trim(), thread.id, thread.taskId, this.modelFor(agentId, projectId), earlier)
+      : await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier, context, models);
     if (result.ok && before) this.#turnStart.set(result.value.id, before);
     if (!result.ok) this.addLine(projectId, thread.id, { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true });
   }
@@ -814,6 +819,31 @@ class AppState {
     if (this.liveAsk) return this.notify(`${this.agentName(this.liveAsk.agentId)} is still answering here.`, 'warn');
     this.thread[projectId] = null;
     await this.askBoard(problemBrief(project.name, board.integrity), agent);
+  }
+
+  /**
+   * Talks a task over before it is handed off (task-35). The chat opens on the
+   * task's latest discussion, kept like any chat, or starts one with the
+   * agent Hand to… offers first; the agent reads the task and answers.
+   */
+  async discussTask(taskId: string): Promise<void> {
+    const projectId = this.activeId;
+    const agent = this.agentFor(projectId);
+    if (!projectId) return;
+    if (!agent) return this.notify('No agent is installed to talk it over with.', 'warn');
+    const threads = this.threads[projectId] ?? [];
+    const live = this.liveAsk;
+    const liveThread = live ? threads.find((t) => t.id === live.threadId) : undefined;
+    this.chatOpen = true;
+    // One turn at a time: a reply still on its way is shown, not talked over.
+    if (live && liveThread?.taskId !== taskId) return this.notify(`${this.agentName(live.agentId)} is still answering here.`, 'warn');
+    const earlier = liveThread ?? threads.find((t) => t.taskId === taskId);
+    if (earlier) {
+      this.thread[projectId] = earlier.id;
+      return;
+    }
+    this.thread[projectId] = null;
+    await this.askBoard(`Talk ${taskId} over with me before I hand it off.`, agent, taskId);
   }
 
   /** Success is silent; only a problem is said. */

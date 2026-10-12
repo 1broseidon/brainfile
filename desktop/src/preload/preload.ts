@@ -43,6 +43,7 @@ const api: Api = {
   setSettings: invoke('setSettings'),
   dispatch: invoke('dispatch'),
   ask: invoke('ask'),
+  discuss: invoke('discuss'),
   stopRun: invoke('stopRun'),
   review: invoke('review'),
   mergeReview: invoke('mergeReview'),
