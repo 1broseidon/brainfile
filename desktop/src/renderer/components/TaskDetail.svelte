@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tip } from '../lib/tooltip';
   import { api, app } from '../lib/state.svelte';
-  import { columnProgress, kindGlyph, priorityLabel, relativeTime, shortDate } from '../lib/format';
+  import { columnProgress, priorityLabel, relativeTime, shortDate } from '../lib/format';
   import { renderMarkdown } from '../lib/markdown';
   import type { BoardSnapshot, TaskDetail } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
@@ -39,6 +39,14 @@
   const progress = $derived(detail?.archived ? 1 : detail ? columnProgress(board.columns, detail.column) : 0);
   const parent = $derived(detail?.parentId ? board.tasks.find((t) => t.id === detail!.parentId) : undefined);
   const children = $derived(board.tasks.filter((t) => t.parentId === taskId));
+  const decision = $derived(detail?.decision);
+  const decisionProps = $derived(
+    !!decision &&
+      !!(decision.claimKey || (decision.kind && decision.kind !== 'decision') || decision.stance || decision.holdsWhile || decision.recheck || decision.validUntil || decision.supersedes.length || decision.supersededBy)
+  );
+  /** The decisions this work rests on, as the board knows them. */
+  const restsOn = $derived((detail?.decisions ?? []).map((id) => ({ id, d: board.decisions.find((d) => d.id === id) })));
+  const restingOnIt = $derived((decision?.restingOn ?? []).map((id) => board.tasks.find((t) => t.id === id)).filter((t) => !!t));
 
   function close(): void {
     app.openTaskId = null;
@@ -123,11 +131,14 @@
 
 <section class="pane">
   <header class="band">
-    {#if detail?.type && kindGlyph(detail.type)}<span class="glyph">{kindGlyph(detail.type)}</span>{/if}
+    {#if detail?.glyph}<span class="glyph">{detail.glyph}</span>{/if}
     <span class="id mono">{taskId}</span>
-    {#if detail?.archived}<span class="state mono">done</span>{/if}
+    {#if detail?.archived && !decision}<span class="state mono">done</span>{/if}
     <span class="spacer"></span>
-    {#if detail && !detail.archived}
+    {#if decision && decision.status !== 'current'}
+      <span class="dstate mono" class:retired={decision.status !== 'proposed'}>{decision.status}</span>
+    {/if}
+    {#if detail && !detail.archived && !decision}
       <HandTo taskId={detail.id} />
       <button class="btn quiet" onclick={complete}><StatusIcon progress={1} size={13} />Complete</button>
       <button class="icon-btn destroy" use:tip={'Delete'} onclick={remove}><Icon name="trash" size={15} /></button>
@@ -162,6 +173,52 @@
         <div class="asking"><AskLine {ask} stacked /></div>
       {/each}
 
+      {#if decision}
+        <!-- A decision is not work: it has a claim and a stance, not a status, priority or assignee. -->
+        {#if decisionProps}
+        <div class="group">
+          {#if decision.claimKey}
+            <div class="prop"><span class="key">Claim key</span><span class="value static mono">{decision.claimKey}</span></div>
+          {/if}
+          {#if decision.kind && decision.kind !== 'decision'}
+            <div class="prop"><span class="key">Kind</span><span class="value static">{decision.kind}</span></div>
+          {/if}
+          {#if decision.stance}
+            <div class="prop">
+              <span class="key">Stance</span>
+              <span class="value static">{decision.stance}{#if decision.subject}&nbsp;<span class="mono">{decision.subject}</span>{/if}</span>
+            </div>
+          {/if}
+          {#if decision.holdsWhile}
+            <div class="prop"><span class="key">Holds while</span><span class="value static clip">{decision.holdsWhile}</span></div>
+          {/if}
+          {#if decision.recheck}
+            <div class="prop"><span class="key">Recheck</span><span class="value static clip">{decision.recheck}</span></div>
+          {/if}
+          {#if decision.validUntil}
+            <div class="prop"><span class="key">Valid until</span><span class="value static mono">{shortDate(decision.validUntil)}</span></div>
+          {/if}
+          {#each decision.supersedes as id (id)}
+            <div class="prop">
+              <span class="key">Replaces</span>
+              <button class="value" onclick={() => (app.openTaskId = id)}>
+                <span class="mono dim">{id}</span>
+                <span class="clip">{board.decisions.find((d) => d.id === id)?.title ?? ''}</span>
+              </button>
+            </div>
+          {/each}
+          {#if decision.supersededBy}
+            <div class="prop">
+              <span class="key">Replaced by</span>
+              <button class="value" onclick={() => (app.openTaskId = decision!.supersededBy!)}>
+                <span class="mono dim">{decision.supersededBy}</span>
+                <span class="clip">{board.decisions.find((d) => d.id === decision!.supersededBy)?.title ?? ''}</span>
+              </button>
+            </div>
+          {/if}
+        </div>
+        {/if}
+      {:else}
       <div class="group">
         <div class="prop">
           <span class="key">Status</span>
@@ -216,6 +273,7 @@
           </div>
         {/if}
       </div>
+      {/if}
 
       {#if editingDescription}
         <textarea
@@ -239,7 +297,7 @@
         <button class="placeholder" onclick={startEditing}>Add description…</button>
       {/if}
 
-      {#if detail.subtasks?.length || !detail.archived}
+      {#if !decision && (detail.subtasks?.length || !detail.archived)}
         <section class="block">
           <h3>
             Sub-tasks
@@ -285,6 +343,43 @@
                   <StatusIcon progress={dep.done ? 1 : 0} />
                   <span class="cid ref mono">{dep.ref}</span>
                   <span class="clip" class:dim={!dep.title}>{dep.title ?? (dep.state === 'missing' ? 'not on this machine' : dep.state === 'no-board' ? 'no board there' : dep.state === 'unknown-alias' ? 'unknown board' : 'not found')}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+
+      {#if restsOn.length}
+        <section class="block">
+          <h3>Rests on</h3>
+          <ul class="children">
+            {#each restsOn as { id, d } (id)}
+              <li>
+                <button disabled={!d} onclick={() => (app.openTaskId = id)}>
+                  <span class="dglyph" aria-hidden="true">{d && (d.status === 'current' || d.status === 'proposed') ? '●' : '○'}</span>
+                  <span class="cid ref mono">{id}</span>
+                  <span class="clip" class:dim={!d}>{d?.title ?? 'not on this board'}</span>
+                  {#if d && d.status !== 'current' && d.status !== 'proposed'}
+                    <span class="mono retired">{d.status}{#if d.supersededBy} → {d.supersededBy}{/if}</span>
+                  {/if}
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+
+      {#if restingOnIt.length}
+        <section class="block">
+          <h3>Work resting on it <span class="mono">{restingOnIt.length}</span></h3>
+          <ul class="children">
+            {#each restingOnIt as t (t!.id)}
+              <li>
+                <button onclick={() => app.goTo(board.projectId, t!.id)}>
+                  <StatusIcon progress={columnProgress(board.columns, t!.column)} />
+                  <span class="cid mono">{t!.id}</span>
+                  <span class="clip">{t!.title}</span>
                 </button>
               </li>
             {/each}
@@ -681,6 +776,25 @@
   .cid.ref {
     width: auto;
     white-space: nowrap;
+  }
+
+  /* A decision's mark, the TUI's glyph, in the place a status box takes. */
+  .dglyph {
+    width: 16px;
+    flex: none;
+    text-align: center;
+    font-size: var(--t-xs);
+    color: var(--ink-3);
+  }
+
+  .retired {
+    flex: none;
+    color: var(--warn);
+  }
+
+  /* A decision says where it stands only when it is not simply current. */
+  .dstate {
+    color: var(--ink-3);
   }
 
   .cid {

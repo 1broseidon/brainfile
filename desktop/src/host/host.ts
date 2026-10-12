@@ -13,7 +13,10 @@ import {
   addSubtasksToFile,
   addTaskFile,
   buildBoardFromV2,
+  buildDocGraph,
   completeTaskFile,
+  decisionStatus,
+  idList,
   deleteTaskFile,
   extractDescription,
   extractLog,
@@ -23,8 +26,11 @@ import {
   patchTaskFile,
   readBoardConfig,
   readTasksDir,
+  resolveDocType,
   toggleSubtasksInFile,
+  type DocGraph,
   type Task,
+  type TypesConfig,
 } from '@brainfile/core';
 import {
   AUTOSYNC_DELAY_MS,
@@ -45,6 +51,7 @@ import {
 } from '@brainfile/core/repo';
 import type {
   BoardSnapshot,
+  DecisionView,
   DependencyView,
   HostMessage,
   HostRequest,
@@ -110,14 +117,21 @@ function locate(folder: string): ProjectState {
 
 // ── Reading ─────────────────────────────────────────────────────────────────
 
-function toView(task: Task, body?: string): TaskView {
+function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph): TaskView {
   const description = task.description ?? (body ? extractDescription(body) : undefined);
+  const kind = resolveDocType(task.type, types);
+  const decisions = idList(task.decisions);
+  const retired = graph ? graph.decisionsOf(task.id).filter((d) => d.isDecision && d.status && d.status !== 'current' && d.status !== 'proposed') : [];
   return {
     id: task.id,
     title: task.title,
     column: task.column ?? 'todo',
     position: task.position,
     type: task.type,
+    role: kind.role,
+    glyph: kind.glyph,
+    ...(decisions.length ? { decisions } : {}),
+    ...(retired.length ? { restsOnRetired: retired.map((d) => d.id) } : {}),
     priority: task.priority,
     assignee: task.assignee,
     tags: task.tags,
@@ -143,25 +157,64 @@ function syncView(board: OpenBoard): SyncView {
   };
 }
 
+/** A frontmatter value that should be text, or nothing. */
+function text(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+/** A decision document as the window shows it. */
+function toDecision(task: Task, body: string | undefined, graph: DocGraph): DecisionView {
+  return {
+    id: task.id,
+    title: task.title,
+    claimKey: text(task.claimKey),
+    kind: text(task.kind),
+    status: decisionStatus(task),
+    stance: text(task.stance),
+    subject: text(task.subject),
+    holdsWhile: text(task.holdsWhile),
+    recheck: text(task.recheck),
+    validUntil: text(task.validUntil),
+    supersedes: idList(task.supersedes),
+    supersededBy: text(task.supersededBy),
+    description: task.description ?? (body ? extractDescription(body) : undefined),
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    restingOn: graph
+      .restingOn(task.id)
+      .filter((t) => graph.isOpenWork(t))
+      .map((t) => t.id),
+  };
+}
+
 function snapshot(board: OpenBoard): BoardSnapshot {
   const built = buildBoardFromV2(board.brainfilePath);
   const config = readBoardConfig(board.brainfilePath)?.config;
+  const types = config?.types;
+  const { boardDir, logsDir } = getV2Dirs(board.brainfilePath);
+  // Open documents and the archive together: decisions live in both, and
+  // work can rest on a decision that has since been retired to logs/.
+  const open = readTasksDir(boardDir);
+  const archived = readTasksDir(logsDir);
+  const graph = buildDocGraph([...open, ...archived].map((d) => d.task), { types });
+  const isDecision = (task: Task) => resolveDocType(task.type, types).role === 'decision';
   const related = relatedBoards(board.brainfilePath);
   const sisters = related.boards();
   board.relatedFolders = sisters.map((b) => b.folder);
   // Only dependencies on related boards block here, as in the CLI.
   const blockedOn = (task: Task) =>
     (task.dependsOn ?? []).filter((ref) => ref.includes(':') && !related.lookup(ref).done);
+  // A decision has no column: it is not work, and has its own view.
   const tasks = built.columns.flatMap((column) =>
-    column.tasks.map((task) => {
-      const view = toView({ ...task, column: column.id });
+    column.tasks.filter((task) => !isDecision(task)).map((task) => {
+      const view = toView({ ...task, column: column.id }, undefined, types, graph);
       const blocked = blockedOn(task);
       return blocked.length ? { ...view, blockedOn: blocked } : view;
     })
   );
-  const { logsDir } = getV2Dirs(board.brainfilePath);
-  const completed = readTasksDir(logsDir)
-    .map((doc) => toView(doc.task, doc.body))
+  const completed = archived
+    .filter((doc) => !isDecision(doc.task))
+    .map((doc) => toView(doc.task, doc.body, types))
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
     .slice(0, COMPLETED_LIMIT);
   return {
@@ -171,6 +224,10 @@ function snapshot(board: OpenBoard): BoardSnapshot {
     tasks,
     completed,
     typeNames: Object.keys(config?.types ?? {}),
+    decisions: [...open, ...archived]
+      .filter((doc) => isDecision(doc.task))
+      .map((doc) => toDecision(doc.task, doc.body, graph))
+      .sort((a, b) => (b.updatedAt ?? b.createdAt ?? '').localeCompare(a.updatedAt ?? a.createdAt ?? '')),
     storage: boardRepoKind(board.dotDir) ?? 'plain',
     related: sisters.map((b) => ({ alias: b.alias, folder: b.folder, status: b.status })),
     sync: syncView(board),
@@ -250,8 +307,15 @@ function getTask(projectId: string, taskId: string): Result<TaskDetail> {
     .split('\n')
     .map((line) => line.replace(/^\s*[-*]\s+/, '').trim())
     .filter(Boolean);
+  const types = readBoardConfig(board.brainfilePath)?.config?.types;
+  const graph = buildDocGraph(
+    [...readTasksDir(getV2Dirs(board.brainfilePath).boardDir), ...readTasksDir(getV2Dirs(board.brainfilePath).logsDir)].map((d) => d.task),
+    { types }
+  );
+  const view = toView(task, body, types, graph);
   return ok({
-    ...toView(task, body),
+    ...view,
+    ...(view.role === 'decision' ? { decision: toDecision(task, body, graph) } : {}),
     body,
     log,
     relatedFiles: task.relatedFiles,
@@ -316,9 +380,10 @@ function addTask(projectId: string, input: NewTaskInput): Result<TaskView> {
     () => `add ${id}: ${input.title}`,
     (board) => {
       const dirs = getV2Dirs(board.brainfilePath);
-      const result = unwrap(addTaskFile(dirs.boardDir, { ...input }, '', dirs.logsDir));
+      const types = readBoardConfig(board.brainfilePath)?.config?.types;
+      const result = unwrap(addTaskFile(dirs.boardDir, { ...input }, '', dirs.logsDir, { types }));
       id = result.task!.id;
-      return toView(result.task!);
+      return toView(result.task!, undefined, types);
     }
   );
 }
@@ -372,7 +437,8 @@ function completeTask(projectId: string, taskId: string): Result {
     projectId,
     () => `complete ${taskId}`,
     (board) => {
-      unwrap(completeTaskFile(taskPath(board, taskId), getV2Dirs(board.brainfilePath).logsDir));
+      const types = readBoardConfig(board.brainfilePath)?.config?.types;
+      unwrap(completeTaskFile(taskPath(board, taskId), getV2Dirs(board.brainfilePath).logsDir, { types }));
     }
   );
 }

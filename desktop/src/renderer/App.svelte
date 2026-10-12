@@ -91,10 +91,13 @@
     const focused = app.selectedTaskId ?? app.openTaskId;
     switch (e.key) {
       case 'c':
-        app.composer = {};
+        if (app.view !== 'decisions') app.composer = {};
         break;
       case 'v':
         app.toggleView();
+        break;
+      case 'd':
+        app.setView(app.view === 'decisions' ? 'list' : 'decisions');
         break;
       case 'j':
       case 'ArrowDown':

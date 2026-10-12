@@ -195,6 +195,30 @@ off course. These rules win over every other section:
   every column to drop into).
 - The rail is one line per project: its storage icon, its name, its count.
 
+## Kinds and decisions
+
+Every document is a file with frontmatter, and core says what each is for
+(spec-12): epic, spec, plan, task (alias issue) and decision (alias adr), or
+any name a board gives that borrows one of their places with `like:`. The
+window takes a document's role and glyph from core, never from its own table.
+
+- **The outline is the graph's tree.** An epic holds specs, plans and tasks;
+  a spec holds plans and tasks; a plan holds tasks. The list nests by
+  `parentId` as before; each kind keeps its TUI glyph (▸ epic, ◆ spec,
+  ⎘ plan, ● decision) small before the title.
+- **Decisions are not work.** They have no column and never complete, so
+  they leave the list and the board for their own view, the band's third
+  key (a flag, D). Standing decisions are grouped by family, the claim
+  key's first word, set in mono; history (superseded, rejected, stale) folds
+  away below, like Done. A row leads with ● where a task has its box, ○ once
+  retired, and says at rest only a kind other than decision, a legacy
+  `proposed`, or a date: `review` in the warn colour once `validUntil` has
+  passed. The claim key, the stance and what it replaced wait for the hand.
+- **In the task pane** a decision shows its claim key, kind, stance, holds
+  while, recheck, valid until and the chain it sits in, and the open work
+  resting on it. Work shows the decisions it rests on; one since replaced
+  says so in the warn colour, and its row says `decision changed`.
+
 ## Related boards
 
 A board names its sister repositories in `related:` (spec-10). The app

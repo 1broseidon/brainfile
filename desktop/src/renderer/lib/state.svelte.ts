@@ -14,10 +14,9 @@ import type {
   ModelOption,
   PermissionAsk,
   Project,
-  TaskView,
 } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
-import { asTree } from './format';
+import { asTree, decisionGroups } from './format';
 
 declare global {
   interface Window {
@@ -42,7 +41,7 @@ for (const key of MUTATIONS) {
   };
 }
 
-export type ViewMode = 'list' | 'board';
+export type ViewMode = 'list' | 'board' | 'decisions';
 export type MenuKind = 'status' | 'priority' | 'assignee' | 'labels';
 
 const VIEW_KEY = 'brainfile.view';
@@ -182,10 +181,11 @@ class AppState {
   board = $derived(this.activeId ? (this.boards[this.activeId] ?? null) : null);
   view = $derived<ViewMode>((this.activeId && this.views[this.activeId]) || 'list');
 
-  /** Tasks in the order the list shows them: by column, then as the outline (each parent before its children). */
-  orderedTasks = $derived.by(() => {
+  /** What j / k step through, in the order the view shows it: tasks by column and outline, or decisions by family. */
+  orderedTasks = $derived.by((): { id: string }[] => {
     const board = this.board;
-    if (!board) return [] as TaskView[];
+    if (!board) return [];
+    if (this.view === 'decisions') return decisionGroups(board.decisions).flatMap((g) => g.decisions);
     return board.columns.flatMap((column) => asTree(board.tasks.filter((t) => t.column === column.id)).map((r) => r.task));
   });
 
@@ -413,6 +413,7 @@ class AppState {
     localStorage.setItem(VIEW_KEY, JSON.stringify(this.views));
   }
 
+  /** V turns between the two views of the work; from decisions it goes back to the list. */
   toggleView(): void {
     this.setView(this.view === 'list' ? 'board' : 'list');
   }
