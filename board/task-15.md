@@ -24,3 +24,4 @@ Set process.exitCode = 1 when success is false (and audit the other contract sub
 
 ## Log
 - 2026-10-12T01:32:46.527Z: [claude] Verified 2026-10-11: still open. cli/src/cli.ts:569 still discards contractValidateCommand's result, and contract.ts:497 returns { success: ok } that nothing reads.
+- 2026-10-12T18:35:28.903Z: [codex] Fixed CLI actions to set process.exitCode=1 for failed contract validation and template without an action. Audited other contract subcommands and command results: other contract failures throw; check/sync already set exit codes. Added process-level tests for missing deliverables, failing commands, preserved failure feedback, successful validation, and template exits. npm run build and 28 targeted tests passed; git diff --check clean. Standing ADRs unchanged. Handoff: ready for review of cli/src/program.ts and cli/src/__tests__/cli-result-exit.test.ts.
