@@ -40,9 +40,14 @@ import {
   fetchBeforeRead,
   flushBoardCommits,
   isTrackedBoard,
+  adoptBoard,
   boardConflict,
   boardConflictError,
   locateBoard,
+  mergeBoards,
+  pruneLostBoardCheckouts,
+  surveyBoards,
+  unmergedFiles,
   relatedBoards,
   onBoardCommitted,
   pendingChanges,
@@ -51,16 +56,19 @@ import {
   syncMessage,
   syncStatusLabel,
 } from '@brainfile/core/repo';
+import { integrityView } from './integrity';
 import type {
   BoardSnapshot,
   DecisionView,
   DependencyView,
   HostMessage,
   HostRequest,
+  IntegrityView,
   NewTaskInput,
   ProjectState,
   RemovedTask,
   Result,
+  SettleChoice,
   SyncView,
   TaskDetail,
   TaskPatch,
@@ -78,6 +86,8 @@ interface OpenBoard {
   lastWarning?: string;
   /** Related boards' folders, so a change over there re-reads what depends on it. */
   relatedFolders: string[];
+  /** Where the board lives and whether it needs a look (spec-15), read at most every INTEGRITY_TTL_MS. */
+  integrity: { at: number; view: IntegrityView; behind: number } | null;
 }
 
 const COMPLETED_LIMIT = 50;
@@ -85,6 +95,8 @@ const RELOAD_DEBOUNCE_MS = 120;
 /** Commits made by the app land this soon after the last edit in a burst. */
 const COMMIT_DEBOUNCE_MS = 1200;
 const FULL_SYNC_INTERVAL_MS = 60_000;
+/** Other boards in the repository are looked for at most this often, besides after a sync or a settle. */
+const INTEGRITY_TTL_MS = 15_000;
 
 const boards = new Map<string, OpenBoard>();
 const parentPort = process.parentPort;
@@ -148,12 +160,27 @@ function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph
   };
 }
 
+/** Every board in the repository, and the rest of where this one lives. Cached; `fetch` asks the remote first. */
+function readIntegrity(board: OpenBoard, options: { fresh?: boolean; fetch?: boolean } = {}): { view: IntegrityView; behind: number } {
+  const cached = board.integrity;
+  if (cached && !options.fresh && !options.fetch && Date.now() - cached.at < INTEGRITY_TTL_MS) return cached;
+  try {
+    const survey = surveyBoards(board.dotDir, { fetch: options.fetch });
+    const unfinished = isTrackedBoard(board.dotDir) ? unmergedFiles(board.dotDir) : [];
+    board.integrity = { at: Date.now(), view: integrityView(survey, unfinished), behind: survey.lineage?.behind ?? 0 };
+  } catch {
+    board.integrity = { at: Date.now(), view: { twoBoards: null, notes: [], short: null }, behind: 0 };
+  }
+  return board.integrity;
+}
+
 function syncView(board: OpenBoard): SyncView {
   const tracked = isTrackedBoard(board.dotDir);
   return {
     label: syncStatusLabel(board.dotDir),
     remote: tracked ? boardRemote(board.dotDir) : null,
     pending: tracked ? pendingChanges(board.dotDir) : 0,
+    behind: tracked ? readIntegrity(board).behind : 0,
     busy: board.syncing,
     ...(board.lastWarning ? { warning: board.lastWarning } : {}),
   };
@@ -256,6 +283,7 @@ function snapshot(board: OpenBoard): BoardSnapshot {
     storage: boardRepoKind(board.dotDir) ?? 'plain',
     related: sisters.map((b) => ({ alias: b.alias, folder: b.folder, status: b.status })),
     sync: syncView(board),
+    integrity: readIntegrity(board).view,
   };
 }
 
@@ -298,6 +326,8 @@ function openBoard(projectId: string): Result<BoardSnapshot> {
   if (existing) return ok(snapshot(existing));
   const state = locate(projectId);
   if (state.status !== 'ready') return fail(`No board in ${projectId}`);
+  // A checkout of the board branch whose folder is gone only gets in the way.
+  pruneLostBoardCheckouts(state.dotDir);
   const board: OpenBoard = {
     projectId,
     dotDir: state.dotDir,
@@ -307,10 +337,19 @@ function openBoard(projectId: string): Result<BoardSnapshot> {
     pushTimer: null,
     syncing: false,
     relatedFolders: [],
+    integrity: null,
   };
   board.watcher = watch(board);
   boards.set(projectId, board);
   if (effectiveAutosync(board.dotDir) === 'full') void runSync(board, () => fetchBeforeRead(board.dotDir));
+  // Once per open, a plain folder board asks the remote for its copy: a board
+  // there that this folder does not know about is a second board
+  // (runprism.ai's case). A tracked board's sync keeps that copy fresh.
+  if (!isTrackedBoard(board.dotDir)) setTimeout(() => {
+    if (boards.get(projectId) !== board || board.syncing) return;
+    readIntegrity(board, { fetch: true });
+    publish(board);
+  }, 0);
   return ok(snapshot(board));
 }
 
@@ -515,6 +554,7 @@ async function runSync(board: OpenBoard, work: () => ReturnType<typeof syncBoard
   } finally {
     board.syncing = false;
   }
+  readIntegrity(board, { fresh: true });
   publish(board);
   return syncView(board);
 }
@@ -524,6 +564,41 @@ async function syncNow(projectId: string): Promise<Result<SyncView>> {
     const board = requireBoard(projectId);
     flushBoardCommits();
     return ok(await runSync(board, () => syncBoard(board.dotDir)));
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+// ── Two boards (spec-15) ────────────────────────────────────────────────────
+
+/**
+ * Make two boards one, as the band's line offers: take the other board, merge
+ * them, or keep this one. Core backs up whatever is replaced first; the board
+ * is then reopened where it now lives.
+ */
+function settleBoards(projectId: string, choice: SettleChoice): Result<{ message: string }> {
+  try {
+    const board = requireBoard(projectId);
+    flushBoardCommits();
+    const conflict = surveyBoards(board.dotDir).conflict;
+    if (!conflict) return ok({ message: 'Already one board.' });
+    let message: string;
+    if (choice === 'merge') {
+      const merged = mergeBoards(board.dotDir, conflict.other.ref);
+      const renumbered = merged.renumbered.map((r) => `${r.from} → ${r.to}`).join(', ');
+      message = merged.adopted === 'other'
+        ? `Took ${conflict.other.label}: it already had everything.`
+        : merged.adopted === 'this'
+          ? 'Kept this board: it already had everything.'
+          : `Merged ${conflict.other.label} in${renumbered ? ` (renumbered ${renumbered})` : ''}.`;
+    } else {
+      adoptBoard(board.dotDir, choice === 'theirs' ? conflict.other.ref : conflict.current.ref);
+      message = choice === 'theirs' ? `Took ${conflict.other.label}.` : 'Kept this board.';
+    }
+    closeBoard(projectId);
+    const reopened = openBoard(projectId);
+    if (reopened.ok) send({ kind: 'board', snapshot: reopened.value });
+    return ok({ message: `${message} The board it replaced is in brainfile backups.` });
   } catch (err) {
     return fail(err);
   }
@@ -561,6 +636,7 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   deleteTask,
   restoreTask,
   syncNow,
+  settleBoards,
 };
 
 parentPort.on('message', async (event: { data: HostRequest }) => {

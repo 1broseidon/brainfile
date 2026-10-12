@@ -48,6 +48,12 @@ columns get a command of their own. The TUI catches up with decisions
   outside `.brainfile/`; a checkout whose folder is gone is forgotten before
   the board is checked out (it used to block that) or by `lint --fix`. `lint`
   reports two boards as an error.
+- The desktop app says "Two boards: this folder (7) and origin's (19,
+  newer)" in the board's band with Use origin's / Merge / Keep this one, and
+  its health covers two boards, a checkout outside `.brainfile/`, a code
+  branch tracking an old copy, a merge left half-done, and changes on the
+  remote not here yet (`↓N`). A plain folder board asks the remote for its
+  copy when it opens.
 - Backups: anything that replaces a board saves it first as
   `refs/brainfile/backups/<UTC time>-folder|branch`. `brainfile backups` lists
   them; `brainfile backups restore <name>` puts one back.

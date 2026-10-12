@@ -469,6 +469,10 @@ function settle(dotDir: string, makePlan: (ctx: RepoContext) => Plan): SettleRes
 
   const untracked = untrackNeeded ? untrackBoardOnCodeBranch(ctx.main.path) : null;
 
+  // The board descends from the remote's copy, so that is where it goes back to.
+  const remote = ctx.tracking ? /^refs\/brainfile\/remotes\/([^/]+)\//.exec(ctx.tracking)?.[1] : null;
+  if (remote && !boardRemote(ctx.cwd)) git(['config', 'brainfile.remote', remote], ctx.cwd);
+
   ensureBoardDirs(ctx.home);
   ensureBoardAttributes(ctx.home);
   registerMergeDriver(ctx.home);

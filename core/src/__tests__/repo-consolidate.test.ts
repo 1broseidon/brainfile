@@ -185,6 +185,8 @@ describe('one board out of two (spec-15 phase 2)', () => {
     git(['merge-base', '--is-ancestor', 'refs/brainfile/remotes/origin/board', 'brainfile'], repo);
     git(['push', '-q', 'origin', 'brainfile:refs/brainfile/board'], repo);
     expect(surveyBoards(home).conflict).toBeNull();
+    // It came from origin, so it is shared back there.
+    expect(git(['config', '--get', 'brainfile.remote'], repo)).toBe('origin');
   });
 
   it('restoring a backup puts it back and backs up what it replaces', () => {
