@@ -6,7 +6,8 @@
   // cannot be represented in this CJS output; the executable gets the TUI from
   // the esbuild bundle instead (`dist/cli.mjs`). `src/cli.ts` is excluded for
   // the same reason — the entry it would emit is replaced by the generated CJS
-  // launcher in `scripts/build-bundle.mjs`. Type coverage for the excluded
+  // launcher in `scripts/build-bundle.mjs`; `src/program.ts`, the commander
+  // program it builds, imports the TUI lazily and goes with it. Type coverage for the excluded
   // files is not lost: the root `tsconfig.json` still typechecks them under
   // `npm run typecheck`.
   "extends": "./tsconfig.json",
@@ -22,6 +23,7 @@
     "src/tui/**",
     "src/commands/tui.tsx",
     "src/cli.ts",
+    "src/program.ts",
     "src/hook.ts"
   ]
 }

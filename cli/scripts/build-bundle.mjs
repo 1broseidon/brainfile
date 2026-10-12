@@ -49,7 +49,7 @@ for (const entry of readdirSync(outdir)) {
   }
 }
 
-// ESM has no __dirname/__filename/require. `src/cli.ts` reads package.json via
+// ESM has no __dirname/__filename/require. `src/program.ts` reads package.json via
 // __dirname and `src/commands/schema.ts` resolves the schemas dir the same way;
 // both must keep resolving relative to dist/, which is where the bundle lands.
 const esmShims = [
