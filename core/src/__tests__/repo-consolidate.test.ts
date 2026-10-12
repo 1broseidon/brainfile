@@ -13,6 +13,7 @@ import {
   mergeBoardFiles,
   mergeBoards,
   restoreBackup,
+  saveBoardBackup,
   surveyBoards,
   untrackBoardOnCodeBranch,
 } from '../repo';
@@ -215,6 +216,20 @@ describe('one board out of two (spec-15 phase 2)', () => {
     expect(fs.existsSync(stray)).toBe(true);
     expect(git(['rev-parse', 'brainfile'], repo)).toBe(tip);
     expect(listBackups(stray)).toEqual([]);
+  });
+
+  it('saveBoardBackup saves one copy at a time, a folder or a tree in a code commit, as backups lists them', () => {
+    oldBoardOnMain();
+    const stamp = '20261012T120000Z';
+    const folder = saveBoardBackup(home, { dir: home }, `the folder ${home} before fix`, 'folder', stamp);
+    const onMain = saveBoardBackup(home, { treeish: `${git(['rev-parse', 'HEAD'], repo)}:.brainfile` }, 'the copy on main before fix', 'main', stamp);
+    const again = saveBoardBackup(home, { dir: home }, 'again', 'folder', stamp);
+    expect([folder, onMain, again]).toEqual([`${stamp}-folder`, `${stamp}-main`, `${stamp}-folder-2`]);
+    // A tree inside a code commit is saved without the code's history.
+    expect(git(['rev-list', '--count', `refs/brainfile/backups/${onMain}`], repo)).toBe('1');
+    expect(git(['ls-tree', '--name-only', `refs/brainfile/backups/${onMain}`, 'board/'], repo)).toBe('board/task-1.md\nboard/task-2.md');
+    expect(listBackups(home).map((b) => b.name).sort()).toEqual([folder, again, onMain].sort());
+    expect(() => saveBoardBackup(home, { dir: path.join(base, 'nothing') }, 'x', 'folder')).toThrow(/holds no board/);
   });
 });
 
