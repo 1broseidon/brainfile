@@ -10,7 +10,11 @@ tags:
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
 assignee: claude
-updatedAt: "2026-10-12T18:58:27.906Z"
+updatedAt: "2026-10-12T19:10:16.071Z"
+subtasks:
+  - id: task-20-1
+    title: "Host: completed children travel with their parent past the Done limit"
+    completed: false
 ---
 
 ## Description
