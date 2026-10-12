@@ -65,3 +65,6 @@ Recoil (Go, SQLite, one database per machine) keeps agents' decisions, handoffs 
 **Not in scope.** Importing old recoil records; mining agent transcripts (session evidence); embeddings and hybrid search; the tray (the desktop app has one); recoil's benchmark suites and benchmark-tuned heuristics; syncing the index (each machine rebuilds it from the synced files).
 
 **Recoil afterwards.** Once brief, search and check land here, recoil gets a last release whose README points to Brainfile, and the repo is archived; owner's call at the time.
+
+## Log
+- 2026-10-12T07:22:08.617Z: [claude] Subtask 1 (decision type) was delivered by spec-12 (39188f1..20ae859): decision type and aliases, no column, status current, board/ while current, list leaves decisions out, show flags rests-on-superseded. spec-11 builds on it; toggled as done.
