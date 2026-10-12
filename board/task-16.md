@@ -1,8 +1,8 @@
 ---
 id: task-16
 title: "complete: let callers supply filesChanged for the ledger"
-column: todo
-position: 5
+column: backlog
+position: 6
 priority: medium
 tags:
   - ledger
@@ -15,6 +15,7 @@ relatedFiles:
   - core/src/taskOperations.ts
   - core/src/ledger.ts
 createdAt: "2026-09-23T03:04:32.175Z"
+updatedAt: "2026-10-12T21:58:24.136Z"
 ---
 
 ## Description
