@@ -43,7 +43,9 @@ subtasks:
     completed: false
 createdAt: "2026-10-12T22:24:00.756Z"
 assignee: claude
-updatedAt: "2026-10-12T23:39:36.978Z"
+updatedAt: "2026-10-12T23:45:33.858Z"
+decisions:
+  - decision-3
 ---
 
 ## Description
