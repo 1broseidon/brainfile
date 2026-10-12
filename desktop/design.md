@@ -20,12 +20,11 @@ Nothing decorates; everything on screen is a thing you can read or press.
 
 One family, **Workbench**:
 
-- The window's top strip is the well itself: 32px, the traffic lights and
-  then the key that shows and hides the rail (⌘B) in the left corner, the
-  mark at the head of the board, the search at the right. Unlike Hotline's
-  centred toad, the mark has a hard left edge, so it is aligned, not
-  centred: that edge stands on the same line as the board's title below it,
-  and with the rail closed it follows the key.
+- The window's top strip is the well itself: 32px, the traffic lights,
+  the key that shows and hides the rail (⌘B), then the **lockup** (the mark
+  at 16px and the name written out, lowercase `brainfile` in Plex Sans 600)
+  in the left corner, and the search at the right. Unlike Hotline's centred
+  toad, the box has a hard left edge, so it leads from the left.
 - The **rail** stands directly in the well: Projects, one row each, the
   folder's name over one mono line (`13 open · branch`). Its edge is the
   gutter beside it, dragged between 180 and 420px, remembered, put back by a
@@ -49,7 +48,7 @@ is 44 units with a 4-unit corner on the left and an 18-unit corner on the
 right; 12 reads as any app's checkbox, 22 as the letter D.
 
 - One shape in one colour. In chrome it is ink-3, the colour of furniture,
-  never the accent; on the app tile (`assets/tile.svg`) it is the accent on
+  never the accent, and so is the name beside it; on the app tile (`assets/tile.svg`) it is the accent on
   the dark rounded square, drawn as Hotline's tile is.
 - At 20px and under the tick is cut heavier (8 units instead of 6.2) so it
   stays more than two pixels wide.

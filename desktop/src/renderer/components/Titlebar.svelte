@@ -4,12 +4,10 @@
   import Mark from './Mark.svelte';
 </script>
 
-<!-- The window's strip is the well itself: the rail's key after the lights,
-     the mark at the head of the board, the search at the right. The mark's
-     hard left edge stands on the same line as the board's title below it,
-     so it is aligned rather than centred; with the rail closed it follows
-     the key. -->
-<header class="strip drag" style:--lead={app.layout.railOpen ? `${app.layout.rail + 16}px` : 'auto'}>
+<!-- The window's strip is the well itself: the lights, the rail's key, then
+     the lockup (the mark and the written name) in the left corner, the
+     search at the right. -->
+<header class="strip drag">
   <div class="left">
     <button
       class="icon-btn no-drag"
@@ -19,9 +17,11 @@
     >
       <Icon name="sidebar" size={15} />
     </button>
+    <span class="lockup" aria-label="Brainfile">
+      <span class="mark"><Mark size={16} /></span>
+      <span class="name">brainfile</span>
+    </span>
   </div>
-
-  <div class="mark" class:follows={!app.layout.railOpen} title="Brainfile"><Mark size={18} /></div>
 
   <div class="right">
     <button class="search field no-drag" onclick={() => (app.paletteOpen = true)}>
@@ -37,7 +37,7 @@
     height: var(--strip-h);
     flex: none;
     display: grid;
-    grid-template-columns: var(--lead) auto 1fr;
+    grid-template-columns: 1fr 1fr;
     align-items: center;
     padding: 0 var(--gap);
   }
@@ -54,16 +54,26 @@
     height: 24px;
   }
 
+  .lockup {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: var(--s2);
+  }
+
   .mark {
     display: inline-flex;
     color: var(--ink-3);
-    /* The box starts 10 units into its 64 grid; pull it back so its hard
-       edge, not its viewBox, sits on the title's line. */
-    margin-left: -2px;
   }
 
-  .mark.follows {
-    margin-left: var(--s3);
+  /* The written name, lowercase, in the mark's colour: the lockup is one
+     piece of furniture, not a heading. */
+  .name {
+    font-size: var(--t-md);
+    line-height: var(--lh-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink-3);
   }
 
   .right {
