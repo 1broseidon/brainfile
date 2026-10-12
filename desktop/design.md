@@ -50,6 +50,12 @@ One family, **Workbench**:
   beneath it.
 - Menus, the command palette and the new-task dialog are pop-plane surfaces
   on the one float shadow, and nothing else floats.
+- The **palette** opens on one row, its query, ended by a hairline as a
+  menu's filter is: the search mark, the field, and, while a board is open,
+  `every project` as a quiet mono chip at the end. The row is the pop itself,
+  not a field sunk into it, and it keeps the entries' insets, so the mark,
+  the text and the chip stand on their icon, label and key edges; the first
+  section label stands 16 below the line.
 
 ## The mark
 

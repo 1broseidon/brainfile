@@ -138,9 +138,20 @@
 
 <div class="overlay" role="presentation" onmousedown={close}></div>
 <div class="palette" role="dialog" aria-label="Command menu">
-  <div class="field">
+  <!-- One row: the search mark in the entries' icon column, the query on
+       their labels' edge, and the scope at the end where their keys sit. -->
+  <div class="query">
+    <span class="lead"><Icon name="search" size={15} /></span>
+    <input
+      bind:this={input}
+      bind:value={query}
+      {onkeydown}
+      placeholder="Type a command or search tasks…"
+      aria-label="Command or search"
+      spellcheck="false"
+      autocomplete="off"
+    />
     {#if app.active}<span class="scope mono">every project</span>{/if}
-    <input bind:this={input} bind:value={query} {onkeydown} placeholder="Type a command or search tasks…" spellcheck="false" />
   </div>
   <div class="results" bind:this={list}>
     {#each entries as entry, i (entry.key)}
@@ -186,7 +197,7 @@
     z-index: var(--z-menu);
     top: 16vh;
     left: 50%;
-    width: 640px;
+    width: min(640px, calc(100vw - var(--s8) * 2));
     max-height: 60vh;
     transform: translateX(-50%);
     display: flex;
@@ -205,35 +216,52 @@
     }
   }
 
-  .field {
+  /* The query row is the pop itself, not a field sunk into it: no well, no
+     rim, only the hairline that ends it. Its insets are the entries' own
+     (the results' 8 plus an entry's 12), so the mark stands in their icon
+     column, the text starts on their labels' edge and the scope ends where
+     their keys do. */
+  .query {
+    flex: none;
+    height: var(--s12);
     display: flex;
-    flex-direction: column;
-    gap: var(--s2);
-    padding: var(--s3) var(--s4) 0;
-    border-bottom: 0.5px solid var(--line-strong);
+    align-items: center;
+    gap: var(--s3);
+    padding: 0 var(--s5);
+    border-bottom: var(--hairline) solid var(--line-strong);
   }
 
-  .scope {
-    align-self: flex-start;
-    height: 22px;
-    padding: 0 var(--s2);
-    display: inline-flex;
-    align-items: center;
-    border-radius: var(--r-chip);
-    font-size: var(--t-xs);
-    color: var(--ink-2);
-    background: var(--fill-active);
+  .query .lead {
+    color: var(--ink-3);
   }
 
   input {
-    height: 44px;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
     border: 0;
     background: transparent;
     font-size: var(--t-read);
+    line-height: var(--lh-read);
   }
 
   input::placeholder {
     color: var(--ink-3);
+  }
+
+  /* Says the search reaches past the board in front. A quiet tint, not a
+     key's raised rim, since it is not pressed. */
+  .scope {
+    flex: none;
+    height: 20px;
+    padding: 0 var(--s2);
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--r-chip);
+    color: var(--ink-3);
+    background: var(--fill-hover);
+    white-space: nowrap;
   }
 
   .results {
@@ -241,9 +269,12 @@
     overflow-y: auto;
   }
 
+  /* Set on the ink of the icons beneath it (a glyph sits 3 units into its
+     16 grid); the first stands 16 below the hairline. */
   .section {
-    padding: var(--s2) var(--s2) var(--s1);
+    padding: var(--s2) var(--s4) var(--s1);
     font-size: var(--t-xs);
+    line-height: var(--lh-xs);
     font-weight: 500;
     color: var(--ink-3);
   }
@@ -270,7 +301,6 @@
     color: var(--ink-2);
   }
 
-
   .label {
     flex: 1;
     overflow: hidden;
@@ -294,6 +324,7 @@
   .empty {
     padding: var(--s6);
     text-align: center;
+    text-wrap: balance;
     color: var(--ink-3);
   }
 </style>
