@@ -27,7 +27,7 @@ subtasks:
     completed: true
   - id: spec-15-5
     title: "One home for the board branch: report and prune worktrees outside .brainfile/"
-    completed: false
+    completed: true
   - id: spec-15-6
     title: migrate --to-branch untracks .brainfile/ on the code branch and ignores it in one commit
     completed: false
@@ -37,7 +37,7 @@ subtasks:
   - id: spec-15-8
     title: Tests on scratch repos reproducing runprism.ai's case end to end
     completed: false
-updatedAt: "2026-10-12T21:01:16.293Z"
+updatedAt: "2026-10-12T21:07:40.635Z"
 decisions:
   - decision-1
 ---
