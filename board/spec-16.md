@@ -21,7 +21,10 @@ subtasks:
   - id: spec-16-2
     title: "Phase 1: desktop MCP server for its own chat agents: dispatch, runs, stop; through Hand to… (worktree, dock tab, asks, Review)"
     completed: false
-updatedAt: "2026-10-12T23:16:18.743Z"
+  - id: spec-16-3
+    title: "Phase 1: chat shows 'handed to codex' under the reply; dispatch from the task-in-context"
+    completed: false
+updatedAt: "2026-10-12T23:16:19.193Z"
 ---
 
 ## Description
