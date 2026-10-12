@@ -9,8 +9,10 @@ tags:
   - dispatch
   - git
 createdAt: "2026-10-12T18:47:59.412Z"
-updatedAt: "2026-10-12T23:05:41.738Z"
+updatedAt: "2026-10-12T23:12:07.288Z"
 assignee: claude
+decisions:
+  - decision-2
 ---
 
 ## Description
