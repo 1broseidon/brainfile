@@ -3,7 +3,19 @@
  * whole; the window never edits a snapshot except to show a move before the
  * host confirms it.
  */
-import type { AgentId, AgentInfo, AgentRun, Api, BoardSnapshot, ModelOption, PermissionAsk, Project, TaskView } from '../../shared/api';
+import type {
+  AgentId,
+  AgentInfo,
+  AgentModes,
+  AgentRun,
+  Api,
+  BoardSnapshot,
+  DispatchSettings,
+  ModelOption,
+  PermissionAsk,
+  Project,
+  TaskView,
+} from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
 import { asTree } from './format';
 
@@ -127,6 +139,11 @@ class AppState {
   /** The thread in the popover, per board; null is the blank page it opens to. */
   thread = $state<Record<string, string | null>>({});
   chatOpen = $state(false);
+  /** Settings take the board's place in the pane until a project is picked or Esc. */
+  settingsOpen = $state(false);
+  settings = $state<DispatchSettings>({ bypass: false, modes: {} });
+  /** Each agent's permission modes, as it reports them; null when it has none. */
+  modes = $state<Partial<Record<AgentId, AgentModes | null>>>({});
   models = $state<Partial<Record<AgentId, ModelOption[]>>>({});
   /** The model chosen for each agent; unset means the agent's own default. */
   modelChoice = $state<Partial<Record<AgentId, string>>>(load(MODEL_KEY, {}));
@@ -175,6 +192,7 @@ class AppState {
       else this.asks = this.asks.filter((a) => a.id !== event.id);
     });
     void api.listAgents().then((agents) => (this.agents = agents));
+    void api.getSettings().then((settings) => (this.settings = settings));
     this.projects = await api.listProjects();
     this.loaded = true;
     // A board can turn up while the window is away (pushed from another
@@ -239,6 +257,25 @@ class AppState {
     if (this.models[agentId]) return;
     const result = await api.listModels(agentId);
     this.models[agentId] = result.ok ? result.value : [];
+  }
+
+  async loadModes(agentId: AgentId): Promise<void> {
+    if (agentId in this.modes) return;
+    const result = await api.listModes(agentId);
+    this.modes[agentId] = result.ok ? result.value : null;
+  }
+
+  async setSettings(patch: Partial<DispatchSettings>): Promise<void> {
+    this.settings = { ...this.settings, ...patch };
+    this.settings = await api.setSettings($state.snapshot(patch) as Partial<DispatchSettings>);
+  }
+
+  /** null is the agent's own default. */
+  chooseMode(agentId: AgentId, mode: string | null): void {
+    const modes = { ...this.settings.modes };
+    if (mode) modes[agentId] = mode;
+    else delete modes[agentId];
+    void this.setSettings({ modes });
   }
 
   chooseModel(agentId: AgentId, model: string | null): void {
@@ -313,6 +350,7 @@ class AppState {
   }
 
   async select(projectId: string): Promise<void> {
+    this.settingsOpen = false;
     this.activeId = projectId;
     this.selectedTaskId = null;
     this.openTaskId = null;

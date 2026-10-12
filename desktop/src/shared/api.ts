@@ -200,6 +200,30 @@ export type AgentEvent =
 /** Per repository, how the dispatcher answers an agent that asks first. Set in repo settings later. */
 export type PermissionPolicy = 'ask' | 'allow' | 'bypass';
 
+/** A permission mode an agent offers its sessions (ACP session modes), as the agent names it. */
+export interface AgentMode {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+/** An agent's permission modes, as it reports them at runtime. */
+export interface AgentModes {
+  /** The mode a new session starts in: the agent's own default. */
+  initial: string;
+  options: AgentMode[];
+  /** The mode that never asks (Bypass permissions, Full access, YOLO), if the agent has one. */
+  bypass: string | null;
+}
+
+/** App-wide dispatch settings, kept in the app's dispatch.json. */
+export interface DispatchSettings {
+  /** On: every agent runs in its bypass mode and nothing is asked. Off: each agent's own default, or the mode chosen for it. */
+  bypass: boolean;
+  /** A mode chosen per agent for when bypass is off; unset is the agent's default. */
+  modes: Partial<Record<AgentId, string>>;
+}
+
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Requests the renderer can make. Each maps to one handler in the host or main. */
@@ -231,6 +255,11 @@ export interface Api {
   listAgents(): Promise<AgentInfo[]>;
   /** The agent's models, as it reports them; probed once and cached. */
   listModels(agentId: AgentId): Promise<Result<ModelOption[]>>;
+  /** The agent's permission modes, as it reports them; probed with the models and cached. */
+  listModes(agentId: AgentId): Promise<Result<AgentModes | null>>;
+  getSettings(): Promise<DispatchSettings>;
+  /** Applies at once, to sessions already open as well as new ones. */
+  setSettings(patch: Partial<DispatchSettings>): Promise<DispatchSettings>;
   dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>>;
   /** One turn in a chat thread; earlier lines come along in case the agent's session has gone. */
   ask(projectId: string, agentId: AgentId, text: string, threadId: string, model?: string, earlier?: ChatTurn[]): Promise<Result<AgentRun>>;
@@ -251,7 +280,17 @@ export const CHANNEL = {
 } as const;
 
 /** Methods main forwards to the agents process. */
-export const AGENT_METHODS = ['listAgents', 'listModels', 'dispatch', 'ask', 'stopRun', 'answerPermission'] as const;
+export const AGENT_METHODS = [
+  'listAgents',
+  'listModels',
+  'listModes',
+  'getSettings',
+  'setSettings',
+  'dispatch',
+  'ask',
+  'stopRun',
+  'answerPermission',
+] as const;
 export type AgentMethod = (typeof AGENT_METHODS)[number];
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
 export type AgentMessage = { kind: 'reply'; id: number; result: unknown } | { kind: 'event'; event: AgentEvent };

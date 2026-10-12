@@ -244,8 +244,29 @@ board changes (and in the feed).
   because some agents (Codex) start MCP servers in a stripped environment
   where a version-manager shim never answers. The brief also says to fall
   back to the `brainfile` command line, never to edit board files by hand.
-  Per repository, the answer can be `ask` (the default), `allow` or
-  `bypass`, kept in the app's `dispatch.json` until repo settings exist.
+- **Permissions are the agent's own.** Each agent reports its permission
+  modes at runtime (ACP session modes), and Settings offers exactly those,
+  in the agent's words. One switch, Work without asking, puts every agent
+  in its bypass mode (Claude's Bypass permissions, Codex's Full access,
+  Antigravity's YOLO) and allows whatever is still asked; off, each agent
+  starts in its own default or the mode chosen for it. A change reaches
+  sessions already open. A repository's own policy (`ask`, `allow`,
+  `bypass` in `dispatch.json`) will override it once repo settings exist.
+
+## Settings
+
+Settings take the board's place in the pane (⌘, or the quiet row at the foot
+of the rail; Esc or a project leaves). One column, 560px, centred: a
+section's heading and its one-line lede, then its rows in a group (raised,
+radius 14) with no lines between them. Headings and notes stand on the
+rows' text, not the group's rim, so the column has one left edge.
+
+- **A switch is a box sliding in a sunk track**, the checkbox's corner kept;
+  on, the track takes the accent, the one place a setting earns it.
+- **A choice is a quiet pick**, the current value in ink-2 with the agent's
+  default marked `default` in mono; its menu gives each option's own
+  description. When a switch overrides the choice, the value is said, not
+  offered, in the same place.
 
 ## Microinteractions stance
 

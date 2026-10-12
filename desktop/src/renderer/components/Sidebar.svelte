@@ -72,7 +72,7 @@
 
   <nav class="projects">
     {#each ordered as { project, sister }, i (project.id)}
-      {@const active = project.id === app.activeId}
+      {@const active = project.id === app.activeId && !app.settingsOpen}
       {@const ready = project.state.status === 'ready'}
       <button class="project" class:sister class:active use:tip={`${tildify(project.path)} · ${storageWord(project) || line(project)}`} onclick={() => app.select(project.id)}>
         <span class="where"><Icon name={storageIcon(project)} size={14} /></span>
@@ -90,6 +90,13 @@
       </button>
     {/if}
   </nav>
+
+  <!-- Settings wait at the foot of the rail, as quiet as a project row. -->
+  <button class="project foot" class:active={app.settingsOpen} onclick={() => (app.settingsOpen = !app.settingsOpen)}>
+    <span class="where"><Icon name="settings" size={14} /></span>
+    <span class="name">Settings</span>
+    <span class="key mono">⌘,</span>
+  </button>
 </aside>
 
 <style>
@@ -200,6 +207,20 @@
 
   .project:hover .key {
     opacity: 1;
+  }
+
+  .foot {
+    flex: none;
+    margin-top: auto;
+  }
+
+  .foot .name {
+    font-weight: 400;
+    color: var(--ink-2);
+  }
+
+  .foot.active .name {
+    color: var(--ink);
   }
 
   .add {

@@ -50,9 +50,14 @@
       e.preventDefault();
       return;
     }
-    if (meta && e.key === 'j' && app.board) {
+    if (meta && e.key === 'j' && app.board && !app.settingsOpen) {
       if (app.chatOpen) app.chatOpen = false;
       else app.openChat();
+      e.preventDefault();
+      return;
+    }
+    if (meta && e.key === ',') {
+      app.settingsOpen = !app.settingsOpen;
       e.preventDefault();
       return;
     }
@@ -69,6 +74,13 @@
     }
     if (app.paletteOpen || app.composer || app.menu || typing(e.target) || meta || e.altKey) return;
 
+    if (app.settingsOpen) {
+      if (e.key === 'Escape') {
+        app.settingsOpen = false;
+        e.preventDefault();
+      }
+      return;
+    }
     if (e.key === 'Escape' && app.openTaskId) {
       app.openTaskId = null;
       e.preventDefault();
@@ -134,7 +146,7 @@
       <div class="edge"></div>
     {/if}
     <Workspace />
-    {#if app.openTaskId && app.board}
+    {#if app.openTaskId && app.board && !app.settingsOpen}
       {#if overlay}
         <div class="float" style:width="{app.layout.pane}px">
           <TaskDetail board={app.board} taskId={app.openTaskId} />

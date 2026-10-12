@@ -5,6 +5,7 @@
   import Mark from './Mark.svelte';
   import PathTip from './PathTip.svelte';
   import ChatPop from './ChatPop.svelte';
+  import Settings from './Settings.svelte';
   import AskLine from './AskLine.svelte';
   import ListView from './ListView.svelte';
   import BoardView from './BoardView.svelte';
@@ -47,6 +48,15 @@
   {/if}
   {#if !app.loaded}
     <div class="center"></div>
+  {:else if app.settingsOpen}
+    <header class="band">
+      <span class="title">Settings</span>
+      <span class="spacer"></span>
+      <button class="icon-btn" use:tip={'Close  Esc'} aria-label="Close settings" onclick={() => (app.settingsOpen = false)}>
+        <Icon name="close" size={14} />
+      </button>
+    </header>
+    <div class="content"><Settings /></div>
   {:else if !project}
     <div class="center">
       <div class="empty">

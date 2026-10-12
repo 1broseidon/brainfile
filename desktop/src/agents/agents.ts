@@ -21,9 +21,12 @@ import type {
   AgentId,
   AgentInfo,
   AgentMessage,
+  AgentMode,
+  AgentModes,
   AgentRequest,
   AgentRun,
   ChatTurn,
+  DispatchSettings,
   ModelOption,
   PermissionAsk,
   PermissionPolicy,
@@ -133,18 +136,44 @@ function listAgents(): AgentInfo[] {
   });
 }
 
-function policyFor(projectId: string): PermissionPolicy {
+// ── Settings ─────────────────────────────────────────────────────────────────
+
+/** dispatch.json: the app-wide settings, and per repository a policy that overrides them. */
+interface SettingsFile extends Partial<DispatchSettings> {
+  projects?: Record<string, { permissions?: PermissionPolicy }>;
+}
+
+function readSettings(): SettingsFile {
   try {
-    const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) as { projects?: Record<string, { permissions?: PermissionPolicy }> };
-    return settings.projects?.[projectId]?.permissions ?? 'ask';
+    return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) as SettingsFile;
   } catch {
-    return 'ask';
+    return {};
   }
+}
+
+function getSettings(): DispatchSettings {
+  const file = readSettings();
+  return { bypass: file.bypass === true, modes: file.modes ?? {} };
+}
+
+async function setSettings(patch: Partial<DispatchSettings>): Promise<DispatchSettings> {
+  const file = { ...readSettings(), ...patch };
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(file, null, 2));
+  // Sessions already open change mode now, not on their next start.
+  await Promise.all([...sessions.values()].map((session) => applyMode(session)));
+  return getSettings();
+}
+
+/** A repository's own policy wins; otherwise the app-wide switch decides. */
+function policyFor(projectId: string): PermissionPolicy {
+  const file = readSettings();
+  return file.projects?.[projectId]?.permissions ?? (file.bypass ? 'bypass' : 'ask');
 }
 
 // ── Models ───────────────────────────────────────────────────────────────────
 
-type ModelCache = Record<string, { at: number; options: ModelOption[] }>;
+type ModelCache = Record<string, { at: number; options: ModelOption[]; modes?: AgentModes | null }>;
 
 function readModels(): ModelCache {
   try {
@@ -154,37 +183,80 @@ function readModels(): ModelCache {
   }
 }
 
+type SelectEntry = { value?: string; name: string; description?: string | null; options?: SelectEntry[] };
+
+/** A select config option's values, its groups flattened. */
+function flatSelect(option: acp.SessionConfigOption): { value: string; name: string; description?: string }[] {
+  const flat: { value: string; name: string; description?: string }[] = [];
+  if (option.type !== 'select') return flat;
+  for (const entry of option.options as SelectEntry[]) {
+    for (const o of entry.options ?? [entry]) if (o.value) flat.push({ value: o.value, name: o.name, description: o.description ?? undefined });
+  }
+  return flat;
+}
+
 /** The session's model option, if the agent offers one: `category: model`, or an option named model. */
 function modelOption(options: acp.SessionConfigOption[] | null | undefined) {
   const option = options?.find((o) => o.category === 'model' || o.id === 'model');
   if (!option || option.type !== 'select') return null;
-  const flat: ModelOption[] = [];
-  for (const entry of option.options as Array<{ value?: string; name: string; options?: Array<{ value: string; name: string }> }>) {
-    if (entry.options) for (const o of entry.options) flat.push({ value: o.value, name: o.name });
-    else if (entry.value) flat.push({ value: entry.value, name: entry.name });
-  }
-  return { id: option.id, current: option.currentValue as string, options: flat };
+  return { id: option.id, current: option.currentValue as string, options: flatSelect(option).map(({ value, name }) => ({ value, name })) };
 }
 
-function remember(agentId: AgentId, options: ModelOption[]): void {
-  if (!options.length) return;
+/** The modes that never ask: Claude's Bypass permissions, Codex's Full access, Antigravity's YOLO. */
+const BYPASS_MODE = /bypass|yolo|full.?access|dont.?ask/i;
+
+/**
+ * The session's permission modes, as the agent reports them: ACP session
+ * modes, or else a config option of category `mode`. `via` says which one
+ * changes it.
+ */
+function modesOf(created: acp.NewSessionResponse): (AgentModes & { via: { configId: string } | null }) | null {
+  let options: AgentMode[];
+  let initial: string;
+  let via: { configId: string } | null = null;
+  if (created.modes?.availableModes.length) {
+    options = created.modes.availableModes.map((m) => ({ id: m.id, name: m.name, description: m.description ?? undefined }));
+    initial = created.modes.currentModeId;
+  } else {
+    const option = created.configOptions?.find((o) => o.category === 'mode' && o.type === 'select');
+    if (!option) return null;
+    options = flatSelect(option).map((o) => ({ id: o.value, name: o.name, description: o.description }));
+    initial = option.currentValue as string;
+    via = { configId: option.id };
+  }
+  const bypass = options.find((m) => BYPASS_MODE.test(m.id) || BYPASS_MODE.test(m.name))?.id ?? null;
+  return { initial, options, bypass, via };
+}
+
+function remember(agentId: AgentId, options: ModelOption[], modes: AgentModes | null): void {
+  if (!options.length && !modes) return;
   const cache = readModels();
-  cache[agentId] = { at: Date.now(), options };
+  cache[agentId] = { at: Date.now(), options, modes };
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(MODELS_FILE, JSON.stringify(cache, null, 2));
 }
 
-async function listModels(agentId: AgentId): Promise<Result<ModelOption[]>> {
+/** What the agent reports about its sessions, asked once a day: a throwaway session, no tools, then gone. */
+async function probe(agentId: AgentId): Promise<Result<ModelCache[string]>> {
   const cached = readModels()[agentId];
-  if (cached && Date.now() - cached.at < MODELS_TTL_MS) return { ok: true, value: cached.options };
-  // Ask the agent itself: a throwaway session, no tools, then gone.
+  if (cached && 'modes' in cached && Date.now() - cached.at < MODELS_TTL_MS) return { ok: true, value: cached };
   try {
-    const session = await open(DATA_DIR, agentId, `models:${agentId}`, undefined, false);
+    const session = await open(DATA_DIR, agentId, `probe:${agentId}`, undefined, false);
     close(session);
-    return { ok: true, value: readModels()[agentId]?.options ?? [] };
+    return { ok: true, value: readModels()[agentId] ?? { at: Date.now(), options: [], modes: null } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
+}
+
+async function listModels(agentId: AgentId): Promise<Result<ModelOption[]>> {
+  const result = await probe(agentId);
+  return result.ok ? { ok: true, value: result.value.options } : result;
+}
+
+async function listModes(agentId: AgentId): Promise<Result<AgentModes | null>> {
+  const result = await probe(agentId);
+  return result.ok ? { ok: true, value: result.value.modes ?? null } : result;
 }
 
 // ── Sessions ─────────────────────────────────────────────────────────────────
@@ -200,6 +272,9 @@ interface Session {
   run: AgentRun | null;
   text: string;
   idle: NodeJS.Timeout | null;
+  /** The agent's permission modes, and the one the session is in. */
+  modes: ReturnType<typeof modesOf>;
+  mode: string | null;
 }
 
 const sessions = new Map<string, Session>();
@@ -267,13 +342,26 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   const launch = await known.launch();
   const child = spawn(launch.command, launch.args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'ignore'] });
 
-  const session: Session = { key, projectId, agentId, child, connection: null!, sessionId: '', run: null, text: '', idle: null };
+  const session: Session = {
+    key,
+    projectId,
+    agentId,
+    child,
+    connection: null!,
+    sessionId: '',
+    run: null,
+    text: '',
+    idle: null,
+    modes: null,
+    mode: null,
+  };
   const stream = acp.ndJsonStream(Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>);
   session.connection = new acp.ClientSideConnection(
     () => ({
       requestPermission: (params) => requestPermission(session, params),
       sessionUpdate: async (params) => {
         const u = params.update;
+        if (u.sessionUpdate === 'current_mode_update') session.mode = u.currentModeId;
         const run = session.run;
         if (!run) return;
         if (u.sessionUpdate === 'agent_message_chunk' && u.content.type === 'text') session.text += u.content.text;
@@ -294,18 +382,40 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   const created = await session.connection.newSession({ cwd, mcpServers: board ? brainfileMcp() : [] });
   session.sessionId = created.sessionId;
   const models = modelOption(created.configOptions);
-  if (models) {
-    remember(agentId, models.options);
-    if (model && model !== models.current && models.options.some((o) => o.value === model)) {
-      await session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => {});
-    }
+  session.modes = modesOf(created);
+  session.mode = session.modes?.initial ?? null;
+  remember(agentId, models?.options ?? [], session.modes && { initial: session.modes.initial, options: session.modes.options, bypass: session.modes.bypass });
+  if (models && model && model !== models.current && models.options.some((o) => o.value === model)) {
+    await session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => {});
   }
-  if (policyFor(projectId) === 'bypass') {
-    const bypass = created.modes?.availableModes.find((m) => /bypass/i.test(m.id));
-    if (bypass) await session.connection.setSessionMode({ sessionId: created.sessionId, modeId: bypass.id }).catch(() => {});
-  }
+  if (board) await applyMode(session);
   sessions.set(key, session);
   return session;
+}
+
+/**
+ * Puts a session in the mode the settings ask for: the bypass mode while
+ * bypass is on (app-wide or for this repository), else the mode chosen for
+ * the agent, else the one it started in, which is its own default.
+ */
+async function applyMode(session: Session): Promise<void> {
+  const modes = session.modes;
+  if (!modes) return;
+  const chosen = getSettings().modes[session.agentId];
+  const want =
+    policyFor(session.projectId) === 'bypass' && modes.bypass
+      ? modes.bypass
+      : chosen && modes.options.some((m) => m.id === chosen)
+        ? chosen
+        : modes.initial;
+  if (want === session.mode) return;
+  try {
+    if (modes.via) await session.connection.setSessionConfigOption({ sessionId: session.sessionId, configId: modes.via.configId, value: want });
+    else await session.connection.setSessionMode({ sessionId: session.sessionId, modeId: want });
+    session.mode = want;
+  } catch {
+    // The agent refused the change; it keeps the mode it is in.
+  }
 }
 
 /** Brainfile's own board tools: `brainfile_list_tasks`, `mcp__brainfile__task_add`, `mcp.brainfile.list_tasks`. */
@@ -464,6 +574,9 @@ async function stopRun(runId: string): Promise<void> {
 const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   listAgents,
   listModels,
+  listModes,
+  getSettings,
+  setSettings,
   dispatch,
   ask,
   stopRun,

@@ -29,6 +29,7 @@
     ask: 'M2.5 3h11v8h-6l-3 2.5V11h-2z',
     send: 'M8 13V3.5M4 7.5 8 3.5l4 4',
     history: 'M3 3h10v10H3zM8 5.5V8l2 1.5',
+    settings: 'M2.5 5h11M2.5 11h11M5.5 3v4M10.5 9v4',
   } as const;
 
   export type IconName = keyof typeof PATHS;
