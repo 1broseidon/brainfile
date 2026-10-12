@@ -1,8 +1,8 @@
 ---
 id: task-26
 title: "GitHub integration: track a repo's issues and offer to turn them into tasks"
-column: backlog
-position: 5
+column: todo
+position: 3
 description: |-
   When a repo's git origin points at GitHub, the desktop app detects it and shows that repo's open issues next to the board. For an issue with no linked task, offer to create a Brainfile task from it (title, body, labels as tags) and keep a link back to the issue so it isn't offered twice.
 
@@ -33,6 +33,7 @@ subtasks:
     title: Mark issues that already have a linked task
     completed: false
 createdAt: "2026-10-12T20:34:18.677Z"
+updatedAt: "2026-10-12T21:58:41.137Z"
 ---
 
 ## Description
