@@ -77,6 +77,12 @@
       "require": "./dist/repo/index.js",
       "default": "./dist/repo/index.js"
     },
+    "./memory": {
+      "types": "./dist/memory/index.d.ts",
+      "import": "./dist/memory/index.js",
+      "require": "./dist/memory/index.js",
+      "default": "./dist/memory/index.js"
+    },
     "./dist/*": "./dist/*",
     "./package.json": "./package.json"
   },
@@ -114,6 +120,9 @@
       ],
       "repo": [
         "dist/repo/index.d.ts"
+      ],
+      "memory": [
+        "dist/memory/index.d.ts"
       ],
       "dist/*": [
         "dist/*"
