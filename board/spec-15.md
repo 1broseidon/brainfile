@@ -2,8 +2,8 @@
 id: spec-15
 title: "Board integrity: one board per repo, detected, merged and backed up"
 type: spec
-column: todo
-position: 3
+column: in-progress
+position: 1
 priority: high
 tags:
   - sync
@@ -37,7 +37,7 @@ subtasks:
   - id: spec-15-8
     title: Tests on scratch repos reproducing runprism.ai's case end to end
     completed: false
-updatedAt: "2026-10-12T19:23:33.013Z"
+updatedAt: "2026-10-12T20:39:17.685Z"
 ---
 
 ## Description
