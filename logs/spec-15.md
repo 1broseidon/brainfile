@@ -2,8 +2,6 @@
 id: spec-15
 title: "Board integrity: one board per repo, detected, merged and backed up"
 type: spec
-column: review
-position: 0
 priority: high
 tags:
   - sync
@@ -37,9 +35,10 @@ subtasks:
   - id: spec-15-8
     title: Tests on scratch repos reproducing runprism.ai's case end to end
     completed: true
-updatedAt: "2026-10-12T21:14:20.918Z"
+updatedAt: "2026-10-12T21:53:42.318Z"
 decisions:
   - decision-1
+completedAt: "2026-10-12T21:53:42.318Z"
 ---
 
 ## Description
@@ -61,3 +60,10 @@ A repo should have one board, and Brainfile should know when it doesn't. runpris
 
 ## Log
 - 2026-10-12T21:14:21.138Z: [claude] All eight subtasks built on feat/board-integrity (4 commits on top of feat/desktop-app 250da20; worktree ../brainfile-wt-board-integrity): phases task-27..30. Not merged: feat/desktop-app's main worktree has uncommitted window-state work. Open follow-ups: the TUI does not guard writes yet (CLI, MCP, desktop do); no desktop button for 'tracked twice' (where/lint point to migrate --to-branch).
+
+## Child Tasks
+Summary: 4/4 children completed.
+- task-27: spec-15 phase 1: detect every board; where reports them; writes refuse when boards disagree (completed)
+- task-28: spec-15 phase 2: backups as refs, merge-boards and adopt (completed)
+- task-29: spec-15 phase 3: one home for the board branch; migrate --to-branch finishes the job (completed)
+- task-30: spec-15 phase 4: desktop two-boards line and health (completed)
