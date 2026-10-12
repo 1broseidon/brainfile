@@ -36,3 +36,4 @@ Do not change code. For each critical issue found, create a follow-up task under
 
 ## Log
 - 2026-10-12T23:38:09.499Z: [codex] Review found two critical lifecycle risks: concurrent dispatch can share one task worktree, and stopping a starting run does not prevent its later prompt. Verifying call paths before filing follow-ups.
+- 2026-10-12T23:38:46.691Z: [codex] Verdict: task-38, task-39. Reviewed e7280cc dispatch/stop, authorization and chat hand-offs; reproduced concurrent dispatch and traced startup cancellation. No code changed; review record committed on dispatch/task-37. Next: review and fix the two spec-16 follow-ups.
