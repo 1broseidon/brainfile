@@ -28,7 +28,10 @@ subtasks:
   - id: spec-15-5
     title: "One home for the board branch: report and prune worktrees outside .brainfile/"
     completed: false
-updatedAt: "2026-10-12T19:03:43.496Z"
+  - id: spec-15-6
+    title: migrate --to-branch untracks .brainfile/ on the code branch and ignores it in one commit
+    completed: false
+updatedAt: "2026-10-12T19:03:43.805Z"
 ---
 
 ## Description
