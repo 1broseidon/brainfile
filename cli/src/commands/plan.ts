@@ -24,6 +24,7 @@ import { CLIError, missingRequired, operationFailed, taskNotFound } from '../uti
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { ensureV2Dirs, getV2Dirs, findV2Task, composeBody, extractDescription } from '../utils/v2-detect';
+import { checkLinks, readBoardGraph } from '../utils/graph';
 
 export const PLAN_COMMAND_HELP = `
 Plans are board documents with type: plan. They participate in the board like
@@ -40,9 +41,9 @@ Link direction:
   A task's parentId points at the plan it implements (task.parentId = plan-1).
   Find a plan's tasks with: brainfile list --parent plan-1
 
-Note:
-  On a strict board, add a 'plan' entry under types: in your brainfile
-  before creating plan documents.
+Where plans sit (spec-12):
+  A plan goes under an epic or a spec and holds tasks. Plan is a built-in
+  type, so a strict board needs no types: entry for it.
 `.trimEnd();
 
 const PLAN_TYPE = 'plan';
@@ -119,6 +120,11 @@ export function planAddCommand(options: PlanAddOptions, logger: Logger = default
     throw new CLIError(`Column not found: ${columnRef}. Available: ${available}`);
   }
 
+  const parentId = options.parent?.trim() || undefined;
+  if (parentId) {
+    checkLinks(readBoardGraph(filePath), { type: PLAN_TYPE, parentId }, logger);
+  }
+
   const result = addTaskFile(
     dirs.boardDir,
     {
@@ -126,11 +132,12 @@ export function planAddCommand(options: PlanAddOptions, logger: Logger = default
       type: PLAN_TYPE,
       column: targetColumn.id,
       tags: options.tags ? options.tags.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
-      parentId: options.parent,
+      parentId,
       status: options.status,
     },
     composeBody(options.description),
     dirs.logsDir,
+    { types: board.types },
   );
 
   if (!result.success || !result.task) {
@@ -265,6 +272,8 @@ export function planLinkCommand(options: PlanLinkOptions, logger: Logger = defau
   if (!found || found.isLog) {
     throw taskNotFound(options.task);
   }
+
+  checkLinks(readBoardGraph(filePath), { id: options.task, parentId: options.plan }, logger);
 
   const result = patchTaskFile(found.filePath, { parentId: options.plan });
   if (!result.success) {

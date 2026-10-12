@@ -139,7 +139,8 @@ columns:
       expect(fs.existsSync(path.join(logsDir, 'epic-1.md'))).toBe(true);
     });
 
-    it('does not gate non-epic tasks that have children', () => {
+    // spec-12: epic's rule is every container's; a task holds tasks.
+    it('gates any parent that has open children', () => {
       writeTaskFile(
         path.join(boardDir, 'task-60.md'),
         { id: 'task-60', title: 'Child', column: 'todo', parentId: 'task-61' } as Task,
@@ -151,7 +152,24 @@ columns:
         '',
       );
 
-      expect(completeCommand({ file: brainfilePath, task: 'task-61' }, logger).success).toBe(true);
+      expect(() => completeCommand({ file: brainfilePath, task: 'task-61' }, logger)).toThrow(
+        'Task task-61 has 1 incomplete child task(s). Use --force to override.',
+      );
+      expect(logger.getOutput()).toContain('Task task-61 has incomplete child tasks:');
+      expect(logger.getOutput()).toContain('- task-60: Child');
+
+      expect(completeCommand({ file: brainfilePath, task: 'task-61', force: true }, logger).success).toBe(true);
+      expect(logger.getOutput()).toContain('Completing task task-61 with --force despite 1 incomplete child task(s).');
+    });
+
+    it('gates a spec by its plan, and refuses a decision', () => {
+      writeTaskFile(path.join(boardDir, 'plan-1.md'), { id: 'plan-1', title: 'Plan', type: 'plan', column: 'todo', parentId: 'spec-1' } as Task, '');
+      writeTaskFile(path.join(boardDir, 'spec-1.md'), { id: 'spec-1', title: 'Spec', type: 'spec', column: 'todo' } as Task, '');
+      expect(() => completeCommand({ file: brainfilePath, task: 'spec-1' }, logger)).toThrow('Spec spec-1 has 1 incomplete child task(s)');
+
+      writeTaskFile(path.join(boardDir, 'decision-1.md'), { id: 'decision-1', title: 'Use SQLite', type: 'decision' } as Task, '');
+      expect(() => completeCommand({ file: brainfilePath, task: 'decision-1', force: true }, logger)).toThrow(/decisions are not completed/);
+      expect(fs.existsSync(path.join(boardDir, 'decision-1.md'))).toBe(true);
     });
   });
 });

@@ -18,17 +18,31 @@ import { WireClient, type Era } from './helpers/mcp-wire';
 const ERAS: Era[] = ['legacy', 'modern'];
 
 const EXPECTED_TOOLS = [
+  'adr_promote',
+  'board',
   'brief',
+  'check',
+  'columns',
   'contract',
+  'decide',
   'get_task',
+  'lint',
   'list_tasks',
+  'log',
+  'note',
+  'retire',
   'search',
   'subtask',
+  'supersede',
+  'sync',
   'task_add',
   'task_complete',
   'task_delete',
   'task_move',
   'task_patch',
+  'template',
+  'types',
+  'where',
 ];
 
 /** A board with two tasks, one of which carries an extension field. */
@@ -90,7 +104,7 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
 
   // ── advertisement ────────────────────────────────────────────────────────
 
-  test('advertises exactly the 11 consolidated tools', async () => {
+  test('advertises exactly the 25 consolidated tools', async () => {
     const names = (await client.listTools()).map((t) => t.name).sort();
     expect(names).toEqual(EXPECTED_TOOLS);
   });
@@ -374,12 +388,50 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
       ['search', { task: 'task-1' }],
       // peek keeps this sweep side-effect-free against the shared fixture.
       ['brief', { agent: `wire-sweep-${era}`, peek: true }],
+      ['brief', { agent: `wire-sweep-${era}`, peek: true, maxChars: 0 }],
+      ['check', { query: 'wire' }],
+      ['check', { claimKeyPrefix: 'wire' }],
+      // spec-13: the read-only paths of the new tools.
+      ['log', {}],
+      ['log', { task: 'task-1' }],
+      ['log', { query: 'wire' }],
+      ['columns', {}],
+      ['board', {}],
+      ['types', {}],
+      ['template', {}],
+      ['lint', {}],
+      ['where', {}],
+      ['sync', {}],
+      ['list_tasks', { type: 'plan', status: 'draft' }],
     ];
     for (const [name, args] of calls) {
       const result = await client.callTool(name, args);
       expect(WireClient.text(result) ?? '').not.toContain('Output validation error');
       expect(result.structuredContent).toBeDefined();
     }
+  });
+
+  test('decide, supersede and check round-trip through output validation (spec-11)', async () => {
+    const key = `wire.${era}`;
+    const first = await client.callTool('decide', { claimKey: key, text: 'Use the first wire', stance: 'prefers', subject: 'wire' });
+    expect(first.isError).toBeFalsy();
+    const decided = first.structuredContent as { decision: { id: string; status: string; claimKey: string }; superseded: string[] };
+    expect(decided.decision).toMatchObject({ status: 'current', claimKey: key });
+
+    const second = await client.callTool('supersede', { taskId: decided.decision.id, text: 'Use the second wire', stance: 'forbids', subject: 'cables' });
+    expect(second.isError).toBeFalsy();
+    expect((second.structuredContent as { superseded: string[] }).superseded).toEqual([decided.decision.id]);
+
+    const check = await client.callTool('check', { query: 'add cables to the rack', claimKey: key });
+    expect(WireClient.text(check) ?? '').not.toContain('Output validation error');
+    expect(check.structuredContent).toMatchObject({ verdict: 'review', recommendation: 'block_action', exitCode: 2 });
+
+    const prefix = await client.callTool('check', { claimKeyPrefix: 'wire' });
+    expect(prefix.structuredContent).toMatchObject({ claimKeyPrefix: 'wire', exitCode: expect.any(Number) });
+
+    const brief = await client.callTool('brief', { agent: `wire-decide-${era}`, peek: true });
+    const sections = (brief.structuredContent as { sections: Array<{ id: string }>; text: string }).sections;
+    expect(sections.map((s) => s.id)).toEqual(['warnings', 'decisions', 'tasks', 'changes', 'docs']);
   });
 
   test('the server keeps serving after an error result', async () => {
@@ -416,6 +468,10 @@ describe('mcp structured output is identical across protocol eras', () => {
     ['search', { task: 'task-1' }],
     ['subtask', { action: 'toggle', task: 'task-1', all: true }],
     ['task_patch', { task: 'task-2', priority: 'low' }],
+    ['columns', { action: 'add', title: 'Review', after: 'in-progress' }],
+    ['board', { addInstructions: ['Write tests'] }],
+    ['types', {}],
+    ['lint', {}],
   ];
 
   test.each(cases)('%s returns identical structuredContent on both eras', async (name, args) => {

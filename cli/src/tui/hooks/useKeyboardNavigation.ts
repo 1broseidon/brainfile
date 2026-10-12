@@ -11,6 +11,11 @@
  * key that silently duplicates another is muscle-memory noise — rubric P2);
  * `1`/`2`/`3` (there are no panels left to switch between); and every
  * rules/logs modal mode. Completed work is the `L` done view.
+ *
+ * task-19 adds `D`, the decisions view (`d` deletes, so the capital, as `L`
+ * is for done). There `L` folds the history, and the board's mutating keys
+ * answer with how decisions change instead: they are not work, and the CLI's
+ * `decide`, `supersede` and `retire` are what change them.
  */
 import { spawnSync } from 'child_process';
 import { useCallback, useEffect, useRef } from 'react';
@@ -20,6 +25,7 @@ import type { Task } from '@brainfile/core';
 import type { DocRow } from '../rows.js';
 import { isCompletable } from '../utils.js';
 import { buildDetailStops, clampDetailCursor } from '../detailStops.js';
+import { NO_RELATIONS, type DetailRelations } from '../decisions.js';
 import { computeDetailLayout } from '../components/DetailView.js';
 import { patchTuiState } from '../tuiState.js';
 import {
@@ -59,6 +65,16 @@ interface UseKeyboardNavigationProps {
   doneView: boolean;
   /** The drilled-into doc is archived — same gating, resolved per-doc. */
   detailArchived: boolean;
+  /** The list is the decisions view (task-19): `rows` are its decisions. */
+  decisionsView?: boolean;
+  /** The type cycle's name for the decision stop, which `D` goes to. */
+  decisionStop?: string;
+  /** Retired decisions behind the decisions view's history fold. */
+  decisionHistoryCount?: number;
+  /** The drilled-into doc's decision relations: stops before its children. */
+  detailRelations?: DetailRelations;
+  /** The drilled-into doc is a decision: nothing to move, complete or toggle. */
+  detailIsDecision?: boolean;
 }
 
 /** How long a status toast stays on screen. */
@@ -82,6 +98,11 @@ export function useKeyboardNavigation({
   detailHeight,
   doneView,
   detailArchived,
+  decisionsView = false,
+  decisionStop = 'decision',
+  decisionHistoryCount = 0,
+  detailRelations = NO_RELATIONS,
+  detailIsDecision = false,
 }: UseKeyboardNavigationProps) {
   const { exit, suspendTerminal } = useApp();
   // DEVIATION from the bind's `!process.stdout.isTTY || !process.stdin.isTTY`.
@@ -183,6 +204,17 @@ export function useKeyboardNavigation({
 
   const currentTask: Task | undefined = rows[state.selectedTaskIndex]?.task;
   const maxRowIndex = Math.max(0, rows.length - 1);
+  /**
+   * The selected row is archived: the whole `done` stop, or a completed child
+   * kept under its open parent (task-20). Read-mostly either way (§B2).
+   */
+  const rowArchived = doneView || Boolean(rows[state.selectedTaskIndex]?.archived);
+
+  /** The move picker starts on the document's own column, which under a parent may not be the tab's (task-20). */
+  const ownColumnIndex = (task: Task | undefined, fallback: number): number => {
+    const at = task ? allColumns.findIndex((column) => column.tasks?.some((t) => t.id === task.id)) : -1;
+    return at >= 0 ? at : fallback;
+  };
 
   // An overlay (move / delete / complete-confirm) opened from the detail view
   // targets the drilled-into doc, not the list's own selection — they can
@@ -426,11 +458,18 @@ export function useKeyboardNavigation({
       // `detailStops.ts` is the single source of truth for what the cursor is
       // on — children first, then subtasks — shared with `DetailView`'s render
       // so the two can never disagree about what `enter`/`space` act on.
-      const stops = detailTask ? buildDetailStops(detailTask, detailChildren) : [];
+      const stops = detailTask ? buildDetailStops(detailTask, detailChildren, detailRelations) : [];
       const cursor = clampDetailCursor(state.detailCursor, stops.length);
       const stop = stops[cursor];
       const layout = detailTask
-        ? computeDetailLayout(detailTask, detailWidth, detailHeight, detailChildren, detailActivity)
+        ? computeDetailLayout(
+            detailTask,
+            detailWidth,
+            detailHeight,
+            detailChildren,
+            detailActivity,
+            detailRelations,
+          )
         : null;
 
       if (input === 'q') {
@@ -493,21 +532,34 @@ export function useKeyboardNavigation({
         return;
       }
 
-      // `enter` on a child stop drills in; the breadcrumb grows.
+      // `enter` on a child, a decision it rests on, a decision's chain or the
+      // work resting on it drills in; the breadcrumb grows.
       if (key.return) {
-        if (stop?.kind === 'child') {
+        const target =
+          stop?.kind === 'child' || stop?.kind === 'resting'
+            ? stop.task.id
+            : stop?.kind === 'ref' && stop.ref.task
+              ? stop.ref.id
+              : undefined;
+        if (target) {
           setState((prev) => ({
             ...prev,
-            detailPath: [...prev.detailPath, stop.task.id],
+            detailPath: [...prev.detailPath, target],
             detailCursor: 0,
             detailScroll: 0,
           }));
+        } else if (stop?.kind === 'ref' && stop.ref.missing) {
+          showStatus(STATUS.cannotOpen(stop.ref.id, stop.ref.missing), 'info');
         }
         return;
       }
 
       // `space` toggles the subtask under the cursor (existing action wiring).
       if (input === ' ') {
+        if (detailIsDecision) {
+          showStatus(STATUS.decisionsReadOnly, 'info');
+          return;
+        }
         if (detailArchived) {
           // The underlying action only resolves board files, so without this
           // an archived doc answers "not found" — technically true, and
@@ -547,10 +599,16 @@ export function useKeyboardNavigation({
         return;
       }
 
+      // A decision has no column and never completes (task-19): say so,
+      // rather than let the key fall through to nothing.
+      if (detailIsDecision && detailTask && (input === 'm' || input === 'c')) {
+        showStatus(input === 'm' ? STATUS.decisionNoColumn : STATUS.cannotComplete(detailTask.id), 'info');
+        return;
+      }
       // Board mutations are suppressed on an archived doc (§B2); `e` is not a
       // board mutation, so it stays available everywhere.
       if (input === 'm' && detailTask && !detailArchived) {
-        setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
+        setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: ownColumnIndex(detailTask, prev.activeColumnIndex) }));
         return;
       }
       if (input === 'c' && detailTask && !detailArchived && isCompletable(detailTask)) {
@@ -578,27 +636,50 @@ export function useKeyboardNavigation({
       setMode('filter', { filterQuery: '', selectedTaskIndex: 0 });
       return;
     }
+    // Decisions view (`D`, task-19): the type cycle's decision stop, reached
+    // directly. `D` again goes back to the stop it left from.
+    if (input === 'D') {
+      const next = decisionsView ? (state.decisionsReturn ?? 'all') : decisionStop;
+      patchTuiState(filePath, { lastTypeFilter: next }); // resume view (§C3)
+      setState((prev) => ({
+        ...prev,
+        activeTypeFilter: next,
+        decisionsReturn: decisionsView ? null : prev.activeTypeFilter,
+        selectedTaskIndex: 0,
+      }));
+      return;
+    }
     // Done toggle (`L`): flips between board columns and completed history,
     // preserving the column/type/selection view you left. Orthogonal to `t`.
+    // In the decisions view it folds that view's own history instead.
     if (input === 'L') {
+      if (decisionsView) {
+        if (decisionHistoryCount === 0) {
+          showStatus(STATUS.noDecisionHistory, 'info');
+          return;
+        }
+        setState((prev) => ({ ...prev, decisionHistory: !prev.decisionHistory }));
+        return;
+      }
       setState((prev) => ({ ...prev, doneView: !prev.doneView, selectedTaskIndex: 0 }));
       return;
     }
-    // Type-cycle (§A2): all → task → epic → spec → plan → adr → all,
-    // restricted to types the board actually declares.
+    // Type-cycle (§A2): all → task → epic → spec → plan → decision → all,
+    // restricted to types the board actually declares or holds.
     if (input === 't') {
       if (typeCycleOptions.length > 1) {
-        const idx = typeCycleOptions.indexOf(state.activeTypeFilter);
+        // Either spelling of the decision stop continues from the cycle's own.
+        const idx = typeCycleOptions.indexOf(decisionsView ? decisionStop : state.activeTypeFilter);
         const next = typeCycleOptions[(idx < 0 ? 0 : idx + 1) % typeCycleOptions.length];
         patchTuiState(filePath, { lastTypeFilter: next }); // resume view (§C3)
-        setState((prev) => ({ ...prev, activeTypeFilter: next, selectedTaskIndex: 0 }));
+        setState((prev) => ({ ...prev, activeTypeFilter: next, decisionsReturn: null, selectedTaskIndex: 0 }));
       }
       return;
     }
     // Collapse/expand (§A1): only a no-op-free toggle when the row has
     // children currently rendered under it.
     if (input === ' ') {
-      if (doneView) return; // flat list, nothing to collapse
+      if (doneView || decisionsView) return; // flat lists, nothing to collapse
       const row = rows[state.selectedTaskIndex];
       if (row && (row.childCount ?? 0) > 0) {
         const id = row.task.id;
@@ -629,6 +710,17 @@ export function useKeyboardNavigation({
     // The `done` stop is read-mostly (§B2): every mutating key answers with a
     // status line instead of silently doing nothing (rubric P6 — a keystroke
     // that produces no feedback is indistinguishable from a dropped one).
+    //
+    // So is the decisions view (task-19): a decision is not work, so it has
+    // no column, priority or completion, and it is made, replaced and retired
+    // through `brainfile decide`, `supersede` and `retire`. `e` still opens
+    // its file; `d` does not delete one from here.
+    if (decisionsView && ['a', 'n', 'N', 'm', 'c', 'd', 'p', 'A'].includes(input) && !key.ctrl) {
+      if (input === 'c' && currentTask) showStatus(STATUS.cannotComplete(currentTask.id), 'info');
+      else if (input === 'm') showStatus(STATUS.decisionNoColumn, 'info');
+      else showStatus(STATUS.decisionsReadOnly, 'info');
+      return;
+    }
     if (input === 'a' || input === 'n') {
       if (doneView) {
         showStatus(STATUS.readOnly, 'info');
@@ -638,7 +730,7 @@ export function useKeyboardNavigation({
       return;
     }
     if (input === 'm') {
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.readOnly, 'info');
         return;
       }
@@ -646,11 +738,11 @@ export function useKeyboardNavigation({
         showStatus(STATUS.noDocument, 'error');
         return;
       }
-      setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
+      setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: ownColumnIndex(currentTask, prev.activeColumnIndex) }));
       return;
     }
     if (input === 'c') {
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.alreadyCompleted, 'info');
         return;
       }
@@ -666,7 +758,7 @@ export function useKeyboardNavigation({
       return;
     }
     if (input === 'd') {
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.readOnly, 'info');
         return;
       }
@@ -689,7 +781,7 @@ export function useKeyboardNavigation({
     }
     if (input === 'p') {
       if (!currentTask) return;
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.readOnly, 'info');
         return;
       }
@@ -729,7 +821,7 @@ export function useKeyboardNavigation({
     }
     if (input === 'A') {
       if (!currentTask) return;
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.readOnly, 'info');
         return;
       }
@@ -794,7 +886,7 @@ export function useKeyboardNavigation({
     // cycle. Under `done` there is one flat archive list and no columns, so
     // cycling is a deliberate no-op rather than a silent index change.
     if (key.tab || key.rightArrow || input === 'l') {
-      if (!doneView && filteredColumnsLength > 0) {
+      if (!doneView && !decisionsView && filteredColumnsLength > 0) {
         setState((prev) => {
           const nextIndex = (prev.activeColumnIndex + 1) % filteredColumnsLength;
           rememberColumn(nextIndex);
@@ -804,7 +896,7 @@ export function useKeyboardNavigation({
       return;
     }
     if ((key.shift && key.tab) || key.leftArrow || input === 'h') {
-      if (!doneView && filteredColumnsLength > 0) {
+      if (!doneView && !decisionsView && filteredColumnsLength > 0) {
         setState((prev) => {
           const nextIndex =
             prev.activeColumnIndex === 0 ? filteredColumnsLength - 1 : prev.activeColumnIndex - 1;

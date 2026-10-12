@@ -173,6 +173,25 @@ describe('buildBrief', () => {
       ]);
     });
 
+    it('orients against current decisions too, never superseded ones (spec-12)', () => {
+      addAcceptedAdr(fx, 'adr-2', 'Kill the rules block');
+      addTask(fx, makeTask({ id: 'decision-1', title: 'Use node:sqlite', type: 'decision', column: undefined, status: 'current' }));
+      addTask(fx, makeTask({ id: 'decision-2', title: 'Unstated status is current', type: 'decision', column: undefined }));
+      writeTaskFile(
+        path.join(fx.dirs.logsDir, 'decision-3.md'),
+        { id: 'decision-3', title: 'Old choice', type: 'decision', status: 'superseded', supersededBy: 'decision-1', createdAt: T0 } as Task,
+        '',
+      );
+
+      const result = buildBrief(fx.dirs, 'codex', { lastBriefAt: null, now: NOW });
+      const items = lane(result, 'orientation').items.slice(2);
+      expect(items.map((i) => [i.taskId, i.why])).toEqual([
+        ['adr-2', 'accepted adr'],
+        ['decision-1', 'current decision'],
+        ['decision-2', 'current decision'],
+      ]);
+    });
+
     it('inlines contract status as current truth, never as a transition', () => {
       addTask(fx, makeTask({
         id: 'task-1',

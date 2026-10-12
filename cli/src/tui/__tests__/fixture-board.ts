@@ -13,7 +13,7 @@
  *  - `priority: high` and `priority: critical` and no priority
  *  - contracts in ready / in_progress / delivered / done / failed / draft
  *  - a document with a subtask checklist (detail space-toggle)
- *  - an orphan child whose parent is in another column (`← epic-1`)
+ *  - a child whose parent is in another column, drawn under it there (task-20)
  *  - a document with more than three eligible chips (chip cap)
  */
 import * as fs from 'node:fs';
@@ -183,10 +183,11 @@ const TASKS: Array<{ task: Task; body?: string }> = [
     },
   },
   {
-    // parentId points at an epic that lives in another column → orphan row.
+    // parentId points at an epic that lives in another column: drawn under
+    // it in Backlog, saying `todo` (task-20).
     task: {
       id: 'task-11',
-      title: 'Orphaned child of a backlog epic',
+      title: 'Child of a backlog epic, itself in To Do',
       parentId: 'epic-2',
       column: 'todo',
       position: 10,
@@ -205,7 +206,7 @@ const TASKS: Array<{ task: Task; body?: string }> = [
   },
   // ── Detail v2 fixture (v3.1 §B1/§B2) ─────────────────────────────────────
   // A dedicated column ('later') so these documents never shift the counts
-  // the board-list suite asserts on ('Backlog 1', 'To Do 11*', ...): a
+  // the board-list suite asserts on ('Backlog 2', 'To Do 9*', ...): a
   // depth-2 hierarchy (epic-9 → task-50 → 3 children) plus subtasks, a full
   // contract (deliverables over the 3-item cap, validation over the 2-item
   // cap, feedback), a body long enough to force the scroll `↕` indicator at

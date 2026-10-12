@@ -1,4 +1,5 @@
 import type { BoardConfig, TypesConfig } from "./types";
+import { availableTypeNames, isKnownType, resolveDocType } from "./docTypes";
 
 export interface BoardValidationResult {
   valid: boolean;
@@ -7,6 +8,8 @@ export interface BoardValidationResult {
 
 /**
  * Returns the board's type configuration map, or an empty map when absent.
+ * The built-in types are not in it unless the board overrides them; use
+ * `listDocTypes` for every type a board has.
  */
 export function getBoardTypes(board: BoardConfig): TypesConfig {
   return board.types ?? {};
@@ -15,43 +18,34 @@ export function getBoardTypes(board: BoardConfig): TypesConfig {
 /**
  * Returns whether a task of the given type may be auto-completed.
  *
- * The implicit `task` type is always completable. Any other type is
- * completable unless its board config entry sets `completable: false`.
+ * A `task` (or `issue`) always is and a decision (or `adr`) never is. Any
+ * other type is completable unless its board config entry sets
+ * `completable: false`; a custom type with `like:` defaults to its model's rule.
  */
 export function isTypeCompletable(
   taskType: string | undefined,
   types: TypesConfig | undefined,
 ): boolean {
-  const resolvedType = taskType || "task";
-  if (resolvedType === "task") {
-    return true;
-  }
-
-  const typeConfig = (types ?? {})[resolvedType];
-  return typeConfig?.completable !== false;
+  return resolveDocType(taskType, types).completable;
 }
 
 /**
- * Validates a type name against board config strict mode.
+ * Validates a type name against board config strict mode. On a strict board
+ * a type must be one of the five built-ins (or an alias of one) or be named
+ * under `types:`.
  */
 export function validateType(board: BoardConfig, typeName: string): BoardValidationResult {
-  if (!board.strict || !board.types) {
+  if (!board.strict) {
     return { valid: true };
   }
 
-  if (typeName === "task") {
+  if (isKnownType(typeName, board.types)) {
     return { valid: true };
   }
 
-  if (Object.prototype.hasOwnProperty.call(board.types, typeName)) {
-    return { valid: true };
-  }
-
-  const definedKeys = Object.keys(board.types);
-  const availableTypes = definedKeys.includes("task") ? definedKeys : ["task", ...definedKeys];
   return {
     valid: false,
-    error: `Type '${typeName}' is not defined. Available types: ${availableTypes.join(", ")}`,
+    error: `Type '${typeName}' is not defined. Available types: ${availableTypeNames(board.types).join(", ")}`,
   };
 }
 

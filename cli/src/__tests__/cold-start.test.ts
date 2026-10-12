@@ -59,9 +59,12 @@ describe('cold start (§C5 / P1)', () => {
     // The structural claim behind the budget, asserted directly rather than
     // inferred from a timing number: commander resolves `--help` without
     // running the action handler, so the dynamic import never fires.
-    const source = fs.readFileSync(path.join(__dirname, '..', 'cli.ts'), 'utf-8');
+    // cli.ts parses the program that program.ts builds (spec-13).
+    const entry = fs.readFileSync(path.join(__dirname, '..', 'cli.ts'), 'utf-8');
+    const source = fs.readFileSync(path.join(__dirname, '..', 'program.ts'), 'utf-8');
 
-    // No static import of the TUI entry point anywhere in cli.ts…
+    // No static import of the TUI entry point anywhere in either…
+    expect(entry).not.toMatch(/^import .*from ['"]\.\/commands\/tui/m);
     expect(source).not.toMatch(/^import .*from ['"]\.\/commands\/tui/m);
     // …and the only reference to it is a dynamic import.
     expect(source).toMatch(/await import\(['"]\.\/commands\/tui/);

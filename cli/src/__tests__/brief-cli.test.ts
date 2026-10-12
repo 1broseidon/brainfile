@@ -188,14 +188,26 @@ updatedAt: 2026-08-01T00:00:00.000Z
     expect(ignore.split('\n').map((l) => l.trim())).toContain('state/');
   });
 
-  maybe('human mode renders lane labels and a why-column', () => {
+  maybe('human mode prints the budgeted block with its lanes (spec-11)', () => {
     const result = runCli(['brief', '-f', boardPath, '--agent', 'codex']);
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain('Board & Decisions');
-    expect(result.stdout).toContain('Your Tasks');
-    expect(result.stdout).toContain('task-1');
-    expect(result.stdout).toContain('(todo)');
+    expect(result.stdout).toContain('Brainfile brief for codex · Brief CLI Board (first brief)');
+    expect(result.stdout).toContain('Your tasks');
+    expect(result.stdout).toContain('- task-1 A task for codex · To Do');
+    expect(result.stdout).toContain('note: context for the agent');
+  });
+
+  maybe('--max-chars bounds the block; --json carries it with its sections', () => {
+    const payload = JSON.parse(runCli(['brief', '-f', boardPath, '--agent', 'codex', '--peek', '--json', '--max-chars', '80']).stdout);
+    expect(payload.data.maxChars).toBe(80);
+    expect(payload.data.text.length).toBeLessThanOrEqual(80);
+    expect(payload.data.truncated).toBe(true);
+    expect(payload.data.sections.map((l: { id: string }) => l.id)).toEqual(['warnings', 'decisions', 'tasks', 'changes', 'docs']);
+
+    const bad = runCli(['brief', '-f', boardPath, '--agent', 'codex', '--max-chars', 'lots']);
+    expect(bad.status).toBe(1);
+    expect(bad.stderr).toContain('--max-chars must be a number');
   });
 
   maybe('human mode reports an empty delta as a friendly line, exit 0', () => {

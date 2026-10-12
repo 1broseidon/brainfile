@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brainfile.md/v2/adr.json",
   "title": "Brainfile ADR Schema",
-  "description": "Schema for Architecture Decision Record documents. Captures architectural decisions with lifecycle status and supersession tracking. Extends the task schema.",
+  "description": "Schema for Architecture Decision Record documents. 'adr' is an alias of the decision type (decision.json): existing type: adr documents read as decisions and keep their IDs, and new ones are written as type: decision. Extends the task schema.",
   "allOf": [
     {
       "$ref": "https://brainfile.md/v2/task.json"
@@ -15,12 +15,12 @@
         },
         "status": {
           "type": "string",
-          "description": "ADR lifecycle status.",
-          "enum": ["proposed", "accepted", "deprecated", "superseded"]
+          "description": "ADR lifecycle status. accepted and promoted read as a current decision, deprecated as stale; the decision statuses (current, superseded, rejected, stale) are accepted too.",
+          "enum": ["proposed", "accepted", "promoted", "deprecated", "superseded", "current", "rejected", "stale"]
         },
         "supersededBy": {
           "type": "string",
-          "description": "ID of the ADR that supersedes this one. Only relevant when status is 'superseded'.",
+          "description": "ID of the ADR or decision that supersedes this one. Setting it makes the decision superseded.",
           "minLength": 1,
           "examples": ["adr-5"]
         }

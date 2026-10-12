@@ -17,6 +17,11 @@ import {
 } from '../utils/board-repo';
 import { ensureBoardAttributes, registerMergeDriver } from '../utils/board-sync';
 
+/**
+ * A new board's config stays short: the five built-in types (epic, spec,
+ * plan, task, decision) exist without being listed, so there is no types:
+ * block until the board adds or overrides one (spec-12).
+ */
 const DEFAULT_BRAINFILE_V2 = `---
 schema: https://brainfile.md/v2/board.json
 title: My Project
@@ -26,6 +31,8 @@ agent:
     - Completed tasks are in logs/
     - Preserve all IDs
     - Make minimal changes
+    - Larger arcs are epics; specs say what and why, plans say how, tasks are the work (link with parentId)
+    - Standing choices are decisions; work names the ones it rests on in decisions
 columns:
   - id: todo
     title: To Do
@@ -38,6 +45,7 @@ columns:
 Add your project description here.
 
 > Note: Completing a task moves it to \`logs/\` via \`brainfile complete\`.
+> Types: epic, spec, plan, task and decision are built in (\`brainfile types\`); name only your own under \`types:\`.
 `;
 
 const DEFAULT_FILE = path.join('.brainfile', 'brainfile.md');

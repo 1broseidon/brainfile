@@ -20,6 +20,8 @@ export interface TemplateResult {
   success: boolean;
   taskId?: string;
   templateName?: string;
+  /** The column the task went to. */
+  columnId?: string;
 }
 
 export function templateCommand(options: TemplateOptions, logger: Logger = defaultLogger): TemplateResult {
@@ -141,7 +143,8 @@ export function templateCommand(options: TemplateOptions, logger: Logger = defau
     return {
       success: true,
       taskId: newTaskId,
-      templateName: options.use
+      templateName: options.use,
+      columnId: targetColumn.id,
     };
   }
 

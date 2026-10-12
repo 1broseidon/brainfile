@@ -34,6 +34,25 @@ export function requireV2(filePath: string): { content: Array<{ type: 'text'; te
   return null;
 }
 
+/** A plain MCP error result. */
+export function mcpError(message: string): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+  return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true as const };
+}
+
+/** An MCP error result from anything thrown (a CLIError keeps its hint). */
+export function mcpErrorFrom(error: unknown): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+  if (error instanceof Error) {
+    const details = (error as { details?: unknown }).details;
+    return mcpError(typeof details === 'string' && details ? `${error.message}\n${details}` : error.message);
+  }
+  return mcpError(String(error));
+}
+
+/** A success result: a text block and the same payload as structuredContent. */
+export function mcpResult<T extends Record<string, unknown>>(text: string, structuredContent: T) {
+  return { content: [{ type: 'text' as const, text }], structuredContent };
+}
+
 export function mcpStructuredError(message: string, field: string, value: string) {
   return {
     content: [{
@@ -71,6 +90,7 @@ export function findGitRoot(startDir: string): string | null {
 // ── Board-on-a-branch (spec-9): one commit per mutating tool call ─────────
 
 import { commitBoard, isTrackedBoard } from '../utils/board-repo';
+import { boardConflict, boardConflictError } from '../utils/board-sync';
 import { detectAgent } from '../utils/actor';
 
 type ToolInput = Record<string, unknown>;
@@ -83,14 +103,36 @@ function describeToolCall(toolName: string, input: ToolInput): string {
   const action = typeof input.action === 'string' ? ` ${input.action}` : '';
   const rawId = input.taskId ?? input.task;
   const id = Array.isArray(rawId) ? ` ${rawId.join(',')}` : typeof rawId === 'string' ? ` ${rawId}` : '';
-  const detail = [input.title, input.column]
+  const detail = [input.title, input.column, input.claimKey, input.name, input.template]
     .find((v): v is string => typeof v === 'string' && v.length > 0);
   return `${toolName}${action}${id}${detail ? `: ${detail}` : ''}`;
 }
 
+const BOARD_SETTINGS = ['title', 'instructions', 'addInstructions', 'removeInstructions', 'addRelated', 'removeRelated'];
+
+/** Will this call change the board? Tools that both read and write say so in their input. */
+export function toolWrites(toolName: string, input: ToolInput): boolean {
+  switch (toolName) {
+    case 'template':
+      return input.action === 'use';
+    case 'types':
+      return input.action === 'add';
+    case 'columns':
+      return input.action !== undefined && input.action !== 'list';
+    case 'lint':
+      return input.fix === true;
+    case 'board':
+      return BOARD_SETTINGS.some((key) => input[key] !== undefined);
+    default:
+      return true;
+  }
+}
+
 /**
  * Wrap a mutating tool handler so a successful call commits the board when it
- * is tracked. A failed commit never fails the tool. The commit is authored by
+ * is tracked. A call that would write while another board in the repository
+ * disagrees with this one (spec-15) is refused before it runs, naming the
+ * command that settles it. A failed commit never fails the tool. The commit is authored by
  * the git user and tagged with the agent (`BRAINFILE_AGENT`, else the MCP
  * host detected from the process tree).
  */
@@ -100,6 +142,17 @@ export function withBoardCommit<I extends ToolInput, R, E>(
   handler: (input: I, extra: E) => Promise<R>
 ): (input: I, extra: E) => Promise<R> {
   return async (input, extra) => {
+    if (toolWrites(toolName, input)) {
+      let conflict = null;
+      try {
+        const filePath = typeof input.file === 'string' && input.file ? input.file : defaultFile;
+        const resolved = resolveBrainfile(filePath);
+        if (fs.existsSync(resolved)) conflict = boardConflict(path.dirname(resolved));
+      } catch {
+        /* no board to guard */
+      }
+      if (conflict) return mcpError(boardConflictError(conflict)) as R;
+    }
     const result = await handler(input, extra);
     try {
       if (!isErrorResult(result)) {

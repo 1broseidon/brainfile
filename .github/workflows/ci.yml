@@ -18,6 +18,13 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      # Tests make throwaway git repos and commit in them; the runner's account
+      # has no name, so git needs one to commit.
+      - name: Git identity for tests
+        run: |
+          git config --global user.name "brainfile ci"
+          git config --global user.email "ci@brainfile.invalid"
+
       - name: Install
         run: npm ci
 

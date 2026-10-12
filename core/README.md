@@ -85,6 +85,24 @@ if (parseResult.error) {
 const board = readV2BoardConfig(".brainfile/brainfile.md");
 ```
 
+Edit the config: columns, the title, agent instructions and related boards.
+The pure forms (`addColumn`, `renameColumn`, `reorderColumns`,
+`removeColumn`, `updateBoardSettings`) take a `BoardConfig` and return a new
+one, and are in `@brainfile/core/browser` too; the `*File` forms read and
+write `brainfile.md`.
+
+```typescript
+import { addColumnFile, removeColumnFile, updateBoardSettingsFile } from "@brainfile/core";
+
+addColumnFile(".brainfile/brainfile.md", { title: "In Review", after: "in-progress" });
+// A column that holds tasks is refused unless they have somewhere to go.
+removeColumnFile(".brainfile/brainfile.md", "in-review", { moveTo: "in-progress" });
+updateBoardSettingsFile(".brainfile/brainfile.md", {
+  addInstructions: ["Write tests"],
+  addRelated: { mobile: "../mobile" },
+});
+```
+
 ### Type Validation
 
 Validate tasks against the defined strict types (e.g., ensuring an "Epic" is in a valid column).
@@ -101,6 +119,56 @@ if (typeError) console.error(typeError);
 
 // Validate if a column allows a specific type
 const colError = validateColumn(boardConfig, "todo", "task");
+```
+
+### Document types and the graph
+
+Five types are built in (epic, spec, plan, task, decision; `issue` and `adr`
+are aliases), each with a role, a glyph and the parents it fits under. A
+board's `types:` adds types (optionally `like:` a built-in) and overrides
+built-ins. The registry and the graph are pure, so they are also exported from
+`@brainfile/core/browser`.
+
+```typescript
+import {
+  DOC_TYPES,           // { epic: { glyph: '▸', parents: [], children: ['spec','plan','task'], … }, … }
+  TYPE_ALIASES,        // { issue: 'task', adr: 'decision' }
+  resolveDocType,      // resolveDocType('bug', board.types) → { name, role, glyph, parents, children, idPrefix, completable, … }
+  listDocTypes,        // every type a board has, built-ins first
+  parentFit,           // parentFit('spec', 'plan') → { fits: false, reason: 'a spec goes under an epic, not under a plan' }
+  buildDocGraph,       // the graph of documents you already read
+  readBoardGraph,      // …or read board/ and logs/ from disk (Node only)
+} from "@brainfile/core";
+
+const { graph } = readBoardGraph(".brainfile/brainfile.md");
+graph.tree();                            // the containment outline of open work
+graph.restingOn("decision-3");           // work whose decisions: names it (computed)
+graph.openWorkOnSupersededDecisions();   // what should say "rests on a superseded decision"
+```
+
+### Decisions, the local index, the brief and check
+
+A decision belongs to a claim family (`claimKey`); a family has one current
+decision. The pure parts (families, the stance rule, verdicts) are in the
+main entry and `@brainfile/core/browser`; writing decisions is in the main
+entry. The local index (SQLite FTS5 through Node's own `node:sqlite`, loaded
+lazily; `null` where it is missing) and what reads it live in the Node-only
+`@brainfile/core/memory`.
+
+```typescript
+import { decideFile, groupDecisionsByPrefix, getV2Dirs, readTasksDir } from "@brainfile/core";
+import { searchMemory, composeBrief, checkDecision } from "@brainfile/core/memory";
+
+const dirs = getV2Dirs(".brainfile/brainfile.md");
+decideFile(dirs, { claimKey: "dependency.http-client", text: "Use undici", stance: "forbids", subject: "axios" });
+// → the family's current decision superseded and moved to logs/
+
+const tasks = [...readTasksDir(dirs.boardDir), ...readTasksDir(dirs.logsDir)].map((d) => d.task);
+groupDecisionsByPrefix(tasks);           // [{ prefix: 'dependency', families: [{ key, current, history }] }]
+
+searchMemory(dirs.brainfilePath, "http client");   // { mode: 'index' | 'scan', current, history, results }
+composeBrief(dirs, "claude", { lastBriefAt: null }).text;   // the session-start block
+checkDecision(dirs.brainfilePath, { query: "add axios" });  // { result: { verdict: 'review', … } }
 ```
 
 ### Utilities

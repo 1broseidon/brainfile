@@ -17,7 +17,7 @@ import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { resolveActor } from '../utils/actor';
-import { readTasksDir, writeTaskFile, scoreTaskDocument, type TaskDocument } from '@brainfile/core';
+import { readTasksDir, resolveDocType, writeTaskFile, scoreTaskDocument, type TaskDocument } from '@brainfile/core';
 import {
   isV2,
   getV2Dirs,
@@ -83,6 +83,52 @@ export function logCommand(options: LogOptions, logger: Logger = defaultLogger):
   return listRecentLogs(dirs, logger);
 }
 
+/** A note appended to a task's log. */
+export interface TaskNote {
+  taskId: string;
+  /** The line written: `- <timestamp>: [<who>] <message>`. */
+  entry: string;
+  /** Who it is attributed to, when anyone could be told. */
+  agent?: string;
+  /** True when the task is completed (its file is in logs/). */
+  isLog: boolean;
+}
+
+/**
+ * Append a timestamped note to a task's `## Log` section, on an open task or
+ * a completed one. Attributed to `agent`, else the detected agent, else the
+ * git user. The CLI's `note` and the MCP `note` tool both write through this.
+ */
+export function appendTaskNote(filePath: string, taskId: string, message: string, agent?: string): TaskNote {
+  if (!fs.existsSync(filePath)) {
+    throw fileNotFound(filePath);
+  }
+  if (!isV2(filePath)) {
+    throw operationFailed('Log note command requires v2 per-task file architecture. Run: brainfile migrate');
+  }
+
+  const dirs = getV2Dirs(filePath);
+  const found = findV2Task(dirs, taskId, true);
+  if (!found) {
+    throw taskNotFound(taskId);
+  }
+
+  const { doc, filePath: taskPath } = found;
+  const timestamp = new Date().toISOString();
+  // Who wrote it: --agent, else the detected agent, else the git user.
+  const actor = agent?.trim() || resolveActor(path.dirname(filePath))?.name;
+  const agentPrefix = actor ? `[${actor}] ` : '';
+  const entry = `- ${timestamp}: ${agentPrefix}${message}`;
+
+  // Extract existing sections from body
+  const existingDesc = extractDescription(doc.body);
+  const existingLog = extractLog(doc.body);
+  const newLog = existingLog ? `${existingLog}\n${entry}` : entry;
+
+  writeTaskFile(taskPath, doc.task, composeBody(existingDesc, newLog));
+  return { taskId, entry, ...(actor ? { agent: actor } : {}), isLog: found.isLog };
+}
+
 /**
  * Append a timestamped note to a task's log section.
  * Works on both active tasks and completed logs.
@@ -96,35 +142,7 @@ export function logNoteCommand(options: LogNoteOptions, logger: Logger = default
   }
 
   const filePath = resolveCliBrainfilePath(options.file);
-  if (!fs.existsSync(filePath)) {
-    throw fileNotFound(filePath);
-  }
-
-  if (!isV2(filePath)) {
-    throw operationFailed('Log note command requires v2 per-task file architecture. Run: brainfile migrate');
-  }
-
-  const dirs = getV2Dirs(filePath);
-  const found = findV2Task(dirs, options.task, true);
-
-  if (!found) {
-    throw taskNotFound(options.task);
-  }
-
-  const { doc, filePath: taskPath } = found;
-  const timestamp = new Date().toISOString();
-  // Who wrote it: --agent, else the detected agent, else the git user.
-  const actor = options.agent?.trim() || resolveActor(path.dirname(filePath))?.name;
-  const agentPrefix = actor ? `[${actor}] ` : '';
-  const entry = `- ${timestamp}: ${agentPrefix}${options.message}`;
-
-  // Extract existing sections from body
-  const existingDesc = extractDescription(doc.body);
-  const existingLog = extractLog(doc.body);
-  const newLog = existingLog ? `${existingLog}\n${entry}` : entry;
-
-  const newBody = composeBody(existingDesc, newLog);
-  writeTaskFile(taskPath, doc.task, newBody);
+  const { entry } = appendTaskNote(filePath, options.task, options.message, options.agent);
 
   logger.log(chalk.green('Log entry added.'));
   logger.log(chalk.gray(`  Task: ${options.task}`));
@@ -133,112 +151,91 @@ export function logNoteCommand(options: LogNoteOptions, logger: Logger = default
   return { success: true, taskId: options.task, entry };
 }
 
-function viewTaskLog(dirs: V2Dirs, taskId: string, logger: Logger): LogResult {
-  // Search in both tasks and logs
-  const found = findV2Task(dirs, taskId, true);
+/** One task's log, open or completed. */
+export interface TaskLogView {
+  id: string;
+  title: string;
+  completedAt?: string;
+  isLog: boolean;
+  description?: string;
+  log?: string;
+}
 
+/** A task's description and log, from board/ or logs/. */
+export function readTaskLog(dirs: V2Dirs, taskId: string): TaskLogView {
+  const found = findV2Task(dirs, taskId, true);
   if (!found) {
     throw taskNotFound(taskId);
   }
-
-  const { doc } = found;
-  const task = doc.task;
-  const description = extractDescription(doc.body);
-  const logContent = extractLog(doc.body);
-
-  logger.log('');
-  logger.log(chalk.bold(`Task: ${task.id} - ${task.title}`));
-  if (task.completedAt) {
-    logger.log(chalk.gray(`Completed: ${task.completedAt}`));
-  }
-
-  if (description) {
-    logger.log('');
-    logger.log(chalk.bold('Description:'));
-    logger.log(description);
-  }
-
-  if (logContent) {
-    logger.log('');
-    logger.log(chalk.bold('Log:'));
-    logger.log(logContent);
-  } else {
-    logger.log('');
-    logger.log(chalk.gray('(no log entries)'));
-  }
-  logger.log('');
-
+  const task = found.doc.task;
+  const description = extractDescription(found.doc.body);
+  const log = extractLog(found.doc.body);
   return {
-    success: true,
-    task: { id: task.id, title: task.title, log: logContent },
+    id: task.id,
+    title: task.title,
+    ...(task.completedAt ? { completedAt: task.completedAt } : {}),
+    isLog: found.isLog,
+    ...(description ? { description } : {}),
+    ...(log ? { log } : {}),
   };
 }
 
-function searchLogs(dirs: V2Dirs, query: string, logger: Logger): LogResult {
-  const logDocs = readTasksDir(dirs.logsDir);
+/** A completed task whose title, description or log matches a search. */
+export interface LogSearchMatch {
+  id: string;
+  title: string;
+  completedAt?: string;
+  /** Where it matched: the title, the log line, or the description. */
+  match: string;
+}
+
+/** Search the completed tasks in logs/: title, description and log. */
+export function searchLogEntries(dirs: V2Dirs, query: string): LogSearchMatch[] {
   const queryLower = query.toLowerCase();
-
-  const matches: Array<{ id: string; title: string; completedAt?: string; matchContext: string }> = [];
-
-  for (const doc of logDocs) {
+  const matches: LogSearchMatch[] = [];
+  for (const doc of readTasksDir(dirs.logsDir)) {
     const task = doc.task;
-    const logContent = extractLog(doc.body);
-
     // Matching decision is core's; the match-context snippet below is presentation.
-    if (scoreTaskDocument(doc, queryLower) > 0) {
-      // Find match context
-      let matchContext = '';
-      if (task.title.toLowerCase().includes(queryLower)) {
-        matchContext = `Title: ${task.title}`;
-      } else if (logContent && logContent.toLowerCase().includes(queryLower)) {
-        // Find the line containing the match
-        const lines = logContent.split('\n');
-        const matchLine = lines.find(l => l.toLowerCase().includes(queryLower));
-        matchContext = matchLine ? matchLine.trim() : 'Log entry';
-      } else {
-        matchContext = 'Description match';
-      }
-
-      matches.push({
-        id: task.id,
-        title: task.title,
-        completedAt: task.completedAt,
-        matchContext,
-      });
+    if (scoreTaskDocument(doc, queryLower) <= 0) continue;
+    const logContent = extractLog(doc.body);
+    let match: string;
+    if (task.title.toLowerCase().includes(queryLower)) {
+      match = `Title: ${task.title}`;
+    } else if (logContent && logContent.toLowerCase().includes(queryLower)) {
+      // Find the line containing the match
+      const matchLine = logContent.split('\n').find(l => l.toLowerCase().includes(queryLower));
+      match = matchLine ? matchLine.trim() : 'Log entry';
+    } else {
+      match = 'Description match';
     }
+    matches.push({ id: task.id, title: task.title, completedAt: task.completedAt, match });
   }
-
-  logger.log('');
-  logger.log(chalk.bold(`Log search: "${query}" (${matches.length} results)`));
-  logger.log(chalk.gray('─'.repeat(50)));
-
-  if (matches.length === 0) {
-    logger.log(chalk.gray('  No matching logs found.'));
-  } else {
-    for (const match of matches) {
-      logger.log(`  ${chalk.gray(`[${match.id}]`)} ${chalk.white(match.title)}`);
-      if (match.completedAt) {
-        logger.log(`    ${chalk.gray('Completed:')} ${match.completedAt}`);
-      }
-      logger.log(`    ${chalk.gray('Match:')} ${match.matchContext}`);
-      logger.log('');
-    }
-  }
-
-  return {
-    success: true,
-    tasks: matches.map(m => ({ id: m.id, title: m.title, completedAt: m.completedAt })),
-  };
+  return matches;
 }
 
-function listRecentLogs(dirs: V2Dirs, logger: Logger): LogResult {
-  const logDocs = readTasksDir(dirs.logsDir);
+/** A completed task, newest first. */
+export interface RecentLogEntry {
+  id: string;
+  title: string;
+  completedAt?: string;
+  /** Only in ledger.jsonl, with no file in logs/. */
+  ledgerOnly?: boolean;
+}
+
+/**
+ * Completed work, newest first: logs/ (decisions retired there were never
+ * completed and are left out) and ledger records with no file there.
+ */
+export function recentLogEntries(dirs: V2Dirs): RecentLogEntry[] {
+  // A decision retired to logs/ (spec-11) was never completed: not a recent completion.
+  const logDocs = readTasksDir(dirs.logsDir)
+    .filter((d) => d.task.completedAt || resolveDocType(d.task.type).role !== 'decision');
 
   // Union in ledger records that have no markdown archive. Under the
   // dual-artifact model both always exist, but boards touched by the
   // pre-2026-08-13 destructive --logs-to-ledger may have ledger-only history.
   const seenIds = new Set(logDocs.map((d) => d.task.id));
-  const entries: Array<{ id: string; title: string; completedAt?: string; ledgerOnly?: boolean }> =
+  const entries: RecentLogEntry[] =
     logDocs.map((d) => ({ id: d.task.id, title: d.task.title, completedAt: d.task.completedAt }));
   const ledgerPath = path.join(dirs.logsDir, 'ledger.jsonl');
   if (fs.existsSync(ledgerPath)) {
@@ -256,6 +253,68 @@ function listRecentLogs(dirs: V2Dirs, logger: Logger): LogResult {
   }
 
   entries.sort((a, b) => (b.completedAt || '').localeCompare(a.completedAt || ''));
+  return entries;
+}
+
+function viewTaskLog(dirs: V2Dirs, taskId: string, logger: Logger): LogResult {
+  const view = readTaskLog(dirs, taskId);
+
+  logger.log('');
+  logger.log(chalk.bold(`Task: ${view.id} - ${view.title}`));
+  if (view.completedAt) {
+    logger.log(chalk.gray(`Completed: ${view.completedAt}`));
+  }
+
+  if (view.description) {
+    logger.log('');
+    logger.log(chalk.bold('Description:'));
+    logger.log(view.description);
+  }
+
+  if (view.log) {
+    logger.log('');
+    logger.log(chalk.bold('Log:'));
+    logger.log(view.log);
+  } else {
+    logger.log('');
+    logger.log(chalk.gray('(no log entries)'));
+  }
+  logger.log('');
+
+  return {
+    success: true,
+    task: { id: view.id, title: view.title, log: view.log },
+  };
+}
+
+function searchLogs(dirs: V2Dirs, query: string, logger: Logger): LogResult {
+  const matches = searchLogEntries(dirs, query);
+
+  logger.log('');
+  logger.log(chalk.bold(`Log search: "${query}" (${matches.length} results)`));
+  logger.log(chalk.gray('─'.repeat(50)));
+
+  if (matches.length === 0) {
+    logger.log(chalk.gray('  No matching logs found.'));
+  } else {
+    for (const match of matches) {
+      logger.log(`  ${chalk.gray(`[${match.id}]`)} ${chalk.white(match.title)}`);
+      if (match.completedAt) {
+        logger.log(`    ${chalk.gray('Completed:')} ${match.completedAt}`);
+      }
+      logger.log(`    ${chalk.gray('Match:')} ${match.match}`);
+      logger.log('');
+    }
+  }
+
+  return {
+    success: true,
+    tasks: matches.map(m => ({ id: m.id, title: m.title, completedAt: m.completedAt })),
+  };
+}
+
+function listRecentLogs(dirs: V2Dirs, logger: Logger): LogResult {
+  const entries = recentLogEntries(dirs);
 
   logger.log('');
   logger.log(chalk.bold(`Recently completed tasks (${entries.length})`));

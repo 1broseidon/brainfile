@@ -28,10 +28,11 @@ import {
   removeExcludeEntry,
 } from '../utils/board-repo';
 import { ensureBoardAttributes, registerMergeDriver } from '../utils/board-sync';
+import { untrackBoardOnCodeBranch, type UntrackResult } from '@brainfile/core/repo';
 
 export interface MigrateTrackedOptions {
   dir?: string;
-  /** After `--to-branch` on a committed board, also commit its removal from the code branch. */
+  /** Accepted for compatibility: `--to-branch` now always commits the board's removal from the code branch. */
   commit?: boolean;
 }
 
@@ -226,8 +227,12 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
   const repoRoot = gitToplevel(path.dirname(dotDir));
 
   if (kind === 'linked') {
+    // Finish what an earlier move left: the code branch may still track an old copy.
+    const root = listWorktrees(dotDir)[0]?.path;
+    const untracked = root ? untrackBoardOnCodeBranch(root) : null;
     console.log(chalk.green('Board is already a worktree on its own branch.'));
     console.log(chalk.gray(`  ${dotDir}`));
+    if (untracked) printUntracked(untracked);
     return;
   }
 
@@ -247,11 +252,13 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
 
   const branch = boardBranch(repoRoot);
   if (git(['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], repoRoot).ok) {
+    // A board already lives on the branch: this folder and it are two boards (spec-15).
     const checkedOut = listWorktrees(repoRoot).find((w) => w.branch === `refs/heads/${branch}`);
+    const where = checkedOut ? ` (checked out at ${checkedOut.path})` : '';
     throw new Error(
-      checkedOut
-        ? `Branch '${branch}' is already checked out at ${checkedOut.path}.`
-        : `Branch '${branch}' already exists. Delete it (git branch -D ${branch}) or set brainfile.branch to another name.`
+      `A board already lives on the '${branch}' branch${where}, so this folder and it are two boards. ` +
+        `Compare them with brainfile where, then make them one: brainfile merge-boards refs/heads/${branch} ` +
+        `(or brainfile adopt refs/heads/${branch} to take the branch as it is). Nothing was changed.`
     );
   }
 
@@ -344,16 +351,21 @@ export function migrateToBranch(options: MigrateTrackedOptions = {}): void {
     console.log(chalk.gray('  Board changes that were not committed yet came along as one more commit on that branch.'));
   }
   if (trackedOnCodeBranch) {
-    if (options.commit) {
-      const commit = git(['commit', '--quiet', '--no-verify', '-m', `chore: move the board to the ${branch} branch`], repoRoot);
-      if (!commit.ok) throw new Error(`Could not commit the removal on the code branch: ${commit.stderr}`);
-      console.log(chalk.gray('  The old copy on your code branch was removed in a commit; the board itself is on its own branch.'));
+    // One commit on the code branch drops the old copy and ignores the folder;
+    // anything else staged stays staged.
+    const untracked = untrackBoardOnCodeBranch(repoRoot, relDotDir);
+    if (untracked) {
+      printUntracked(untracked);
     } else {
-      console.log(chalk.gray('  Your code branch still tracks the old copy. It is staged to be dropped there (the board itself is safe). Commit that:'));
-      console.log(chalk.cyan(`    git commit -m "chore: move the board to the ${branch} branch"`));
+      console.log(chalk.gray('  Your code branch still tracks the old copy (HEAD is not a branch). It is staged to be dropped; commit that.'));
     }
   }
   printMigratedStory(dotDir, branch);
+}
+
+function printUntracked(untracked: UntrackResult): void {
+  console.log(chalk.gray(`  ${untracked.branch} stopped tracking the old copy and ignores .brainfile/, in one commit (${untracked.commit.slice(0, 7)}).`));
+  console.log(chalk.gray(`  Push it like any commit: git push (a pull request, if ${untracked.branch} is protected).`));
 }
 
 function printMigratedStory(dotDir: string, branch: string | null): void {

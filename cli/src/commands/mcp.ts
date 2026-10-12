@@ -23,31 +23,70 @@ import { registerSubtaskTool } from '../mcp/tools/subtask_tool';
 import { registerContractTool } from '../mcp/tools/contract_tool';
 import { registerTaskCompleteTool } from '../mcp/tools/task_complete_tool';
 import { registerBriefTool } from '../mcp/tools/brief_tool';
+import { registerDecideTool } from '../mcp/tools/decide_tool';
+import { registerSupersedeTool } from '../mcp/tools/supersede_tool';
+import { registerCheckTool } from '../mcp/tools/check_tool';
+import { registerNoteTool } from '../mcp/tools/note_tool';
+import { registerLogTool } from '../mcp/tools/log_tool';
+import { registerRetireTool } from '../mcp/tools/retire_tool';
+import { registerAdrPromoteTool } from '../mcp/tools/adr_promote_tool';
+import { registerColumnsTool } from '../mcp/tools/columns_tool';
+import { registerBoardTool } from '../mcp/tools/board_tool';
+import { registerTypesTool } from '../mcp/tools/types_tool';
+import { registerTemplateTool } from '../mcp/tools/template_tool';
+import { registerLintTool } from '../mcp/tools/lint_tool';
+import { registerSyncTool } from '../mcp/tools/sync_tool';
+import { registerWhereTool } from '../mcp/tools/where_tool';
+import { registerSchemaResources } from '../mcp/resources';
+import { serverInstructions } from '../mcp/instructions';
 
 /**
- * Builds the MCP server with all 11 consolidated tools registered.
+ * Builds the MCP server: every tool (one for each thing the CLI does to a
+ * board, spec-13), the bundled schemas as resources, and the instructions
+ * that tell a client to use them for every board change.
  *
  * Exported so tests can serve the exact production registration over an
  * in-memory transport instead of re-listing the tools (which would drift).
- * The same factory serves both protocol eras.
+ * The same factory serves both protocol eras. Tools are registered in the
+ * order `TOOL_PURPOSES` lists them.
  */
 export function createBrainfileMcpServer(defaultFile: string): McpServer {
-  const server = new McpServer({
-    name: 'brainfile',
-    version: cliVersion
-  });
+  const server = new McpServer(
+    { name: 'brainfile', version: cliVersion },
+    { instructions: serverInstructions() },
+  );
 
+  // Reading the board
   registerListTasksTool(server, defaultFile);
   registerGetTaskTool(server, defaultFile);
   registerSearchTool(server, defaultFile);
+  registerBriefTool(server, defaultFile);
+  registerCheckTool(server, defaultFile);
+  // Tasks
   registerTaskAddTool(server, defaultFile);
-  registerTaskMoveTool(server, defaultFile);
   registerTaskPatchTool(server, defaultFile);
+  registerTaskMoveTool(server, defaultFile);
+  registerTaskCompleteTool(server, defaultFile);
   registerTaskDeleteTool(server, defaultFile);
   registerSubtaskTool(server, defaultFile);
   registerContractTool(server, defaultFile);
-  registerTaskCompleteTool(server, defaultFile);
-  registerBriefTool(server, defaultFile);
+  registerNoteTool(server, defaultFile);
+  registerLogTool(server, defaultFile);
+  // Decisions
+  registerDecideTool(server, defaultFile);
+  registerSupersedeTool(server, defaultFile);
+  registerRetireTool(server, defaultFile);
+  registerAdrPromoteTool(server, defaultFile);
+  // The board itself
+  registerColumnsTool(server, defaultFile);
+  registerBoardTool(server, defaultFile);
+  registerTypesTool(server, defaultFile);
+  registerTemplateTool(server, defaultFile);
+  registerLintTool(server, defaultFile);
+  registerSyncTool(server, defaultFile);
+  registerWhereTool(server, defaultFile);
+
+  registerSchemaResources(server);
 
   return server;
 }

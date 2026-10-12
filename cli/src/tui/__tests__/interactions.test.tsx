@@ -33,14 +33,15 @@ describe('filter', () => {
 
     const rule = headerRule(h);
     expect(rule).toContain('/p:high');
-    // Denominator is every document on the board (17: the original 12-doc
-    // fixture plus the 5-doc detail-v2 fixture added for §B1/§B2 tests).
-    expect(rule).toContain('1/17 match "p:high"');
+    // Denominator is every document in the columns (16: the original 12-doc
+    // fixture plus the 5-doc detail-v2 fixture added for §B1/§B2 tests, less
+    // adr-1, a decision, which has no column — task-19).
+    expect(rule).toContain('1/16 match "p:high"');
 
     const frame = plain(h.frame());
     expect(frame).toContain('task-8');
     expect(frame).not.toContain('task-4');
-    expect(frame).not.toContain('adr-1');
+    expect(frame).not.toContain('plan-1');
   });
 
   it('honours the structured tokens core already parses', async () => {
@@ -71,7 +72,7 @@ describe('filter', () => {
 
     const frame = plain(h.frame());
     expect(frame).toContain('task-4');
-    expect(frame).toContain('adr-1');
+    expect(frame).toContain('plan-1');
     expect(headerRule(h)).not.toContain('match');
     expect(headerRule(h)).toMatch(/^ ─+$/);
   });
@@ -155,8 +156,9 @@ describe('move overlay', () => {
     const doc = readTaskFile(path.join(h.fixture.boardDir, 'epic-1.md'));
     expect(doc?.task.column).toBe('in-progress');
 
-    // back on the list, and the header counts followed the move
-    expect(plain(h.frame()).split('\n')[0]).toContain('In Progress 1');
+    // back on the list, and the header counts followed the move: the epic's
+    // three children, still in To Do, are drawn under it there (task-20)
+    expect(plain(h.frame()).split('\n')[0]).toContain('In Progress 4');
   });
 
   it('cancels on esc without touching the board', async () => {
@@ -212,9 +214,9 @@ describe('complete', () => {
   });
 
   it('refuses to complete an adr', async () => {
-    // adr-1 is row index 8 in the To Do column
-    await h.press('g');
-    for (let i = 0; i < 8; i += 1) await h.press('j');
+    // adr-1 is a decision: no column, so it is reached in the decisions view
+    // (task-19), where it is the only row.
+    await h.press('D', 'g');
     expect(footerOf(h)).not.toContain('c complete');
 
     await h.press('c');
