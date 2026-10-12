@@ -70,3 +70,6 @@ A parent cannot complete while it has open children: epic's rule today, now ever
 - Desktop: the list's outline already nests by parentId and now follows the five; each keeps its TUI glyph (▸ epic, ◆ spec, ⎘ plan, ● decision); decisions leave the list for their own view (spec-11).
 
 **Not in scope.** More than one parent, arbitrary named edges, a graph canvas.
+
+## Log
+- 2026-10-12T06:27:55.007Z: [claude] Step 0 + core/CLI/MCP landed on feat/memory-graph (b517b30..95a5a37): patch --parent/--depends-on (+MCP dependsOn); core docTypes.ts (registry, aliases, like:, parentFit) and docGraph.ts (tree, decisions reverse, checkDocumentLinks, lintDocGraph, docPlace) + boardGraph.ts; completion gate for every container; decisions never completed; add/patch/list --tree/--type/show/types/lint/search/plan/complete and MCP task_add/task_patch/list_tasks(tree)/get_task(graph)/search/task_complete. Core 752/752; CLI 517 pass / 9 fail (same 9 baseline); TUI 129/129. Smoke-tested the real binary on /tmp scratch board incl. strict refusals and MCP over stdio.
