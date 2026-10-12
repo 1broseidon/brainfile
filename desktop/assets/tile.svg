@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Brainfile">
 	<!--
-		The app tile: the b in Forge orange on a dark rounded square on Apple's
+		The app tile: the box in Forge orange on a dark rounded square on Apple's
 		grid (the square is 82% of the canvas, its corner a little over a fifth
 		of its width), as Hotline's tile is drawn. Colours are the window's
 		tokens spelled in sRGB, because an icon renderer reads no oklch:
@@ -18,12 +18,12 @@
 		</clipPath>
 		<mask id="tick" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
 			<rect width="64" height="64" fill="#fff" />
-			<path d="M24 40l6 6 11.5-12.5" fill="none" stroke="#000" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round" />
+			<path d="M21.5 32.5l7 7 14-15.5" fill="none" stroke="#000" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round" />
 		</mask>
 	</defs>
 	<rect x="92" y="92" width="840" height="840" rx="188" fill="url(#ground)" />
 	<rect x="92" y="92" width="840" height="4" fill="#4a3a2e" fill-opacity="0.6" clip-path="url(#square)" />
-	<g transform="translate(262 262) scale(7.8)">
-		<path d="M15 4H31a4 4 0 0 1 0 8H19V19a1 1 0 0 0 1 1H42a11 11 0 0 1 11 11V48a11 11 0 0 1-11 11H15a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z" fill="#f38c48" mask="url(#tick)" />
+	<g transform="translate(192 192) scale(10)">
+		<path d="M14 10H36a18 18 0 0 1 18 18V36a18 18 0 0 1-18 18H14a4 4 0 0 1-4-4V14a4 4 0 0 1 4-4Z" fill="#f38c48" mask="url(#tick)" />
 	</g>
 </svg>

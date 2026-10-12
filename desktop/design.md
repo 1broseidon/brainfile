@@ -39,11 +39,11 @@ One family, **Workbench**:
 
 ## The mark
 
-The mark is **the b** (`assets/mark.svg`, `components/Mark.svelte`). The
-Markdown bracket's stem runs down into the box and becomes the box's left
-wall; the bracket's serif is the b's hook; the bowl is a filled checkbox
-with the tick cut out. One shape, one 8-unit weight on a 64 grid. It spells
-the name, the format and the job at once.
+The mark is **the box** (`assets/mark.svg`, `components/Mark.svelte`): a
+filled checkbox with the tick cut out, square on the left like the Markdown
+bracket and rounded on the right like the bowl of a b. On a 64 grid the box
+is 44 units with a 4-unit corner on the left and an 18-unit corner on the
+right; 12 reads as any app's checkbox, 22 as the letter D.
 
 - One shape in one colour. In chrome it is ink-3, the colour of furniture,
   never the accent; on the app tile (`assets/tile.svg`) it is the accent on
@@ -51,7 +51,7 @@ the name, the format and the job at once.
 - At 20px and under the tick is cut heavier (8 units instead of 6.2) so it
   stays more than two pixels wide.
 - A literal `[x]` is not ours ([x]cube LABS sets it in its wordmark); the
-  b is.
+  half-rounded box is.
 
 ## Theme
 
