@@ -9,7 +9,7 @@ tags:
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
-updatedAt: "2026-10-12T21:55:47.264Z"
+updatedAt: "2026-10-12T21:55:47.699Z"
 subtasks:
   - id: task-34-1
     title: "Health rows: problem sentence under the name, Fix / Ask agent keys; long row tooltip dropped, short words (two copies, old copy in main, N unsent…)"
@@ -19,6 +19,9 @@ subtasks:
     completed: false
   - id: task-34-3
     title: Fix backs up every copy first (core saveBoardBackup), nothing runs if a backup fails or the plan changed; untrack / adopt / prune per problem
+    completed: false
+  - id: task-34-4
+    title: Inline Confirm / Cancel before it runs; result line with Undo for 10s that puts folder, branch, checkouts and code branch back
     completed: false
 ---
 
