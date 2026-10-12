@@ -20,7 +20,10 @@ subtasks:
   - id: spec-13-3
     title: "columns: new CLI command and MCP tool (list, add, rename, reorder, remove with move-to)"
     completed: false
-updatedAt: "2026-10-12T05:56:09.929Z"
+  - id: spec-13-4
+    title: "board tool: title, agent instructions, related entries; types and template tools"
+    completed: false
+updatedAt: "2026-10-12T05:56:10.210Z"
 ---
 
 ## Description
