@@ -635,8 +635,8 @@ $ brainfile log -s "cache"
 $ brainfile tui
 ```
 
-Columns, detail view, filters and every write operation from the keyboard. See
-[The TUI](#the-tui).
+Columns, decisions, detail view, filters and every write operation from the
+keyboard. See [The TUI](#the-tui).
 
 ### Agents
 
@@ -1252,8 +1252,9 @@ does, so changes made elsewhere show up on `r`.
 | --- | --- |
 | `j` `k` `↑` `↓` | Move within a column. `g` and `G` jump to the ends, `ctrl-d` and `ctrl-u` page. |
 | `h` `l` `←` `→` `tab` | Move between columns. |
-| `↵` | Open the selected document. In the detail view, open a child. `esc` goes back. |
+| `↵` | Open the selected document. In the detail view, open a child, a decision the work rests on, or a decision's chain and the work resting on it. `esc` goes back. |
 | `t` | Cycle the document type shown. `L` toggles the done view. |
+| `D` | The decisions view, also the type cycle's `decision` stop. `L` there unfolds the history; `D` again goes back. |
 | `/` | Filter. `p:high`, `#tag` or `t:tag`, `@name`, `type:epic`, `contract:ready`, `due:overdue`. |
 | `a` `n` | Add a task. `N` adds and opens it for editing. |
 | `m` `c` `e` | Move, complete, edit. |
@@ -1261,6 +1262,20 @@ does, so changes made elsewhere show up on `r`.
 | `space` | Collapse a group. In the detail view, toggle a subtask. |
 | `d` `y` `A` | Delete, copy the ID, archive. |
 | `r` `?` `q` | Reload, help, quit. |
+
+Decisions have no column, so they are in none of the column lists, and a
+retired one is not in the done view. The decisions view groups the standing
+ones by family, the first segment of the claim key, with history (superseded,
+rejected, stale) folded below. A row leads with `●`, `○` once retired, and
+says only what needs saying: a kind other than `decision`, `proposed` for a
+legacy ADR, `review` once `validUntil` has passed, or where a retired one
+went (`superseded → decision-2`). A decision's detail shows its claim key,
+kind, stance and subject, holds while, recheck, valid until, what it
+replaces or what replaced it, and the open work resting on it. Work's detail
+lists the decisions it rests on under `rests on`, and its row says
+`decision changed` once one of them is superseded, rejected or stale.
+Decisions change through `decide`, `supersede` and `retire`: the TUI does
+not move, complete or delete one, and `e` still opens its file.
 
 Editing opens `$EDITOR` on the task file. Set `NO_COLOR` to drop colour.
 
