@@ -128,6 +128,31 @@ graph.restingOn("decision-3");           // work whose decisions: names it (comp
 graph.openWorkOnSupersededDecisions();   // what should say "rests on a superseded decision"
 ```
 
+### Decisions, the local index, the brief and check
+
+A decision belongs to a claim family (`claimKey`); a family has one current
+decision. The pure parts (families, the stance rule, verdicts) are in the
+main entry and `@brainfile/core/browser`; writing decisions is in the main
+entry. The local index (SQLite FTS5 through Node's own `node:sqlite`, loaded
+lazily; `null` where it is missing) and what reads it live in the Node-only
+`@brainfile/core/memory`.
+
+```typescript
+import { decideFile, groupDecisionsByPrefix, getV2Dirs, readTasksDir } from "@brainfile/core";
+import { searchMemory, composeBrief, checkDecision } from "@brainfile/core/memory";
+
+const dirs = getV2Dirs(".brainfile/brainfile.md");
+decideFile(dirs, { claimKey: "dependency.http-client", text: "Use undici", stance: "forbids", subject: "axios" });
+// → the family's current decision superseded and moved to logs/
+
+const tasks = [...readTasksDir(dirs.boardDir), ...readTasksDir(dirs.logsDir)].map((d) => d.task);
+groupDecisionsByPrefix(tasks);           // [{ prefix: 'dependency', families: [{ key, current, history }] }]
+
+searchMemory(dirs.brainfilePath, "http client");   // { mode: 'index' | 'scan', current, history, results }
+composeBrief(dirs, "claude", { lastBriefAt: null }).text;   // the session-start block
+checkDecision(dirs.brainfilePath, { query: "add axios" });  // { result: { verdict: 'review', … } }
+```
+
 ### Utilities
 
 Helper functions for common tasks.

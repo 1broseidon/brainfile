@@ -278,6 +278,16 @@ the task file to `logs/`. The ledger is the record; the file is the archive.
 Notes added with `note` become the `summary`, so the ledger reads as a
 changelog written while the work happened rather than after.
 
+A decision that is superseded, rejected or stale also moves to `logs/`, with
+its status and links, but it writes no ledger line: it was never completed.
+
+### state/ — local to this machine
+
+`.brainfile/state/` is ignored by git and never synced. It holds each agent's
+brief checkpoint (`<agent>.json`) and the local search index (`index.db`):
+SQLite with full-text search over the board, the ledger, `plans/` and the
+project's own Markdown. Delete it at any time; it is rebuilt from the files.
+
 ### Document types
 
 Every document is a file with frontmatter, so the board is a graph and not only
@@ -305,6 +315,45 @@ open work resting on it says so in `show` and `list`; `supersedes` and
 `issue` and `adr` are accepted wherever a type is (`add --type`, `list --type`,
 `search`, the MCP tools) and new documents are written as `task` and
 `decision`. Existing `type: adr` files read as decisions and keep their IDs.
+
+#### Decisions
+
+A decision belongs to a claim family through its dotted `claimKey`
+(`dependency.http-client`). A family has one current decision: `decide`
+records a new one and supersedes the old, which gets `status: superseded`
+and `supersededBy`, moves to `logs/`, and is pointed at by the new one's
+`supersedes`. A current decision lives in `board/`; a superseded, rejected or
+stale one in `logs/`. The body is the decision and why.
+
+```yaml
+---
+id: decision-3
+title: Use undici for HTTP, never axios
+type: decision
+status: current
+claimKey: dependency.http-client
+kind: constraint
+stance: forbids
+subject: axios
+holdsWhile: we target Node 20 and later
+recheck: when fetch gains retries
+validUntil: 2027-06-30
+packageVersion: undici>=6
+supersedes: decision-1
+---
+```
+
+| Field | Meaning |
+| --- | --- |
+| `claimKey` | The family. Dotted segments of lowercase letters, digits, `_` and `-`. |
+| `kind` | How firmly it binds: `decision` (default), `preference`, `constraint`, `rule`. |
+| `status` | `current`, `superseded`, `rejected` or `stale`. None means current. |
+| `stance`, `subject` | What it says about something: `prefers`, `rejects`, `requires` or `forbids` a package, a pattern, a tool. `check` reads them. |
+| `holdsWhile`, `recheck` | The condition it holds under, and when or why to look again. |
+| `validUntil` | After this date, `check` says review. |
+| `sourcePath`, `sourceHash` | A file it rests on and its sha256; a change makes `check` say review. |
+| `packageVersion` | A version it rests on, `name<op>version`: `zod>=4.3`, `engines.node>=20`, `go>=1.22`. Read from `package.json`, `go.mod` or `pyproject.toml`. |
+| `supersedes`, `supersededBy` | The links between a family's decisions. |
 
 Name your own under `types:` in the config, or with `brainfile types add`. A
 type can take a built-in's place with `like:`: it gets that type's parents,
@@ -341,15 +390,17 @@ false }` stops a plan completing when it reaches a completion column). With
 | See epics, specs, plans and tasks as one outline | `list --tree` |
 | Read one task in full | `show` |
 | See what this board waits on in other repos | `list --related` |
-| Find something, active or done | `search` |
+| Find something, active or done, on the board or in the project's docs | `search` |
 | Write down what you learned while working | `note` |
 | Break a task into steps | `subtask` |
 | Hand work to an agent, with deliverables and validation | `contract` |
 | Orient an agent at the start of a session | `brief` |
+| Record a decision, or replace one | `decide`, `supersede`, `retire` |
+| Ask whether a decision still holds before acting | `check` |
 | Let an agent work the board as tools | `mcp` |
 | Keep an agent updating the board | `hooks` |
 | Read what was done on a task | `log` |
-| Record a plan or a decision | `plan`, `add --type decision` |
+| Record a plan | `plan` |
 | See every type and where it fits | `types` |
 | Export finished work to GitHub or Linear, or bring it back | `archive`, `restore` |
 | Share the board with another machine or person | `sync` |
@@ -527,15 +578,30 @@ $ brainfile subtask -t task-1 --update sub-1 --title "Write unit tests"
 $ brainfile subtask -t task-1 --delete sub-1
 ```
 
-#### search — Search active tasks and completed logs
+#### search — Search the board, its history and the project's docs
 
 ```console
 $ brainfile search parser
 $ brainfile search parser -c in-progress
 $ brainfile search cache --type adr      # decisions, under either name
+$ brainfile search "p:high #auth token"  # filter tokens: p: #tag @user type: due: contract:
+$ brainfile search parser --no-history --json
 ```
 
-Matches titles, descriptions and log entries across the board and the ledger.
+Current results come first: open work, current decisions, `plans/` and the
+project's own Markdown (README, AGENTS.md, docs/…). History comes after, in
+its own lane: completed work, the ledger, and decisions that were superseded,
+rejected or let go stale. Every hit has its path and line range; a board
+document also has its ID, a file hit's ID is `path:start-end`.
+
+On Node 22.13 and later the local index answers (`.brainfile/state/index.db`,
+brought up to date before every search): words are matched all together
+first and any of them second, ranked with titles over bodies. On older Node,
+or with `BRAINFILE_INDEX=off`, the scan over `board/` and `logs/` answers in
+the same shape; nothing else changes. A query that is only filter tokens
+(`p:high`) always scans. `--limit` caps each lane (default 20), `--json`
+prints `{ mode, query, results, count }` with each hit's `lane`, `source`,
+`path`, `startLine` and `endLine`.
 
 #### note — Append a timestamped line to a task's log
 
@@ -568,22 +634,47 @@ Columns, detail view, filters and every write operation from the keyboard. See
 
 ### Agents
 
-#### brief — What changed since this agent last checked in
+#### brief — Decisions, your tasks, what changed, the docs that bear on them
 
 ```console
 $ brainfile brief --agent claude
-$ brainfile brief --agent claude --peek    # read without marking seen
+$ brainfile brief --agent claude --max-chars 0  # no budget
+$ brainfile brief --agent claude --peek         # read without marking seen
 $ brainfile brief --agent claude --json
-$ brainfile brief --agent claude --offline # skip the sync a shared board does first
+$ brainfile brief --agent claude --offline      # skip the sync a shared board does first
 ```
 
-The first brief for a name prints the board title, the agent instructions and
-the decisions that stand (current decisions and accepted ADRs), then the
-agent's tasks. Later briefs are deltas: new notes, task changes and
-completions since the last one. State is per agent, kept in
-`.brainfile/state/` and ignored by git. A shared board syncs before the brief
-so it reflects other machines; a sync failure is one warning line, never an
-error.
+One block, about 1,600 characters (`--max-chars`), in lanes:
+
+```
+Brainfile brief for claude · My Project (since 3h ago)
+! task-12 Build the index: rests on superseded decision-1 (now decision-3)
+## Current decisions
+- decision-3 dependency.http-client: Use undici for HTTP, never axios (constraint · forbids axios)
+## Your tasks
+- task-12 Build the index · In Progress · high
+## Since your last brief
+- task-12 note: [codex] wired the FTS table (2h ago)
+- decision-3 decided: Use undici for HTTP, never axios (supersedes decision-1) (3h ago)
+## Docs that bear on them
+- docs/index.md:12-40 Search index › Design
+```
+
+Lines starting with `!` come first: open work resting on a superseded
+decision, and current decisions whose `validUntil`, source file or package
+version no longer holds. Then the current decisions; the agent's tasks (or,
+when nothing is assigned to it, the work in flight); what changed since its
+last brief (notes, task changes, completions, decisions made or retired,
+config), or on a first brief the latest notes and completions; and, from the
+local index, the docs that share the tasks' most distinctive words. When the
+budget is tight every lane still gets its first line, shortened if need be,
+before any lane gets a second, and a last line says how many more there are.
+
+The checkpoint is per agent, kept in `.brainfile/state/` and ignored by git;
+`--peek` reads without moving it. `--json` carries the block as `text`, its
+lanes as `sections`, and the checkpoint's own `lanes` as before. A shared
+board syncs before the brief so it reflects other machines; a sync failure is
+one warning line, never an error. The SessionStart hook prints this block.
 
 #### contract — pickup, deliver, validate, attach, graph, activate
 
@@ -617,8 +708,13 @@ $ brainfile hooks uninstall cline --scope all
 ```
 
 Supports `claude-code`, `cursor` and `cline`, at `user` (default) or `project`
-scope. The hooks nudge the agent to update the board after it edits files and
-tell it a board exists when a session starts.
+scope. The hooks nudge the agent to update the board after it edits files, and
+when a session starts they hand it its brief: for Claude Code as
+`hookSpecificOutput.additionalContext`, for Cline as text. The session-start
+hook runs from a lean entry that loads the brief and nothing else, about
+150ms warm; it names the agent from `BRAINFILE_AGENT`, else the tool
+(`claude`, `cline`), and moves that agent's brief checkpoint.
+`BRAINFILE_BRIEF_MAX_CHARS` changes its budget.
 
 ### Structure
 
@@ -636,19 +732,70 @@ and a free-form `--status`. `link` sets the task's `parentId` to the plan, so
 `list --parent plan-1` finds a plan's tasks. `plan` is a built-in type, so a
 strict board needs no `types:` entry for it.
 
-#### adr — Decision records
+#### decide, supersede, retire — Decisions
+
+```console
+$ brainfile decide -k dependency.http-client "Use undici for HTTP. It ships with Node."
+$ brainfile decide -k dependency.http-client --kind constraint \
+    --stance forbids --subject axios "Never axios: one HTTP client"
+$ brainfile decide -k release.window --valid-until 2026-12-31 \
+    --recheck "Ask the release manager" "Release on Tuesdays"
+$ brainfile decide -k storage.index --source docs/index.md "Index with SQLite FTS5"
+$ brainfile decide -k runtime.node --package "engines.node>=20" --for task-12 "Support Node 20+"
+$ brainfile supersede decision-3 "Use fetch: it retries now"
+$ brainfile retire decision-4 --as rejected --note "Too costly to run"
+```
+
+`decide` needs `-k/--claim-key` and the text (`-` reads stdin; the first line
+is the title unless `--title`). When the family already has a current
+decision, that one is superseded and moved to `logs/`; when the family was
+empty, it lists related families (the same parent key, or the same words) in
+case the call already exists under another key. Saying again exactly what the
+family's current decision says changes nothing. `--no-supersede` leaves both
+current, and `check` will say review. `--source` records the file's sha256
+relative to the project root; `--package` a version predicate; `--for` adds
+the decision to the listed work's `decisions:`.
+
+`supersede <id>` replaces one decision by hand, keeping its claim key and kind
+unless you give others. `retire <id> --as rejected|stale` moves a decision to
+`logs/` with that status and an optional `--note`. Each command is one board
+commit on a tracked board. `list --type decision` lists them all, current
+first; `show` prints one with its chain.
 
 ```console
 $ brainfile add -t "Use SQLite for the index" --type decision
-$ brainfile list --type decision
 $ brainfile adr promote -t adr-1
 ```
 
 ADRs are decisions: `--type adr` writes a `decision`, and an existing
-`type: adr` file reads as one and keeps its ID. A decision has no column and
-is never completed; it is current until superseded, rejected or stale.
-`promote` marks a legacy ADR accepted and moves it to `logs/`. Current
-decisions and accepted ADRs appear in every agent's first `brief`.
+`type: adr` file reads as one and keeps its ID. `promote` marks a legacy ADR
+accepted and moves it to `logs/`. Current decisions and accepted ADRs appear
+in every `brief`.
+
+#### check — Does a decision still hold?
+
+```console
+$ brainfile check "use axios for the retry client"
+$ brainfile check decision-3
+$ brainfile check --claim-key dependency.http-client
+$ brainfile check --claim-key-prefix dependency "add axios"
+$ brainfile check "add axios" --json
+```
+
+`check` finds the claim family an action touches (a decision ID, a claim key,
+or its words: the local index when there is one, a scan of the decisions when
+there is not) and answers in this order:
+
+| Verdict | When | Exit |
+| --- | --- | --- |
+| `review` | The family has two current decisions; or the current one's `validUntil` passed, its source file changed or its package version no longer matches; or the action names the decision's subject next to an adopt or remove cue ("use axios", "drop axios") that goes against its stance (`block_action` for requires and forbids, `ask_operator` for prefers and rejects); or the family has no current decision. | 2 |
+| `use_replacement` | The action matched a superseded decision; the current one is named. | 3 |
+| `use` | A current decision stands and nothing above applies: act on it (the decision is printed; `use` means follow it, not "go ahead with anything"). | 0 |
+| `no_decision` | Nothing on the board speaks to it. | 0 |
+
+`--claim-key-prefix` checks every family under a prefix and gives the worst
+verdict. Errors (no board, bad arguments) exit 1. `--json` prints the verdict,
+recommendation, reason, the predicates as evaluated and the family.
 
 #### types — Every type and its place in the graph
 
@@ -701,6 +848,24 @@ also checks the graph: a parent that is missing, loops or does not fit the
 type, `decisions:` that name nothing or something other than a decision, and
 a `like:` that names no type. Off-pattern links are warnings, and errors on a
 strict board.
+
+#### index — The local search index
+
+```console
+$ brainfile index            # bring it up to date and say what changed
+$ brainfile index --rebuild  # drop it and index from scratch
+$ brainfile index --status   # what is in it
+```
+
+Never required: every `search`, `brief` and `check` brings the index up to
+date first. Unchanged files (same size and modification time) are not read; a
+changed file replaces its chunks; a deleted one drops out. Inside git the
+project's files come from `git ls-files`, so `.gitignore` is honoured; root
+`AGENTS.md` and `CLAUDE.md` are read even when ignored. Markdown and text only,
+256 KiB a file at most, never `node_modules`, `dist` and the like, never
+`.brainfile/` (the board is indexed on its own terms), never your home
+folder. Where Node has no `node:sqlite` (below 22.13) it says so; search,
+brief and check scan instead.
 
 #### schema — The bundled JSON Schemas
 
@@ -1080,7 +1245,7 @@ server, the per-agent brief, and hooks.
 ### The MCP server
 
 Add this to `.mcp.json` at the repo root (or the equivalent for your agent) and
-restart the agent. Eleven tools appear, mirroring the CLI.
+restart the agent. Fourteen tools appear, mirroring the CLI.
 
 ```console title=".mcp.json"
 {
@@ -1097,7 +1262,7 @@ restart the agent. Eleven tools appear, mirroring the CLI.
 | --- | --- |
 | `list_tasks` | List board documents, filtered by column, tag or type (aliases work). `type: "decision"` lists decisions; `tree: true` adds the outline; `related` adds related boards' open tasks. |
 | `get_task` | One document by ID, in full, with `graph`: its parent, children and the decisions it rests on. Takes `mobile:task-12` for a related board. |
-| `search` | Search tasks and logs, list recent completions, or view one log entry. Takes `type`. |
+| `search` | Search the board, its history and the project's docs (current first, history in its own lane, each hit with `path` and line range), list recent completions, or view one log entry. Takes `type`, `limit`, `history`. |
 | `task_add` | Create a document. Takes `type` (aliases work), `parentId`, `dependsOn`, `decisions`, and contract parts for `with_contract`. |
 | `task_move` | Move one task or many to a column. |
 | `task_patch` | Update fields on one task or many, `parentId`, `dependsOn` and `decisions` included; `null` removes a field. |
@@ -1105,15 +1270,29 @@ restart the agent. Eleven tools appear, mirroring the CLI.
 | `task_delete` | Remove a task. |
 | `subtask` | `action=` add, toggle, delete or update, on one subtask, several, or all. |
 | `contract` | `action=` attach, pickup, deliver, validate, graph or activate. |
-| `brief` | The per-agent delta, with `agent=` and optional `peek`. |
+| `brief` | The agent's brief: `text` (budgeted by `maxChars`) and its `sections`, plus the checkpoint `lanes`. Takes `agent=`, `peek`. |
+| `decide` | Record a decision in its claim family (`claimKey`, `text`, `kind`, `stance`, `subject`, `holdsWhile`, `recheck`, `validUntil`, `source`, `package`, `forWork`); the family's current decision is superseded. |
+| `supersede` | Replace a decision by hand (`taskId`, `text`). |
+| `check` | `use`, `review`, `use_replacement` or `no_decision` for an action (`query`), a decision, a `claimKey` or a `claimKeyPrefix`, with `exitCode` as the CLI's. |
 
 ### Start every session with a brief
 
-`brainfile brief --agent <name>` is the orientation call. The first time it
-prints the board's standing instructions and accepted decisions; after that it
-prints only what changed, so the cost stays small however long the board runs.
-`--json` gives the same lanes as data. Have the agent use the same name it
-gives as `assignee`, so its tasks show up under "Your Tasks".
+`brainfile brief --agent <name>` is the orientation call: the decisions that
+stand, the agent's tasks, what changed since it last looked, and the docs that
+bear on its work, in about 1,600 characters. With the hooks installed it
+arrives on its own at session start. Have the agent use the same name it
+gives as `assignee`, so its tasks show up under "Your tasks".
+
+### Decide, then check
+
+When an agent settles something (a library, a pattern, a rule), it records it
+with `decide` under a claim key, and the next session sees it in the brief.
+Before an action that might cut across a settled choice, `check "<action>"`
+names the decision that speaks to it and says `use` (follow it), `review`
+(ask first), `use_replacement` (that one was replaced: use this) or
+`no_decision`. Name the subject next to the verb ("use axios", "drop
+axios") so a contradiction of the decision's stance is caught. Next steps are tasks and what happened is a note: a handoff
+needs no other type.
 
 ### Hooks that keep the board honest
 
@@ -1123,8 +1302,8 @@ $ brainfile hooks install claude-code
 
 Installs three hooks into the agent's settings: after a file edit, a reminder
 to update the task; before a prompt, a warning when files changed but the board
-did not; at session start, a note that a board exists. `--scope project` writes
-them into the repo instead of the user's home.
+did not; at session start, the agent's brief. `--scope project` writes them
+into the repo instead of the user's home.
 
 ### Bootstrap files
 
@@ -1153,6 +1332,14 @@ they belong.
 
 `ledger.jsonl` is the record `search`, `log` and `brief` read. The archived
 task file in `logs/` is kept for people. If they ever disagree, the ledger wins.
+
+### The index is a cache
+
+`.brainfile/state/index.db` is built from the files on each machine and never
+leaves it: the board branch carries the decisions and tasks, and every machine
+indexes them itself. Nothing reads the index that could not be read from the
+files, so deleting it costs one rebuild. It needs no native module: Node's own
+`node:sqlite`, loaded only when present.
 
 ### The library underneath
 

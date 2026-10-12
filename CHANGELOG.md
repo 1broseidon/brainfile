@@ -6,10 +6,60 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
-Default types and the graph (spec-12): every board has epics, specs, plans,
-tasks and decisions, and knows how they fit together.
+Memory moves onto the board (spec-11): decisions with claim families, one
+search over a local index, a brief that starts every session, and `check`
+before acting. Default types and the graph (spec-12): every board has epics,
+specs, plans, tasks and decisions, and knows how they fit together.
 
-### Added
+### Added (spec-11)
+- `brainfile decide -k <claim.key> "text"` records a decision in its claim
+  family (`--kind`, `--stance`/`--subject`, `--holds-while`, `--recheck`,
+  `--valid-until`, `--source` with its sha256, `--package name<op>version`,
+  `--for` work that rests on it). The family's current decision is
+  superseded: status, `supersedes`/`supersededBy` both ways, moved to
+  `logs/`. An empty family lists related ones (same parent key, same words).
+  `supersede <id> "text"` replaces one by hand; `retire <id> --as
+  rejected|stale` lets one go. One board commit per command; no ledger lines.
+- `brainfile check "<action>"` (or a decision ID, `--claim-key`,
+  `--claim-key-prefix`) answers `use`, `review`, `use_replacement` or
+  `no_decision` in recoil's order, with the stance rule and the predicates
+  `validUntil`, source unchanged and package version (package.json,
+  go.mod, pyproject.toml). Exit codes 0, 2, 3, 0; errors 1.
+- A local search index at `.brainfile/state/index.db` (gitignored,
+  rebuildable) on Node's own `node:sqlite` with FTS5: board and logs
+  documents, the ledger, `plans/` and the project's Markdown, via `git
+  ls-files` so `.gitignore` holds. Tracked by size, mtime and sha256; changed
+  files replace their chunks. `brainfile index [--rebuild] [--status]`.
+- MCP: `decide`, `supersede` and `check` (fourteen tools).
+- Core: `decisions` (claim families, stance rule, verdicts; also in
+  `@brainfile/core/browser`), `decideFile`, `supersedeDecisionFile`,
+  `retireDecisionFile` and the file predicates in the main entry, and the new
+  Node-only `@brainfile/core/memory`: `MemoryIndex`, `searchMemory`,
+  `composeBrief`, `checkDecision`, `checkClaimKeyPrefix`.
+- `/v2/decision.json` documents `sourcePath`, `sourceHash` and
+  `packageVersion`.
+
+### Changed (spec-11)
+- `search` (CLI and MCP) uses the index when Node has `node:sqlite` (22.13
+  and later): AND then OR, titles over bodies, current results first and
+  history (completed work, superseded decisions) in its own lane, every hit
+  with its path and line range, and the project's docs alongside the board.
+  Filter tokens work as before. Elsewhere, or with `BRAINFILE_INDEX=off`, the
+  scan answers in the same shape. New: `search --json`, `--limit`,
+  `--no-history`.
+- `brief` prints one budgeted block (about 1,600 characters, `--max-chars`):
+  work resting on a superseded decision and decisions whose predicates broke,
+  current decisions, your tasks (or the work in flight), what changed since
+  your checkpoint, and the docs that bear on your tasks. `--json` adds
+  `sections`, `text`, `maxChars` and `truncated`; `lanes` is unchanged.
+- The SessionStart hook injects that brief (Claude Code:
+  `hookSpecificOutput.additionalContext`) instead of a reminder, from a lean
+  entry that loads neither commander, the MCP server nor the TUI (~150ms
+  warm).
+- `log --recent` and MCP `search recent` leave out decisions retired to
+  `logs/`; they were never completed.
+
+### Added (spec-12)
 - Five built-in types that need no `types:` entry: `epic`, `spec`, `plan`,
   `task` (alias `issue`) and `decision` (alias `adr`). `brainfile types`
   prints each with its place in the graph; `types add <name> --like <type>`
@@ -33,7 +83,7 @@ tasks and decisions, and knows how they fit together.
   `@brainfile/core/browser`; `readBoardGraph` and
   `findWorkOnSupersededDecisions` in the main entry.
 
-### Changed
+### Changed (spec-12)
 - A parent with open children refuses to complete, whatever its type (it was
   only epics); `--force` still overrides. A decision is never completed.
 - An off-pattern parent (an epic under a task, anything under a decision) is a
