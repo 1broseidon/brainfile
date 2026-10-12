@@ -28,6 +28,27 @@ export interface TaskView {
   createdAt?: string;
   updatedAt?: string;
   completedAt?: string;
+  /** Dependencies on related boards that are not done yet, as written (`mobile:task-12`). */
+  blockedOn?: string[];
+}
+
+/** A dependency, resolved: here, or on a related board. */
+export interface DependencyView {
+  ref: string;
+  /** open, completed, not-found, missing, no-board, unknown-alias, malformed */
+  state: string;
+  done: boolean;
+  title?: string;
+  /** The related board's folder, for a qualified reference. */
+  folder?: string;
+}
+
+/** A sister board named in this board's `related:`. */
+export interface RelatedView {
+  alias: string;
+  /** Absolute folder, resolved against this repository's root. */
+  folder: string;
+  status: 'found' | 'missing' | 'no-board';
 }
 
 export interface TaskDetail extends TaskView {
@@ -38,6 +59,7 @@ export interface TaskDetail extends TaskView {
   relatedFiles?: string[];
   blockedBy?: string[];
   dependsOn?: string[];
+  dependencies: DependencyView[];
   /** True when the task lives in logs/ (completed). */
   archived: boolean;
 }
@@ -71,6 +93,7 @@ export interface BoardSnapshot {
   typeNames: string[];
   storage: Storage;
   sync: SyncView;
+  related: RelatedView[];
 }
 
 export type ProjectState =

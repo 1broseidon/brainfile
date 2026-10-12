@@ -83,6 +83,9 @@
       <span class="tag reveal">{tag}</span>
     {/each}
   </span>
+  {#if task.blockedOn?.length}
+    <span class="run mono" use:tip={`Waiting on ${task.blockedOn.join(', ')}`}>blocked</span>
+  {/if}
   {#if app.runFor(task.id)}
     {@const run = app.runFor(task.id)!}
     <span class="run mono">{run.agentId} · {run.state === 'waiting' ? 'needs you' : run.activity}</span>

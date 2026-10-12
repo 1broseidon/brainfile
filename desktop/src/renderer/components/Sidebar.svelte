@@ -23,6 +23,28 @@
     }
   }
 
+  /**
+   * Projects in the person's order, except that a board's related sisters
+   * (named in its `related:`) sit directly under it, stepped in.
+   */
+  const ordered = $derived.by(() => {
+    const sistersOf = (id: string) =>
+      (app.boards[id]?.related ?? []).map((r) => app.projects.find((p) => p.id === r.folder)).filter((p): p is Project => !!p && p.id !== id);
+    const placed = new Set<string>();
+    const out: { project: Project; sister: boolean }[] = [];
+    for (const project of app.projects) {
+      if (placed.has(project.id)) continue;
+      placed.add(project.id);
+      out.push({ project, sister: false });
+      for (const s of sistersOf(project.id)) {
+        if (placed.has(s.id)) continue;
+        placed.add(s.id);
+        out.push({ project: s, sister: true });
+      }
+    }
+    return out;
+  });
+
   /** Where the board lives: on the brainfile branch (or its own repo), or in plain files. */
   function storageIcon(project: Project): 'git' | 'folder' {
     return project.state.status === 'ready' && project.state.storage !== 'plain' ? 'git' : 'folder';
@@ -49,14 +71,14 @@
   </div>
 
   <nav class="projects">
-    {#each app.projects as project, i (project.id)}
+    {#each ordered as { project, sister }, i (project.id)}
       {@const active = project.id === app.activeId}
       {@const ready = project.state.status === 'ready'}
-      <button class="project" class:active use:tip={`${tildify(project.path)} · ${storageWord(project) || line(project)}`} onclick={() => app.select(project.id)}>
+      <button class="project" class:sister class:active use:tip={`${tildify(project.path)} · ${storageWord(project) || line(project)}`} onclick={() => app.select(project.id)}>
         <span class="where"><Icon name={storageIcon(project)} size={14} /></span>
             <span class="name">{project.name}</span>
         <span class="count mono" class:off={!ready}>{app.boards[project.id] ? app.boards[project.id].tasks.length : ready ? '' : '–'}</span>
-        {#if i < 9}<span class="key mono">⌘{i + 1}</span>{/if}
+        {#if app.projects.indexOf(project) < 9}<span class="key mono">⌘{app.projects.indexOf(project) + 1}</span>{/if}
       </button>
     {/each}
 
@@ -112,6 +134,11 @@
     border-radius: var(--r-card);
     text-align: left;
     transition: background var(--d-press) var(--ease);
+  }
+
+  /* A related sister board, stepped in under the board that names it. */
+  .project.sister {
+    padding-left: calc(var(--s3) + var(--s4));
   }
 
   .project:hover,

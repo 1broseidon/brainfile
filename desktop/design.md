@@ -186,6 +186,19 @@ off course. These rules win over every other section:
   every column to drop into).
 - The rail is one line per project: its storage icon, its name, its count.
 
+## Related boards
+
+A board names its sister repositories in `related:` (spec-10). The app
+reads that and nothing else:
+
+- A sister that is also a project sits directly under the board that names
+  it in the rail, stepped in.
+- A task waiting on a sister task that is not done says `blocked` in muted
+  mono on its row; the reference is in its tooltip.
+- The task pane lists **Depends on**: each reference, its state as a box,
+  and its title, read from the sister board; pressing one opens it there.
+  A sister folder not on this machine says so.
+
 ## Dispatch
 
 Brainfile is a dispatcher, not a chat app: anything long belongs in Hotline.

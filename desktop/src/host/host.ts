@@ -35,6 +35,7 @@ import {
   flushBoardCommits,
   isTrackedBoard,
   locateBoard,
+  relatedBoards,
   onBoardCommitted,
   pendingChanges,
   scheduleBoardCommit,
@@ -44,6 +45,7 @@ import {
 } from '@brainfile/core/repo';
 import type {
   BoardSnapshot,
+  DependencyView,
   HostMessage,
   HostRequest,
   NewTaskInput,
@@ -65,6 +67,8 @@ interface OpenBoard {
   pushTimer: NodeJS.Timeout | null;
   syncing: boolean;
   lastWarning?: string;
+  /** Related boards' folders, so a change over there re-reads what depends on it. */
+  relatedFolders: string[];
 }
 
 const COMPLETED_LIMIT = 50;
@@ -142,7 +146,19 @@ function syncView(board: OpenBoard): SyncView {
 function snapshot(board: OpenBoard): BoardSnapshot {
   const built = buildBoardFromV2(board.brainfilePath);
   const config = readBoardConfig(board.brainfilePath)?.config;
-  const tasks = built.columns.flatMap((column) => column.tasks.map((task) => toView({ ...task, column: column.id })));
+  const related = relatedBoards(board.brainfilePath);
+  const sisters = related.boards();
+  board.relatedFolders = sisters.map((b) => b.folder);
+  // Only dependencies on related boards block here, as in the CLI.
+  const blockedOn = (task: Task) =>
+    (task.dependsOn ?? []).filter((ref) => ref.includes(':') && !related.lookup(ref).done);
+  const tasks = built.columns.flatMap((column) =>
+    column.tasks.map((task) => {
+      const view = toView({ ...task, column: column.id });
+      const blocked = blockedOn(task);
+      return blocked.length ? { ...view, blockedOn: blocked } : view;
+    })
+  );
   const { logsDir } = getV2Dirs(board.brainfilePath);
   const completed = readTasksDir(logsDir)
     .map((doc) => toView(doc.task, doc.body))
@@ -156,6 +172,7 @@ function snapshot(board: OpenBoard): BoardSnapshot {
     completed,
     typeNames: Object.keys(config?.types ?? {}),
     storage: boardRepoKind(board.dotDir) ?? 'plain',
+    related: sisters.map((b) => ({ alias: b.alias, folder: b.folder, status: b.status })),
     sync: syncView(board),
   };
 }
@@ -168,7 +185,13 @@ function publish(board: OpenBoard): void {
   }
 }
 
-function scheduleReload(board: OpenBoard): void {
+function scheduleReload(board: OpenBoard, cascade = true): void {
+  // A sister board changed: boards that depend on it read their blockers again.
+  if (cascade) {
+    for (const other of boards.values()) {
+      if (other !== board && other.relatedFolders.some((f) => path.resolve(f) === path.resolve(board.projectId))) scheduleReload(other, false);
+    }
+  }
   if (board.reloadTimer) clearTimeout(board.reloadTimer);
   board.reloadTimer = setTimeout(() => {
     board.reloadTimer = null;
@@ -201,6 +224,7 @@ function openBoard(projectId: string): Result<BoardSnapshot> {
     reloadTimer: null,
     pushTimer: null,
     syncing: false,
+    relatedFolders: [],
   };
   board.watcher = watch(board);
   boards.set(projectId, board);
@@ -231,9 +255,25 @@ function getTask(projectId: string, taskId: string): Result<TaskDetail> {
     body,
     log,
     relatedFiles: task.relatedFiles,
+    dependencies: dependencies(board, task.dependsOn ?? []),
     blockedBy: task.blockedBy,
     dependsOn: task.dependsOn,
     archived: found.isLog,
+  });
+}
+
+/** Each dependency resolved, here or on a related board, for the task pane. */
+function dependencies(board: OpenBoard, refs: string[]): DependencyView[] {
+  if (refs.length === 0) return [];
+  const related = relatedBoards(board.brainfilePath);
+  const dirs = getV2Dirs(board.brainfilePath);
+  return refs.map((ref) => {
+    if (!ref.includes(':')) {
+      const local = findV2Task(dirs, ref, true);
+      return { ref, state: local ? (local.isLog ? 'completed' : 'open') : 'not-found', done: !!local?.isLog, title: local?.doc.task.title };
+    }
+    const r = related.lookup(ref);
+    return { ref, state: r.state, done: r.done, title: r.doc?.task.title, folder: r.board?.folder };
   });
 }
 

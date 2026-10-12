@@ -269,6 +269,24 @@
         </section>
       {/if}
 
+      {#if detail.dependencies.length}
+        <section class="block">
+          <h3>Depends on</h3>
+          <ul class="children">
+            {#each detail.dependencies as dep (dep.ref)}
+              {@const target = dep.ref.includes(':') ? app.projects.find((p) => dep.folder && p.id === dep.folder) : app.active}
+              <li>
+                <button disabled={!target || dep.state === 'missing' || dep.state === 'no-board'} onclick={() => target && app.goTo(target.id, dep.ref.split(':').pop()!)}>
+                  <StatusIcon progress={dep.done ? 1 : 0} />
+                  <span class="cid ref mono">{dep.ref}</span>
+                  <span class="clip" class:dim={!dep.title}>{dep.title ?? (dep.state === 'missing' ? 'not on this machine' : dep.state === 'no-board' ? 'no board there' : dep.state === 'unknown-alias' ? 'unknown board' : 'not found')}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {/if}
+
       {#if children.length}
         <section class="block">
           <h3>Child tasks <span class="mono">{children.length}</span></h3>
@@ -644,6 +662,12 @@
 
   .children button:hover {
     background: var(--fill-hover);
+  }
+
+  /* A reference can be longer than an ID (`mobile:task-12`); it never wraps. */
+  .cid.ref {
+    width: auto;
+    white-space: nowrap;
   }
 
   .cid {
