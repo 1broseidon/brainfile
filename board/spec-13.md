@@ -57,3 +57,6 @@ An agent working through `brainfile mcp` should be able to do everything a perso
 **The server says how to use it.** `brainfile mcp` gets server instructions: use these tools for every board change, never edit `.brainfile/` files by hand, and what each tool is for in one line. Tool names stay in the existing style (`task_*`, then a noun).
 
 **Not in scope.** New capabilities that the CLI does not have, beyond `columns`.
+
+## Log
+- 2026-10-12T07:30:16.640Z: [claude] Started on feat/memory-graph. Baseline: core 837/837, CLI 546 pass / 9 fail (brainfile-finder, command-lint, hook-settings), TUI 129/129. The TUI does not edit columns on any branch, so columns get core operations written through core's readBoardConfig/writeBoardConfig.
