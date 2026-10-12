@@ -10,7 +10,7 @@ tags:
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
 assignee: claude
-updatedAt: "2026-10-12T19:22:27.895Z"
+updatedAt: "2026-10-12T19:22:28.176Z"
 subtasks:
   - id: task-20-1
     title: "Host: completed children travel with their parent past the Done limit"
@@ -26,7 +26,7 @@ subtasks:
     completed: true
   - id: task-20-5
     title: "Task pane: child tasks include completed ones, ticked"
-    completed: false
+    completed: true
   - id: task-20-6
     title: "TUI: children under the parent across columns, own status, completed until parent done"
     completed: false
