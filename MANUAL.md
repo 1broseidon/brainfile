@@ -187,8 +187,9 @@ and edited by hand when that is quicker than a command.
 ### brainfile.md — the config
 
 `init` writes `.brainfile/brainfile.md`. It holds configuration only: the columns, the standing
-instructions an agent should read, and any custom document types. Tasks never
-live in it.
+instructions an agent should read, and any document types of your own. Tasks
+never live in it, and neither do the built-in types: epic, spec, plan, task and
+decision exist without being listed (see [Document types](#document-types)).
 
 ```yaml
 ---
@@ -215,7 +216,7 @@ Add your project description here.
 ```
 
 `agent.instructions` is what `brainfile brief` shows an agent on its first
-visit, alongside any accepted decision records. Put the guidance you would
+visit, alongside the decisions that stand. Put the guidance you would
 otherwise repeat in every prompt there.
 
 ### board/ — one document per file
@@ -251,13 +252,14 @@ updatedAt: "2026-09-20T19:03:57.257Z"
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Unique across the board. The prefix comes from the type: `task-`, `epic-`, `adr-`, `plan-`. Never regenerate one. |
-| `type` | `task` (default), `epic`, `adr` or `plan`, plus any type you define. |
+| `id` | Unique across the board. The prefix comes from the type: `task-`, `epic-`, `spec-`, `plan-`, `decision-`. Never regenerate one. |
+| `type` | `task` (default), `epic`, `spec`, `plan` or `decision`, plus any type you define. `issue` and `adr` are accepted and written as `task` and `decision`. |
 | `title`, `column`, `position` | Where the card sits. `column` is a column id from the config. |
 | `priority` | `low`, `medium`, `high` or `critical`. |
 | `tags`, `assignee`, `dueDate` | Free-form. `assignee` is how `brief` and the TUI's `@name` filter find an agent's work. |
-| `parentId` | The epic or plan this document belongs to. `list --parent` follows it. |
+| `parentId` | The one parent: a spec's epic, a plan's spec, a task's plan. `list --tree` draws it; `list --parent` follows it. |
 | `dependsOn` | Tasks that come first. `mobile:task-12` names a task on a related board. See [Related boards](#related-boards). |
+| `decisions` | The decisions this work rests on, e.g. `[decision-3]`. The reverse is worked out, never written on the decision. |
 | `relatedFiles` | Paths an agent should read first. |
 | `subtasks` | `{ id, title, completed }` rows, managed with `subtask`. |
 | `contract` | Deliverables, validation and constraints. See [Contracts](#contracts). |
@@ -278,21 +280,52 @@ changelog written while the work happened rather than after.
 
 ### Document types
 
-`task`, `epic`, `adr` and `plan` are built in. Epics group tasks through
-`parentId` and refuse to complete while children are active unless you pass
-`--force`. ADRs are decisions: `adr promote` marks one accepted and moves it to
-`logs/`, where `brief` keeps surfacing it. Plans are first-class documents with
-a free-form `status`, and tasks link to the plan they implement.
+Every document is a file with frontmatter, so the board is a graph and not only
+a list. Five types are built in, each with a place in it:
 
-Add your own under `types:` in the config, or with `brainfile types add`. A
-type gets an ID prefix, a completable flag and an optional schema. With
-`strict: true` on the board, every document must declare a known type.
+| Type | Glyph | What it is | Goes under | Holds |
+| --- | --- | --- | --- | --- |
+| `epic` | ▸ | An outcome worth several pieces of work; done when everything under it is. | top level | spec, plan, task |
+| `spec` | ◆ | What to build and why: behaviour, scope, what is not in scope. | epic | plan, task |
+| `plan` | ⎘ | How, and in what order; done when its tasks are. | epic, spec | task |
+| `task` | | One piece of work a person or an agent can pick up. Alias `issue`. | epic, spec, plan, task | task |
+| `decision` | ● | A standing choice. Alias `adr`. Not work: no column, never completed; current until superseded, rejected or stale. | never in the tree | nothing |
+
+`parentId` is the one parent link and the table says which parents fit. A
+parent cannot complete while it has open children (`complete --force`
+overrides). An off-pattern parent, an epic under a task or anything under a
+decision, is a `lint` warning; with `strict: true` on the board, `add`,
+`patch` and `lint` refuse it. A loop is always refused.
+
+The other edges are few and named: `dependsOn` orders work; `decisions:` on a
+piece of work names the decisions it rests on, and when one is superseded,
+open work resting on it says so in `show` and `list`; `supersedes` and
+`supersededBy` link decisions to each other.
+
+`issue` and `adr` are accepted wherever a type is (`add --type`, `list --type`,
+`search`, the MCP tools) and new documents are written as `task` and
+`decision`. Existing `type: adr` files read as decisions and keep their IDs.
+
+Name your own under `types:` in the config, or with `brainfile types add`. A
+type can take a built-in's place with `like:`: it gets that type's parents,
+children, completion rule and glyph. One with no `like` behaves as a task.
+
+```yaml
+types:
+  bug: { like: task }
+  rfc: { like: spec, idPrefix: rfc }
+```
+
+An entry under a built-in's own name overrides it (`plan: { completable:
+false }` stops a plan completing when it reaches a completion column). With
+`strict: true`, a document's type must be built in or listed.
+`brainfile types` prints every type with its place in the graph.
 
 > The JSON Schemas the frontmatter points at are served from this domain and
 > never move: [/v2/board.json](/v2/board.json), [/v2/task.json](/v2/task.json),
 > [/v2/contract.json](/v2/contract.json), [/v2/epic.json](/v2/epic.json),
-> [/v2/adr.json](/v2/adr.json), with [/v2/index.json](/v2/index.json) as the
-> directory. `brainfile schema board` prints the bundled copy without a network.
+> [/v2/decision.json](/v2/decision.json) and [/v2/adr.json](/v2/adr.json), with
+> [/v2/index.json](/v2/index.json) as the directory. `brainfile schema board` prints the bundled copy without a network.
 
 ## Choosing a command
 
@@ -305,6 +338,7 @@ type gets an ID prefix, a completable flag and an optional schema. With
 | Change a task's fields | `patch` |
 | Finish a task and record it | `complete` |
 | Read the whole board | `list` |
+| See epics, specs, plans and tasks as one outline | `list --tree` |
 | Read one task in full | `show` |
 | See what this board waits on in other repos | `list --related` |
 | Find something, active or done | `search` |
@@ -315,7 +349,8 @@ type gets an ID prefix, a completable flag and an optional schema. With
 | Let an agent work the board as tools | `mcp` |
 | Keep an agent updating the board | `hooks` |
 | Read what was done on a task | `log` |
-| Record a plan or a decision | `plan`, `adr` |
+| Record a plan or a decision | `plan`, `add --type decision` |
+| See every type and where it fits | `types` |
 | Export finished work to GitHub or Linear, or bring it back | `archive`, `restore` |
 | Share the board with another machine or person | `sync` |
 | See where the board lives and who has it | `where` |
@@ -351,9 +386,10 @@ $ brainfile init --here     # inside a repository: this directory, not its root
 $ brainfile init -g         # the home board at ~/.brainfile
 ```
 
-Writes `brainfile.md` with two columns and the default agent instructions,
-creates `board/` and `logs/`, and adds a `.gitignore` that excludes `state/`,
-where per-agent brief state lives.
+Writes a short `brainfile.md` with two columns and the default agent
+instructions (no `types:`: the five built-in types need none), creates `board/`
+and `logs/`, and adds a `.gitignore` that excludes `state/`, where per-agent
+brief state lives.
 
 Inside a git repository the board is created at the repository root as a
 worktree on its own `brainfile` branch, hidden from the code branch through
@@ -368,13 +404,36 @@ $ brainfile list
 $ brainfile list -c todo
 $ brainfile list -t urgent             # by tag
 $ brainfile list --parent epic-1
+$ brainfile list --type spec           # aliases work: issue is task, adr is decision
+$ brainfile list --tree                # the outline: epics, specs, plans, tasks
+$ brainfile list --tree --parent epic-1
+$ brainfile list --type decision       # decisions, current first
 $ brainfile list --contract ready      # ready | in_progress | delivered | done | failed
 $ brainfile list --related             # open tasks on related boards this board waits on
 $ brainfile list --related all         # every open task on every related board
 ```
 
 Prints every column with its tasks, priorities and tags. A task waiting on a
-related board says so on a `Blocked by:` line.
+related board says so on a `Blocked by:` line, and one resting on a superseded
+decision says that too. Decisions have no column, so `list` leaves them out
+and says how many; `--type decision` lists them with where each stands.
+
+`--tree` prints open work as an outline, nested by `parentId` in column order:
+
+```console
+$ brainfile list --tree
+
+My Project — outline
+
+▸ epic-1  Memory and the graph  · In Progress
+  ◆ spec-1  Default types  · To Do
+    ⎘ plan-1  Build order  · To Do
+      · task-1  Registry  · To Do
+  · task-3  Index work  · To Do  ⚠ rests on superseded decision-2
+```
+
+With a filter it shows the matches and keeps their ancestors, dimmed, for
+context; `--parent` shows one document and everything under it.
 
 #### show — Full details of one task
 
@@ -385,14 +444,20 @@ $ brainfile show -t mobile:task-12     # a task on a related board
 ```
 
 `--json` prints the document's frontmatter as one object, timestamps included.
-A task with `dependsOn` also lists each dependency and whether it is done.
+`show` names the document's type, its parent, its children (open or done),
+each dependency and whether it is done, and the decisions it rests on with
+where each stands; if one is superseded it says "Rests on a superseded
+decision". A decision shows its status and the work resting on it. `--json`
+adds the same as `graph`.
 
 #### add — Create a document
 
 ```console
 $ brainfile add -t "Fix login bug" -p high --tags bug,auth --files src/auth.ts
 $ brainfile add -t "Auth epic" --type epic --child "OAuth flow" --child "Session hardening"
-$ brainfile add -t "OAuth flow" --parent epic-1
+$ brainfile add -t "Token refresh" --type spec --parent epic-1
+$ brainfile add -t "Use SQLite for the index" --type decision
+$ brainfile add -t "Build the index" --parent spec-1 --decisions decision-1
 ```
 
 | Flag | Meaning |
@@ -403,8 +468,9 @@ $ brainfile add -t "OAuth flow" --parent epic-1
 | `-p, --priority` | `low`, `medium`, `high`, `critical`. |
 | `--tags`, `--subtasks`, `--files` | Comma-separated. |
 | `--assignee`, `--due-date` | A name; a `YYYY-MM-DD` date. |
-| `--type` | `epic`, `adr`, `plan` or a custom type. Sets the ID prefix. |
-| `--parent` | Parent ID. `--child <title>` creates children under the new document, repeatable. |
+| `--type` | `epic`, `spec`, `plan`, `task`, `decision` or a type of yours; `issue` and `adr` are aliases. Sets the ID prefix. A decision gets no column. |
+| `--parent` | Parent ID; it must fit the type (see [Document types](#document-types)). `--child <title>` creates children under the new document, repeatable. |
+| `--depends-on`, `--decisions` | Comma-separated IDs: tasks that come first, decisions the work rests on. |
 | `--with-contract` | Attach a draft contract. Add `--ready` to make it dispatchable at once. |
 | `--deliverable`, `--validation`, `--constraint` | Contract parts, each repeatable. See [Contracts](#contracts). |
 
@@ -422,11 +488,15 @@ Column names and ids both work.
 $ brainfile patch -t task-1 -p critical --assignee codex
 $ brainfile patch -t task-1 --tags perf,cache        # replaces the tag list
 $ brainfile patch -t task-1 --clear-due-date
+$ brainfile patch -t spec-3 --parent epic-2
+$ brainfile patch -t task-7 --depends-on task-5,task-6 --decisions decision-2
 ```
 
-Takes `--title`, `-d`, `-p`, `--tags`, `--assignee` and `--due-date`, plus
-`--clear-tags`, `--clear-assignee`, `--clear-due-date` and `--clear-priority`.
-`-p none` also removes the priority.
+Takes `--title`, `-d`, `-p`, `--tags`, `--assignee`, `--due-date`, `--parent`,
+`--depends-on` and `--decisions`, plus `--clear-tags`, `--clear-assignee`,
+`--clear-due-date`, `--clear-priority`, `--clear-parent`, `--clear-depends-on`
+and `--clear-decisions`. `-p none` also removes the priority. A new parent
+must fit the type, as for `add`, and neither link may loop.
 
 #### complete — Finish a task
 
@@ -436,7 +506,9 @@ $ brainfile complete -t epic-1 --force   # even if children are still active
 ```
 
 Appends to `logs/ledger.jsonl`, moves the file to `logs/`, and records cycle
-time from `createdAt`.
+time from `createdAt`. A parent with open children refuses, whatever its
+type, until they are done or you pass `--force`; a decision is never
+completed.
 
 #### delete — Remove a task permanently
 
@@ -460,6 +532,7 @@ $ brainfile subtask -t task-1 --delete sub-1
 ```console
 $ brainfile search parser
 $ brainfile search parser -c in-progress
+$ brainfile search cache --type adr      # decisions, under either name
 ```
 
 Matches titles, descriptions and log entries across the board and the ledger.
@@ -505,8 +578,9 @@ $ brainfile brief --agent claude --offline # skip the sync a shared board does f
 ```
 
 The first brief for a name prints the board title, the agent instructions and
-accepted ADRs, then the agent's tasks. Later briefs are deltas: new notes, task
-changes and completions since the last one. State is per agent, kept in
+the decisions that stand (current decisions and accepted ADRs), then the
+agent's tasks. Later briefs are deltas: new notes, task changes and
+completions since the last one. State is per agent, kept in
 `.brainfile/state/` and ignored by git. A shared board syncs before the brief
 so it reflects other machines; a sync failure is one warning line, never an
 error.
@@ -557,28 +631,50 @@ $ brainfile plan show plan-1 --json
 $ brainfile plan link plan-1 -t task-42
 ```
 
-`add` takes `-c`, `--description`, `--tags`, `--parent` and a free-form
-`--status`. `link` sets the task's `parentId` to the plan, so
-`list --parent plan-1` finds a plan's tasks. On a strict board, add a `plan`
-entry under `types:` first.
+`add` takes `-c`, `--description`, `--tags`, `--parent` (an epic or a spec)
+and a free-form `--status`. `link` sets the task's `parentId` to the plan, so
+`list --parent plan-1` finds a plan's tasks. `plan` is a built-in type, so a
+strict board needs no `types:` entry for it.
 
 #### adr — Decision records
 
 ```console
-$ brainfile add -t "Use SQLite for the index" --type adr
+$ brainfile add -t "Use SQLite for the index" --type decision
+$ brainfile list --type decision
 $ brainfile adr promote -t adr-1
 ```
 
-`promote` marks the ADR accepted and moves it to `logs/`. Accepted decisions
-appear in every agent's first `brief`.
+ADRs are decisions: `--type adr` writes a `decision`, and an existing
+`type: adr` file reads as one and keeps its ID. A decision has no column and
+is never completed; it is current until superseded, rejected or stale.
+`promote` marks a legacy ADR accepted and moves it to `logs/`. Current
+decisions and accepted ADRs appear in every agent's first `brief`.
 
-#### types — Inspect and add document types
+#### types — Every type and its place in the graph
 
 ```console
 $ brainfile types
 $ brainfile types list --json
-$ brainfile types add spec --id-prefix spec --completable false --schema ./spec.json
+$ brainfile types add bug --like task
+$ brainfile types add rfc --like spec --id-prefix rfc --schema ./rfc.json
 ```
+
+```console
+$ brainfile types
+Strict mode: off
+
+  TYPE      ID          GOES UNDER                 HOLDS
+▸ epic      epic-N      top level                  spec · plan · task
+◆ spec      spec-N      epic                       plan · task
+⎘ plan      plan-N      epic · spec                task
+  task      task-N      epic · spec · plan · task  task                alias issue
+● decision  decision-N  never in the tree          —                   alias adr · no column, never completed
+
+  bug       bug-N       epic · spec · plan · task  task                like task
+```
+
+`--like` takes a built-in's place; without it a type behaves as a task. An
+alias name (`adr`, `issue`) cannot be added as a type of its own.
 
 #### template — Create tasks from templates
 
@@ -600,7 +696,11 @@ $ brainfile lint --fix
 $ brainfile lint --check   # non-zero exit for CI
 ```
 
-`--fix` also folds a legacy `rules:` block into `agent.instructions`.
+`--fix` also folds a legacy `rules:` block into `agent.instructions`. `lint`
+also checks the graph: a parent that is missing, loops or does not fit the
+type, `decisions:` that name nothing or something other than a decision, and
+a `like:` that names no type. Off-pattern links are warnings, and errors on a
+strict board.
 
 #### schema — The bundled JSON Schemas
 
@@ -995,13 +1095,13 @@ restart the agent. Eleven tools appear, mirroring the CLI.
 
 | Tool | Does |
 | --- | --- |
-| `list_tasks` | List board documents, filtered by column, tag or type. `related` adds related boards' open tasks. |
-| `get_task` | One document by ID, in full. Takes `mobile:task-12` for a related board. |
-| `search` | Search tasks and logs, list recent completions, or view one log entry. |
-| `task_add` | Create a document. Takes `type`, and contract parts for `with_contract`. |
+| `list_tasks` | List board documents, filtered by column, tag or type (aliases work). `type: "decision"` lists decisions; `tree: true` adds the outline; `related` adds related boards' open tasks. |
+| `get_task` | One document by ID, in full, with `graph`: its parent, children and the decisions it rests on. Takes `mobile:task-12` for a related board. |
+| `search` | Search tasks and logs, list recent completions, or view one log entry. Takes `type`. |
+| `task_add` | Create a document. Takes `type` (aliases work), `parentId`, `dependsOn`, `decisions`, and contract parts for `with_contract`. |
 | `task_move` | Move one task or many to a column. |
-| `task_patch` | Update fields on one task or many; `null` removes a field. |
-| `task_complete` | Complete to the ledger, or export to GitHub or Linear. |
+| `task_patch` | Update fields on one task or many, `parentId`, `dependsOn` and `decisions` included; `null` removes a field. |
+| `task_complete` | Complete to the ledger, or export to GitHub or Linear. A parent with open children and a decision refuse. |
 | `task_delete` | Remove a task. |
 | `subtask` | `action=` add, toggle, delete or update, on one subtask, several, or all. |
 | `contract` | `action=` attach, pickup, deliver, validate, graph or activate. |

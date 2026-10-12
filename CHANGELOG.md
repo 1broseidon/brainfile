@@ -4,6 +4,51 @@ All notable changes to this project are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com); versions are synced across
 `brainfile` (CLI) and `@brainfile/core`.
 
+## [Unreleased]
+
+Default types and the graph (spec-12): every board has epics, specs, plans,
+tasks and decisions, and knows how they fit together.
+
+### Added
+- Five built-in types that need no `types:` entry: `epic`, `spec`, `plan`,
+  `task` (alias `issue`) and `decision` (alias `adr`). `brainfile types`
+  prints each with its place in the graph; `types add <name> --like <type>`
+  takes a built-in's place (parents, children, completion rule, glyph).
+- Containment by `parentId`: epic ▸ spec · plan · task, spec ▸ plan · task,
+  plan ▸ task, task ▸ task. `list --tree` prints the outline (`--parent` for a
+  subtree); `show` names the parent and children.
+- `decisions: [ids]` on work: the decisions it rests on. `add --decisions`,
+  `patch --decisions`; `show` lists them with where each stands and says when
+  one is superseded, and a decision shows the work resting on it. The reverse
+  is computed, never written.
+- `patch --parent / --clear-parent` and `--depends-on / --clear-depends-on`;
+  `add --depends-on`; `list --type` and `search --type`, aliases included.
+- MCP: `task_add` and `task_patch` take `decisions` (and `dependsOn`);
+  `list_tasks` takes `tree: true` and lists decisions with `type: "decision"`;
+  `get_task` returns `graph`; `search` takes `type`.
+- `/v2/decision.json`; `task.json` documents `parentId` and `decisions`;
+  `board.json` documents `like`.
+- Core: `docTypes` (registry, `resolveDocType`, `parentFit`) and `docGraph`
+  (`buildDocGraph`, `docPlace`, `checkDocumentLinks`, `lintDocGraph`), both in
+  `@brainfile/core/browser`; `readBoardGraph` and
+  `findWorkOnSupersededDecisions` in the main entry.
+
+### Changed
+- A parent with open children refuses to complete, whatever its type (it was
+  only epics); `--force` still overrides. A decision is never completed.
+- An off-pattern parent (an epic under a task, anything under a decision) is a
+  `lint` warning; on a `strict` board `add`, `patch` and `lint` refuse it. A
+  `parentId` or `dependsOn` loop is always refused.
+- `--type adr` writes `type: decision` with a `decision-N` ID, no column and
+  `status: current`; `--type issue` writes a plain task. Existing `type: adr`
+  files read as decisions and keep their IDs.
+- A strict board accepts the five built-ins without listing them.
+- New IDs use the type's `idPrefix` from `types:`; before, the prefix was
+  always the type name whatever `idPrefix` said.
+- `list` leaves decisions out of the columns (they have none) and says how
+  many; `list --type decision` lists them. `brief` orients against current
+  decisions as well as accepted ADRs.
+
 ## [0.21.2] - 2026-10-11
 
 Descriptions come back whole, headings, dividers and all.

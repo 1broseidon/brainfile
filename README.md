@@ -19,16 +19,18 @@ A board is a `.brainfile/` directory:
 
 ```
 .brainfile/
-├── brainfile.md        # board config: columns, agent instructions, document types
+├── brainfile.md        # board config: columns, agent instructions, your own types
 ├── board/              # active documents, one file each
+│   ├── epic-1.md
+│   ├── spec-1.md
 │   ├── task-1.md
-│   └── epic-1.md
+│   └── decision-1.md
 └── logs/               # completion history
     ├── ledger.jsonl    # append-only completion log
     └── task-2.md       # archived documents
 ```
 
-`brainfile.md` holds configuration only — columns, agent instructions, and custom document types. Every task, epic, or ADR is its own Markdown file with YAML frontmatter:
+`brainfile.md` holds configuration only — columns, agent instructions, and any document types of your own. Five types are built in and form a graph: an **epic** holds specs, plans and tasks; a **spec** (what and why) holds plans and tasks; a **plan** (how) holds tasks; a **task** is the work; a **decision** is a standing choice that work names in `decisions:`. `brainfile list --tree` prints the outline. Every document is its own Markdown file with YAML frontmatter:
 
 ```yaml
 ---

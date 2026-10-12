@@ -103,6 +103,31 @@ if (typeError) console.error(typeError);
 const colError = validateColumn(boardConfig, "todo", "task");
 ```
 
+### Document types and the graph
+
+Five types are built in (epic, spec, plan, task, decision; `issue` and `adr`
+are aliases), each with a role, a glyph and the parents it fits under. A
+board's `types:` adds types (optionally `like:` a built-in) and overrides
+built-ins. The registry and the graph are pure, so they are also exported from
+`@brainfile/core/browser`.
+
+```typescript
+import {
+  DOC_TYPES,           // { epic: { glyph: '▸', parents: [], children: ['spec','plan','task'], … }, … }
+  TYPE_ALIASES,        // { issue: 'task', adr: 'decision' }
+  resolveDocType,      // resolveDocType('bug', board.types) → { name, role, glyph, parents, children, idPrefix, completable, … }
+  listDocTypes,        // every type a board has, built-ins first
+  parentFit,           // parentFit('spec', 'plan') → { fits: false, reason: 'a spec goes under an epic, not under a plan' }
+  buildDocGraph,       // the graph of documents you already read
+  readBoardGraph,      // …or read board/ and logs/ from disk (Node only)
+} from "@brainfile/core";
+
+const { graph } = readBoardGraph(".brainfile/brainfile.md");
+graph.tree();                            // the containment outline of open work
+graph.restingOn("decision-3");           // work whose decisions: names it (computed)
+graph.openWorkOnSupersededDecisions();   // what should say "rests on a superseded decision"
+```
+
 ### Utilities
 
 Helper functions for common tasks.

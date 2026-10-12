@@ -1,0 +1,82 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://brainfile.md/v2/decision.json",
+  "title": "Brainfile Decision Schema",
+  "description": "Schema for decision documents: a standing choice, not work. A decision has no column and is never completed; it is current until superseded, rejected or stale. The body is the decision and why. 'adr' is an alias: existing type: adr documents read as decisions and keep their IDs. Extends the task schema.",
+  "allOf": [
+    {
+      "$ref": "https://brainfile.md/v2/task.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": ["decision", "adr"],
+          "description": "decision, or its alias adr."
+        },
+        "claimKey": {
+          "type": "string",
+          "description": "Dotted claim family the decision belongs to. A family has one current decision; a new one supersedes it.",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*(\\.[A-Za-z0-9][A-Za-z0-9_-]*)*$",
+          "examples": ["dependency.http-client", "storage.index"]
+        },
+        "kind": {
+          "type": "string",
+          "description": "How firmly it binds.",
+          "enum": ["decision", "preference", "constraint", "rule"]
+        },
+        "status": {
+          "type": "string",
+          "description": "Where the decision stands. No status means current. Legacy ADR spellings are accepted: accepted and promoted read as current, deprecated as stale, proposed as not yet decided.",
+          "enum": ["current", "superseded", "rejected", "stale", "proposed", "accepted", "promoted", "deprecated"],
+          "default": "current"
+        },
+        "stance": {
+          "type": "string",
+          "description": "What the decision says about its subject.",
+          "enum": ["prefers", "rejects", "requires", "forbids"]
+        },
+        "subject": {
+          "type": "string",
+          "description": "What the stance is about: a package, a pattern, a tool.",
+          "examples": ["undici", "better-sqlite3"]
+        },
+        "holdsWhile": {
+          "type": "string",
+          "description": "The condition under which the decision holds."
+        },
+        "recheck": {
+          "type": "string",
+          "description": "When or why to look at it again."
+        },
+        "validUntil": {
+          "type": "string",
+          "format": "date",
+          "description": "Date after which the decision is stale."
+        },
+        "supersedes": {
+          "description": "The decision or decisions this one replaces.",
+          "oneOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+          ],
+          "examples": ["decision-2"]
+        },
+        "supersededBy": {
+          "type": "string",
+          "description": "The decision that replaced this one. Setting it makes the decision superseded.",
+          "minLength": 1,
+          "examples": ["decision-5"]
+        },
+        "parentId": {
+          "not": {},
+          "description": "Decisions are never in the tree."
+        },
+        "decisions": {
+          "not": {},
+          "description": "Decisions link to each other with supersedes and supersededBy, not decisions."
+        }
+      }
+    }
+  ]
+}
