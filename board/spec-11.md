@@ -15,7 +15,7 @@ createdAt: "2026-10-12T05:36:52.024Z"
 subtasks:
   - id: spec-11-1
     title: "Decision type: frontmatter, board/ while current, logs/ once superseded; ADRs fold in; list leaves decisions out"
-    completed: false
+    completed: true
   - id: spec-11-2
     title: decide and supersede commands with auto-supersede by claim key; MCP decide
     completed: false
@@ -37,7 +37,7 @@ subtasks:
   - id: spec-11-8
     title: "Recoil: last release pointing to Brainfile, archive (owner's call)"
     completed: false
-updatedAt: "2026-10-12T06:34:37.511Z"
+updatedAt: "2026-10-12T07:22:08.913Z"
 parentId: epic-2
 dependsOn:
   - spec-12
