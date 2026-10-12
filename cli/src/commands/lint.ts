@@ -30,6 +30,47 @@ export interface LintResult {
   fixedCount: number;
 }
 
+/** What `lint` found, and what `--fix` changed: the data the CLI prints and the MCP lint tool returns. */
+export interface LintReport {
+  filePath: string;
+  issues: LintIssue[];
+  errors: LintIssue[];
+  warnings: LintIssue[];
+  fixable: LintIssue[];
+  /** True when `fix` rewrote the config. */
+  fixed: boolean;
+  fixedCount: number;
+  /** After a fix: what the config check still finds (not auto-fixable). */
+  remaining: LintIssue[];
+}
+
+/**
+ * Lint a board: the config's syntax and shape, `dependsOn` references to
+ * related boards, and the graph. With `fix`, write the fixable part back.
+ * Never prints and never throws for issues; a missing file is a CLIError.
+ */
+export function lintBoard(filePath: string, options: { fix?: boolean } = {}): LintReport {
+  if (!fs.existsSync(filePath)) {
+    throw fileNotFound(filePath);
+  }
+  const content = fs.readFileSync(filePath, 'utf-8');
+  const result = BrainfileLinter.lint(content, { autoFix: options.fix });
+  result.issues.push(...lintDependsOnRefs(filePath, content));
+  result.issues.push(...lintGraph(filePath, content));
+  const { errors, warnings, fixable } = BrainfileLinter.groupIssues(result);
+
+  let fixed = false;
+  let fixedCount = 0;
+  let remaining: LintIssue[] = [];
+  if (options.fix && result.fixedContent && result.issues.length > 0) {
+    fs.writeFileSync(filePath, result.fixedContent, 'utf-8');
+    fixed = true;
+    fixedCount = fixable.length;
+    remaining = BrainfileLinter.lint(result.fixedContent, { autoFix: false }).issues;
+  }
+  return { filePath, issues: result.issues, errors, warnings, fixable, fixed, fixedCount, remaining };
+}
+
 export function lintCommand(options: LintOptions, logger: Logger = defaultLogger): LintResult {
   // Resolve file path
   const filePath = resolveCliBrainfilePath(options.file);
@@ -39,25 +80,17 @@ export function lintCommand(options: LintOptions, logger: Logger = defaultLogger
     throw fileNotFound(filePath);
   }
 
-  // Read file content
-  const content = fs.readFileSync(filePath, 'utf-8');
-
   logger.log(chalk.blue(`\n🔍 Linting: ${filePath}\n`));
 
-  // Run linter from core
-  const result = BrainfileLinter.lint(content, { autoFix: options.fix });
-  result.issues.push(...lintDependsOnRefs(filePath, content));
-  result.issues.push(...lintGraph(filePath, content));
+  const report = lintBoard(filePath, { fix: options.fix });
 
   // Report findings
-  if (result.issues.length === 0) {
+  if (report.issues.length === 0) {
     logger.log(chalk.green('✓ No issues found! Your brainfile.md is valid.\n'));
     return { success: true, issues: [], fixed: false, fixedCount: 0 };
   }
 
-  // Group issues by type
-  const grouped = BrainfileLinter.groupIssues(result);
-  const { errors, warnings, fixable } = grouped;
+  const { errors, warnings, fixable } = report;
 
   // Display errors
   if (errors.length > 0) {
@@ -80,20 +113,11 @@ export function lintCommand(options: LintOptions, logger: Logger = defaultLogger
     logger.log('');
   }
 
-  let fixedCount = 0;
-  let fixed = false;
-
-  // Apply fixes if requested and content was fixed
-  if (options.fix && result.fixedContent) {
-    fs.writeFileSync(filePath, result.fixedContent, 'utf-8');
-    fixedCount = fixable.length;
-    fixed = true;
+  // Fixes were applied by lintBoard when requested and possible
+  if (report.fixed) {
     logger.log(chalk.green(`✓ Fixed ${fixable.length} issue${fixable.length > 1 ? 's' : ''}!\n`));
 
-    // Recheck after fixes
-    const recheckResult = BrainfileLinter.lint(result.fixedContent, { autoFix: false });
-    const remainingIssues = recheckResult.issues;
-
+    const remainingIssues = report.remaining;
     if (remainingIssues.length > 0) {
       logger.log(chalk.yellow(`⚠ ${remainingIssues.length} issue${remainingIssues.length > 1 ? 's' : ''} remaining (not auto-fixable)\n`));
     }
@@ -103,7 +127,7 @@ export function lintCommand(options: LintOptions, logger: Logger = defaultLogger
 
   // Summary
   logger.log(chalk.gray('─'.repeat(60)));
-  logger.log(chalk.gray(`Total: ${result.issues.length} issue${result.issues.length > 1 ? 's' : ''} found`));
+  logger.log(chalk.gray(`Total: ${report.issues.length} issue${report.issues.length > 1 ? 's' : ''} found`));
   if (fixable.length > 0 && !options.fix) {
     logger.log(chalk.gray(`       ${fixable.length} fixable with --fix`));
   }
@@ -121,7 +145,7 @@ export function lintCommand(options: LintOptions, logger: Logger = defaultLogger
     throw new CLIError('Lint failed with errors', ExitCode.USER_ERROR);
   }
 
-  return { success: true, issues: result.issues, fixed, fixedCount };
+  return { success: true, issues: report.issues, fixed: report.fixed, fixedCount: report.fixedCount };
 }
 
 /**
