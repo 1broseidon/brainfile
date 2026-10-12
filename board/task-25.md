@@ -1,8 +1,8 @@
 ---
 id: task-25
 title: "Window: remember its size and position and restore them on launch"
-column: in-progress
-position: 0
+column: review
+position: 2
 description: The desktop app opens large and centered every time. Save the window's bounds (size, position, maximized/fullscreen state) when they change or on close, and restore them on the next launch. If the saved position is no longer on any connected display (monitor unplugged, resolution changed), fall back to the current centered default.
 tags:
   - desktop
@@ -21,7 +21,7 @@ subtasks:
     completed: true
 createdAt: "2026-10-12T19:06:07.091Z"
 assignee: cursor
-updatedAt: "2026-10-12T22:05:14.436Z"
+updatedAt: "2026-10-12T22:05:16.265Z"
 ---
 
 ## Description
