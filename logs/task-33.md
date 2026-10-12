@@ -1,15 +1,14 @@
 ---
 id: task-33
 title: "Tooltips: two or three words, five at most"
-column: review
-position: 2
 priority: medium
 tags:
   - desktop
   - copy
   - calm
 createdAt: "2026-10-12T21:23:49.013Z"
-updatedAt: "2026-10-12T21:37:46.701Z"
+updatedAt: "2026-10-12T22:18:42.629Z"
+completedAt: "2026-10-12T22:18:42.629Z"
 ---
 
 ## Description
