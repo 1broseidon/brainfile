@@ -25,14 +25,14 @@ subtasks:
     completed: true
   - id: spec-13-5
     title: lint, sync and where tools; schemas as MCP resources
-    completed: false
+    completed: true
   - id: spec-13-6
     title: "Server instructions: use the tools for every board change, never hand-edit .brainfile/"
     completed: false
   - id: spec-13-7
     title: "Docs: MANUAL and llms files list every tool"
     completed: false
-updatedAt: "2026-10-12T07:46:36.698Z"
+updatedAt: "2026-10-12T07:46:36.983Z"
 ---
 
 ## Description
