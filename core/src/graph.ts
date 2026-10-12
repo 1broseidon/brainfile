@@ -1,3 +1,5 @@
+import { isQualifiedRef } from './related';
+
 export interface DependencyGraphNode {
   id: string;
   dependsOn?: readonly string[];
@@ -25,12 +27,17 @@ export class DependencyCycleError extends Error {
   }
 }
 
+/**
+ * Edges within this graph. A reference to another board (`alias:task-id`,
+ * spec-10) is an edge out of the graph, not a node in it, so it is left out.
+ */
 function normalizeDependencyIds(dependsOn?: readonly string[]): string[] {
   if (!Array.isArray(dependsOn)) {
     return [];
   }
 
-  return [...new Set(dependsOn.map((value) => value.trim()).filter(Boolean))];
+  return [...new Set(dependsOn.map((value) => value.trim()).filter(Boolean))]
+    .filter((value) => !isQualifiedRef(value));
 }
 
 export function topologicalSort(nodes: readonly DependencyGraphNode[]): string[] {
