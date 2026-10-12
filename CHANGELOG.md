@@ -9,7 +9,43 @@ All notable changes to this project are documented here. Format follows
 Memory moves onto the board (spec-11): decisions with claim families, one
 search over a local index, a brief that starts every session, and `check`
 before acting. Default types and the graph (spec-12): every board has epics,
-specs, plans, tasks and decisions, and knows how they fit together.
+specs, plans, tasks and decisions, and knows how they fit together. MCP
+parity (spec-13): everything the CLI does to a board has an MCP tool, and
+columns get a command of their own.
+
+### Added (spec-13)
+- `brainfile columns`: list (the default, with task counts and `--json`),
+  `add <title>` (`--id`, `--after`/`--before`, `--completion`), `rename
+  <column> <title>` (the ID stays, so its tasks do), `reorder <columns...>`
+  (the ones named first, the rest after) and `remove <column>`, which refuses
+  a column that holds tasks unless `--move-to` names where they go; they
+  move there without being completed. One board commit per change.
+- MCP: eleven more tools, twenty-five in all: `note` (append to a task's log,
+  attributed like `brainfile note`), `log` (one task's log, a search, the
+  most recent), `columns` (the operations above), `board` (read; set the
+  title, agent instructions and `related:` entries), `types` (list with the
+  graph; add with `like`, `idPrefix`, `completable`), `template` (list; use),
+  `lint` (`fix: true`), `sync` (`pull`/`push`), `where`, `retire` and
+  `adr_promote`. Every one has an output schema; every write is one board
+  commit. `list_tasks` reports a document's own `status` and filters by it.
+- The bundled schemas as MCP resources: `brainfile://schema/board` and
+  `brainfile://schema/base`.
+- `brainfile mcp` sends server instructions: use these tools for every board
+  change, never edit `.brainfile/` by hand, start with `brief`, note as you
+  go, `check` before acting; then one line per tool.
+- A parity test enumerates the CLI's commands and fails unless each maps to
+  a tool, a resource, or an exclusion with a reason (`tui`, `mcp`,
+  `merge-driver`, `hooks`, `auth`, `config`, `init`, `migrate`, `restore`,
+  `index`).
+- Core: `addColumn`, `renameColumn`, `reorderColumns`, `removeColumn`,
+  `readBoardSettings` and `updateBoardSettings` (pure, also in
+  `@brainfile/core/browser`), and their `*File` forms with
+  `summarizeColumns`; `removeColumnFile` moves a column's tasks first or
+  refuses.
+
+### Changed (spec-13)
+- The commander program is built by `createProgram()` in `src/program.ts`;
+  `cli.ts` parses it. Nothing changes for the command line.
 
 ### Added (spec-11)
 - `brainfile decide -k <claim.key> "text"` records a decision in its claim

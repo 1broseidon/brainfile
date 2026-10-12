@@ -85,6 +85,24 @@ if (parseResult.error) {
 const board = readV2BoardConfig(".brainfile/brainfile.md");
 ```
 
+Edit the config: columns, the title, agent instructions and related boards.
+The pure forms (`addColumn`, `renameColumn`, `reorderColumns`,
+`removeColumn`, `updateBoardSettings`) take a `BoardConfig` and return a new
+one, and are in `@brainfile/core/browser` too; the `*File` forms read and
+write `brainfile.md`.
+
+```typescript
+import { addColumnFile, removeColumnFile, updateBoardSettingsFile } from "@brainfile/core";
+
+addColumnFile(".brainfile/brainfile.md", { title: "In Review", after: "in-progress" });
+// A column that holds tasks is refused unless they have somewhere to go.
+removeColumnFile(".brainfile/brainfile.md", "in-review", { moveTo: "in-progress" });
+updateBoardSettingsFile(".brainfile/brainfile.md", {
+  addInstructions: ["Write tests"],
+  addRelated: { mobile: "../mobile" },
+});
+```
+
 ### Type Validation
 
 Validate tasks against the defined strict types (e.g., ensuring an "Epic" is in a valid column).

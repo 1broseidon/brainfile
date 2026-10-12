@@ -42,8 +42,9 @@ whole data model.
 ```
 
 The CLI edits those files for you, and so does the MCP server — an agent with
-`brainfile mcp` attached can list the board, add and move tasks, pick up a
-contract and mark it delivered, with the same rules a person gets. Because a
+`brainfile mcp` attached can do everything the CLI does to a board: list it,
+add and move tasks, leave notes, change the columns, pick up a contract and
+mark it delivered, with the same rules a person gets. Because a
 task is a file, `git blame`, pull requests and code review already work on it.
 
 > Contracts are the part built for agents: a task can carry deliverables,
@@ -219,6 +220,10 @@ Add your project description here.
 visit, alongside the decisions that stand. Put the guidance you would
 otherwise repeat in every prompt there.
 
+`brainfile columns` adds, renames, reorders and removes columns. Over MCP the
+`columns` tool does the same, and `board` sets the title, the instructions
+and `related:`, so an agent never edits this file by hand.
+
 ### board/ — one document per file
 
 The file name is the ID. Everything the board knows about a document is in the
@@ -384,6 +389,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | See the board and work it by keyboard | `tui` |
 | Create a task | `add` |
 | Advance a task to another column | `move` |
+| Add, rename, reorder or remove a column | `columns` |
 | Change a task's fields | `patch` |
 | Finish a task and record it | `complete` |
 | Read the whole board | `list` |
@@ -419,7 +425,7 @@ false }` stops a plan completing when it reaches a completion column). With
 
 ## Commands
 
-Twenty-eight commands, in four groups. `-t <id>` names the task and
+Thirty-six commands, in four groups. `-t <id>` names the task and
 `-f <path>` the board; everything else is per-command, and every flag is as
 printed by `brainfile <command> --help`. Expand a row for its flags. Commands
 that accept `--json` say so; `list` does not have one yet, so scripts and
@@ -695,8 +701,9 @@ The whole lifecycle is in [Contracts](#contracts).
 $ brainfile mcp
 ```
 
-Speaks MCP over stdio; your agent launches it, you never run it by hand. Tools
-and setup are in [For agents](#for-agents).
+Speaks MCP over stdio; your agent launches it, you never run it by hand. It
+tells the agent to use its tools for every board change and never to edit
+`.brainfile/` by hand. Tools and setup are in [For agents](#for-agents).
 
 #### hooks — Install reminder hooks into a coding agent
 
@@ -796,6 +803,27 @@ there is not) and answers in this order:
 `--claim-key-prefix` checks every family under a prefix and gives the worst
 verdict. Errors (no board, bad arguments) exit 1. `--json` prints the verdict,
 recommendation, reason, the predicates as evaluated and the family.
+
+#### columns — Add, rename, reorder and remove columns
+
+```console
+$ brainfile columns                                   # list, with task counts
+$ brainfile columns add "In Review" --after in-progress
+$ brainfile columns add Shipped --completion
+$ brainfile columns rename in-review Review
+$ brainfile columns reorder backlog todo in-progress
+$ brainfile columns remove review --move-to in-progress
+```
+
+Columns are named by ID or title. `add` makes the ID from the title
+(`In Review` is `in-review`) unless `--id` gives one, and puts the column
+last unless `--after` or `--before` says where; `--completion` marks a column
+whose tasks count as done. `rename` changes the title only: the ID stays, so
+the tasks in it stay. `reorder` puts the columns you name first, in that
+order, and the rest after them. `remove` refuses a column that still holds
+tasks unless `--move-to` names where they go; they move there first, without
+being completed. The last column is never removed. Every command takes
+`--json`, and each change is one board commit on a tracked board.
 
 #### types — Every type and its place in the graph
 
@@ -1245,7 +1273,8 @@ server, the per-agent brief, and hooks.
 ### The MCP server
 
 Add this to `.mcp.json` at the repo root (or the equivalent for your agent) and
-restart the agent. Fourteen tools appear, mirroring the CLI.
+restart the agent. Twenty-five tools appear, one for everything the CLI does
+to a board.
 
 ```console title=".mcp.json"
 {
@@ -1260,20 +1289,51 @@ restart the agent. Fourteen tools appear, mirroring the CLI.
 
 | Tool | Does |
 | --- | --- |
-| `list_tasks` | List board documents, filtered by column, tag or type (aliases work). `type: "decision"` lists decisions; `tree: true` adds the outline; `related` adds related boards' open tasks. |
+| `list_tasks` | List board documents, filtered by column, tag, type (aliases work) or `status`. `type: "decision"` lists decisions; `tree: true` adds the outline; `related` adds related boards' open tasks. |
 | `get_task` | One document by ID, in full, with `graph`: its parent, children and the decisions it rests on. Takes `mobile:task-12` for a related board. |
 | `search` | Search the board, its history and the project's docs (current first, history in its own lane, each hit with `path` and line range), list recent completions, or view one log entry. Takes `type`, `limit`, `history`. |
-| `task_add` | Create a document. Takes `type` (aliases work), `parentId`, `dependsOn`, `decisions`, and contract parts for `with_contract`. |
-| `task_move` | Move one task or many to a column. |
+| `brief` | The agent's brief: `text` (budgeted by `maxChars`) and its `sections`, plus the checkpoint `lanes`. Takes `agent=`, `peek`. |
+| `check` | `use`, `review`, `use_replacement` or `no_decision` for an action (`query`), a decision, a `claimKey` or a `claimKeyPrefix`, with `exitCode` as the CLI's. |
+| `task_add` | Create a document. Takes `type` (aliases work), `parentId`, `dependsOn`, `decisions`, `status`, and contract parts for `with_contract`. |
 | `task_patch` | Update fields on one task or many, `parentId`, `dependsOn` and `decisions` included; `null` removes a field. |
+| `task_move` | Move one task or many to a column. |
 | `task_complete` | Complete to the ledger, or export to GitHub or Linear. A parent with open children and a decision refuse. |
 | `task_delete` | Remove a task. |
 | `subtask` | `action=` add, toggle, delete or update, on one subtask, several, or all. |
 | `contract` | `action=` attach, pickup, deliver, validate, graph or activate. |
-| `brief` | The agent's brief: `text` (budgeted by `maxChars`) and its `sections`, plus the checkpoint `lanes`. Takes `agent=`, `peek`. |
+| `note` | Append a line to a task's log, attributed as `brainfile note` does: `agent`, else the agent running the server, else your git `user.name`. |
+| `log` | Completed work: one task's log (`task`), a search of it (`query`), or the most recent, ledger-only records included; `limit`. |
 | `decide` | Record a decision in its claim family (`claimKey`, `text`, `kind`, `stance`, `subject`, `holdsWhile`, `recheck`, `validUntil`, `source`, `package`, `forWork`); the family's current decision is superseded. |
 | `supersede` | Replace a decision by hand (`taskId`, `text`). |
-| `check` | `use`, `review`, `use_replacement` or `no_decision` for an action (`query`), a decision, a `claimKey` or a `claimKeyPrefix`, with `exitCode` as the CLI's. |
+| `retire` | Mark a decision `rejected` or `stale` (`taskId`, `as`, `note`); it moves to `logs/`. |
+| `adr_promote` | Accept a legacy `type: adr` document and move it to `logs/`. |
+| `columns` | `action=` list (with task counts), add (`title`, `id`, `after` or `before`, `completion`), rename (`column`, `title`), reorder (`order`) or remove (`column`, and `moveTo` when it holds tasks). |
+| `board` | Read the title, agent instructions, related boards, columns and `strict`; set `title`, replace `instructions` or edit them with `addInstructions` and `removeInstructions`, and `addRelated` (`alias`, `path`) or `removeRelated`. With no changes it only reads. |
+| `types` | Every type with its place in the graph; `action=add` with `name`, `like`, `idPrefix`, `completable`, `schema`. |
+| `template` | `action=` list, or use (`template`, `title`, `description`, `column`). |
+| `lint` | Check the board, the graph included; `fix: true` fixes what it can. Issues come back as data, with `valid` false only for errors. |
+| `sync` | Fetch, merge and push a shared board now; `pull` or `push` for one direction. A plain or unshared board says so in `skipped`. |
+| `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent. |
+
+Every tool takes `file` to point at another board, and every one that writes
+is one board commit on a tracked board. The bundled JSON Schemas are
+resources: `brainfile://schema/board` and `brainfile://schema/base`, the
+files `brainfile schema` prints.
+
+When a client connects, the server tells it how to work: use these tools for
+every board change, never create, edit or delete files under `.brainfile/` by
+hand, start with `brief`, leave a `note` as you go, `check` before acting on
+something a decision covers; then a line on what each tool is for.
+
+Some commands have no tool, on purpose: `tui` and `mcp` (they are the
+interfaces), `merge-driver` (git runs it), `hooks` (events the agent host
+fires, and your agent's settings), `auth` and `config` (your credentials and
+user config), `init` and `migrate` (one-off, and your call), `restore` (the
+v1 archive file; a v2 board keeps completed work in `logs/`) and `index` (a
+cache that `search`, `brief` and `check` refresh). Choosing the remote a
+board is shared through, and its autosync mode, also stays with you
+(`brainfile sync --set-remote`, `--autosync`). A test holds the CLI and the
+server to this: a new command fails it until it has a tool or a reason here.
 
 ### Start every session with a brief
 

@@ -74,7 +74,7 @@ After that, changes are sent in the background and teammates who clone the repo 
 
 ## Working with agents
 
-- **MCP server** — `brainfile mcp` exposes board operations (`list_tasks`, `task_add`, `task_move`, `task_patch`, `subtask`, `contract`, `search`, …) to Claude, Cursor, or any MCP client, so agents read and update the same board you see in the TUI.
+- **MCP server** — `brainfile mcp` exposes everything the CLI does to a board (`list_tasks`, `task_add`, `task_move`, `note`, `columns`, `contract`, `search`, …) to Claude, Cursor, or any MCP client, so agents read and update the same board you see in the TUI and never edit its files by hand.
 - **Contracts** — a task can carry a contract: deliverables, validation commands, and constraints. Agents pick up (`brainfile contract pickup`), deliver, and you validate (`brainfile contract validate`) — which actually runs the validation commands. "Please do X" becomes verifiable.
 - **Agent instructions** — project guidance lives in `agent.instructions` in the board config, one place agents are told to read before working.
 - **Decisions and a brief** — `brainfile decide` records a standing choice under a claim key (a new one supersedes the old); `brainfile check "<action>"` says whether a decision still holds before an agent acts; every session starts with `brainfile brief`: the decisions that stand, the agent's tasks, what changed, and the docs that bear on them, from a local index of the board and the repo's Markdown.
