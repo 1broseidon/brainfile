@@ -660,3 +660,7 @@ parentPort.on('message', async (event: { data: AgentRequest }) => {
 process.on('exit', () => {
   for (const session of sessions.values()) session.child.kill();
 });
+
+// Let go of the agents when main lets go of this process (a reload, a quit),
+// so none of them is left running on its own.
+process.on('SIGTERM', () => process.exit(0));

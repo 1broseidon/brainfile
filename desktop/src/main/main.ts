@@ -5,6 +5,7 @@
  */
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { spawn } from 'child_process';
+import * as fs from 'fs';
 import * as path from 'path';
 import {
   AGENT_METHODS,
@@ -85,6 +86,19 @@ function startAgents(): UtilityProcess {
     agents = null;
   });
   return child;
+}
+
+/**
+ * In development, a rebuilt agents process takes over without a restart:
+ * the old one is let go (its agents with it) and the next request starts
+ * the new build. The window and the board host carry on.
+ */
+function reloadAgentsOnRebuild(): void {
+  let timer: NodeJS.Timeout | null = null;
+  fs.watch(path.join(__dirname, 'agents.js'), () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => agents?.kill(), 250);
+  });
 }
 
 function callAgents<T>(method: AgentRequest['method'], ...args: unknown[]): Promise<T> {
@@ -225,7 +239,7 @@ function captureAndQuit(target: BrowserWindow, file: string): void {
       await new Promise((r) => setTimeout(r, 900));
     }
     const image = await target.webContents.capturePage();
-    require('fs').writeFileSync(file, image.toPNG());
+    fs.writeFileSync(file, image.toPNG());
     app.quit();
   });
 }
@@ -237,6 +251,7 @@ app.whenReady().then(() => {
   app.setName('Brainfile');
   store = new ProjectStore(path.join(app.getPath('userData'), 'projects.json'));
   host = startHost();
+  if (DEV_URL) reloadAgentsOnRebuild();
   createWindow();
   app.on('activate', () => {
     if (!win) createWindow();
