@@ -20,7 +20,8 @@ describe('board list — wide', () => {
     const header = plain(h.frame()).split('\n')[0];
     expect(header).toContain('brainfile ▸');
     expect(header).toContain('Backlog 1');
-    expect(header).toContain('To Do 11*');
+    // 10, not 11: adr-1 is a decision, and decisions have no column (task-19).
+    expect(header).toContain('To Do 10*');
     expect(header).toContain('In Progress 0');
     expect(header).toContain('Review 0');
     expect(header).toContain('/ filter  ? help');
@@ -32,8 +33,10 @@ describe('board list — wide', () => {
     // glyph — see `collapse.test.tsx` for the collapsed (▸) state.
     expect(lineWith(h.frame(), 'epic-1')).toMatch(/^▌▾ epic-1\b/);
     expect(lineWith(h.frame(), 'spec-4')).toMatch(/^ ◆ spec-4\b/);
-    expect(lineWith(h.frame(), 'adr-1')).toMatch(/^ ● adr-1\b/);
     expect(lineWith(h.frame(), 'plan-1')).toMatch(/^ ⎘ plan-1\b/);
+    // A decision's ● is drawn in the decisions view (decisions.test.tsx):
+    // it has no column, so it is in none of these lists (task-19).
+    expect(plain(h.frame())).not.toContain('adr-1');
     // A plain task leaves the glyph column blank — no placeholder character.
     expect(lineWith(h.frame(), 'task-4')).toMatch(/^ {3}task-4\b/);
   });
@@ -63,10 +66,11 @@ describe('board list — wide', () => {
 
   it('shows the footer with item count, actions and the state chip', () => {
     const footer = plain(h.frame()).trimEnd().split('\n').pop() ?? '';
-    expect(footer).toContain('11 items');
+    expect(footer).toContain('10 items');
     expect(footer).toContain('↵ detail');
     expect(footer).toContain('m move');
     expect(footer).toContain('a add');
+    expect(footer).toContain('D decisions');
     expect(footer).toContain('tab column');
     expect(footer).toContain('q quit');
     expect(footer.trimEnd().endsWith('todo')).toBe(true);
@@ -154,7 +158,7 @@ describe('board list — narrow', () => {
 
   it('renders the same glyphs, indentation and chips below the detail breakpoint', () => {
     expect(lineWith(h.frame(), 'epic-1')).toMatch(/^▌▾ epic-1\b/);
-    expect(lineWith(h.frame(), 'adr-1')).toMatch(/^ ● adr-1\b/);
+    expect(lineWith(h.frame(), 'spec-4')).toMatch(/^ ◆ spec-4\b/);
     expect(lineWith(h.frame(), 'task-4')).toMatch(/^ {3}task-4\b/);
 
     const epicIndent = lineWith(h.frame(), 'epic-1').indexOf('epic-1');
@@ -184,19 +188,15 @@ describe('footer context-sensitivity', () => {
     expect(footer()).toContain('c complete');
   });
 
-  it('omits c complete when an adr is selected', async () => {
-    await h.press('G'); // bottom — task-11
-    // walk up to adr-1
-    for (let i = 0; i < 10; i += 1) {
-      if (plain(h.frame()).includes('adr-1')) {
-        const selectedIsAdr = footer();
-        if (!selectedIsAdr.includes('c complete')) break;
-      }
-      await h.press('k');
-    }
+  it('omits c complete and m move for decisions, which live in their own view', async () => {
+    // adr-1 is no longer a row in any column (task-19); its view is `D`.
+    await h.press('D');
+    expect(plain(h.frame())).toContain('adr-1');
     expect(footer()).not.toContain('c complete');
-    // the other actions are still advertised
+    expect(footer()).not.toContain('m move');
+    // the actions that do apply are still advertised
     expect(footer()).toContain('↵ detail');
-    expect(footer()).toContain('m move');
+    expect(footer()).toContain('e edit');
+    await h.press('D'); // back to the board for the next case
   });
 });

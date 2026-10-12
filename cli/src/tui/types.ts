@@ -106,8 +106,25 @@ export interface AppState {
   /**
    * Documents read from `logs/` for the `L` done view (§B2). Refreshed
    * by the loader alongside the board, since chokidar already watches logsDir.
+   * Retired decisions also live in logs/, but they are not completed work:
+   * the loader lifts them out into `decisions`.
    */
   logs: Task[];
+
+  /**
+   * Every decision on the board, standing ones (board/) first, then retired
+   * ones (logs/). The loader lifts them out of the columns: a decision has no
+   * column, and is shown by the decisions view (`D`, or the type cycle's
+   * decision stop).
+   */
+  decisions: Task[];
+  /** The decisions view's history fold (superseded, rejected, stale) is open (`L` there). */
+  decisionHistory: boolean;
+  /**
+   * The type-cycle stop `D` left from, so `D` again returns there rather
+   * than to `all`. Null when the decisions view was reached by `t`.
+   */
+  decisionsReturn: string | null;
 }
 
 export interface TUIProps {

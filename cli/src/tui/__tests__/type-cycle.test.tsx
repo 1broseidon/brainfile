@@ -12,8 +12,9 @@ import { mount, ESC, WIDE, type Harness } from './helpers.js';
 describe('getTypeCycleOptions', () => {
   it('includes custom board types after the known set', () => {
     const board = { types: { epic: {}, spike: {}, adr: {} } } as any;
+    // adr is an alias: its stop is the decision stop, under the canonical name.
     expect(getTypeCycleOptions(board)).toEqual([
-      'all', 'task', 'epic', 'adr', 'spike',
+      'all', 'task', 'epic', 'decision', 'spike',
     ]);
   });
 });
@@ -71,14 +72,16 @@ describe('type-cycle (§A2)', () => {
 
   it('cycles back to all, restoring every type', async () => {
     await h.press('t', 't', 't', 't'); // plan
-    await h.press('t'); // adr
-    expect(headerLine(h)).toContain(' · adr');
+    await h.press('t'); // decision: the decisions view (task-19)
+    expect(headerLine(h)).toContain('▸ decisions');
+    expect(plain(h.frame())).toContain('adr-1');
     await h.press('t'); // all — done is no longer a cycle stop (L toggle)
 
     expect(headerLine(h)).not.toContain(' · ');
     const frame = plain(h.frame());
     expect(frame).toContain('task-4');
-    expect(frame).toContain('adr-1');
     expect(frame).toContain('epic-1');
+    // …every type that has a column: the decision is back in its own view.
+    expect(frame).not.toContain('adr-1');
   });
 });

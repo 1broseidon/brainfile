@@ -5,6 +5,13 @@ import * as chokidar from 'chokidar';
 import { Brainfile, hashBoardContent } from '@brainfile/core';
 import { isV2, getV2Dirs, buildBoardFromV2 } from '../../utils/v2-detect.js';
 import { loadLogs } from '../actions.js';
+import {
+  boardTypes,
+  buildDecisionView,
+  filterDecisions,
+  isDecisionStop,
+  splitDecisions,
+} from '../decisions.js';
 import type { AppState } from '../types.js';
 
 function getV2ChangeSignature(filePath: string): string {
@@ -63,19 +70,19 @@ export function useBrainfileLoader(
       const content = fs.readFileSync(filePath, 'utf-8');
       const v2 = isV2(filePath);
 
-      let board = null as ReturnType<typeof buildBoardFromV2> | null;
+      let parsed = null as ReturnType<typeof buildBoardFromV2> | null;
       let parseError: string | undefined;
 
       if (v2) {
         try {
-          board = buildBoardFromV2(filePath);
+          parsed = buildBoardFromV2(filePath);
         } catch (err) {
           parseError = err instanceof Error ? err.message : String(err);
         }
       } else {
         const result = Brainfile.parseWithErrors(content);
         if (result.board) {
-          board = result.board;
+          parsed = result.board;
         } else {
           parseError = result.error || 'Not a valid brainfile';
         }
@@ -89,7 +96,14 @@ export function useBrainfileLoader(
       // watches logsDir and routes those events here, so the archive is
       // refreshed on exactly the same beat as the board — one source of truth
       // for "what does the TUI currently believe is on disk".
-      const logs = loadLogs(filePath).logs;
+      //
+      // Decisions leave both: they have no column (with none they used to
+      // land in `todo`) and a retired one is not completed work. They are
+      // the decisions view's rows instead (task-19).
+      const split = parsed ? splitDecisions(parsed, loadLogs(filePath).logs) : null;
+      const board = split?.board ?? null;
+      const logs = split?.logs ?? [];
+      const decisions = split?.decisions ?? [];
 
       setState((prev) => {
         // Skip redundant refreshes using content hash
@@ -99,9 +113,36 @@ export function useBrainfileLoader(
 
         if (board) {
           // ── Selection survival across a refresh (rubric P3) ──────────────
-          // Both branches re-resolve BY ID, never by index: an external
+          // Every branch re-resolves BY ID, never by index: an external
           // insert/delete above the cursor must not slide the selection onto a
           // different document.
+          if (isDecisionStop(prev.activeTypeFilter, boardTypes(board))) {
+            // The decisions view's rows run in family order, so the id is
+            // looked up in the same order the view draws them.
+            const order = (list: typeof decisions) =>
+              buildDecisionView(filterDecisions(list, prev.filterQuery), {
+                historyOpen: prev.decisionHistory,
+                types: boardTypes(board),
+              }).selectable;
+            const prevId = order(prev.decisions)[prev.selectedTaskIndex]?.id;
+            const next = order(decisions);
+            const foundIdx = prevId ? next.findIndex((t) => t.id === prevId) : -1;
+            return {
+              ...prev,
+              board,
+              logs,
+              decisions,
+              error: null,
+              lastUpdated: new Date(),
+              selectedTaskIndex:
+                foundIdx >= 0
+                  ? foundIdx
+                  : Math.max(0, Math.min(prev.selectedTaskIndex, next.length - 1)),
+              reloadFlash: true,
+              lastContentHash: contentHash,
+            };
+          }
+
           if (prev.doneView) {
             const prevLogId = prev.logs[prev.selectedTaskIndex]?.id;
             const foundIdx = prevLogId ? logs.findIndex((t) => t.id === prevLogId) : -1;
@@ -115,6 +156,7 @@ export function useBrainfileLoader(
               ...prev,
               board,
               logs,
+              decisions,
               error: null,
               lastUpdated: new Date(),
               selectedTaskIndex: nextIndex,
@@ -152,6 +194,7 @@ export function useBrainfileLoader(
             ...prev,
             board,
             logs,
+            decisions,
             error: null,
             lastUpdated: new Date(),
             activeColumnIndex: newColumnIndex,

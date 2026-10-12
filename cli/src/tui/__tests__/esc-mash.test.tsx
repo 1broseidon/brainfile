@@ -140,14 +140,14 @@ describe('Esc always retreats (P5)', () => {
   it('clears an active filter rather than leaving it stuck', async () => {
     await h.press('/');
     for (const ch of 'triage') await h.press(ch);
-    expect(plain(h.frame())).not.toContain('adr-1');
+    expect(plain(h.frame())).not.toContain('plan-1');
 
     await h.press(ESC, ESC);
     await tick();
 
     // The whole column is back — the filter did not survive the retreat.
     const frame = plain(h.frame());
-    expect(frame).toContain('adr-1');
+    expect(frame).toContain('plan-1');
     expect(frame).toContain('epic-1');
   });
 

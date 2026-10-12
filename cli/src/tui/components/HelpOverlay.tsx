@@ -3,6 +3,11 @@
  * live in separate groups (list vs detail) so the map never claims `p` is
  * both priority and parent on the same line. Dismissed by any key except
  * `q`, which still quits.
+ *
+ * `D` is the decisions view (task-19; `d` already deletes). There `L` folds
+ * the history the way it opens done on the board, hence `done · history`;
+ * a detail's links are the decisions work rests on, a decision's chain and
+ * the work resting on it.
  */
 import React from 'react';
 import { Box, Text } from 'ink';
@@ -29,7 +34,8 @@ const LIST: HelpGroup = {
     ['ctrl-d/u', 'half page'],
     ['↵', 'open'],
     ['t', 'type'],
-    ['L', 'done'],
+    ['L', 'done · history'],
+    ['D', 'decisions'],
     ['/', 'filter'],
   ],
 };
@@ -37,7 +43,7 @@ const LIST: HelpGroup = {
 const DETAIL: HelpGroup = {
   heading: 'detail',
   rows: [
-    ['↵', 'open child'],
+    ['↵', 'open child or link'],
     ['space', 'toggle subtask'],
     ['u d', 'scroll body'],
     ['p', 'parent'],
