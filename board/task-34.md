@@ -9,7 +9,7 @@ tags:
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
-updatedAt: "2026-10-12T21:55:48.129Z"
+updatedAt: "2026-10-12T21:55:48.561Z"
 subtasks:
   - id: task-34-1
     title: "Health rows: problem sentence under the name, Fix / Ask agent keys; long row tooltip dropped, short words (two copies, old copy in main, N unsent…)"
@@ -25,6 +25,9 @@ subtasks:
     completed: false
   - id: task-34-5
     title: "Ask agent: opens the project's chat and sends the default agent what was found (where survey, notes) with look / explain / ask, change nothing"
+    completed: false
+  - id: task-34-6
+    title: Tests on scratch repos (old copy in main, two copies contained either way, origin's copy, diverged, nothing to fix, backup failure, stale plan) + core saveBoardBackup test
     completed: false
 ---
 
