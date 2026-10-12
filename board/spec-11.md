@@ -12,6 +12,11 @@ tags:
   - mcp
   - desktop
 createdAt: "2026-10-12T05:36:52.024Z"
+subtasks:
+  - id: spec-11-1
+    title: "Decision type: frontmatter, board/ while current, logs/ once superseded; ADRs fold in; list leaves decisions out"
+    completed: false
+updatedAt: "2026-10-12T05:36:57.335Z"
 ---
 
 ## Description
