@@ -19,9 +19,12 @@ describe('board list — wide', () => {
   it('renders the header: board title, column tabs with live counts, active column marked', () => {
     const header = plain(h.frame()).split('\n')[0];
     expect(header).toContain('brainfile ▸');
-    expect(header).toContain('Backlog 1');
-    // 10, not 11: adr-1 is a decision, and decisions have no column (task-19).
-    expect(header).toContain('To Do 10*');
+    // A tab counts what its list holds (task-20): task-11 lives in To Do but
+    // is drawn under its parent, epic-2, in Backlog.
+    expect(header).toContain('Backlog 2');
+    // 9, not 11: adr-1 is a decision, and decisions have no column (task-19),
+    // and task-11 is listed under its parent in Backlog.
+    expect(header).toContain('To Do 9*');
     expect(header).toContain('In Progress 0');
     expect(header).toContain('Review 0');
     expect(header).toContain('/ filter  ? help');
@@ -57,16 +60,28 @@ describe('board list — wide', () => {
     expect(ids.slice(0, 4)).toEqual(['epic-1', 'task-1', 'task-2', 'task-3']);
   });
 
-  it('renders the orphan reference when the parent lives in another column', () => {
-    const row = lineWith(h.frame(), 'task-11');
-    expect(row).toContain('← epic-2');
-    // and does not indent it, because there is no visible parent to indent under
-    expect(row).toMatch(/^ {3}task-11\b/);
+  it('does not list a child in its own column when its parent is shown in another (task-20)', () => {
+    expect(plain(h.frame())).not.toContain('task-11');
+  });
+
+  it('draws that child under its parent, in the parent’s column, saying its own column', async () => {
+    const backlog = await mount(WIDE, 26, { column: 0 });
+    try {
+      const epic = lineWith(backlog.frame(), 'epic-2');
+      const child = lineWith(backlog.frame(), 'task-11');
+      expect(epic).toMatch(/^▌▾ epic-2\b/);
+      expect(child.indexOf('task-11') - epic.indexOf('epic-2')).toBe(2);
+      // its own status, at the right edge, after its chips; no orphan reference
+      expect(child).toMatch(/failed\s+todo$/);
+      expect(child).not.toContain('←');
+    } finally {
+      backlog.teardown();
+    }
   });
 
   it('shows the footer with item count, actions and the state chip', () => {
     const footer = plain(h.frame()).trimEnd().split('\n').pop() ?? '';
-    expect(footer).toContain('10 items');
+    expect(footer).toContain('9 items');
     expect(footer).toContain('↵ detail');
     expect(footer).toContain('m move');
     expect(footer).toContain('a add');
@@ -123,7 +138,7 @@ describe('board list — chips', () => {
     expect(lineWith(h.frame(), 'task-9')).toContain('delivered');
     expect(lineWith(h.frame(), 'spec-4')).toContain('done');
     expect(lineWith(h.frame(), 'plan-1')).toContain('draft');
-    expect(lineWith(h.frame(), 'task-11')).toContain('failed');
+    // task-11's `failed` is drawn under epic-2, in Backlog (see above).
   });
 
   it('shows subtask progress as done/total', () => {

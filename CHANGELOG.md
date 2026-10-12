@@ -34,6 +34,15 @@ columns get a command of their own. The TUI catches up with decisions
 - The TUI's detail cursor is drawn as a bar as well as reverse video, so it
   shows under `NO_COLOR`; archived documents show their description.
 
+### Changed (task-20)
+- The TUI's list keeps a child under its parent across columns: it is drawn
+  in the parent's tab, says its own column at the row's right edge (`review`),
+  and is no longer listed in its own tab with `← epic-1`. A child completed
+  into logs/ stays under its open parent as `✓ done`, read-only, until the
+  parent is done. Grandchildren nest too. A tab counts what its list holds;
+  `m` starts on the document's own column, and the cursor follows a child
+  moved or completed under it.
+
 ### Added (spec-13)
 - `brainfile columns`: list (the default, with task counts and `--json`),
   `add <title>` (`--id`, `--after`/`--before`, `--completion`), `rename

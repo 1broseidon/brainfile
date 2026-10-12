@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tip } from '../lib/tooltip';
   import { api, app } from '../lib/state.svelte';
-  import { columnProgress, priorityLabel, relativeTime, shortDate } from '../lib/format';
+  import { childrenOf, columnProgress, priorityLabel, relativeTime, shortDate } from '../lib/format';
   import { renderMarkdown } from '../lib/markdown';
   import type { BoardSnapshot, TaskDetail } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
@@ -38,7 +38,8 @@
   const column = $derived(detail ? board.columns.find((c) => c.id === detail!.column) : undefined);
   const progress = $derived(detail?.archived ? 1 : detail ? columnProgress(board.columns, detail.column) : 0);
   const parent = $derived(detail?.parentId ? board.tasks.find((t) => t.id === detail!.parentId) : undefined);
-  const children = $derived(board.tasks.filter((t) => t.parentId === taskId));
+  /** Open and completed alike, as the list draws them under it (task-20). */
+  const children = $derived(childrenOf(taskId, board.columns, board.tasks, board.completed));
   const decision = $derived(detail?.decision);
   const decisionProps = $derived(
     !!decision &&
@@ -391,10 +392,10 @@
         <section class="block">
           <h3>Child tasks <span class="mono">{children.length}</span></h3>
           <ul class="children">
-            {#each children as child (child.id)}
+            {#each children as { task: child, done } (child.id)}
               <li>
                 <button onclick={() => (app.openTaskId = child.id)}>
-                  <StatusIcon progress={columnProgress(board.columns, child.column)} />
+                  <StatusIcon progress={done ? 1 : columnProgress(board.columns, child.column)} />
                   <span class="cid mono">{child.id}</span>
                   <span class="clip">{child.title}</span>
                 </button>

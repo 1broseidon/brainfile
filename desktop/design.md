@@ -153,6 +153,26 @@ The board reads like the TUI's list, calmed. A row is 36px:
 - A typed document's TUI glyph (▸ epic · ◆ spec · ● adr · ⎘ plan) sits small
   before its title; a parent with children shows ▾ / ▸ there instead, and
   its children indent 20px beneath it.
+- **A child stays under its parent, whatever its column.** The outline is
+  drawn in the parent's group: an epic in In Progress carries its specs in
+  Review and its tasks in Todo beneath it, and they are not shown again in
+  their own groups. Each child keeps its own box, the level its column gives
+  it (the box's tooltip names the column), so the outline reads as progress.
+  Children run as the groups do: by column, then the completed ones.
+- **Completed children stay until the parent is done.** A child completed
+  into logs/ stays under its open parent, ticked, its title in ink-3, however
+  long ago; when the parent is done they go into Done together, nested there
+  as they were. An open child of a completed parent is a root in its own
+  group.
+- **A group counts what it shows**: its own roots and everything under
+  them, children from other columns and completed ones included, collapsed or
+  not. Done counts what is left in it. j / k walk the rows as drawn, folded
+  groups and collapsed parents left out.
+- **Cards stay in their columns.** On the board view a card is what you drag,
+  so a child keeps its own card in its own column; a parent's card says where
+  its children are instead, one 12px box each in the outline's order,
+  completed ones ticked, among the card's signals (past twelve, one ticked box
+  and `done/total`). The task pane lists every child, completed ones ticked.
 - At rest the right side carries only signals: contract state, sub-task
   progress, urgent and high priority, an assignee. The ID, tags and an unset
   priority or assignee wait for the pointer or the selection, in space kept
@@ -186,9 +206,9 @@ off course. These rules win over every other section:
 - **No big buttons.** New task is a muted + key in the board's band (C);
   there is no filled primary button at rest. The accent is left for the
   tick of done.
-- **Rows wait for the hand.** At rest a row is its title, plus the signals
-  that matter: urgent and high priority, contract state, sub-task progress,
-  an assignee. The status box, the ID, the tags and any unset priority or
+- **Rows wait for the hand.** At rest a row is its status box and title,
+  plus the signals that matter: urgent and high priority, contract state,
+  sub-task progress, an assignee. The ID, the tags and any unset priority or
   assignee appear under the pointer or on the selected row, in space that is
   already kept for them, so nothing shifts.
 - **Empty groups are not shown** in the list (the board view still has
@@ -204,8 +224,8 @@ window takes a document's role and glyph from core, never from its own table.
 
 - **The outline is the graph's tree.** An epic holds specs, plans and tasks;
   a spec holds plans and tasks; a plan holds tasks. The list nests by
-  `parentId` as before; each kind keeps its TUI glyph (▸ epic, ◆ spec,
-  ⎘ plan, ● decision) small before the title.
+  `parentId` across columns (Rows); each kind keeps its TUI glyph (▸ epic,
+  ◆ spec, ⎘ plan, ● decision) small before the title.
 - **Decisions are not work.** They have no column and never complete, so
   they leave the list and the board for their own view, the band's third
   key (a flag, D). Standing decisions are grouped by family, the claim

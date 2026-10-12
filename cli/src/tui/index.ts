@@ -16,7 +16,7 @@ export type {
 export { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
 
 // Row model
-export { buildRows, windowRows } from './rows.js';
+export { buildOutline, buildRows, collapseRows, windowRows } from './rows.js';
 export type { DocRow } from './rows.js';
 
 // Utils

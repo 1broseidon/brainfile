@@ -29,6 +29,8 @@
   const selected = $derived(app.selectedTaskId === task.id);
   const subDone = $derived(task.subtasks?.filter((s) => s.completed).length ?? 0);
   const progress = $derived(done ? 1 : columnProgress(columns, task.column));
+  /** The box says where the task is, which under a parent may not be the group it is drawn in. */
+  const where = $derived(done ? 'Done' : (columns.find((c) => c.id === task.column)?.title ?? task.column));
   /** Priorities loud enough to show without the hand. */
   const loud = $derived(task.priority === 'critical' || task.priority === 'high');
 
@@ -40,7 +42,9 @@
 </script>
 
 <!-- A calm row: the status box, the title, and only what is worth saying
-     about it. The box always shows (an open task is still a box); a typed
+     about it. The box always shows (an open task is still a box), and it is
+     the task's own: a child drawn under a parent in another group keeps its
+     column's level, and a completed one its tick (task-20). A typed
      document's TUI glyph sits small before its title, and a parent's ▾ / ▸
      takes that place. The ID, tags and an unset priority or assignee wait for
      the hand. Urgent and high priority, contract state, sub-task progress and
@@ -60,7 +64,7 @@
   onclick={() => (app.openTaskId = task.id)}
   onkeydown={() => {}}
 >
-  <button class="cell" use:tip={'Status  S'} onclick={(e) => pick('status', e)}>
+  <button class="cell" use:tip={done ? where : `${where}  S`} onclick={(e) => pick('status', e)}>
     <StatusIcon {progress} />
   </button>
   {#if children > 0}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
-  import { columnProgress, shortDate } from '../lib/format';
+  import { childMap, columnProgress, shortDate } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import PriorityIcon from './PriorityIcon.svelte';
@@ -12,6 +12,14 @@
 
   let dropTarget = $state<string | null>(null);
   let dragging = $state<string | null>(null);
+
+  /**
+   * Cards stay in their own columns, since a card is what you drag; a parent's
+   * card shows where its children are instead, one small box each, completed
+   * ones ticked, in the list's order (task-20).
+   */
+  const kids = $derived(childMap(board.columns, board.tasks, board.completed));
+  const SHOWN_BOXES = 12;
 
   function drop(e: DragEvent, column: string): void {
     e.preventDefault();
@@ -51,6 +59,8 @@
       <div class="cards">
         {#each tasks as task (task.id)}
           {@const subDone = task.subtasks?.filter((s) => s.completed).length ?? 0}
+          {@const children = kids.get(task.id) ?? []}
+          {@const childrenDone = children.filter((c) => c.done).length}
           <button
             class="card"
             class:selected={app.selectedTaskId === task.id}
@@ -72,9 +82,21 @@
               {#if task.assignee}<Avatar name={task.assignee} size={18} />{/if}
             </div>
             <div class="title">{task.title}</div>
-            {#if task.priority || task.contractStatus || task.subtasks?.length || task.tags?.length || task.dueDate}
+            {#if task.priority || children.length || task.contractStatus || task.subtasks?.length || task.tags?.length || task.dueDate}
               <div class="meta">
                 {#if task.priority}<PriorityIcon priority={task.priority} size={13} />{/if}
+                {#if children.length}
+                  <span class="kids" use:tip={`${childrenDone} of ${children.length} child tasks done`}>
+                    {#if children.length <= SHOWN_BOXES}
+                      {#each children as child (child.task.id)}
+                        <StatusIcon progress={child.done ? 1 : columnProgress(board.columns, child.task.column)} size={12} />
+                      {/each}
+                    {:else}
+                      <StatusIcon progress={1} size={12} />
+                      <span class="mono sub tabular">{childrenDone}/{children.length}</span>
+                    {/if}
+                  </span>
+                {/if}
                 {#if task.contractStatus}
                   <span class="contract" data-status={task.contractStatus}>{task.contractStatus.replace('_', ' ')}</span>
                 {/if}
@@ -221,6 +243,16 @@
   .sub,
   .due {
     color: var(--ink-3);
+  }
+
+  .kids {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+  }
+
+  .kids .sub {
+    margin-left: 3px;
   }
 
   .sub.complete {

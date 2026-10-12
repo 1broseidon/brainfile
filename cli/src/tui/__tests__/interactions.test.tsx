@@ -156,8 +156,9 @@ describe('move overlay', () => {
     const doc = readTaskFile(path.join(h.fixture.boardDir, 'epic-1.md'));
     expect(doc?.task.column).toBe('in-progress');
 
-    // back on the list, and the header counts followed the move
-    expect(plain(h.frame()).split('\n')[0]).toContain('In Progress 1');
+    // back on the list, and the header counts followed the move: the epic's
+    // three children, still in To Do, are drawn under it there (task-20)
+    expect(plain(h.frame()).split('\n')[0]).toContain('In Progress 4');
   });
 
   it('cancels on esc without touching the board', async () => {
