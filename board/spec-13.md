@@ -17,7 +17,10 @@ subtasks:
   - id: spec-13-2
     title: note and log tools
     completed: false
-updatedAt: "2026-10-12T05:56:09.650Z"
+  - id: spec-13-3
+    title: "columns: new CLI command and MCP tool (list, add, rename, reorder, remove with move-to)"
+    completed: false
+updatedAt: "2026-10-12T05:56:09.929Z"
 ---
 
 ## Description
