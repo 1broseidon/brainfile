@@ -114,7 +114,7 @@ export interface SurveyOptions {
   fetch?: boolean;
 }
 
-interface Doc {
+export interface Doc {
   /** Path inside the board, e.g. `board/task-3.md`. */
   path: string;
   /** git blob id of its contents. */
@@ -123,7 +123,8 @@ interface Doc {
   read: () => string;
 }
 
-interface Contents {
+/** A board's documents, by ID, for comparing two boards. */
+export interface Contents {
   docs: Map<string, Doc>;
   config: string | null;
 }
@@ -135,7 +136,8 @@ function blobId(content: Buffer): string {
   return crypto.createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex');
 }
 
-function readFolder(dotDir: string): Contents {
+/** A board's documents as they are on disk. */
+export function readFolder(dotDir: string): Contents {
   const docs = new Map<string, Doc>();
   for (const sub of ['board', 'logs']) {
     let names: string[] = [];
@@ -191,7 +193,7 @@ function readBlobs(cwd: string, ids: string[]): Map<string, string> {
 }
 
 /** A board's documents at a git tree-ish (`refs/heads/brainfile`, `HEAD:.brainfile`). */
-function readTree(cwd: string, treeish: string): Contents | null {
+export function readTree(cwd: string, treeish: string): Contents | null {
   const r = git(['ls-tree', '-r', '-z', treeish], cwd);
   if (!r.ok) return null;
   const docs = new Map<string, Doc>();

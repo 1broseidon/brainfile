@@ -91,6 +91,9 @@ const EXCLUDED: Record<string, string> = {
   migrate: 'Upgrades a v1 board or changes how one is stored: one-off, the person\'s call.',
   restore: 'Brings a task back from a v1 brainfile-archive.md; a v2 board keeps completed work in logs/.',
   index: 'Maintains the local search cache in state/; search, brief and check refresh it on every call.',
+  adopt: 'Decides which of two boards is the board: the person\'s call. Writes refuse with this command named.',
+  'merge-boards': 'Decides how two boards become one: the person\'s call. Writes refuse with this command named.',
+  backups: 'Local safety copies of replaced boards, and putting one back: the person\'s call.',
 };
 
 /** Every leaf command, `parent child` for a subcommand. */

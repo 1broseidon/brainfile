@@ -9,6 +9,7 @@ import * as path from 'path';
 import { spawnSync } from 'child_process';
 import { beforeCommand, commandWrites } from '../utils/board-commit-hooks';
 import { whereCommand } from '../commands/where';
+import { adoptCommand, backupsCommand, mergeBoardsCommand } from '../commands/boards';
 import { toolWrites, withBoardCommit } from '../mcp/helpers';
 import { CLIError } from '../utils/cli-error';
 
@@ -126,6 +127,33 @@ describe('two boards in one repository (spec-15)', () => {
     expect(text).toMatch(/The 'brainfile' branch already has everything this folder has\./);
     expect(text).toMatch(/Nothing writes until you choose: brainfile adopt refs\/heads\/brainfile/);
     expect(text).toMatch(/the board branch is also checked out at .*stray/);
+  });
+
+  it('merge-boards settles it: the branch already had everything, so it is adopted and writes work again', () => {
+    const lines: string[] = [];
+    const logger = { log: (m: string) => lines.push(m), error: () => {}, warn: () => {} } as never;
+    const result = mergeBoardsCommand({ ref: 'refs/heads/brainfile' }, logger);
+    expect(result).toMatchObject({ adopted: 'other', dotDir: dot, removedCheckouts: [path.join(base, 'stray')] });
+    const text = lines.join('\n');
+    expect(text).toMatch(/The 'brainfile' branch already had everything this board had, so it was adopted as it is\./);
+    expect(text).toMatch(/Saved first: \d{8}T\d{6}Z-folder, \d{8}T\d{6}Z-branch\./);
+    expect(text).toMatch(/main stopped tracking \.brainfile\/ and ignores it, in one commit/);
+
+    expect(() => beforeCommand(fakeCommand(['add'], { title: 'x' }))).not.toThrow();
+    expect(whereCommand({}, { log: () => {}, error: () => {}, warn: () => {} } as never).conflict).toBeNull();
+
+    const listed = backupsCommand({}, { log: () => {}, error: () => {}, warn: () => {} } as never) as Array<{ name: string; docs: number }>;
+    expect(listed.map((b) => b.docs).sort()).toEqual([2, 3]);
+  });
+
+  it('adopt takes the named board as it is; backups restore puts the old one back', () => {
+    const quiet = { log: () => {}, error: () => {}, warn: () => {} } as never;
+    const adopted = adoptCommand({ ref: 'refs/heads/brainfile' }, quiet);
+    expect(fs.readdirSync(path.join(dot, 'board')).filter((f) => f.endsWith('.md')).sort()).toEqual(['task-1.md', 'task-2.md', 'task-3.md']);
+    const folder = adopted.backups.find((b) => b.endsWith('-folder'))!;
+    backupsCommand({ action: 'restore', name: folder }, quiet);
+    expect(fs.readdirSync(path.join(dot, 'board')).filter((f) => f.endsWith('.md')).sort()).toEqual(['task-1.md', 'task-2.md']);
+    expect(() => backupsCommand({ action: 'restore' }, quiet)).toThrow(/Name the backup to restore/);
   });
 
   it('MCP refuses a writing tool call and lets a reading one through', async () => {

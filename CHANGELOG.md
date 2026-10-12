@@ -27,6 +27,16 @@ columns get a command of their own. The TUI catches up with decisions
   work. A board ahead of or behind the remote is not two boards.
 - `where` says how many changes on the remote are not here yet, and reports a
   code branch that still tracks an old copy of `.brainfile/`.
+- `brainfile adopt <ref|path>` takes one board as it is; `brainfile
+  merge-boards <ref|path>` combines two by document ID on the field-level
+  merge, renumbering the newer of two different documents that share an ID
+  and rewriting references to it, and adopts outright when one board already
+  has everything. Both leave one board on its branch at `.brainfile/`,
+  descending from the remote's copy, with the code branch no longer tracking
+  `.brainfile/` (one commit).
+- Backups: anything that replaces a board saves it first as
+  `refs/brainfile/backups/<UTC time>-folder|branch`. `brainfile backups` lists
+  them; `brainfile backups restore <name>` puts one back.
 
 ### Added (task-19)
 - The TUI has a decisions view, on `D` and at the type cycle's `decision`

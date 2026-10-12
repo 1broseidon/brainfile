@@ -19,7 +19,7 @@ interface CommandLike {
 }
 
 /** Long-running or board-unrelated commands that manage their own commits, or none. */
-const SKIP_COMMANDS = new Set(['mcp', 'tui', 'hooks', 'auth', 'sync', 'merge-driver', 'where']);
+const SKIP_COMMANDS = new Set(['mcp', 'tui', 'hooks', 'auth', 'sync', 'merge-driver', 'where', 'adopt', 'merge-boards', 'backups']);
 
 export function topLevelCommandName(command: CommandLike): string {
   let cursor: CommandLike = command;
@@ -38,13 +38,11 @@ export function boardDirForCommand(command: CommandLike): string | null {
 }
 
 /**
- * Commands that never change the board, or that exist to settle which board
- * is the board (spec-15). Anything not named here is treated as a write.
+ * Commands that never change the board, or that change how it is stored
+ * rather than what it says. With SKIP_COMMANDS (which includes the commands
+ * that settle which board is the board, spec-15), everything else is a write.
  */
-const READ_COMMANDS = new Set([
-  'list', 'show', 'search', 'check', 'schema', 'log', 'brief', 'index', 'config', 'init', 'migrate',
-  'merge-boards', 'adopt', 'backups',
-]);
+const READ_COMMANDS = new Set(['list', 'show', 'search', 'check', 'schema', 'log', 'brief', 'index', 'config', 'init', 'migrate']);
 const READ_SUBCOMMANDS = new Set(['plan list', 'plan show', 'contract graph', 'contract validate', 'columns list']);
 
 /** Will this invocation change the board? */

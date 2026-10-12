@@ -939,6 +939,37 @@ the repository (see [One board per repository](#one-board-per-repository)) and
 says when one disagrees with this one. It touches the network only with
 `--fetch`, so it is always safe to run.
 
+#### adopt, merge-boards, backups — Settle two boards into one
+
+```console
+$ brainfile adopt refs/brainfile/remotes/origin/board   # take that board as it is
+$ brainfile adopt .brainfile                            # keep this folder
+$ brainfile merge-boards refs/heads/brainfile           # combine them by document ID
+$ brainfile backups                                     # what was saved
+$ brainfile backups restore 20261012T205217Z-folder     # put one back
+```
+
+When a repository has two boards (see
+[One board per repository](#one-board-per-repository)), these make it one.
+`adopt <ref|path>` takes the named board as it is. `merge-boards <ref|path>`
+combines this board with the named one by document ID, with the same rules
+sync uses: frontmatter fields by `updatedAt`, logs unioned in time order,
+completion over an edit. One ID on two different documents (created apart,
+with unrelated titles) keeps the older; the newer gets the next free ID, a
+log line saying so, and every reference to it on its board rewritten. When
+one board already has everything the other has, `merge-boards` says so and
+adopts it without asking.
+
+Both end the same way: the board on the `brainfile` branch, checked out at
+`.brainfile/`, descending from what the branch and the remote's copy had (so
+the next `sync` is a plain push), with any other checkout of the branch
+removed once its changes are committed. If the code branch still tracked
+`.brainfile/`, one commit on it stops tracking the folder and adds it to
+`.gitignore`; push that like any commit. Every board that is replaced is saved
+first as `refs/brainfile/backups/<UTC time>-folder` or `-branch`; `backups`
+lists them and `backups restore <name>` puts one back, backing up what it
+replaces. Backups stay on this machine unless you push one by name.
+
 #### sync — Share a board through a git remote
 
 ```console
@@ -1098,8 +1129,10 @@ Boards    Two boards: this folder (7) and origin's (19, newer).
 
 While two boards disagree, every write (from the CLI, an agent's MCP tools or
 the desktop app) is refused with that same sentence and the command that
-settles it; reading still works. One board ahead of or behind its own copy on
-the remote is not two boards, just unsynced. A checkout of the board branch
+settles it; reading still works. `adopt` or `merge-boards` settles it (see
+[adopt, merge-boards, backups](#adopt-merge-boards-backups--settle-two-boards-into-one)).
+One board ahead of or behind its own copy on the remote is not two boards,
+just unsynced. A checkout of the board branch
 outside `.brainfile/`, and a code branch that still tracks an old copy of
 `.brainfile/`, are reported too.
 
