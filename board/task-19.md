@@ -17,14 +17,14 @@ subtasks:
     completed: true
   - id: task-19-3
     title: "Decision detail: claim key, kind, stance+subject, holds while, recheck, valid until, replaces/replaced by and resting work (navigable); no complete/move"
-    completed: false
+    completed: true
   - id: task-19-4
     title: Work detail shows Rests on (retired marked); rows on a retired decision say 'decision changed'
     completed: false
   - id: task-19-5
     title: Help overlay, footer hints, NO_COLOR, narrow widths; TUI tests for each; MANUAL + CHANGELOG
     completed: false
-updatedAt: "2026-10-12T16:03:03.926Z"
+updatedAt: "2026-10-12T16:03:04.220Z"
 ---
 
 ## Description
