@@ -48,3 +48,4 @@ Today the list nests by parentId only within a column, so a parent in In Progres
 
 ## Log
 - 2026-10-12T19:22:37.776Z: [claude] Built on feat/outline-across-columns (worktree ~/Projects/personal/brainfile-outline), 5 commits 21b8bea..8951df1, not pushed. Desktop: host keeps completed children of shown parents past the 50 limit; format.ts outline/childMap/childrenOf replace asTree; list, board cards, task pane, j/k follow it.
+- 2026-10-12T19:22:38.071Z: [claude] Checks: desktop svelte-check 0/0, tsc node OK, vite build + build-electron OK, node tests 7/7 (npm test in desktop/). TUI 189/189 (was 179, +10). CLI 605 pass / 9 known failures (brainfile-finder, command-lint, hook-settings). Root npm run build OK.
