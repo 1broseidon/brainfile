@@ -1,6 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/server";
+import * as path from 'path';
 import { z } from 'zod';
+import { docPlace, isQualifiedRef, readBoardGraph } from '@brainfile/core';
+import { relatedBoards } from '@brainfile/core/repo';
 import { getV2Dirs, findV2Task, extractDescription } from '../../utils/v2-detect';
+import { resolveRelatedTask } from '../../utils/related';
 import { requireV2 } from '../helpers';
 import { getTaskOutputSchema } from '../schemas';
 
@@ -9,10 +13,10 @@ export function registerGetTaskTool(server: McpServer, defaultFile: string): voi
     'get_task',
     {
       title: 'Get Task',
-      description: 'Get detailed information about a specific task by ID',
+      description: 'Get detailed information about a specific task by ID, with its place in the graph (graph: type, parent, children, the decisions it rests on and whether any is superseded; for a decision, the work resting on it). A task on a related board (related: in brainfile.md) is alias:task-id; it is read-only from here.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-              task: z.string().describe('Task ID to retrieve')
+              task: z.string().describe('Task ID to retrieve, or alias:task-id for a task on a related board')
             }),
       outputSchema: getTaskOutputSchema
     },
@@ -22,18 +26,40 @@ export function registerGetTaskTool(server: McpServer, defaultFile: string): voi
       const guard = requireV2(filePath);
       if (guard) return guard;
 
-      const dirs = getV2Dirs(filePath);
-      const found = findV2Task(dirs, task, true);
+      let boardFile = path.resolve(filePath);
+      let taskId = task;
+      let alias: string | undefined;
+      if (isQualifiedRef(task)) {
+        const target = resolveRelatedTask(boardFile, task);
+        if (!target.ok) {
+          const details = target.details ? `\n${target.details}` : '';
+          return { content: [{ type: 'text' as const, text: `Error: ${target.message}${details}` }], isError: true };
+        }
+        boardFile = target.board.brainfilePath;
+        taskId = target.id;
+        alias = target.board.alias;
+      }
+
+      const dirs = getV2Dirs(boardFile);
+      const found = findV2Task(dirs, taskId, true);
       if (!found) {
         return { content: [{ type: 'text' as const, text: `Error: Task not found: ${task}` }], isError: true };
       }
       const { doc, isLog } = found;
       const description = extractDescription(doc.body);
+      const hasDeps = Array.isArray(doc.task.dependsOn) && doc.task.dependsOn.length > 0;
+      const rel = hasDeps ? relatedBoards(boardFile) : null;
       const output = {
         ...doc.task,
         ...(description && !doc.task.description && { description }),
         column: isLog ? 'Completed' : (doc.task.column || 'unknown'),
         ...(isLog && { archived: true }),
+        ...(alias && { board: alias, ref: `${alias}:${doc.task.id}` }),
+        ...(rel && {
+          dependencies: rel.dependencies(doc.task).map((d) => ({ ref: d.ref, state: d.state, done: d.done })),
+          blocked: !isLog && rel.blockers(doc.task).length > 0,
+        }),
+        graph: docPlace(readBoardGraph(boardFile).graph, doc.task.id),
       };
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],

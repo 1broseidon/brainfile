@@ -11,7 +11,9 @@ import { initCommand } from '../commands/init';
 import { addCommand } from '../commands/add';
 import { migrateCommand } from '../commands/migrate';
 import { migrateToBranch } from '../commands/migrate-tracked';
-import * as boardRepo from '../utils/board-repo';
+// Spy where commitBoard is defined: the CLI module re-exports it through
+// read-only bindings, and every caller reaches it through this object.
+import * as boardRepo from '@brainfile/core/dist/repo/boardRepo';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import {
   boardRepoKind,
@@ -398,8 +400,13 @@ describe('board on a branch (spec-9 phase 1)', () => {
       expect(snapshotDir(dotDir)).toMatchObject(expected);
       expect(boardFiles(dotDir).filter((f) => f.startsWith('board/') && f.endsWith('.md'))).toHaveLength(2);
       expect(run(['status', '--porcelain'], dotDir)).toBe('');
-      // Without --commit the removal from the code branch is only staged.
-      expect(run(['diff', '--cached', '--name-only'], repo)).toContain('.brainfile/');
+      // The code branch drops the old copy and ignores the folder in one commit (spec-15).
+      expect(run(['ls-files', '.brainfile'], repo)).toBe('');
+      expect(run(['show', '--name-only', '--format=%s', 'HEAD'], repo).split('\n')).toEqual(
+        expect.arrayContaining(['chore: move the board to the brainfile branch', '.gitignore'])
+      );
+      expect(run(['show', 'HEAD:.gitignore'], repo)).toContain('.brainfile/');
+      expect(run(['status', '--porcelain'], repo)).toBe('');
     });
 
     it('keeps board files the code branch ignores (a partly force-added board)', () => {

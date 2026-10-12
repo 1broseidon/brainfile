@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { readTaskFile, taskFileName, writeTaskFile, type Task } from '@brainfile/core';
-import { createV2TestWorkspace, type V2TestWorkspace } from './helpers/v2';
+import { createV2TestWorkspace, writeV2Task, type V2TestWorkspace } from './helpers/v2';
 import {
   planAddCommand,
   planListCommand,
@@ -124,14 +124,24 @@ describe('plan commands', () => {
     });
   });
 
+  // spec-12: plan is built in, so a strict board accepts it without a types: entry.
   describe('strict board without a plan type', () => {
     beforeEach(() => setup(STRICT_BOARD_WITHOUT_PLAN));
 
-    it('fails validateType with an actionable message', () => {
-      expect(() => planAddCommand({ file: ws.brainfilePath, title: 'x' }, logger)).toThrow(
-        /Type 'plan' is not defined/,
+    it('creates the plan, since plan is a built-in type', () => {
+      const result = planAddCommand({ file: ws.brainfilePath, title: 'x' }, logger);
+      expect(result.taskId).toBe('plan-1');
+      expect(fs.existsSync(path.join(ws.boardDir, 'plan-1.md'))).toBe(true);
+    });
+
+    it('refuses a plan under a plan, and a task under a decision, on a strict board', () => {
+      planAddCommand({ file: ws.brainfilePath, title: 'Outer' }, logger);
+      expect(() => planAddCommand({ file: ws.brainfilePath, title: 'Inner', parent: 'plan-1' }, logger)).toThrow(
+        /a plan goes under an epic or a spec, not under a plan \(refused on a strict board\)/,
       );
-      expect(fs.existsSync(path.join(ws.boardDir, 'plan-1.md'))).toBe(false);
+      writeV2Task(ws, { id: 'decision-1', title: 'D', type: 'decision' });
+      writeV2Task(ws, { id: 'task-1', title: 'T', column: 'todo' });
+      expect(() => planLinkCommand({ file: ws.brainfilePath, plan: 'decision-1', task: 'task-1' }, logger)).toThrow(/decisions hold nothing/);
     });
   });
 

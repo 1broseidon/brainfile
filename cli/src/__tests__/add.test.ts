@@ -241,7 +241,8 @@ columns:
 
     expect(epicResult.taskId).toBe('epic-1');
     expect(epicResult2.taskId).toBe('epic-2');
-    expect(adrResult.taskId).toBe('adr-1');
+    // adr is an alias of decision (spec-12): written as decision-N.
+    expect(adrResult.taskId).toBe('decision-1');
   });
 
   it('does not show Type in output when type is default task', () => {

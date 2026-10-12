@@ -40,6 +40,9 @@ describe('init command', () => {
     expect(contents).toContain('- id: in-progress');
     expect(contents).not.toContain('- id: done');
     expect(contents).toContain('moves it to `logs/` via `brainfile complete`');
+    // spec-12: the built-in types need no types: block.
+    expect(contents).not.toContain('types:\n');
+    expect(contents).toContain('epic, spec, plan, task and decision are built in');
 
     const gitignore = fs.readFileSync(gitignorePath, 'utf-8');
     expect(gitignore).not.toContain('state.json');

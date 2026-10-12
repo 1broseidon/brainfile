@@ -68,6 +68,13 @@ describe('search', () => {
       expect(taskMatchesFilters(makeTask({ type: 'plan' }), { type: 'epic' })).toBe(false);
     });
 
+    it('matches aliases to their canonical type (spec-12)', () => {
+      expect(taskMatchesFilters(makeTask({ type: 'decision' }), { type: 'adr' })).toBe(true);
+      expect(taskMatchesFilters(makeTask({ type: 'adr' }), { type: 'decision' })).toBe(true);
+      expect(taskMatchesFilters(makeTask(), { type: 'issue' })).toBe(true);
+      expect(taskMatchesFilters(makeTask({ type: 'decision' }), { type: 'task' })).toBe(false);
+    });
+
     it('filters by priority', () => {
       expect(taskMatchesFilters(makeTask({ priority: 'high' }), { priority: 'high' })).toBe(true);
       expect(taskMatchesFilters(makeTask(), { priority: 'high' })).toBe(false);

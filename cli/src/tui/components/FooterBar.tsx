@@ -26,12 +26,45 @@ import { itemCountLabel } from '../copy.js';
  * the $EDITOR handoff opens the doc's real file and is orthogonal to board
  * mutation. Restoring stays a CLI verb this round.
  */
-export function browseActions(selected: Task | undefined, archived = false): string[] {
+export function browseActions(
+  selected: Task | undefined,
+  archived = false,
+  hasDecisions = false,
+  selectedDone = false,
+): string[] {
   if (archived) return ['↵ detail', 'e edit', 't type', 'L board', 'q quit'];
 
-  const actions = ['↵ detail', 'm move'];
-  if (isCompletable(selected)) actions.push('c complete');
-  actions.push('a add', 't type', 'L done', 'tab column', 'q quit');
+  // A completed child kept under its open parent (task-20) is read-mostly,
+  // as in the done stop: nothing to move or complete.
+  const actions = ['↵ detail'];
+  if (selectedDone) actions.push('e edit');
+  else {
+    actions.push('m move');
+    if (isCompletable(selected)) actions.push('c complete');
+  }
+  actions.push('a add', 't type', 'L done');
+  // The way to the decisions view, once the board has any (task-19).
+  if (hasDecisions) actions.push('D decisions');
+  actions.push('tab column', 'q quit');
+  return actions;
+}
+
+/**
+ * Actions offered in the decisions view (task-19). Decisions are not work:
+ * nothing here moves, completes or adds one (that is `brainfile decide`,
+ * `supersede` and `retire`). `L` folds history, as it opens done on the
+ * board; `D` goes back to the board.
+ */
+export function decisionsActions({
+  historyCount,
+  historyOpen,
+}: {
+  historyCount: number;
+  historyOpen: boolean;
+}): string[] {
+  const actions = ['↵ detail', 'e edit'];
+  if (historyCount > 0) actions.push(historyOpen ? 'L hide history' : 'L history');
+  actions.push('t type', 'D board', 'q quit');
   return actions;
 }
 
@@ -44,6 +77,10 @@ export interface DetailFooterContext {
   bodyOverflows: boolean;
   /** Archived doc — board mutations are suppressed (§B2). */
   archived?: boolean;
+  /** The doc is a decision: no column to move to, nothing to complete (task-19). */
+  decision?: boolean;
+  /** Decisions it rests on, its chain, or work resting on it: stops `↵` opens. */
+  hasLinks?: boolean;
 }
 
 /**
@@ -55,12 +92,13 @@ export interface DetailFooterContext {
  */
 export function detailActions(ctx: DetailFooterContext): string[] {
   const actions: string[] = [];
-  if (ctx.hasChildren) actions.push('↵ open child');
-  if (ctx.hasSubtasks) actions.push('space toggle');
+  if (ctx.hasLinks) actions.push('↵ open');
+  else if (ctx.hasChildren) actions.push('↵ open child');
+  if (ctx.hasSubtasks && !ctx.decision) actions.push('space toggle');
   if (ctx.bodyOverflows) actions.push('u/d scroll');
   if (ctx.hasParent) actions.push('p parent');
   actions.push('e edit');
-  if (!ctx.archived) {
+  if (!ctx.archived && !ctx.decision) {
     actions.push('m move');
     if (isCompletable(ctx.task)) actions.push('c complete');
   }

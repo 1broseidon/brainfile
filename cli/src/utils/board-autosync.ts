@@ -1,6 +1,7 @@
 /**
  * Autosync (spec-9 phase 3): keep a shared board flowing without anyone
- * typing `sync`.
+ * typing `sync`. The policy (`effectiveAutosync`, `fetchBeforeRead`) lives in
+ * `@brainfile/core/repo`; how the CLI carries out a push lives here.
  *
  *   push  after every committed mutation, a detached `brainfile sync --push`
  *         runs a few seconds later so bursts collapse into one push and the
@@ -14,20 +15,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import { AUTOSYNC_DELAY_MS, effectiveAutosync } from '@brainfile/core/repo';
 import { isTrackedBoard, onBoardCommitted } from './board-repo';
-import { type AutosyncMode, type SyncResult, boardAutosync, boardRemote, secondsSinceSync, syncBoard } from './board-sync';
+import { boardRemote } from './board-sync';
 
-export const AUTOSYNC_DELAY_MS = 5000;
-export const FETCH_MAX_AGE_SECONDS = 60;
+export { AUTOSYNC_DELAY_MS, FETCH_MAX_AGE_SECONDS, effectiveAutosync, fetchBeforeRead } from '@brainfile/core/repo';
+
 const LOCK_FILE = path.join('state', 'autosync.lock');
 /** A pending push older than this is assumed dead (crashed child). */
 const LOCK_STALE_MS = 60_000;
-
-export function effectiveAutosync(dotDir: string): AutosyncMode {
-  const override = process.env.BRAINFILE_AUTOSYNC;
-  if (override === 'off' || override === 'push' || override === 'full') return override;
-  return boardAutosync(dotDir);
-}
 
 /** The runnable CLI: the bundle we live in, or the built one next to the sources. */
 export function autosyncCliPath(): string | null {
@@ -96,19 +92,6 @@ export function schedulePush(dotDir: string, delayMs = AUTOSYNC_DELAY_MS): boole
   } catch {
     return false;
   }
-}
-
-/**
- * In `full` mode, bring the board up to date before a read when the last
- * sync attempt is older than `maxAgeSeconds`. Returns the sync result, or
- * null when nothing was fetched.
- */
-export function fetchBeforeRead(dotDir: string, maxAgeSeconds = FETCH_MAX_AGE_SECONDS): SyncResult | null {
-  if (!isTrackedBoard(dotDir)) return null;
-  if (effectiveAutosync(dotDir) !== 'full') return null;
-  const age = secondsSinceSync(dotDir);
-  if (age !== null && age < maxAgeSeconds) return null;
-  return syncBoard(dotDir, { pull: true, push: false });
 }
 
 let installed = false;

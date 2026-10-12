@@ -12,9 +12,10 @@ brainfile init
 ```
 
 This creates `.brainfile/` with:
-- `brainfile.md` — board config (columns, document types, agent instructions)
+- `brainfile.md` — board config (columns, agent instructions, and only the document types you add: epic, spec, plan, task and decision are built in)
 - `board/` — active documents, one file each
-- `logs/` — completion history (`ledger.jsonl`) and archived task files
+- `logs/` — completion history (`ledger.jsonl`), archived task files, and decisions that no longer stand
+- `state/` — local only, ignored by git: each agent's brief checkpoint and the search index (`index.db`, built on Node 22.13+)
 
 ## 2. Connect the MCP server
 
@@ -36,37 +37,65 @@ Restart the agent afterwards. The server speaks MCP over stdio and exposes the t
 ## 3. CLI commands
 
 ```
-brainfile brief --agent <name>                    # start of every session: what changed since last time
+brainfile brief --agent <name>                    # start of every session: decisions, your tasks, what changed, related docs
 brainfile list                                    # all tasks
 brainfile list -c todo                            # filter by column
 brainfile list --contract ready                   # contracts waiting for pickup
+brainfile list --tree                             # the outline: epics ▸ specs ▸ plans ▸ tasks
 brainfile show -t task-1 --json                   # one task, as JSON
 brainfile add -t "Task name"                      # create a task
 brainfile add -t "Fix bug" -p high --tags bug     # with metadata
+brainfile add -t "Auth" --type spec --parent epic-1  # types: epic, spec, plan, task, decision
 brainfile move -t task-1 -c in-progress           # move between columns
+brainfile columns add "Review" --after in-progress # columns: list, add, rename, reorder, remove --move-to
 brainfile note -t task-1 "What you learned"       # append to the task log
 brainfile complete -t task-1                      # done: ledger.jsonl + logs/task-1.md
 brainfile patch -t task-1 -p critical             # update fields
 brainfile subtask -t task-1 --add "Write tests"   # add a subtask
 brainfile subtask -t task-1 --toggle sub-1        # toggle a subtask
-brainfile search <query>                          # active tasks and completed logs
+brainfile search <query>                          # board, history and the project's docs; current first
+brainfile decide -k <claim.key> "Decision and why" # record a decision; supersedes the family's current one
+brainfile supersede decision-3 "New decision"     # replace one by hand
+brainfile retire decision-4 --as rejected         # rejected or stale; moves to logs/
+brainfile check "<action>"                        # use | review | use_replacement | no_decision (exit 0/2/3/0)
+brainfile index --status                          # the local search index
 ```
+
+Before an action that might cut across a settled choice (a library, a pattern, a rule), run `brainfile check "<action>"`: `review` means ask first, `use_replacement` names the decision that replaced the one you had in mind. When you settle something, record it with `brainfile decide` under a dotted claim key (`dependency.http-client`) so the next session sees it in its brief.
 
 ## 4. MCP tools (if connected)
 
+When the server is connected, use these tools for every board change and never create, edit or delete files under `.brainfile/` by hand; the server says the same when it connects. Every tool takes `file` for another board; every write is one board commit.
+
 ```
-list_tasks      — list board documents, filtered by column, tag or type
-get_task        — one document by ID, in full
-search          — search tasks and logs, list recent completions, or view one entry
-task_add        — create a document (type, contract parts via with_contract)
-task_move       — move one task or many to a column
+list_tasks      — list board documents by column, tag, type or status (tree: true for the outline, related for other repos' boards)
+get_task        — one document by ID, in full, with its place in the graph
+search          — search board, history and the project's docs (lane, path, line range on every hit), list recent completions, or view one entry
+brief           — the agent's brief as text (maxChars) and sections (agent=, peek?)
+check           — use | review | use_replacement | no_decision for an action, a decision ID, claimKey or claimKeyPrefix
+task_add        — create a document (type, parentId, decisions, status, contract parts via with_contract)
 task_patch      — update fields on one task or many (null removes a field)
+task_move       — move one task or many to a column
 task_complete   — complete to the ledger, or export to GitHub/Linear
 task_delete     — remove a task
 subtask         — action= add | toggle | delete | update
 contract        — action= attach | pickup | deliver | validate | graph | activate
-brief           — per-agent delta since the last brief (agent=, peek?)
+note            — append a line to a task's log (agent?)
+log             — completed work: one task's log (task), a search (query), or the most recent
+decide          — record a decision in its claim family (claimKey, text, stance+subject, validUntil, source, package)
+supersede       — replace a decision by hand (taskId, text)
+retire          — mark a decision rejected or stale (taskId, as, note?); it moves to logs/
+adr_promote     — accept a legacy type: adr document (task)
+columns         — action= list | add | rename | reorder | remove (moveTo when the column holds tasks)
+board           — read or set the title, agent instructions (instructions, addInstructions, removeInstructions) and related boards (addRelated, removeRelated)
+types           — every type and its place in the graph; action=add (name, like, idPrefix, completable)
+template        — action= list | use (template, title, column?)
+lint            — check the board; fix: true fixes what it can
+sync            — fetch, merge and push a shared board now (pull? push?)
+where           — where the board lives, how it is stored, how fresh it is
 ```
+
+The bundled JSON Schemas are resources: `brainfile://schema/board` and `brainfile://schema/base`.
 
 ## 5. Contracts
 
@@ -130,7 +159,9 @@ contract:
 Detailed requirements go here.
 ```
 
-Rules: never regenerate an ID; prefer the CLI or MCP tools over editing files by hand; complete tasks with `brainfile complete` so the ledger stays the record.
+Rules: never regenerate an ID; change the board through the MCP tools (or the CLI), never by editing files under `.brainfile/` by hand; complete tasks with `brainfile complete` so the ledger stays the record; record decisions with `brainfile decide`, never by editing an old one.
+
+Hooks: `brainfile hooks install claude-code` makes every session start with the brief (`additionalContext`).
 
 ## 7. What to do next
 

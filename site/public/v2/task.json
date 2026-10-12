@@ -2,13 +2,13 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://brainfile.md/v2/task.json",
   "title": "Brainfile Task Schema",
-  "description": "Schema for standalone task documents. Each task is an individual .md file with YAML frontmatter and an optional markdown body. Active tasks live in .brainfile/board/, completed tasks in .brainfile/logs/.",
+  "description": "Schema for standalone board documents (tasks, epics, specs, plans; decision.json extends it for decisions). Each document is an individual .md file with YAML frontmatter and an optional markdown body. Active documents live in .brainfile/board/, completed ones in .brainfile/logs/.",
   "type": "object",
   "required": ["id", "title"],
   "properties": {
     "id": {
       "type": "string",
-      "description": "Unique identifier following pattern '{type}-N' (e.g., task-1, epic-1, adr-1)",
+      "description": "Unique identifier following pattern '{prefix}-N' (e.g., task-1, epic-1, spec-1, plan-1, decision-1). The prefix is the type's idPrefix, by default its name.",
       "pattern": "^[a-z][a-z0-9]*-[0-9]+$"
     },
     "title": {
@@ -18,7 +18,7 @@
     },
     "column": {
       "type": "string",
-      "description": "Column ID this task belongs to. References a column.id in the board config. Required for active tasks in board/. Omitted for completed tasks in logs/.",
+      "description": "Column ID this task belongs to. References a column.id in the board config. Required for active work in board/. Omitted for completed tasks in logs/, and for decisions, which have no column.",
       "pattern": "^[a-z]+(-[a-z]+)*$",
       "minLength": 1
     },
@@ -49,6 +49,27 @@
       "type": "string",
       "description": "Effort estimation for planning",
       "enum": ["trivial", "small", "medium", "large", "xlarge"]
+    },
+    "parentId": {
+      "type": "string",
+      "description": "The one parent (containment). The built-in types say which parents fit: an epic holds specs, plans and tasks; a spec holds plans and tasks; a plan holds tasks; a task holds tasks. Decisions are never in the tree. An off-pattern parent is a lint warning, refused on a strict board.",
+      "minLength": 1,
+      "examples": ["epic-2", "spec-11", "plan-1"]
+    },
+    "decisions": {
+      "type": "array",
+      "description": "Decisions this piece of work rests on. The reverse (what rests on a decision) is computed and never written on the decision. When one is superseded, open work resting on it says so.",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true,
+      "examples": [["decision-3"]]
+    },
+    "dependsOn": {
+      "type": "array",
+      "description": "IDs of tasks that must be completed first. A task on a related board (related: in brainfile.md) is alias:task-id, and blocks this task until it is completed there.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     },
     "blockedBy": {
       "type": "array",
@@ -87,16 +108,21 @@
     },
     "type": {
       "type": "string",
-      "description": "Document type identifier. When omitted, the item is a standard task. Custom types (e.g., 'epic', 'adr') are defined in the board's types map.",
+      "description": "Document type. When omitted, the item is a task. Built in, with no board config: epic, spec, plan, task and decision; 'issue' and 'adr' are aliases of task and decision, and new documents are written with the canonical name. Any other type is defined in the board's types map, optionally taking a built-in's place with like.",
       "minLength": 1,
-      "examples": ["epic", "adr"]
+      "examples": ["epic", "spec", "plan", "decision", "bug"]
     },
     "contract": {
       "$ref": "https://brainfile.md/v2/contract.json"
     }
   },
   "if": {
-    "not": { "required": ["completedAt"] }
+    "not": {
+      "anyOf": [
+        { "required": ["completedAt"] },
+        { "required": ["type"], "properties": { "type": { "enum": ["decision", "adr"] } } }
+      ]
+    }
   },
   "then": {
     "required": ["column"]

@@ -28,13 +28,15 @@ export interface Harness {
 /**
  * Mount the TUI against a throwaway v2 board at a pinned terminal size, already
  * focused on the `To Do` column (index 1) — the column the design mockups show.
+ * `board` swaps the shared fixture for another (the decisions suites use
+ * `createDecisionBoard`).
  */
 export async function mount(
   width = WIDE,
   height = 26,
-  { column = 1 }: { column?: number } = {},
+  { column = 1, board = createFixtureBoard }: { column?: number; board?: () => FixtureBoard } = {},
 ): Promise<Harness> {
-  const fixture = createFixtureBoard();
+  const fixture = board();
   const app = render(<BrainfileTUI filePath={fixture.brainfilePath} width={width} height={height} />);
   await tick(200);
 

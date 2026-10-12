@@ -3,6 +3,11 @@
  * live in separate groups (list vs detail) so the map never claims `p` is
  * both priority and parent on the same line. Dismissed by any key except
  * `q`, which still quits.
+ *
+ * `D` is the decisions view (task-19; `d` already deletes). There `L` folds
+ * the history the way it opens done on the board, hence `done · history`;
+ * a detail's links are the decisions work rests on, a decision's chain and
+ * the work resting on it.
  */
 import React from 'react';
 import { Box, Text } from 'ink';
@@ -29,7 +34,8 @@ const LIST: HelpGroup = {
     ['ctrl-d/u', 'half page'],
     ['↵', 'open'],
     ['t', 'type'],
-    ['L', 'done'],
+    ['L', 'done · history'],
+    ['D', 'decisions'],
     ['/', 'filter'],
   ],
 };
@@ -37,7 +43,7 @@ const LIST: HelpGroup = {
 const DETAIL: HelpGroup = {
   heading: 'detail',
   rows: [
-    ['↵', 'open child'],
+    ['↵', 'open child or link'],
     ['space', 'toggle subtask'],
     ['u d', 'scroll body'],
     ['p', 'parent'],
@@ -80,12 +86,17 @@ const COLUMNS: HelpGroup[][] = [
   [ACTIONS, FILTER],
 ];
 
-/** Width of the keys column inside each group. */
-const KEYS_WIDTH = 14;
+/**
+ * Width of the keys column in each column of groups: its longest key and a
+ * two-space gap, so `contract:ready` never runs into its description and the
+ * left column does not pay for the right one's longest key.
+ */
+const KEYS_WIDTHS = COLUMNS.map(
+  (column) => Math.max(...column.flatMap((group) => group.rows.map(([keys]) => keys.length))) + 2,
+);
 
 export function HelpOverlay({ termWidth, termHeight }: HelpOverlayProps) {
   const columnWidth = Math.max(24, Math.floor((termWidth - 4) / COLUMNS.length));
-  const descriptionWidth = Math.max(6, columnWidth - KEYS_WIDTH - 2);
 
   return (
     <Box flexDirection="column" width={termWidth} height={termHeight} paddingLeft={1}>
@@ -94,27 +105,31 @@ export function HelpOverlay({ termWidth, termHeight }: HelpOverlayProps) {
       </Text>
       <Text color={PALETTE.textDim}>{RULE.repeat(Math.max(1, termWidth - 2))}</Text>
       <Box marginTop={1}>
-        {COLUMNS.map((column, columnIndex) => (
-          <Box key={columnIndex} flexDirection="column" width={columnWidth}>
-            {column.map((group, groupIndex) => (
-              <Box
-                key={group.heading}
-                flexDirection="column"
-                marginTop={groupIndex === 0 ? 0 : 1}
-              >
-                <Text color={PALETTE.textSecondary} bold>
-                  {group.heading}
-                </Text>
-                {group.rows.map(([keys, description]) => (
-                  <Text key={keys} wrap="truncate">
-                    <Text color={PALETTE.text}>{keys.padEnd(KEYS_WIDTH)}</Text>
-                    <Text color={PALETTE.textMuted}>{truncate(description, descriptionWidth)}</Text>
+        {COLUMNS.map((column, columnIndex) => {
+          const keysWidth = KEYS_WIDTHS[columnIndex];
+          const descriptionWidth = Math.max(6, columnWidth - keysWidth - 2);
+          return (
+            <Box key={columnIndex} flexDirection="column" width={columnWidth}>
+              {column.map((group, groupIndex) => (
+                <Box
+                  key={group.heading}
+                  flexDirection="column"
+                  marginTop={groupIndex === 0 ? 0 : 1}
+                >
+                  <Text color={PALETTE.textSecondary} bold>
+                    {group.heading}
                   </Text>
-                ))}
-              </Box>
-            ))}
-          </Box>
-        ))}
+                  {group.rows.map(([keys, description]) => (
+                    <Text key={keys} wrap="truncate">
+                      <Text color={PALETTE.text}>{keys.padEnd(keysWidth)}</Text>
+                      <Text color={PALETTE.textMuted}>{truncate(description, descriptionWidth)}</Text>
+                    </Text>
+                  ))}
+                </Box>
+              ))}
+            </Box>
+          );
+        })}
       </Box>
       <Box marginTop={1}>
         <Text color={PALETTE.textDim}>{CHROME.helpDismiss}</Text>

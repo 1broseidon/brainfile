@@ -8,6 +8,8 @@ import { Board } from "./types";
 import { BrainfileParser } from "./parser";
 import { BrainfileValidator } from "./validator";
 import { parseFrontmatter, serializeFrontmatter } from "./frontmatter";
+import { lintRelatedConfig } from "./related";
+import { lintTypesConfig } from "./docTypes";
 
 /** Warning text for a legacy `rules:` block (adr-2 removed the feature). */
 export const LEGACY_RULES_MESSAGE =
@@ -129,6 +131,13 @@ export class BrainfileLinter {
             }
           });
         }
+
+        // related: (spec-10) — shape only; a folder missing from this
+        // machine is not a problem.
+        issues.push(...lintRelatedConfig((result.board as { related?: unknown }).related));
+
+        // types: (spec-12) — a `like:` must name a type.
+        issues.push(...lintTypesConfig((result.board as { types?: unknown }).types));
 
         // Run structural validation
         const validation = BrainfileValidator.validate(result.board);

@@ -37,7 +37,7 @@ describe("boardValidation", () => {
       const result = validateType(board, "feature");
       expect(result.valid).toBe(false);
       expect(result.error).toContain("Type 'feature' is not defined.");
-      expect(result.error).toContain("Available types: task, epic, bug");
+      expect(result.error).toContain("Available types: task, epic, spec, plan, decision, bug");
     });
 
     it("always accepts 'task' in strict mode", () => {

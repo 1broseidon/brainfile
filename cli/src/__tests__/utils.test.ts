@@ -57,3 +57,31 @@ describe('tui utils search: contract status filters', () => {
     expect(taskMatchesFilter(taskWrongAssignee, filter)).toBe(false);
   });
 });
+
+describe('tui: decisions and aliases (spec-12)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { isCompletable } = require('../tui/utils');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getTypeGlyph } = require('../tui/theme');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { getTypeCycleOptions } = require('../tui/typeCycle');
+
+  it('gives a decision the ● glyph under either name, and never offers to complete it', () => {
+    expect(getTypeGlyph('decision')).toBe('●');
+    expect(getTypeGlyph('ADR')).toBe('●');
+    expect(getTypeGlyph('issue')).toBe('');
+    expect(isCompletable({ id: 'decision-1', title: 'D', type: 'decision' })).toBe(false);
+    expect(isCompletable({ id: 'adr-1', title: 'A', type: 'adr' })).toBe(false);
+    expect(isCompletable({ id: 'spec-1', title: 'S', type: 'spec' })).toBe(true);
+  });
+
+  it('cycles through built-ins that have documents, one stop for adr and decision', () => {
+    const board = (types: Record<string, unknown>, docTypes: string[]) => ({
+      types,
+      columns: [{ id: 'todo', title: 'To Do', tasks: docTypes.map((type, i) => ({ id: `x-${i}`, title: 'x', type })) }],
+    });
+    expect(getTypeCycleOptions(board({}, ['epic', 'decision']))).toEqual(['all', 'task', 'epic', 'decision']);
+    expect(getTypeCycleOptions(board({ adr: {} }, ['decision']))).toEqual(['all', 'task', 'decision']);
+    expect(getTypeCycleOptions(board({ adr: {}, issue: {}, bug: {} }, []))).toEqual(['all', 'task', 'adr', 'bug']);
+  });
+});

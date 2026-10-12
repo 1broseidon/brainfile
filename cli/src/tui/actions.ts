@@ -32,6 +32,7 @@ import {
   formatTaskForLinear,
   parseNotes,
   readLedger,
+  extractDescription,
   type Board,
   type Task,
   type TaskPatch,
@@ -780,8 +781,18 @@ export function loadLogs(filePath: string): { logs: Task[]; error?: string } {
     try {
       const dirs = getV2Dirs(filePath);
       const docs = readTasksDir(dirs.logsDir);
+      // The body's description, as buildBoardFromV2 gives board documents:
+      // the detail view of an archived doc (or a retired decision) has
+      // something to say besides its frontmatter.
       const logs = docs
-        .map((doc) => ({ ...doc.task }))
+        .map((doc) => {
+          const task = { ...doc.task };
+          if (!task.description) {
+            const description = extractDescription(doc.body);
+            if (description) task.description = description;
+          }
+          return task;
+        })
         .sort((a, b) => {
           const aTime = a.completedAt ? Date.parse(a.completedAt) : 0;
           const bTime = b.completedAt ? Date.parse(b.completedAt) : 0;

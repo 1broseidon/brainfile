@@ -1,11 +1,10 @@
-import * as path from 'path';
 import {
   addTaskFile,
-  readTaskFile,
-  readTasksDir,
-  taskFileName,
+  parentFit,
+  resolveDocType,
   type Contract,
   type Task,
+  type TypesConfig,
 } from '@brainfile/core';
 import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
@@ -17,8 +16,9 @@ import {
   composeBody,
 } from '../utils/v2-detect';
 import { assertV2Brainfile } from '../utils/v2-only';
-import { validateType, readBoardConfig } from '@brainfile/core';
+import { validateType } from '@brainfile/core';
 import { lintValidationCommands } from '../validation/command-lint';
+import { checkLinks, readBoardGraph, splitIds } from '../utils/graph';
 
 export const ADD_COMMAND_HELP = `
 Examples:
@@ -41,8 +41,17 @@ Create a parent task and children in one shot:
   brainfile add -c todo -t "Auth epic" --type epic \
     --child "OAuth flow" --child "Session hardening"
 
-Attach to an existing parent:
-  brainfile add -c todo -t "OAuth flow" --parent epic-1
+Attach to an existing parent (the defaults: epic holds spec, plan and task;
+spec holds plan and task; plan holds task; task holds task):
+  brainfile add -t "Token refresh" --type spec --parent epic-1
+  brainfile add -t "OAuth flow" --parent spec-1
+
+Record a decision (no column, never completed) and work that rests on it:
+  brainfile add -t "Use SQLite for the index" --type decision
+  brainfile add -t "Build the index" --decisions decision-1
+
+Types: epic, spec, plan, task (alias issue) and decision (alias adr) are built
+in; see brainfile types for these and the board's own.
 
 Create a task from a template:
   brainfile template --list
@@ -66,6 +75,10 @@ export interface AddOptions {
   files?: string;
   type?: string;
   parent?: string;
+  /** Comma-separated IDs of tasks that come first. */
+  dependsOn?: string;
+  /** Comma-separated IDs of the decisions this work rests on. */
+  decisions?: string;
   child?: string | string[];
   withContract?: boolean;
   /** When true, created contract is status=ready instead of the default draft */
@@ -81,20 +94,12 @@ export interface AddResult {
   columnId: string;
 }
 
-function findActiveTaskById(boardDir: string, taskId: string): Task | null {
-  const direct = readTaskFile(path.join(boardDir, taskFileName(taskId)));
-  if (direct && direct.task.id === taskId) return direct.task;
-
-  const docs = readTasksDir(boardDir);
-  const found = docs.find((doc) => doc.task.id === taskId);
-  return found?.task || null;
-}
-
 function createV2TaskFile(
   dirs: { boardDir: string; logsDir: string },
+  types: TypesConfig | undefined,
   input: {
     title: string;
-    columnId: string;
+    columnId?: string;
     type?: string;
     description?: string;
     priority?: 'low' | 'medium' | 'high' | 'critical';
@@ -104,6 +109,8 @@ function createV2TaskFile(
     relatedFiles?: string[];
     subtaskTitles?: string[];
     parentId?: string;
+    dependsOn?: string[];
+    decisions?: string[];
     contract?: Contract;
   },
 ): Task {
@@ -112,7 +119,7 @@ function createV2TaskFile(
     {
       title: input.title,
       column: input.columnId,
-      ...(input.type && input.type !== 'task' && { type: input.type }),
+      ...(input.type && { type: input.type }),
       priority: input.priority,
       tags: input.tags,
       assignee: input.assignee,
@@ -120,10 +127,13 @@ function createV2TaskFile(
       relatedFiles: input.relatedFiles,
       subtasks: input.subtaskTitles?.map((t) => t.trim()).filter(Boolean),
       parentId: input.parentId,
+      dependsOn: input.dependsOn,
+      decisions: input.decisions,
       contract: input.contract,
     },
     composeBody(input.description),
     dirs.logsDir,
+    { types },
   );
 
   if (!result.success || !result.task) {
@@ -152,32 +162,46 @@ export function addCommand(options: AddOptions, logger: Logger = defaultLogger):
 
 function addCommandV2(options: AddOptions, filePath: string, logger: Logger): AddResult {
   const dirs = ensureV2Dirs(filePath);
-  const boardFile = readBoardConfig(filePath);
-  if (!boardFile) {
+  const boardGraph = readBoardGraph(filePath);
+  const board = boardGraph.config;
+  if (!board) {
     throw operationFailed(`Failed to parse brainfile: ${filePath}`);
   }
-  const board = boardFile.config;
   const typeName = options.type || 'task';
   const typeValidation = validateType(board, typeName);
   if (!typeValidation.valid) {
     throw new CLIError(typeValidation.error || `Invalid type: ${typeName}`);
   }
+  const docType = resolveDocType(typeName, board.types);
+  const isDecision = docType.role === 'decision';
 
-  // Find target column
-  let targetColumn = board.columns.find(c => c.id === options.column);
-  if (!targetColumn) {
+  // Find target column. A decision has none (spec-12).
+  let targetColumn = isDecision ? undefined : board.columns.find(c => c.id === options.column);
+  if (!isDecision && !targetColumn) {
     targetColumn = board.columns.find(c => c.title.toLowerCase() === options.column.toLowerCase());
   }
-  if (!targetColumn) {
+  if (!isDecision && !targetColumn) {
     const availableColumns = board.columns.map(col => `${col.id} (${col.title})`);
     throw columnNotFound(options.column, availableColumns);
   }
 
-  const parentId = options.parent?.trim();
-  if (parentId) {
-    const parentTask = findActiveTaskById(dirs.boardDir, parentId);
-    if (!parentTask) {
-      logger.warn(chalk.yellow(`Warning: parent task ${parentId} not found in board/. Creating task anyway.`));
+  const parentId = options.parent?.trim() || undefined;
+  const dependsOn = splitIds(options.dependsOn);
+  const decisions = splitIds(options.decisions);
+  checkLinks(boardGraph, {
+    type: typeName,
+    ...(parentId && { parentId }),
+    ...(dependsOn.length > 0 && { dependsOn }),
+    ...(decisions.length > 0 && { decisions }),
+  }, logger);
+
+  const childTitles = normalizeToArray(options.child).map((title) => title.trim()).filter(Boolean);
+  if (childTitles.length > 0) {
+    const fit = parentFit('task', typeName, board.types);
+    if (!fit.fits) {
+      const message = `children of the new ${docType.name}: ${fit.reason}`;
+      if (board.strict === true) throw new CLIError(`${message} (refused on a strict board)`);
+      logger.warn(chalk.yellow(`Warning: ${message}`));
     }
   }
 
@@ -208,9 +232,9 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
     }
   }
 
-  const parentTask = createV2TaskFile(dirs, {
+  const parentTask = createV2TaskFile(dirs, board.types, {
     title: options.title!,
-    columnId: targetColumn.id,
+    columnId: targetColumn?.id,
     type: options.type,
     description: options.description,
     priority: options.priority,
@@ -220,44 +244,56 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
     relatedFiles: options.files ? options.files.split(',').map((f) => f.trim()).filter(Boolean) : undefined,
     subtaskTitles: options.subtasks ? options.subtasks.split(',').map((title) => title.trim()) : undefined,
     parentId,
+    dependsOn,
+    decisions,
     contract,
   });
 
-  const childTitles = normalizeToArray(options.child).map((title) => title.trim()).filter(Boolean);
   const createdChildren: Task[] = [];
 
   for (const childTitle of childTitles) {
-    const childTask = createV2TaskFile(dirs, {
+    const childTask = createV2TaskFile(dirs, board.types, {
       title: childTitle,
-      columnId: targetColumn.id,
+      columnId: targetColumn?.id ?? board.columns[0]?.id,
       parentId: parentTask.id,
     });
     createdChildren.push(childTask);
   }
 
   // Success message
-  logAddSuccess(options, parentTask.id, targetColumn.title, logger, createdChildren);
+  logAddSuccess(options, parentTask, targetColumn?.title, logger, createdChildren);
 
-  return { success: true, taskId: parentTask.id, columnId: targetColumn.id };
+  return { success: true, taskId: parentTask.id, columnId: targetColumn?.id ?? '' };
 }
 
 function logAddSuccess(
   options: AddOptions,
-  taskId: string,
-  columnTitle: string,
+  task: Task,
+  columnTitle: string | undefined,
   logger: Logger,
   createdChildren: Task[] = [],
 ): void {
-  logger.log(chalk.green('Task added successfully!'));
+  logger.log(chalk.green(columnTitle === undefined ? 'Decision added successfully!' : 'Task added successfully!'));
   logger.log('');
-  logger.log(chalk.gray(`  ID:       ${taskId}`));
+  logger.log(chalk.gray(`  ID:       ${task.id}`));
   logger.log(chalk.gray(`  Title:    ${options.title}`));
-  logger.log(chalk.gray(`  Column:   ${columnTitle}`));
-  if (options.type && options.type !== 'task') {
-    logger.log(chalk.gray(`  Type:     ${options.type}`));
+  if (columnTitle !== undefined) {
+    logger.log(chalk.gray(`  Column:   ${columnTitle}`));
+  }
+  if (task.type && task.type !== 'task') {
+    logger.log(chalk.gray(`  Type:     ${task.type}`));
+  }
+  if (typeof task.status === 'string' && columnTitle === undefined) {
+    logger.log(chalk.gray(`  Status:   ${task.status}`));
   }
   if (options.parent) {
     logger.log(chalk.gray(`  Parent:   ${options.parent}`));
+  }
+  if (task.dependsOn?.length) {
+    logger.log(chalk.gray(`  Depends:  ${task.dependsOn.join(', ')}`));
+  }
+  if (task.decisions?.length) {
+    logger.log(chalk.gray(`  Rests on: ${task.decisions.join(', ')}`));
   }
   if (options.description) {
     logger.log(chalk.gray(`  Desc:     ${options.description.substring(0, 50)}${options.description.length > 50 ? '...' : ''}`));

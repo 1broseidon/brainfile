@@ -10,7 +10,7 @@
  * CommonJS Jest project rather than the ESM render project.
  */
 import type { Task } from '@brainfile/core';
-import { buildRows, windowRows } from '../tui/rows';
+import { buildOutline, buildRows, collapseRows, windowRows } from '../tui/rows';
 import { getContractStateColor, PALETTE, getTypeGlyph, makePalette } from '../tui/theme';
 import { isCompletable, getSubtaskProgress, getContractState, getDocType } from '../tui/utils';
 
@@ -55,6 +55,58 @@ describe('buildRows', () => {
     ]);
 
     expect(rows.map((r) => r.task.id).sort()).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('buildOutline (task-20)', () => {
+  const columns = [
+    { id: 'todo', tasks: [task({ id: 'task-2', parentId: 'epic-1' }), task({ id: 'task-7', parentId: 'epic-9' })] },
+    { id: 'doing', tasks: [task({ id: 'epic-1', type: 'epic' }), task({ id: 'task-3', parentId: 'epic-1' })] },
+    { id: 'review', tasks: [task({ id: 'spec-1', type: 'spec', parentId: 'epic-1' }), task({ id: 'task-6' })] },
+  ];
+  const logs = [task({ id: 'task-5', parentId: 'epic-1' }), task({ id: 'epic-9' }), task({ id: 'task-4', parentId: 'epic-1' })];
+  const lists = buildOutline({ columns, logs });
+  const shape = (column: string) =>
+    (lists.get(column) ?? []).map((r) => [r.task.id, r.depth, r.column ?? (r.archived ? 'done' : '')]);
+
+  it('draws a child under its parent in the parent’s list, saying its own column, completed ones last', () => {
+    expect(shape('doing')).toEqual([
+      ['epic-1', 0, ''],
+      ['task-2', 1, 'todo'],
+      ['task-3', 1, ''],
+      ['spec-1', 1, 'review'],
+      ['task-5', 1, 'done'],
+      ['task-4', 1, 'done'],
+    ]);
+    expect(lists.get('doing')?.[0].childCount).toBe(5);
+  });
+
+  it('does not list a child again in its own column', () => {
+    expect(shape('todo')).toEqual([['task-7', 0, '']]);
+    expect(shape('review')).toEqual([['task-6', 0, '']]);
+  });
+
+  it('points an open child of a completed parent at it, from its own column', () => {
+    expect(lists.get('todo')?.[0].orphanParentId).toBe('epic-9');
+  });
+
+  it('collapses everything under a parent, whatever column it came from', () => {
+    const rows = collapseRows(lists.get('doing') ?? [], new Set(['epic-1']));
+    expect(rows.map((r) => r.task.id)).toEqual(['epic-1']);
+    expect(rows[0].collapsed).toBe(true);
+  });
+
+  it('nests every generation, not just the first', () => {
+    const rows = buildRows([
+      task({ id: 'epic-1', type: 'epic' }),
+      task({ id: 'task-1', parentId: 'epic-1' }),
+      task({ id: 'task-2', parentId: 'task-1' }),
+    ]);
+    expect(rows.map((r) => [r.task.id, r.depth])).toEqual([
+      ['epic-1', 0],
+      ['task-1', 1],
+      ['task-2', 2],
+    ]);
   });
 });
 

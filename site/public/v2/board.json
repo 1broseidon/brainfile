@@ -28,28 +28,28 @@
         },
         "types": {
           "type": "object",
-          "description": "Map of document type definitions. Keys are type identifiers (e.g., 'epic', 'adr') that match the type field in task files. In strict mode, this map is the allowlist; the built-in task type is always implicitly valid.",
+          "description": "Additions to and overrides of the document types. epic, spec, plan, task and decision are built in and need no entry; an entry under one of their names overrides it, and any other name adds a type, optionally taking a built-in's place with like. Entries under the aliases issue and adr do not configure task or decision. In strict mode a document's type must be built in or listed here.",
           "additionalProperties": {
             "$ref": "#/definitions/typeEntry"
           },
           "examples": [
             {
-              "epic": {
-                "idPrefix": "epic",
-                "completable": false,
-                "schema": "https://brainfile.md/v2/epic.json"
-              },
-              "adr": {
-                "idPrefix": "adr",
-                "completable": false,
-                "schema": "https://brainfile.md/v2/adr.json"
-              }
+              "bug": { "like": "task" },
+              "rfc": { "like": "spec", "idPrefix": "rfc" },
+              "plan": { "completable": false }
             }
           ]
         },
+        "related": {
+          "type": "object",
+          "description": "Sister boards in other repositories, by short name. Each value is the repository folder, relative to this repository's root. A task refers to a task on one as alias:task-id. A folder that is not on this machine is still valid.",
+          "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$" },
+          "additionalProperties": { "type": "string", "minLength": 1 },
+          "examples": [{ "mobile": "../hotline-mobile" }]
+        },
         "strict": {
           "type": "boolean",
-          "description": "Enables strict validation. When true, add rejects unknown task types and move rejects unknown columns.",
+          "description": "Enables strict validation. When true, add rejects unknown document types (the built-ins are always known), move rejects unknown columns, and add, patch and lint refuse an off-pattern parent.",
           "default": false
         },
         "statsConfig": {
@@ -71,18 +71,22 @@
   "definitions": {
     "typeEntry": {
       "type": "object",
-      "description": "Configuration for a custom document type.",
-      "required": ["idPrefix"],
+      "description": "Configuration for a document type: a type of your own, or an override of a built-in.",
       "properties": {
+        "like": {
+          "type": "string",
+          "description": "The built-in type whose place this one takes: its parents, children, completion rule and glyph. One of epic, spec, plan, task, decision (or the aliases issue, adr), or another type on the board. Without like, a type behaves as a task.",
+          "examples": ["task", "spec"]
+        },
         "idPrefix": {
           "type": "string",
-          "description": "Prefix for auto-generated IDs (e.g., 'epic' produces 'epic-1', 'epic-2'). Must be unique across all type entries.",
+          "description": "Prefix for auto-generated IDs (e.g., 'epic' produces 'epic-1', 'epic-2'). Defaults to the type name.",
           "pattern": "^[a-z]+(-[a-z]+)*$",
           "minLength": 1
         },
         "completable": {
           "type": "boolean",
-          "description": "Whether items of this type can be completed (moved to logs/). Set to false for reference documents like ADRs or epics.",
+          "description": "Whether items of this type complete when moved to a completion column. Defaults to true, or to the like type's rule. A task is always completable; a decision never is.",
           "default": true
         },
         "schema": {
