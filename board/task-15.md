@@ -13,6 +13,8 @@ relatedFiles:
   - cli/src/cli.ts
   - cli/src/commands/contract.ts
 createdAt: "2026-09-23T03:04:31.919Z"
+assignee: codex
+updatedAt: "2026-10-12T18:33:59.915Z"
 ---
 
 ## Description
