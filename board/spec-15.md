@@ -58,3 +58,6 @@ A repo should have one board, and Brainfile should know when it doesn't. runpris
 **Health says it.** The desktop's health covers: two boards, a stray board worktree, the board behind or ahead of the remote (not only "waiting to send"), the board tracked by the code branch, and a failed merge left half-done.
 
 **Not in scope.** Two-way sync with Linear or GitHub Issues (a Linear import is a one-time copy; drift such as BRO-224's title and BRO-254's state is expected), and any server.
+
+## Log
+- 2026-10-12T21:14:21.138Z: [claude] All eight subtasks built on feat/board-integrity (4 commits on top of feat/desktop-app 250da20; worktree ../brainfile-wt-board-integrity): phases task-27..30. Not merged: feat/desktop-app's main worktree has uncommitted window-state work. Open follow-ups: the TUI does not guard writes yet (CLI, MCP, desktop do); no desktop button for 'tracked twice' (where/lint point to migrate --to-branch).
