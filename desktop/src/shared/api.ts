@@ -125,7 +125,11 @@ export interface BoardSnapshot {
   title: string;
   columns: ColumnView[];
   tasks: TaskView[];
-  /** Most recent completions from logs/, newest first. */
+  /**
+   * Completed work from logs/, newest first: the latest completions, and
+   * everything completed under a document that is shown, however old, so a
+   * child stays under its parent (task-20).
+   */
   completed: TaskView[];
   typeNames: string[];
   /** Every decision, current and retired, newest first. */

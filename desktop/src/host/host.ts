@@ -212,11 +212,34 @@ function snapshot(board: OpenBoard): BoardSnapshot {
       return blocked.length ? { ...view, blockedOn: blocked } : view;
     })
   );
-  const completed = archived
+  const done = archived
     .filter((doc) => !isDecision(doc.task))
     .map((doc) => toView(doc.task, doc.body, types))
-    .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''))
-    .slice(0, COMPLETED_LIMIT);
+    .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
+  // The latest completions, and everything completed under a document that
+  // is shown, however old: a child stays under its open parent until the
+  // parent is done, then goes with it into Done (task-20).
+  const doneUnder = new Map<string, TaskView[]>();
+  for (const t of done) {
+    if (!t.parentId) continue;
+    const list = doneUnder.get(t.parentId);
+    if (list) list.push(t);
+    else doneUnder.set(t.parentId, [t]);
+  }
+  const shown = new Set<string>();
+  const bring = (id: string): void => {
+    for (const child of doneUnder.get(id) ?? []) {
+      if (shown.has(child.id)) continue;
+      shown.add(child.id);
+      bring(child.id);
+    }
+  };
+  for (const t of tasks) bring(t.id);
+  for (const t of done.slice(0, COMPLETED_LIMIT)) {
+    shown.add(t.id);
+    bring(t.id);
+  }
+  const completed = done.filter((t) => shown.has(t.id));
   return {
     projectId: board.projectId,
     title: built.title || path.basename(path.dirname(board.dotDir)),
