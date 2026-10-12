@@ -30,14 +30,14 @@ subtasks:
     completed: true
   - id: spec-15-6
     title: migrate --to-branch untracks .brainfile/ on the code branch and ignores it in one commit
-    completed: false
+    completed: true
   - id: spec-15-7
     title: "Desktop: the two-boards line with Use theirs / Merge / Keep, and health covering ahead/behind, stray worktree, tracked-twice"
     completed: false
   - id: spec-15-8
     title: Tests on scratch repos reproducing runprism.ai's case end to end
     completed: false
-updatedAt: "2026-10-12T21:07:40.635Z"
+updatedAt: "2026-10-12T21:07:40.852Z"
 decisions:
   - decision-1
 ---
