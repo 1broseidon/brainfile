@@ -3,7 +3,7 @@
  * whole; the window never edits a snapshot except to show a move before the
  * host confirms it.
  */
-import type { Api, BoardSnapshot, Project, TaskView } from '../../shared/api';
+import type { AgentId, AgentInfo, AgentRun, Api, BoardSnapshot, PermissionAsk, Project, TaskView } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
 import { asTree } from './format';
 
@@ -18,18 +18,17 @@ const lastLocalWrite: Record<string, number> = {};
 const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask'] as const;
 const LOCAL_WINDOW_MS = 4000;
 
-export const api: Api = new Proxy(window.brainfile, {
-  get(target, key: string) {
-    const value = target[key as keyof Api];
-    if (typeof value === 'function' && (MUTATIONS as readonly string[]).includes(key)) {
-      return (projectId: string, ...rest: unknown[]) => {
-        lastLocalWrite[projectId] = Date.now();
-        return (value as (...args: unknown[]) => unknown)(projectId, ...rest);
-      };
-    }
-    return value;
-  },
-});
+// The bridge's object is frozen, so a Proxy over it breaks the proxy
+// invariants; wrap the writes in a plain copy instead.
+const bridge = window.brainfile;
+export const api: Api = { ...bridge };
+for (const key of MUTATIONS) {
+  const write = bridge[key] as (projectId: string, ...rest: unknown[]) => unknown;
+  (api as unknown as Record<string, unknown>)[key] = (projectId: string, ...rest: unknown[]) => {
+    lastLocalWrite[projectId] = Date.now();
+    return write(projectId, ...rest);
+  };
+}
 
 export type ViewMode = 'list' | 'board';
 export type MenuKind = 'status' | 'priority' | 'assignee' | 'labels';
@@ -38,6 +37,18 @@ const VIEW_KEY = 'brainfile.view';
 const ACTIVE_KEY = 'brainfile.active';
 const LAYOUT_KEY = 'brainfile.layout';
 const SEEN_KEY = 'brainfile.feedSeen';
+const AGENT_KEY = 'brainfile.lastAgent';
+
+export interface ChatLine {
+  key: string;
+  who: 'you' | 'agent';
+  text: string;
+  at: number;
+  failed?: boolean;
+}
+
+const LIVE = new Set(['starting', 'working', 'waiting']);
+export const isLive = (run: AgentRun | undefined) => !!run && LIVE.has(run.state);
 const FEED_LIMIT = 100;
 
 export type Health = 'ok' | 'busy' | 'pending' | 'warn' | 'local';
@@ -88,6 +99,21 @@ class AppState {
   /** The one success that speaks: a reversible step, with its Undo, for a few seconds. */
   undo = $state<{ text: string; run: () => Promise<void> } | null>(null);
   menu = $state<{ kind: MenuKind; taskId: string; x: number; y: number } | null>(null);
+  /** The person's own agents, as detected on this Mac, in the picker's order. */
+  agents = $state<AgentInfo[]>([]);
+  lastAgent = $state<AgentId | null>(localStorage.getItem(AGENT_KEY) as AgentId | null);
+  runs = $state<Record<string, AgentRun>>({});
+  asks = $state<PermissionAsk[]>([]);
+  chats = $state<Record<string, ChatLine[]>>({});
+  chatOpen = $state(false);
+
+  /** Whatever was used last, if it is still here; else the first one installed. */
+  defaultAgent = $derived<AgentId | null>(
+    (this.lastAgent && this.agents.find((a) => a.id === this.lastAgent && a.available)?.id) ||
+      this.agents.find((a) => a.available)?.id ||
+      null
+  );
+
   /** Changes from outside the window, newest first. */
   feed = $state<FeedItem[]>([]);
   feedSeen = $state(Number(localStorage.getItem(SEEN_KEY) ?? 0));
@@ -119,6 +145,12 @@ class AppState {
       this.projects = projects;
     });
     api.onBoardChanged((snapshot) => this.receive(snapshot));
+    api.onAgentEvent((event) => {
+      if (event.kind === 'run') this.onRun(event.run);
+      else if (event.kind === 'permission') this.asks = [...this.asks, event.ask];
+      else this.asks = this.asks.filter((a) => a.id !== event.id);
+    });
+    void api.listAgents().then((agents) => (this.agents = agents));
     this.projects = await api.listProjects();
     this.loaded = true;
     // A board can turn up while the window is away (pushed from another
@@ -150,6 +182,60 @@ class AppState {
     const items = diffBoards(before, snapshot, Date.now());
     if (items.length) this.feed = [...items.reverse(), ...this.feed].slice(0, FEED_LIMIT);
   }
+
+  // ── Agents ──────────────────────────────────────────────────────────────
+
+  /** The live dispatch on a task of the board in front, if any. */
+  runFor(taskId: string): AgentRun | undefined {
+    return Object.values(this.runs).find((r) => r.kind === 'dispatch' && r.taskId === taskId && r.projectId === this.activeId && isLive(r));
+  }
+
+  agentName(id: AgentId): string {
+    return this.agents.find((a) => a.id === id)?.name ?? id;
+  }
+
+  stopRun(runId: string): Promise<void> {
+    return api.stopRun(runId);
+  }
+
+  remember(agentId: AgentId): void {
+    this.lastAgent = agentId;
+    localStorage.setItem(AGENT_KEY, agentId);
+  }
+
+  async dispatch(taskId: string, agentId: AgentId): Promise<void> {
+    if (!this.activeId) return;
+    this.remember(agentId);
+    await this.patch(taskId, { assignee: agentId });
+    const result = await api.dispatch(this.activeId, taskId, agentId);
+    if (!result.ok) this.notify(result.error, 'warn');
+  }
+
+  async askBoard(text: string, agentId: AgentId): Promise<void> {
+    const projectId = this.activeId;
+    if (!projectId || !text.trim()) return;
+    this.remember(agentId);
+    this.chats[projectId] = [...(this.chats[projectId] ?? []), { key: `you-${Date.now()}`, who: 'you', text: text.trim(), at: Date.now() }];
+    const result = await api.ask(projectId, agentId, text.trim());
+    if (!result.ok) this.chats[projectId] = [...this.chats[projectId], { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true }];
+  }
+
+  private onRun(run: AgentRun): void {
+    const before = this.runs[run.id];
+    this.runs[run.id] = run;
+    const ended = !isLive(run) && (!before || isLive(before));
+    if (!ended) return;
+    if (run.kind === 'ask') {
+      const text = run.state === 'done' ? run.reply || 'Done.' : run.state === 'stopped' ? 'Stopped.' : (run.error ?? 'It stopped.');
+      const lines = this.chats[run.projectId] ?? [];
+      this.chats[run.projectId] = [...lines, { key: run.id, who: 'agent', text, at: Date.now(), failed: run.state === 'failed' }];
+    } else if (run.state === 'failed') {
+      this.notify(`${this.agentName(run.agentId)} stopped on ${run.taskId}: ${run.error ?? 'unknown error'}`, 'warn');
+    }
+  }
+
+  /** The chat's live turn for the board in front. */
+  liveAsk = $derived(Object.values(this.runs).find((r) => r.kind === 'ask' && r.projectId === this.activeId && isLive(r)));
 
   markFeedSeen(): void {
     this.feedSeen = Date.now();

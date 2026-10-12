@@ -6,7 +6,18 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { spawn } from 'child_process';
 import * as path from 'path';
-import { CHANNEL, HOST_METHODS, type HostMessage, type HostRequest, type Project, type ProjectState, type Result } from '../shared/api';
+import {
+  AGENT_METHODS,
+  CHANNEL,
+  HOST_METHODS,
+  type AgentMessage,
+  type AgentRequest,
+  type HostMessage,
+  type HostRequest,
+  type Project,
+  type ProjectState,
+  type Result,
+} from '../shared/api';
 import { loginShellPath } from './shellPath';
 import { ProjectStore } from './projects';
 
@@ -18,6 +29,8 @@ const DEV_URL = process.env.BRAINFILE_DEV_URL;
 
 let win: BrowserWindow | null = null;
 let host: UtilityProcess | null = null;
+let agents: UtilityProcess | null = null;
+const agentPending = new Map<number, (result: unknown) => void>();
 let store: ProjectStore;
 let nextRequest = 1;
 const pending = new Map<number, (result: unknown) => void>();
@@ -48,6 +61,38 @@ function callHost<T>(method: HostRequest['method'], ...args: unknown[]): Promise
   return new Promise((resolve) => {
     pending.set(id, resolve as (result: unknown) => void);
     host!.postMessage({ id, method, args } satisfies HostRequest);
+  });
+}
+
+// ── Agents process ──────────────────────────────────────────────────────────
+
+function startAgents(): UtilityProcess {
+  const child = utilityProcess.fork(path.join(__dirname, 'agents.js'), [], {
+    serviceName: 'Brainfile Agents',
+    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData') },
+  });
+  child.on('message', (message: AgentMessage) => {
+    if (message.kind === 'reply') {
+      agentPending.get(message.id)?.(message.result);
+      agentPending.delete(message.id);
+    } else {
+      win?.webContents.send(CHANNEL.agent, message.event);
+    }
+  });
+  child.on('exit', () => {
+    for (const resolve of agentPending.values()) resolve({ ok: false, error: 'The agents process stopped' });
+    agentPending.clear();
+    agents = null;
+  });
+  return child;
+}
+
+function callAgents<T>(method: AgentRequest['method'], ...args: unknown[]): Promise<T> {
+  if (!agents) agents = startAgents();
+  const id = nextRequest++;
+  return new Promise((resolve) => {
+    agentPending.set(id, resolve as (result: unknown) => void);
+    agents!.postMessage({ id, method, args } satisfies AgentRequest);
   });
 }
 
@@ -121,6 +166,7 @@ const local: Record<string, (...args: any[]) => unknown> = {
 
 ipcMain.handle(CHANNEL.invoke, async (_event, method: string, ...args: unknown[]) => {
   if ((HOST_METHODS as readonly string[]).includes(method)) return callHost(method as HostRequest['method'], ...args);
+  if ((AGENT_METHODS as readonly string[]).includes(method)) return callAgents(method as AgentRequest['method'], ...args);
   const handler = local[method];
   if (!handler) throw new Error(`Unknown method ${method}`);
   return handler(...args);
@@ -169,6 +215,7 @@ function createWindow(): void {
  * settled and quits. `BRAINFILE_CAPTURE_SCRIPT` runs in the page first.
  */
 function captureAndQuit(target: BrowserWindow, file: string): void {
+  target.webContents.on('console-message', (event) => console.log('renderer:', event.message));
   target.webContents.once('did-finish-load', async () => {
     await new Promise((r) => setTimeout(r, 1500));
     const script = process.env.BRAINFILE_CAPTURE_SCRIPT;
@@ -203,4 +250,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   // The host flushes pending commits on exit.
   host?.kill();
+  agents?.kill();
 });

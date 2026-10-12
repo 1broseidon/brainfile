@@ -115,6 +115,54 @@ export interface RemovedTask {
   content: string;
 }
 
+// ── Agents (dispatch) ─────────────────────────────────────────────────────
+
+export type AgentId = 'claude' | 'codex' | 'antigravity' | 'cursor';
+
+export interface AgentInfo {
+  id: AgentId;
+  name: string;
+  available: boolean;
+  /** Why it is or isn't offered, in a few words: `your login`, `downloads once`, `not installed`. */
+  note: string;
+}
+
+export type RunState = 'starting' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped';
+
+/** One piece of agent work: a dispatched task, or a turn in the board's small chat. */
+export interface AgentRun {
+  id: string;
+  projectId: string;
+  agentId: AgentId;
+  kind: 'dispatch' | 'ask';
+  taskId?: string;
+  state: RunState;
+  /** What kind of work, one word: reading, editing, running, searching, thinking. */
+  activity: string;
+  reply?: string;
+  error?: string;
+  startedAt: number;
+  endedAt?: number;
+}
+
+/** An agent asking before it acts, answered in the board's band. */
+export interface PermissionAsk {
+  id: string;
+  runId: string;
+  projectId: string;
+  agentId: AgentId;
+  title: string;
+  options: { optionId: string; name: string; kind: string }[];
+}
+
+export type AgentEvent =
+  | { kind: 'run'; run: AgentRun }
+  | { kind: 'permission'; ask: PermissionAsk }
+  | { kind: 'permission-done'; id: string };
+
+/** Per repository, how the dispatcher answers an agent that asks first. Set in repo settings later. */
+export type PermissionPolicy = 'ask' | 'allow' | 'bypass';
+
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Requests the renderer can make. Each maps to one handler in the host or main. */
@@ -143,6 +191,13 @@ export interface Api {
   restoreTask(projectId: string, removed: RemovedTask): Promise<Result>;
   syncNow(projectId: string): Promise<Result<SyncView>>;
 
+  listAgents(): Promise<AgentInfo[]>;
+  dispatch(projectId: string, taskId: string, agentId: AgentId): Promise<Result<AgentRun>>;
+  ask(projectId: string, agentId: AgentId, text: string): Promise<Result<AgentRun>>;
+  stopRun(runId: string): Promise<void>;
+  answerPermission(askId: string, optionId: string | null): Promise<void>;
+  onAgentEvent(listener: (event: AgentEvent) => void): () => void;
+
   onBoardChanged(listener: (snapshot: BoardSnapshot) => void): () => void;
   onProjectsChanged(listener: (projects: Project[]) => void): () => void;
 }
@@ -152,7 +207,14 @@ export const CHANNEL = {
   invoke: 'brainfile:invoke',
   board: 'brainfile:board',
   projects: 'brainfile:projects',
+  agent: 'brainfile:agent',
 } as const;
+
+/** Methods main forwards to the agents process. */
+export const AGENT_METHODS = ['listAgents', 'dispatch', 'ask', 'stopRun', 'answerPermission'] as const;
+export type AgentMethod = (typeof AGENT_METHODS)[number];
+export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
+export type AgentMessage = { kind: 'reply'; id: number; result: unknown } | { kind: 'event'; event: AgentEvent };
 
 /** Methods main forwards to the board host rather than answering itself. */
 export const HOST_METHODS = [

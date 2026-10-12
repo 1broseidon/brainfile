@@ -1,0 +1,164 @@
+<script lang="ts">
+  import { app } from '../lib/state.svelte';
+  import { tip } from '../lib/tooltip';
+  import Icon from './Icon.svelte';
+  import type { AgentId } from '../../shared/api';
+
+  /** Dispatch, the muted way: one key on a task, a short list of the person's own agents. */
+  let { taskId }: { taskId: string } = $props();
+
+  let open = $state(false);
+  let active = $state(0);
+  const offered = $derived(app.agents);
+  const run = $derived(app.runFor(taskId));
+
+  function toggle(): void {
+    open = !open;
+    if (open) active = Math.max(0, offered.findIndex((a) => a.id === app.defaultAgent));
+  }
+
+  function pick(id: AgentId): void {
+    open = false;
+    void app.dispatch(taskId, id);
+  }
+
+  function onkeydown(e: KeyboardEvent): void {
+    if (!open) return;
+    const step = (d: number) => {
+      let i = active;
+      for (let n = 0; n < offered.length; n++) {
+        i = (i + d + offered.length) % offered.length;
+        if (offered[i].available) break;
+      }
+      active = i;
+    };
+    if (e.key === 'ArrowDown') step(1);
+    else if (e.key === 'ArrowUp') step(-1);
+    else if (e.key === 'Enter' && offered[active]?.available) pick(offered[active].id);
+    else if (e.key === 'Escape') open = false;
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+</script>
+
+<svelte:window onkeydown={onkeydown} />
+
+{#if run}
+  <span class="running mono">{run.agentId} · {run.state === 'waiting' ? 'needs you' : run.activity}</span>
+  <button class="icon-btn" use:tip={'Stop'} onclick={() => app.stopRun(run.id)}><Icon name="stop" size={13} /></button>
+{:else}
+  <span class="anchor">
+    <button class="btn quiet" class:on={open} onclick={toggle}><Icon name="hand" size={13} />Hand to…</button>
+    {#if open}
+      <div class="catch" role="presentation" onmousedown={() => (open = false)}></div>
+      <div class="menu" role="listbox">
+        <div class="head mono">Hand to</div>
+        {#each offered as agent, i (agent.id)}
+          <button
+            class="item"
+            class:active={i === active}
+            disabled={!agent.available}
+            role="option"
+            aria-selected={i === active}
+            onmouseenter={() => agent.available && (active = i)}
+            onclick={() => pick(agent.id)}
+          >
+            <span class="name">{agent.name}</span>
+            <span class="note mono">{agent.note}</span>
+          </button>
+        {/each}
+        <p class="foot">The agent gets this task and its contract as its brief, works in the repo, and reports through the board.</p>
+      </div>
+    {/if}
+  </span>
+{/if}
+
+<style>
+  .running {
+    color: var(--ink-3);
+    margin-right: var(--s1);
+  }
+
+  .btn.on {
+    background: var(--fill-hover);
+    color: var(--ink);
+  }
+
+  .anchor {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .catch {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-catch);
+  }
+
+  .menu {
+    position: absolute;
+    z-index: var(--z-menu);
+    top: calc(100% + 4px);
+    right: 0;
+    width: 280px;
+    padding: var(--s1);
+    border-radius: var(--r-card);
+    background: var(--pop);
+    box-shadow: var(--top-light), var(--shadow-float);
+    animation: open var(--d-open) var(--ease);
+  }
+
+  @keyframes open {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+  }
+
+  .head {
+    padding: var(--s2) var(--s2) var(--s1);
+    color: var(--ink-3);
+  }
+
+  .item {
+    width: 100%;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: 0 var(--s2);
+    border-radius: var(--r-control);
+    text-align: left;
+  }
+
+  .item.active:not(:disabled) {
+    background: var(--fill-hover);
+  }
+
+  .item:disabled {
+    color: var(--ink-4);
+  }
+
+  .name {
+    flex: 1;
+    font-weight: 500;
+  }
+
+  .item:disabled .name {
+    font-weight: 400;
+  }
+
+  .note {
+    color: var(--ink-4);
+  }
+
+  .foot {
+    margin: var(--s1) 0 0;
+    padding: var(--s2);
+    color: var(--ink-3);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    box-shadow: inset 0 var(--hairline) 0 var(--line);
+  }
+</style>

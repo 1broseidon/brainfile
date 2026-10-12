@@ -8,6 +8,7 @@
   import PriorityIcon from './PriorityIcon.svelte';
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
+  import HandTo from './HandTo.svelte';
 
   let { board, taskId }: { board: BoardSnapshot; taskId: string } = $props();
 
@@ -126,6 +127,7 @@
     {#if detail?.archived}<span class="state mono">done</span>{/if}
     <span class="spacer"></span>
     {#if detail && !detail.archived}
+      <HandTo taskId={detail.id} />
       <button class="btn quiet" onclick={complete}><StatusIcon progress={1} size={13} />Complete</button>
       <button class="icon-btn destroy" use:tip={'Delete'} onclick={remove}><Icon name="trash" size={15} /></button>
     {/if}

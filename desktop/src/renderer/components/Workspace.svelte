@@ -4,6 +4,8 @@
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
   import PathTip from './PathTip.svelte';
+  import ChatPop from './ChatPop.svelte';
+  import AskLine from './AskLine.svelte';
   import ListView from './ListView.svelte';
   import BoardView from './BoardView.svelte';
 
@@ -107,6 +109,9 @@
         </button>
       </div>
       <span class="spacer"></span>
+      {#each app.asks.filter((a) => a.projectId === project.id).slice(0, 1) as ask (ask.id)}
+        <AskLine {ask} />
+      {/each}
       {#if app.undo}
         <span class="undo">
           <span class="mono">{app.undo.text}</span>
@@ -152,6 +157,7 @@
         <ListView {board} />
       {/if}
     </div>
+    <ChatPop projectName={project.name} />
   {:else if app.boardErrors[project.id]}
     <div class="center"><div class="empty"><p>{app.boardErrors[project.id]}</p></div></div>
   {/if}

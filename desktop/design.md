@@ -186,6 +186,31 @@ off course. These rules win over every other section:
   every column to drop into).
 - The rail is one line per project: its storage icon, its name, its count.
 
+## Dispatch
+
+Brainfile is a dispatcher, not a chat app: anything long belongs in Hotline.
+It starts the person's own agents over the Agent Client Protocol, in the
+repository, with Brainfile's MCP server attached, so an agent changes the
+board through the same tools as the CLI and its work arrives as ordinary
+board changes (and in the feed).
+
+- **Agents** are the installed ones, in this order: Claude Code
+  (claude-agent-acp), Codex (codex-acp), Antigravity (the registry's ACP
+  server, downloaded once) and Cursor (`cursor-agent acp`). Each runs on the
+  person's own login. The default is whichever was used last, if still here.
+- **Hand to…** is a muted key on a task. The brief is the task, its body
+  and its contract; the agent moves it to In Progress, does the work and
+  leaves a log note. At rest, the row's only trace is one mono line,
+  `claude · editing`.
+- **Ask the board** is a muted key in the board's bottom-right corner (⌘J):
+  a 360px popover for small things, asking about the board or having it
+  managed (add, sort, split, close). One thread per board; replies land
+  whole; no history beyond the session.
+- **When an agent asks first**, the board's band says so in one line, with
+  Allow once · Always · Deny; a board not in front is named in the strip.
+  Per repository, the answer can be `ask` (the default), `allow` or
+  `bypass`, kept in the app's `dispatch.json` until repo settings exist.
+
 ## Microinteractions stance
 
 - **One tooltip** (`lib/tooltip.ts`): a pop-plane label that waits 800ms for

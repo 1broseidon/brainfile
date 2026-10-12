@@ -45,6 +45,11 @@
   </button>
 
   <div class="right">
+    {#each app.asks.filter((a) => a.projectId !== app.activeId).slice(0, 1) as ask (ask.id)}
+      <button class="health no-drag" onclick={() => app.select(ask.projectId)}>
+        <span class="mono">{ask.agentId} needs you · {projectName(ask.projectId)}</span>
+      </button>
+    {/each}
     {#if healthLine}
       <button class="health no-drag" class:open={opened === 'health'} data-tone={tone} onclick={() => toggle('health')}>
         <span class="mono">{healthLine}</span>

@@ -83,6 +83,10 @@
       <span class="tag reveal">{tag}</span>
     {/each}
   </span>
+  {#if app.runFor(task.id)}
+    {@const run = app.runFor(task.id)!}
+    <span class="run mono">{run.agentId} · {run.state === 'waiting' ? 'needs you' : run.activity}</span>
+  {/if}
   <span class="chips">
     {#if task.contractStatus}
       <span class="contract" data-status={task.contractStatus}>{task.contractStatus.replace('_', ' ')}</span>
@@ -206,6 +210,13 @@
 
   .id {
     color: var(--ink-4);
+  }
+
+  /* Who has it and what kind of work: the only trace of an agent at rest. */
+  .run {
+    flex: none;
+    color: var(--ink-3);
+    margin-left: var(--s4);
   }
 
   .chips {

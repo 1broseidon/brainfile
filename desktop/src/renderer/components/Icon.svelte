@@ -24,6 +24,10 @@
     user: 'M5.5 3h5v5h-5zM2.5 14c.5-2.5 2.6-4 5.5-4s5 1.5 5.5 4',
     tag: 'M5.5 2.5v11M10.5 2.5v11M2.5 5.5h11M2.5 10.5h11',
     bolt: 'M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z',
+    hand: 'M3 8h8.5M8.5 4.5 12 8l-3.5 3.5M3 3v10',
+    stop: 'M4.5 4.5h7v7h-7z',
+    ask: 'M2.5 3h11v8h-6l-3 2.5V11h-2z',
+    send: 'M8 13V3.5M4 7.5 8 3.5l4 4',
   } as const;
 
   export type IconName = keyof typeof PATHS;

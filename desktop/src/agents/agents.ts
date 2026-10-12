@@ -1,0 +1,378 @@
+/**
+ * The agents process: an Electron utility process that starts the person's
+ * own coding agents over the Agent Client Protocol and keeps them apart from
+ * the board host, so an agent that thinks for minutes never holds up a read.
+ *
+ * Brainfile is a dispatcher, not a chat app (design.md, Dispatch). An agent
+ * gets the repository as its working directory and Brainfile's own MCP server
+ * (`brainfile mcp`), so it reads and changes the board through the same tools
+ * as the CLI; what it changes reaches the window as ordinary board changes.
+ */
+import { spawn, spawnSync, type ChildProcess } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { Readable, Writable } from 'stream';
+import * as acp from '@agentclientprotocol/sdk';
+import { findV2Task, getV2Dirs } from '@brainfile/core';
+import { locateBoard } from '@brainfile/core/repo';
+import type {
+  AgentEvent,
+  AgentId,
+  AgentInfo,
+  AgentMessage,
+  AgentRequest,
+  AgentRun,
+  PermissionAsk,
+  PermissionPolicy,
+  Result,
+} from '../shared/api';
+
+const parentPort = process.parentPort;
+const DATA_DIR = process.env.BRAINFILE_DATA_DIR ?? path.join(os.homedir(), 'Library', 'Application Support', 'Brainfile');
+const AGENTS_DIR = path.join(DATA_DIR, 'agents');
+const SETTINGS_FILE = path.join(DATA_DIR, 'dispatch.json');
+/** A chat session nobody has used for this long is let go. */
+const IDLE_MS = 10 * 60_000;
+
+function send(message: AgentMessage): void {
+  parentPort.postMessage(message);
+}
+
+function emit(event: AgentEvent): void {
+  send({ kind: 'event', event });
+}
+
+function which(command: string): string | null {
+  const r = spawnSync('/usr/bin/which', [command], { encoding: 'utf-8' });
+  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : null;
+}
+
+// ── Which agents, started how ────────────────────────────────────────────────
+
+interface Launch {
+  command: string;
+  args: string[];
+}
+
+interface Known {
+  id: AgentId;
+  name: string;
+  /** The CLI that carries the person's login; without it the agent cannot run a turn. */
+  client: string;
+  launch(): Promise<Launch>;
+}
+
+/** The ACP registry's Antigravity server, downloaded once into the app's folder. */
+const ANTIGRAVITY = {
+  version: '1.3.0',
+  archive: (arch: string) =>
+    `https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-1.3.0-darwin-${arch === 'arm64' ? 'arm64' : 'x86_64'}.zip`,
+  cmd: 'agy_acp_server.par',
+};
+
+async function antigravityServer(): Promise<string> {
+  const dir = path.join(AGENTS_DIR, 'antigravity', ANTIGRAVITY.version);
+  const bin = path.join(dir, ANTIGRAVITY.cmd);
+  if (fs.existsSync(bin)) return bin;
+  fs.mkdirSync(dir, { recursive: true });
+  const response = await fetch(ANTIGRAVITY.archive(process.arch));
+  if (!response.ok) throw new Error(`Could not download Antigravity's ACP server (${response.status})`);
+  const zip = path.join(dir, 'server.zip');
+  fs.writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
+  const unzip = spawnSync('/usr/bin/ditto', ['-x', '-k', zip, dir]);
+  fs.rmSync(zip, { force: true });
+  if (unzip.status !== 0 || !fs.existsSync(bin)) throw new Error('Could not unpack Antigravity’s ACP server');
+  fs.chmodSync(bin, 0o755);
+  return bin;
+}
+
+/** In the order the picker shows them. */
+const KNOWN: Known[] = [
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    client: 'claude',
+    launch: async () => ({ command: 'npx', args: ['-y', '@agentclientprotocol/claude-agent-acp@0.89.1'] }),
+  },
+  {
+    id: 'codex',
+    name: 'Codex',
+    client: 'codex',
+    launch: async () => ({ command: 'npx', args: ['-y', '@agentclientprotocol/codex-acp@2.2.2'] }),
+  },
+  {
+    id: 'antigravity',
+    name: 'Antigravity',
+    client: 'agy',
+    launch: async () => ({ command: await antigravityServer(), args: [] }),
+  },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    client: 'cursor-agent',
+    launch: async () => ({ command: 'cursor-agent', args: ['acp'] }),
+  },
+];
+
+function listAgents(): AgentInfo[] {
+  return KNOWN.map((agent) => {
+    const installed = which(agent.client) !== null;
+    const downloaded = agent.id !== 'antigravity' || fs.existsSync(path.join(AGENTS_DIR, 'antigravity', ANTIGRAVITY.version, ANTIGRAVITY.cmd));
+    return {
+      id: agent.id,
+      name: agent.name,
+      available: installed,
+      note: !installed ? 'not installed' : downloaded ? 'your login' : 'downloads once',
+    };
+  });
+}
+
+function policyFor(projectId: string): PermissionPolicy {
+  try {
+    const settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) as { projects?: Record<string, { permissions?: PermissionPolicy }> };
+    return settings.projects?.[projectId]?.permissions ?? 'ask';
+  } catch {
+    return 'ask';
+  }
+}
+
+// ── Sessions ─────────────────────────────────────────────────────────────────
+
+interface Session {
+  key: string;
+  projectId: string;
+  agentId: AgentId;
+  child: ChildProcess;
+  connection: acp.ClientSideConnection;
+  sessionId: string;
+  /** The run the current turn belongs to. */
+  run: AgentRun | null;
+  text: string;
+  idle: NodeJS.Timeout | null;
+}
+
+const sessions = new Map<string, Session>();
+const runs = new Map<string, AgentRun>();
+const asks = new Map<string, { ask: PermissionAsk; resolve: (optionId: string | null) => void }>();
+let nextId = 1;
+
+const ACTIVITY: Record<string, string> = {
+  read: 'reading',
+  edit: 'editing',
+  delete: 'editing',
+  move: 'editing',
+  search: 'searching',
+  execute: 'running',
+  think: 'thinking',
+  fetch: 'fetching',
+};
+
+function update(run: AgentRun, patch: Partial<AgentRun>): void {
+  Object.assign(run, patch);
+  emit({ kind: 'run', run: { ...run } });
+}
+
+function brainfileMcp(): acp.McpServer[] {
+  const command = which('brainfile');
+  return command ? [{ name: 'brainfile', command, args: ['mcp'], env: [] }] : [];
+}
+
+async function open(projectId: string, agentId: AgentId, key: string): Promise<Session> {
+  const known = KNOWN.find((k) => k.id === agentId);
+  if (!known) throw new Error(`Unknown agent ${agentId}`);
+  if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
+  const located = locateBoard(projectId, { materialize: false });
+  const cwd = located.projectRoot;
+  const launch = await known.launch();
+  const child = spawn(launch.command, launch.args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'ignore'] });
+
+  const session: Session = { key, projectId, agentId, child, connection: null!, sessionId: '', run: null, text: '', idle: null };
+  const stream = acp.ndJsonStream(Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>);
+  session.connection = new acp.ClientSideConnection(
+    () => ({
+      requestPermission: (params) => requestPermission(session, params),
+      sessionUpdate: async (params) => {
+        const u = params.update;
+        const run = session.run;
+        if (!run) return;
+        if (u.sessionUpdate === 'agent_message_chunk' && u.content.type === 'text') session.text += u.content.text;
+        else if (u.sessionUpdate === 'agent_thought_chunk' && run.activity !== 'thinking') update(run, { activity: 'thinking', state: 'working' });
+        else if (u.sessionUpdate === 'tool_call') update(run, { activity: ACTIVITY[u.kind ?? ''] ?? 'working', state: 'working' });
+      },
+    }),
+    stream
+  );
+  child.on('exit', () => {
+    sessions.delete(key);
+    if (session.run && (session.run.state === 'working' || session.run.state === 'starting' || session.run.state === 'waiting')) {
+      update(session.run, { state: 'failed', error: 'The agent stopped', endedAt: Date.now() });
+    }
+  });
+
+  await session.connection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} });
+  const created = await session.connection.newSession({ cwd, mcpServers: brainfileMcp() });
+  session.sessionId = created.sessionId;
+  if (policyFor(projectId) === 'bypass') {
+    const bypass = created.modes?.availableModes.find((m) => /bypass/i.test(m.id));
+    if (bypass) await session.connection.setSessionMode({ sessionId: created.sessionId, modeId: bypass.id }).catch(() => {});
+  }
+  sessions.set(key, session);
+  return session;
+}
+
+async function requestPermission(session: Session, params: acp.RequestPermissionRequest): Promise<acp.RequestPermissionResponse> {
+  const allowOnce = params.options.find((o) => o.kind === 'allow_once') ?? params.options.find((o) => o.kind.startsWith('allow'));
+  if (policyFor(session.projectId) !== 'ask' && allowOnce) {
+    return { outcome: { outcome: 'selected', optionId: allowOnce.optionId } };
+  }
+  const run = session.run;
+  const ask: PermissionAsk = {
+    id: `ask-${nextId++}`,
+    runId: run?.id ?? '',
+    projectId: session.projectId,
+    agentId: session.agentId,
+    title: params.toolCall.title ?? 'Run a tool',
+    options: params.options.map((o) => ({ optionId: o.optionId, name: o.name, kind: o.kind })),
+  };
+  if (run) update(run, { state: 'waiting' });
+  emit({ kind: 'permission', ask });
+  const optionId = await new Promise<string | null>((resolve) => asks.set(ask.id, { ask, resolve }));
+  if (run && run.state === 'waiting') update(run, { state: 'working' });
+  return optionId ? { outcome: { outcome: 'selected', optionId } } : { outcome: { outcome: 'cancelled' } };
+}
+
+function answerPermission(askId: string, optionId: string | null): void {
+  const pending = asks.get(askId);
+  if (!pending) return;
+  asks.delete(askId);
+  emit({ kind: 'permission-done', id: askId });
+  pending.resolve(optionId);
+}
+
+function close(session: Session): void {
+  if (session.idle) clearTimeout(session.idle);
+  sessions.delete(session.key);
+  session.child.kill();
+}
+
+/** One prompt turn on a session; the reply lands whole when the turn ends. */
+async function turn(session: Session, run: AgentRun, prompt: string): Promise<void> {
+  session.run = run;
+  session.text = '';
+  if (session.idle) clearTimeout(session.idle);
+  update(run, { state: 'working', activity: 'thinking' });
+  try {
+    const result = await session.connection.prompt({ sessionId: session.sessionId, prompt: [{ type: 'text', text: prompt }] });
+    if (run.state === 'stopped') return;
+    const stopped = result.stopReason === 'cancelled';
+    update(run, { state: stopped ? 'stopped' : 'done', reply: session.text.trim(), endedAt: Date.now() });
+  } catch (err) {
+    update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
+  } finally {
+    session.run = null;
+    if (run.kind === 'dispatch') close(session);
+    else session.idle = setTimeout(() => close(session), IDLE_MS);
+  }
+}
+
+function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], taskId?: string): AgentRun {
+  const run: AgentRun = { id: `run-${nextId++}`, projectId, agentId, kind, taskId, state: 'starting', activity: 'starting', startedAt: Date.now() };
+  runs.set(run.id, run);
+  emit({ kind: 'run', run: { ...run } });
+  return run;
+}
+
+// ── Dispatch and ask ─────────────────────────────────────────────────────────
+
+function brief(projectId: string, taskId: string): string {
+  const located = locateBoard(projectId, { materialize: false });
+  if (!located.found) throw new Error(`No board in ${projectId}`);
+  const found = findV2Task(getV2Dirs(located.brainfilePath), taskId);
+  if (!found) throw new Error(`Task ${taskId} not found`);
+  const { task, body } = found.doc;
+  const contract = task.contract
+    ? `\n\nIt carries a contract (status ${task.contract.status}). Pick it up with the brainfile MCP contract tool before you start, meet its deliverables and validation, and deliver it when you are done.`
+    : '';
+  return [
+    `You have been handed ${task.id} on this repository's Brainfile board: "${task.title}".`,
+    body.trim() ? `\n${body.trim()}` : '',
+    contract,
+    `\n\nUse the brainfile MCP tools for the board: move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did. Do the work in this repository. Finish with a reply of one or two sentences.`,
+  ].join('');
+}
+
+async function dispatch(projectId: string, taskId: string, agentId: AgentId): Promise<Result<AgentRun>> {
+  let prompt: string;
+  try {
+    prompt = brief(projectId, taskId);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  const run = newRun(projectId, agentId, 'dispatch', taskId);
+  void (async () => {
+    try {
+      const session = await open(projectId, agentId, run.id);
+      await turn(session, run, prompt);
+    } catch (err) {
+      update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
+    }
+  })();
+  return { ok: true, value: { ...run } };
+}
+
+const ASK_PREAMBLE =
+  'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
+  'Do not change code unless asked. Reply briefly, in a sentence or two; if you changed the board, end with what you changed, by task ID, and say nothing about changes when there were none.\n\n';
+
+async function ask(projectId: string, agentId: AgentId, text: string): Promise<Result<AgentRun>> {
+  const key = `ask:${projectId}:${agentId}`;
+  const run = newRun(projectId, agentId, 'ask');
+  void (async () => {
+    try {
+      const existing = sessions.get(key);
+      const session = existing ?? (await open(projectId, agentId, key));
+      await turn(session, run, existing ? text : ASK_PREAMBLE + text);
+    } catch (err) {
+      update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
+    }
+  })();
+  return { ok: true, value: { ...run } };
+}
+
+async function stopRun(runId: string): Promise<void> {
+  const run = runs.get(runId);
+  if (!run) return;
+  for (const [id, pending] of asks) if (pending.ask.runId === runId) answerPermission(id, null);
+  const session = [...sessions.values()].find((s) => s.run?.id === runId);
+  update(run, { state: 'stopped', endedAt: Date.now() });
+  if (session) {
+    await session.connection.cancel({ sessionId: session.sessionId }).catch(() => {});
+    if (run.kind === 'dispatch') close(session);
+  }
+}
+
+// ── Dispatch ─────────────────────────────────────────────────────────────────
+
+const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
+  listAgents,
+  dispatch,
+  ask,
+  stopRun,
+  answerPermission,
+};
+
+parentPort.on('message', async (event: { data: AgentRequest }) => {
+  const { id, method, args } = event.data;
+  let result: unknown;
+  try {
+    result = await handlers[method](...args);
+  } catch (err) {
+    result = { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  send({ kind: 'reply', id, result });
+});
+
+process.on('exit', () => {
+  for (const session of sessions.values()) session.child.kill();
+});

@@ -22,7 +22,7 @@ function launch() {
 }
 
 const ctx = await context({
-  entryPoints: { main: 'src/main/main.ts', preload: 'src/preload/preload.ts', host: 'src/host/host.ts' },
+  entryPoints: { main: 'src/main/main.ts', preload: 'src/preload/preload.ts', host: 'src/host/host.ts', agents: 'src/agents/agents.ts' },
   outdir: 'dist-electron',
   bundle: true,
   platform: 'node',

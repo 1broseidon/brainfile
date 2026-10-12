@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { CHANNEL, type Api, type BoardSnapshot, type Project } from '../shared/api';
+import { CHANNEL, type AgentEvent, type Api, type BoardSnapshot, type Project } from '../shared/api';
 
 const invoke =
   (method: string) =>
@@ -31,6 +31,12 @@ const api: Api = {
   deleteTask: invoke('deleteTask'),
   restoreTask: invoke('restoreTask'),
   syncNow: invoke('syncNow'),
+  listAgents: invoke('listAgents'),
+  dispatch: invoke('dispatch'),
+  ask: invoke('ask'),
+  stopRun: invoke('stopRun'),
+  answerPermission: invoke('answerPermission'),
+  onAgentEvent: (listener) => subscribe<AgentEvent>(CHANNEL.agent, listener),
   onBoardChanged: (listener) => subscribe<BoardSnapshot>(CHANNEL.board, listener),
   onProjectsChanged: (listener) => subscribe<Project[]>(CHANNEL.projects, listener),
 } as Api;

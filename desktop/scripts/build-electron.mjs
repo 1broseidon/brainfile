@@ -13,6 +13,7 @@ const options = {
     main: 'src/main/main.ts',
     preload: 'src/preload/preload.ts',
     host: 'src/host/host.ts',
+    agents: 'src/agents/agents.ts',
   },
   outdir: 'dist-electron',
   bundle: true,

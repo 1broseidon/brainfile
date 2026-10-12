@@ -15,6 +15,7 @@
     "icons": "electron scripts/make-icons.mjs"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.8.0",
     "@brainfile/core": "file:../core"
   },
   "devDependencies": {

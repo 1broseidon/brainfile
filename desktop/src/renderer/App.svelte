@@ -50,6 +50,11 @@
       e.preventDefault();
       return;
     }
+    if (meta && e.key === 'j' && app.board) {
+      app.chatOpen = !app.chatOpen;
+      e.preventDefault();
+      return;
+    }
     if (meta && e.key === 'b') {
       app.toggleRail();
       e.preventDefault();
