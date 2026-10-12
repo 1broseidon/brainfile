@@ -13,6 +13,7 @@ import {
   gitToplevel,
   materializeBoardWorktree,
 } from './boardRepo';
+import { type BoardConflict, boardConflict } from './boards';
 
 export type LocatedBoard =
   | {
@@ -27,6 +28,11 @@ export type LocatedBoard =
       storage: BoardRepoKind | 'plain';
       /** True when this call checked the board out from its branch or the remote. */
       materialized: boolean;
+      /**
+       * Another board in the same repository disagrees with this one
+       * (spec-15): read it, but write nothing until the person chooses.
+       */
+      conflict: BoardConflict | null;
     }
   | {
       found: false;
@@ -55,6 +61,7 @@ export function locateBoard(folder: string, options: LocateOptions = {}): Locate
     projectRoot,
     storage: boardRepoKind(dotDir) ?? 'plain',
     materialized,
+    conflict: inRepo ? boardConflict(dotDir) : null,
   });
 
   // Inside a repository, walk up to its root. Outside one, only the folder

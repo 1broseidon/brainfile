@@ -14,6 +14,50 @@ parity (spec-13): everything the CLI does to a board has an MCP tool, and
 columns get a command of their own. The TUI catches up with decisions
 (task-19): a view of their own, their detail, and the work resting on them.
 
+### Changed (spec-15)
+- `migrate --to-branch` always commits the old copy's removal from the code
+  branch; `--commit` is accepted and hidden.
+
+### Added (spec-15, board integrity)
+- Brainfile looks for every board a repository has: the `.brainfile/` folder
+  in the checkout (tracked by the code branch or not), the `brainfile` branch,
+  the remote's `refs/brainfile/<name>`, and checkouts of the board branch
+  outside `.brainfile/`. `brainfile where` (and the MCP `where` tool) lists
+  them with document counts and last change, says how the two stand (one
+  already has everything the other has, or each has changes the other
+  lacks), and `--fetch` / `fetch: true` asks the remote first.
+- While two boards disagree, every write from the CLI, the MCP tools and the
+  desktop app is refused, naming the command that settles it; reads still
+  work. A board ahead of or behind the remote is not two boards.
+- `where` says how many changes on the remote are not here yet, and reports a
+  code branch that still tracks an old copy of `.brainfile/`.
+- `brainfile adopt <ref|path>` takes one board as it is; `brainfile
+  merge-boards <ref|path>` combines two by document ID on the field-level
+  merge, renumbering the newer of two different documents that share an ID
+  and rewriting references to it, and adopts outright when one board already
+  has everything. Both leave one board on its branch at `.brainfile/`,
+  descending from the remote's copy, with the code branch no longer tracking
+  `.brainfile/` (one commit).
+- `migrate --to-branch` finishes the move: a code branch that tracked the
+  board drops `.brainfile/` and ignores it in one commit, built so other staged
+  work stays staged; on a board already on its branch it makes that commit if
+  the code branch still tracks an old copy; and when a board already lives on
+  the branch it says the two are two boards and points to `merge-boards`
+  instead of failing on the checkout.
+- One home for the board branch: `where` and `lint` report a checkout of it
+  outside `.brainfile/`; a checkout whose folder is gone is forgotten before
+  the board is checked out (it used to block that) or by `lint --fix`. `lint`
+  reports two boards as an error.
+- The desktop app says "Two boards: this folder (7) and origin's (19,
+  newer)" in the board's band with Use origin's / Merge / Keep this one, and
+  its health covers two boards, a checkout outside `.brainfile/`, a code
+  branch tracking an old copy, a merge left half-done, and changes on the
+  remote not here yet (`↓N`). A plain folder board asks the remote for its
+  copy when it opens.
+- Backups: anything that replaces a board saves it first as
+  `refs/brainfile/backups/<UTC time>-folder|branch`. `brainfile backups` lists
+  them; `brainfile backups restore <name>` puts one back.
+
 ### Added (task-19)
 - The TUI has a decisions view, on `D` and at the type cycle's `decision`
   stop: standing decisions grouped by claim-key family, history (superseded,

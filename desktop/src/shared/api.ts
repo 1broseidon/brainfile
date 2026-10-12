@@ -115,9 +115,32 @@ export interface SyncView {
   remote: string | null;
   /** Commits not yet sent. */
   pending: number;
+  /** Commits on the remote's copy not here yet, as of the last fetch. */
+  behind: number;
   busy: boolean;
   /** Plain-language result of the last sync this app ran, when it failed. */
   warning?: string;
+}
+
+export type SettleChoice = 'theirs' | 'merge' | 'keep';
+
+/** Where the board lives and whether that needs a look (spec-15). */
+export interface IntegrityView {
+  /** Two boards disagree: nothing writes until one of the three choices is taken. */
+  twoBoards: {
+    /** `Two boards: this folder (7) and origin's (19, newer).` */
+    message: string;
+    /** `Origin's already has everything this folder has.` */
+    detail: string;
+    /** `Use origin's`. */
+    useOther: string;
+    /** The choice that loses nothing, when there is one. */
+    lossless: SettleChoice | null;
+  } | null;
+  /** Anything else about where the board lives, one sentence each. */
+  notes: string[];
+  /** A few words for the health list (`two boards`, `tracked twice`), or null when all is well. */
+  short: string | null;
 }
 
 export interface BoardSnapshot {
@@ -136,6 +159,7 @@ export interface BoardSnapshot {
   decisions: DecisionView[];
   storage: Storage;
   sync: SyncView;
+  integrity: IntegrityView;
   related: RelatedView[];
 }
 
@@ -305,6 +329,8 @@ export interface Api {
   deleteTask(projectId: string, taskId: string): Promise<Result<RemovedTask>>;
   restoreTask(projectId: string, removed: RemovedTask): Promise<Result>;
   syncNow(projectId: string): Promise<Result<SyncView>>;
+  /** Make two boards one: take the other, merge them, or keep this one. What is replaced is backed up first. */
+  settleBoards(projectId: string, choice: SettleChoice): Promise<Result<{ message: string }>>;
 
   listAgents(): Promise<AgentInfo[]>;
   /** The agent's models, as it reports them; probed once and cached. */
@@ -379,6 +405,7 @@ export const HOST_METHODS = [
   'deleteTask',
   'restoreTask',
   'syncNow',
+  'settleBoards',
 ] as const;
 
 export type HostMethod = (typeof HOST_METHODS)[number];

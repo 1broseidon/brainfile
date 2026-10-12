@@ -19,6 +19,7 @@ import { initCommand } from './commands/init';
 import { migrateCommand } from './commands/migrate';
 import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
 import { whereCommand } from './commands/where';
+import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
 import { mergeDriverCommand } from './commands/merge-driver';
 import { patchCommand, PATCH_COMMAND_HELP } from './commands/patch';
 import { deleteCommand } from './commands/delete';
@@ -181,9 +182,9 @@ Brainfile file resolution (when you don't pass --file):
     .option('--force', 'Overwrite existing migration outputs (task files/backups)')
     .option('--v2', 'Deprecated alias; migration now targets v2 by default')
     .option('--logs-to-ledger', 'Backfill logs/*.md into ledger.jsonl, keeping the markdown archives (resolves ID conflicts with board)')
-    .option('--to-branch', 'Move the board onto its own git branch (or repository outside a repo); history is kept')
+    .option('--to-branch', 'Move the board onto its own git branch (or repository outside a repo); history is kept, and a code branch that tracked it drops it in one commit')
     .option('--to-plain', 'Turn a tracked board back into a plain directory (the branch is left intact)')
-    .option('--commit', 'With --to-branch on a committed board: also commit its removal from the code branch')
+    .addOption(new Option('--commit', 'Accepted for compatibility: --to-branch now always commits the board\'s removal from the code branch').hideHelp())
     .action(migrateCommand);
 
   const listCmd = program
@@ -358,10 +359,34 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('where')
-    .description('Where the board lives, how it is stored, and who else has it (never touches the network)')
+    .description('Where the board lives, how it is stored, who else has it, and any other copy of it here (offline unless --fetch)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--fetch', 'Ask the remote for its copy of the board first')
     .option('--json', 'Output as JSON')
     .action((options) => { whereCommand(options); });
+
+  program
+    .command('adopt')
+    .description('Make the board at <ref|path> the one board, as it is; the boards it replaces are backed up first')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output as JSON')
+    .argument('<ref|path>', 'A board folder, or a git ref such as refs/heads/brainfile or refs/brainfile/remotes/origin/board')
+    .action((ref, options) => { adoptCommand({ ...options, ref }); });
+
+  program
+    .command('merge-boards')
+    .description('Combine this board with the one at <ref|path> by document ID; adopts outright when one already has everything')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output as JSON')
+    .argument('<ref|path>', 'A board folder, or a git ref such as refs/brainfile/remotes/origin/board')
+    .action((ref, options) => { mergeBoardsCommand({ ...options, ref }); });
+
+  program
+    .command('backups [action] [name]')
+    .description('Boards saved before adopt, merge-boards or a restore replaced them; restore <name> puts one back')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output as JSON')
+    .action((action, name, options) => { backupsCommand({ ...options, action, name }); });
 
   program
     .command('merge-driver', { hidden: true })

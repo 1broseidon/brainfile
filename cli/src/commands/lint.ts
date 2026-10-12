@@ -16,6 +16,8 @@ import { defaultLogger, type Logger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure } from '../utils/cli-error';
 import { ExitCode } from '../utils/errorHandler';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { boardConflictRelation, surveyBoards } from '../utils/board-sync';
+import { pruneLostBoardCheckouts } from '../utils/board-repo';
 
 interface LintOptions {
   file: string;
@@ -45,6 +47,59 @@ export interface LintReport {
 }
 
 /**
+ * Where the board lives (spec-15): another board that disagrees with it, the
+ * board branch checked out away from `.brainfile/` (or lost), and a code
+ * branch still tracking an old copy. Never throws; a failed look is no issue.
+ */
+export function lintBoardLocation(dotDir: string): LintIssue[] {
+  let survey;
+  try {
+    survey = surveyBoards(dotDir);
+  } catch {
+    return [];
+  }
+  const issues: LintIssue[] = [];
+  if (survey.conflict) {
+    issues.push({
+      type: 'error',
+      code: 'two-boards',
+      message: `${survey.conflict.message} ${boardConflictRelation(survey.conflict)} Writes are refused until: ${survey.conflict.resolve}`,
+    });
+  }
+  if (survey.outsideHome) {
+    issues.push({
+      type: 'warning',
+      code: 'board-checkout-elsewhere',
+      message: `This board is checked out outside ${survey.outsideHome}, where it belongs. Move it home: brainfile adopt refs/heads/${boardBranchName(survey)}`,
+    });
+  }
+  for (const stray of survey.strayWorktrees) {
+    issues.push(
+      stray.missing
+        ? { type: 'warning', code: 'board-checkout-lost', fixable: true, message: `A checkout of the board branch at ${stray.path} is gone but still registered.` }
+        : {
+            type: 'warning',
+            code: 'board-checkout-elsewhere',
+            message: `The board branch is also checked out at ${stray.path}; it belongs at .brainfile/ only. Finish there, then: git worktree remove ${stray.path}`,
+          }
+    );
+  }
+  if (survey.trackedTwice) {
+    issues.push({
+      type: 'warning',
+      code: 'board-tracked-twice',
+      message: `${survey.trackedTwice.label.replace(/^the copy on /, '')} still tracks an old copy of .brainfile/ (${survey.trackedTwice.docs} docs). Remove it in one commit: brainfile migrate --to-branch`,
+    });
+  }
+  return issues;
+}
+
+function boardBranchName(survey: ReturnType<typeof surveyBoards>): string {
+  const branch = survey.boards[0]?.ref ?? 'refs/heads/brainfile';
+  return branch.startsWith('refs/heads/') ? branch.slice('refs/heads/'.length) : 'brainfile';
+}
+
+/**
  * Lint a board: the config's syntax and shape, `dependsOn` references to
  * related boards, and the graph. With `fix`, write the fixable part back.
  * Never prints and never throws for issues; a missing file is a CLIError.
@@ -57,10 +112,17 @@ export function lintBoard(filePath: string, options: { fix?: boolean } = {}): Li
   const result = BrainfileLinter.lint(content, { autoFix: options.fix });
   result.issues.push(...lintDependsOnRefs(filePath, content));
   result.issues.push(...lintGraph(filePath, content));
+  const location = lintBoardLocation(path.dirname(path.resolve(filePath)));
+  result.issues.push(...location);
   const { errors, warnings, fixable } = BrainfileLinter.groupIssues(result);
 
   let fixed = false;
   let fixedCount = 0;
+  const lost = location.filter((issue) => issue.code === 'board-checkout-lost');
+  if (options.fix && lost.length > 0) {
+    fixedCount += pruneLostBoardCheckouts(path.dirname(path.resolve(filePath))).length;
+    fixed = fixedCount > 0;
+  }
   let remaining: LintIssue[] = [];
   if (options.fix && result.fixedContent && result.issues.length > 0) {
     fs.writeFileSync(filePath, result.fixedContent, 'utf-8');

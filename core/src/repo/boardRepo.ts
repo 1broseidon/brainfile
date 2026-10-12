@@ -170,6 +170,44 @@ export function findTrackedBoardDir(cwd: string): string | null {
   return fs.existsSync(path.join(hit.path, 'brainfile.md')) ? hit.path : null;
 }
 
+/**
+ * Forget checkouts of the board branch whose folder is gone (a deleted temp
+ * directory, a removed clone of a worktree). git keeps them registered, and
+ * a registered checkout keeps the branch from being checked out at its home.
+ * Only these entries are dropped, unlike `git worktree prune`; a locked one
+ * is left alone. Returns the paths forgotten.
+ */
+export function pruneLostBoardCheckouts(cwd: string): string[] {
+  const common = gitCommonDir(cwd);
+  if (!common) return [];
+  const wanted = `refs/heads/${boardBranch(cwd)}`;
+  const lost = listWorktrees(cwd).filter((w) => w.branch === wanted && !fs.existsSync(w.path));
+  if (lost.length === 0) return [];
+  const admin = path.join(common, 'worktrees');
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(admin);
+  } catch {
+    return [];
+  }
+  const forgotten: string[] = [];
+  for (const entry of entries) {
+    const dir = path.join(admin, entry);
+    let gitdir: string;
+    try {
+      gitdir = fs.readFileSync(path.join(dir, 'gitdir'), 'utf-8').trim();
+    } catch {
+      continue;
+    }
+    const checkout = path.dirname(path.resolve(dir, gitdir));
+    const hit = lost.find((w) => path.resolve(w.path) === checkout);
+    if (!hit || fs.existsSync(path.join(dir, 'locked'))) continue;
+    fs.rmSync(dir, { recursive: true, force: true });
+    forgotten.push(hit.path);
+  }
+  return forgotten;
+}
+
 /** How long a failed lookup for a board on the remote is remembered. */
 const PROBE_MISS_TTL_MS = 10 * 60_000;
 
@@ -286,6 +324,7 @@ function findBoardStart(cwd: string, branch: string, options: MaterializeOptions
  */
 export function materializeBoardWorktree(cwd: string, options: MaterializeOptions = {}): string | null {
   const branch = boardBranch(cwd);
+  pruneLostBoardCheckouts(cwd);
   const worktrees = listWorktrees(cwd);
   if (worktrees.length === 0) return null;
   if (worktrees.some((w) => w.branch === `refs/heads/${branch}`)) return null;

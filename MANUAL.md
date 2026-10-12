@@ -875,7 +875,10 @@ $ brainfile lint --check   # non-zero exit for CI
 also checks the graph: a parent that is missing, loops or does not fit the
 type, `decisions:` that name nothing or something other than a decision, and
 a `like:` that names no type. Off-pattern links are warnings, and errors on a
-strict board.
+strict board. It also checks where the board lives: two boards that disagree
+are an error; the board branch checked out away from `.brainfile/`, a checkout
+whose folder is gone (`--fix` forgets it), and a code branch still tracking an
+old copy are warnings.
 
 #### index — The local search index
 
@@ -911,29 +914,68 @@ once a day and never block.
 ```console
 $ brainfile migrate --dir ./old-project
 $ brainfile migrate --to-branch            # move the board onto its own branch
-$ brainfile migrate --to-branch --commit   # ...and commit its removal from the code branch
 $ brainfile migrate --to-plain             # back to a plain directory
 ```
 
-Flags: `--dir`, `--force`, `--logs-to-ledger`, `--to-branch`, `--to-plain`,
-`--commit`. `--to-branch` keeps the board's history when it was committed on
-the code branch (`git subtree split`), imports a gitignored one as a fresh
-branch, and folds a standalone board repository into the surrounding
-repository. Board changes not yet committed come along as one more commit on
-the branch. If any step fails, the migration undoes itself and the repository
-is left as it was. `--to-plain` leaves the branch intact.
+Flags: `--dir`, `--force`, `--logs-to-ledger`, `--to-branch`, `--to-plain`.
+`--to-branch` keeps the board's history when it was committed on the code
+branch (`git subtree split`), imports a gitignored one as a fresh branch, and
+folds a standalone board repository into the surrounding repository. Board
+changes not yet committed come along as one more commit on the branch. If any
+step fails, the migration undoes itself and the repository is left as it was.
+When the code branch tracked the board, one commit on it drops `.brainfile/`
+and adds it to `.gitignore` (anything else you had staged stays staged); push
+it like any commit. Run on a board already on its branch, it makes that commit
+if the code branch still tracks an old copy. If a board already lives on the
+`brainfile` branch, this folder and it are two boards, and `--to-branch` says
+so and points to `merge-boards`. `--to-plain` leaves the branch intact.
 
 #### where — Where the board lives and who has it
 
 ```console
 $ brainfile where
+$ brainfile where --fetch          # ask the remote for its copy first
 $ brainfile where --json
 ```
 
 Prints the board's location, how it is stored (plain files, a branch of this
 repository, or its own repository), the remote it is shared through, when it
-last synced, and how many changes are waiting to be sent. It never touches
-the network, so it is always safe to run.
+last synced, how many changes are waiting to be sent and how many on the
+remote are not here yet. It also looks for every other copy of the board in
+the repository (see [One board per repository](#one-board-per-repository)) and
+says when one disagrees with this one. It touches the network only with
+`--fetch`, so it is always safe to run.
+
+#### adopt, merge-boards, backups — Settle two boards into one
+
+```console
+$ brainfile adopt refs/brainfile/remotes/origin/board   # take that board as it is
+$ brainfile adopt .brainfile                            # keep this folder
+$ brainfile merge-boards refs/heads/brainfile           # combine them by document ID
+$ brainfile backups                                     # what was saved
+$ brainfile backups restore 20261012T205217Z-folder     # put one back
+```
+
+When a repository has two boards (see
+[One board per repository](#one-board-per-repository)), these make it one.
+`adopt <ref|path>` takes the named board as it is. `merge-boards <ref|path>`
+combines this board with the named one by document ID, with the same rules
+sync uses: frontmatter fields by `updatedAt`, logs unioned in time order,
+completion over an edit. One ID on two different documents (created apart,
+with unrelated titles) keeps the older; the newer gets the next free ID, a
+log line saying so, and every reference to it on its board rewritten. When
+one board already has everything the other has, `merge-boards` says so and
+adopts it without asking.
+
+Both end the same way: the board on the `brainfile` branch, checked out at
+`.brainfile/`, descending from what the branch and the remote's copy had (so
+the next `sync` is a plain push), with any other checkout of the branch
+removed once its changes are committed. If the code branch still tracked
+`.brainfile/`, one commit on it stops tracking the folder and adds it to
+`.gitignore`; push that like any commit. Every board that is replaced is saved
+first as `refs/brainfile/backups/<UTC time>-folder` or `-branch`; `backups`
+lists them and `backups restore <name>` puts one back, backing up what it
+replaces. Backups stay on this machine unless you push one by name.
 
 #### sync — Share a board through a git remote
 
@@ -1074,6 +1116,33 @@ Shared    through origin (git@github.com:me/app.git)
           Anyone who can read origin can read this board.
 ```
 
+### One board per repository
+
+A repository should have one board, and Brainfile notices when it has two: a
+`.brainfile/` folder in the checkout (plain files, or still tracked by the code
+branch) beside the `brainfile` branch, or a `brainfile` branch with no history
+in common with the board on the remote. `where` names both, with how many
+documents each holds and when each last changed:
+
+```console
+$ brainfile where
+...
+Boards    Two boards: this folder (7) and origin's (19, newer).
+          this folder    7 docs, last change 2026-08-12 /work/app/.brainfile
+          origin's      19 docs, last change 2026-10-12 refs/brainfile/remotes/origin/board
+          Origin's already has everything this folder has.
+          Nothing writes until you choose: brainfile adopt refs/brainfile/remotes/origin/board
+```
+
+While two boards disagree, every write (from the CLI, an agent's MCP tools or
+the desktop app) is refused with that same sentence and the command that
+settles it; reading still works. `adopt` or `merge-boards` settles it (see
+[adopt, merge-boards, backups](#adopt-merge-boards-backups--settle-two-boards-into-one)).
+One board ahead of or behind its own copy on the remote is not two boards,
+just unsynced. A checkout of the board branch
+outside `.brainfile/`, and a code branch that still tracks an old copy of
+`.brainfile/`, are reported too.
+
 A board is a folder of Markdown. That is what makes it easy to read, and what
 made it hard to share: committed next to the code, every task move lands on a
 feature branch and a pull request; gitignored, it never leaves the machine.
@@ -1193,8 +1262,13 @@ stops pushing until it is resolved.
 
 `brainfile migrate --to-branch` moves a board that is committed with the code
 onto the branch with its history, or imports a gitignored one as a fresh
-branch. `--commit` also commits the removal from the code branch. `migrate
---to-plain` reverses it. Neither touches any other file in the repository.
+branch, and commits the old copy's removal from the code branch (with
+`.brainfile/` added to `.gitignore`). `migrate --to-plain` reverses it.
+Neither touches any other file in the repository.
+
+The branch has one home, `.brainfile/` in the main worktree. A checkout of it
+anywhere else is reported by `where` and `lint`; one whose folder is gone is
+forgotten when the board is next checked out, or by `lint --fix`.
 
 ## Related boards
 
@@ -1328,7 +1402,7 @@ to a board.
 | `template` | `action=` list, or use (`template`, `title`, `description`, `column`). |
 | `lint` | Check the board, the graph included; `fix: true` fixes what it can. Issues come back as data, with `valid` false only for errors. |
 | `sync` | Fetch, merge and push a shared board now; `pull` or `push` for one direction. A plain or unshared board says so in `skipped`. |
-| `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent. |
+| `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent; every other copy of the board in the repository, and `conflict` when one disagrees (writes are refused until `conflict.resolve` runs). `fetch: true` asks the remote first. |
 
 Every tool takes `file` to point at another board, and every one that writes
 is one board commit on a tracked board. The bundled JSON Schemas are

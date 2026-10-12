@@ -8,6 +8,7 @@
   import Dock from './Dock.svelte';
   import Settings from './Settings.svelte';
   import AskLine from './AskLine.svelte';
+  import TwoBoardsLine from './TwoBoardsLine.svelte';
   import ListView from './ListView.svelte';
   import BoardView from './BoardView.svelte';
   import DecisionsView from './DecisionsView.svelte';
@@ -133,6 +134,8 @@
       <span class="spacer"></span>
       {#each app.asks.filter((a) => a.projectId === project.id).slice(0, 1) as ask (ask.id)}
         <AskLine {ask} />
+      {:else}
+        {#if board.integrity.twoBoards}<TwoBoardsLine two={board.integrity.twoBoards} />{/if}
       {/each}
       {#if app.undo}
         <span class="undo">
@@ -145,7 +148,7 @@
           <Icon name="close" size={12} />{app.problem}
         </button>
       {/if}
-      {#if board.sync.busy || board.sync.warning || board.sync.pending > 0}
+      {#if board.sync.busy || board.sync.warning || board.sync.pending > 0 || board.sync.behind > 0}
       <button
         class="sync"
         class:busy={board.sync.busy}
@@ -156,9 +159,10 @@
       >
         <span class="mono">{board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')}</span>
         {#if board.sync.pending > 0}<span class="pending mono tabular">↑{board.sync.pending}</span>{/if}
+        {#if board.sync.behind > 0}<span class="pending mono tabular">↓{board.sync.behind}</span>{/if}
       </button>
       {/if}
-      {#if app.view !== 'decisions'}
+      {#if app.view !== 'decisions' && !board.integrity.twoBoards}
         <button class="icon-btn" use:tip={'New task  C'} aria-label="New task" onclick={() => (app.composer = {})}>
           <Icon name="plus" size={15} />
         </button>

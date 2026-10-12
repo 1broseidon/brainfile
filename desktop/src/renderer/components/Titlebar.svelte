@@ -14,11 +14,32 @@
     if (h.warn) return `${h.warn} ${h.warn === 1 ? 'board needs' : 'boards need'} a look`;
     if (h.busy) return 'syncing';
     if (h.pending) return `${h.pending} waiting to send`;
+    if (h.behind) return `${h.behind} ${h.behind === 1 ? 'board has' : 'boards have'} changes to receive`;
     void shared;
     return null;
   });
 
-  const tone = $derived(app.health.warn ? 'warn' : app.health.busy ? 'busy' : app.health.pending ? 'pending' : 'ok');
+  const tone = $derived(app.health.warn ? 'warn' : app.health.busy ? 'busy' : app.health.pending || app.health.behind ? 'pending' : 'ok');
+
+  /** A board's state in a few words for the health list, worst first. */
+  function healthMeta(projectId: string): string {
+    const board = app.boards[projectId];
+    const project = app.projects.find((p) => p.id === projectId);
+    if (!board) return project?.state.status === 'ready' ? '…' : 'no board';
+    if (board.integrity.short) return board.integrity.short;
+    if (board.sync.warning) return 'needs a look';
+    if (board.sync.busy) return 'syncing…';
+    if (board.sync.behind > 0) return `${board.sync.behind} to receive`;
+    return board.sync.label ?? 'plain files';
+  }
+
+  /** What the health list's tip says about a board: the two-boards line and every note. */
+  function healthTip(projectId: string): string {
+    const board = app.boards[projectId];
+    if (!board) return '';
+    const two = board.integrity.twoBoards;
+    return [two ? `${two.message} ${two.detail}` : '', ...board.integrity.notes, board.sync.warning ?? ''].filter(Boolean).join(' ');
+  }
 
   const projectName = (id: string) => app.projects.find((p) => p.id === id)?.name ?? id;
 
@@ -73,16 +94,16 @@
   <div class="pop" class:wide={opened === 'feed'}>
     {#if opened === 'health'}
       {#each app.projects as project (project.id)}
-        {@const board = app.boards[project.id]}
         <button
           class="item"
+          use:tip={healthTip(project.id) || null}
           onclick={() => {
             opened = null;
             void app.select(project.id);
           }}
         >
           <span class="label">{project.name}</span>
-          <span class="mono meta">{board ? (board.sync.warning ? 'needs a look' : board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')) : project.state.status === 'ready' ? '…' : 'no board'}</span>
+          <span class="mono meta">{healthMeta(project.id)}</span>
         </button>
       {/each}
     {:else}

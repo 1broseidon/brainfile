@@ -278,6 +278,31 @@ reads that and nothing else:
   and its title, read from the sister board; pressing one opens it there.
   A sister folder not on this machine says so.
 
+## Two boards
+
+A repository has one board, and the window says when it has two (spec-15):
+a `.brainfile/` folder in the checkout beside a board on the `brainfile`
+branch or on the remote, which a folder board asks the remote about when it
+opens.
+
+- The band says it once, where the ask would be, in warn ink: "Two boards:
+  this folder (7) and origin's (19, newer)", then **Use origin's · Merge ·
+  Keep this one** as quiet buttons. The one that loses nothing (the board
+  that already has everything, or Merge) is in full ink. The tooltips say
+  what each keeps, and that the board it replaces is saved first
+  (`brainfile backups`).
+- Until one is pressed nothing writes: the + key leaves the band, and any
+  write that reaches the host is refused with the same sentence.
+- Pressing one settles it with core's `adopt` / `merge-boards`, reopens the
+  board where it now lives, and stays silent: the board changing is the
+  confirmation, and what changed is not news in the feed.
+- **Health** says the rest in a few words in its list, with the sentence in
+  the tooltip: `two boards`, `merge not finished`, `checked out elsewhere`,
+  `checked out twice`, `tracked twice` (the code branch still carries an
+  old copy), and `N to receive` when the remote has changes not here yet.
+  The band's sync line shows `↓N` beside `↑N`. A checkout of the board
+  branch whose folder is gone is forgotten when the board opens.
+
 ## Dispatch
 
 Brainfile is a dispatcher, not a chat app: anything long belongs in Hotline.

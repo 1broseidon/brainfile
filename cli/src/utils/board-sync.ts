@@ -32,4 +32,11 @@ export {
   type SyncResult,
   type SyncState,
   type RemoteSetting,
+  surveyBoards,
+  boardConflict,
+  boardConflictError,
+  boardConflictRelation,
+  type BoardSurvey,
+  type BoardSighting,
+  type BoardConflict,
 } from '@brainfile/core/repo';

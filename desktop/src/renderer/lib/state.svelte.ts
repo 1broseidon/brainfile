@@ -16,6 +16,7 @@ import type {
   PermissionAsk,
   Project,
   RunStep,
+  SettleChoice,
 } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
 
@@ -31,7 +32,7 @@ declare global {
 
 /** Changes this window makes are not news; remember when each board was last written from here. */
 const lastLocalWrite: Record<string, number> = {};
-const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask'] as const;
+const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask', 'settleBoards'] as const;
 const LOCAL_WINDOW_MS = 4000;
 
 // The bridge's object is frozen, so a Proxy over it breaks the proxy
@@ -104,14 +105,16 @@ const LIVE = new Set(['starting', 'working', 'waiting']);
 export const isLive = (run: AgentRun | undefined) => !!run && LIVE.has(run.state);
 const FEED_LIMIT = 100;
 
-export type Health = 'ok' | 'busy' | 'pending' | 'warn' | 'local';
+export type Health = 'ok' | 'busy' | 'pending' | 'behind' | 'warn' | 'local';
 
 export function healthOf(board: BoardSnapshot | undefined): Health | null {
   if (!board) return null;
-  if (board.sync.warning) return 'warn';
+  // Where the board lives (spec-15): two boards, a stray checkout, a merge left half-done.
+  if (board.integrity.short || board.sync.warning) return 'warn';
   if (board.sync.busy) return 'busy';
   if (!board.sync.remote) return 'local';
   if (board.sync.pending > 0) return 'pending';
+  if (board.sync.behind > 0) return 'behind';
   return 'ok';
 }
 
@@ -154,6 +157,8 @@ class AppState {
   layout = $state(loadLayout());
   /** A problem worth saying, shown in the board's band until it times out. Success is silent. */
   problem = $state<string | null>(null);
+  /** The project whose two boards are being made one; its snapshot is not news. */
+  settling = $state<string | null>(null);
   /** The one success that speaks: a reversible step, with its Undo, for a few seconds. */
   undo = $state<{ text: string; run: () => Promise<void> } | null>(null);
   menu = $state<{ kind: MenuKind; taskId: string; x: number; y: number } | null>(null);
@@ -215,7 +220,7 @@ class AppState {
   health = $derived.by(() => {
     const boards = Object.values(this.boards);
     const count = (h: Health) => boards.filter((b) => healthOf(b) === h).length;
-    return { total: boards.length, warn: count('warn'), busy: count('busy'), pending: count('pending'), local: count('local') };
+    return { total: boards.length, warn: count('warn'), busy: count('busy'), pending: count('pending'), behind: count('behind'), local: count('local') };
   });
 
   active = $derived(this.projects.find((p) => p.id === this.activeId) ?? null);
@@ -303,7 +308,7 @@ class AppState {
   receive(snapshot: BoardSnapshot): void {
     const before = this.boards[snapshot.projectId];
     this.boards[snapshot.projectId] = snapshot;
-    if (!before || Date.now() - (lastLocalWrite[snapshot.projectId] ?? 0) < LOCAL_WINDOW_MS) return;
+    if (!before || this.settling === snapshot.projectId || Date.now() - (lastLocalWrite[snapshot.projectId] ?? 0) < LOCAL_WINDOW_MS) return;
     const items = diffBoards(before, snapshot, Date.now());
     if (items.length) this.feed = [...items.reverse(), ...this.feed].slice(0, FEED_LIMIT);
   }
@@ -636,6 +641,20 @@ class AppState {
     if (task) Object.assign(task, Object.fromEntries(Object.entries(patch).map(([k, v]) => [k, v ?? undefined])));
     const result = await api.patchTask(this.activeId, taskId, patch);
     if (!result.ok) this.notify(result.error, 'warn');
+  }
+
+  /** Two boards made one, as the band offers (spec-15). The board changing is the confirmation. */
+  async settleBoards(choice: SettleChoice): Promise<void> {
+    const projectId = this.activeId;
+    if (!projectId || this.settling) return;
+    this.settling = projectId;
+    try {
+      const result = await api.settleBoards(projectId, choice);
+      if (!result.ok) this.notify(result.error, 'warn');
+      else await this.refreshProject(projectId);
+    } finally {
+      this.settling = null;
+    }
   }
 
   /** Success is silent; only a problem is said. */

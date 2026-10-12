@@ -31,6 +31,7 @@ const api: Api = {
   deleteTask: invoke('deleteTask'),
   restoreTask: invoke('restoreTask'),
   syncNow: invoke('syncNow'),
+  settleBoards: invoke('settleBoards'),
   listAgents: invoke('listAgents'),
   listModels: invoke('listModels'),
   listModes: invoke('listModes'),
