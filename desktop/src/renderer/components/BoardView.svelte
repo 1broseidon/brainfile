@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
   import { columnProgress, kindGlyph, shortDate } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
@@ -42,7 +43,7 @@
         <span class="name">{column.title}</span>
         <span class="count mono tabular">{tasks.length}</span>
         <span class="spacer"></span>
-        <button class="icon-btn small" title="New task in {column.title}" onclick={() => (app.composer = { column: column.id })}>
+        <button class="icon-btn small" use:tip={`New task in ${column.title}`} onclick={() => (app.composer = { column: column.id })}>
           <Icon name="plus" size={14} />
         </button>
       </header>
@@ -192,7 +193,7 @@
   }
 
   .glyph {
-    font-size: 11px;
+    font-size: var(--t-xs);
     color: var(--ink-3);
   }
 
@@ -202,7 +203,7 @@
 
   .title {
     font-weight: 500;
-    line-height: 20px;
+    line-height: var(--lh-md);
     display: -webkit-box;
     -webkit-line-clamp: 3;
     line-clamp: 3;

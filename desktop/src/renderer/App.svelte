@@ -187,7 +187,7 @@
     right: var(--gap);
     bottom: var(--gap);
     display: flex;
-    z-index: 20;
+    z-index: var(--z-float);
     border-radius: var(--r-pane);
     box-shadow: var(--shadow-float);
     animation: slide var(--d-move) var(--ease);

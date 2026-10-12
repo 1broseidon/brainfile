@@ -303,3 +303,26 @@ button.chip:focus-visible {
     transition: none !important;
   }
 }
+
+/* The window's one tooltip (lib/tooltip.ts). */
+.tip {
+  position: fixed;
+  z-index: var(--z-tip);
+  max-width: 320px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s1) var(--s2);
+  border-radius: var(--r-control);
+  background: var(--pop);
+  box-shadow: var(--top-light), var(--shadow-float);
+  color: var(--ink-2);
+  font-size: var(--t-sm);
+  line-height: var(--lh-sm);
+  pointer-events: none;
+  animation: fade var(--d-open) var(--ease);
+}
+
+.tip kbd {
+  height: 16px;
+}

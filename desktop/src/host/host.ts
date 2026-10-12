@@ -48,6 +48,7 @@ import type {
   HostRequest,
   NewTaskInput,
   ProjectState,
+  RemovedTask,
   Result,
   SyncView,
   TaskDetail,
@@ -336,12 +337,30 @@ function completeTask(projectId: string, taskId: string): Result {
   );
 }
 
-function deleteTask(projectId: string, taskId: string): Result {
+function deleteTask(projectId: string, taskId: string): Result<RemovedTask> {
   return mutate(
     projectId,
     () => `delete ${taskId}`,
     (board) => {
-      unwrap(deleteTaskFile(taskPath(board, taskId)));
+      const filePath = taskPath(board, taskId);
+      const content = fs.readFileSync(filePath, 'utf-8');
+      unwrap(deleteTaskFile(filePath));
+      return { taskId, filePath, content };
+    }
+  );
+}
+
+/** Undo for a delete: the file goes back exactly as it was, as its own commit. */
+function restoreTask(projectId: string, removed: RemovedTask): Result {
+  return mutate(
+    projectId,
+    () => `restore ${removed.taskId}`,
+    (board) => {
+      const { boardDir } = getV2Dirs(board.brainfilePath);
+      const target = path.resolve(removed.filePath);
+      if (path.dirname(target) !== path.resolve(boardDir)) throw new Error('That file is not on this board');
+      if (fs.existsSync(target)) throw new Error(`${removed.taskId} already exists`);
+      fs.writeFileSync(target, removed.content, 'utf-8');
     }
   );
 }
@@ -404,6 +423,7 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   addSubtask,
   completeTask,
   deleteTask,
+  restoreTask,
   syncNow,
 };
 

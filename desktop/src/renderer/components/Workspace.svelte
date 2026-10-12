@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from '../lib/tooltip';
   import { api, app } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
@@ -38,7 +39,7 @@
 <main class="pane" class:keyed={!app.layout.railOpen}>
   <!-- With the rail closed, its key leads the pane, before the title. -->
   {#if !app.layout.railOpen}
-    <button class="icon-btn railkey" title="Show projects  ⌘B" onclick={() => app.toggleRail()}>
+    <button class="icon-btn railkey" use:tip={'Show projects  ⌘B'} onclick={() => app.toggleRail()}>
       <Icon name="sidebar" size={14} />
     </button>
   {/if}
@@ -53,7 +54,7 @@
           A project is a repository, or any folder, with a Brainfile board. Brainfile finds the board in
           <code>.brainfile/</code> or on the repository's <code>brainfile</code> branch, exactly as the CLI does.
         </p>
-        <button class="btn primary" onclick={() => app.addProject()}>
+        <button class="btn" onclick={() => app.addProject()}>
           Add project<span class="keys">⌘O</span>
         </button>
       </div>
@@ -73,7 +74,7 @@
             {/if}
           </p>
           <div class="actions">
-            <button class="btn primary" disabled={initializing} onclick={init}>
+            <button class="btn" disabled={initializing} onclick={init}>
               {initializing ? 'Creating…' : 'Create board'}
             </button>
             <button class="btn quiet" onclick={() => app.refreshProject(project.id)}>Check again</button>
@@ -98,16 +99,22 @@
       <span class="title">{board.title}</span>
       <PathTip path={project.path} line={storageLabel} projectId={project.id} />
       <div class="segmented" role="tablist">
-        <button role="tab" aria-label="List" title="List  V" aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
+        <button role="tab" aria-label="List" use:tip={'List  V'} aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
           <Icon name="list" size={14} />
         </button>
-        <button role="tab" aria-label="Board" title="Board  V" aria-selected={app.view === 'board'} class:on={app.view === 'board'} onclick={() => app.setView('board')}>
+        <button role="tab" aria-label="Board" use:tip={'Board  V'} aria-selected={app.view === 'board'} class:on={app.view === 'board'} onclick={() => app.setView('board')}>
           <Icon name="board" size={14} />
         </button>
       </div>
       <span class="spacer"></span>
+      {#if app.undo}
+        <span class="undo">
+          <span class="mono">{app.undo.text}</span>
+          <button class="btn quiet" onclick={() => app.runUndo()}>Undo</button>
+        </span>
+      {/if}
       {#if app.problem}
-        <button class="problem" title="Dismiss" onclick={() => (app.problem = null)}>
+        <button class="problem" use:tip={'Dismiss'} onclick={() => (app.problem = null)}>
           <Icon name="close" size={12} />{app.problem}
         </button>
       {/if}
@@ -116,7 +123,7 @@
         class="sync"
         class:busy={board.sync.busy}
         class:warn={!!board.sync.warning}
-        title={board.sync.warning ?? (board.sync.remote ? `Sync with ${board.sync.remote} now` : 'Kept on this machine only')}
+        use:tip={board.sync.warning ?? (board.sync.remote ? `Sync with ${board.sync.remote} now` : 'Kept on this machine only')}
         disabled={!board.sync.remote || board.sync.busy}
         onclick={sync}
       >
@@ -124,7 +131,7 @@
         {#if board.sync.pending > 0}<span class="pending mono tabular">↑{board.sync.pending}</span>{/if}
       </button>
       {/if}
-      <button class="icon-btn" title="New task  C" aria-label="New task" onclick={() => (app.composer = {})}>
+      <button class="icon-btn" use:tip={'New task  C'} aria-label="New task" onclick={() => (app.composer = {})}>
         <Icon name="plus" size={15} />
       </button>
     </header>
@@ -134,7 +141,7 @@
           <div class="empty">
             <h1>Nothing on the board</h1>
             <p>Tasks you, the CLI or your agents add appear here as soon as their files change.</p>
-            <button class="btn primary" onclick={() => (app.composer = {})}>
+            <button class="btn" onclick={() => (app.composer = {})}>
               New task<span class="keys">C</span>
             </button>
           </div>
@@ -166,7 +173,7 @@
 
   .railkey {
     position: absolute;
-    z-index: 3;
+    z-index: var(--z-pane-key);
     top: calc((var(--band-h) - var(--control-h)) / 2);
     left: var(--s2);
   }
@@ -184,7 +191,7 @@
     gap: var(--s3);
     padding: 0 var(--s2) 0 var(--s4);
     position: relative;
-    z-index: 2;
+    z-index: var(--z-band);
   }
 
   .title {
@@ -228,6 +235,13 @@
     color: var(--ink);
     background: var(--pop);
     box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
+  }
+
+  .undo {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s1);
+    color: var(--ink-3);
   }
 
   .problem {

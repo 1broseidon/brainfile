@@ -1,4 +1,5 @@
-/*
+/* Hallmark · genre: modern-minimal · macrostructure: Workbench · design-system: desktop/design.md · designed-as-app
+ *
  * The window's tokens. Every colour, length, face and easing the window uses
  * is named here once; the system is locked in desktop/design.md. It is
  * Hotline's system (hotline/ui/design.md) in Brainfile's own colours: the
@@ -137,6 +138,17 @@
   --field-h: 28px;
   --gap: 8px;
   --id-w: 72px;
+
+  /* -------------------------------------------------------------- layers
+   * Named, so nothing reaches for a bigger number to win. */
+  --z-band: 2; /* a pane's band over what scrolls beneath it */
+  --z-pane-key: 3; /* the rail's key leading a pane */
+  --z-float: 20; /* the task pane lying over the board */
+  --z-scrim: 30; /* a dialog's scrim */
+  --z-dialog: 31; /* the composer */
+  --z-catch: 40; /* the click-away layer under a menu */
+  --z-menu: 41; /* a menu, the palette, the strip's lists */
+  --z-tip: 50; /* the tooltip, over everything */
 
   /* ------------------------------------------------------------- motion
    * One curve, three durations, no overshoot. */

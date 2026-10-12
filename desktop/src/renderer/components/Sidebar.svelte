@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
   import { tildify } from '../lib/format';
   import Icon from './Icon.svelte';
@@ -38,10 +39,10 @@
   <div class="head">
     <span>Projects</span>
     <span class="keys">
-      <button class="icon-btn" title="Add project  ⌘O" onclick={() => app.addProject()}>
+      <button class="icon-btn" use:tip={'Add project  ⌘O'} onclick={() => app.addProject()}>
         <Icon name="plus" size={14} />
       </button>
-      <button class="icon-btn" title="Hide projects  ⌘B" onclick={() => app.toggleRail()}>
+      <button class="icon-btn" use:tip={'Hide projects  ⌘B'} onclick={() => app.toggleRail()}>
         <Icon name="sidebar" size={14} />
       </button>
     </span>
@@ -51,7 +52,7 @@
     {#each app.projects as project, i (project.id)}
       {@const active = project.id === app.activeId}
       {@const ready = project.state.status === 'ready'}
-      <button class="project" class:active title="{tildify(project.path)} · {storageWord(project) || line(project)}" onclick={() => app.select(project.id)}>
+      <button class="project" class:active use:tip={`${tildify(project.path)} · ${storageWord(project) || line(project)}`} onclick={() => app.select(project.id)}>
         <span class="where"><Icon name={storageIcon(project)} size={14} /></span>
             <span class="name">{project.name}</span>
         <span class="count mono" class:off={!ready}>{app.boards[project.id] ? app.boards[project.id].tasks.length : ready ? '' : '–'}</span>

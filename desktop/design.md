@@ -86,9 +86,10 @@ The accent is **Forge**, ember orange: `oklch(74% 0.15 52)` in dark
 (`#F38C48`) and `oklch(57% 0.17 45)` in light (`#C44C00`). It is the colour
 of self-hosted developer tooling, so the window reads as something that runs
 on your own machine, and it sits far from Linear's indigo and Hotline's mint.
-It is on a budget under 5% of any screen: the primary action (New task,
-Create board), the tick of done, an add row in an empty list, a sync in
-flight. It is never a background, a decoration, or focus.
+It is on a budget well under 5% of any screen, and under Calm it is spent
+almost nowhere at rest: the tick of done, and the one action inside an open
+dialog (Create task). Keys at rest, New task included, are muted. It is
+never a background, a decoration, or focus.
 
 Signals that are not the accent, each a glyph and a colour, never colour
 alone, all from the TUI: priority (urgent red, high yellow, moved off the TUI's
@@ -138,20 +139,24 @@ the drawing. Every glyph comes from Brainfile's own material:
 
 ## Rows
 
-The board reads like the TUI's list. A row is 36px:
+The board reads like the TUI's list, calmed. A row is 36px:
 
 ```
-[status] [priority] [kind] task-12  Title, which truncates first      ready  2/4  #sync  (face)
+[status box]  [◆] Title, which truncates first   task-12 #sync      ready  2/4   ▪▪▪  (face)
+                  └ kind glyph, small; ▾/▸ for a     └ ID and tags:     └ signals   └ priority, assignee
+                    parent with children               under the hand
 ```
 
-- Status and priority are drawn as Icons says; no priority draws nothing,
-  because emptiness is legible.
-- The kind is the TUI's glyph (▸ epic · ◆ spec · ● adr · ⎘ plan), blank for
-  a plain task; a parent with children shows ▾ / ▸ instead and its children
-  indent 20px beneath it.
-- At most three signal chips, in the TUI's order: contract state, sub-tasks,
-  tags.
-- An empty assignee says nothing until the row is reached for.
+- The status box always shows: dashed for backlog, open, a level rising as
+  the task moves right, ticked in the accent when done. An open task is
+  still a box.
+- A typed document's TUI glyph (▸ epic · ◆ spec · ● adr · ⎘ plan) sits small
+  before its title; a parent with children shows ▾ / ▸ there instead, and
+  its children indent 20px beneath it.
+- At rest the right side carries only signals: contract state, sub-task
+  progress, urgent and high priority, an assignee. The ID, tags and an unset
+  priority or assignee wait for the pointer or the selection, in space kept
+  for them.
 - Hover and selection are fills on the row; there are no lines between rows.
 
 ## Motion
@@ -182,6 +187,15 @@ off course. These rules win over every other section:
 - The rail is one line per project: its storage icon, its name, its count.
 
 ## Microinteractions stance
+
+- **One tooltip** (`lib/tooltip.ts`): a pop-plane label that waits 800ms for
+  the pointer and shows at once for keyboard focus. Text written
+  `Label  K` sets K as a key. No native `title` tooltips.
+- **Undo, not "are you sure".** Deleting a task happens at once; the band
+  says "Deleted task-12 · Undo" for eight seconds, and Undo writes the file
+  back as its own commit.
+- **Layers are named** (`--z-band` … `--z-tip` in tokens.css), never raw
+  numbers.
 
 - Silent success. The board changing is the confirmation; there are no
   toasts. A problem is said once, in the board's band, as danger text on a

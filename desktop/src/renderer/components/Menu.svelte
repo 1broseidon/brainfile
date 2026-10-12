@@ -130,12 +130,12 @@
   .catch {
     position: fixed;
     inset: 0;
-    z-index: 40;
+    z-index: var(--z-catch);
   }
 
   .menu {
     position: fixed;
-    z-index: 41;
+    z-index: var(--z-menu);
     width: 240px;
     max-height: 340px;
     display: flex;

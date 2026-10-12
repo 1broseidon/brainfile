@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
   import { relativeTime } from '../lib/format';
   import Icon from './Icon.svelte';
@@ -53,7 +54,7 @@
       class="feed no-drag"
       class:lit={app.unseen > 0}
       class:open={opened === 'feed'}
-      title="What changed on any board from outside: agents, the CLI, other machines"
+      use:tip={'What changed on any board from outside: agents, the CLI, other machines'}
       onclick={() => toggle('feed')}
     >
       <Icon name="bolt" size={13} />
@@ -206,12 +207,12 @@
   .catch {
     position: fixed;
     inset: 0;
-    z-index: 40;
+    z-index: var(--z-catch);
   }
 
   .pop {
     position: fixed;
-    z-index: 41;
+    z-index: var(--z-menu);
     top: calc(var(--strip-h) - 2px);
     right: var(--gap);
     width: 300px;

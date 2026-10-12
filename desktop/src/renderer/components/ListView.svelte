@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
   import { asTree, columnProgress } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
@@ -54,7 +55,7 @@
           <span class="count mono tabular">{count}</span>
           <span class="chev" class:open={!folded[column.id]}><Icon name="chevron" size={12} stroke={1.8} /></span>
         </button>
-        <button class="icon-btn add" title="New task in {column.title}" onclick={() => (app.composer = { column: column.id })}>
+        <button class="icon-btn add" use:tip={`New task in ${column.title}`} onclick={() => (app.composer = { column: column.id })}>
           <Icon name="plus" size={14} />
         </button>
       </header>
@@ -106,7 +107,7 @@
   .head {
     position: sticky;
     top: 0;
-    z-index: 1;
+    z-index: var(--z-band);
     height: 40px;
     display: flex;
     align-items: center;
@@ -159,7 +160,8 @@
     opacity: 0;
   }
 
-  .head:hover .add {
+  .head:hover .add,
+  .head:focus-within .add {
     opacity: 1;
   }
 

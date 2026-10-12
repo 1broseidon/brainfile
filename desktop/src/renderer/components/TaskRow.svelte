@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
   import { columnProgress, kindGlyph, shortDate } from '../lib/format';
   import type { ColumnView, TaskView } from '../../shared/api';
@@ -56,21 +57,21 @@
   onclick={() => (app.openTaskId = task.id)}
   onkeydown={() => {}}
 >
-  <button class="cell" title="Status  S" onclick={(e) => pick('status', e)}>
+  <button class="cell" use:tip={'Status  S'} onclick={(e) => pick('status', e)}>
     <StatusIcon {progress} />
   </button>
   <span class="title-block" style:padding-left="{depth * 20}px">
     {#if children > 0}
       <button
         class="toggle"
-        title={collapsed ? 'Show children' : 'Hide children'}
+        use:tip={collapsed ? 'Show children' : 'Hide children'}
         onclick={(e) => {
           e.stopPropagation();
           ontoggle?.();
         }}>{collapsed ? '▸' : '▾'}</button
       >
     {:else if kindGlyph(task.type)}
-      <span class="kind" title={task.type}>{kindGlyph(task.type)}</span>
+      <span class="kind" use:tip={task.type}>{kindGlyph(task.type)}</span>
     {/if}
     <span class="title">{task.title}</span>
     <span class="id mono reveal">{task.id}</span>
@@ -92,12 +93,12 @@
   <button
     class="cell"
     class:reveal={!loud}
-    title="Priority  P"
+    use:tip={'Priority  P'}
     onclick={(e) => pick('priority', e)}
   >
     <PriorityIcon priority={task.priority} placeholder={!task.priority} />
   </button>
-  <button class="cell" class:reveal={!task.assignee} title={task.assignee ?? 'Assign  A'} onclick={(e) => pick('assignee', e)}>
+  <button class="cell" class:reveal={!task.assignee} use:tip={task.assignee ?? 'Assign  A'} onclick={(e) => pick('assignee', e)}>
     <Avatar name={task.assignee} />
   </button>
 </div>
@@ -152,7 +153,7 @@
 
   .kind {
     flex: none;
-    font-size: 10px;
+    font-size: var(--t-xs);
     color: var(--ink-4);
   }
 
@@ -168,7 +169,7 @@
   .toggle {
     width: 12px;
     flex: none;
-    font-size: 10px;
+    font-size: var(--t-xs);
     color: var(--ink-3);
     text-align: left;
   }
@@ -182,7 +183,7 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    font-weight: 450;
+    font-weight: 400;
   }
 
   .id,

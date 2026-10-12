@@ -29,6 +29,7 @@ const api: Api = {
   addSubtask: invoke('addSubtask'),
   completeTask: invoke('completeTask'),
   deleteTask: invoke('deleteTask'),
+  restoreTask: invoke('restoreTask'),
   syncNow: invoke('syncNow'),
   onBoardChanged: (listener) => subscribe<BoardSnapshot>(CHANNEL.board, listener),
   onProjectsChanged: (listener) => subscribe<Project[]>(CHANNEL.projects, listener),

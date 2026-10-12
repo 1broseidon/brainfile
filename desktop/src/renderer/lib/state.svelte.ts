@@ -14,7 +14,7 @@ declare global {
 
 /** Changes this window makes are not news; remember when each board was last written from here. */
 const lastLocalWrite: Record<string, number> = {};
-const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask'] as const;
+const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask'] as const;
 const LOCAL_WINDOW_MS = 4000;
 
 export const api: Api = new Proxy(window.brainfile, {
@@ -84,6 +84,8 @@ class AppState {
   layout = $state(loadLayout());
   /** A problem worth saying, shown in the board's band until it times out. Success is silent. */
   problem = $state<string | null>(null);
+  /** The one success that speaks: a reversible step, with its Undo, for a few seconds. */
+  undo = $state<{ text: string; run: () => Promise<void> } | null>(null);
   menu = $state<{ kind: MenuKind; taskId: string; x: number; y: number } | null>(null);
   /** Changes from outside the window, newest first. */
   feed = $state<FeedItem[]>([]);
@@ -109,6 +111,7 @@ class AppState {
   });
 
   #problemTimer: ReturnType<typeof setTimeout> | null = null;
+  #undoTimer: ReturnType<typeof setTimeout> | null = null;
 
   async init(): Promise<void> {
     api.onProjectsChanged((projects) => {
@@ -239,6 +242,18 @@ class AppState {
     this.problem = text;
     if (this.#problemTimer) clearTimeout(this.#problemTimer);
     this.#problemTimer = setTimeout(() => (this.problem = null), 8000);
+  }
+
+  offerUndo(text: string, run: () => Promise<void>): void {
+    this.undo = { text, run };
+    if (this.#undoTimer) clearTimeout(this.#undoTimer);
+    this.#undoTimer = setTimeout(() => (this.undo = null), 8000);
+  }
+
+  async runUndo(): Promise<void> {
+    const undo = this.undo;
+    this.undo = null;
+    if (undo) await undo.run();
   }
 
   saveLayout(): void {

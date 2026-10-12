@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tip } from '../lib/tooltip';
   import { api, app } from '../lib/state.svelte';
   import { columnProgress, kindGlyph, priorityLabel, relativeTime, shortDate } from '../lib/format';
   import { renderMarkdown } from '../lib/markdown';
@@ -86,11 +87,21 @@
     } else app.notify(result.error, 'warn');
   }
 
+  /** No question first: the delete happens, and Undo puts the file back. */
   async function remove(): Promise<void> {
-    if (!detail || !confirm(`Delete ${detail.id}? The file is removed from the board; git keeps its history.`)) return;
-    const result = await api.deleteTask(board.projectId, detail.id);
-    if (result.ok) close();
-    else app.notify(result.error, 'warn');
+    if (!detail) return;
+    const projectId = board.projectId;
+    const result = await api.deleteTask(projectId, detail.id);
+    if (!result.ok) {
+      app.notify(result.error, 'warn');
+      return;
+    }
+    const removed = result.value;
+    close();
+    app.offerUndo(`Deleted ${removed.taskId}`, async () => {
+      const restored = await api.restoreTask(projectId, removed);
+      if (!restored.ok) app.notify(restored.error, 'warn');
+    });
   }
 
   function autosize(el: HTMLTextAreaElement): void {
@@ -116,9 +127,9 @@
     <span class="spacer"></span>
     {#if detail && !detail.archived}
       <button class="btn quiet" onclick={complete}><StatusIcon progress={1} size={13} />Complete</button>
-      <button class="icon-btn destroy" title="Delete" onclick={remove}><Icon name="trash" size={15} /></button>
+      <button class="icon-btn destroy" use:tip={'Delete'} onclick={remove}><Icon name="trash" size={15} /></button>
     {/if}
-    <button class="icon-btn" title="Close  Esc" onclick={close}><Icon name="close" size={14} /></button>
+    <button class="icon-btn" use:tip={'Close  Esc'} onclick={close}><Icon name="close" size={14} /></button>
   </header>
 
   {#if error}
@@ -216,7 +227,7 @@
         ></textarea>
       {:else if detail.description}
         <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <div class="prose" ondblclick={startEditing} title="Double-click to edit">{@html renderMarkdown(detail.description)}</div>
+        <div class="prose" ondblclick={startEditing} use:tip={'Double-click to edit'}>{@html renderMarkdown(detail.description)}</div>
       {:else if !detail.archived}
         <button class="placeholder" onclick={startEditing}>Add description…</button>
       {/if}
@@ -330,7 +341,7 @@
 
   .glyph {
     color: var(--ink-3);
-    font-size: 11px;
+    font-size: var(--t-xs);
   }
 
   .id {
@@ -504,7 +515,7 @@
 
   .prose :global(code) {
     font-family: var(--mono);
-    font-size: 12px;
+    font-size: var(--t-sm);
     padding: 1px 5px;
     border-radius: var(--r-chip);
     background: var(--fill-code);

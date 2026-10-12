@@ -109,6 +109,12 @@ export interface TaskPatch {
   parentId?: string | null;
 }
 
+export interface RemovedTask {
+  taskId: string;
+  filePath: string;
+  content: string;
+}
+
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Requests the renderer can make. Each maps to one handler in the host or main. */
@@ -132,7 +138,9 @@ export interface Api {
   toggleSubtask(projectId: string, taskId: string, subtaskId: string): Promise<Result>;
   addSubtask(projectId: string, taskId: string, title: string): Promise<Result>;
   completeTask(projectId: string, taskId: string): Promise<Result>;
-  deleteTask(projectId: string, taskId: string): Promise<Result>;
+  /** Resolves to the removed file, so the window can offer Undo. */
+  deleteTask(projectId: string, taskId: string): Promise<Result<RemovedTask>>;
+  restoreTask(projectId: string, removed: RemovedTask): Promise<Result>;
   syncNow(projectId: string): Promise<Result<SyncView>>;
 
   onBoardChanged(listener: (snapshot: BoardSnapshot) => void): () => void;
@@ -158,6 +166,7 @@ export const HOST_METHODS = [
   'addSubtask',
   'completeTask',
   'deleteTask',
+  'restoreTask',
   'syncNow',
 ] as const;
 

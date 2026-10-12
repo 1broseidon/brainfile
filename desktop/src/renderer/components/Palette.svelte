@@ -170,7 +170,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    z-index: 50;
+    z-index: var(--z-scrim);
     background: var(--scrim);
     animation: fade var(--d-open) var(--ease);
   }
@@ -183,7 +183,7 @@
 
   .palette {
     position: fixed;
-    z-index: 51;
+    z-index: var(--z-menu);
     top: 16vh;
     left: 50%;
     width: 640px;

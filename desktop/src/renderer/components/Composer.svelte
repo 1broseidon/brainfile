@@ -183,7 +183,7 @@
   .overlay {
     position: fixed;
     inset: 0;
-    z-index: 30;
+    z-index: var(--z-scrim);
     background: var(--scrim);
     animation: fade var(--d-open) var(--ease);
   }
@@ -196,7 +196,7 @@
 
   .composer {
     position: fixed;
-    z-index: 31;
+    z-index: var(--z-dialog);
     top: 14vh;
     left: 50%;
     width: 720px;

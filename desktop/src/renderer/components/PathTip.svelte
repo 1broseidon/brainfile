@@ -9,9 +9,10 @@
   let open = $state(false);
   let timer: ReturnType<typeof setTimeout> | null = null;
 
-  function show(): void {
+  /** The pointer may be passing, so it waits; keyboard focus is asking, so it doesn't. */
+  function show(delay: number): void {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => (open = true), 250);
+    timer = setTimeout(() => (open = true), delay);
   }
 
   function hide(): void {
@@ -20,8 +21,8 @@
   }
 </script>
 
-<span class="tip" role="presentation" onmouseenter={show} onmouseleave={hide}>
-  <button class="icon-btn" aria-label="Reveal {tildify(path)} in Finder" onclick={() => api.revealProject(projectId)} onfocus={show} onblur={hide}>
+<span class="tip" role="presentation" onmouseenter={() => show(800)} onmouseleave={hide}>
+  <button class="icon-btn" aria-label="Reveal {tildify(path)} in Finder" onclick={() => api.revealProject(projectId)} onfocus={(e) => (e.currentTarget as HTMLElement).matches(':focus-visible') && show(0)} onblur={hide}>
     <Icon name="folder" size={14} />
   </button>
   {#if open}
@@ -46,7 +47,7 @@
 
   .pop {
     position: absolute;
-    z-index: 30;
+    z-index: var(--z-tip);
     top: calc(100% + 6px);
     left: -4px;
     min-width: 220px;

@@ -7,7 +7,7 @@
 {#if name}
   <span
     class="avatar"
-    title={name}
+    aria-label={name}
     style:width="{size}px"
     style:height="{size}px"
     style:font-size="{Math.round(size * (size < 20 ? 0.56 : 0.42))}px"
@@ -28,7 +28,7 @@
     justify-content: center;
     flex: none;
     border-radius: 50%;
-    font-weight: 650;
+    font-weight: 600;
     color: var(--face-ink);
     background: oklch(var(--face-l) var(--face-c) var(--hue));
   }
