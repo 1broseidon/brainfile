@@ -2,8 +2,6 @@
 id: spec-12
 title: "Default types and the graph: epic, spec, plan, task, decision"
 type: spec
-column: review
-position: 0
 tags:
   - types
   - graph
@@ -30,8 +28,9 @@ subtasks:
   - id: spec-12-6
     title: "Docs and schemas: MANUAL, site/public/v2 schemas, llms.txt; init writes a short brainfile.md"
     completed: true
-updatedAt: "2026-10-12T06:40:06.644Z"
+updatedAt: "2026-10-12T18:47:40.553Z"
 parentId: epic-2
+completedAt: "2026-10-12T18:47:40.553Z"
 ---
 
 ## Description
