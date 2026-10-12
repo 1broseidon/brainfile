@@ -9,7 +9,11 @@ tags:
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
-updatedAt: "2026-10-12T21:35:00.818Z"
+updatedAt: "2026-10-12T21:55:46.362Z"
+subtasks:
+  - id: task-34-1
+    title: "Health rows: problem sentence under the name, Fix / Ask agent keys; long row tooltip dropped, short words (two copies, old copy in main, N unsent…)"
+    completed: false
 ---
 
 ## Description
