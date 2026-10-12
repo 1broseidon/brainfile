@@ -27,7 +27,10 @@ subtasks:
   - id: spec-16-4
     title: "Phase 2: queues: tasks, a column, an epic; waves by dependsOn; N at once per repo (default 3)"
     completed: false
-updatedAt: "2026-10-12T23:16:19.657Z"
+  - id: spec-16-5
+    title: "Phase 2: through completion: validation passes → done (bypass) or Review; retries to maxRetries then park; epic done with its last child"
+    completed: false
+updatedAt: "2026-10-12T23:16:20.098Z"
 ---
 
 ## Description
