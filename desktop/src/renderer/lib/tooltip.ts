@@ -71,3 +71,44 @@ export function tip(node: HTMLElement, text: string | null | undefined) {
     },
   };
 }
+
+/**
+ * The same tooltip for elements made outside Svelte (a reply's board keys):
+ * one listener on the container, the text read from what is under the
+ * pointer.
+ */
+export function tipWithin(node: HTMLElement, options: { selector: string; text: (el: HTMLElement) => string | null | undefined }) {
+  let current = options;
+  let over: HTMLElement | null = null;
+  const onOver = (e: MouseEvent) => {
+    const target = (e.target as HTMLElement).closest<HTMLElement>(current.selector);
+    if (target === over) return;
+    hide();
+    over = target && node.contains(target) ? target : null;
+    const text = over ? current.text(over) : null;
+    if (!over || !text) return;
+    const anchor = over;
+    timer = setTimeout(() => {
+      render(text);
+      place(anchor);
+    }, HOVER_DELAY_MS);
+  };
+  const onLeave = () => {
+    over = null;
+    hide();
+  };
+  node.addEventListener('mouseover', onOver);
+  node.addEventListener('mouseleave', onLeave);
+  node.addEventListener('mousedown', onLeave);
+  return {
+    update(next: typeof options) {
+      current = next;
+    },
+    destroy() {
+      onLeave();
+      node.removeEventListener('mouseover', onOver);
+      node.removeEventListener('mouseleave', onLeave);
+      node.removeEventListener('mousedown', onLeave);
+    },
+  };
+}

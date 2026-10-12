@@ -17,6 +17,9 @@ import type {
   RunStep,
 } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
+
+/** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
+const SETTLE_MS = 900;
 import { asTree, decisionGroups } from './format';
 
 declare global {
@@ -82,6 +85,8 @@ export interface ChatLine {
   /** The agent's: what it did on the way to this reply, and how long it took. */
   steps?: RunStep[];
   took?: number;
+  /** What changed on the board during the turn, read from the board itself, not from the reply. */
+  changes?: { id: string; what: string }[];
 }
 
 const LIVE = new Set(['starting', 'working', 'waiting']);
@@ -204,6 +209,8 @@ class AppState {
   });
 
   #problemTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The board as each chat turn found it, to say afterwards what the turn changed. */
+  #turnStart = new Map<string, BoardSnapshot>();
   #undoTimer: ReturnType<typeof setTimeout> | null = null;
 
   async init(): Promise<void> {
@@ -360,6 +367,14 @@ class AppState {
     localStorage.setItem(THREADS_KEY, JSON.stringify(this.threads));
   }
 
+  private patchLine(projectId: string, threadId: string, key: string, patch: Partial<ChatLine>): void {
+    const list = this.threads[projectId] ?? [];
+    this.threads[projectId] = list.map((t) =>
+      t.id === threadId ? { ...t, lines: t.lines.map((l) => (l.key === key ? { ...l, ...patch } : l)) } : t
+    );
+    this.saveThreads();
+  }
+
   private addLine(projectId: string, threadId: string, line: ChatLine): void {
     const list = this.threads[projectId] ?? [];
     this.threads[projectId] = list.map((t) => (t.id === threadId ? { ...t, lines: [...t.lines, line] } : t));
@@ -386,7 +401,9 @@ class AppState {
       at: Date.now(),
       ...(context.length ? { context } : {}),
     });
+    const before = this.boards[projectId];
     const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier, context);
+    if (result.ok && before) this.#turnStart.set(result.value.id, before);
     if (!result.ok) this.addLine(projectId, thread.id, { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true });
   }
 
@@ -406,6 +423,17 @@ class AppState {
         ...(run.steps?.length ? { steps: run.steps } : {}),
         ...(run.endedAt ? { took: run.endedAt - run.startedAt } : {}),
       });
+      const before = this.#turnStart.get(run.id);
+      this.#turnStart.delete(run.id);
+      if (before && run.state !== 'failed') {
+        const { projectId, threadId } = run;
+        setTimeout(() => {
+          const after = this.boards[projectId];
+          if (!after) return;
+          const changes = diffBoards(before, after, Date.now()).map((c) => ({ id: c.taskId, what: c.what }));
+          if (changes.length) this.patchLine(projectId, threadId!, run.id, { changes });
+        }, SETTLE_MS);
+      }
     } else if (run.state === 'failed') {
       this.notify(`${this.agentName(run.agentId)} stopped on ${run.taskId}: ${run.error ?? 'unknown error'}`, 'warn');
     }

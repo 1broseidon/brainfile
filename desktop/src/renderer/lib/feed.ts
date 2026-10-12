@@ -26,8 +26,20 @@ export function diffBoards(before: BoardSnapshot, after: BoardSnapshot, at: numb
     else if (prev.column !== task.column) push(task.id, task.title, `moved to ${columnTitle(task.column)}`);
     else if (prev.updatedAt !== task.updatedAt) push(task.id, task.title, 'edited');
   }
+  const doneAfter = new Set(after.completed.map((t) => t.id));
   for (const task of after.completed) {
     if (!doneBefore.has(task.id) && was.has(task.id)) push(task.id, task.title, 'done');
+  }
+  const still = new Set(after.tasks.map((t) => t.id));
+  for (const task of before.tasks) {
+    if (!still.has(task.id) && !doneAfter.has(task.id)) push(task.id, task.title, 'removed');
+  }
+  // Decisions: one recorded, one replaced or let go.
+  const decided = new Map((before.decisions ?? []).map((d) => [d.id, d]));
+  for (const d of after.decisions ?? []) {
+    const prev = decided.get(d.id);
+    if (!prev) push(d.id, d.title, 'decided');
+    else if (prev.status !== d.status) push(d.id, d.title, d.supersededBy ? `replaced by ${d.supersededBy}` : d.status);
   }
   return items;
 }

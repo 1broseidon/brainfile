@@ -11,6 +11,7 @@ export interface RefInfo {
   kind: 'work' | 'decision';
   done: boolean;
   retired: boolean;
+  title: string;
 }
 
 const ID = /\b([a-z][a-z0-9_]*-\d+)\b/gi;
@@ -20,10 +21,10 @@ const SKIP = new Set(['CODE', 'PRE', 'A', 'BUTTON']);
 export function refsOf(board: BoardSnapshot | null): Map<string, RefInfo> {
   const known = new Map<string, RefInfo>();
   if (!board) return known;
-  for (const t of board.tasks) known.set(t.id, { kind: 'work', done: false, retired: false });
-  for (const t of board.completed) known.set(t.id, { kind: 'work', done: true, retired: false });
+  for (const t of board.tasks) known.set(t.id, { kind: 'work', done: false, retired: false, title: t.title });
+  for (const t of board.completed) known.set(t.id, { kind: 'work', done: true, retired: false, title: t.title });
   for (const d of board.decisions) {
-    known.set(d.id, { kind: 'decision', done: false, retired: d.status !== 'current' && d.status !== 'proposed' });
+    known.set(d.id, { kind: 'decision', done: false, retired: d.status !== 'current' && d.status !== 'proposed', title: d.title });
   }
   return known;
 }

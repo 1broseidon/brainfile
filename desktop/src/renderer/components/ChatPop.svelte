@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app, CHAT } from '../lib/state.svelte';
-  import { tip } from '../lib/tooltip';
+  import { tip, tipWithin } from '../lib/tooltip';
   import Icon from './Icon.svelte';
   import Working from './Working.svelte';
   import AskLine from './AskLine.svelte';
@@ -169,7 +169,7 @@
 
   function fit(el: HTMLTextAreaElement): void {
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 112)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
   }
 </script>
 
@@ -198,80 +198,6 @@
         <Icon name="history" size={13} />
       </button>
       <span class="where">{view === 'history' ? 'Recent' : app.currentThread ? titleOf(lines) : projectName}</span>
-      <span class="anchor">
-        <button
-          class="pick mono"
-          onclick={() => {
-            picking = picking === 'agent' ? null : 'agent';
-            if (picking === 'agent') void app.refreshAgents();
-          }}
-          disabled={!app.defaultAgent}
-        >
-          <span class="label">{agent ? app.agentName(agent) : 'no agent installed'}</span><Icon name="chevron" size={10} />
-        </button>
-        {#if picking === 'agent'}
-          <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
-          <div class="menu">
-            {#each app.agents as a (a.id)}
-              <button
-                class="item"
-                disabled={!a.available}
-                onclick={() => {
-                  agentId = a.id;
-                  app.remember(a.id);
-                  picking = null;
-                }}
-              >
-                <span>{a.name}</span><span class="mono note">{a.note}</span>
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </span>
-      {#if agent}
-        <span class="anchor">
-          <button
-            class="pick mono"
-            onclick={() => {
-              picking = picking === 'model' ? null : 'model';
-              if (picking === 'model') void app.loadModels(agent);
-            }}
-          >
-            <span class="label">{modelName}</span><Icon name="chevron" size={10} />
-          </button>
-          {#if picking === 'model'}
-            <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
-            <div class="menu">
-              {#if !(app.models[agent] ?? []).some((m) => /default/i.test(m.value) || /default/i.test(m.name))}
-                <button
-                  class="item"
-                  onclick={() => {
-                    app.chooseModel(agent, null);
-                    picking = null;
-                  }}
-                >
-                  <span>Default</span><span class="mono note">the agent’s own</span>
-                </button>
-              {/if}
-              {#if !app.models[agent]}
-                <p class="loading mono">asking {app.agentName(agent)}…</p>
-              {:else}
-                {#each app.models[agent] ?? [] as m (m.value)}
-                  <button
-                    class="item"
-                    onclick={() => {
-                      app.chooseModel(agent, m.value);
-                      picking = null;
-                    }}
-                  >
-                    <span>{m.name}</span>{#if app.modelFor(agent) === m.value}<Icon name="check" size={12} />{/if}
-                  </button>
-                {/each}
-              {/if}
-            </div>
-          {/if}
-        </span>
-      {/if}
       {#if app.currentThread && !live}
         <button class="icon-btn" use:tip={'New chat'} onclick={newChat}><Icon name="plus" size={13} /></button>
       {/if}
@@ -291,7 +217,13 @@
       </div>
     {:else}
     <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <div class="lines" bind:this={list} role="presentation" onclick={openRef}>
+    <div
+      class="lines"
+      bind:this={list}
+      role="presentation"
+      onclick={openRef}
+      use:tipWithin={{ selector: '[data-ref]', text: (el) => refs.get(el.dataset.ref ?? '')?.title }}
+    >
       {#if lines.length}
         <p class="when mono">{dayTime(app.currentThread?.startedAt ?? lines[0].at)}</p>
       {/if}
@@ -334,6 +266,26 @@
               {/if}
             {/if}
             <div class="md">{@html linkRefs(renderMarkdown(line.text), refs)}</div>
+            {#if line.changes?.length}
+              <!-- What the turn changed, read from the board, not from the reply. -->
+              <ul class="changes">
+                {#each line.changes as c (c.id + c.what)}
+                  {@const info = refs.get(c.id)}
+                  <li>
+                    <button class="ref" data-ref={c.id}
+                      ><span
+                        class="ref-mark"
+                        data-kind={info?.kind ?? 'work'}
+                        data-done={info?.done ? '' : undefined}
+                        data-retired={info?.retired ? '' : undefined}
+                        aria-hidden="true"
+                      ></span>{c.id}</button
+                    >
+                    <span class="what">{c.what}</span>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
             <button class="copy" use:tip={copied === line.key ? 'Copied' : 'Copy'} aria-label="Copy reply" onclick={() => copy(line.key, line.text)}>
               <Icon name={copied === line.key ? 'check' : 'copy'} size={12} />
             </button>
@@ -356,8 +308,8 @@
       <textarea
         bind:this={field}
         bind:value={text}
-        rows="1"
-        placeholder="Ask or tell it something"
+        rows="2"
+        placeholder={app.currentThread ? 'Reply…' : 'Ask or tell it something'}
         oninput={(e) => fit(e.currentTarget)}
         onkeydown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
@@ -369,11 +321,91 @@
           e.stopPropagation();
         }}
       ></textarea>
-      {#if live}
-        <button class="send" use:tip={'Stop'} onclick={() => app.stopRun(live.id)}><Icon name="stop" size={12} /></button>
-      {:else if text.trim()}
-        <button class="send go" aria-label="Send" onclick={send}><Icon name="send" size={13} /></button>
-      {/if}
+      <!-- Who answers, and with what, sits where you type; then the one action. -->
+      <div class="foot">
+      <span class="anchor">
+          <button
+            class="pick mono"
+            onclick={() => {
+              picking = picking === 'agent' ? null : 'agent';
+              if (picking === 'agent') void app.refreshAgents();
+            }}
+            disabled={!app.defaultAgent}
+          >
+            <span class="label">{agent ? app.agentName(agent) : 'no agent installed'}</span><Icon name="chevron" size={10} />
+          </button>
+          {#if picking === 'agent'}
+            <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
+            <div class="menu">
+              {#each app.agents as a (a.id)}
+                <button
+                  class="item"
+                  disabled={!a.available}
+                  onclick={() => {
+                    agentId = a.id;
+                    app.remember(a.id);
+                    picking = null;
+                  }}
+                >
+                  <span>{a.name}</span><span class="mono note">{a.note}</span>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </span>
+        {#if agent}
+          <span class="anchor">
+            <button
+              class="pick mono"
+              onclick={() => {
+                picking = picking === 'model' ? null : 'model';
+                if (picking === 'model') void app.loadModels(agent);
+              }}
+            >
+              <span class="label">{modelName}</span><Icon name="chevron" size={10} />
+            </button>
+            {#if picking === 'model'}
+              <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
+              <div class="menu">
+                {#if !(app.models[agent] ?? []).some((m) => /default/i.test(m.value) || /default/i.test(m.name))}
+                  <button
+                    class="item"
+                    onclick={() => {
+                      app.chooseModel(agent, null);
+                      picking = null;
+                    }}
+                  >
+                    <span>Default</span><span class="mono note">the agent’s own</span>
+                  </button>
+                {/if}
+                {#if !app.models[agent]}
+                  <p class="loading mono">asking {app.agentName(agent)}…</p>
+                {:else}
+                  {#each app.models[agent] ?? [] as m (m.value)}
+                    <button
+                      class="item"
+                      onclick={() => {
+                        app.chooseModel(agent, m.value);
+                        picking = null;
+                      }}
+                    >
+                      <span>{m.name}</span>{#if app.modelFor(agent) === m.value}<Icon name="check" size={12} />{/if}
+                    </button>
+                  {/each}
+                {/if}
+              </div>
+            {/if}
+          </span>
+        {/if}
+        <span class="grow"></span>
+        {#if live}
+          <button class="send" use:tip={'Stop'} aria-label="Stop" onclick={() => app.stopRun(live.id)}><Icon name="stop" size={12} /></button>
+        {:else}
+          <button class="send" class:go={!!text.trim() && !!agent} use:tip={'Send  ↵'} aria-label="Send" disabled={!text.trim() || !agent} onclick={send}>
+            <Icon name="send" size={13} />
+          </button>
+        {/if}
+      </div>
     </div>
   </section>
 {/if}
@@ -879,16 +911,35 @@
     padding: 2px 0;
   }
 
+  /* A well you type into, with a foot: who answers and with what, then send. */
   .composer {
     flex: none;
     display: flex;
-    align-items: flex-end;
-    gap: var(--s1);
+    flex-direction: column;
     margin: 0 var(--s2) var(--s2);
-    padding: var(--s1) var(--s1) var(--s1) var(--s3);
+    padding: var(--s2) var(--s1) var(--s1) var(--s3);
     border-radius: var(--r-card);
     background: var(--well);
     box-shadow: inset 0 0 0 var(--hairline) var(--line);
+  }
+
+  .foot {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: calc(-1 * var(--s2));
+  }
+
+  .grow {
+    flex: 1;
+  }
+
+  /* From the foot, a pick's menu opens upward, over the thread. */
+  .foot .menu {
+    top: auto;
+    bottom: calc(100% + 4px);
+    left: 0;
+    right: auto;
   }
 
   .composer:focus-within {
@@ -896,9 +947,8 @@
   }
 
   textarea {
-    flex: 1;
-    min-height: 26px;
-    padding: 3px 0;
+    min-height: 40px;
+    padding: 0 var(--s2) var(--s1) 0;
     border: 0;
     background: transparent;
     resize: none;
@@ -922,8 +972,40 @@
     color: var(--ink);
   }
 
+  .send:disabled {
+    color: var(--ink-4);
+    background: none;
+  }
+
+  /* Ready to go: the composer's one action takes the accent. */
   .send.go {
-    color: var(--ink);
-    background: var(--fill-active);
+    color: var(--on-accent);
+    background: var(--accent);
+  }
+
+  .send.go:hover {
+    background: var(--accent-hover);
+  }
+
+  .changes {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .changes li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    color: var(--ink-3);
+  }
+
+  .changes .ref {
+    margin: 0;
   }
 </style>

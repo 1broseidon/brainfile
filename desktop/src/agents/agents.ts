@@ -625,7 +625,7 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId, mod
 const ASK_PREAMBLE =
   'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
   'If those tools are not available, use the `brainfile` command line in this directory instead (`brainfile list`, `brainfile add`, `brainfile move`, `brainfile --help`); do not edit the board’s files by hand. ' +
-  'Do not change code unless asked. Reply briefly, in a sentence or two; if you changed the board, end with what you changed, by task ID, and say nothing about changes when there were none.\n\n';
+  'Do not change code unless asked. Reply briefly, in a sentence or two, with the answer itself. Do not list or mention what you changed on the board, or that you changed nothing: the window shows the board\u2019s changes under your reply.\n\n';
 
 /**
  * What the person has open as they ask, so "this" and "it" mean something:
