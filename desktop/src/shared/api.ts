@@ -139,8 +139,29 @@ export interface IntegrityView {
   } | null;
   /** Anything else about where the board lives, one sentence each. */
   notes: string[];
-  /** A few words for the health list (`two copies of the board`, `old copy still in main`), or null when all is well. */
+  /** A few words for the health list (`two copies`, `old copy in main`), or null when all is well. */
   short: string | null;
+  /** The problem `short` names, in one plain sentence: the health list's second line. */
+  line: string | null;
+  /** What Fix would do, when the problem has a fix that loses nothing (task-34). */
+  fix: FixPlan | null;
+  /** What Brainfile found, as plain lines (every copy, its count and last change), for an agent's brief. Empty when all is well. */
+  found: string[];
+}
+
+/** What Fix does to a board problem (task-34). Only ever offered when nothing is lost; every copy is backed up first. */
+export interface FixPlan {
+  /** `untrack` the code branch's old copy, `adopt` the copy that has everything, or `prune` a lost checkout. */
+  kind: 'untrack' | 'adopt' | 'prune';
+  /** What it will do, in a few words, said before it runs: `Back up, then untrack main's copy`. */
+  words: string;
+}
+
+export interface FixResult {
+  /** What was done, in a short line: `Untracked main's copy. Push main to share it.` */
+  message: string;
+  /** Undo can put it back, for a few seconds. */
+  undo: boolean;
 }
 
 export interface BoardSnapshot {
@@ -331,6 +352,16 @@ export interface Api {
   syncNow(projectId: string): Promise<Result<SyncView>>;
   /** Make two boards one: take the other, merge them, or keep this one. What is replaced is backed up first. */
   settleBoards(projectId: string, choice: SettleChoice): Promise<Result<{ message: string }>>;
+  /** What Fix would do about the board's problem now, or null when no fix loses nothing. */
+  planFix(projectId: string): Promise<Result<FixPlan | null>>;
+  /**
+   * Back up every copy of the board, then fix its problem. `expected` is the
+   * plan's words as the person confirmed them; if the plan has changed since,
+   * nothing runs.
+   */
+  fixBoard(projectId: string, expected?: string): Promise<Result<FixResult>>;
+  /** Put back what the last fix changed, within a few seconds of it. What it replaces is backed up first. */
+  undoFix(projectId: string): Promise<Result<{ message: string }>>;
 
   listAgents(): Promise<AgentInfo[]>;
   /** The agent's models, as it reports them; probed once and cached. */
@@ -406,6 +437,9 @@ export const HOST_METHODS = [
   'restoreTask',
   'syncNow',
   'settleBoards',
+  'planFix',
+  'fixBoard',
+  'undoFix',
 ] as const;
 
 export type HostMethod = (typeof HOST_METHODS)[number];

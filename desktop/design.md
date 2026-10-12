@@ -303,13 +303,34 @@ opens.
 - Pressing one settles it with core's `adopt` / `merge-boards`, reopens the
   board where it now lives, and stays silent: the board changing is the
   confirmation, and what changed is not news in the feed.
-- **Health** says the rest in a few words in its list, with the sentence in
-  the tooltip: `two copies of the board`, `a merge is unfinished`, `open in
-  another folder`, `open in two places`, `old copy still in main` (the code
-  branch still carries one), `N changes not shared yet` and `N changes to
-  bring in`. Counts are taken again every ten seconds, since a push made by
-  an agent or the CLI moves refs the watcher never sees. A checkout of the board
-  branch whose folder is gone is forgotten when the board opens.
+- **Health** says the rest in a few words in its list: `two copies`,
+  `merge unfinished`, `open elsewhere`, `open twice`, `old copy in main`
+  (the code branch still carries one), `sync failed`, `N unsent`, `N
+  incoming`, `this Mac only`. A board with a problem says it once more under
+  its name, as one plain muted sentence ("An old copy of .brainfile/ (7
+  docs) is still tracked on main.", "Origin's (19) already has everything
+  this folder (7) has."); the list explains, tips stay two or three words. Counts are
+  taken again every ten seconds, since a push made by an agent or the CLI
+  moves refs the watcher never sees. A checkout of the board branch whose
+  folder is gone is forgotten when the board opens.
+- **A problem's line settles it** (task-34), with two quiet keys under the
+  sentence, on its left edge. **Fix** is there only when the fix loses
+  nothing: the copy kept already has every document every other copy has.
+  Pressed, the line says what it will do in a few words ("Back up both, then
+  untrack main's copy") with Confirm (full ink) and Cancel inline, never a
+  dialog. Confirmed, every copy is backed up to `brainfile backups` first,
+  and nothing else runs if one fails; then core's own step: the code
+  branch's old copy untracked in one commit (as `migrate --to-branch`), the
+  copy that has everything adopted, a lost checkout forgotten. The line then
+  says what was done ("Untracked main's copy. Push main to share it.") with
+  Undo for ten seconds, and the board republishes without the problem. An
+  unfinished merge, two copies that each have changes, a board that is its
+  own repository and a checkout with work in it get no Fix. **Ask agent**
+  is on every problem: it opens the board's chat and sends the project's
+  agent what Brainfile found (every copy, its count and last change) with
+  one instruction, look, explain the difference in a few lines, and ask how
+  to settle it, changing nothing until the person chooses. It is an ordinary
+  chat turn.
 
 ## Dispatch
 

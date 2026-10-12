@@ -19,6 +19,7 @@ import type {
   SettleChoice,
 } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
+import { problemBrief } from './brief';
 
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
 const SETTLE_MS = 900;
@@ -32,7 +33,7 @@ declare global {
 
 /** Changes this window makes are not news; remember when each board was last written from here. */
 const lastLocalWrite: Record<string, number> = {};
-const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask', 'settleBoards'] as const;
+const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask', 'settleBoards', 'fixBoard', 'undoFix'] as const;
 const LOCAL_WINDOW_MS = 4000;
 
 // The bridge's object is frozen, so a Proxy over it breaks the proxy
@@ -107,6 +108,21 @@ const FEED_LIMIT = 100;
 
 export type Health = 'ok' | 'busy' | 'pending' | 'behind' | 'warn' | 'local';
 
+/**
+ * A fix from the health list, per project (task-34): said before it runs,
+ * running, then its result with Undo for a few seconds, or what stopped it.
+ */
+export type FixStage =
+  | { stage: 'confirm'; words: string }
+  | { stage: 'running'; words: string }
+  | { stage: 'done'; message: string; undo: boolean }
+  | { stage: 'failed'; message: string };
+
+/** How long a fix's result line and its Undo stay. */
+const FIX_UNDO_MS = 10_000;
+/** How long what stopped a fix stays said. */
+const FIX_FAILED_MS = 12_000;
+
 export function healthOf(board: BoardSnapshot | undefined): Health | null {
   if (!board) return null;
   // Where the board lives (spec-15): two boards, a stray checkout, a merge left half-done.
@@ -162,6 +178,8 @@ class AppState {
   problem = $state<string | null>(null);
   /** The project whose two boards are being made one; its snapshot is not news. */
   settling = $state<string | null>(null);
+  /** Fixes from the health list in progress or just done, per project. */
+  fixes = $state<Record<string, FixStage>>({});
   /** The one success that speaks: a reversible step, with its Undo, for a few seconds. */
   undo = $state<{ text: string; run: () => Promise<void> } | null>(null);
   menu = $state<{ kind: MenuKind; taskId: string; x: number; y: number } | null>(null);
@@ -287,6 +305,7 @@ class AppState {
   });
 
   #problemTimer: ReturnType<typeof setTimeout> | null = null;
+  #fixTimers: Record<string, ReturnType<typeof setTimeout>> = {};
   /** The board as each chat turn found it, to say afterwards what the turn changed. */
   #turnStart = new Map<string, BoardSnapshot>();
   #undoTimer: ReturnType<typeof setTimeout> | null = null;
@@ -681,6 +700,82 @@ class AppState {
     } finally {
       this.settling = null;
     }
+  }
+
+  // ── Fixing a board problem from the health list (task-34) ───────────────
+
+  /** Sets a project's fix stage; `ms` clears it after that long. */
+  private setFix(projectId: string, stage: FixStage | null, ms = 0): void {
+    clearTimeout(this.#fixTimers[projectId]);
+    delete this.#fixTimers[projectId];
+    if (!stage) {
+      delete this.fixes[projectId];
+      return;
+    }
+    this.fixes[projectId] = stage;
+    if (ms) this.#fixTimers[projectId] = setTimeout(() => this.setFix(projectId, null), ms);
+  }
+
+  /** Fix pressed: ask the host what it would do now, and say it before anything runs. */
+  async proposeFix(projectId: string): Promise<void> {
+    const result = await api.planFix(projectId);
+    if (!result.ok) return this.setFix(projectId, { stage: 'failed', message: result.error }, FIX_FAILED_MS);
+    if (!result.value) return this.setFix(projectId, { stage: 'failed', message: 'No safe fix now. Ask an agent instead.' }, FIX_FAILED_MS);
+    this.setFix(projectId, { stage: 'confirm', words: result.value.words });
+  }
+
+  cancelFix(projectId: string): void {
+    this.setFix(projectId, null);
+  }
+
+  /** Confirmed: the host backs up every copy, then fixes; the board republishes where it now lives. */
+  async confirmFix(projectId: string): Promise<void> {
+    const asked = this.fixes[projectId];
+    if (asked?.stage !== 'confirm' || this.settling) return;
+    this.setFix(projectId, { stage: 'running', words: 'Backing up…' });
+    this.settling = projectId;
+    try {
+      const result = await api.fixBoard(projectId, asked.words);
+      if (!result.ok) return this.setFix(projectId, { stage: 'failed', message: result.error }, FIX_FAILED_MS);
+      await this.refreshProject(projectId);
+      this.setFix(projectId, { stage: 'done', message: result.value.message, undo: result.value.undo }, FIX_UNDO_MS);
+    } finally {
+      this.settling = null;
+    }
+  }
+
+  /** Puts back what the fix changed; the board it replaces is backed up first. */
+  async undoFix(projectId: string): Promise<void> {
+    const done = this.fixes[projectId];
+    if (done?.stage !== 'done' || !done.undo || this.settling) return;
+    this.setFix(projectId, { stage: 'running', words: 'Putting it back…' });
+    this.settling = projectId;
+    try {
+      const result = await api.undoFix(projectId);
+      if (!result.ok) return this.setFix(projectId, { stage: 'failed', message: result.error }, FIX_FAILED_MS);
+      await this.refreshProject(projectId);
+      this.setFix(projectId, { stage: 'done', message: result.value.message, undo: false }, FIX_UNDO_MS / 2);
+    } finally {
+      this.settling = null;
+    }
+  }
+
+  /**
+   * Hands a board's problem to the project's agent in its chat: what was
+   * found, and to explain it and ask before changing anything. It is an
+   * ordinary chat turn, so it shows in the dock's chat like any other.
+   */
+  async askAboutBoard(projectId: string): Promise<void> {
+    const board = this.boards[projectId];
+    const agent = this.agentFor(projectId);
+    const project = this.projects.find((p) => p.id === projectId);
+    if (!board || !agent || !project) return;
+    if (projectId !== this.activeId) await this.select(projectId);
+    this.chatOpen = true;
+    // One turn at a time: a reply still on its way is shown, not talked over.
+    if (this.liveAsk) return this.notify(`${this.agentName(this.liveAsk.agentId)} is still answering here.`, 'warn');
+    this.thread[projectId] = null;
+    await this.askBoard(problemBrief(project.name, board.integrity), agent);
   }
 
   /** Success is silent; only a problem is said. */
