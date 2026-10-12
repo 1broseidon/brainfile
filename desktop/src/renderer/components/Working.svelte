@@ -6,7 +6,15 @@
    * among honest names for the kind of work under way; it never invents
    * progress. Reduced motion holds the first word still.
    */
-  let { agent, activity, waiting = false, rotate = true }: { agent: string; activity: string; waiting?: boolean; rotate?: boolean } = $props();
+  import type { AgentRun } from '../../shared/api';
+
+  // A run that ends clears its holder a beat before the block showing it is
+  // torn down, so everything read from it here must survive it being gone.
+  let { run, rotate = true }: { run: AgentRun | undefined; rotate?: boolean } = $props();
+
+  const agent = $derived(run?.agentId ?? '');
+  const activity = $derived(run?.activity ?? 'working');
+  const waiting = $derived(run?.state === 'waiting');
 
   const WORDS: Record<string, string[]> = {
     starting: ['Starting', 'Waking up'],

@@ -46,7 +46,7 @@
 <svelte:window onkeydown={onkeydown} />
 
 {#if run}
-  <span class="running"><Working agent={run.agentId} activity={run.activity} waiting={run.state === 'waiting'} /></span>
+  <span class="running"><Working {run} /></span>
   <button class="icon-btn" use:tip={'Stop'} onclick={() => app.stopRun(run.id)}><Icon name="stop" size={13} /></button>
 {:else}
   <span class="anchor">

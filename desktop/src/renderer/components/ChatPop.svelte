@@ -200,8 +200,8 @@
         <p class="empty">Ask about this board, or have it managed: “add a task to…”, “sort To Do by priority”, “split epic-3”.</p>
       {/each}
       {#if live}
-        <p class="status"><Working agent={live.agentId} activity={live.activity} waiting={live.state === 'waiting'} /></p>
-        {#each app.asks.filter((a) => a.runId === live.id) as ask (ask.id)}
+        <p class="status"><Working run={live} /></p>
+        {#each app.asks.filter((a) => a.runId === live?.id) as ask (ask.id)}
           <div class="asking"><AskLine {ask} stacked /></div>
         {/each}
       {/if}

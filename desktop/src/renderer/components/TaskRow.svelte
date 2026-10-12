@@ -88,8 +88,7 @@
     <span class="run mono" use:tip={`Waiting on ${task.blockedOn.join(', ')}`}>blocked</span>
   {/if}
   {#if app.runFor(task.id)}
-    {@const run = app.runFor(task.id)!}
-    <span class="run"><Working agent={run.agentId} activity={run.activity} waiting={run.state === 'waiting'} rotate={false} /></span>
+    <span class="run"><Working run={app.runFor(task.id)} rotate={false} /></span>
   {/if}
   <span class="chips">
     {#if task.contractStatus}
