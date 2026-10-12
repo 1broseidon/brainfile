@@ -15,7 +15,10 @@ subtasks:
   - id: task-19-2
     title: "Decisions view: standing decisions by claim-key family, history folded; t decision stop + direct key"
     completed: false
-updatedAt: "2026-10-12T15:37:34.257Z"
+  - id: task-19-3
+    title: "Decision detail: claim key, kind, stance+subject, holds while, recheck, valid until, replaces/replaced by and resting work (navigable); no complete/move"
+    completed: false
+updatedAt: "2026-10-12T15:37:34.523Z"
 ---
 
 ## Description
