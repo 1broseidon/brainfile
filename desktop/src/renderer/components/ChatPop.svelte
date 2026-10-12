@@ -5,7 +5,8 @@
   import Working from './Working.svelte';
   import AskLine from './AskLine.svelte';
   import { renderMarkdown } from '../lib/markdown';
-  import { relativeTime } from '../lib/format';
+  import { dayTime, relativeTime, tookWords } from '../lib/format';
+  import { linkRefs, refsOf } from '../lib/refs';
   import type { AgentId } from '../../shared/api';
   import { expoOut } from 'svelte/easing';
 
@@ -122,6 +123,32 @@
     return lines.find((l) => l.who === 'you')?.text ?? 'Untitled';
   }
   const live = $derived(app.liveAsk);
+  /** The IDs a reply can link to: everything the board in front can open. */
+  const refs = $derived(refsOf(app.board));
+  /** Which replies have their steps unfolded. */
+  let unfolded = $state<Record<string, boolean>>({});
+  let copied = $state<string | null>(null);
+
+  /** A tool as people read it: `mcp__brainfile__get_task` and `mcp.brainfile.get_task` both say `brainfile · get_task`. */
+  function toolTitle(title: string): string {
+    return title.replace(/^mcp(?:__|\.)([\w-]+?)(?:__|\.)/, '$1 · ');
+  }
+
+  /** A board reference in a reply opens in the pane. */
+  function openRef(e: MouseEvent): void {
+    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-ref]')?.dataset.ref;
+    if (!id) return;
+    app.selectedTaskId = id;
+    app.openTaskId = id;
+  }
+
+  async function copy(key: string, text: string): Promise<void> {
+    await navigator.clipboard.writeText(text);
+    copied = key;
+    setTimeout(() => {
+      if (copied === key) copied = null;
+    }, 1200);
+  }
 
   $effect(() => {
     if (app.chatOpen) field?.focus();
@@ -170,8 +197,7 @@
       <button class="icon-btn" class:on={view === 'history'} use:tip={'Recent chats'} onclick={() => (view = view === 'history' ? 'chat' : 'history')}>
         <Icon name="history" size={13} />
       </button>
-      <span class="where">{view === 'history' ? 'Recent' : projectName}</span>
-      <span class="spacer"></span>
+      <span class="where">{view === 'history' ? 'Recent' : app.currentThread ? titleOf(lines) : projectName}</span>
       <span class="anchor">
         <button
           class="pick mono"
@@ -264,12 +290,54 @@
         {/each}
       </div>
     {:else}
-    <div class="lines" bind:this={list}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <div class="lines" bind:this={list} role="presentation" onclick={openRef}>
+      {#if lines.length}
+        <p class="when mono">{dayTime(app.currentThread?.startedAt ?? lines[0].at)}</p>
+      {/if}
       {#each lines as line (line.key)}
-        {#if line.who === 'agent' && !line.failed}
-          <div class="line md">{@html renderMarkdown(line.text)}</div>
+        {#if line.who === 'you'}
+          <div class="mine">
+            <p class="line you">{line.text}</p>
+            {#if line.context?.length}
+              <p class="context">
+                {#each line.context as id (id)}
+                  {@const info = refs.get(id)}
+                  <button class="ref" data-ref={id}
+                    ><span class="ref-mark" data-kind={info?.kind ?? 'work'} data-done={info?.done ? '' : undefined} aria-hidden="true"
+                    ></span>{id}</button
+                  >
+                {/each}
+                in context
+              </p>
+            {/if}
+          </div>
+        {:else if line.failed}
+          <p class="line failed">{line.text}</p>
         {:else}
-          <p class="line" class:you={line.who === 'you'} class:failed={line.failed}>{line.text}</p>
+          <div class="reply">
+            {#if line.steps?.length}
+              <button class="worked" onclick={() => (unfolded[line.key] = !unfolded[line.key])} aria-expanded={!!unfolded[line.key]}>
+                Worked{#if line.took}{` for ${tookWords(line.took)}`}{/if}
+                <span class="chev" class:open={unfolded[line.key]}><Icon name="chevron" size={10} /></span>
+              </button>
+              {#if unfolded[line.key]}
+                <ol class="steps">
+                  {#each line.steps as step, i (i)}
+                    {#if step.kind === 'tool'}
+                      <li class="tool mono" class:failed={step.failed}>{toolTitle(step.title)}</li>
+                    {:else}
+                      <li class="note">{step.text}</li>
+                    {/if}
+                  {/each}
+                </ol>
+              {/if}
+            {/if}
+            <div class="md">{@html linkRefs(renderMarkdown(line.text), refs)}</div>
+            <button class="copy" use:tip={copied === line.key ? 'Copied' : 'Copy'} aria-label="Copy reply" onclick={() => copy(line.key, line.text)}>
+              <Icon name={copied === line.key ? 'check' : 'copy'} size={12} />
+            </button>
+          </div>
         {/if}
       {:else}
         <p class="empty">Ask about this board, or have it managed: “add a task to…”, “sort To Do by priority”, “split epic-3”.</p>
@@ -430,29 +498,27 @@
   header {
     height: 40px;
     flex: none;
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: var(--s1);
     padding: 0 var(--s1) 0 var(--s3);
   }
 
-  /* The header holds one line: the board's name and the picks give way first. */
+  /* The header holds one line: the title gives way first, then the picks. */
   .where {
     min-width: 0;
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     font-weight: 600;
   }
 
-  .spacer {
-    flex: 1;
-  }
 
   .anchor {
     position: relative;
-    min-width: 0;
+    flex: none;
     display: inline-flex;
   }
 
@@ -467,7 +533,7 @@
   }
 
   .pick {
-    max-width: 168px;
+    max-width: 136px;
     height: 24px;
     display: inline-flex;
     align-items: center;
@@ -584,19 +650,35 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: var(--s2);
+    gap: var(--s3);
     padding: var(--s1) var(--s3) var(--s3);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 10px);
     mask-image: linear-gradient(to bottom, transparent 0, #000 10px);
   }
 
-  /* Speech on two sides, told apart by side and plane, never hue. */
-  .line {
+  /* The thread's start, said once. */
+  .when {
+    margin: var(--s1) 0 0;
+    text-align: center;
+    color: var(--ink-4);
+  }
+
+  /* Yours sits on the right on a raised plane; the agent's reply is plain
+     text on the popover, as Linear sets it. Told apart by side and plane,
+     never hue. */
+  .mine {
+    align-self: flex-end;
     max-width: 86%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--s1);
+  }
+
+  .line {
     margin: 0;
     padding: 6px 10px;
     border-radius: var(--r-card);
-    background: var(--raised);
     font-size: var(--t-read);
     line-height: var(--lh-read);
     white-space: pre-wrap;
@@ -604,42 +686,178 @@
     user-select: text;
   }
 
-  .line.md {
-    white-space: normal;
+  .line.you {
+    background: var(--raised);
+    box-shadow: var(--top-light);
   }
 
-  .line.md :global(p),
-  .line.md :global(ul),
-  .line.md :global(ol) {
+  .line.failed {
+    max-width: 86%;
+    color: var(--danger);
+    background: var(--danger-soft);
+  }
+
+  .context {
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s1);
+    font-size: var(--t-xs);
+    line-height: var(--lh-xs);
+    color: var(--ink-4);
+  }
+
+  .reply {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .worked {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s1);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    color: var(--ink-3);
+  }
+
+  .worked:hover {
+    color: var(--ink-2);
+  }
+
+  .worked .chev {
+    display: inline-flex;
+    transition: transform var(--d-open) var(--ease);
+  }
+
+  .worked .chev.open {
+    transform: rotate(90deg);
+  }
+
+  /* What the agent did: the tools it ran in mono, what it said between in
+     sans, all one step down, hung from a hairline. */
+  .steps {
+    margin: 0;
+    padding: 0 0 0 var(--s3);
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    border-left: var(--hairline) solid var(--line-strong);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    color: var(--ink-3);
+  }
+
+  .steps .tool {
+    font-size: var(--t-xs);
+    overflow-wrap: anywhere;
+  }
+
+  .steps .tool.failed {
+    color: var(--warn);
+  }
+
+  .md {
+    font-size: var(--t-read);
+    line-height: var(--lh-read);
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  .md :global(p),
+  .md :global(ul),
+  .md :global(ol) {
     margin: 0 0 6px;
   }
 
-  .line.md :global(:last-child) {
+  .md :global(:last-child) {
     margin-bottom: 0;
   }
 
-  .line.md :global(ul),
-  .line.md :global(ol) {
+  .md :global(ul),
+  .md :global(ol) {
     padding-left: 18px;
   }
 
-  .line.md :global(strong) {
+  .md :global(strong) {
     font-weight: 600;
   }
 
-  .line.md :global(code) {
+  .md :global(code) {
     font-family: var(--mono);
     font-size: 12px;
   }
 
-  .line.you {
-    align-self: flex-end;
-    background: var(--fill-active);
+  /* A board reference: a small key with the document's own mark, the
+     status box for work, the TUI's dot for a decision. */
+  .lines :global(.ref) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    height: 18px;
+    padding: 0 5px;
+    margin: 0 1px;
+    border-radius: var(--r-chip);
+    background: var(--fill-code);
+    font-family: var(--mono);
+    font-size: var(--t-xs);
+    letter-spacing: 0.04em;
+    color: var(--ink-2);
+    vertical-align: 1px;
+    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
   }
 
-  .line.failed {
-    color: var(--danger);
-    background: var(--danger-soft);
+  .lines :global(.ref:hover) {
+    background: var(--fill-active);
+    color: var(--ink);
+  }
+
+  .lines :global(.ref-mark[data-kind='work']) {
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    box-shadow: inset 0 0 0 1.25px var(--ink-3);
+  }
+
+  .lines :global(.ref-mark[data-kind='work'][data-done]) {
+    background: var(--accent);
+    box-shadow: none;
+  }
+
+  .lines :global(.ref-mark[data-kind='decision'])::before {
+    content: '●';
+    font-size: 8px;
+    color: var(--ink-3);
+  }
+
+  .lines :global(.ref-mark[data-kind='decision'][data-retired])::before {
+    content: '○';
+  }
+
+  /* Copy waits under the reply for the hand. */
+  .copy {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-chip);
+    color: var(--ink-4);
+    opacity: 0;
+    transition: opacity var(--d-press) var(--ease), background var(--d-press) var(--ease);
+  }
+
+  .reply:hover .copy,
+  .copy:focus-visible {
+    opacity: 1;
+  }
+
+  .copy:hover {
+    background: var(--fill-hover);
+    color: var(--ink-2);
   }
 
   .empty {

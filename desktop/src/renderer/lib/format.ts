@@ -110,3 +110,26 @@ export function decisionGroups(decisions: DecisionView[]): { family: string; dec
     .map(([family, list]) => ({ family, decisions: list }))
     .sort((a, b) => (a.family === '' ? 1 : b.family === '' ? -1 : b.decisions.length - a.decisions.length || a.family.localeCompare(b.family)));
 }
+
+/** A moment in a chat, as a person says it: `Today 11:02`, `Yesterday 18:40`, `Oct 9, 14:03`. */
+export function dayTime(at: number): string {
+  const when = new Date(at);
+  const time = when.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  const day = new Date(when);
+  day.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((today.getTime() - day.getTime()) / 86_400_000);
+  if (days === 0) return `Today ${time}`;
+  if (days === 1) return `Yesterday ${time}`;
+  return `${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, ${time}`;
+}
+
+/** How long a turn took, in words: `9 seconds`, `1 minute 12 seconds`. */
+export function tookWords(ms: number): string {
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'}`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = seconds % 60;
+  return `${minutes} minute${minutes === 1 ? '' : 's'}${rest ? ` ${rest} second${rest === 1 ? '' : 's'}` : ''}`;
+}

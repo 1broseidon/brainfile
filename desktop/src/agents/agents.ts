@@ -29,6 +29,7 @@ import type {
   DispatchSettings,
   ModelOption,
   PermissionAsk,
+  RunStep,
   PermissionPolicy,
   Result,
 } from '../shared/api';
@@ -288,6 +289,8 @@ interface Session {
   messageId: string | null;
   /** A tool ran since the last text: the next text starts a new message. */
   breakNext: boolean;
+  /** The turn's tool calls by ID, in the order they started. */
+  tools: Map<string, { title: string; tool?: string; failed?: boolean; after: number }>;
   idle: NodeJS.Timeout | null;
   /** The agent's permission modes, and the one the session is in. */
   modes: ReturnType<typeof modesOf>;
@@ -370,6 +373,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     messages: [],
     messageId: null,
     breakNext: false,
+    tools: new Map(),
     idle: null,
     modes: null,
     mode: null,
@@ -387,7 +391,12 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
         else if (u.sessionUpdate === 'agent_thought_chunk' && run.activity !== 'thinking') update(run, { activity: 'thinking', state: 'working' });
         else if (u.sessionUpdate === 'tool_call') {
           session.breakNext = true;
+          session.tools.set(u.toolCallId, { title: u.title, tool: u.kind ?? undefined, after: session.messages.length });
           update(run, { activity: ACTIVITY[u.kind ?? ''] ?? 'working', state: 'working' });
+        } else if (u.sessionUpdate === 'tool_call_update') {
+          const known = session.tools.get(u.toolCallId);
+          if (known && u.title) known.title = u.title;
+          if (known && u.status === 'failed') known.failed = true;
         }
       },
     }),
@@ -492,6 +501,23 @@ function hear(session: Session, text: string, messageId: string | null): void {
   session.breakNext = false;
 }
 
+/**
+ * What the agent did on the way: its tool calls and what it wrote between
+ * them, in order, leaving out the reply itself. Capped, so a long turn
+ * stays a list to glance at.
+ */
+function stepsOf(session: Session, reply: string): RunStep[] {
+  const steps: RunStep[] = [];
+  const tools = [...session.tools.values()];
+  session.messages.forEach((message, i) => {
+    for (const t of tools.filter((t) => t.after === i)) steps.push({ kind: 'tool', title: t.title, tool: t.tool, ...(t.failed ? { failed: true } : {}) });
+    const text = message.trim();
+    if (text && text !== reply) steps.push({ kind: 'note', text });
+  });
+  for (const t of tools.filter((t) => t.after >= session.messages.length)) steps.push({ kind: 'tool', title: t.title, tool: t.tool, ...(t.failed ? { failed: true } : {}) });
+  return steps.slice(0, 60);
+}
+
 /** The reply: the turn's last message with something in it, not the narration before it. */
 function replyOf(session: Session): string {
   for (let i = session.messages.length - 1; i >= 0; i--) {
@@ -506,13 +532,15 @@ async function turn(session: Session, run: AgentRun, prompt: string): Promise<vo
   session.messages = [];
   session.messageId = null;
   session.breakNext = false;
+  session.tools = new Map();
   if (session.idle) clearTimeout(session.idle);
   update(run, { state: 'working', activity: 'thinking' });
   try {
     const result = await session.connection.prompt({ sessionId: session.sessionId, prompt: [{ type: 'text', text: prompt }] });
     if (run.state === 'stopped') return;
     const stopped = result.stopReason === 'cancelled';
-    update(run, { state: stopped ? 'stopped' : 'done', reply: replyOf(session), endedAt: Date.now() });
+    const reply = replyOf(session);
+    update(run, { state: stopped ? 'stopped' : 'done', reply, steps: stepsOf(session, reply), endedAt: Date.now() });
   } catch (err) {
     update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
   } finally {
@@ -599,13 +627,27 @@ const ASK_PREAMBLE =
   'If those tools are not available, use the `brainfile` command line in this directory instead (`brainfile list`, `brainfile add`, `brainfile move`, `brainfile --help`); do not edit the board’s files by hand. ' +
   'Do not change code unless asked. Reply briefly, in a sentence or two; if you changed the board, end with what you changed, by task ID, and say nothing about changes when there were none.\n\n';
 
+/**
+ * What the person has open as they ask, so "this" and "it" mean something:
+ * each document's ID, type and title, one line. Empty when nothing is open.
+ */
+function lookingAt(brainfilePath: string, ids: string[]): string {
+  const dirs = getV2Dirs(brainfilePath);
+  const lines = ids
+    .map((id) => findV2Task(dirs, id, true))
+    .filter((found): found is NonNullable<typeof found> => !!found)
+    .map(({ doc, isLog }) => `${doc.task.id} (${doc.task.type ?? 'task'}${isLog ? ', completed' : ''}): "${doc.task.title}"`);
+  return lines.length ? `[The person has ${lines.join(' and ')} open on the board as they ask this.]\n\n` : '';
+}
+
 async function ask(
   projectId: string,
   agentId: AgentId,
   text: string,
   threadId: string,
   model?: string,
-  earlier: ChatTurn[] = []
+  earlier: ChatTurn[] = [],
+  context: string[] = []
 ): Promise<Result<AgentRun>> {
   const key = `ask:${threadId}:${agentId}:${model ?? ''}`;
   const run = newRun(projectId, agentId, 'ask');
@@ -618,9 +660,10 @@ async function ask(
       const past = existing || earlier.length === 0
         ? ''
         : `Earlier in this conversation:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
-      const located = existing ? null : locateBoard(projectId, { materialize: false });
-      const decisions = located?.found ? `${standingDecisions(located.brainfilePath).trim()}\n\n` : '';
-      await turn(session, run, existing ? text : ASK_PREAMBLE + (decisions.trim() ? decisions : '') + past + text);
+      const located = locateBoard(projectId, { materialize: false });
+      const decisions = !existing && located.found ? `${standingDecisions(located.brainfilePath).trim()}\n\n` : '';
+      const looking = located.found ? lookingAt(located.brainfilePath, context) : '';
+      await turn(session, run, (existing ? '' : ASK_PREAMBLE + (decisions.trim() ? decisions : '') + past) + looking + text);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
     }

@@ -266,6 +266,17 @@ board changes (and in the feed).
   last message. Beside the agent, a muted model picker lists the models the agent
   itself reports (asked once a day); unset means the agent's default, and
   Hand to… uses the same choice.
+- **The chat's thread reads like Linear's agent window, calmed.** The header
+  carries the thread's title (its first line) once there is one, the board's
+  name before. The thread's start is said once, centred, in mono. Yours sits
+  on the right on the raised plane; the reply is plain text on the popover,
+  with a copy key under it for the hand. The task open in the pane goes
+  along as context (`task-10 in context` under your line), so "this" means
+  it. Above a reply, "Worked for 19 seconds ›" folds away what the agent did
+  on the way: the tools it ran, in mono (`brainfile · get_task`), and what it
+  said between them. Any ID the board knows in a reply (`task-12`,
+  `decision-2`) is a small key with its own mark, the status box or the
+  decision dot, that opens it in the pane.
 - **When an agent asks first**, it is said where you are looking: inside the
   chat for a chat turn, in the task pane for a dispatched task, and in the
   board's band either way, with Allow once · Always · Deny in that order

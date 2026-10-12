@@ -217,7 +217,12 @@ export interface AgentRun {
   error?: string;
   startedAt: number;
   endedAt?: number;
+  /** What the agent did on the way to its reply, in order: tools it ran and what it said between them. */
+  steps?: RunStep[];
 }
+
+/** One step of a turn: a tool the agent ran, or a line it wrote before its answer. */
+export type RunStep = { kind: 'tool'; title: string; tool?: string; failed?: boolean } | { kind: 'note'; text: string };
 
 /** An agent asking before it acts, answered in the board's band. */
 export interface PermissionAsk {
@@ -301,7 +306,16 @@ export interface Api {
   setSettings(patch: Partial<DispatchSettings>): Promise<DispatchSettings>;
   dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>>;
   /** One turn in a chat thread; earlier lines come along in case the agent's session has gone. */
-  ask(projectId: string, agentId: AgentId, text: string, threadId: string, model?: string, earlier?: ChatTurn[]): Promise<Result<AgentRun>>;
+  /** `context` names what the person has open (a task's ID), so "this" means it. */
+  ask(
+    projectId: string,
+    agentId: AgentId,
+    text: string,
+    threadId: string,
+    model?: string,
+    earlier?: ChatTurn[],
+    context?: string[]
+  ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
   answerPermission(askId: string, optionId: string | null): Promise<void>;
   onAgentEvent(listener: (event: AgentEvent) => void): () => void;

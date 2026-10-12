@@ -14,6 +14,7 @@ import type {
   ModelOption,
   PermissionAsk,
   Project,
+  RunStep,
 } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
 import { asTree, decisionGroups } from './format';
@@ -76,6 +77,11 @@ export interface ChatLine {
   text: string;
   at: number;
   failed?: boolean;
+  /** Yours: what you had open as you asked (a task's ID), sent along as context. */
+  context?: string[];
+  /** The agent's: what it did on the way to this reply, and how long it took. */
+  steps?: RunStep[];
+  took?: number;
 }
 
 const LIVE = new Set(['starting', 'working', 'waiting']);
@@ -371,8 +377,16 @@ class AppState {
       this.thread[projectId] = thread.id;
     }
     const earlier = thread.lines.filter((l) => !l.failed).map((l) => ({ who: l.who, text: l.text }));
-    this.addLine(projectId, thread.id, { key: `you-${Date.now()}`, who: 'you', text: text.trim(), at: Date.now() });
-    const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier);
+    // What is open in the pane goes along, so "this" means it.
+    const context = this.openTaskId ? [this.openTaskId] : [];
+    this.addLine(projectId, thread.id, {
+      key: `you-${Date.now()}`,
+      who: 'you',
+      text: text.trim(),
+      at: Date.now(),
+      ...(context.length ? { context } : {}),
+    });
+    const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier, context);
     if (!result.ok) this.addLine(projectId, thread.id, { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true });
   }
 
@@ -383,7 +397,15 @@ class AppState {
     if (!ended) return;
     if (run.kind === 'ask' && run.threadId) {
       const text = run.state === 'done' ? run.reply || 'Done.' : run.state === 'stopped' ? 'Stopped.' : (run.error ?? 'It stopped.');
-      this.addLine(run.projectId, run.threadId, { key: run.id, who: 'agent', text, at: Date.now(), failed: run.state === 'failed' });
+      this.addLine(run.projectId, run.threadId, {
+        key: run.id,
+        who: 'agent',
+        text,
+        at: Date.now(),
+        failed: run.state === 'failed',
+        ...(run.steps?.length ? { steps: run.steps } : {}),
+        ...(run.endedAt ? { took: run.endedAt - run.startedAt } : {}),
+      });
     } else if (run.state === 'failed') {
       this.notify(`${this.agentName(run.agentId)} stopped on ${run.taskId}: ${run.error ?? 'unknown error'}`, 'warn');
     }
