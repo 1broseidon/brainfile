@@ -1,8 +1,6 @@
 ---
 id: task-32
 title: "Sync health: quiet, true, and in one place"
-column: review
-position: 1
 priority: high
 tags:
   - desktop
@@ -10,7 +8,8 @@ tags:
   - calm
   - bug
 createdAt: "2026-10-12T21:12:16.663Z"
-updatedAt: "2026-10-12T21:20:02.772Z"
+updatedAt: "2026-10-12T21:53:50.841Z"
+completedAt: "2026-10-12T21:53:50.841Z"
 ---
 
 ## Description
