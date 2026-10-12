@@ -5,8 +5,11 @@
 </script>
 
 <!-- The window's strip is the well itself: the rail's key after the lights,
-     the mark alone in the centre, the search at the right. -->
-<header class="strip drag">
+     the mark at the head of the board, the search at the right. The mark's
+     hard left edge stands on the same line as the board's title below it,
+     so it is aligned rather than centred; with the rail closed it follows
+     the key. -->
+<header class="strip drag" style:--lead={app.layout.railOpen ? `${app.layout.rail + 16}px` : 'auto'}>
   <div class="left">
     <button
       class="icon-btn no-drag"
@@ -18,7 +21,7 @@
     </button>
   </div>
 
-  <div class="mark" title="Brainfile"><Mark size={18} /></div>
+  <div class="mark" class:follows={!app.layout.railOpen} title="Brainfile"><Mark size={18} /></div>
 
   <div class="right">
     <button class="search field no-drag" onclick={() => (app.paletteOpen = true)}>
@@ -34,7 +37,7 @@
     height: var(--strip-h);
     flex: none;
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: var(--lead) auto 1fr;
     align-items: center;
     padding: 0 var(--gap);
   }
@@ -54,6 +57,13 @@
   .mark {
     display: inline-flex;
     color: var(--ink-3);
+    /* The box starts 10 units into its 64 grid; pull it back so its hard
+       edge, not its viewBox, sits on the title's line. */
+    margin-left: -2px;
+  }
+
+  .mark.follows {
+    margin-left: var(--s3);
   }
 
   .right {

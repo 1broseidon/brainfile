@@ -22,7 +22,10 @@ One family, **Workbench**:
 
 - The window's top strip is the well itself: 32px, the traffic lights and
   then the key that shows and hides the rail (⌘B) in the left corner, the
-  mark alone in the centre, the search at the right.
+  mark at the head of the board, the search at the right. Unlike Hotline's
+  centred toad, the mark has a hard left edge, so it is aligned, not
+  centred: that edge stands on the same line as the board's title below it,
+  and with the rail closed it follows the key.
 - The **rail** stands directly in the well: Projects, one row each, the
   folder's name over one mono line (`13 open · branch`). Its edge is the
   gutter beside it, dragged between 180 and 420px, remembered, put back by a
