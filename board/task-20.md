@@ -10,7 +10,7 @@ tags:
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
 assignee: claude
-updatedAt: "2026-10-12T19:22:27.323Z"
+updatedAt: "2026-10-12T19:22:27.607Z"
 subtasks:
   - id: task-20-1
     title: "Host: completed children travel with their parent past the Done limit"
@@ -20,7 +20,7 @@ subtasks:
     completed: true
   - id: task-20-3
     title: "Keyboard: j/k follow the outline; folds live in app state"
-    completed: false
+    completed: true
   - id: task-20-4
     title: "Board view: parent card shows its children's boxes"
     completed: false
