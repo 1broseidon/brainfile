@@ -248,7 +248,7 @@ function captureAndQuit(target: BrowserWindow, file: string): void {
   });
 }
 
-app.whenReady().then(() => {
+function start(): void {
   // A packaged app takes its icon from the bundle; in development the Dock
   // would show Electron's, so lend it the tile.
   if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '..', 'assets', 'icon.png'));
@@ -260,7 +260,20 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (!win) createWindow();
   });
-});
+  app.on('second-instance', () => {
+    if (!win) return createWindow();
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  });
+}
+
+// One packaged app per data folder: a second copy (another Brainfile.app, or
+// `open -n`) hands over to the first rather than opening the same projects,
+// localStorage and boards twice. Development runs skip the lock, since the dev
+// loop restarts Electron while the old one is still letting go.
+if (!app.isPackaged || app.requestSingleInstanceLock()) void app.whenReady().then(start);
+else app.quit();
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
