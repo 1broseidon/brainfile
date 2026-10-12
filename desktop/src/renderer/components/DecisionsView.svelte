@@ -5,7 +5,8 @@
    * A decision is not work, so it has no status box: its row leads with the
    * TUI's decision glyph, and says at rest only what needs saying (a kind
    * other than decision, a decision still proposed or past its date). The
-   * claim key, the stance and what it replaced wait for the hand.
+   * rest of its claim key waits for the hand; its stance and chain are in
+   * the task pane, so the title keeps the row.
    */
   import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
@@ -50,11 +51,10 @@
     <span class="title-block">
       <span class="title">{d.title}</span>
       {#if d.claimKey}<span class="key mono reveal">{retired ? d.claimKey : tail(d)}</span>{/if}
-      {#if d.stance && d.subject}<span class="stance mono reveal">{d.stance} {d.subject}</span>{/if}
     </span>
     <span class="signals">
       {#if retired}
-        <span class="mono quiet">{d.status}{#if d.supersededBy} → {d.supersededBy}{/if}</span>
+        <span class="mono quiet">{d.status}{#if d.supersededBy}{` → ${d.supersededBy}`}{/if}</span>
       {:else}
         {#if d.status === 'proposed'}<span class="mono quiet">proposed</span>{/if}
         {#if d.kind && d.kind !== 'decision'}<span class="mono quiet">{d.kind}</span>{/if}
@@ -63,7 +63,6 @@
         {:else if d.validUntil}
           <span class="mono quiet" use:tip={'Valid until'}>{shortDate(d.validUntil)}</span>
         {/if}
-        {#if d.supersedes.length}<span class="mono quiet reveal">replaces {d.supersedes.join(', ')}</span>{/if}
       {/if}
     </span>
   </div>
@@ -234,8 +233,7 @@
     color: var(--ink-3);
   }
 
-  .key,
-  .stance {
+  .key {
     flex: none;
     color: var(--ink-4);
   }

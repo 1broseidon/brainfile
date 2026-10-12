@@ -213,7 +213,8 @@ window takes a document's role and glyph from core, never from its own table.
   away below, like Done. A row leads with ● where a task has its box, ○ once
   retired, and says at rest only a kind other than decision, a legacy
   `proposed`, or a date: `review` in the warn colour once `validUntil` has
-  passed. The claim key, the stance and what it replaced wait for the hand.
+  passed. The rest of the claim key waits for the hand; the stance and the
+  chain are in the task pane, so the title keeps the row.
 - **In the task pane** a decision shows its claim key, kind, stance, holds
   while, recheck, valid until and the chain it sits in, and the open work
   resting on it. Work shows the decisions it rests on; one since replaced
@@ -266,6 +267,11 @@ board changes (and in the feed).
   ("Antigravity wants to run `ls -a`"); a board not in front is named in the
   strip. Brainfile's own board tools are never asked about: every change
   they make is a commit on the board the agent was asked to manage.
+- **Every agent is told the board's standing decisions.** Hand to… and the
+  chat's first turn carry the current decisions, one line each with their
+  claim keys (the first 15; the rest by `brainfile list --type decision`),
+  with the rule: work within them, run `check` before going against one, and
+  record a new lasting choice with `decide`.
 - **Every agent gets the board tools.** The MCP server is started as the
   real `node` binary and the CLI's own file, with PATH and HOME passed,
   because some agents (Codex) start MCP servers in a stripped environment

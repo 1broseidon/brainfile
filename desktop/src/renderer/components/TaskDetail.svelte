@@ -361,7 +361,7 @@
                   <span class="cid ref mono">{id}</span>
                   <span class="clip" class:dim={!d}>{d?.title ?? 'not on this board'}</span>
                   {#if d && d.status !== 'current' && d.status !== 'proposed'}
-                    <span class="mono retired">{d.status}{#if d.supersededBy} → {d.supersededBy}{/if}</span>
+                    <span class="mono retired">{d.status}{#if d.supersededBy}{` → ${d.supersededBy}`}{/if}</span>
                   {/if}
                 </button>
               </li>
