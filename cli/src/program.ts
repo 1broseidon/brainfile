@@ -492,7 +492,9 @@ Brainfile file resolution (when you don't pass --file):
     .option('--title <text>', 'Task title (for template usage)')
     .option('--description <text>', 'Task description (for template usage)')
     .option('-c, --column <name>', 'Column to add task to', 'todo')
-    .action((options) => { templateCommand(options); });
+    .action((options) => {
+      if (!templateCommand(options).success) process.exitCode = 1;
+    });
 
   program
     .command('lint')
@@ -638,7 +640,9 @@ Brainfile file resolution (when you don't pass --file):
     .description('Validate contract deliverables and commands; set status done/failed')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to validate (required)')
-    .action((options) => { contractValidateCommand(options); });
+    .action((options) => {
+      if (!contractValidateCommand(options).success) process.exitCode = 1;
+    });
   contractValidateCmd.addHelpText('after', `\n${CONTRACT_VALIDATE_HELP}`);
 
   const contractAttachCmd = contractCmd
