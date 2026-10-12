@@ -11,7 +11,7 @@ createdAt: "2026-10-12T15:35:49.043Z"
 subtasks:
   - id: task-19-1
     title: Decisions leave the column list (no column, no longer fall into one)
-    completed: false
+    completed: true
   - id: task-19-2
     title: "Decisions view: standing decisions by claim-key family, history folded; t decision stop + direct key"
     completed: false
@@ -24,7 +24,7 @@ subtasks:
   - id: task-19-5
     title: Help overlay, footer hints, NO_COLOR, narrow widths; TUI tests for each; MANUAL + CHANGELOG
     completed: false
-updatedAt: "2026-10-12T15:37:35.067Z"
+updatedAt: "2026-10-12T16:03:03.634Z"
 ---
 
 ## Description
