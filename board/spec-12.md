@@ -21,7 +21,10 @@ subtasks:
   - id: spec-12-3
     title: "decisions: edge on work, computed reverse, flag work resting on a superseded decision"
     completed: false
-updatedAt: "2026-10-12T05:45:06.722Z"
+  - id: spec-12-4
+    title: "CLI: add --parent checks, list --tree, show with edges, types lists the graph; MCP accepts aliases and decisions"
+    completed: false
+updatedAt: "2026-10-12T05:45:07.003Z"
 ---
 
 ## Description
