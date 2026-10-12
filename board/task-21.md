@@ -22,3 +22,4 @@ Editor links in replies only find apps in /Applications, and terminal editors on
 
 ## Log
 - 2026-10-12T23:44:00.615Z: [codex-task-21] Implemented layered editor discovery and terminal launch plans; Zed installed via Homebrew. Adding platform fixtures and validating quoting, running-editor preference and login-shell EDITOR before committing.
+- 2026-10-12T23:50:41.769Z: [codex-task-21] Implemented layered PATH/OS-install/URL editor discovery, terminal launchers across macOS/Linux/Windows, login-shell Your $EDITOR, and running-editor-first Automatic. Committed as 86c2a69 on dispatch/task-21; worktree clean. Desktop build/typecheck and tests pass (14 editor regression cases); Windows/Linux checked with fixtures. Installed Zed 1.23.3 and verified detection plus file:line launch via Electron; Terminal.app AppleScript compiles.
