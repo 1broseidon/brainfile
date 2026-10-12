@@ -24,7 +24,10 @@ subtasks:
   - id: spec-16-3
     title: "Phase 1: chat shows 'handed to codex' under the reply; dispatch from the task-in-context"
     completed: false
-updatedAt: "2026-10-12T23:16:19.193Z"
+  - id: spec-16-4
+    title: "Phase 2: queues: tasks, a column, an epic; waves by dependsOn; N at once per repo (default 3)"
+    completed: false
+updatedAt: "2026-10-12T23:16:19.657Z"
 ---
 
 ## Description
