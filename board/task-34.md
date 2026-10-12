@@ -9,7 +9,7 @@ tags:
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
-updatedAt: "2026-10-12T22:05:14.344Z"
+updatedAt: "2026-10-12T22:05:14.860Z"
 subtasks:
   - id: task-34-1
     title: "Health rows: problem sentence under the name, Fix / Ask agent keys; long row tooltip dropped, short words (two copies, old copy in main, N unsent…)"
@@ -31,7 +31,7 @@ subtasks:
     completed: true
   - id: task-34-7
     title: "Checks: svelte-check 0/0, tsc, vite build, build-electron, desktop npm test 21/21, core jest 879/879, root build; offscreen captures of list, confirm, done, undo, ask"
-    completed: false
+    completed: true
 ---
 
 ## Description
