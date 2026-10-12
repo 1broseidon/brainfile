@@ -1,106 +1,40 @@
 /**
- * The person's editors, found on this Mac, and how each opens a file at a
+ * The person's editors, found across supported platforms, and how each opens a file at a
  * line. A file named in an agent's reply (`core/src/linter.ts:74`) opens in
- * the one chosen in Settings; with none chosen, the first found here.
+ * the one chosen in Settings; with none chosen, a running editor, then the first found.
  */
-import { spawn, spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
+import spawn from 'cross-spawn';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { shell } from 'electron';
+import { app, shell } from 'electron';
+import { discoverEditors, findTerminal, selectEditor, runningProcesses, terminalInvocation, editorUrl, type EditorHost } from './editorDiscovery';
 import type { EditorInfo, Result } from '../shared/api';
-
-interface Editor {
-  id: string;
-  name: string;
-  /** The app bundle, looked for in /Applications and ~/Applications. */
-  app?: string;
-  /** Where the bundle keeps its command line, or a command on PATH. */
-  cli: (bundle: string) => string;
-  /** The arguments that open `file` at `line`. */
-  args: (file: string, line?: number) => string[];
-  /** A terminal editor, run in Ghostty. */
-  terminal?: boolean;
-}
-
-const at = (file: string, line?: number) => (line ? `${file}:${line}` : file);
-const vscodeLike = (app: string, bin: string): Pick<Editor, 'app' | 'cli' | 'args'> => ({
-  app,
-  cli: (bundle) => path.join(bundle, 'Contents/Resources/app/bin', bin),
-  // `-g` is for a file at a line; a folder opens as itself.
-  args: (file, line) => (line ? ['-g', at(file, line)] : [file]),
-});
-const jetbrains = (id: string, name: string, app: string, bin: string): Editor => ({
-  id,
-  name,
-  app,
-  cli: (bundle) => path.join(bundle, 'Contents/MacOS', bin),
-  args: (file, line) => (line ? ['--line', String(line), file] : [file]),
-});
-
-/** In the order a default is chosen when the person has not chosen one. */
-const EDITORS: Editor[] = [
-  { id: 'cursor', name: 'Cursor', ...vscodeLike('Cursor.app', 'cursor') },
-  { id: 'vscode', name: 'Visual Studio Code', ...vscodeLike('Visual Studio Code.app', 'code') },
-  { id: 'zed', name: 'Zed', app: 'Zed.app', cli: (bundle) => path.join(bundle, 'Contents/MacOS/cli'), args: (file, line) => [at(file, line)] },
-  { id: 'windsurf', name: 'Windsurf', ...vscodeLike('Windsurf.app', 'windsurf') },
-  // The editor is Antigravity IDE; plain Antigravity (2.x) is the agent manager, not an editor.
-  { id: 'antigravity', name: 'Antigravity IDE', ...vscodeLike('Antigravity IDE.app', 'antigravity-ide') },
-  {
-    id: 'sublime',
-    name: 'Sublime Text',
-    app: 'Sublime Text.app',
-    cli: (bundle) => path.join(bundle, 'Contents/SharedSupport/bin/subl'),
-    args: (file, line) => [at(file, line)],
-  },
-  jetbrains('webstorm', 'WebStorm', 'WebStorm.app', 'webstorm'),
-  jetbrains('idea', 'IntelliJ IDEA', 'IntelliJ IDEA.app', 'idea'),
-  jetbrains('goland', 'GoLand', 'GoLand.app', 'goland'),
-  jetbrains('pycharm', 'PyCharm', 'PyCharm.app', 'pycharm'),
-  jetbrains('rustrover', 'RustRover', 'RustRover.app', 'rustrover'),
-  {
-    id: 'bbedit',
-    name: 'BBEdit',
-    app: 'BBEdit.app',
-    cli: (bundle) => path.join(bundle, 'Contents/Helpers/bbedit_tool'),
-    args: (file, line) => (line ? [`+${line}`, file] : [file]),
-  },
-  { id: 'xcode', name: 'Xcode', app: 'Xcode.app', cli: () => '/usr/bin/xed', args: (file, line) => (line ? ['--line', String(line), file] : [file]) },
-  { id: 'nvim', name: 'Neovim', terminal: true, cli: () => 'nvim', args: (file, line) => (line ? [`+${line}`, file] : [file]) },
-  { id: 'hx', name: 'Helix', terminal: true, cli: () => 'hx', args: (file, line) => [at(file, line)] },
-  { id: 'vim', name: 'Vim', terminal: true, cli: () => 'vim', args: (file, line) => (line ? [`+${line}`, file] : [file]) },
-];
 
 const SYSTEM: EditorInfo = { id: 'system', name: 'The file’s default app' };
 
-function bundleOf(app: string): string | null {
-  for (const dir of ['/Applications', path.join(os.homedir(), 'Applications')]) {
-    const bundle = path.join(dir, app);
-    if (fs.existsSync(bundle)) return bundle;
-  }
-  return null;
-}
+const host: EditorHost = {
+  platform: process.platform,
+  home: os.homedir(),
+  env: process.env,
+  exists: (file) => { try { fs.accessSync(file, process.platform === 'win32' ? fs.constants.F_OK : fs.constants.X_OK); return true; } catch { return false; } },
+  entries: (dir) => { try { return fs.readdirSync(dir); } catch { return []; } },
+  run: (command, args) => {
+    const r = spawnSync(command, args, { encoding: 'utf-8', timeout: 4000, windowsHide: true });
+    return r.status === 0 ? (r.stdout ?? '').trim() : '';
+  },
+  protocol: (scheme) => { try { return app.getApplicationNameForProtocol(`${scheme}://`); } catch { return ''; } },
+};
 
-function which(command: string): string | null {
-  const r = spawnSync('/usr/bin/which', [command], { encoding: 'utf-8' });
-  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : null;
-}
-
-const ghostty = () => bundleOf('Ghostty.app');
-
-/** How to run an editor that is here, or null when it is not. */
-function resolve(editor: Editor): string | null {
-  if (editor.terminal) return ghostty() ? which(editor.cli('')) : null;
-  const bundle = editor.app ? bundleOf(editor.app) : null;
-  if (!bundle) return null;
-  const cli = editor.cli(bundle);
-  return fs.existsSync(cli) ? cli : null;
-}
-
-/** The editors on this Mac, best first, then the file's default app. */
 export function listEditors(): EditorInfo[] {
-  const found = EDITORS.filter((e) => resolve(e)).map((e) => ({ id: e.id, name: e.terminal ? `${e.name} in Ghostty` : e.name }));
-  return [...found, SYSTEM];
+  const found = discoverEditors(host);
+  const terminal = findTerminal(host);
+  return [
+    { id: 'auto', name: 'Automatic (running editor, then first found)' },
+    ...found.map(({ editor }) => ({ id: editor.id, name: editor.terminal ? `${editor.name} in ${terminal?.name}` : editor.name })),
+    SYSTEM,
+  ];
 }
 
 /** A file in the project, or nothing: a path outside it, or one that is not there, is never opened. */
@@ -127,7 +61,7 @@ export function openInEditor(projectId: string, file: string, line: number | und
   return { ok: true, value: undefined };
 }
 
-/** Opens a folder (a hand-off's worktree) as the editor's project; the default app is Finder. */
+/** Opens a folder (a hand-off's worktree) as the editor's project. */
 export function openFolder(folder: string, editorId: string | undefined): Result {
   if (!fs.statSync(folder, { throwIfNoEntry: false })?.isDirectory()) return { ok: false, error: `${folder} is not there` };
   launch(folder, folder, undefined, editorId);
@@ -135,19 +69,20 @@ export function openFolder(folder: string, editorId: string | undefined): Result
 }
 
 function launch(target: string, cwd: string, line: number | undefined, editorId: string | undefined): void {
-  const editor = EDITORS.find((e) => e.id === editorId && resolve(e)) ?? EDITORS.find((e) => resolve(e));
-  if (!editor || editorId === 'system') {
-    void shell.openPath(target);
+  if (editorId === 'system') { void shell.openPath(target); return; }
+  const found = discoverEditors(host);
+  const selected = selectEditor(found, editorId, runningProcesses(host));
+  if (!selected) { void shell.openPath(target); return; }
+  if (selected.scheme) {
+    void shell.openExternal(editorUrl(selected.editor, selected.scheme, target, line)).catch(() => shell.openPath(target));
     return;
   }
-  const command = resolve(editor)!;
-  const args = editor.args(target, line);
-  const child = editor.terminal
-    ? spawn('/usr/bin/open', ['-na', 'Ghostty', '--args', `--working-directory=${cwd}`, '-e', command, ...args], {
-        detached: true,
-        stdio: 'ignore',
-      })
-    : spawn(command, args, { cwd, env: process.env, detached: true, stdio: 'ignore' });
+  const args = [...(selected.prefix ?? []), ...selected.editor.args(target, line)];
+  const invocation = selected.editor.terminal ? terminalInvocation(host, selected.command!, args, cwd) : { command: selected.command!, args };
+  if (!invocation) { void shell.openPath(target); return; }
+  // cross-spawn handles Windows .cmd PATH shims and their argument escaping.
+  const child = spawn(invocation.command, invocation.args, { cwd, env: process.env, detached: true, stdio: 'ignore', windowsHide: false });
   child.on('error', () => void shell.openPath(target));
+  child.on('exit', (code) => { if (code !== null && code !== 0) void shell.openPath(target); });
   child.unref();
 }

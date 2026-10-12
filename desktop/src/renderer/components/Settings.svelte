@@ -20,7 +20,7 @@
     void app.refreshEditors();
   });
 
-  /** The editor files open in now: the one chosen, else the first found. */
+  /** The editor files open in now: the chosen editor, else automatic. */
   const editorNow = $derived(app.editors.find((e) => e.id === app.editor) ?? app.editors[0]);
 
   $effect(() => {
@@ -149,7 +149,7 @@
           {/if}
         </div>
       </div>
-      <p class="foot">Found on this Mac: editors in Applications, and terminal editors when Ghostty is here.</p>
+      <p class="foot">Found on your computer and PATH, including your $EDITOR. Automatic prefers a running editor, then the first found.</p>
     </section>
   </div>
 </div>

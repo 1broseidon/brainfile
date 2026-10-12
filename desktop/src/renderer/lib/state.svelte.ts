@@ -204,7 +204,7 @@ class AppState {
       return [];
     }
   })());
-  /** The editors on this Mac, and the one files open in (unset: the first found). */
+  /** The available editors; unset uses a running editor, then the first found. */
   editors = $state<EditorInfo[]>([]);
   editor = $state<string | null>(localStorage.getItem(EDITOR_KEY));
   /** Each agent's permission modes, as it reports them; null when it has none. */
