@@ -10,14 +10,14 @@ tags:
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
 assignee: claude
-updatedAt: "2026-10-12T19:22:27.033Z"
+updatedAt: "2026-10-12T19:22:27.323Z"
 subtasks:
   - id: task-20-1
     title: "Host: completed children travel with their parent past the Done limit"
     completed: true
   - id: task-20-2
     title: "List: outline across columns (format.ts outline, ListView, counts)"
-    completed: false
+    completed: true
   - id: task-20-3
     title: "Keyboard: j/k follow the outline; folds live in app state"
     completed: false
