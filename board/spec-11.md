@@ -37,7 +37,10 @@ subtasks:
   - id: spec-11-8
     title: "Recoil: last release pointing to Brainfile, archive (owner's call)"
     completed: false
-updatedAt: "2026-10-12T05:36:59.259Z"
+updatedAt: "2026-10-12T06:04:13.593Z"
+parentId: epic-2
+dependsOn:
+  - spec-12
 ---
 
 ## Description
