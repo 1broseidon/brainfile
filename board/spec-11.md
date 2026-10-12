@@ -34,7 +34,10 @@ subtasks:
   - id: spec-11-7
     title: "Desktop: Decisions view; decisions carried in Hand to… and chat briefs"
     completed: false
-updatedAt: "2026-10-12T05:36:58.984Z"
+  - id: spec-11-8
+    title: "Recoil: last release pointing to Brainfile, archive (owner's call)"
+    completed: false
+updatedAt: "2026-10-12T05:36:59.259Z"
 ---
 
 ## Description
