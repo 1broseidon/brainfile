@@ -2,14 +2,15 @@
 id: epic-2
 title: Memory and the graph
 type: epic
-column: todo
-position: 6
+column: in-progress
+position: 0
 tags:
   - memory
   - graph
   - types
   - recoil
 createdAt: "2026-10-12T05:52:24.425Z"
+updatedAt: "2026-10-12T05:53:10.076Z"
 ---
 
 ## Description
