@@ -1,7 +1,7 @@
 ---
 id: task-33
 title: "Tooltips: two or three words, five at most"
-column: todo
+column: in-progress
 position: 3
 priority: medium
 tags:
@@ -9,6 +9,7 @@ tags:
   - copy
   - calm
 createdAt: "2026-10-12T21:23:49.013Z"
+updatedAt: "2026-10-12T21:35:01.455Z"
 ---
 
 ## Description
