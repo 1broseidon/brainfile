@@ -81,6 +81,8 @@ export interface TaskFilePatch {
   dueDate?: string | null;
   relatedFiles?: string[] | null;
   parentId?: string | null;
+  /** Replaces the whole list. Entries are trimmed and de-duplicated; an empty list clears it. */
+  dependsOn?: string[] | null;
   status?: string | null;
 }
 
@@ -613,6 +615,9 @@ export function patchTaskFile(taskPath: string, patch: TaskFilePatch): TaskOpera
   applyField('dueDate', patch.dueDate);
   applyField('relatedFiles', patch.relatedFiles);
   applyField('parentId', patch.parentId);
+  if (patch.dependsOn !== undefined) {
+    applyField('dependsOn', patch.dependsOn === null ? null : (normalizeTaskDependencyIds(patch.dependsOn) ?? null));
+  }
   applyField('status', patch.status);
 
   task.updatedAt = new Date().toISOString();

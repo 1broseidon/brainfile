@@ -1247,6 +1247,20 @@ describe('taskOperations', () => {
       expect(readTaskFile(filePath)!.task.tags).toBeUndefined();
     });
 
+    it('sets, normalises and clears dependsOn', () => {
+      const filePath = seedTask('task-1', 'todo');
+
+      patchTaskFile(filePath, { dependsOn: [' task-2 ', 'task-3', 'task-2', 'mobile:task-9'] });
+      expect(readTaskFile(filePath)!.task.dependsOn).toEqual(['task-2', 'task-3', 'mobile:task-9']);
+
+      patchTaskFile(filePath, { dependsOn: [] });
+      expect(readTaskFile(filePath)!.task.dependsOn).toBeUndefined();
+
+      patchTaskFile(filePath, { dependsOn: ['task-4'] });
+      patchTaskFile(filePath, { dependsOn: null });
+      expect(readTaskFile(filePath)!.task.dependsOn).toBeUndefined();
+    });
+
     it('sets and clears relatedFiles', () => {
       const filePath = seedTask('task-1', 'todo');
 

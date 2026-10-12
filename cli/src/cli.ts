@@ -31,7 +31,7 @@ async function runTui(options: { file: string }): Promise<void> {
   const { tuiCommand } = await import('./commands/tui');
   return tuiCommand(options);
 }
-import { patchCommand } from './commands/patch';
+import { patchCommand, PATCH_COMMAND_HELP } from './commands/patch';
 import { deleteCommand } from './commands/delete';
 import { archiveCommand } from './commands/archive';
 import { restoreCommand } from './commands/restore';
@@ -273,7 +273,7 @@ Brainfile file resolution (when you don't pass --file):
     .action((options) => { addCommand(options); });
   addCmd.addHelpText('after', `\n${ADD_COMMAND_HELP}`);
 
-  program
+  const patchCmd = program
     .command('patch')
     .description('Update task fields (partial update)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
@@ -288,7 +288,12 @@ Brainfile file resolution (when you don't pass --file):
     .option('--clear-assignee', 'Remove assignee')
     .option('--clear-due-date', 'Remove due date')
     .option('--clear-priority', 'Remove priority')
-    .action(patchCommand);
+    .option('--parent <id>', 'New parent ID (parentId)')
+    .option('--clear-parent', 'Remove the parent link')
+    .option('--depends-on <ids>', 'Comma-separated task IDs this task depends on (replaces the list)')
+    .option('--clear-depends-on', 'Remove all dependencies')
+    .action((options) => { patchCommand(options); });
+  patchCmd.addHelpText('after', `\n${PATCH_COMMAND_HELP}`);
 
   program
     .command('delete')
