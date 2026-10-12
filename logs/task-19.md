@@ -1,8 +1,6 @@
 ---
 id: task-19
 title: "TUI: parity with the decision framework"
-column: review
-position: 3
 tags:
   - tui
   - decisions
@@ -24,7 +22,8 @@ subtasks:
   - id: task-19-5
     title: Help overlay, footer hints, NO_COLOR, narrow widths; TUI tests for each; MANUAL + CHANGELOG
     completed: true
-updatedAt: "2026-10-12T16:12:04.205Z"
+updatedAt: "2026-10-12T18:47:39.960Z"
+completedAt: "2026-10-12T18:47:39.960Z"
 ---
 
 ## Description
