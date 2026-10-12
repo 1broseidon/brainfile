@@ -18,7 +18,10 @@ subtasks:
   - id: spec-16-1
     title: "Board record: dispatch request and runner claim in frontmatter (agent, model, by, at, until, claimedBy + heartbeat); core read/write + lint"
     completed: false
-updatedAt: "2026-10-12T23:16:18.283Z"
+  - id: spec-16-2
+    title: "Phase 1: desktop MCP server for its own chat agents: dispatch, runs, stop; through Hand to… (worktree, dock tab, asks, Review)"
+    completed: false
+updatedAt: "2026-10-12T23:16:18.743Z"
 ---
 
 ## Description
