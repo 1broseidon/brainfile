@@ -22,16 +22,16 @@ decisions:
 subtasks:
   - id: task-36-1
     title: Add the Hand-offs section to desktop/README.md
-    completed: false
+    completed: true
   - id: task-36-2
     title: Commit on the dispatch branch
-    completed: false
+    completed: true
   - id: task-36-3
     title: Move the task to Review
     completed: false
 createdAt: "2026-10-12T23:14:13.926Z"
 assignee: grok
-updatedAt: "2026-10-12T23:15:28.199Z"
+updatedAt: "2026-10-12T23:16:19.576Z"
 ---
 
 ## Description
