@@ -35,3 +35,6 @@ The desktop got a Decisions view and decision details overnight (spec-11/12); th
 - A decision's detail: claim key, kind, stance and subject, holds while, recheck, valid until (review once past), replaces / replaced by (navigable), and the open work resting on it.
 - Work's detail shows the decisions it rests on; a row resting on a replaced decision says so.
 - Help overlay, footer hints, NO_COLOR and narrow widths covered; TUI tests for each.
+
+## Log
+- 2026-10-12T16:03:04.792Z: [claude] Landed on feat/tui-decisions (0a0b16d, b6131e3, bf36055): decisions lifted out of columns and the done list by the loader; decisions view on D and the type cycle's decision stop (families via groupDecisionsByPrefix, history folded, L folds it); decision detail (fields, chain, work resting on it, all on the flat cursor); work's 'rests on'; 'decision changed' row chip. TUI 179/179 (129 baseline + 50 new; 6 existing suites updated for adr-1 leaving To Do). Smoked the real binary in a pty (pyte) on a copy of /tmp/bf-demo at 130x30 and 60x22 NO_COLOR.
