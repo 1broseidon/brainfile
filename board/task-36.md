@@ -28,10 +28,10 @@ subtasks:
     completed: true
   - id: task-36-3
     title: Move the task to Review
-    completed: false
+    completed: true
 createdAt: "2026-10-12T23:14:13.926Z"
 assignee: grok
-updatedAt: "2026-10-12T23:16:27.200Z"
+updatedAt: "2026-10-12T23:16:44.006Z"
 ---
 
 ## Description
