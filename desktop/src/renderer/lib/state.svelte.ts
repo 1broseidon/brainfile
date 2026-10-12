@@ -94,12 +94,17 @@ export function healthOf(board: BoardSnapshot | undefined): Health | null {
 
 export const RAIL = { min: 180, max: 420, initial: 232 };
 export const TASK_PANE = { min: 380, max: 680, initial: 500 };
+/** The chat popover: sized from its top-left corner; the pane caps it. */
+export const CHAT = { minW: 320, minH: 300, w: 360, h: 480 };
 
-function loadLayout(): { rail: number; railOpen: boolean; pane: number } {
+type Layout = { rail: number; railOpen: boolean; pane: number; chat: { w: number; h: number } };
+
+function loadLayout(): Layout {
+  const initial: Layout = { rail: RAIL.initial, railOpen: true, pane: TASK_PANE.initial, chat: { w: CHAT.w, h: CHAT.h } };
   try {
-    return { rail: RAIL.initial, railOpen: true, pane: TASK_PANE.initial, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') };
+    return { ...initial, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') };
   } catch {
-    return { rail: RAIL.initial, railOpen: true, pane: TASK_PANE.initial };
+    return initial;
   }
 }
 

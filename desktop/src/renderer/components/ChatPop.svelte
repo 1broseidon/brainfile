@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app } from '../lib/state.svelte';
+  import { app, CHAT } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
   import Icon from './Icon.svelte';
   import Working from './Working.svelte';
@@ -20,6 +20,41 @@
 
   /** The key's size: the popover grows out of it and shrinks back into it. */
   const KEY = 32;
+
+  let pop = $state<HTMLElement>();
+  let sizing = $state<'left' | 'top' | 'corner' | null>(null);
+
+  /**
+   * Sized from the edges that face the board, left and top, since the right
+   * and bottom are held by the corner. The pane caps it; the size is kept.
+   */
+  function resize(e: PointerEvent, edge: 'left' | 'top' | 'corner'): void {
+    if (!pop?.offsetParent) return;
+    e.preventDefault();
+    const pane = pop.offsetParent.getBoundingClientRect();
+    const band = parseFloat(getComputedStyle(pop).getPropertyValue('--band-h')) || 44;
+    const maxW = pane.width - 24;
+    const maxH = pane.height - band - 24;
+    const start = { x: e.clientX, y: e.clientY, w: pop.offsetWidth, h: pop.offsetHeight };
+    sizing = edge;
+    const move = (ev: PointerEvent) => {
+      if (edge !== 'top') app.layout.chat.w = Math.round(Math.min(maxW, Math.max(CHAT.minW, start.w + start.x - ev.clientX)));
+      if (edge !== 'left') app.layout.chat.h = Math.round(Math.min(maxH, Math.max(CHAT.minH, start.h + start.y - ev.clientY)));
+    };
+    const up = () => {
+      sizing = null;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      app.saveLayout();
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  function resetSize(): void {
+    app.layout.chat = { w: CHAT.w, h: CHAT.h };
+    app.saveLayout();
+  }
 
   /**
    * The key becomes the popover: a clip from the key's square in the corner
@@ -117,7 +152,19 @@
 {/if}
 
 {#if app.chatOpen}
-  <section class="pop" aria-label="Ask the board" transition:grow>
+  <section
+    class="pop"
+    class:sizing
+    aria-label="Ask the board"
+    bind:this={pop}
+    style:--w="{app.layout.chat.w}px"
+    style:--h="{app.layout.chat.h}px"
+    transition:grow
+  >
+    <!-- The edges that face the board size it; double-click puts it back. -->
+    <div class="edge left" class:on={sizing === 'left'} role="presentation" onpointerdown={(e) => resize(e, 'left')} ondblclick={resetSize}></div>
+    <div class="edge top" class:on={sizing === 'top'} role="presentation" onpointerdown={(e) => resize(e, 'top')} ondblclick={resetSize}></div>
+    <div class="edge corner" role="presentation" onpointerdown={(e) => resize(e, 'corner')} ondblclick={resetSize}></div>
     <header>
       <button class="icon-btn" class:on={view === 'history'} use:tip={'Recent chats'} onclick={() => (view = view === 'history' ? 'chat' : 'history')}>
         <Icon name="history" size={13} />
@@ -284,8 +331,8 @@
     z-index: var(--z-menu);
     right: var(--s3);
     bottom: var(--s3);
-    width: 360px;
-    height: min(480px, calc(100% - var(--band-h) - var(--s3) * 2));
+    width: min(var(--w), calc(100% - var(--s3) * 2));
+    height: min(var(--h), calc(100% - var(--band-h) - var(--s3) * 2));
     display: flex;
     flex-direction: column;
     border-radius: var(--r-pane);
@@ -296,6 +343,75 @@
       var(--top-light),
       var(--shadow-float),
       0 0 48px 20px color-mix(in oklch, var(--canvas) 85%, transparent);
+  }
+
+  /* While it is sized, nothing inside takes the pointer or the selection. */
+  .pop.sizing {
+    user-select: none;
+  }
+
+  .pop.sizing > :global(:not(.edge)) {
+    pointer-events: none;
+  }
+
+  /* The two edges that face the board, and the corner between them. A
+     hairline shows under the pointer, as a gutter does. */
+  .edge {
+    position: absolute;
+    z-index: 1;
+  }
+
+  .edge.left {
+    top: var(--s3);
+    bottom: var(--s3);
+    left: -3px;
+    width: 6px;
+    cursor: ew-resize;
+  }
+
+  .edge.top {
+    left: var(--s3);
+    right: var(--s3);
+    top: -3px;
+    height: 6px;
+    cursor: ns-resize;
+  }
+
+  .edge.corner {
+    top: -3px;
+    left: -3px;
+    width: 14px;
+    height: 14px;
+    cursor: nwse-resize;
+  }
+
+  .edge.left::after,
+  .edge.top::after {
+    content: '';
+    position: absolute;
+    border-radius: 1px;
+    background: transparent;
+    transition: background var(--d-open) var(--ease);
+  }
+
+  .edge.left::after {
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    width: 2px;
+  }
+
+  .edge.top::after {
+    left: 0;
+    right: 0;
+    top: 2px;
+    height: 2px;
+  }
+
+  .edge.left:hover::after,
+  .edge.top:hover::after,
+  .edge.on::after {
+    background: var(--line-strong);
   }
 
   /* While it grows, its contents wait for the room to read them. */
