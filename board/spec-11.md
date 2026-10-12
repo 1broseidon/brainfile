@@ -28,7 +28,10 @@ subtasks:
   - id: spec-11-5
     title: "brief takes over wake: budgeted lanes; SessionStart hook injects it from a lean entry under 300ms"
     completed: false
-updatedAt: "2026-10-12T05:36:58.434Z"
+  - id: spec-11-6
+    title: check with stance rule and predicates (validUntil, source unchanged, package version); MCP check
+    completed: false
+updatedAt: "2026-10-12T05:36:58.711Z"
 ---
 
 ## Description
