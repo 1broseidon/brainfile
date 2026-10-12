@@ -16,7 +16,10 @@ subtasks:
   - id: spec-15-1
     title: Detect every board a repo has (folder, branch, remote ref, stray worktrees); refuse writes when they disagree
     completed: false
-updatedAt: "2026-10-12T19:03:42.274Z"
+  - id: spec-15-2
+    title: brainfile where reports all boards with counts and last change; agents get a resolving error on write
+    completed: false
+updatedAt: "2026-10-12T19:03:42.579Z"
 ---
 
 ## Description
