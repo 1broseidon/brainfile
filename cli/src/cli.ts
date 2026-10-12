@@ -217,6 +217,7 @@ Brainfile file resolution (when you don't pass --file):
     .option('-t, --tag <name>', 'Filter by tag')
     .option('--parent <id>', 'Filter by parent task ID (parentId)')
     .option('--contract <status>', 'Filter by contract status (ready|in_progress|delivered|done|failed)')
+    .option('--related [all]', "Open tasks on related boards this board depends on; 'all' for every open task there")
     .action((options) => { listCommand(options); });
   listCmd.addHelpText('after', `\n${LIST_COMMAND_HELP}`);
 

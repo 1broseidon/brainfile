@@ -1,13 +1,23 @@
-import { readTasksDir, type Task } from '@brainfile/core';
+import { isQualifiedRef, readTasksDir, type Task } from '@brainfile/core';
+import {
+  describeRelatedBoard,
+  describeTaskRefState,
+  relatedBoards,
+  type RelatedBoard,
+  type ResolvedTaskRef,
+} from '@brainfile/core/repo';
 import chalk from 'chalk';
 import { defaultLogger, type Logger } from '../utils/logger';
 import {
+  CLIError,
   missingRequired,
   taskNotFound,
+  validationError,
 } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { getV2Dirs, findV2Task, extractDescription, extractLog } from '../utils/v2-detect';
+import { resolveRelatedTask, type FoundRelatedBoard } from '../utils/related';
 
 export interface ShowOptions {
   file: string;
@@ -35,10 +45,32 @@ export function showCommand(options: ShowOptions, logger: Logger = defaultLogger
   const filePath = resolveCliBrainfilePath(options.file);
   assertV2Brainfile(filePath);
 
+  if (isQualifiedRef(options.task)) {
+    return showRelatedTask(options, filePath, logger);
+  }
   return showCommandV2(options, filePath, logger);
 }
 
-function showCommandV2(options: ShowOptions, filePath: string, logger: Logger): ShowResult {
+/**
+ * `show -t mobile:task-12` (spec-10): read a task on a related board, found
+ * the way `brainfile` in that folder would find it. Read-only.
+ */
+function showRelatedTask(options: ShowOptions, filePath: string, logger: Logger): ShowResult {
+  const target = resolveRelatedTask(filePath, options.task!);
+  if (!target.ok) {
+    if (target.kind === 'malformed') throw validationError(target.message);
+    if (target.kind === 'not-found') throw taskNotFound(options.task!);
+    throw new CLIError(target.message, undefined, target.details);
+  }
+  return showCommandV2({ ...options, task: target.id }, target.board.brainfilePath, logger, target.board);
+}
+
+function showCommandV2(
+  options: ShowOptions,
+  filePath: string,
+  logger: Logger,
+  relatedBoard?: FoundRelatedBoard,
+): ShowResult {
   const dirs = getV2Dirs(filePath);
   const found = findV2Task(dirs, options.task!, true);
 
@@ -62,18 +94,30 @@ function showCommandV2(options: ShowOptions, filePath: string, logger: Logger): 
   const archived = isLog;
   const logContent = extractLog(doc.body);
 
+  // dependsOn, resolved against the board the task lives on.
+  const hasDeps = Array.isArray(task.dependsOn) && task.dependsOn.length > 0;
+  const rel = hasDeps ? relatedBoards(filePath) : null;
+  const dependencies = rel ? rel.dependencies(task) : [];
+  const blockers = rel && !archived ? rel.blockers(task) : [];
+  const ref = relatedBoard ? `${relatedBoard.alias}:${task.id}` : task.id;
+
   if (options.json) {
     const jsonOutput = {
       ...task,
       column: columnTitle,
       archived,
+      ...(relatedBoard ? { board: relatedBoard.alias, ref } : {}),
       ...(childIds.length > 0 ? { children: childIds } : {}),
+      ...(hasDeps ? {
+        dependencies: dependencies.map((d) => ({ ref: d.ref, state: d.state, done: d.done })),
+        blocked: blockers.length > 0,
+      } : {}),
       ...(task.completedAt && { completedAt: task.completedAt }),
       ...(logContent && { log: logContent }),
     };
     logger.log(JSON.stringify(jsonOutput, null, 2));
   } else {
-    renderTask({ task, columnTitle, archived, childIds }, logger);
+    renderTask({ task, columnTitle, archived, childIds, ref, relatedBoard, dependencies, blockers }, logger);
     if (task.completedAt) {
       logger.log(`${chalk.bold('Completed:')} ${chalk.white(task.completedAt)}`);
     }
@@ -85,17 +129,29 @@ function showCommandV2(options: ShowOptions, filePath: string, logger: Logger): 
     logger.log('');
   }
 
-  return { success: true, taskId: task.id, archived, task, column: columnTitle };
+  return { success: true, taskId: ref, archived, task, column: columnTitle };
 }
 
 function renderTask(
-  input: { task: Task; columnTitle: string; archived: boolean; childIds?: string[] },
+  input: {
+    task: Task;
+    columnTitle: string;
+    archived: boolean;
+    childIds?: string[];
+    ref?: string;
+    relatedBoard?: RelatedBoard;
+    dependencies?: ResolvedTaskRef[];
+    blockers?: ResolvedTaskRef[];
+  },
   logger: Logger
 ) {
-  const { task, columnTitle, archived, childIds = [] } = input;
+  const { task, columnTitle, archived, childIds = [], dependencies = [], blockers = [] } = input;
 
   logger.log('');
-  logger.log(`${chalk.bold('Task:')} ${chalk.cyan(task.id)}`);
+  logger.log(`${chalk.bold('Task:')} ${chalk.cyan(input.ref ?? task.id)}`);
+  if (input.relatedBoard) {
+    logger.log(`${chalk.bold('Board:')} ${chalk.white(describeRelatedBoard(input.relatedBoard))}`);
+  }
   logger.log(`${chalk.bold('Title:')} ${chalk.white(task.title)}`);
   logger.log(`${chalk.bold('Column:')} ${chalk.white(columnTitle)}${archived ? chalk.gray(' (archived)') : ''}`);
 
@@ -154,6 +210,18 @@ function renderTask(
   if (childIds.length > 0) {
     logger.log('');
     logger.log(`${chalk.bold('Children:')} ${chalk.white(childIds.join(', '))}`);
+  }
+
+  if (dependencies.length > 0) {
+    logger.log('');
+    logger.log(chalk.bold('Depends on:'));
+    for (const dep of dependencies) {
+      const mark = dep.done ? chalk.green('✓') : chalk.gray('○');
+      logger.log(`  ${mark} ${chalk.white(dep.ref)} ${chalk.gray(describeTaskRefState(dep))}`);
+    }
+    if (blockers.length > 0) {
+      logger.log(`${chalk.bold('Blocked by:')} ${chalk.yellow(blockers.map((b) => b.ref).join(', '))}`);
+    }
   }
 
   const contract = (task as any).contract as any | undefined;

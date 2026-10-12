@@ -58,9 +58,31 @@ const subtaskSchema = z.looseObject({
 
 // ── list_tasks ─────────────────────────────────────────────────────────────
 
+/**
+ * `related: true | "all"` (spec-10): open tasks on the boards named under
+ * `related:`. `status` is `found`, `missing` (not on this machine) or
+ * `no-board`; `note` says the same for people.
+ */
+const relatedListingSchema = z.object({
+  alias: z.string(),
+  path: z.string(),
+  status: z.string(),
+  note: z.string(),
+  title: z.string().optional(),
+  tasks: z.array(z.object({
+    ...taskSummaryShape,
+    ref: z.string(),
+    column: z.string(),
+    neededBy: z.array(z.string()).optional(),
+  })),
+  notFound: z.array(z.string()),
+  neededBy: z.record(z.string(), z.array(z.string())),
+});
+
 export const listTasksOutputSchema = z.object({
   tasks: z.array(z.object({ ...taskSummaryShape, column: z.string() })),
   count: z.number(),
+  related: z.array(relatedListingSchema).optional(),
 });
 
 // ── get_task ───────────────────────────────────────────────────────────────
@@ -97,6 +119,13 @@ export const getTaskOutputSchema = z.looseObject({
   completedAt: z.string().optional(),
   position: z.number().optional(),
   archived: z.boolean().optional(),
+  /** Set when the task was read from a related board (`alias:id`). */
+  board: z.string().optional(),
+  ref: z.string().optional(),
+  /** `dependsOn`, resolved: `open`, `completed`, `not-found`, `missing`, `no-board`, … */
+  dependencies: z.array(z.object({ ref: z.string(), state: z.string(), done: z.boolean() })).optional(),
+  /** True while a dependency on a related board is not completed. */
+  blocked: z.boolean().optional(),
 });
 
 // ── search ─────────────────────────────────────────────────────────────────

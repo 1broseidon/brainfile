@@ -1,5 +1,13 @@
 import * as fs from 'fs';
-import { BrainfileLinter, LintIssue } from '@brainfile/core';
+import * as path from 'path';
+import {
+  BrainfileLinter,
+  LintIssue,
+  lintTaskRefs,
+  parseFrontmatter,
+  readRelatedConfig,
+  readTasksDir,
+} from '@brainfile/core';
 import chalk from 'chalk';
 import { defaultLogger, type Logger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure } from '../utils/cli-error';
@@ -35,6 +43,7 @@ export function lintCommand(options: LintOptions, logger: Logger = defaultLogger
 
   // Run linter from core
   const result = BrainfileLinter.lint(content, { autoFix: options.fix });
+  result.issues.push(...lintDependsOnRefs(filePath, content));
 
   // Report findings
   if (result.issues.length === 0) {
@@ -109,4 +118,16 @@ export function lintCommand(options: LintOptions, logger: Logger = defaultLogger
   }
 
   return { success: true, issues: result.issues, fixed, fixedCount };
+}
+
+/**
+ * spec-10: `dependsOn` entries on this board's open tasks that name a related
+ * board must be well formed and name an alias under `related:`. A related
+ * folder missing from this machine is fine; plain IDs are not checked.
+ */
+function lintDependsOnRefs(filePath: string, content: string): LintIssue[] {
+  const config = parseFrontmatter<Record<string, unknown>>(content)?.data;
+  const boardDir = path.join(path.dirname(filePath), 'board');
+  const tasks = readTasksDir(boardDir).map((doc) => doc.task);
+  return lintTaskRefs(tasks, readRelatedConfig(config));
 }
