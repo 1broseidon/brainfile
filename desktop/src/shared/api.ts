@@ -315,6 +315,34 @@ export interface EditorInfo {
   name: string;
 }
 
+/**
+ * A hand-off's own branch and worktree, as its review shows them (spec-14):
+ * what the agent committed, and where Merge would put it.
+ */
+export interface ReviewView {
+  /** `dispatch/task-15`. */
+  branch: string;
+  /** The worktree's folder. */
+  path: string;
+  /** The branch it was started from (a commit, when that was detached). */
+  base: string | null;
+  /** The branch the project's checkout is on now: where Merge lands. Null when detached. */
+  into: string | null;
+  /** Commits on the branch since it started. */
+  ahead: number;
+  /** The newest first, the first few. */
+  commits: { sha: string; subject: string }[];
+  /** The first few files changed, with lines added and removed. */
+  files: { path: string; added: number; removed: number }[];
+  filesChanged: number;
+  added: number;
+  removed: number;
+  /** Files changed in the worktree and not committed: Merge waits for them. */
+  uncommitted: number;
+  /** Its commits are already in `into`; Merge only lets the worktree go. */
+  merged: boolean;
+}
+
 /** App-wide dispatch settings, kept in the app's dispatch.json. */
 export interface DispatchSettings {
   /** On: every agent runs in its bypass mode and nothing is asked. Off: each agent's own default, or the mode chosen for it. */
@@ -349,6 +377,8 @@ export interface Api {
   /** Resolves to the removed file, so the window can offer Undo. */
   deleteTask(projectId: string, taskId: string): Promise<Result<RemovedTask>>;
   restoreTask(projectId: string, removed: RemovedTask): Promise<Result>;
+  /** A line in the task's log, as the person. */
+  noteTask(projectId: string, taskId: string, text: string): Promise<Result>;
   syncNow(projectId: string): Promise<Result<SyncView>>;
   /** Make two boards one: take the other, merge them, or keep this one. What is replaced is backed up first. */
   settleBoards(projectId: string, choice: SettleChoice): Promise<Result<{ message: string }>>;
@@ -384,6 +414,14 @@ export interface Api {
     context?: string[]
   ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
+  /** The hand-off's branch and what is on it, or null when the task has no worktree. */
+  review(projectId: string, taskId: string): Promise<Result<ReviewView | null>>;
+  /** Merge the hand-off's branch into the checkout's branch, then let its worktree and branch go. */
+  mergeReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
+  /** Throw the hand-off's work away: its worktree and its branch. */
+  discardReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
+  /** Opens the hand-off's worktree in the editor named, else the first found. */
+  openWorktree(projectId: string, taskId: string, editorId?: string): Promise<Result>;
   answerPermission(askId: string, optionId: string | null): Promise<void>;
   onAgentEvent(listener: (event: AgentEvent) => void): () => void;
 
@@ -416,6 +454,9 @@ export const AGENT_METHODS = [
   'dispatch',
   'ask',
   'stopRun',
+  'review',
+  'mergeReview',
+  'discardReview',
   'answerPermission',
 ] as const;
 export type AgentMethod = (typeof AGENT_METHODS)[number];
@@ -435,6 +476,7 @@ export const HOST_METHODS = [
   'completeTask',
   'deleteTask',
   'restoreTask',
+  'noteTask',
   'syncNow',
   'settleBoards',
   'planFix',

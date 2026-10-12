@@ -363,6 +363,27 @@ board changes (and in the feed).
   is one, leaving completing it to a person (it completes it only on a board
   with no review column). At rest, the row's only trace is one mono line,
   `claude · editing`.
+- **Each hand-off works on its own branch** (spec-14, learned from Orca).
+  Hand to… checks the task out into its own git worktree, on
+  `dispatch/<task-id>` from the commit the person is on, under
+  `~/.brainfile-worktrees/<repo>-<hash>/`, so two hand-offs, or an agent and
+  the person, never share a checkout, and an agent never edits the running
+  app's own files. (`brainfile/<task-id>` cannot exist beside the board
+  branch `brainfile`.) The board is still the shared one: it lives on the
+  board branch, which every worktree reaches. The brief names the branch and
+  says to commit there and leave nothing uncommitted, never to merge or push.
+  A board kept as plain files in the code would be copied, not shared, so
+  there the agent works in the folder as before. Handing the task off again
+  finds the same worktree.
+- **The review is a moment in the task pane**, not an IDE: while the task
+  has a worktree, the pane says its branch, its commits and files with lines
+  added and removed, and anything left uncommitted; then Open in the editor
+  (the worktree as a folder), Discard (asked once, in place: it has no
+  Undo), Send back… (a note in the task's log, then the same agent on the
+  same branch), and Merge into the branch the person's checkout is on, the
+  accent once the task is in Review. Merge waits for uncommitted work and
+  changes nothing on a conflict; merging or discarding lets the worktree and
+  its branch go. No diff authoring, no terminals.
 - **Ask the board** is a muted key in the board's bottom-right corner (⌘J)
   that grows into a popover in its own corner (360 × 480 to start; its left
   and top edges and the corner between them size it, double-click puts it

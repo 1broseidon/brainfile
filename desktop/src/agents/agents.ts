@@ -7,6 +7,7 @@
  * gets the repository as its working directory and Brainfile's own MCP server
  * (`brainfile mcp`), so it reads and changes the board through the same tools
  * as the CLI; what it changes reaches the window as ordinary board changes.
+ * A hand-off gets its own worktree and branch instead (worktree.ts, spec-14).
  */
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
@@ -16,6 +17,7 @@ import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
+import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
 import type {
   AgentEvent,
   AgentId,
@@ -32,6 +34,7 @@ import type {
   RunStep,
   PermissionPolicy,
   Result,
+  ReviewView,
 } from '../shared/api';
 
 const parentPort = process.parentPort;
@@ -438,11 +441,12 @@ function brainfileMcp(): acp.McpServer[] {
   return node ? [{ name: 'brainfile', command: node, args: [cli, 'mcp'], env }] : [{ name: 'brainfile', command: bin, args: ['mcp'], env }];
 }
 
-async function open(projectId: string, agentId: AgentId, key: string, model?: string, board = true): Promise<Session> {
+/** `at` is where the agent works when not the repository itself: a hand-off's worktree. */
+async function open(projectId: string, agentId: AgentId, key: string, model?: string, board = true, at?: string): Promise<Session> {
   const known = KNOWN.find((k) => k.id === agentId);
   if (!known) throw new Error(`Unknown agent ${agentId}`);
   if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
-  const cwd = board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId;
+  const cwd = at ?? (board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId);
   const launch = await known.launch();
   // The real node first on PATH, so nothing an agent starts finds a shim instead.
   const node = realNode();
@@ -698,7 +702,25 @@ function finish(brainfilePath: string, taskId: string): string {
     : `Then complete ${taskId}.`;
 }
 
-function brief(projectId: string, taskId: string): string {
+/**
+ * Where the hand-off works, when it has its own worktree: the branch, that
+ * its work is committed there, and what it must leave to the person.
+ */
+function workplace(worktree: Worktree | null): string {
+  if (!worktree) return '';
+  const from = worktree.base ? ` (started from ${worktree.base})` : '';
+  const again = worktree.resumed
+    ? ' It has been here before: the branch already carries earlier work on this task. Pick up from there; the task\'s log says what the reviewer asked for.'
+    : '';
+  return (
+    `\n\nYou are working in your own git worktree of this repository, at ${worktree.path}, on the branch \`${worktree.branch}\`${from}. ` +
+    'Commit your work on this branch as you go, with clear messages, and leave nothing uncommitted when you finish: a person reviews and merges the branch. ' +
+    'Do not switch branches, merge, rebase or push. Untracked files such as installed dependencies are not here; set them up if you need to build or test. ' +
+    `The board is shared: the brainfile tools reach it from here.${again}`
+  );
+}
+
+function brief(projectId: string, taskId: string, worktree: Worktree | null = null): string {
   const located = locateBoard(projectId, { materialize: false });
   if (!located.found) throw new Error(`No board in ${projectId}`);
   const found = findV2Task(getV2Dirs(located.brainfilePath), taskId);
@@ -712,21 +734,24 @@ function brief(projectId: string, taskId: string): string {
     body.trim() ? `\n${body.trim()}` : '',
     contract,
     standingDecisions(located.brainfilePath),
-    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did. ${finish(located.brainfilePath, task.id)} Do the work in this repository. Finish with a reply of one or two sentences.`,
+    workplace(worktree),
+    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did${worktree ? ' and that it is on its branch' : ''}. ${finish(located.brainfilePath, task.id)} Do the work in ${worktree ? 'this worktree' : 'this repository'}. Finish with a reply of one or two sentences.`,
   ].join('');
 }
 
 async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>> {
   let prompt: string;
+  let worktree: Worktree | null;
   try {
-    prompt = brief(projectId, taskId);
+    worktree = prepareWorktree(projectId, taskId);
+    prompt = brief(projectId, taskId, worktree);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
   const run = newRun(projectId, agentId, 'dispatch', taskId);
   void (async () => {
     try {
-      const session = await open(projectId, agentId, run.id, model);
+      const session = await open(projectId, agentId, run.id, model, true, worktree?.path);
       await turn(session, run, prompt);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
@@ -784,6 +809,29 @@ async function ask(
   return { ok: true, value: { ...run } };
 }
 
+// ── Review ───────────────────────────────────────────────────────────────────
+
+function review(projectId: string, taskId: string): Result<ReviewView | null> {
+  try {
+    return { ok: true, value: reviewOf(projectId, taskId) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/** Merge and discard wait for the agent: its worktree is not taken from under it. */
+function settle(projectId: string, taskId: string, act: (title?: string) => { message: string }): Result<{ message: string }> {
+  const live = [...runs.values()].find((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId && (r.state === 'starting' || r.state === 'working' || r.state === 'waiting'));
+  if (live) return { ok: false, error: `${KNOWN.find((k) => k.id === live.agentId)?.name ?? live.agentId} is still working on ${taskId}` };
+  try {
+    const located = locateBoard(projectId, { materialize: false });
+    const title = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId, true)?.doc.task.title : undefined;
+    return { ok: true, value: act(title) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 async function stopRun(runId: string): Promise<void> {
   const run = runs.get(runId);
   if (!run) return;
@@ -807,6 +855,9 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   dispatch,
   ask,
   stopRun,
+  review,
+  mergeReview: (projectId: string, taskId: string) => settle(projectId, taskId, (title) => mergeReview(projectId, taskId, title)),
+  discardReview: (projectId: string, taskId: string) => settle(projectId, taskId, () => discardReview(projectId, taskId)),
   answerPermission,
 };
 

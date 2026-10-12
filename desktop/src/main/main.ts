@@ -3,7 +3,7 @@
  * host. A project is a folder the person added; its board is found, read and
  * written by the host, never here.
  */
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,10 +18,12 @@ import {
   type Project,
   type ProjectState,
   type Result,
+  type ReviewView,
 } from '../shared/api';
 import { loginShellPath } from './shellPath';
 import { ProjectStore } from './projects';
-import { existingFiles, listEditors, openInEditor } from './editors';
+import { existingFiles, listEditors, openFolder, openInEditor } from './editors';
+import { readPlacement, resolvePlacement, writePlacement, type WindowPlacement } from './windowState';
 
 // Launched from the Dock, the app inherits launchd's bare PATH: no Homebrew
 // git, and no `brainfile` for `init` or the merge driver sync registers.
@@ -180,6 +182,13 @@ const local: Record<string, (...args: any[]) => unknown> = {
   listEditors,
   existingFiles,
   openInEditor,
+  // The folder comes from the agents process, never from the window.
+  openWorktree: async (projectId: string, taskId: string, editorId?: string): Promise<Result> => {
+    const review = await callAgents<Result<ReviewView | null>>('review', projectId, taskId);
+    if (!review.ok) return review;
+    if (!review.value) return { ok: false, error: `${taskId} has no worktree` };
+    return openFolder(review.value.path, editorId);
+  },
 };
 
 ipcMain.handle(CHANNEL.invoke, async (_event, method: string, ...args: unknown[]) => {
@@ -192,12 +201,55 @@ ipcMain.handle(CHANNEL.invoke, async (_event, method: string, ...args: unknown[]
 
 // ── Window ──────────────────────────────────────────────────────────────────
 
+function windowFile(): string {
+  return path.join(app.getPath('userData'), 'window.json');
+}
+
+/** Writes the normal bounds (not the maximized frame) plus the display mode. */
+function rememberWindow(target: BrowserWindow): void {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const save = () => {
+    if (target.isDestroyed()) return;
+    const bounds = target.getNormalBounds();
+    const placement: WindowPlacement = {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+      maximized: target.isMaximized(),
+      fullscreen: target.isFullScreen(),
+    };
+    writePlacement(windowFile(), placement);
+  };
+  const later = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(save, 200);
+  };
+  target.on('move', later);
+  target.on('resize', later);
+  target.on('maximize', save);
+  target.on('unmaximize', save);
+  target.on('enter-full-screen', save);
+  target.on('leave-full-screen', save);
+  target.on('close', () => {
+    if (timer) clearTimeout(timer);
+    save();
+  });
+}
+
 function createWindow(): void {
   const forced = process.env.BRAINFILE_THEME;
   nativeTheme.themeSource = forced === 'light' || forced === 'dark' ? forced : 'system';
+  // Capture stays on the centered default so a screenshot cannot clobber the saved place.
+  const capturing = !!process.env.BRAINFILE_CAPTURE;
+  const placement = resolvePlacement(
+    capturing ? null : readPlacement(windowFile()),
+    screen.getAllDisplays().map((display) => display.bounds),
+  );
   win = new BrowserWindow({
-    width: 1440,
-    height: 920,
+    width: placement.width,
+    height: placement.height,
+    ...(placement.position ? { x: placement.position.x, y: placement.position.y } : {}),
     minWidth: 960,
     minHeight: 600,
     show: false,
@@ -212,11 +264,14 @@ function createWindow(): void {
       sandbox: true,
       nodeIntegration: false,
       // Captures render offscreen, in sRGB, so screenshots match the tokens.
-      offscreen: !!process.env.BRAINFILE_CAPTURE,
+      offscreen: capturing,
     },
   });
+  if (placement.fullscreen) win.setFullScreen(true);
+  else if (placement.maximized) win.maximize();
+  if (!capturing) rememberWindow(win);
   win.once('ready-to-show', () => {
-    if (!process.env.BRAINFILE_CAPTURE) win?.show();
+    if (!capturing) win?.show();
   });
   if (process.env.BRAINFILE_CAPTURE) captureAndQuit(win, process.env.BRAINFILE_CAPTURE);
   win.webContents.setWindowOpenHandler(({ url }) => {

@@ -27,7 +27,8 @@ const at = (file: string, line?: number) => (line ? `${file}:${line}` : file);
 const vscodeLike = (app: string, bin: string): Pick<Editor, 'app' | 'cli' | 'args'> => ({
   app,
   cli: (bundle) => path.join(bundle, 'Contents/Resources/app/bin', bin),
-  args: (file, line) => ['-g', at(file, line)],
+  // `-g` is for a file at a line; a folder opens as itself.
+  args: (file, line) => (line ? ['-g', at(file, line)] : [file]),
 });
 const jetbrains = (id: string, name: string, app: string, bin: string): Editor => ({
   id,
@@ -122,20 +123,31 @@ export function existingFiles(projectId: string, files: string[]): string[] {
 export function openInEditor(projectId: string, file: string, line: number | undefined, editorId: string | undefined): Result {
   const full = inProject(projectId, file);
   if (!full) return { ok: false, error: `${file} is not a file in this project` };
+  launch(full, path.resolve(projectId), line, editorId);
+  return { ok: true, value: undefined };
+}
+
+/** Opens a folder (a hand-off's worktree) as the editor's project; the default app is Finder. */
+export function openFolder(folder: string, editorId: string | undefined): Result {
+  if (!fs.statSync(folder, { throwIfNoEntry: false })?.isDirectory()) return { ok: false, error: `${folder} is not there` };
+  launch(folder, folder, undefined, editorId);
+  return { ok: true, value: undefined };
+}
+
+function launch(target: string, cwd: string, line: number | undefined, editorId: string | undefined): void {
   const editor = EDITORS.find((e) => e.id === editorId && resolve(e)) ?? EDITORS.find((e) => resolve(e));
   if (!editor || editorId === 'system') {
-    void shell.openPath(full);
-    return { ok: true, value: undefined };
+    void shell.openPath(target);
+    return;
   }
   const command = resolve(editor)!;
-  const args = editor.args(full, line);
+  const args = editor.args(target, line);
   const child = editor.terminal
-    ? spawn('/usr/bin/open', ['-na', 'Ghostty', '--args', `--working-directory=${path.resolve(projectId)}`, '-e', command, ...args], {
+    ? spawn('/usr/bin/open', ['-na', 'Ghostty', '--args', `--working-directory=${cwd}`, '-e', command, ...args], {
         detached: true,
         stdio: 'ignore',
       })
-    : spawn(command, args, { cwd: path.resolve(projectId), env: process.env, detached: true, stdio: 'ignore' });
-  child.on('error', () => void shell.openPath(full));
+    : spawn(command, args, { cwd, env: process.env, detached: true, stdio: 'ignore' });
+  child.on('error', () => void shell.openPath(target));
   child.unref();
-  return { ok: true, value: undefined };
 }

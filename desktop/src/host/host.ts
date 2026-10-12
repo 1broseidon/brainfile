@@ -12,6 +12,7 @@ import * as path from 'path';
 import {
   addSubtasksToFile,
   addTaskFile,
+  appendLog,
   buildBoardFromV2,
   buildDocGraph,
   completeTaskFile,
@@ -546,6 +547,16 @@ function restoreTask(projectId: string, removed: RemovedTask): Result {
   );
 }
 
+function noteTask(projectId: string, taskId: string, text: string): Result {
+  return mutate(
+    projectId,
+    () => `note ${taskId}`,
+    (board) => {
+      unwrap(appendLog(taskPath(board, taskId), text.replace(/\s+/g, ' ').trim()));
+    }
+  );
+}
+
 // ── Sync ────────────────────────────────────────────────────────────────────
 
 async function runSync(board: OpenBoard, work: () => ReturnType<typeof syncBoard> | null): Promise<SyncView> {
@@ -727,6 +738,7 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   completeTask,
   deleteTask,
   restoreTask,
+  noteTask,
   syncNow,
   settleBoards,
   planFix,

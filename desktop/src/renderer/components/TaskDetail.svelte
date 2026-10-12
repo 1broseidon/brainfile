@@ -10,6 +10,7 @@
   import Icon from './Icon.svelte';
   import HandTo from './HandTo.svelte';
   import AskLine from './AskLine.svelte';
+  import Review from './Review.svelte';
 
   let { board, taskId }: { board: BoardSnapshot; taskId: string } = $props();
 
@@ -36,6 +37,8 @@
   });
 
   const column = $derived(detail ? board.columns.find((c) => c.id === detail!.column) : undefined);
+  /** The board's review column, found the way a hand-off's brief finds it. */
+  const inReview = $derived(!!column && (/review/i.test(column.id) || /review/i.test(column.title)));
   const progress = $derived(detail?.archived ? 1 : detail ? columnProgress(board.columns, detail.column) : 0);
   const parent = $derived(detail?.parentId ? board.tasks.find((t) => t.id === detail!.parentId) : undefined);
   /** Open and completed alike, as the list draws them under it (task-20). */
@@ -173,6 +176,10 @@
       {#each app.asks.filter((a) => a.runId === app.runFor(detail!.id)?.id) as ask (ask.id)}
         <div class="asking"><AskLine {ask} stacked /></div>
       {/each}
+
+      {#if !detail.archived && !decision}
+        <Review {board} taskId={detail.id} {inReview} assignee={detail.assignee} />
+      {/if}
 
       {#if decision}
         <!-- A decision is not work: it has a claim and a stance, not a status, priority or assignee. -->

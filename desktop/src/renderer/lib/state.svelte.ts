@@ -33,7 +33,7 @@ declare global {
 
 /** Changes this window makes are not news; remember when each board was last written from here. */
 const lastLocalWrite: Record<string, number> = {};
-const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask', 'settleBoards', 'fixBoard', 'undoFix'] as const;
+const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask', 'noteTask', 'settleBoards', 'fixBoard', 'undoFix'] as const;
 const LOCAL_WINDOW_MS = 4000;
 
 // The bridge's object is frozen, so a Proxy over it breaks the proxy
@@ -419,6 +419,31 @@ class AppState {
     const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId));
     if (!result.ok) this.notify(result.error, 'warn');
     else this.touchTab(this.activeId, taskId);
+  }
+
+  // ── A hand-off's review (spec-14) ────────────────────────────────────────
+
+  /** The hand-off's worktree, opened in the chosen editor. */
+  async openWorktree(taskId: string): Promise<void> {
+    if (!this.activeId) return;
+    const result = await api.openWorktree(this.activeId, taskId, this.editor ?? undefined);
+    if (!result.ok) this.notify(result.error, 'warn');
+  }
+
+  /** Merge or discard: the review goes when its worktree does. True when it went. */
+  async settleReview(taskId: string, how: 'merge' | 'discard'): Promise<boolean> {
+    if (!this.activeId) return false;
+    const result = how === 'merge' ? await api.mergeReview(this.activeId, taskId) : await api.discardReview(this.activeId, taskId);
+    if (!result.ok) this.notify(result.error, 'warn');
+    return result.ok;
+  }
+
+  /** Back to the agent with the person's note, in the log where the brief will carry it, on the same branch. */
+  async sendBack(taskId: string, note: string, agentId: AgentId): Promise<void> {
+    if (!this.activeId) return;
+    const noted = await api.noteTask(this.activeId, taskId, `Sent back from review: ${note.trim()}`);
+    if (!noted.ok) return this.notify(noted.error, 'warn');
+    await this.dispatch(taskId, agentId);
   }
 
   // ── The dock's tabs ──────────────────────────────────────────────────────
