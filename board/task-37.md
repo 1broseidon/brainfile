@@ -1,8 +1,8 @@
 ---
 id: task-37
 title: "Light code review: spec-16 phase 1 (dispatch from the desktop chat)"
-column: todo
-position: 4
+column: in-progress
+position: 1
 description: |-
   A very quick, light review of spec-16 phase 1 as merged in 2ad5bc9 (feature commit e7280cc: `git show e7280cc`): the desktop's in-app MCP server (dispatch, runs, stop) and the chat showing hand-offs under the reply.
 
@@ -24,7 +24,7 @@ dispatch:
   model: gpt-6.1-sol
   by: chat
   at: "2026-10-12T23:37:08.343Z"
-updatedAt: "2026-10-12T23:37:08.443Z"
+updatedAt: "2026-10-12T23:37:36.034Z"
 ---
 
 ## Description
