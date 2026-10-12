@@ -155,7 +155,7 @@
   }
 
   .filter {
-    border-bottom: 0.5px solid var(--line-strong);
+    border-bottom: var(--hairline) solid var(--line-strong);
   }
 
   .filter input {

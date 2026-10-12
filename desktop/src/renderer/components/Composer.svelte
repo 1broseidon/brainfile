@@ -285,7 +285,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 0 var(--s4) 0 var(--s5);
-    border-top: 0.5px solid var(--line-strong);
+    border-top: var(--hairline) solid var(--line-strong);
   }
 
   .more {
