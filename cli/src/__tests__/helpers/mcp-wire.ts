@@ -51,6 +51,8 @@ export class WireClient {
   >();
   private readonly clientTransport: InMemoryTransport;
   private readonly handle: { close(): Promise<void> };
+  /** The server's answer to the opening exchange: `initialize` (legacy) or `server/discover` (modern). */
+  opening: Record<string, unknown> = {};
 
   private constructor(
     clientTransport: InMemoryTransport,
@@ -98,7 +100,7 @@ export class WireClient {
 
   private async handshake(): Promise<void> {
     if (this.era === 'legacy') {
-      await this.request(
+      this.opening = await this.request(
         'initialize',
         {
           protocolVersion: LEGACY_PROTOCOL_VERSION,
@@ -114,7 +116,7 @@ export class WireClient {
       } as any);
       return;
     }
-    await this.request('server/discover', {
+    this.opening = await this.request('server/discover', {
       protocolVersions: [MODERN_PROTOCOL_VERSION],
       clientInfo: { name: 'wire-test', version: '0.0.0' },
     });
