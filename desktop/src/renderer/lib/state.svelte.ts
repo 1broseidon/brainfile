@@ -78,6 +78,11 @@ class AppState {
     });
     this.projects = await api.listProjects();
     this.loaded = true;
+    // A board can turn up while the window is away (pushed from another
+    // machine, `brainfile init` in a terminal), so look again on return.
+    window.addEventListener('focus', () => {
+      for (const p of this.projects) if (p.state.status !== 'ready') void this.refreshProject(p.id);
+    });
     const first = this.projects.find((p) => p.id === this.activeId) ?? this.projects[0];
     if (first) await this.select(first.id);
   }
@@ -115,8 +120,9 @@ class AppState {
 
   async refreshProject(projectId: string): Promise<void> {
     const project = await api.refreshProject(projectId);
+    const before = this.projects.find((p) => p.id === projectId)?.state.status;
     this.projects = this.projects.map((p) => (p.id === projectId ? project : p));
-    if (projectId === this.activeId) await this.select(projectId);
+    if (projectId === this.activeId && (before !== 'ready' || project.state.status !== 'ready')) await this.select(projectId);
   }
 
   setView(mode: ViewMode): void {
