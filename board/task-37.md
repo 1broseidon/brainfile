@@ -33,3 +33,6 @@ A very quick, light review of spec-16 phase 1 as merged in 2ad5bc9 (feature comm
 Surface only highly critical issues: data loss, board corruption, broken worktree/branch isolation (decision-2), security problems, crashes, or dispatch/stop doing the wrong thing. Skip style, naming, nits and nice-to-haves.
 
 Do not change code. For each critical issue found, create a follow-up task under spec-16 with the brainfile tools (title, file:line, the failure scenario). Then note a one-line verdict on this task ("no critical issues" or the follow-up IDs) and move it to review.
+
+## Log
+- 2026-10-12T23:38:09.499Z: [codex] Review found two critical lifecycle risks: concurrent dispatch can share one task worktree, and stopping a starting run does not prevent its later prompt. Verifying call paths before filing follow-ups.
