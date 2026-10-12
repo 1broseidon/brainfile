@@ -18,7 +18,7 @@ subtasks:
     completed: true
   - id: spec-15-2
     title: brainfile where reports all boards with counts and last change; agents get a resolving error on write
-    completed: false
+    completed: true
   - id: spec-15-3
     title: merge-boards and adopt, on the existing field-level merge; ID collisions renumbered with references rewritten
     completed: false
@@ -37,7 +37,7 @@ subtasks:
   - id: spec-15-8
     title: Tests on scratch repos reproducing runprism.ai's case end to end
     completed: false
-updatedAt: "2026-10-12T20:52:16.686Z"
+updatedAt: "2026-10-12T20:52:16.899Z"
 decisions:
   - decision-1
 ---
