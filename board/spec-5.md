@@ -15,3 +15,6 @@ updatedAt: "2026-09-22T05:04:42.708Z"
 
 ## Description
 Validate the thin-frontend platform with a real second frontend: minimal read-first web board (brainfile serve → local web UI, or static export). core already ships a browser-safe entrypoint (Apr 2026). Reuses the V2 mutation layer + searchTasksRanked + realtime diffing (diffBoards/hashBoard were built for exactly this). Scope decision: read-only viewer vs mutating app; local server vs hosted. After inbox design, unless it becomes the demo vehicle for relaunch.
+
+## Log
+- 2026-10-12T01:32:45.969Z: [claude] Closed 2026-10-11: superseded by the desktop app (feat/desktop-app), the first non-CLI frontend. It reads and writes boards through @brainfile/core and the new @brainfile/core/repo, committing and syncing exactly like the CLI, so a separate web board is no longer planned.
