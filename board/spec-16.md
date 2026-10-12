@@ -14,6 +14,11 @@ tags:
 dependsOn:
   - spec-14
 createdAt: "2026-10-12T23:16:17.527Z"
+subtasks:
+  - id: spec-16-1
+    title: "Board record: dispatch request and runner claim in frontmatter (agent, model, by, at, until, claimedBy + heartbeat); core read/write + lint"
+    completed: false
+updatedAt: "2026-10-12T23:16:18.283Z"
 ---
 
 ## Description
