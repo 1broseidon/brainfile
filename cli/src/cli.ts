@@ -215,7 +215,9 @@ Brainfile file resolution (when you don't pass --file):
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-c, --column <name>', 'Filter by column')
     .option('-t, --tag <name>', 'Filter by tag')
-    .option('--parent <id>', 'Filter by parent task ID (parentId)')
+    .option('--parent <id>', 'Filter by parent task ID (parentId); with --tree, everything under it')
+    .option('--type <type>', 'Filter by document type (aliases work: issue, adr); decision lists decisions')
+    .option('--tree', 'Print the outline: documents nested under their parents')
     .option('--contract <status>', 'Filter by contract status (ready|in_progress|delivered|done|failed)')
     .option('--related [all]', "Open tasks on related boards this board depends on; 'all' for every open task there")
     .action((options) => { listCommand(options); });
@@ -242,8 +244,10 @@ Brainfile file resolution (when you don't pass --file):
     .option('--due-date <date>', 'Due date (YYYY-MM-DD)')
     .option('--subtasks <titles>', 'Comma-separated subtask titles')
     .option('--files <paths>', 'Comma-separated related file paths')
-    .option('--type <type>', 'Document type (e.g., epic, adr). Determines ID prefix. Default: task')
-    .option('--parent <id>', 'Parent task ID (sets parentId on the new task file)')
+    .option('--type <type>', 'Document type: epic, spec, plan, task (alias issue), decision (alias adr) or one of the board\'s. Determines ID prefix. Default: task')
+    .option('--parent <id>', 'Parent ID (parentId); must fit the type (an epic holds specs, plans and tasks)')
+    .option('--depends-on <ids>', 'Comma-separated IDs of tasks that come first')
+    .option('--decisions <ids>', 'Comma-separated IDs of the decisions this work rests on')
     .option(
       '--child <title>',
       'Create a child task under the newly created parent (repeatable; children default to type: task)',
@@ -288,10 +292,12 @@ Brainfile file resolution (when you don't pass --file):
     .option('--clear-assignee', 'Remove assignee')
     .option('--clear-due-date', 'Remove due date')
     .option('--clear-priority', 'Remove priority')
-    .option('--parent <id>', 'New parent ID (parentId)')
+    .option('--parent <id>', 'New parent ID (parentId); must fit the type')
     .option('--clear-parent', 'Remove the parent link')
     .option('--depends-on <ids>', 'Comma-separated task IDs this task depends on (replaces the list)')
     .option('--clear-depends-on', 'Remove all dependencies')
+    .option('--decisions <ids>', 'Comma-separated IDs of the decisions this work rests on (replaces the list)')
+    .option('--clear-decisions', 'Remove the decisions list')
     .action((options) => { patchCommand(options); });
   patchCmd.addHelpText('after', `\n${PATCH_COMMAND_HELP}`);
 
@@ -326,7 +332,7 @@ Brainfile file resolution (when you don't pass --file):
     .description('Complete a task (moves it to logs/)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to complete (required)')
-    .option('--force', 'Force epic completion even if child tasks are still active')
+    .option('--force', 'Complete a parent even if its children are still open')
     .action((options) => { completeCommand(options); });
 
   program
@@ -394,6 +400,7 @@ Brainfile file resolution (when you don't pass --file):
     .description('Search across active tasks and completed logs')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-c, --column <name>', 'Filter by column')
+    .option('--type <type>', 'Filter by document type (aliases work: adr finds decisions)')
     .argument('<query>', 'Search query')
     .action((query, options) => { searchCommand({ ...options, query }); });
 
@@ -643,7 +650,7 @@ Brainfile file resolution (when you don't pass --file):
     .option('-c, --column <id>', 'Column to place the plan in (default: todo)')
     .option('--description <text>', 'Plan description (written to the markdown body)')
     .option('--tags <tags>', 'Comma-separated tags')
-    .option('--parent <id>', 'Parent plan or epic ID')
+    .option('--parent <id>', 'Parent epic or spec ID')
     .option('--status <status>', 'Free-form status (e.g. draft, active, superseded)')
     .action((options) => { planAddCommand(options); });
 
@@ -692,13 +699,14 @@ Brainfile file resolution (when you don't pass --file):
     .action((options) => { adrPromoteCommand(options); });
 
   // Add types command
-  program
+  const typesCmd = program
     .command('types [action]')
-    .description('Inspect and manage board document types')
+    .description('Every document type and its place in the graph; add your own')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('--json', 'Output in JSON format (list action)')
+    .option('--like <type>', 'Take a built-in type\'s place: epic, spec, plan, task or decision (add action)')
     .option('--id-prefix <prefix>', 'ID prefix to use for the type (add action; default: type name)')
-    .option('--completable <bool>', 'Whether this type can be completed (add action; default: true)')
+    .option('--completable <bool>', 'Whether this type can be completed (add action; default: true, or its like: type\'s rule)')
     .option('--schema <url>', 'Optional schema URL/path for this type (add action)')
     .argument('[name]', 'Type name (required for add action)')
     .action((action, name, options) => {
@@ -724,12 +732,26 @@ Brainfile file resolution (when you don't pass --file):
           idPrefix: options.idPrefix,
           completable,
           schema: options.schema,
+          like: options.like,
         });
         return;
       }
 
       throw new Error(`Unknown types action: ${action}`);
     });
+  typesCmd.addHelpText('after', `
+Built in, no config needed:
+  ▸ epic      holds specs, plans and tasks; done when everything under it is
+  ◆ spec      what to build and why; goes under an epic, holds plans and tasks
+  ⎘ plan      how, and in what order; goes under an epic or spec, holds tasks
+    task      one piece of work (alias issue); goes under any of these, holds tasks
+  ● decision  a standing choice (alias adr); no column, never completed, never in the tree
+
+Examples:
+  brainfile types
+  brainfile types --json
+  brainfile types add bug --like task
+  brainfile types add rfc --like spec --id-prefix rfc`);
 
   /**
    * The CLI's outermost error boundary.

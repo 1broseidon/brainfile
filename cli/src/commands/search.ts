@@ -4,6 +4,7 @@
  * Usage:
  * - brainfile search "auth bug"     Search title, description, tags, and log body
  * - brainfile search "auth" -c todo  Filter to specific column
+ * - brainfile search "auth" --type spec  Filter by document type (aliases work)
  *
  * @packageDocumentation
  */
@@ -20,6 +21,8 @@ export interface SearchOptions {
   file: string;
   query?: string;
   column?: string;
+  /** Document type; aliases work (`adr` finds decisions). Same as `type:` in the query. */
+  type?: string;
 }
 
 export interface SearchResult {
@@ -47,14 +50,14 @@ export function searchCommand(options: SearchOptions, logger: Logger = defaultLo
   const filePath = resolveCliBrainfilePath(options.file);
   assertV2Brainfile(filePath);
 
-  return searchV2(filePath, options.query, options.column, logger);
+  return searchV2(filePath, options.query, options.column, options.type, logger);
 }
 
-function searchV2(filePath: string, query: string, column: string | undefined, logger: Logger): SearchResult {
+function searchV2(filePath: string, query: string, column: string | undefined, type: string | undefined, logger: Logger): SearchResult {
   const dirs = getV2Dirs(filePath);
 
   // Active tasks (optionally restricted to one column)
-  const taskMatches = searchTasksRanked(readTasksDir(dirs.boardDir), query, { column });
+  const taskMatches = searchTasksRanked(readTasksDir(dirs.boardDir), query, { column, type });
 
   const results: SearchResult['results'] = taskMatches.map(({ doc, score }) => ({
     id: doc.task.id,
@@ -66,7 +69,7 @@ function searchV2(filePath: string, query: string, column: string | undefined, l
 
   // Completed logs — skipped entirely when a column filter is active
   if (!column) {
-    for (const { doc, score } of searchTasksRanked(readTasksDir(dirs.logsDir), query)) {
+    for (const { doc, score } of searchTasksRanked(readTasksDir(dirs.logsDir), query, { type })) {
       results.push({
         id: doc.task.id,
         title: doc.task.title,

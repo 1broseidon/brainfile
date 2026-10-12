@@ -3,10 +3,13 @@ import * as path from 'path';
 import {
   BrainfileLinter,
   LintIssue,
+  buildDocGraph,
+  lintDocGraph,
   lintTaskRefs,
   parseFrontmatter,
   readRelatedConfig,
   readTasksDir,
+  type TypesConfig,
 } from '@brainfile/core';
 import chalk from 'chalk';
 import { defaultLogger, type Logger } from '../utils/logger';
@@ -44,6 +47,7 @@ export function lintCommand(options: LintOptions, logger: Logger = defaultLogger
   // Run linter from core
   const result = BrainfileLinter.lint(content, { autoFix: options.fix });
   result.issues.push(...lintDependsOnRefs(filePath, content));
+  result.issues.push(...lintGraph(filePath, content));
 
   // Report findings
   if (result.issues.length === 0) {
@@ -130,4 +134,24 @@ function lintDependsOnRefs(filePath: string, content: string): LintIssue[] {
   const boardDir = path.join(path.dirname(filePath), 'board');
   const tasks = readTasksDir(boardDir).map((doc) => doc.task);
   return lintTaskRefs(tasks, readRelatedConfig(config));
+}
+
+/**
+ * spec-12: the graph of open documents. Parents that are missing, loop or do
+ * not fit the defaults (an error on a strict board), `decisions:` that name
+ * nothing or something other than a decision, and links that treat a
+ * decision as work.
+ */
+function lintGraph(filePath: string, content: string): LintIssue[] {
+  const config = parseFrontmatter<Record<string, unknown>>(content)?.data;
+  if (!config) return [];
+  const dotDir = path.dirname(filePath);
+  const boardDir = path.join(dotDir, 'board');
+  if (!fs.existsSync(boardDir)) return [];
+  const tasks = [
+    ...readTasksDir(boardDir).map((doc) => doc.task),
+    ...readTasksDir(path.join(dotDir, 'logs')).map((doc) => doc.task),
+  ];
+  const graph = buildDocGraph(tasks, { types: config.types as TypesConfig | undefined });
+  return lintDocGraph(graph, { strict: config.strict === true });
 }

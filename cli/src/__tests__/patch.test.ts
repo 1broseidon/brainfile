@@ -43,7 +43,7 @@ describe('patch command', () => {
 
   it('warns but sets a parent that is not on the board', () => {
     patchCommand({ file: ws.brainfilePath, task: 'task-1', parent: 'epic-9' }, logger);
-    expect(logger.getOutput()).toContain('parent epic-9 not found');
+    expect(logger.getOutput()).toContain('parent epic-9 is not on this board');
     expect(readV2Task(ws, 'task-1')!.task.parentId).toBe('epic-9');
   });
 
@@ -53,7 +53,7 @@ describe('patch command', () => {
 
     patchCommand({ file: ws.brainfilePath, task: 'task-1', dependsOn: 'mobile:task-4' }, logger);
     expect(readV2Task(ws, 'task-1')!.task.dependsOn).toEqual(['mobile:task-4']);
-    expect(logger.getOutput()).not.toContain('not found on this board');
+    expect(logger.getOutput()).not.toContain('is not on this board');
 
     patchCommand({ file: ws.brainfilePath, task: 'task-1', clearDependsOn: true }, logger);
     expect(readV2Task(ws, 'task-1')!.task.dependsOn).toBeUndefined();
