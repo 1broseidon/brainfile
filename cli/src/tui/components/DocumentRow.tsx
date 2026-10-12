@@ -15,8 +15,9 @@
  *  - children indent two spaces;
  *  - IDs are dim and padded to a shared width so titles line up within a depth;
  *  - the priority marker (`⚠ high`) is the single priority mechanism;
- *  - up to three right-aligned signal chips in fixed precedence: contract
- *    state → subtask progress → first tag;
+ *  - up to three right-aligned signal chips in fixed precedence: `decision
+ *    changed` (it rests on a decision since replaced) → contract state →
+ *    subtask progress → first tag;
  *  - the title truncates with `…` before a chip is ever dropped or wrapped.
  */
 import React from 'react';
@@ -28,6 +29,9 @@ import { getPriorityColor, getSubtaskProgress, getContractState } from '../utils
 
 /** Maximum right-aligned signal chips per row (design §3). */
 export const MAX_CHIPS = 3;
+
+/** The chip on a row resting on a retired decision, as the desktop says it. */
+export const DECISION_CHANGED = 'decision changed';
 
 interface Chip {
   text: string;
@@ -42,6 +46,12 @@ export function buildChips(row: DocRow): Chip[] {
   // Collapsed parent: `N hidden` leads, ahead of the usual precedence (§A1).
   if (row.collapsed && row.childCount) {
     chips.push({ text: `${row.childCount} hidden`, color: PALETTE.textMuted });
+  }
+
+  // Work resting on a decision that no longer stands needs a look before it
+  // goes on: ahead of every ordinary signal, so the cap never drops it.
+  if (row.decisionChanged) {
+    chips.push({ text: DECISION_CHANGED, color: PALETTE.warning });
   }
 
   const contractState = getContractState(task);

@@ -22,9 +22,24 @@
  * Sections render only when non-empty — a childless task shows no `children`
  * heading, an uncontracted doc shows no `contract` block, and so on.
  *
- * The flat cursor (§B2, the locked decision) walks children then subtasks —
- * `detailStops.ts` is the single source of truth for what stop N means, so
- * this file and `useKeyboardNavigation` can never disagree.
+ * A decision (task-19) swaps the metadata row for its own fields, one per
+ * line, and shows the open work resting on it; work that rests on decisions
+ * lists them under `rests on`, a retired one marked where it went:
+ *
+ * ```
+ *  decision-1  Use fetch for HTTP.                               superseded
+ *  ─────────────────────────────────────────────────────────────────────
+ *  claim key    dependency.http-client
+ *  kind         decision
+ *  replaced by  decision-2  Never axios: one HTTP client is enough…
+ *  work resting on it (1)
+ *    task-10  Empty states for no board, legacy board…          backlog
+ * ```
+ *
+ * The flat cursor (§B2, the locked decision) walks decision references,
+ * resting work, children, then subtasks — `detailStops.ts` is the single
+ * source of truth for what stop N means, so this file and
+ * `useKeyboardNavigation` can never disagree.
  *
  * Wide terminals render this as a persistent right pane beside a still-
  * interactive list; narrow terminals render it fullscreen in place of the
@@ -35,11 +50,19 @@
  */
 import React from 'react';
 import { Box, Text } from 'ink';
-import type { Task } from '@brainfile/core';
-import { PALETTE, RULE, GLYPHS, getContractStateColor } from '../theme.js';
+import type { DecisionSummary, Task } from '@brainfile/core';
+import { PALETTE, RULE, GLYPHS, getContractStateColor, getTypeGlyph } from '../theme.js';
 import { getPriorityColor, getDocType } from '../utils.js';
 import { truncate, truncateStart, wrapText, pad } from '../text.js';
 import type { ActivityEntry } from '../actions.js';
+import {
+  NO_RELATIONS,
+  isPastValidUntil,
+  isRetiredRef,
+  retiredLabel,
+  type DecisionRef,
+  type DetailRelations,
+} from '../decisions.js';
 
 /** Deliverables shown before the rest are dropped (§B1). */
 export const MAX_DELIVERABLES = 3;
@@ -66,6 +89,8 @@ export interface DetailViewProps {
   cursor: number;
   /** Body scroll offset in lines, cursor-independent (§B2). */
   scrollOffset: number;
+  /** Decision fields, a decision's chain and resting work, or the decisions work rests on. */
+  relations?: DetailRelations;
 }
 
 interface BodyLine {
@@ -92,16 +117,22 @@ export function computeDetailLayout(
   height: number,
   children: Task[],
   activity: ActivityEntry[],
+  relations: DetailRelations = NO_RELATIONS,
 ): DetailLayout {
   const contentWidth = Math.max(20, width - 2);
   const stacked = contentWidth < 60;
   const subtasks = task.subtasks ?? [];
   const files = task.relatedFiles ?? [];
   const contract = task.contract;
+  const { decision, refs, resting } = relations;
 
   const bodyLines = buildBodyLines(task.description, contentWidth);
 
-  const metaLines = stacked ? 4 : 1;
+  // A decision's fields replace the metadata row; work's `rests on` is a
+  // section of its own, as `children` is.
+  const metaLines = decision ? decisionFieldLines(decision, refs, contentWidth).length : stacked ? 4 : 1;
+  const restsOnLines = !decision && refs.length > 0 ? 1 + refs.length : 0;
+  const restingLines = resting.length > 0 ? 1 + resting.length : 0;
   const childrenLines = children.length > 0 ? 1 + children.length : 0;
   const subtasksLines = subtasks.length > 0 ? 1 + subtasks.length : 0;
   const contractLines = contract
@@ -115,6 +146,8 @@ export function computeDetailLayout(
 
   const sectionsWithMargin = [
     bodyLines.length > 0,
+    restsOnLines > 0,
+    restingLines > 0,
     childrenLines > 0,
     subtasksLines > 0,
     contractLines > 0,
@@ -128,6 +161,8 @@ export function computeDetailLayout(
       2 /* header + rule */ -
       metaLines -
       1 /* description heading line */ -
+      restsOnLines -
+      restingLines -
       childrenLines -
       subtasksLines -
       contractLines -
@@ -150,14 +185,21 @@ export function DetailView({
   activity,
   cursor,
   scrollOffset,
+  relations = NO_RELATIONS,
 }: DetailViewProps) {
   const contentWidth = Math.max(20, width - 2);
   const stacked = contentWidth < 60;
+  const { decision, refs, resting } = relations;
 
-  const priority = task.priority;
+  // A decision has no priority: its state chip is where it stands.
+  const priority = decision ? undefined : task.priority;
   const subtasks = task.subtasks ?? [];
   const files = task.relatedFiles ?? [];
   const contract = task.contract;
+  // Stop numbering follows `buildDetailStops`: refs, resting, children, subtasks.
+  const restingBase = refs.length;
+  const childBase = restingBase + resting.length;
+  const subtaskBase = childBase + children.length;
 
   const { bodyLines, bodyBudget, bodyOverflows } = computeDetailLayout(
     task,
@@ -165,6 +207,7 @@ export function DetailView({
     height,
     children,
     activity,
+    relations,
   );
   const clampedScroll = Math.max(0, Math.min(scrollOffset, Math.max(0, bodyLines.length - bodyBudget)));
   const visibleBody = bodyLines.slice(clampedScroll, clampedScroll + bodyBudget);
@@ -197,7 +240,17 @@ export function DetailView({
         <Text color={PALETTE.textDim}>{RULE.repeat(contentWidth)}</Text>
       </Box>
 
-      <MetadataBlock task={task} parent={parent} stacked={stacked} width={width} />
+      {decision ? (
+        <DecisionFields
+          decision={decision}
+          refs={refs}
+          cursor={cursor}
+          contentWidth={contentWidth}
+          width={width}
+        />
+      ) : (
+        <MetadataBlock task={task} parent={parent} stacked={stacked} width={width} />
+      )}
 
       {bodyLines.length > 0 ? (
         <Box flexDirection="column" paddingLeft={1} marginTop={1}>
@@ -226,13 +279,55 @@ export function DetailView({
         </Box>
       ) : null}
 
+      {!decision && refs.length > 0 ? (
+        <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+          <Text color={PALETTE.textMuted}>{`rests on (${refs.length})`}</Text>
+          {refs.map((ref, index) => {
+            const retired = isRetiredRef(ref);
+            return (
+              <StopRow
+                key={`ref-${ref.id}`}
+                selected={index === cursor}
+                left={`  ${refGlyph(ref)} ${ref.id}  ${ref.task?.title ?? ref.missing ?? ''}`}
+                leftColor={ref.task && !ref.missing ? PALETTE.textSecondary : PALETTE.textMuted}
+                right={
+                  retired && ref.summary
+                    ? retiredLabel(ref.summary)
+                    : ref.missing === 'not a decision'
+                      ? ref.missing
+                      : undefined
+                }
+                rightColor={retired ? PALETTE.warning : PALETTE.textMuted}
+                contentWidth={contentWidth}
+              />
+            );
+          })}
+        </Box>
+      ) : null}
+
+      {resting.length > 0 ? (
+        <Box flexDirection="column" paddingLeft={1} marginTop={1}>
+          <Text color={PALETTE.textMuted}>{`work resting on it (${resting.length})`}</Text>
+          {resting.map((work, index) => (
+            <StopRow
+              key={`resting-${work.id}`}
+              selected={restingBase + index === cursor}
+              left={`  ${work.id}  ${work.title}`}
+              right={work.column ?? ''}
+              rightColor={PALETTE.textSecondary}
+              contentWidth={contentWidth}
+            />
+          ))}
+        </Box>
+      ) : null}
+
       {children.length > 0 ? (
         <Box flexDirection="column" paddingLeft={1} marginTop={1}>
           <Text color={PALETTE.textMuted}>{`children (${children.length})`}</Text>
           {children.map((child, index) => (
             <StopRow
               key={child.id}
-              selected={index === cursor}
+              selected={childBase + index === cursor}
               left={`  ${child.id}  ${child.title}`}
               right={child.column ?? ''}
               rightColor={PALETTE.textSecondary}
@@ -248,7 +343,7 @@ export function DetailView({
             {`subtasks (${subtasks.filter((s) => s.completed).length}/${subtasks.length})`}
           </Text>
           {subtasks.map((subtask, index) => {
-            const stopIndex = children.length + index;
+            const stopIndex = subtaskBase + index;
             const glyph = subtask.completed ? GLYPHS.subtaskDone : GLYPHS.subtaskOpen;
             return (
               <StopRow
@@ -368,7 +463,12 @@ function StopRow({
   contentWidth: number;
 }) {
   const rightText = right ?? '';
-  const leftTruncated = truncate(left, Math.max(1, contentWidth - rightText.length - 2));
+  // The cursor is a character as well as reverse video: chalk drops inverse
+  // under NO_COLOR, so the bar is what a no-colour terminal sees (as in the
+  // list). Every stop's text starts with two spaces of indent; the bar takes
+  // the second, against the text.
+  const marked = selected && left.startsWith('  ') ? ` ${GLYPHS.cursor}${left.slice(2)}` : left;
+  const leftTruncated = truncate(marked, Math.max(1, contentWidth - rightText.length - 2));
   const gap = Math.max(1, contentWidth - leftTruncated.length - rightText.length);
 
   return (
@@ -409,6 +509,122 @@ function LabeledList({
       ))}
     </React.Fragment>
   );
+}
+
+/** Width of the label column in a decision's fields: `replaced by` and its gap. */
+export const FIELD_LABEL_WIDTH = 13;
+/** Lines a long field (holds while, recheck) may wrap to before it is cut. */
+export const MAX_FIELD_LINES = 3;
+
+/** One line of a decision's fields. */
+export interface DecisionFieldLine {
+  /** Empty on a wrapped continuation. */
+  label: string;
+  value: string;
+  /** The value is a note, not data: a reference that is not on this board. */
+  muted?: boolean;
+  /** Said after the value in the warning colour: `review` once validUntil has passed. */
+  signal?: string;
+  /** Flat-cursor stop, for a reference the cursor can open. */
+  stop?: number;
+}
+
+/**
+ * A decision's fields, line by line: claim key, kind, stance and subject,
+ * holds while, recheck, valid until, the chain (replaces, replaced by: the
+ * cursor's first stops) and when it was made. Only what is set; long prose
+ * wraps under its label. Shared by the render and the layout math.
+ */
+export function decisionFieldLines(
+  decision: DecisionSummary,
+  refs: DecisionRef[],
+  contentWidth: number,
+): DecisionFieldLine[] {
+  const valueWidth = Math.max(8, contentWidth - FIELD_LABEL_WIDTH);
+  const lines: DecisionFieldLine[] = [];
+  const add = (label: string, value: string | undefined, wrap = false) => {
+    if (!value) return;
+    let parts = wrap ? wrapText(value, valueWidth) : [value];
+    if (parts.length > MAX_FIELD_LINES) {
+      const rest = parts.slice(MAX_FIELD_LINES - 1).join(' ');
+      parts = [...parts.slice(0, MAX_FIELD_LINES - 1), truncate(rest, valueWidth)];
+    }
+    parts.forEach((text, index) => lines.push({ label: index === 0 ? label : '', value: text }));
+  };
+
+  add('claim key', decision.claimKey);
+  add('kind', decision.kind);
+  if (decision.stance) {
+    add('stance', decision.subject ? `${decision.stance} ${decision.subject}` : decision.stance, true);
+  } else {
+    add('subject', decision.subject, true);
+  }
+  add('holds while', decision.holdsWhile, true);
+  add('recheck', decision.recheck, true);
+  if (decision.validUntil) {
+    lines.push({
+      label: 'valid until',
+      value: decision.validUntil.slice(0, 10),
+      ...(isPastValidUntil(decision) ? { signal: 'review' } : {}),
+    });
+  }
+  refs.forEach((ref, index) => {
+    lines.push({
+      label: ref.relation === 'replaced-by' ? 'replaced by' : 'replaces',
+      value: `${ref.id}  ${ref.task?.title ?? ref.missing ?? ''}`,
+      ...(ref.missing ? { muted: true } : {}),
+      stop: index,
+    });
+  });
+  add('created', decision.createdAt?.slice(0, 10));
+  return lines;
+}
+
+function DecisionFields({
+  decision,
+  refs,
+  cursor,
+  contentWidth,
+  width,
+}: {
+  decision: DecisionSummary;
+  refs: DecisionRef[];
+  cursor: number;
+  contentWidth: number;
+  width: number;
+}) {
+  const lines = decisionFieldLines(decision, refs, contentWidth);
+  if (lines.length === 0) return null;
+  return (
+    <Box flexDirection="column" paddingLeft={1} width={width}>
+      {lines.map((line, index) => {
+        const selected = line.stop !== undefined && line.stop === cursor;
+        const signal = line.signal ?? '';
+        const valueWidth = Math.max(1, contentWidth - FIELD_LABEL_WIDTH - (signal ? signal.length + 2 : 0));
+        return (
+          <Text key={`field-${index}`} wrap="truncate">
+            {/* The cursor bar sits against the value, in the label's last column. */}
+            <Text color={PALETTE.textMuted}>{line.label.padEnd(FIELD_LABEL_WIDTH - 1)}</Text>
+            <Text>{selected ? GLYPHS.cursor : ' '}</Text>
+            <Text
+              color={selected ? undefined : line.muted ? PALETTE.textMuted : PALETTE.textSecondary}
+              inverse={selected}
+            >
+              {truncate(line.value, valueWidth)}
+            </Text>
+            {signal ? <Text>{pad(2)}</Text> : null}
+            {signal ? <Text color={PALETTE.warning}>{signal}</Text> : null}
+          </Text>
+        );
+      })}
+    </Box>
+  );
+}
+
+/** ● for a standing decision, ○ for a retired one, nothing for one that is not on the board. */
+function refGlyph(ref: DecisionRef): string {
+  if (!ref.summary) return ' ';
+  return isRetiredRef(ref) ? GLYPHS.retiredDecision : getTypeGlyph('decision');
 }
 
 function MetadataBlock({

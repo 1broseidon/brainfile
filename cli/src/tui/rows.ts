@@ -28,6 +28,17 @@ export interface DocRow {
   childCount?: number;
   /** True when a parent-with-children row is currently collapsed. */
   collapsed?: boolean;
+  /**
+   * The document rests on a decision that has since been superseded,
+   * rejected or gone stale: the row says `decision changed` (task-19).
+   */
+  decisionChanged?: boolean;
+}
+
+/** Flag the rows whose document rests on a retired decision. Rows not named keep their identity. */
+export function markDecisionChanges(rows: DocRow[], changed: ReadonlySet<string>): DocRow[] {
+  if (changed.size === 0) return rows;
+  return rows.map((row) => (changed.has(row.task.id) ? { ...row, decisionChanged: true } : row));
 }
 
 /**
