@@ -2,14 +2,14 @@
 id: spec-10
 title: "Related boards: name sister repos, dependsOn across them, list them"
 type: spec
-column: todo
-position: 6
 tags:
   - boards
   - cli
   - mcp
   - desktop
 createdAt: "2026-10-12T02:12:52.102Z"
+completedAt: "2026-10-12T03:14:34.951Z"
+updatedAt: "2026-10-12T03:14:34.951Z"
 ---
 
 ## Description
