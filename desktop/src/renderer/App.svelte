@@ -111,6 +111,9 @@
       case 'd':
         app.setView(app.view === 'decisions' ? 'list' : 'decisions');
         break;
+      case 'i':
+        if (app.activeId && app.forges[app.activeId]) app.setView(app.view === 'issues' ? 'list' : 'issues');
+        break;
       case 'j':
       case 'ArrowDown':
         moveSelection(1);

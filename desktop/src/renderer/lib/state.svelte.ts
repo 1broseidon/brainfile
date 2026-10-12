@@ -12,6 +12,10 @@ import type {
   BoardSnapshot,
   DispatchSettings,
   EditorInfo,
+  ForgeRepo,
+  GitHubAuthView,
+  IssuesView,
+  IssueView,
   ModelOption,
   PermissionAsk,
   Project,
@@ -24,6 +28,7 @@ import { problemBrief } from './brief';
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
 const SETTLE_MS = 900;
 import { decisionGroups, outline, visibleRows } from './format';
+import { intakeColumn, issueTask } from '../../shared/issues';
 
 declare global {
   interface Window {
@@ -48,7 +53,7 @@ for (const key of MUTATIONS) {
   };
 }
 
-export type ViewMode = 'list' | 'board' | 'decisions';
+export type ViewMode = 'list' | 'board' | 'decisions' | 'issues';
 export type MenuKind = 'status' | 'priority' | 'assignee' | 'labels';
 
 const VIEW_KEY = 'brainfile.view';
@@ -265,7 +270,20 @@ class AppState {
 
   active = $derived(this.projects.find((p) => p.id === this.activeId) ?? null);
   board = $derived(this.activeId ? (this.boards[this.activeId] ?? null) : null);
-  view = $derived<ViewMode>((this.activeId && this.views[this.activeId]) || 'list');
+  /** Issues are a view only where the origin is on a forge the window knows; elsewhere the list stands in. */
+  view = $derived.by<ViewMode>(() => {
+    const chosen = (this.activeId && this.views[this.activeId]) || 'list';
+    return chosen === 'issues' && this.activeId && this.forges[this.activeId] === null ? 'list' : chosen;
+  });
+
+  /** Each project's forge repository (task-26): undefined until asked, null when its origin is none the window knows. */
+  forges = $state<Record<string, ForgeRepo | null>>({});
+  /** Each project's open issues, as last read, and whether a read is under way. */
+  issues = $state<Record<string, { view: IssuesView | null; loading: boolean; error: string | null }>>({});
+  /** How the window signs in to GitHub, as Settings last asked. */
+  githubAuth = $state<GitHubAuthView | null>(null);
+  /** Issues being made into tasks, by URL, so a second click waits for the first. */
+  making = $state<Record<string, boolean>>({});
 
   /**
    * The list's folds, per board: column groups folded shut and parents whose
@@ -294,6 +312,7 @@ class AppState {
   orderedTasks = $derived.by((): { id: string }[] => {
     const board = this.board;
     if (!board) return [];
+    if (this.view === 'issues') return [];
     if (this.view === 'decisions') return decisionGroups(board.decisions).flatMap((g) => g.decisions);
     if (this.view === 'board') return board.columns.flatMap((column) => board.tasks.filter((t) => t.column === column.id));
     const tree = outline(board.columns, board.tasks, board.completed);
@@ -331,6 +350,8 @@ class AppState {
     // machine, `brainfile init` in a terminal), so look again on return.
     window.addEventListener('focus', () => {
       for (const p of this.projects) if (p.state.status !== 'ready') void this.refreshProject(p.id);
+      // Issues filed while the window was away; the host side keeps this to once a minute.
+      if (this.activeId && this.view === 'issues') void this.loadIssues(this.activeId);
     });
     const first = this.projects.find((p) => p.id === this.activeId) ?? this.projects[0];
     if (first) await this.select(first.id);
@@ -346,6 +367,56 @@ class AppState {
     } else {
       this.boardErrors[projectId] = result.error;
     }
+    if (!(projectId in this.forges)) void api.forgeRepo(projectId).then((repo) => (this.forges[projectId] = repo));
+  }
+
+  // ── Issues (task-26) ──────────────────────────────────────────────────────
+
+  /** Read the project's open issues; `force` asks GitHub even if it was asked a moment ago. */
+  async loadIssues(projectId: string, force = false): Promise<void> {
+    this.issues[projectId] ??= { view: null, loading: false, error: null };
+    // Read back through the state proxy: the literal above is not reactive.
+    const entry = this.issues[projectId];
+    if (entry.loading) return;
+    entry.loading = true;
+    const result = await api.listIssues(projectId, force);
+    const now = this.issues[projectId];
+    now.loading = false;
+    if (result.ok) {
+      now.view = result.value;
+      now.error = null;
+    } else {
+      // What was read before stays on screen, under the problem.
+      now.error = result.error;
+    }
+  }
+
+  /** Make a task from an issue on the active board, linked back to it by `source:`. */
+  async taskFromIssue(issue: IssueView): Promise<void> {
+    const board = this.board;
+    const column = board && intakeColumn(board.columns);
+    if (!board || !this.activeId || !column || this.making[issue.url]) return;
+    this.making[issue.url] = true;
+    const result = await api.addTask(this.activeId, issueTask(issue, column));
+    delete this.making[issue.url];
+    if (!result.ok) this.notify(result.error, 'warn');
+    else this.selectedTaskId = result.value.id;
+  }
+
+  async loadGitHubAuth(): Promise<void> {
+    this.githubAuth = await api.githubAuth();
+  }
+
+  /** Save a token for GitHub, or forget it; the issues read before are read again with it. */
+  async setGitHubToken(token: string | null): Promise<boolean> {
+    const result = await api.setGitHubToken(token);
+    if (!result.ok) {
+      this.notify(result.error, 'warn');
+      return false;
+    }
+    this.githubAuth = result.value;
+    for (const id of Object.keys(this.issues)) this.issues[id].view = null;
+    return true;
   }
 
   /** A fresh snapshot from the host. What changed without this window's hand goes in the feed. */
@@ -689,7 +760,7 @@ class AppState {
     localStorage.setItem(VIEW_KEY, JSON.stringify(this.views));
   }
 
-  /** V turns between the two views of the work; from decisions it goes back to the list. */
+  /** V turns between the two views of the work; from decisions or issues it goes back to the list. */
   toggleView(): void {
     this.setView(this.view === 'list' ? 'board' : 'list');
   }

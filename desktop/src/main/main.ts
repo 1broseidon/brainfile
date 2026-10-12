@@ -3,7 +3,7 @@
  * host. A project is a folder the person added; its board is found, read and
  * written by the host, never here.
  */
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -17,6 +17,7 @@ import {
   type HostReply,
   type HostMessage,
   type HostRequest,
+  type IssuesView,
   type Project,
   type ProjectState,
   type Result,
@@ -25,6 +26,8 @@ import {
 import { loginShellPath } from './shellPath';
 import { ProjectStore } from './projects';
 import { existingFiles, listEditors, openFolder, openInEditor } from './editors';
+import { detectForge } from './forge';
+import { fileTokenStore, ghCliToken, GitHub } from './github';
 import { readPlacement, resolvePlacement, writePlacement, type WindowPlacement } from './windowState';
 
 // Launched from the Dock, the app inherits launchd's bare PATH: no Homebrew
@@ -38,6 +41,7 @@ let host: UtilityProcess | null = null;
 let agents: UtilityProcess | null = null;
 const agentPending = new Map<number, (result: unknown) => void>();
 let store: ProjectStore;
+let github: GitHub;
 let nextRequest = 1;
 const pending = new Map<number, (result: unknown) => void>();
 
@@ -174,6 +178,26 @@ function initBoard(projectId: string): Promise<Result<Project>> {
   });
 }
 
+// ── Issues (task-26) ────────────────────────────────────────────────────────
+
+async function listIssues(projectId: string, force?: boolean): Promise<Result<IssuesView>> {
+  const repo = await detectForge(projectId);
+  if (!repo) return { ok: false, error: `${path.basename(projectId)}'s origin is not on GitHub.` };
+  return github.listIssues(repo, force);
+}
+
+function startGitHub(): GitHub {
+  const store = fileTokenStore(
+    path.join(app.getPath('userData'), 'github.json'),
+    (text) => {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('The Keychain is not available to keep a token safely.');
+      return safeStorage.encryptString(text);
+    },
+    (sealed) => safeStorage.decryptString(sealed)
+  );
+  return new GitHub({ fetch: (...args) => fetch(...args), ghToken: ghCliToken, env: process.env, store });
+}
+
 // ── IPC ─────────────────────────────────────────────────────────────────────
 
 const local: Record<string, (...args: any[]) => unknown> = {
@@ -190,6 +214,10 @@ const local: Record<string, (...args: any[]) => unknown> = {
   listEditors,
   existingFiles,
   openInEditor,
+  forgeRepo: detectForge,
+  listIssues,
+  githubAuth: () => github.auth(),
+  setGitHubToken: (token: string | null) => github.setToken(token),
   // The folder comes from the agents process, never from the window.
   openWorktree: async (projectId: string, taskId: string, editorId?: string): Promise<Result> => {
     const review = await callAgents<Result<ReviewView | null>>('review', projectId, taskId);
@@ -317,6 +345,7 @@ function start(): void {
   if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '..', 'assets', 'icon.png'));
   app.setName('Brainfile');
   store = new ProjectStore(path.join(app.getPath('userData'), 'projects.json'));
+  github = startGitHub();
   host = startHost();
   if (DEV_URL) reloadAgentsOnRebuild();
   createWindow();

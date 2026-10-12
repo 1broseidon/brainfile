@@ -40,6 +40,8 @@ export interface TaskView {
   decisions?: string[];
   /** Those of them that have been superseded, rejected or gone stale. */
   restsOnRetired?: string[];
+  /** Where the work came from, as written in `source:`: an issue's URL when it was made from one (task-26). */
+  source?: string;
 }
 
 /** `proposed` is a legacy ADR's status before it was accepted. */
@@ -182,6 +184,8 @@ export interface BoardSnapshot {
   sync: SyncView;
   integrity: IntegrityView;
   related: RelatedView[];
+  /** Every `source:` on the board, open and completed, to the task that carries it: an issue here is already a task. */
+  sources: Record<string, string>;
 }
 
 export type ProjectState =
@@ -208,6 +212,8 @@ export interface NewTaskInput {
   tags?: string[];
   type?: string;
   parentId?: string;
+  /** The issue it is made from (task-26); refused when a task already carries it. */
+  source?: string;
 }
 
 export interface TaskPatch {
@@ -368,6 +374,62 @@ export interface DispatchSettings {
   modes: Partial<Record<AgentId, string>>;
 }
 
+// ── Forges (task-26) ──────────────────────────────────────────────────────
+
+/** A code host the window knows how to read issues from. Only GitHub, for now. */
+export type ForgeId = 'github';
+
+/** The repository a project's origin remote points at, on a forge the window knows. */
+export interface ForgeRepo {
+  forge: ForgeId;
+  /** `github.com`. */
+  host: string;
+  owner: string;
+  name: string;
+  /** `https://github.com/owner/name`. */
+  url: string;
+}
+
+/** An open issue, as the issues view shows it. */
+export interface IssueView {
+  number: number;
+  title: string;
+  body: string;
+  labels: string[];
+  /** The issue's page: what a task made from it keeps as its `source:`. */
+  url: string;
+  author?: string;
+  comments: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** How the window signs in to GitHub: the gh CLI's login, a token in the environment, one saved in Settings, or none (public repositories only). */
+export type GitHubAuthSource = 'gh' | 'env' | 'token' | 'none';
+
+export interface IssuesView {
+  repo: ForgeRepo;
+  /** Open issues, pull requests left out, most recently updated first. */
+  issues: IssueView[];
+  /** When GitHub was last asked (ms). */
+  fetchedAt: number;
+  auth: GitHubAuthSource;
+  /** Requests left in the hour, as GitHub last said. */
+  rateRemaining?: number;
+  /** More open issues than were read. */
+  truncated: boolean;
+}
+
+export interface GitHubAuthView {
+  source: GitHubAuthSource;
+  /** Who GitHub says the credentials belong to, when it was asked and they work. */
+  login?: string;
+  /** A token is saved in Settings. */
+  saved: boolean;
+  /** Why the credentials found do not work. */
+  error?: string;
+}
+
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Requests the renderer can make. Each maps to one handler in the host or main. */
@@ -450,6 +512,15 @@ export interface Api {
   existingFiles(projectId: string, files: string[]): Promise<string[]>;
   /** Opens a file in the project at a line, in the editor named, else the first found. */
   openInEditor(projectId: string, file: string, line?: number, editorId?: string): Promise<Result>;
+
+  /** The forge repository the project's origin points at, or null when it is none the window knows. */
+  forgeRepo(projectId: string): Promise<ForgeRepo | null>;
+  /** The repository's open issues. Asked of GitHub at most once a minute unless `force`; unchanged answers cost no rate limit. */
+  listIssues(projectId: string, force?: boolean): Promise<Result<IssuesView>>;
+  /** How the window would sign in to GitHub now, and as whom. */
+  githubAuth(): Promise<GitHubAuthView>;
+  /** Save a token for GitHub (kept in the Keychain's care), or forget it with null. Checked with GitHub before it is kept. */
+  setGitHubToken(token: string | null): Promise<Result<GitHubAuthView>>;
 
   onBoardChanged(listener: (snapshot: BoardSnapshot) => void): () => void;
   onProjectsChanged(listener: (projects: Project[]) => void): () => void;

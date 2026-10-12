@@ -32,6 +32,23 @@ Hand to… runs the agent in its own git worktree on the branch
 you can see the diff, open it in your editor, merge it or send it back, and
 the worktree is removed on merge or discard.
 
+## Issues
+
+When a project's `origin` is on GitHub, the band gets an Issues view (I):
+the repository's open issues, those not on the board first. Make task adds
+one to the board's first column with its title, body and labels (as tags),
+and writes the issue's URL on the task as `source:`. An issue whose URL is
+already on a task, open or completed, is listed under On the board with that
+task instead of being offered again.
+
+Issues are read with the gh CLI's login when it is signed in, else
+`GH_TOKEN` / `GITHUB_TOKEN`, else a token saved in Settings (sealed by the
+Keychain); with none, public repositories still answer. GitHub is asked when
+the view opens, when the window comes back, every five minutes while it is
+open, and on refresh, never more than once a minute per repository unless
+you refresh, and an unchanged list costs no rate limit. Detection lives in
+`src/main/forge.ts`, so another forge is one more matcher there.
+
 ## Install
 
 `npm run package` builds `release/mac-arm64/Brainfile.app` for this Mac:
@@ -81,8 +98,10 @@ into before.
 | Board host | `src/host/` | Electron utility process. Every file read, write, watch, commit and sync, through `@brainfile/core` and `@brainfile/core/repo` |
 | Window | `src/renderer/` | Svelte 5. Sees only the shapes in `src/shared/api.ts` |
 
-Git and the network never run in main or the window, so a slow commit or a
-sync waiting on a remote cannot stall the UI. Edits commit the way the TUI's
+Board git and sync never run in main or the window, so a slow commit or a
+sync waiting on a remote cannot stall the UI. Main makes only short
+asynchronous calls of its own: `git remote get-url` and GitHub's issues API,
+for the Issues view. Edits commit the way the TUI's
 do: one commit per burst, then a push a few seconds later when the board has
 a remote. Changes from the CLI, agents or a sync show up as soon as the files
 change.
@@ -96,6 +115,8 @@ change.
 | ⌘1–⌘9 | Switch project |
 | ⌘B | Show or hide the projects rail |
 | V | List / board |
+| D | Decisions |
+| I | Issues, when the origin is on GitHub |
 | C | New task |
 | J / K, ↑ / ↓, ↵ | Move through tasks, open one |
 | S, P, A, L | Status, priority, assignee, labels of the selected task |
