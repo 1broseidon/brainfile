@@ -9,6 +9,8 @@ tags:
   - tui
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
+assignee: claude
+updatedAt: "2026-10-12T18:58:18.215Z"
 ---
 
 ## Description
