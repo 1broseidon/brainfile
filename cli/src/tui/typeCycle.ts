@@ -1,15 +1,16 @@
 /**
  * Type-cycle (`t`) options for the v3.1 list view (§A2).
  *
- * `t` cycles `all → task → epic → spec → plan → decision → all`, restricted to
+ * `t` cycles `all → task → epic → spec → plan → adr/decision → all`, restricted to
  * document types only — completed history is the orthogonal `L` toggle, so
  * the two compose (done view of one type).
  *
  * The decision stop is not a filter over the columns: decisions have no
  * column, so it is the decisions view (task-19), also reached directly with
- * `D`. It is always named `decision`, the canonical type, whether the board
- * spells it `adr` or not; a custom type that is `like: decision` gets no stop
- * of its own, since its documents are in that view too.
+ * `D`. The loader has lifted decisions out of the columns, so they are
+ * passed in separately; any at all give the stop. A custom type that is
+ * `like: decision` gets no stop of its own, since its documents are in that
+ * view too; it gives the decision stop instead.
  *
  * Restriction:
  * types that actually exist *on the current board* — read from the board
@@ -22,7 +23,7 @@ import { isTypeAlias, resolveDocType, type Board, type Task } from '@brainfile/c
 import { boardTypes } from './decisions.js';
 
 /** Fixed cycle order (excluding `'all'`, which always leads). */
-const FIXED_TYPE_ORDER = ['task', 'epic', 'spec', 'plan', 'decision'];
+const FIXED_TYPE_ORDER = ['task', 'epic', 'spec', 'plan', 'adr', 'decision'];
 
 /**
  * @param decisions The board's decisions, which the loader has lifted out of
@@ -42,16 +43,20 @@ export function getTypeCycleOptions(board: Board | null, decisions: readonly Tas
   const present = new Set(
     (board?.columns ?? []).flatMap((column) => (column.tasks ?? []).map((task) => (task.type || 'task').toLowerCase())),
   );
-  // One decision stop, under the canonical name, for decisions on the board
-  // or any configured type in the decision role (adr, `like: decision`).
   const types = boardTypes(board);
   const isDecisionType = (type: string) => resolveDocType(type, types).role === 'decision';
-  const hasDecisionStop = decisions.length > 0 || configured.some(isDecisionType);
-  const known = FIXED_TYPE_ORDER.filter(
-    (type) => type === 'task' || (type === 'decision' ? hasDecisionStop : configuredSet.has(type) || present.has(type)),
+  const custom = configured.filter((type) => !FIXED_TYPE_ORDER.includes(type) && !isTypeAlias(type));
+  // Decisions on the board (lifted out of the columns, or still in a board
+  // the caller did not split), or a custom type in the decision role.
+  const holdsDecisions =
+    decisions.length > 0 || [...present].some(isDecisionType) || custom.some(isDecisionType);
+  let known = FIXED_TYPE_ORDER.filter(
+    (type) =>
+      type === 'task' || configuredSet.has(type) || present.has(type) || (type === 'decision' && holdsDecisions),
   );
-  const extra = configured
-    .filter((type) => !FIXED_TYPE_ORDER.includes(type) && !isTypeAlias(type) && !isDecisionType(type))
-    .sort();
+  // adr is an alias of decision: one stop, the canonical one when both appear
+  // (either spelling is the decisions view).
+  if (known.includes('adr') && known.includes('decision')) known = known.filter((type) => type !== 'adr');
+  const extra = custom.filter((type) => !isDecisionType(type)).sort();
   return ['all', ...known, ...extra];
 }

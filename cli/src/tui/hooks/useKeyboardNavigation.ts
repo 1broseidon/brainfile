@@ -67,6 +67,8 @@ interface UseKeyboardNavigationProps {
   detailArchived: boolean;
   /** The list is the decisions view (task-19): `rows` are its decisions. */
   decisionsView?: boolean;
+  /** The type cycle's name for the decision stop, which `D` goes to. */
+  decisionStop?: string;
   /** Retired decisions behind the decisions view's history fold. */
   decisionHistoryCount?: number;
   /** The drilled-into doc's decision relations: stops before its children. */
@@ -97,6 +99,7 @@ export function useKeyboardNavigation({
   doneView,
   detailArchived,
   decisionsView = false,
+  decisionStop = 'decision',
   decisionHistoryCount = 0,
   detailRelations = NO_RELATIONS,
   detailIsDecision = false,
@@ -625,8 +628,7 @@ export function useKeyboardNavigation({
     // Decisions view (`D`, task-19): the type cycle's decision stop, reached
     // directly. `D` again goes back to the stop it left from.
     if (input === 'D') {
-      const back = state.decisionsReturn && state.decisionsReturn !== 'decision' ? state.decisionsReturn : 'all';
-      const next = decisionsView ? back : 'decision';
+      const next = decisionsView ? (state.decisionsReturn ?? 'all') : decisionStop;
       patchTuiState(filePath, { lastTypeFilter: next }); // resume view (§C3)
       setState((prev) => ({
         ...prev,
@@ -655,7 +657,8 @@ export function useKeyboardNavigation({
     // restricted to types the board actually declares or holds.
     if (input === 't') {
       if (typeCycleOptions.length > 1) {
-        const idx = typeCycleOptions.indexOf(state.activeTypeFilter);
+        // Either spelling of the decision stop continues from the cycle's own.
+        const idx = typeCycleOptions.indexOf(decisionsView ? decisionStop : state.activeTypeFilter);
         const next = typeCycleOptions[(idx < 0 ? 0 : idx + 1) % typeCycleOptions.length];
         patchTuiState(filePath, { lastTypeFilter: next }); // resume view (§C3)
         setState((prev) => ({ ...prev, activeTypeFilter: next, decisionsReturn: null, selectedTaskIndex: 0 }));

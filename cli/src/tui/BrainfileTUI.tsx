@@ -24,7 +24,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import type { Task } from '@brainfile/core';
-import { buildDocGraph, canonicalTypeName, isTypeAlias, searchTasksRanked, typesMatch } from '@brainfile/core';
+import { buildDocGraph, searchTasksRanked, typesMatch } from '@brainfile/core';
 
 import { PALETTE } from './theme.js';
 import { CHROME, EMPTY } from './copy.js';
@@ -139,15 +139,13 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   const [state, setState] = useState<AppState>(() => {
     const persisted = readTuiState(filePath);
     resumeColumn.current = persisted.lastColumn;
-    const lastType = persisted.lastTypeFilter;
     return {
       ...baseInitialState,
       collapsedIds: new Set(persisted.collapsed),
       // 'done' was a pseudo-type before the L toggle; never resume into it.
-      // An alias resumes as its canonical stop (`adr` → the decision stop).
       activeTypeFilter:
-        lastType && lastType !== 'done'
-          ? (isTypeAlias(lastType) ? canonicalTypeName(lastType) : lastType)
+        persisted.lastTypeFilter && persisted.lastTypeFilter !== 'done'
+          ? persisted.lastTypeFilter
           : baseInitialState.activeTypeFilter,
     };
   });
@@ -183,6 +181,8 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
    * board's decisions, grouped by claim-key family, history folded below.
    */
   const decisionsView = isDecisionStop(activeTypeFilter, types);
+  /** The cycle's name for the decision stop (`decision`, or `adr` on a board that only configures that). */
+  const decisionStop = typeCycleOptions.find((type) => isDecisionStop(type, types)) ?? 'decision';
   const typeFilterActive = activeTypeFilter !== 'all' && !decisionsView;
   /**
    * Done view (`L` toggle): rows come from `logs/`, not from board columns, so
@@ -413,6 +413,7 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     doneView,
     detailArchived: Boolean(detailTask && archivedIds.has(detailTask.id)),
     decisionsView,
+    decisionStop,
     decisionHistoryCount: decisionModel.historyCount,
     detailRelations,
     detailIsDecision,

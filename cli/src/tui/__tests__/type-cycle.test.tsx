@@ -12,9 +12,8 @@ import { mount, ESC, WIDE, type Harness } from './helpers.js';
 describe('getTypeCycleOptions', () => {
   it('includes custom board types after the known set', () => {
     const board = { types: { epic: {}, spike: {}, adr: {} } } as any;
-    // adr is an alias: its stop is the decision stop, under the canonical name.
     expect(getTypeCycleOptions(board)).toEqual([
-      'all', 'task', 'epic', 'decision', 'spike',
+      'all', 'task', 'epic', 'adr', 'spike',
     ]);
   });
 });
