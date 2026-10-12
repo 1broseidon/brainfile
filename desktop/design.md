@@ -243,7 +243,8 @@ board changes (and in the feed).
 
 - **Agents** are the installed ones, in this order: Claude Code
   (claude-agent-acp), Codex (codex-acp), Antigravity (the registry's ACP
-  server, downloaded once) and Cursor (`cursor-agent acp`). Each runs on the
+  server, downloaded once), Cursor (`cursor-agent acp`) and Grok Build
+  (`grok agent stdio`, in its own process rather than a shared leader). Each runs on the
   person's own login. Each project remembers its own: the agent last used
   there, and for each agent the model last chosen there, in the chat and
   Hand to… alike. A project with no history starts from the last used
@@ -285,7 +286,8 @@ board changes (and in the feed).
   modes at runtime (ACP session modes), and Settings offers exactly those,
   in the agent's words. One switch, Work without asking, puts every agent
   in its bypass mode (Claude's Bypass permissions, Codex's Full access,
-  Antigravity's YOLO) and allows whatever is still asked; off, each agent
+  Antigravity's YOLO) and allows whatever is still asked (Grok Build has no
+  modes, so for it that is the whole of it); off, each agent
   starts in its own default or the mode chosen for it. A change reaches
   sessions already open. A repository's own policy (`ask`, `allow`,
   `bypass` in `dispatch.json`) will override it once repo settings exist.

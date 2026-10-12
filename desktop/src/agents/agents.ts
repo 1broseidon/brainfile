@@ -121,6 +121,14 @@ const KNOWN: Known[] = [
     client: 'cursor-agent',
     launch: async () => ({ command: 'cursor-agent', args: ['acp'] }),
   },
+  {
+    // Grok Build speaks ACP over stdio itself. It offers no permission
+    // modes, so working without asking is answered here, ask by ask.
+    id: 'grok',
+    name: 'Grok Build',
+    client: 'grok',
+    launch: async () => ({ command: 'grok', args: ['agent', '--no-leader', 'stdio'] }),
+  },
 ];
 
 function listAgents(): AgentInfo[] {

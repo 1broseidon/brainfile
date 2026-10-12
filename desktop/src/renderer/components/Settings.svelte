@@ -16,6 +16,10 @@
   const missing = $derived(app.agents.filter((a) => !a.available));
 
   $effect(() => {
+    void app.refreshAgents();
+  });
+
+  $effect(() => {
     for (const a of installed) void app.loadModes(a.id);
   });
 

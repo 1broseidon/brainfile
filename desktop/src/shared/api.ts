@@ -179,7 +179,7 @@ export interface RemovedTask {
 
 // ── Agents (dispatch) ─────────────────────────────────────────────────────
 
-export type AgentId = 'claude' | 'codex' | 'antigravity' | 'cursor';
+export type AgentId = 'claude' | 'codex' | 'antigravity' | 'cursor' | 'grok';
 
 export interface AgentInfo {
   id: AgentId;

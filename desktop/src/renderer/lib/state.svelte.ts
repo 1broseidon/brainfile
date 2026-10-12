@@ -210,7 +210,7 @@ class AppState {
       else if (event.kind === 'permission') this.asks = [...this.asks, event.ask];
       else this.asks = this.asks.filter((a) => a.id !== event.id);
     });
-    void api.listAgents().then((agents) => (this.agents = agents));
+    void this.refreshAgents();
     void api.getSettings().then((settings) => (this.settings = settings));
     this.projects = await api.listProjects();
     this.loaded = true;
@@ -249,6 +249,11 @@ class AppState {
   /** The live dispatch on a task of the board in front, if any. */
   runFor(taskId: string): AgentRun | undefined {
     return Object.values(this.runs).find((r) => r.kind === 'dispatch' && r.taskId === taskId && r.projectId === this.activeId && isLive(r));
+  }
+
+  /** Which agents are on this Mac: asked at start, and again whenever a picker opens, so one installed since shows up. */
+  async refreshAgents(): Promise<void> {
+    this.agents = await api.listAgents();
   }
 
   agentName(id: AgentId): string {

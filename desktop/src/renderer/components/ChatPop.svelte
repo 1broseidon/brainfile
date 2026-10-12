@@ -173,7 +173,14 @@
       <span class="where">{view === 'history' ? 'Recent' : projectName}</span>
       <span class="spacer"></span>
       <span class="anchor">
-        <button class="pick mono" onclick={() => (picking = picking === 'agent' ? null : 'agent')} disabled={!app.defaultAgent}>
+        <button
+          class="pick mono"
+          onclick={() => {
+            picking = picking === 'agent' ? null : 'agent';
+            if (picking === 'agent') void app.refreshAgents();
+          }}
+          disabled={!app.defaultAgent}
+        >
           <span class="label">{agent ? app.agentName(agent) : 'no agent installed'}</span><Icon name="chevron" size={10} />
         </button>
         {#if picking === 'agent'}

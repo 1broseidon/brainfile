@@ -15,7 +15,10 @@
 
   function toggle(): void {
     open = !open;
-    if (open) active = Math.max(0, offered.findIndex((a) => a.id === app.defaultAgent));
+    if (open) {
+      active = Math.max(0, offered.findIndex((a) => a.id === app.defaultAgent));
+      void app.refreshAgents();
+    }
   }
 
   function pick(id: AgentId): void {
