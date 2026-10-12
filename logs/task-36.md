@@ -1,8 +1,6 @@
 ---
 id: task-36
 title: "Test dispatch: add a \"Hand-offs\" note to the desktop README"
-column: review
-position: 1
 description: |-
   A throwaway task to try spec-14 end to end in the dev window: hand it to an agent, let it work in its worktree on dispatch/<task-id>, then merge it from the Review section.
 
@@ -31,7 +29,8 @@ subtasks:
     completed: true
 createdAt: "2026-10-12T23:14:13.926Z"
 assignee: grok
-updatedAt: "2026-10-12T23:16:44.006Z"
+updatedAt: "2026-10-12T23:17:00.118Z"
+completedAt: "2026-10-12T23:17:00.118Z"
 ---
 
 ## Description
