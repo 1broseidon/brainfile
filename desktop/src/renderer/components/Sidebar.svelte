@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, healthOf } from '../lib/state.svelte';
+  import { app } from '../lib/state.svelte';
   import { tildify } from '../lib/format';
   import Icon from './Icon.svelte';
   import type { Project } from '../../shared/api';
@@ -53,11 +53,8 @@
       {@const ready = project.state.status === 'ready'}
       <button class="project" class:active title="{tildify(project.path)} · {storageWord(project) || line(project)}" onclick={() => app.select(project.id)}>
         <span class="where"><Icon name={storageIcon(project)} size={14} /></span>
-        <span class="name">{project.name}</span>
-        <span class="line mono" class:off={!ready}>{line(project)}</span>
-        {#if healthOf(app.boards[project.id])}
-          <i class="dot" data-tone={healthOf(app.boards[project.id])}></i>
-        {/if}
+            <span class="name">{project.name}</span>
+        <span class="count mono" class:off={!ready}>{app.boards[project.id] ? app.boards[project.id].tasks.length : ready ? '' : '–'}</span>
         {#if i < 9}<span class="key mono">⌘{i + 1}</span>{/if}
       </button>
     {/each}
@@ -107,9 +104,10 @@
     position: relative;
     display: grid;
     grid-template-columns: 16px 1fr auto;
+    align-items: center;
     column-gap: var(--s2);
-    row-gap: 2px;
-    padding: 7px var(--s3) 8px;
+    height: 32px;
+    padding: 0 var(--s3);
     border-radius: var(--r-card);
     text-align: left;
     transition: background var(--d-press) var(--ease);
@@ -145,49 +143,21 @@
     color: var(--ink);
   }
 
-  .line {
-    grid-column: 2;
-    color: var(--ink-3);
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
 
-  .line.off {
-    color: var(--ink-4);
-  }
 
-  /* Each board's sync, so one that is behind shows before it is opened. */
-  .dot {
+
+  .count {
     grid-column: 3;
     grid-row: 1;
-    align-self: center;
-    justify-self: end;
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--ok);
+    color: var(--ink-4);
     transition: opacity var(--d-press) var(--ease);
   }
 
-  .dot[data-tone='warn'] {
-    background: var(--warn);
+  .count.off {
+    color: var(--ink-4);
   }
 
-  .dot[data-tone='busy'] {
-    background: var(--accent);
-  }
-
-  .dot[data-tone='pending'] {
-    background: var(--ink-3);
-  }
-
-  .dot[data-tone='local'] {
-    background: none;
-    box-shadow: inset 0 0 0 1.5px var(--ink-4);
-  }
-
-  .project:hover .dot {
+  .project:hover .count {
     opacity: 0;
   }
 

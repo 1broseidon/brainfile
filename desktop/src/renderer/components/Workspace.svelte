@@ -97,12 +97,12 @@
     <header class="band">
       <span class="title">{board.title}</span>
       <PathTip path={project.path} line={storageLabel} projectId={project.id} />
-      <div class="segmented" role="tablist" title="List or board  V">
-        <button role="tab" aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
-          <Icon name="list" size={14} />List
+      <div class="segmented" role="tablist">
+        <button role="tab" aria-label="List" title="List  V" aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
+          <Icon name="list" size={14} />
         </button>
-        <button role="tab" aria-selected={app.view === 'board'} class:on={app.view === 'board'} onclick={() => app.setView('board')}>
-          <Icon name="board" size={14} />Board
+        <button role="tab" aria-label="Board" title="Board  V" aria-selected={app.view === 'board'} class:on={app.view === 'board'} onclick={() => app.setView('board')}>
+          <Icon name="board" size={14} />
         </button>
       </div>
       <span class="spacer"></span>
@@ -111,6 +111,7 @@
           <Icon name="close" size={12} />{app.problem}
         </button>
       {/if}
+      {#if board.sync.busy || board.sync.warning || board.sync.pending > 0}
       <button
         class="sync"
         class:busy={board.sync.busy}
@@ -119,12 +120,12 @@
         disabled={!board.sync.remote || board.sync.busy}
         onclick={sync}
       >
-        <span class="dot" class:shared={!!board.sync.remote}></span>
         <span class="mono">{board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')}</span>
         {#if board.sync.pending > 0}<span class="pending mono tabular">↑{board.sync.pending}</span>{/if}
       </button>
-      <button class="btn primary" onclick={() => (app.composer = {})}>
-        New task<span class="keys">C</span>
+      {/if}
+      <button class="icon-btn" title="New task  C" aria-label="New task" onclick={() => (app.composer = {})}>
+        <Icon name="plus" size={15} />
       </button>
     </header>
     <div class="content">
@@ -208,11 +209,11 @@
   }
 
   .segmented button {
+    width: 28px;
     height: 24px;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    padding: 0 var(--s2);
+    justify-content: center;
     border-radius: var(--r-chip);
     font-weight: 500;
     color: var(--ink-3);
@@ -264,33 +265,10 @@
     color: var(--warn);
   }
 
-  /* Every state is a glyph and a colour: a ring is local, a dot is shared. */
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 1.5px var(--ink-4);
-  }
 
-  .dot.shared {
-    background: var(--ok);
-    box-shadow: none;
-  }
 
-  .sync.warn .dot {
-    background: var(--warn);
-  }
 
-  .sync.busy .dot {
-    background: var(--accent);
-    animation: breathe 1800ms var(--ease) infinite alternate;
-  }
 
-  @keyframes breathe {
-    to {
-      opacity: 0.35;
-    }
-  }
 
   .pending {
     color: var(--ink-2);

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, healthOf } from '../lib/state.svelte';
+  import { app } from '../lib/state.svelte';
   import { relativeTime } from '../lib/format';
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
@@ -9,12 +9,12 @@
   const healthLine = $derived.by(() => {
     const h = app.health;
     const shared = h.total - h.local;
-    if (h.total === 0) return null;
+    // Silent success: the line only speaks when a board needs something.
     if (h.warn) return `${h.warn} ${h.warn === 1 ? 'board needs' : 'boards need'} a look`;
-    if (h.busy) return `syncing ${h.busy} of ${h.total}`;
+    if (h.busy) return 'syncing';
     if (h.pending) return `${h.pending} waiting to send`;
-    if (shared === 0) return `${h.total} ${h.total === 1 ? 'board' : 'boards'} · on this machine`;
-    return `${h.total} ${h.total === 1 ? 'board' : 'boards'} · all synced`;
+    void shared;
+    return null;
   });
 
   const tone = $derived(app.health.warn ? 'warn' : app.health.busy ? 'busy' : app.health.pending ? 'pending' : 'ok');
@@ -39,25 +39,25 @@
 
   <button class="command field no-drag" onclick={() => (app.paletteOpen = true)}>
     <Icon name="search" size={13} />
-    <span>Search every project, or type a command</span>
+    <span>Search</span>
     <kbd>⌘K</kbd>
   </button>
 
   <div class="right">
     {#if healthLine}
       <button class="health no-drag" class:open={opened === 'health'} data-tone={tone} onclick={() => toggle('health')}>
-        <i class="dot"></i><span class="mono">{healthLine}</span>
+        <span class="mono">{healthLine}</span>
       </button>
     {/if}
     <button
       class="feed no-drag"
       class:lit={app.unseen > 0}
       class:open={opened === 'feed'}
-      title="Changes from agents, the CLI and other machines"
+      title="What changed on any board from outside: agents, the CLI, other machines"
       onclick={() => toggle('feed')}
     >
       <Icon name="bolt" size={13} />
-      <span class="mono">{app.unseen > 0 ? `${app.unseen} new` : 'feed'}</span>
+      {#if app.unseen > 0}<span class="mono">{app.unseen} new</span>{/if}
     </button>
   </div>
 </header>
@@ -75,7 +75,6 @@
             void app.select(project.id);
           }}
         >
-          <i class="dot" data-tone={healthOf(board) ?? 'none'}></i>
           <span class="label">{project.name}</span>
           <span class="mono meta">{board ? (board.sync.warning ? 'needs a look' : board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')) : project.state.status === 'ready' ? '…' : 'no board'}</span>
         </button>
@@ -135,7 +134,7 @@
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    width: clamp(260px, 34vw, 460px);
+    width: clamp(220px, 26vw, 340px);
     height: 24px;
     display: flex;
     align-items: center;
@@ -168,6 +167,13 @@
     gap: var(--s1);
   }
 
+  .feed:not(.lit) {
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+    color: var(--ink-4);
+  }
+
   .health,
   .feed {
     height: 24px;
@@ -191,47 +197,11 @@
     color: var(--warn);
   }
 
-  /* Something new is waiting: the one place the strip spends the accent. */
+  /* Something new is waiting: said with a number, not a colour. */
   .feed.lit {
-    color: var(--accent-ink);
-    background: var(--accent-soft);
+    color: var(--ink-2);
   }
 
-  .dot {
-    width: 6px;
-    height: 6px;
-    flex: none;
-    border-radius: 50%;
-    background: var(--ok);
-  }
-
-  [data-tone='warn'] > .dot,
-  .dot[data-tone='warn'] {
-    background: var(--warn);
-  }
-
-  [data-tone='busy'] > .dot,
-  .dot[data-tone='busy'] {
-    background: var(--accent);
-    animation: breathe 1800ms var(--ease) infinite alternate;
-  }
-
-  [data-tone='pending'] > .dot,
-  .dot[data-tone='pending'] {
-    background: var(--ink-3);
-  }
-
-  .dot[data-tone='local'],
-  .dot[data-tone='none'] {
-    background: none;
-    box-shadow: inset 0 0 0 1.5px var(--ink-4);
-  }
-
-  @keyframes breathe {
-    to {
-      opacity: 0.35;
-    }
-  }
 
   .catch {
     position: fixed;

@@ -35,7 +35,7 @@
 </script>
 
 <div class="list" role="table">
-  {#each groups as { column, rows, count } (column.id)}
+  {#each groups.filter((g) => g.count > 0) as { column, rows, count } (column.id)}
     <section
       class="group"
       class:drop={dropTarget === column.id}
@@ -69,9 +69,6 @@
             ontoggle={() => (hidden[row.task.id] = !hidden[row.task.id])}
           />
         {/each}
-        {#if rows.length === 0}
-          <button class="empty" onclick={() => (app.composer = { column: column.id })}>Nothing here</button>
-        {/if}
       {/if}
     </section>
   {/each}
@@ -166,15 +163,5 @@
     opacity: 1;
   }
 
-  .empty {
-    height: var(--row-h);
-    padding-left: 54px;
-    color: var(--ink-4);
-    text-align: left;
-    width: 100%;
-  }
 
-  .empty:hover {
-    color: var(--ink-3);
-  }
 </style>

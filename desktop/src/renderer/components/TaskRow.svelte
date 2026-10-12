@@ -27,16 +27,9 @@
   const selected = $derived(app.selectedTaskId === task.id);
   const subDone = $derived(task.subtasks?.filter((s) => s.completed).length ?? 0);
   const progress = $derived(done ? 1 : columnProgress(columns, task.column));
-  const glyph = $derived(children > 0 ? (collapsed ? '▸' : '▾') : kindGlyph(task.type));
+  /** Priorities loud enough to show without the hand. */
+  const loud = $derived(task.priority === 'critical' || task.priority === 'high');
 
-  // The TUI's signal chips: contract state, then sub-tasks, then tags; three at most.
-  const chips = $derived.by(() => {
-    const out: { kind: 'contract' | 'subtasks' | 'tag'; text: string }[] = [];
-    if (task.contractStatus) out.push({ kind: 'contract', text: task.contractStatus.replace('_', ' ') });
-    if (task.subtasks?.length) out.push({ kind: 'subtasks', text: `${subDone}/${task.subtasks.length}` });
-    for (const tag of task.tags ?? []) out.push({ kind: 'tag', text: tag });
-    return out.slice(0, 3);
-  });
 
   function pick(kind: 'status' | 'priority' | 'assignee', e: MouseEvent): void {
     e.stopPropagation();
@@ -44,6 +37,11 @@
   }
 </script>
 
+<!-- A calm row: the title, and only what is worth saying about it. Column 1 is
+     the TUI's kind glyph (blank for a plain task) and turns into the status
+     box under the hand; the ID, tags and an unset priority or assignee wait
+     for the hand too. Urgent and high priority, contract state, sub-task
+     progress and an assignee always show, because they are signals. -->
 <div
   class="row"
   class:selected
@@ -57,43 +55,47 @@
   onclick={() => (app.openTaskId = task.id)}
   onkeydown={() => {}}
 >
-  <button class="cell" title="Status  S" onclick={(e) => pick('status', e)}>
-    <StatusIcon {progress} />
+  <button class="cell lead-cell" title="Status  S" onclick={(e) => pick('status', e)}>
+    <span class="kind">{kindGlyph(task.type)}</span>
+    <span class="box"><StatusIcon {progress} /></span>
   </button>
-  <button class="cell" title="Priority  P" onclick={(e) => pick('priority', e)}>
-    <PriorityIcon priority={task.priority} />
-  </button>
-  <span class="lead" style:padding-left="{depth * 20}px">
+  <span class="title-block" style:padding-left="{depth * 20}px">
     {#if children > 0}
       <button
-        class="glyph toggle"
+        class="toggle"
         title={collapsed ? 'Show children' : 'Hide children'}
         onclick={(e) => {
           e.stopPropagation();
           ontoggle?.();
-        }}>{glyph}</button
+        }}>{collapsed ? '▸' : '▾'}</button
       >
-    {:else}
-      <span class="glyph">{glyph}</span>
     {/if}
-    <span class="id mono">{task.id}</span>
-  </span>
-  <span class="title">{task.title}</span>
-  <span class="chips">
-    {#each chips as chip (chip.kind + chip.text)}
-      {#if chip.kind === 'contract'}
-        <span class="contract" data-status={task.contractStatus}>{chip.text}</span>
-      {:else if chip.kind === 'subtasks'}
-        <span class="mono sub tabular" class:complete={subDone === task.subtasks?.length}>{chip.text}</span>
-      {:else}
-        <span class="tag">{chip.text}</span>
-      {/if}
+    <span class="title">{task.title}</span>
+    <span class="id mono reveal">{task.id}</span>
+    {#each (task.tags ?? []).slice(0, 2) as tag (tag)}
+      <span class="tag reveal">{tag}</span>
     {/each}
   </span>
+  <span class="chips">
+    {#if task.contractStatus}
+      <span class="contract" data-status={task.contractStatus}>{task.contractStatus.replace('_', ' ')}</span>
+    {/if}
+    {#if task.subtasks?.length}
+      <span class="mono sub" class:complete={subDone === task.subtasks.length}>{subDone}/{task.subtasks.length}</span>
+    {/if}
+  </span>
   {#if done || task.dueDate}
-    <span class="date mono tabular">{done ? shortDate(task.completedAt) : shortDate(task.dueDate)}</span>
+    <span class="date mono">{done ? shortDate(task.completedAt) : shortDate(task.dueDate)}</span>
   {/if}
-  <button class="cell" class:unassigned={!task.assignee} title={task.assignee ?? 'Assign  A'} onclick={(e) => pick('assignee', e)}>
+  <button
+    class="cell"
+    class:reveal={!loud}
+    title="Priority  P"
+    onclick={(e) => pick('priority', e)}
+  >
+    <PriorityIcon priority={task.priority} placeholder={!task.priority} />
+  </button>
+  <button class="cell" class:reveal={!task.assignee} title={task.assignee ?? 'Assign  A'} onclick={(e) => pick('assignee', e)}>
     <Avatar name={task.assignee} />
   </button>
 </div>
@@ -105,7 +107,7 @@
     display: flex;
     align-items: center;
     gap: var(--s1);
-    padding: 0 var(--s5) 0 var(--s4);
+    padding: 0 var(--s4);
     transition: background var(--d-press) var(--ease);
   }
 
@@ -117,9 +119,19 @@
     background: var(--fill-selected);
   }
 
-
   .row.done .title {
     color: var(--ink-3);
+  }
+
+  /* What waits for the hand. Space is kept so nothing shifts when it comes. */
+  .reveal {
+    opacity: 0;
+    transition: opacity var(--d-press) var(--ease);
+  }
+
+  .row:hover .reveal,
+  .row.selected .reveal {
+    opacity: 1;
   }
 
   .cell {
@@ -136,52 +148,79 @@
     background: var(--fill-active);
   }
 
-  /* An empty assignee says nothing until you reach for it. */
-  .cell.unassigned {
+  /* Column 1: the kind glyph at rest, the status box under the hand. A
+     finished row keeps its tick. */
+  .lead-cell {
+    position: relative;
+  }
+
+  .kind,
+  .box {
+    position: absolute;
+    inset: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity var(--d-press) var(--ease);
+  }
+
+  .kind {
+    font-size: 11px;
+    color: var(--ink-3);
+  }
+
+  .box {
     opacity: 0;
   }
 
-  .row:hover .cell.unassigned,
-  .row.selected .cell.unassigned {
+  .row:hover .box,
+  .row.selected .box,
+  .row.done .box {
     opacity: 1;
   }
 
-  .lead {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
+  .row:hover .kind,
+  .row.selected .kind,
+  .row.done .kind {
+    opacity: 0;
+  }
+
+  .title-block {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--s2);
     margin-left: var(--s1);
   }
 
-  .glyph {
-    width: 16px;
+  .toggle {
+    width: 12px;
     flex: none;
-    font-size: 11px;
-    line-height: 16px;
+    font-size: 10px;
     color: var(--ink-3);
     text-align: left;
   }
 
-  .glyph.toggle:hover {
+  .toggle:hover {
     color: var(--ink);
   }
 
-  .id {
-    width: var(--id-w);
-    flex: none;
-    color: var(--ink-4);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   .title {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     font-weight: 450;
+  }
+
+  .id,
+  .tag {
+    flex: none;
+  }
+
+  .id {
+    color: var(--ink-4);
   }
 
   .chips {
@@ -201,9 +240,7 @@
   }
 
   .date {
-    width: 52px;
     flex: none;
-    text-align: right;
     color: var(--ink-3);
     margin-right: var(--s2);
   }

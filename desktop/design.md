@@ -24,16 +24,15 @@ One family, **Workbench**:
   desk, never to one repository: the **lockup** (the mark at 16px and the
   name written out, lowercase `brainfile` in Plex Sans 600), always leftmost;
   one **search** across every project's board, centred; and at the right,
-  every board's **health** in one line ("5 boards · all synced", or which
-  needs a look; press for the list) and the **feed** of changes that reached
-  any board from outside the window (agents, the CLI, other machines). The
-  feed's unread count is the one place the strip spends the accent.
+  every board's **health**, in words and only when a board needs something
+  (press for the list), and the **feed** of changes that reached any board
+  from outside the window (agents, the CLI, other machines): a muted key,
+  with a count beside it only when something new has arrived.
 - Anything about one repository lives in its pane's **band**: the board's
   name, a folder key (hover for the path and where the board is kept, press
   to reveal it in Finder; paths are never printed in the chrome), List /
-  Board, its sync line and New task.
-- Each project in the rail carries its board's sync dot, so one that is
-  behind shows before it is opened.
+  Board as two icons, its sync line only when it has something to say, and
+  a muted + for a new task.
 - The **rail's key** (⌘B) lives with the rail: in the rail's head beside
   Projects and add while it is open, and at the leading edge of the board's
   band, before the title, once it is closed. Nothing ever sits left of the
@@ -161,6 +160,26 @@ One curve, `cubic-bezier(0.16, 1, 0.3, 1)`, three durations: 90ms answers a
 press, 130ms opens something small, 220ms moves something across a pane. No
 overshoot, no hover scale. A sync in flight breathes at 1800ms. Reduced
 motion removes every transition and animation.
+
+## Calm
+
+The window says only what needs saying, for a reader who is easily pulled
+off course. These rules win over every other section:
+
+- **No indicators at rest.** No status dots, no "all synced", no counts
+  that only confirm things are fine. Sync, health and the feed speak, in
+  words, only when something needs you; otherwise the place is empty.
+- **No big buttons.** New task is a muted + key in the board's band (C);
+  there is no filled primary button at rest. The accent is left for the
+  tick of done.
+- **Rows wait for the hand.** At rest a row is its title, plus the signals
+  that matter: urgent and high priority, contract state, sub-task progress,
+  an assignee. The status box, the ID, the tags and any unset priority or
+  assignee appear under the pointer or on the selected row, in space that is
+  already kept for them, so nothing shifts.
+- **Empty groups are not shown** in the list (the board view still has
+  every column to drop into).
+- The rail is one line per project: its storage icon, its name, its count.
 
 ## Microinteractions stance
 
