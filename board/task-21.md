@@ -7,7 +7,8 @@ tags:
   - desktop
   - editor
 createdAt: "2026-10-12T18:47:59.710Z"
-updatedAt: "2026-10-12T21:58:08.614Z"
+updatedAt: "2026-10-12T23:39:50.930Z"
+assignee: codex
 ---
 
 ## Description
