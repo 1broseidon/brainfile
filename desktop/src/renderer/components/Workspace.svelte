@@ -2,7 +2,7 @@
   import { api, app } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
-  import { tildify } from '../lib/format';
+  import PathTip from './PathTip.svelte';
   import ListView from './ListView.svelte';
   import BoardView from './BoardView.svelte';
 
@@ -11,11 +11,11 @@
   let initializing = $state(false);
 
   const storageLabel = $derived(
-    board?.storage === 'linked'
+    (board?.storage === 'linked'
       ? "On the 'brainfile' branch"
       : board?.storage === 'standalone'
         ? 'Its own git repository'
-        : 'Plain files, not in git'
+        : 'Plain files, not in git') + (board?.sync.remote ? `, shared through ${board.sync.remote}` : ', on this machine only')
   );
 
   async function init(): Promise<void> {
@@ -27,12 +27,6 @@
     else app.notify(result.error, 'warn');
   }
 
-  async function sync(): Promise<void> {
-    if (!board) return;
-    const result = await api.syncNow(board.projectId);
-    if (!result.ok) app.notify(result.error, 'warn');
-    else if (result.value.warning) app.notify(result.value.warning, 'warn');
-  }
 </script>
 
 <main class="pane" class:keyed={!app.layout.railOpen}>
@@ -96,37 +90,13 @@
   {:else if board}
     <header class="band">
       <span class="title">{board.title}</span>
-      <span class="path mono">{tildify(project.path)}</span>
-      <span class="sep"></span>
-      <div class="segmented" role="tablist" title="List or board  V">
-        <button role="tab" aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
-          <Icon name="list" size={14} />List
-        </button>
-        <button role="tab" aria-selected={app.view === 'board'} class:on={app.view === 'board'} onclick={() => app.setView('board')}>
-          <Icon name="board" size={14} />Board
-        </button>
-      </div>
+      <PathTip path={project.path} line={storageLabel} projectId={project.id} />
       <span class="spacer"></span>
       {#if app.problem}
         <button class="problem" title="Dismiss" onclick={() => (app.problem = null)}>
           <Icon name="close" size={12} />{app.problem}
         </button>
       {/if}
-      <button
-        class="sync"
-        class:busy={board.sync.busy}
-        class:warn={!!board.sync.warning}
-        title={board.sync.warning ?? `${storageLabel}${board.sync.remote ? ` · shared through ${board.sync.remote}` : ''}`}
-        disabled={!board.sync.remote || board.sync.busy}
-        onclick={sync}
-      >
-        <span class="dot" class:shared={!!board.sync.remote}></span>
-        <span class="mono">{board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')}</span>
-        {#if board.sync.pending > 0}<span class="pending mono tabular">↑{board.sync.pending}</span>{/if}
-      </button>
-      <button class="btn primary" onclick={() => (app.composer = {})}>
-        New task<span class="keys">C</span>
-      </button>
     </header>
     <div class="content">
       {#if board.tasks.length === 0 && board.completed.length === 0}
@@ -181,7 +151,7 @@
     flex: none;
     display: flex;
     align-items: center;
-    gap: var(--s3);
+    gap: var(--s1);
     padding: 0 var(--s2) 0 var(--s4);
     position: relative;
     z-index: 2;
@@ -189,49 +159,17 @@
 
   .title {
     font-weight: 600;
+    margin-right: -2px;
   }
 
-  .path {
-    color: var(--ink-4);
-    margin-left: calc(-1 * var(--s1));
-  }
 
   .spacer {
     flex: 1;
   }
 
-  .segmented {
-    height: var(--field-h);
-    display: flex;
-    padding: 2px;
-    gap: 2px;
-    margin-left: var(--s1);
-    border-radius: var(--r-control);
-    background: var(--well);
-    box-shadow: inset 0 0 0 var(--hairline) var(--line);
-  }
 
-  .segmented button {
-    height: 24px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 var(--s2);
-    border-radius: var(--r-chip);
-    font-weight: 500;
-    color: var(--ink-3);
-    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
-  }
 
-  .segmented button:hover {
-    color: var(--ink);
-  }
 
-  .segmented button.on {
-    color: var(--ink);
-    background: var(--pop);
-    box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
-  }
 
   .problem {
     min-width: 0;
@@ -249,56 +187,14 @@
     text-overflow: ellipsis;
   }
 
-  .sync {
-    height: var(--control-h);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--s2);
-    padding: 0 var(--s2);
-    border-radius: var(--r-control);
-    color: var(--ink-3);
-  }
 
-  .sync:not(:disabled):hover {
-    background: var(--fill-hover);
-    color: var(--ink-2);
-  }
 
-  .sync.warn {
-    color: var(--warn);
-  }
 
-  /* Every state is a glyph and a colour: a ring is local, a dot is shared. */
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 1.5px var(--ink-4);
-  }
 
-  .dot.shared {
-    background: var(--ok);
-    box-shadow: none;
-  }
 
-  .sync.warn .dot {
-    background: var(--warn);
-  }
 
-  .sync.busy .dot {
-    background: var(--accent);
-    animation: breathe 1800ms var(--ease) infinite alternate;
-  }
 
-  @keyframes breathe {
-    to {
-      opacity: 0.35;
-    }
-  }
 
-  .pending {
-    color: var(--ink-2);
-  }
 
   .content {
     flex: 1;

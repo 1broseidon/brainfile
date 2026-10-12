@@ -22,9 +22,14 @@ One family, **Workbench**:
 
 - The window's top strip is the well itself: 32px, the traffic lights,
   then the **lockup** (the mark at 16px and the name written out, lowercase
-  `brainfile` in Plex Sans 600), always leftmost, and the search at the
-  right. Unlike Hotline's centred toad, the box has a hard left edge, so it
-  leads from the left.
+  `brainfile` in Plex Sans 600), always leftmost. Unlike Hotline's centred
+  toad, the box has a hard left edge, so it leads from the left. The
+  board's common keys live in the strip too: List / Board stands over the
+  board on the line of its title (just past the lockup when the rail is
+  closed), and the sync line, New task and the search sit at the right.
+- The board's **band** carries only the board's name and a folder key:
+  hover it for the path and where the board is kept, press it to reveal
+  the folder in Finder. Paths are not printed in the chrome.
 - The **rail's key** (⌘B) lives with the rail: in the rail's head beside
   Projects and add while it is open, and at the leading edge of the board's
   band, before the title, once it is closed. Nothing ever sits left of the
