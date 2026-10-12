@@ -29,7 +29,10 @@ subtasks:
   - id: spec-13-6
     title: "Server instructions: use the tools for every board change, never hand-edit .brainfile/"
     completed: false
-updatedAt: "2026-10-12T05:56:10.767Z"
+  - id: spec-13-7
+    title: "Docs: MANUAL and llms files list every tool"
+    completed: false
+updatedAt: "2026-10-12T05:56:11.052Z"
 ---
 
 ## Description
