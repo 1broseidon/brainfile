@@ -415,7 +415,11 @@ rows' text, not the group's rim, so the column has one left edge.
 
 - **One tooltip** (`lib/tooltip.ts`): a pop-plane label that waits 800ms for
   the pointer and shows at once for keyboard focus. Text written
-  `Label  K` sets K as a key. No native `title` tooltips.
+  `Label  K` sets K as a key. No native `title` tooltips. A tip says what a
+  thing is or does, software-plain: two or three words, five at most
+  (`New task  C`, `Decision replaced`, `Backup, then merge`, `12 outside
+  changes`). It never explains; explanations live in the list or pane the
+  thing opens. Content is the one exception: a tab's full title, a path.
 - **Undo, not "are you sure".** Deleting a task happens at once; the band
   says "Deleted task-12 · Undo" for eight seconds, and Undo writes the file
   back as its own commit.
