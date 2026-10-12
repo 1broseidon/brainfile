@@ -25,6 +25,13 @@ The app asks your login shell for PATH, so opened from Finder or the Dock it
 finds git, `brainfile`, `node`, `npx` and the agents' CLIs where your terminal
 does.
 
+## Hand-offs
+
+Hand to… runs the agent in its own git worktree on the branch
+`dispatch/<task-id>`. The agent commits there. When the task reaches Review
+you can see the diff, open it in your editor, merge it or send it back, and
+the worktree is removed on merge or discard.
+
 ## Install
 
 `npm run package` builds `release/mac-arm64/Brainfile.app` for this Mac:
