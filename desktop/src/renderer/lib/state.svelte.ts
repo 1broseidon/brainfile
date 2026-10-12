@@ -118,6 +118,9 @@ export function healthOf(board: BoardSnapshot | undefined): Health | null {
   return 'ok';
 }
 
+/** How long changes may wait to be sent or received before the strip says so. */
+const UNSENT_GRACE_MS = 60_000;
+
 export const RAIL = { min: 180, max: 420, initial: 232 };
 export const TASK_PANE = { min: 380, max: 680, initial: 500 };
 /** The chat popover: sized from its top-left corner; the pane caps it. */
@@ -217,9 +220,28 @@ class AppState {
   unseen = $derived(this.feed.filter((f) => f.at > this.feedSeen).length);
 
   /** Every board's sync, summed for the strip. */
+  /** When each board began to have changes not shared, or to be behind; a push takes seconds. */
+  #unsentSince: Record<string, number> = {};
+  /** A clock for "longer than a minute", ticking slowly. */
+  now = $state(Date.now());
+
+  /**
+   * A board's health as the window says it: changes waiting to be sent, or
+   * to be received, only count once they have waited longer than a push
+   * takes, so the strip stays quiet through ordinary autosync.
+   */
+  quietHealth(board: BoardSnapshot | undefined): Health | null {
+    const h = healthOf(board);
+    if ((h === 'pending' || h === 'behind') && board) {
+      const since = this.#unsentSince[board.projectId];
+      if (!since || this.now - since < UNSENT_GRACE_MS) return 'ok';
+    }
+    return h === 'busy' ? 'ok' : h;
+  }
+
   health = $derived.by(() => {
     const boards = Object.values(this.boards);
-    const count = (h: Health) => boards.filter((b) => healthOf(b) === h).length;
+    const count = (h: Health) => boards.filter((b) => this.quietHealth(b) === h).length;
     return { total: boards.length, warn: count('warn'), busy: count('busy'), pending: count('pending'), behind: count('behind'), local: count('local') };
   });
 
@@ -279,6 +301,7 @@ class AppState {
       else if (event.kind === 'permission') this.asks = [...this.asks, event.ask];
       else this.asks = this.asks.filter((a) => a.id !== event.id);
     });
+    setInterval(() => (this.now = Date.now()), 15_000);
     void this.refreshAgents();
     void api.getSettings().then((settings) => (this.settings = settings));
     this.projects = await api.listProjects();
@@ -306,6 +329,9 @@ class AppState {
 
   /** A fresh snapshot from the host. What changed without this window's hand goes in the feed. */
   receive(snapshot: BoardSnapshot): void {
+    const unsent = snapshot.sync.pending > 0 || snapshot.sync.behind > 0;
+    if (!unsent) delete this.#unsentSince[snapshot.projectId];
+    else this.#unsentSince[snapshot.projectId] ??= Date.now();
     const before = this.boards[snapshot.projectId];
     this.boards[snapshot.projectId] = snapshot;
     if (!before || this.settling === snapshot.projectId || Date.now() - (lastLocalWrite[snapshot.projectId] ?? 0) < LOCAL_WINDOW_MS) return;

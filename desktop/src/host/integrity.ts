@@ -37,25 +37,25 @@ export function integrityView(survey: BoardSurvey, unfinished: string[] = []): I
     const lossless: SettleChoice | null =
       relation === 'contained' ? 'theirs' : relation === 'contains' || relation === 'same' ? 'keep' : 'merge';
     twoBoards = { message: conflict.message, detail, useOther: useLabel(other.kind, other.remote), lossless };
-    shorts.push('two boards');
+    shorts.push('two copies of the board');
   }
   if (unfinished.length > 0) {
     notes.push(`A merge stopped with conflicts in ${unfinished.join(', ')}. Keep the right version in each, then sync.`);
-    shorts.push('merge not finished');
+    shorts.push('a merge is unfinished');
   }
   if (survey.outsideHome) {
     notes.push(`This board is checked out outside ${survey.outsideHome}, where it belongs. brainfile adopt refs/heads/brainfile moves it home.`);
-    shorts.push('checked out elsewhere');
+    shorts.push('open in another folder');
   }
   const elsewhere = survey.strayWorktrees.filter((w) => !w.missing);
   for (const stray of elsewhere) {
     notes.push(`The board branch is also checked out at ${stray.path}. It belongs at .brainfile/ only.`);
   }
-  if (elsewhere.length > 0) shorts.push('checked out twice');
+  if (elsewhere.length > 0) shorts.push('open in two places');
   if (survey.trackedTwice) {
     const branch = survey.trackedTwice.label.replace(/^the copy on /, '');
     notes.push(`${branch} still tracks an old copy of .brainfile/ (${survey.trackedTwice.docs} docs). brainfile migrate --to-branch removes it in one commit.`);
-    shorts.push('tracked twice');
+    shorts.push(`old copy still in ${branch}`);
   }
   return { twoBoards, notes, short: shorts[0] ?? null };
 }

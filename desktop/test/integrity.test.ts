@@ -32,7 +32,7 @@ test("runprism.ai: origin's has everything, so using it loses nothing", () => {
     useOther: "Use origin's",
     lossless: 'theirs',
   });
-  assert.equal(view.short, 'two boards');
+  assert.equal(view.short, 'two copies of the board');
 });
 
 test('boards that each have something the other lacks are merged to lose nothing', () => {
@@ -59,7 +59,7 @@ test('a stray checkout, a code branch tracking a copy and an unfinished merge ar
     } as never,
     ['board/task-3.md']
   );
-  assert.equal(view.short, 'merge not finished');
+  assert.equal(view.short, 'a merge is unfinished');
   assert.deepEqual(view.notes, [
     'A merge stopped with conflicts in board/task-3.md. Keep the right version in each, then sync.',
     'The board branch is also checked out at /tmp/rp-board. It belongs at .brainfile/ only.',

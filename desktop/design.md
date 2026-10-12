@@ -31,8 +31,8 @@ One family, **Workbench**:
 - Anything about one repository lives in its pane's **band**: the board's
   name, a folder key (hover for the path and where the board is kept, press
   to reveal it in Finder; paths are never printed in the chrome), List /
-  Board as two icons, its sync line only when it has something to say, and
-  a muted + for a new task.
+  Board as two icons, and a muted + for a new task. Sync is never said in
+  the band; the strip carries it.
 - The **rail's key** (⌘B) lives with the rail: in the rail's head beside
   Projects and add while it is open, and at the leading edge of the board's
   band, before the title, once it is closed. Nothing ever sits left of the
@@ -186,8 +186,8 @@ press, 130ms opens something small, 220ms moves something across a pane. No
 overshoot, no hover scale. Reduced motion removes every transition and
 animation.
 
-Two things move on their own, because something is happening: a sync in
-flight breathes at 1800ms, and an agent at work shows a muted status line
+One thing moves on its own, because something is happening: an agent at
+work shows a muted status line
 (`claude · Thinking…`, `components/Working.svelte`) with a slow band of light
 crossing the word every 1800ms. In the chat the word turns over every 2.6s
 among honest names for the kind of work under way (Thinking, Considering,
@@ -201,8 +201,15 @@ The window says only what needs saying, for a reader who is easily pulled
 off course. These rules win over every other section:
 
 - **No indicators at rest.** No status dots, no "all synced", no counts
-  that only confirm things are fine. Sync, health and the feed speak, in
-  words, only when something needs you; otherwise the place is empty.
+  that only confirm things are fine. Sync says nothing while it works,
+  which is almost always: autosync sends a change in seconds. The strip's
+  sync key (an icon, no words) appears only when a board needs a look or
+  changes have waited longer than a minute to be sent or brought in; its
+  tip says what in a person's words ("runprism.ai: old copy still in
+  main", "3 changes not shared yet"), its list names each board with Sync
+  now, and it takes the warn colour only for a real problem. The feed is
+  the bolt and a count (`⚡ 10`), its tip "changes from agents and other
+  machines". At rest the corner is empty but for the bolt.
 - **No big buttons.** New task is a muted + key in the board's band (C);
   there is no filled primary button at rest. The accent is left for the
   tick of done.
@@ -297,10 +304,11 @@ opens.
   board where it now lives, and stays silent: the board changing is the
   confirmation, and what changed is not news in the feed.
 - **Health** says the rest in a few words in its list, with the sentence in
-  the tooltip: `two boards`, `merge not finished`, `checked out elsewhere`,
-  `checked out twice`, `tracked twice` (the code branch still carries an
-  old copy), and `N to receive` when the remote has changes not here yet.
-  The band's sync line shows `↓N` beside `↑N`. A checkout of the board
+  the tooltip: `two copies of the board`, `a merge is unfinished`, `open in
+  another folder`, `open in two places`, `old copy still in main` (the code
+  branch still carries one), `N changes not shared yet` and `N changes to
+  bring in`. Counts are taken again every ten seconds, since a push made by
+  an agent or the CLI moves refs the watcher never sees. A checkout of the board
   branch whose folder is gone is forgotten when the board opens.
 
 ## Dispatch

@@ -34,12 +34,6 @@
     else app.notify(result.error, 'warn');
   }
 
-  async function sync(): Promise<void> {
-    if (!board) return;
-    const result = await api.syncNow(board.projectId);
-    if (!result.ok) app.notify(result.error, 'warn');
-    else if (result.value.warning) app.notify(result.value.warning, 'warn');
-  }
 </script>
 
 <main class="pane" class:keyed={!app.layout.railOpen}>
@@ -147,20 +141,6 @@
         <button class="problem" use:tip={'Dismiss'} onclick={() => (app.problem = null)}>
           <Icon name="close" size={12} />{app.problem}
         </button>
-      {/if}
-      {#if board.sync.busy || board.sync.warning || board.sync.pending > 0 || board.sync.behind > 0}
-      <button
-        class="sync"
-        class:busy={board.sync.busy}
-        class:warn={!!board.sync.warning}
-        use:tip={board.sync.warning ?? (board.sync.remote ? `Sync with ${board.sync.remote} now` : 'Kept on this machine only')}
-        disabled={!board.sync.remote || board.sync.busy}
-        onclick={sync}
-      >
-        <span class="mono">{board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')}</span>
-        {#if board.sync.pending > 0}<span class="pending mono tabular">↑{board.sync.pending}</span>{/if}
-        {#if board.sync.behind > 0}<span class="pending mono tabular">↓{board.sync.behind}</span>{/if}
-      </button>
       {/if}
       {#if app.view !== 'decisions' && !board.integrity.twoBoards}
         <button class="icon-btn" use:tip={'New task  C'} aria-label="New task" onclick={() => (app.composer = {})}>
@@ -295,34 +275,6 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-  }
-
-  .sync {
-    height: var(--control-h);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--s2);
-    padding: 0 var(--s2);
-    border-radius: var(--r-control);
-    color: var(--ink-3);
-  }
-
-  .sync:not(:disabled):hover {
-    background: var(--fill-hover);
-    color: var(--ink-2);
-  }
-
-  .sync.warn {
-    color: var(--warn);
-  }
-
-
-
-
-
-
-  .pending {
-    color: var(--ink-2);
   }
 
   .content {

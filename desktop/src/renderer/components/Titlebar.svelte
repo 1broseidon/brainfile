@@ -1,25 +1,28 @@
 <script lang="ts">
   import { tip } from '../lib/tooltip';
-  import { app } from '../lib/state.svelte';
+  import { api, app } from '../lib/state.svelte';
   import { relativeTime } from '../lib/format';
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
 
   let opened = $state<'health' | 'feed' | null>(null);
 
-  const healthLine = $derived.by(() => {
-    const h = app.health;
-    const shared = h.total - h.local;
-    // Silent success: the line only speaks when a board needs something.
-    if (h.warn) return `${h.warn} ${h.warn === 1 ? 'board needs' : 'boards need'} a look`;
-    if (h.busy) return 'syncing';
-    if (h.pending) return `${h.pending} waiting to send`;
-    if (h.behind) return `${h.behind} ${h.behind === 1 ? 'board has' : 'boards have'} changes to receive`;
-    void shared;
-    return null;
-  });
+  /**
+   * Sync says nothing while it works, which is almost always: autosync sends
+   * a change in seconds. The strip shows one quiet sync key only when a
+   * board needs a look, or changes have waited longer than a push takes;
+   * its tip says what, in words a person uses.
+   */
+  const needsSaying = $derived(app.health.warn > 0 || app.health.pending > 0 || app.health.behind > 0);
+  const tone = $derived(app.health.warn ? 'warn' : 'pending');
+  const unsentBoards = $derived(app.projects.filter((p) => ['pending', 'behind', 'warn'].includes(app.quietHealth(app.boards[p.id]) ?? '')));
 
-  const tone = $derived(app.health.warn ? 'warn' : app.health.busy ? 'busy' : app.health.pending || app.health.behind ? 'pending' : 'ok');
+  const healthTipText = $derived.by(() => {
+    const boards = unsentBoards;
+    if (boards.length === 1) return `${projectName(boards[0].id)}: ${healthMeta(boards[0].id)}`;
+    if (app.health.warn) return `${boards.length} boards need a look`;
+    return `Changes not shared yet on ${boards.length} boards`;
+  });
 
   /** A board's state in a few words for the health list, worst first. */
   function healthMeta(projectId: string): string {
@@ -27,10 +30,23 @@
     const project = app.projects.find((p) => p.id === projectId);
     if (!board) return project?.state.status === 'ready' ? '…' : 'no board';
     if (board.integrity.short) return board.integrity.short;
-    if (board.sync.warning) return 'needs a look';
+    if (board.sync.warning) return 'couldn’t sync';
     if (board.sync.busy) return 'syncing…';
-    if (board.sync.behind > 0) return `${board.sync.behind} to receive`;
-    return board.sync.label ?? 'plain files';
+    if (board.sync.pending > 0) return `${board.sync.pending} ${board.sync.pending === 1 ? 'change' : 'changes'} not shared yet`;
+    if (board.sync.behind > 0) return `${board.sync.behind} ${board.sync.behind === 1 ? 'change' : 'changes'} to bring in`;
+    return board.sync.remote ? (board.sync.label ?? 'shared') : 'on this Mac only';
+  }
+
+  /** A board with something to send or bring in can be synced from the list. */
+  const canSync = (projectId: string) => {
+    const b = app.boards[projectId];
+    return !!b?.sync.remote && !b.sync.busy && (b.sync.pending > 0 || b.sync.behind > 0 || !!b.sync.warning);
+  };
+
+  async function syncNow(e: MouseEvent, projectId: string): Promise<void> {
+    e.stopPropagation();
+    const result = await api.syncNow(projectId);
+    if (!result.ok) app.notify(result.error, 'warn');
   }
 
   /** What the health list's tip says about a board: the two-boards line and every note. */
@@ -71,20 +87,27 @@
         <span class="mono">{ask.agentId} needs you · {projectName(ask.projectId)}</span>
       </button>
     {/each}
-    {#if healthLine}
-      <button class="health no-drag" class:open={opened === 'health'} data-tone={tone} onclick={() => toggle('health')}>
-        <span class="mono">{healthLine}</span>
+    {#if needsSaying}
+      <button
+        class="health no-drag"
+        class:open={opened === 'health'}
+        data-tone={tone}
+        aria-label={healthTipText}
+        use:tip={healthTipText}
+        onclick={() => toggle('health')}
+      >
+        <Icon name="sync" size={13} />
       </button>
     {/if}
     <button
       class="feed no-drag"
       class:lit={app.unseen > 0}
       class:open={opened === 'feed'}
-      use:tip={'What changed on any board from outside: agents, the CLI, other machines'}
+      use:tip={app.unseen > 0 ? `${app.unseen} ${app.unseen === 1 ? 'change' : 'changes'} from agents and other machines` : 'Changes from agents and other machines'}
       onclick={() => toggle('feed')}
     >
       <Icon name="bolt" size={13} />
-      {#if app.unseen > 0}<span class="mono">{app.unseen} new</span>{/if}
+      {#if app.unseen > 0}<span class="mono">{app.unseen}</span>{/if}
     </button>
   </div>
 </header>
@@ -103,7 +126,10 @@
           }}
         >
           <span class="label">{project.name}</span>
-          <span class="mono meta">{healthMeta(project.id)}</span>
+          <span class="mono meta" class:warn={app.quietHealth(app.boards[project.id]) === 'warn'}>{healthMeta(project.id)}</span>
+          {#if canSync(project.id)}
+            <span class="send" role="button" tabindex="0" onclick={(e) => syncNow(e, project.id)} onkeydown={() => {}}>Sync now</span>
+          {/if}
         </button>
       {/each}
     {:else}
@@ -220,6 +246,13 @@
     color: var(--ink-2);
   }
 
+  /* The sync key: an icon alone, square like the feed's at rest. */
+  .health {
+    width: 24px;
+    padding: 0;
+    justify-content: center;
+  }
+
   .health[data-tone='warn'] {
     color: var(--warn);
   }
@@ -292,6 +325,28 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     font-weight: 500;
+  }
+
+  .meta.warn {
+    color: var(--warn);
+  }
+
+  /* Send what is waiting, from the board's own line. */
+  .send {
+    flex: none;
+    height: 22px;
+    padding: 0 var(--s2);
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--r-control);
+    font-size: var(--t-sm);
+    color: var(--ink-2);
+    background: var(--fill-hover);
+  }
+
+  .send:hover {
+    background: var(--fill-active);
+    color: var(--ink);
   }
 
   .meta {

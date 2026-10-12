@@ -620,6 +620,25 @@ setInterval(() => {
   }
 }, FULL_SYNC_INTERVAL_MS).unref();
 
+/** How often what is waiting to be sent is counted again. */
+const RECOUNT_MS = 10_000;
+/** The count each board was last published with. */
+const lastPending = new Map<string, number>();
+
+// An agent's or the CLI's commit is pushed by its own `brainfile sync --push`,
+// which moves refs in the repository's git directory, outside the folder the
+// watcher sees; so what is waiting is counted again on a timer, and a board
+// whose count moved is published.
+setInterval(() => {
+  for (const board of boards.values()) {
+    if (board.syncing || !isTrackedBoard(board.dotDir)) continue;
+    const pending = pendingChanges(board.dotDir);
+    if (lastPending.has(board.projectId) && lastPending.get(board.projectId) === pending) continue;
+    lastPending.set(board.projectId, pending);
+    publish(board);
+  }
+}, RECOUNT_MS).unref();
+
 // ── Dispatch ────────────────────────────────────────────────────────────────
 
 const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {

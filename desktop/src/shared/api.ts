@@ -139,7 +139,7 @@ export interface IntegrityView {
   } | null;
   /** Anything else about where the board lives, one sentence each. */
   notes: string[];
-  /** A few words for the health list (`two boards`, `tracked twice`), or null when all is well. */
+  /** A few words for the health list (`two copies of the board`, `old copy still in main`), or null when all is well. */
   short: string | null;
 }
 
