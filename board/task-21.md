@@ -19,3 +19,6 @@ Editor links in replies only find apps in /Applications, and terminal editors on
 - A 'Your $EDITOR' option read from the login shell.
 - Unset, open in the editor that is running, then the first found (launch-editor's idea).
 - Install Zed on this Mac to check it (already in the table).
+
+## Log
+- 2026-10-12T23:44:00.615Z: [codex-task-21] Implemented layered editor discovery and terminal launch plans; Zed installed via Homebrew. Adding platform fixtures and validating quoting, running-editor preference and login-shell EDITOR before committing.
