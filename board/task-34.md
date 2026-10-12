@@ -1,14 +1,15 @@
 ---
 id: task-34
 title: "Health: fix a board problem from its line (safe fix, or ask an agent)"
-column: todo
-position: 4
+column: in-progress
+position: 1
 priority: high
 tags:
   - desktop
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
+updatedAt: "2026-10-12T21:35:00.818Z"
 ---
 
 ## Description
