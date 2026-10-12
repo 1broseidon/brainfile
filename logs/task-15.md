@@ -1,8 +1,6 @@
 ---
 id: task-15
 title: "contract validate: exit non-zero when validation fails"
-column: in-progress
-position: 1
 priority: high
 tags:
   - bug
@@ -14,7 +12,8 @@ relatedFiles:
   - cli/src/commands/contract.ts
 createdAt: "2026-09-23T03:04:31.919Z"
 assignee: codex
-updatedAt: "2026-10-12T18:34:20.436Z"
+updatedAt: "2026-10-12T18:35:29.008Z"
+completedAt: "2026-10-12T18:35:29.008Z"
 ---
 
 ## Description
