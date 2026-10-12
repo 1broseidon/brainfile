@@ -23,7 +23,7 @@ subtasks:
     completed: true
   - id: spec-16-3
     title: "Phase 1: chat shows 'handed to codex' under the reply; dispatch from the task-in-context"
-    completed: false
+    completed: true
   - id: spec-16-4
     title: "Phase 2: queues: tasks, a column, an epic; waves by dependsOn; N at once per repo (default 3)"
     completed: false
@@ -42,7 +42,7 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: false
-updatedAt: "2026-10-12T23:30:59.371Z"
+updatedAt: "2026-10-12T23:30:59.783Z"
 ---
 
 ## Description
