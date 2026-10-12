@@ -30,7 +30,8 @@ subtasks:
   - id: spec-12-6
     title: "Docs and schemas: MANUAL, site/public/v2 schemas, llms.txt; init writes a short brainfile.md"
     completed: false
-updatedAt: "2026-10-12T05:53:10.368Z"
+updatedAt: "2026-10-12T06:04:13.884Z"
+parentId: epic-2
 ---
 
 ## Description
