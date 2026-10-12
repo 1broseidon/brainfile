@@ -1,7 +1,7 @@
 ---
 id: task-20
 title: "Outline: children stay under their parent across columns"
-column: in-progress
+column: review
 position: 0
 priority: high
 tags:
@@ -10,7 +10,7 @@ tags:
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
 assignee: claude
-updatedAt: "2026-10-12T19:22:29.040Z"
+updatedAt: "2026-10-12T19:22:38.951Z"
 subtasks:
   - id: task-20-1
     title: "Host: completed children travel with their parent past the Done limit"
