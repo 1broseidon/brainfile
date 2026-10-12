@@ -42,6 +42,8 @@ subtasks:
     title: Tests
     completed: false
 createdAt: "2026-10-12T22:24:00.756Z"
+assignee: claude
+updatedAt: "2026-10-12T23:39:26.649Z"
 ---
 
 ## Description
