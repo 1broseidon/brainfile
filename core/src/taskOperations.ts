@@ -74,6 +74,12 @@ export interface TaskFileInput {
    * for plan documents). Not validated by core — convention lives at the frontend level.
    */
   status?: string;
+  /**
+   * More frontmatter, written as given right after `status` (a decision's
+   * `claimKey`, `kind`, `stance`, …). Undefined values are left out; it never
+   * overrides the fields above.
+   */
+  fields?: Record<string, unknown>;
 }
 
 /**
@@ -294,6 +300,17 @@ function buildChildTasksSection(childTasks: ChildTaskSummary[]): string {
   return lines.join('\n');
 }
 
+/** Fields from `TaskFileInput.fields` with undefined values dropped and the core fields protected. */
+const PROTECTED_FIELDS = new Set(['id', 'title', 'type', 'column', 'position', 'status', 'createdAt', 'completedAt']);
+function extraFields(fields: Record<string, unknown> | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(fields ?? {})) {
+    if (value === undefined || PROTECTED_FIELDS.has(key)) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
 function writeTaskFileExclusive(filePath: string, task: Task, body: string): void {
   const dir = path.dirname(filePath);
   fs.mkdirSync(dir, { recursive: true });
@@ -439,6 +456,7 @@ export function addTaskFile(
       ...(resolvedPosition !== undefined && { position: resolvedPosition }),
       ...(input.description && { description: input.description.trim() }),
       ...(status && { status }),
+      ...extraFields(input.fields),
       ...(input.priority && { priority: input.priority }),
       ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
       ...(input.assignee && { assignee: input.assignee }),

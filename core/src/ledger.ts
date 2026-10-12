@@ -6,6 +6,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { readTasksDir } from './taskFile';
+import { resolveDocType } from './docTypes';
+
+function isDecisionType(type: string | undefined): boolean {
+  return resolveDocType(type).role === 'decision';
+}
 import type {
   Deliverable,
   FileHistoryOptions,
@@ -315,7 +320,8 @@ function shouldWarnLegacyFallback(logsDir: string): boolean {
 }
 
 function readLegacyMarkdownLedger(logsDir: string): LedgerRecord[] {
-  const docs = readTasksDir(logsDir);
+  // A decision retired to logs/ (spec-11) was never completed: it has no record.
+  const docs = readTasksDir(logsDir).filter((doc) => doc.task.completedAt || !isDecisionType(doc.task.type));
   if (docs.length === 0) {
     return [];
   }
