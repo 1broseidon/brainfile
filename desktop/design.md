@@ -260,7 +260,9 @@ board changes (and in the feed).
   a muted history key in its header lists the board's recent chats (kept
   on this machine, the last 30), and any of them can be picked up again,
   its past carried along if the agent's session has gone. Replies land
-  whole. Beside the agent, a muted model picker lists the models the agent
+  whole, and only the answer: the narration an agent writes between tool
+  calls ("I'll look at the board…") is dropped, and the reply is the turn's
+  last message. Beside the agent, a muted model picker lists the models the agent
   itself reports (asked once a day); unset means the agent's default, and
   Hand to… uses the same choice.
 - **When an agent asks first**, it is said where you are looking: inside the

@@ -270,7 +270,16 @@ interface Session {
   sessionId: string;
   /** The run the current turn belongs to. */
   run: AgentRun | null;
-  text: string;
+  /**
+   * The turn's messages, in order. An agent narrates as it goes ("I'll look
+   * at the board…"), then calls tools, then answers; only the last message
+   * is the reply.
+   */
+  messages: string[];
+  /** The message the last chunk belonged to, when the agent says. */
+  messageId: string | null;
+  /** A tool ran since the last text: the next text starts a new message. */
+  breakNext: boolean;
   idle: NodeJS.Timeout | null;
   /** The agent's permission modes, and the one the session is in. */
   modes: ReturnType<typeof modesOf>;
@@ -350,7 +359,9 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     connection: null!,
     sessionId: '',
     run: null,
-    text: '',
+    messages: [],
+    messageId: null,
+    breakNext: false,
     idle: null,
     modes: null,
     mode: null,
@@ -364,9 +375,12 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
         if (u.sessionUpdate === 'current_mode_update') session.mode = u.currentModeId;
         const run = session.run;
         if (!run) return;
-        if (u.sessionUpdate === 'agent_message_chunk' && u.content.type === 'text') session.text += u.content.text;
+        if (u.sessionUpdate === 'agent_message_chunk' && u.content.type === 'text') hear(session, u.content.text, u.messageId ?? null);
         else if (u.sessionUpdate === 'agent_thought_chunk' && run.activity !== 'thinking') update(run, { activity: 'thinking', state: 'working' });
-        else if (u.sessionUpdate === 'tool_call') update(run, { activity: ACTIVITY[u.kind ?? ''] ?? 'working', state: 'working' });
+        else if (u.sessionUpdate === 'tool_call') {
+          session.breakNext = true;
+          update(run, { activity: ACTIVITY[u.kind ?? ''] ?? 'working', state: 'working' });
+        }
       },
     }),
     stream
@@ -461,16 +475,36 @@ function close(session: Session): void {
 }
 
 /** One prompt turn on a session; the reply lands whole when the turn ends. */
+/** A chunk of the agent's text: a new message when its ID changes or a tool has run since. */
+function hear(session: Session, text: string, messageId: string | null): void {
+  const fresh = session.messages.length === 0 || session.breakNext || (messageId !== null && messageId !== session.messageId);
+  if (fresh) session.messages.push('');
+  session.messages[session.messages.length - 1] += text;
+  session.messageId = messageId;
+  session.breakNext = false;
+}
+
+/** The reply: the turn's last message with something in it, not the narration before it. */
+function replyOf(session: Session): string {
+  for (let i = session.messages.length - 1; i >= 0; i--) {
+    const text = session.messages[i].trim();
+    if (text) return text;
+  }
+  return '';
+}
+
 async function turn(session: Session, run: AgentRun, prompt: string): Promise<void> {
   session.run = run;
-  session.text = '';
+  session.messages = [];
+  session.messageId = null;
+  session.breakNext = false;
   if (session.idle) clearTimeout(session.idle);
   update(run, { state: 'working', activity: 'thinking' });
   try {
     const result = await session.connection.prompt({ sessionId: session.sessionId, prompt: [{ type: 'text', text: prompt }] });
     if (run.state === 'stopped') return;
     const stopped = result.stopReason === 'cancelled';
-    update(run, { state: stopped ? 'stopped' : 'done', reply: session.text.trim(), endedAt: Date.now() });
+    update(run, { state: stopped ? 'stopped' : 'done', reply: replyOf(session), endedAt: Date.now() });
   } catch (err) {
     update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
   } finally {
