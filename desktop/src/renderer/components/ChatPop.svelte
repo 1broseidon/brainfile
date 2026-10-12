@@ -62,8 +62,9 @@
    * them. Closing runs it back into the key. Reduced motion just shows it.
    */
   function grow(node: HTMLElement) {
-    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return { duration: 0 };
     const { width, height } = node.getBoundingClientRect();
+    // Not laid out yet, or reduced motion: just show it, never a stuck square.
+    if (width <= KEY || height <= KEY || matchMedia('(prefers-reduced-motion: reduce)').matches) return { duration: 0 };
     return {
       duration: 220,
       easing: expoOut,
