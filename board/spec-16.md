@@ -20,7 +20,7 @@ subtasks:
     completed: false
   - id: spec-16-2
     title: "Phase 1: desktop MCP server for its own chat agents: dispatch, runs, stop; through Hand to… (worktree, dock tab, asks, Review)"
-    completed: false
+    completed: true
   - id: spec-16-3
     title: "Phase 1: chat shows 'handed to codex' under the reply; dispatch from the task-in-context"
     completed: false
@@ -42,7 +42,7 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: false
-updatedAt: "2026-10-12T23:18:14.130Z"
+updatedAt: "2026-10-12T23:30:59.371Z"
 ---
 
 ## Description
