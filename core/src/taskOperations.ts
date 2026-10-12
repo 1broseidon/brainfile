@@ -15,6 +15,8 @@ import type { Contract, ContractStatus, ContractMetrics } from './types/contract
 import type { V2Dirs } from './workspace';
 import { replaceDescription } from './workspace';
 import { isTypeCompletable, validateColumn } from './boardValidation';
+import { resolveDocType, typesMatch, type ResolvedDocType } from './docTypes';
+import { idList } from './docGraph';
 import { buildContract } from './contractSpec';
 import { generateNextSubtaskId } from './idGen';
 import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, serializeTaskContent } from './taskFile';
@@ -30,8 +32,9 @@ export interface TaskOperationResult {
   filePath?: string;
   error?: string;
   /**
-   * Populated only when the completed task is type `epic` and has children.
-   * Present on both blocked failures and forced-through successes.
+   * Populated when the completed document holds children (`parentId`) that
+   * are still open: any container, not only an epic (spec-12). Present on
+   * both blocked failures and forced-through successes.
    */
   incompleteChildren?: Array<{ id: string; title: string }>;
 }
@@ -42,7 +45,8 @@ export interface TaskOperationResult {
 export interface TaskFileInput {
   id?: string;
   title: string;
-  column: string;
+  /** Required for work; ignored for a decision, which has no column. */
+  column?: string;
   position?: number;
   description?: string;
   priority?: 'low' | 'medium' | 'high' | 'critical';
@@ -56,7 +60,12 @@ export interface TaskFileInput {
   parentId?: string;
   /** Task IDs that must be completed before this task can run. */
   dependsOn?: string[];
-  /** Document type (e.g., 'epic', 'adr'). When set, IDs use this as prefix (epic-1, adr-1). */
+  /** Decisions this piece of work rests on. */
+  decisions?: string[];
+  /**
+   * Document type. Aliases are written canonically (`issue` → no type, i.e. a
+   * task; `adr` → `decision`), and the ID takes the type's prefix (`epic-1`).
+   */
   type?: string;
   /** Optional contract to attach at creation time (single-write, avoids a second file write). */
   contract?: Contract;
@@ -83,6 +92,8 @@ export interface TaskFilePatch {
   parentId?: string | null;
   /** Replaces the whole list. Entries are trimmed and de-duplicated; an empty list clears it. */
   dependsOn?: string[] | null;
+  /** Decisions the work rests on; replaces the list like dependsOn. */
+  decisions?: string[] | null;
   status?: string | null;
 }
 
@@ -95,7 +106,7 @@ export interface TaskFilters {
   priority?: 'low' | 'medium' | 'high' | 'critical';
   assignee?: string;
   parentId?: string;
-  /** Document type filter (e.g. 'plan', 'epic'). Untyped tasks match 'task'. */
+  /** Document type filter (e.g. 'plan', 'epic'). Untyped tasks match 'task'; aliases match their canonical type. */
   type?: string;
 }
 
@@ -109,8 +120,16 @@ export interface CompleteTaskFileOptions {
   filesChanged?: string[];
   columnHistory?: string[];
   validationAttempts?: number;
-  /** Complete an epic even if it has incomplete (still-active) child tasks. */
+  /** Complete a parent even if it has incomplete (still-active) children. */
   force?: boolean;
+  /** The board's `types:`, so a custom type completes by its `like:` model's rule. */
+  types?: BoardConfig['types'];
+}
+
+/** Options for creating a task file. */
+export interface AddTaskFileOptions {
+  /** The board's `types:`, for ID prefixes and the roles of custom types. */
+  types?: BoardConfig['types'];
 }
 
 type ChildTaskStateStatus = 'active' | 'completed' | 'missing';
@@ -128,6 +147,11 @@ function normalizeTaskDependencyIds(values?: string[]): string[] | undefined {
 
   const deps = [...new Set(values.map((value) => value.trim()).filter(Boolean))];
   return deps.length > 0 ? deps : undefined;
+}
+
+/** `Epic`, `Spec`, `Bug`: a type name for the start of a message. */
+function typeLabel(type: ResolvedDocType): string {
+  return type.name.charAt(0).toUpperCase() + type.name.slice(1);
 }
 
 function appendBodySection(body: string, section: string): string {
@@ -202,34 +226,41 @@ function resolveChildTaskStates(
 }
 
 function resolveParentLinkedChildStates(
-  epicId: string,
+  parentId: string,
   boardDir: string,
   logsDir: string,
+  types?: BoardConfig['types'],
 ): ChildTaskSummary[] {
+  // Decisions are never children (spec-12): one pointing here does not count.
+  const isChild = (doc: TaskDocument) =>
+    doc.task.parentId === parentId && resolveDocType(doc.task.type, types).role !== 'decision';
+
   const activeChildren = readTasksDir(boardDir)
-    .filter((doc) => doc.task.parentId === epicId)
+    .filter(isChild)
     .map((doc) => ({ id: doc.task.id, title: doc.task.title, status: 'active' as const }));
 
   const completedChildren = readTasksDir(logsDir)
-    .filter((doc) => doc.task.parentId === epicId)
+    .filter(isChild)
     .map((doc) => ({ id: doc.task.id, title: doc.task.title, status: 'completed' as const }));
 
   return [...activeChildren, ...completedChildren];
 }
 
 /**
- * Resolve an epic's child tasks and their completion states.
+ * Resolve a document's children and their completion states.
  *
- * First-class `parentId` links win when any exist; otherwise the epic's
+ * First-class `parentId` links win when any exist; otherwise an epic's
  * legacy `subtasks` ID references are resolved against board/ and logs/.
  */
-function resolveEpicChildStates(
+function resolveChildStates(
   task: Task,
+  type: ResolvedDocType,
   boardDir: string,
   logsDir: string,
+  types?: BoardConfig['types'],
 ): ChildTaskSummary[] {
-  const linkedByParentId = resolveParentLinkedChildStates(task.id, boardDir, logsDir);
-  if (linkedByParentId.length > 0) {
+  const linkedByParentId = resolveParentLinkedChildStates(task.id, boardDir, logsDir, types);
+  if (linkedByParentId.length > 0 || type.role !== 'epic') {
     return linkedByParentId;
   }
 
@@ -288,9 +319,11 @@ function rollbackLedgerAppend(logsDir: string, appendedRecord: ReturnType<typeof
 
 function archivedBody(
   doc: TaskDocument,
+  type: ResolvedDocType,
   childStates?: ChildTaskSummary[],
 ): string {
-  if (doc.task.type !== 'epic') return doc.body;
+  // An epic always records its children; any other container does when it had some.
+  if (type.role !== 'epic' && (childStates?.length ?? 0) === 0) return doc.body;
   return appendBodySection(doc.body, buildChildTasksSection(childStates ?? []));
 }
 
@@ -357,22 +390,35 @@ export function addTaskFile(
   input: TaskFileInput,
   body: string = '',
   logsDir?: string,
+  options: AddTaskFileOptions = {},
 ): TaskOperationResult {
   if (!input.title || input.title.trim() === '') {
     return { success: false, error: 'Task title is required' };
   }
 
-  if (!input.column || input.column.trim() === '') {
+  // Aliases are written canonically; a task needs no type field.
+  const resolvedType = resolveDocType(input.type, options.types);
+  const isDecision = resolvedType.role === 'decision';
+  const docType = input.type && resolvedType.name !== 'task' ? resolvedType.name : undefined;
+
+  // A decision has no column (spec-12); every piece of work needs one.
+  const column = isDecision ? undefined : input.column?.trim();
+  if (!isDecision && !column) {
     return { success: false, error: 'Task column is required' };
   }
 
-  const typePrefix = input.type || 'task';
+  const typePrefix = resolvedType.idPrefix;
   const maxAttempts = input.id ? 1 : 25;
 
   // Append to the end of the target column when no explicit position is given.
-  const resolvedPosition = input.position !== undefined
-    ? input.position
-    : readTasksDir(boardDir).filter((doc) => doc.task.column === input.column.trim()).length;
+  const resolvedPosition = column === undefined
+    ? undefined
+    : input.position !== undefined
+      ? input.position
+      : readTasksDir(boardDir).filter((doc) => doc.task.column === column).length;
+  // A decision is current until superseded, rejected or stale.
+  const status = input.status ?? (isDecision ? 'current' : undefined);
+  const decisions = idList(input.decisions);
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const taskId = input.id || generateNextFileTaskId(boardDir, logsDir, typePrefix);
@@ -388,11 +434,11 @@ export function addTaskFile(
     const task: Task = {
       id: taskId,
       title: input.title.trim(),
-      ...(input.type && { type: input.type }),
-      column: input.column.trim(),
-      position: resolvedPosition,
+      ...(docType && { type: docType }),
+      ...(column !== undefined && { column }),
+      ...(resolvedPosition !== undefined && { position: resolvedPosition }),
       ...(input.description && { description: input.description.trim() }),
-      ...(input.status && { status: input.status }),
+      ...(status && { status }),
       ...(input.priority && { priority: input.priority }),
       ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
       ...(input.assignee && { assignee: input.assignee }),
@@ -401,6 +447,7 @@ export function addTaskFile(
       ...(input.template && { template: input.template }),
       ...(input.parentId && input.parentId.trim().length > 0 && { parentId: input.parentId.trim() }),
       ...(normalizeTaskDependencyIds(input.dependsOn) && { dependsOn: normalizeTaskDependencyIds(input.dependsOn)! }),
+      ...(decisions.length > 0 && { decisions }),
       ...(subtasks && subtasks.length > 0 && { subtasks }),
       ...(input.contract && { contract: input.contract }),
       createdAt: now,
@@ -554,7 +601,7 @@ export function moveTaskFileToColumn(
     return { success: true, task, filePath, column: resolvedColumn };
   }
 
-  const completeResult = completeTaskFile(filePath, dirs.logsDir);
+  const completeResult = completeTaskFile(filePath, dirs.logsDir, { types: board.types });
   if (!completeResult.success || !completeResult.task) {
     return {
       success: false,
@@ -617,6 +664,10 @@ export function patchTaskFile(taskPath: string, patch: TaskFilePatch): TaskOpera
   applyField('parentId', patch.parentId);
   if (patch.dependsOn !== undefined) {
     applyField('dependsOn', patch.dependsOn === null ? null : (normalizeTaskDependencyIds(patch.dependsOn) ?? null));
+  }
+  if (patch.decisions !== undefined) {
+    const decisions = patch.decisions === null ? [] : idList(patch.decisions);
+    applyField('decisions', decisions.length > 0 ? decisions : null);
   }
   applyField('status', patch.status);
 
@@ -867,27 +918,34 @@ export function completeTaskFile(
     return { success: false, error: `Failed to read task file: ${taskPath}` };
   }
 
-  // Epic safety gate: refuse to complete an epic that still has active children,
-  // unless the caller explicitly forces it. Non-epic types skip this entirely.
-  let childStates: ChildTaskSummary[] | undefined;
-  let incompleteChildren: Array<{ id: string; title: string }> | undefined;
-  if (doc.task.type === 'epic') {
-    const boardDir = path.dirname(taskPath);
-    childStates = resolveEpicChildStates(doc.task, boardDir, logsDir);
-    const incomplete = childStates
-      .filter((child) => child.status === 'active')
-      .map((child) => ({ id: child.id, title: child.title }));
+  const docType = resolveDocType(doc.task.type, options.types);
 
-    if (incomplete.length > 0) {
-      if (!options.force) {
-        return {
-          success: false,
-          error: `Epic ${doc.task.id} has ${incomplete.length} incomplete child task(s). Use force:true to override.`,
-          incompleteChildren: incomplete,
-        };
-      }
-      incompleteChildren = incomplete;
+  // A decision is a standing choice, not work: it is never completed (spec-12).
+  if (docType.role === 'decision') {
+    return {
+      success: false,
+      error: `${doc.task.id} is a decision; decisions are not completed (one stays current until it is superseded, rejected or stale)`,
+    };
+  }
+
+  // Container gate: a parent cannot complete while it has open children,
+  // unless the caller forces it. Epic's rule, now every container's (spec-12).
+  const boardDir = path.dirname(taskPath);
+  const childStates = resolveChildStates(doc.task, docType, boardDir, logsDir, options.types);
+  let incompleteChildren: Array<{ id: string; title: string }> | undefined;
+  const incomplete = childStates
+    .filter((child) => child.status === 'active')
+    .map((child) => ({ id: child.id, title: child.title }));
+
+  if (incomplete.length > 0) {
+    if (!options.force) {
+      return {
+        success: false,
+        error: `${typeLabel(docType)} ${doc.task.id} has ${incomplete.length} incomplete child task(s). Use force:true to override.`,
+        incompleteChildren: incomplete,
+      };
     }
+    incompleteChildren = incomplete;
   }
 
   const now = new Date().toISOString();
@@ -905,7 +963,7 @@ export function completeTaskFile(
     return { success: false, error: `Task already exists in logs: ${doc.task.id}` };
   }
 
-  const completedBody = archivedBody(doc, childStates);
+  const completedBody = archivedBody(doc, docType, childStates);
   const record = buildLedgerRecord(completedTask, completedBody, {
     summary: options.summary,
     filesChanged: options.filesChanged,
@@ -1056,7 +1114,8 @@ export function listTasks(
       docs = docs.filter((d) => d.task.parentId === filters.parentId);
     }
     if (filters.type) {
-      docs = docs.filter((d) => (d.task.type || 'task') === filters.type);
+      // Aliases match their canonical type: `adr` finds decisions, `issue` tasks.
+      docs = docs.filter((d) => typesMatch(d.task.type, filters.type));
     }
   }
 

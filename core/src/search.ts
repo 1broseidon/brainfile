@@ -11,6 +11,7 @@
 import type { Task, TaskDocument } from './types';
 import type { ContractStatus } from './types/contract';
 import { extractDescription, extractLog } from './workspace';
+import { typesMatch } from './docTypes';
 
 export interface SearchFilters {
   column?: string;
@@ -19,7 +20,7 @@ export interface SearchFilters {
   assignee?: string;
   due?: 'overdue' | 'today' | 'week' | 'month';
   contract?: ContractStatus;
-  /** Document type filter (e.g. 'epic', 'plan'). Untyped tasks match 'task'. */
+  /** Document type filter (e.g. 'epic', 'plan'). Untyped tasks match 'task'; `adr` and `issue` match `decision` and `task`. */
   type?: string;
 }
 
@@ -119,7 +120,8 @@ export function taskMatchesFilters(task: Task, filters: SearchFilters & { text?:
   }
 
   if (filters.type) {
-    if ((task.type || 'task') !== filters.type) return false;
+    // Aliases match their canonical type: `type:adr` finds decisions, `type:issue` tasks.
+    if (!typesMatch(task.type, filters.type)) return false;
   }
 
   if (filters.priority) {

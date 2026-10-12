@@ -248,6 +248,7 @@ export {
   type TaskOperationResult,
   type TaskFileInput,
   type TaskFilePatch,
+  type AddTaskFileOptions,
   type TaskFilters,
   type CompleteTaskFileOptions,
   type ContractTransitionOptions,
@@ -329,6 +330,62 @@ export {
   lintRelatedConfig,
   lintTaskRefs,
 } from './related';
+
+// Export the built-in document types and their place in the graph (spec-12)
+export {
+  type DocRole,
+  type DocTypeDefinition,
+  type ResolvedDocType,
+  type ParentFit,
+  DOC_ROLES,
+  DOC_TYPES,
+  TYPE_ALIASES,
+  TYPE_GLYPHS,
+  isDocRole,
+  isTypeAlias,
+  canonicalTypeName,
+  typesMatch,
+  isBuiltInType,
+  resolveDocType,
+  docRole,
+  typeGlyph,
+  isKnownType,
+  listDocTypes,
+  availableTypeNames,
+  parentFit,
+  allowedParentRoles,
+  allowedChildRoles,
+  lintTypesConfig,
+} from './docTypes';
+
+// Export the document graph: containment, decisions and their reverse (spec-12)
+export {
+  type DecisionLink,
+  type WorkOnSupersededDecision,
+  type DocTreeNode,
+  type DocTreeOptions,
+  type DocGraphOptions,
+  type DocGraph,
+  type LinkChange,
+  type LinkCheckResult,
+  type LinkCheckOptions,
+  type LintDocGraphOptions,
+  type DocPlace,
+  DECISION_STATUSES,
+  decisionStatus,
+  idList,
+  decisionIdsOf,
+  buildDocGraph,
+  docPlace,
+  flattenDocTree,
+  checkDocumentLinks,
+  lintDocGraph,
+} from './docGraph';
+export {
+  type BoardGraph,
+  readBoardGraph,
+  findWorkOnSupersededDecisions,
+} from './boardGraph';
 
 // Export task dependency graph utilities
 export {

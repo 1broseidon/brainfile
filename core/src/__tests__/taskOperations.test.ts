@@ -281,7 +281,8 @@ describe('taskOperations', () => {
       expect(result.filePath).toContain('epic-1.md');
     });
 
-    it('creates adr-prefixed task', () => {
+    // spec-12: adr is an alias of decision; new documents are written canonically.
+    it('writes an adr as a decision: decision-N, no column, current', () => {
       const result = addTaskFile(tasksDir, {
         title: 'Use token bucket for rate limiting',
         column: 'todo',
@@ -289,8 +290,35 @@ describe('taskOperations', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.task!.id).toBe('adr-1');
-      expect(result.task!.type).toBe('adr');
+      expect(result.task!.id).toBe('decision-1');
+      expect(result.task!.type).toBe('decision');
+      expect(result.task!.column).toBeUndefined();
+      expect(result.task!.position).toBeUndefined();
+      expect(result.task!.status).toBe('current');
+    });
+
+    it('needs no column for a decision, and keeps a given status', () => {
+      const result = addTaskFile(tasksDir, { title: 'Proposal', type: 'decision', status: 'proposed' });
+      expect(result.success).toBe(true);
+      expect(result.task!.status).toBe('proposed');
+      expect(addTaskFile(tasksDir, { title: 'Work without a column' }).error).toBe('Task column is required');
+    });
+
+    it('writes an issue as a plain task', () => {
+      const result = addTaskFile(tasksDir, { title: 'Bug report', column: 'todo', type: 'issue' });
+      expect(result.task!.id).toBe('task-1');
+      expect(result.task!.type).toBeUndefined();
+    });
+
+    it('takes the ID prefix from the board types, and writes decisions: on work', () => {
+      const types = { bug: { like: 'task', idPrefix: 'bg' }, decision: { idPrefix: 'dec' } };
+      const bug = addTaskFile(tasksDir, { title: 'Crash', column: 'todo', type: 'bug', decisions: ['dec-1', ' dec-1 '] }, '', undefined, { types });
+      expect(bug.task!.id).toBe('bg-1');
+      expect(bug.task!.type).toBe('bug');
+      expect(bug.task!.decisions).toEqual(['dec-1']);
+
+      const decision = addTaskFile(tasksDir, { title: 'Use SQLite', type: 'adr' }, '', undefined, { types });
+      expect(decision.task!.id).toBe('dec-1');
     });
 
     it('increments typed IDs independently from task IDs', () => {
@@ -346,7 +374,8 @@ describe('taskOperations', () => {
       });
 
       expect(epicResult.task!.id).toBe('epic-3');
-      expect(adrResult.task!.id).toBe('adr-2');
+      // adr resolves to decision (spec-12); existing adr-N files keep their IDs.
+      expect(adrResult.task!.id).toBe('decision-1');
       expect(taskResult.task!.id).toBe('task-2');
     });
 
@@ -1469,13 +1498,68 @@ describe('taskOperations', () => {
       expect(result.incompleteChildren).toBeUndefined();
     });
 
-    it('skips the gate entirely for non-epic types', () => {
+    // spec-12: epic's rule is now every container's. A task holds tasks.
+    it('gates every container, not only epics', () => {
       seedTask('task-10', 'todo', { title: 'Child', parentId: 'task-1' });
       const parentPath = seedTask('task-1', 'done');
 
       const result = completeTaskFile(parentPath, logsDir, { legacyMode: true });
 
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Task task-1 has 1 incomplete child task(s). Use force:true to override.');
+      expect(result.incompleteChildren).toEqual([{ id: 'task-10', title: 'Child' }]);
+    });
+
+    it('gates a spec with an open plan, and records the children once forced', () => {
+      seedTask('plan-1', 'todo', { title: 'The plan', type: 'plan', parentId: 'spec-1' });
+      seedLogTask('task-11', { title: 'Done child', parentId: 'spec-1' });
+      const specPath = seedTask('spec-1', 'done', { type: 'spec' });
+
+      const blocked = completeTaskFile(specPath, logsDir);
+      expect(blocked.success).toBe(false);
+      expect(blocked.error).toContain('Spec spec-1 has 1 incomplete child task(s)');
+
+      const forced = completeTaskFile(specPath, logsDir, { force: true });
+      expect(forced.success).toBe(true);
+      const body = readTaskFile(path.join(logsDir, 'spec-1.md'))!.body;
+      expect(body).toContain('Summary: 1/2 children completed.');
+    });
+
+    it('lets a container complete once its children are done, without a child section when it had none', () => {
+      seedLogTask('task-11', { title: 'Done child', parentId: 'plan-1' });
+      const planPath = seedTask('plan-1', 'done', { type: 'plan' });
+      expect(completeTaskFile(planPath, logsDir).success).toBe(true);
+
+      const lonePath = seedTask('task-30', 'done', { title: 'Alone' });
+      expect(completeTaskFile(lonePath, logsDir).success).toBe(true);
+      expect(readTaskFile(path.join(logsDir, 'task-30.md'))!.body).not.toContain('## Child Tasks');
+    });
+
+    it('follows like: for a custom container', () => {
+      seedTask('task-10', 'todo', { title: 'Child', parentId: 'initiative-1' });
+      const parentPath = seedTask('initiative-1', 'done', { type: 'initiative' });
+      const types = { initiative: { like: 'epic' } };
+
+      const result = completeTaskFile(parentPath, logsDir, { types });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Initiative initiative-1 has 1 incomplete child task(s)');
+    });
+
+    it('does not count a decision that names the document as its parent', () => {
+      seedTask('decision-1', 'todo', { title: 'Off-pattern', type: 'decision', parentId: 'task-1' });
+      const parentPath = seedTask('task-1', 'done');
+      expect(completeTaskFile(parentPath, logsDir).success).toBe(true);
+    });
+
+    it('refuses to complete a decision or an adr', () => {
+      const decisionPath = seedTask('decision-1', 'todo', { type: 'decision' });
+      const decision = completeTaskFile(decisionPath, logsDir);
+      expect(decision.success).toBe(false);
+      expect(decision.error).toContain('decision-1 is a decision; decisions are not completed');
+
+      const adrPath = seedTask('adr-1', 'todo', { type: 'adr' });
+      expect(completeTaskFile(adrPath, logsDir, { force: true }).success).toBe(false);
+      expect(fs.existsSync(adrPath)).toBe(true);
     });
 
     it('records child status labels in the legacy child summary', () => {
@@ -1552,6 +1636,16 @@ describe('taskOperations', () => {
       const plans = listTasks(tasksDir, { type: 'plan' });
 
       expect(plans.map((d) => d.task.id)).toEqual(['plan-1']);
+    });
+
+    it('filters by type with aliases (spec-12)', () => {
+      seedTask('adr-1', 'todo', { type: 'adr' });
+      seedTask('decision-2', 'todo', { type: 'decision' });
+      seedTask('task-1', 'todo');
+
+      expect(listTasks(tasksDir, { type: 'decision' }).map((d) => d.task.id).sort()).toEqual(['adr-1', 'decision-2']);
+      expect(listTasks(tasksDir, { type: 'adr' }).map((d) => d.task.id).sort()).toEqual(['adr-1', 'decision-2']);
+      expect(listTasks(tasksDir, { type: 'issue' }).map((d) => d.task.id)).toEqual(['task-1']);
     });
 
     it('treats untyped documents as type "task"', () => {

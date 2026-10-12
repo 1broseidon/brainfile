@@ -64,7 +64,16 @@ export interface Task {
   parentId?: string;
   /** Task IDs that must be completed before this task's contract can auto-activate or dispatch. */
   dependsOn?: string[];
-  /** Document type (e.g., 'epic', 'adr', 'bug'). Determines ID prefix when generating IDs. */
+  /**
+   * Decisions this piece of work rests on (spec-12). The reverse ("what rests
+   * on this decision") is computed, never written on the decision.
+   */
+  decisions?: string[];
+  /**
+   * Document type: one of the built-ins (epic, spec, plan, task, decision; `issue`
+   * and `adr` are aliases) or a type from the board's `types:`. Determines the
+   * ID prefix when generating IDs. Absent means task.
+   */
   type?: string;
   description?: string;
   relatedFiles?: string[];
@@ -90,6 +99,44 @@ export interface Task {
   /** Extension fields (x-otto, x-cursor, etc.) are preserved for round-tripping. */
   [key: string]: unknown;
 }
+
+/** How firmly a decision binds (spec-11). */
+export type DecisionKind = 'decision' | 'preference' | 'constraint' | 'rule';
+
+/** Where a decision stands. A decision with no status is current; a legacy `type: adr` with none is proposed. */
+export type DecisionStatus = 'current' | 'superseded' | 'rejected' | 'stale' | 'proposed';
+
+/** What a decision says about its subject (spec-11). */
+export type DecisionStance = 'prefers' | 'rejects' | 'requires' | 'forbids';
+
+/**
+ * Frontmatter of a `decision` document (alias `adr`): a standing choice, not
+ * work. No column, never completed; current until superseded, rejected or
+ * stale. The body is the decision and why. spec-11 builds on these fields.
+ */
+export interface DecisionFields {
+  /** Dotted claim family, e.g. `dependency.http-client`. One current decision per family. */
+  claimKey?: string;
+  kind?: DecisionKind;
+  /** `current`, `superseded`, `rejected` or `stale`. Legacy ADRs may say `proposed`, `accepted`, `promoted` or `deprecated`. */
+  status?: DecisionStatus | string;
+  stance?: DecisionStance;
+  /** What the stance is about: a package, a pattern, a tool. */
+  subject?: string;
+  /** The condition under which the decision holds. */
+  holdsWhile?: string;
+  /** When or why to look at it again. */
+  recheck?: string;
+  /** ISO date after which it is stale. */
+  validUntil?: string;
+  /** The decision(s) this one replaces. */
+  supersedes?: string | string[];
+  /** The decision that replaced this one. */
+  supersededBy?: string;
+}
+
+/** A decision document's frontmatter. */
+export type Decision = Task & DecisionFields;
 
 /**
  * A task document wrapping the YAML frontmatter metadata and markdown body.
