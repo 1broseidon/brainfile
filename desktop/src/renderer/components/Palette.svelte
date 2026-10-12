@@ -75,21 +75,28 @@
       detail: tildify(p.path),
       run: () => app.select(p.id),
     }));
-    const board = app.board;
-    const tasks: Entry[] = q && board
-      ? [...board.tasks, ...board.completed]
-          .filter((t) => match(t.title) || match(t.id) || (t.tags ?? []).some(match) || match(t.assignee ?? ''))
-          .slice(0, 30)
-          .map((t) => ({
-            key: `t:${t.id}`,
-            section: 'Tasks',
+    // Every open board, the one in front first.
+    const tasks: Entry[] = [];
+    if (q) {
+      const ids = Object.keys(app.boards).sort((a, b) => (a === app.activeId ? -1 : b === app.activeId ? 1 : 0));
+      for (const id of ids) {
+        const board = app.boards[id];
+        const name = app.projects.find((p) => p.id === id)?.name ?? '';
+        const here = id === app.activeId;
+        for (const t of [...board.tasks, ...board.completed]) {
+          if (!(match(t.title) || match(t.id) || (t.tags ?? []).some(match) || match(t.assignee ?? ''))) continue;
+          tasks.push({
+            key: `t:${id}:${t.id}`,
+            section: here ? 'Tasks' : 'In other projects',
             label: t.title,
-            detail: t.id,
+            detail: here ? t.id : `${name} · ${t.id}`,
             progress: t.completedAt ? 1 : columnProgress(board.columns, t.column),
-            run: () => (app.openTaskId = t.id),
-          }))
-      : [];
-    return [...tasks, ...actions.filter((a) => !q || match(a.label)), ...projects.filter((p) => !q || match(p.label))];
+            run: () => app.goTo(id, t.id),
+          });
+        }
+      }
+    }
+    return [...tasks.slice(0, 40), ...actions.filter((a) => !q || match(a.label)), ...projects.filter((p) => !q || match(p.label))];
   });
 
   $effect(() => {
@@ -132,7 +139,7 @@
 <div class="overlay" role="presentation" onmousedown={close}></div>
 <div class="palette" role="dialog" aria-label="Command menu">
   <div class="field">
-    {#if app.active}<span class="scope mono">{app.active.name}</span>{/if}
+    {#if app.active}<span class="scope mono">every project</span>{/if}
     <input bind:this={input} bind:value={query} {onkeydown} placeholder="Type a command or search tasks…" spellcheck="false" />
   </div>
   <div class="results" bind:this={list}>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app } from '../lib/state.svelte';
+  import { app, healthOf } from '../lib/state.svelte';
   import { tildify } from '../lib/format';
   import Icon from './Icon.svelte';
   import type { Project } from '../../shared/api';
@@ -55,6 +55,9 @@
         <span class="where"><Icon name={storageIcon(project)} size={14} /></span>
         <span class="name">{project.name}</span>
         <span class="line mono" class:off={!ready}>{line(project)}</span>
+        {#if healthOf(app.boards[project.id])}
+          <i class="dot" data-tone={healthOf(app.boards[project.id])}></i>
+        {/if}
         {#if i < 9}<span class="key mono">⌘{i + 1}</span>{/if}
       </button>
     {/each}
@@ -152,6 +155,40 @@
 
   .line.off {
     color: var(--ink-4);
+  }
+
+  /* Each board's sync, so one that is behind shows before it is opened. */
+  .dot {
+    grid-column: 3;
+    grid-row: 1;
+    align-self: center;
+    justify-self: end;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ok);
+    transition: opacity var(--d-press) var(--ease);
+  }
+
+  .dot[data-tone='warn'] {
+    background: var(--warn);
+  }
+
+  .dot[data-tone='busy'] {
+    background: var(--accent);
+  }
+
+  .dot[data-tone='pending'] {
+    background: var(--ink-3);
+  }
+
+  .dot[data-tone='local'] {
+    background: none;
+    box-shadow: inset 0 0 0 1.5px var(--ink-4);
+  }
+
+  .project:hover .dot {
+    opacity: 0;
   }
 
   .key {

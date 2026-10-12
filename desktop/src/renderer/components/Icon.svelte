@@ -23,6 +23,7 @@
     contract: 'M3.5 2.5h6l3 3v8h-9zM9.5 2.5v3h3M6 8.5h4M6 11h4',
     user: 'M5.5 3h5v5h-5zM2.5 14c.5-2.5 2.6-4 5.5-4s5 1.5 5.5 4',
     tag: 'M5.5 2.5v11M10.5 2.5v11M2.5 5.5h11M2.5 10.5h11',
+    bolt: 'M9 1.5 3.5 9H8l-1 5.5L12.5 7H8z',
   } as const;
 
   export type IconName = keyof typeof PATHS;

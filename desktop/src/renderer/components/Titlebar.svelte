@@ -1,74 +1,103 @@
 <script lang="ts">
-  import { api, app } from '../lib/state.svelte';
+  import { app, healthOf } from '../lib/state.svelte';
+  import { relativeTime } from '../lib/format';
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
 
-  const board = $derived(app.board);
-  let lockupWidth = $state(0);
+  let opened = $state<'health' | 'feed' | null>(null);
 
-  /**
-   * The view keys stand over the board: on the line of the board's title
-   * while the rail is open, and just past the lockup once it is closed.
-   */
-  const LIGHTS = 80;
-  const viewsLeft = $derived(
-    Math.max(app.layout.railOpen ? app.layout.rail + 24 : 0, LIGHTS + lockupWidth + 24)
-  );
+  const healthLine = $derived.by(() => {
+    const h = app.health;
+    const shared = h.total - h.local;
+    if (h.total === 0) return null;
+    if (h.warn) return `${h.warn} ${h.warn === 1 ? 'board needs' : 'boards need'} a look`;
+    if (h.busy) return `syncing ${h.busy} of ${h.total}`;
+    if (h.pending) return `${h.pending} waiting to send`;
+    if (shared === 0) return `${h.total} ${h.total === 1 ? 'board' : 'boards'} · on this machine`;
+    return `${h.total} ${h.total === 1 ? 'board' : 'boards'} · all synced`;
+  });
 
-  async function sync(): Promise<void> {
-    if (!board) return;
-    const result = await api.syncNow(board.projectId);
-    if (!result.ok) app.notify(result.error, 'warn');
-    else if (result.value.warning) app.notify(result.value.warning, 'warn');
+  const tone = $derived(app.health.warn ? 'warn' : app.health.busy ? 'busy' : app.health.pending ? 'pending' : 'ok');
+
+  const projectName = (id: string) => app.projects.find((p) => p.id === id)?.name ?? id;
+
+  function toggle(which: 'health' | 'feed'): void {
+    opened = opened === which ? null : which;
+    if (opened === 'feed') app.markFeedSeen();
   }
 </script>
 
-<!-- The window's strip is the well itself: the lights, then the lockup (the
-     mark and the written name), always leftmost; the view keys over the
-     board; the board's sync, New task and the search at the right. The
-     rail's key lives with the rail (see Sidebar, Workspace). -->
+<!-- The window's strip is the well itself and belongs to the whole desk:
+     the lockup, always leftmost; one search across every project in the
+     middle; every board's health and the feed of outside changes at the
+     right. Anything about one repository lives in its pane. -->
 <header class="strip drag">
-  <span class="lockup" aria-label="Brainfile" bind:clientWidth={lockupWidth}>
+  <span class="lockup" aria-label="Brainfile">
     <span class="mark"><Mark size={16} /></span>
     <span class="name">brainfile</span>
   </span>
 
-  {#if board}
-    <div class="segmented no-drag" role="tablist" title="List or board  V" style:left="{viewsLeft}px">
-      <button role="tab" aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
-        <Icon name="list" size={13} />List
-      </button>
-      <button role="tab" aria-selected={app.view === 'board'} class:on={app.view === 'board'} onclick={() => app.setView('board')}>
-        <Icon name="board" size={13} />Board
-      </button>
-    </div>
-  {/if}
+  <button class="command field no-drag" onclick={() => (app.paletteOpen = true)}>
+    <Icon name="search" size={13} />
+    <span>Search every project, or type a command</span>
+    <kbd>⌘K</kbd>
+  </button>
 
   <div class="right">
-    {#if board}
-      <button
-        class="sync no-drag"
-        class:busy={board.sync.busy}
-        class:warn={!!board.sync.warning}
-        title={board.sync.warning ?? (board.sync.remote ? `Sync with ${board.sync.remote} now` : 'Kept on this machine only')}
-        disabled={!board.sync.remote || board.sync.busy}
-        onclick={sync}
-      >
-        <span class="dot" class:shared={!!board.sync.remote}></span>
-        <span class="mono">{board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')}</span>
-        {#if board.sync.pending > 0}<span class="pending mono">↑{board.sync.pending}</span>{/if}
-      </button>
-      <button class="btn primary no-drag" onclick={() => (app.composer = {})}>
-        New task<span class="keys">C</span>
+    {#if healthLine}
+      <button class="health no-drag" class:open={opened === 'health'} data-tone={tone} onclick={() => toggle('health')}>
+        <i class="dot"></i><span class="mono">{healthLine}</span>
       </button>
     {/if}
-    <button class="search field no-drag" onclick={() => (app.paletteOpen = true)}>
-      <Icon name="search" size={13} />
-      <span>Search</span>
-      <kbd>⌘K</kbd>
+    <button
+      class="feed no-drag"
+      class:lit={app.unseen > 0}
+      class:open={opened === 'feed'}
+      title="Changes from agents, the CLI and other machines"
+      onclick={() => toggle('feed')}
+    >
+      <Icon name="bolt" size={13} />
+      <span class="mono">{app.unseen > 0 ? `${app.unseen} new` : 'feed'}</span>
     </button>
   </div>
 </header>
+
+{#if opened}
+  <div class="catch" role="presentation" onmousedown={() => (opened = null)}></div>
+  <div class="pop" class:wide={opened === 'feed'}>
+    {#if opened === 'health'}
+      {#each app.projects as project (project.id)}
+        {@const board = app.boards[project.id]}
+        <button
+          class="item"
+          onclick={() => {
+            opened = null;
+            void app.select(project.id);
+          }}
+        >
+          <i class="dot" data-tone={healthOf(board) ?? 'none'}></i>
+          <span class="label">{project.name}</span>
+          <span class="mono meta">{board ? (board.sync.warning ? 'needs a look' : board.sync.busy ? 'syncing…' : (board.sync.label ?? 'plain files')) : project.state.status === 'ready' ? '…' : 'no board'}</span>
+        </button>
+      {/each}
+    {:else}
+      {#each app.feed as item (item.key)}
+        <button
+          class="item two"
+          onclick={() => {
+            opened = null;
+            void app.goTo(item.projectId, item.taskId);
+          }}
+        >
+          <span class="label">{item.title}</span>
+          <span class="mono meta">{projectName(item.projectId)} · {item.taskId} {item.what} · {relativeTime(new Date(item.at).toISOString())}</span>
+        </button>
+      {:else}
+        <p class="empty">Nothing yet. Changes that agents, the CLI or your other machines make to any board arrive here.</p>
+      {/each}
+    {/if}
+  </div>
+{/if}
 
 <style>
   .strip {
@@ -102,106 +131,11 @@
     color: var(--ink-3);
   }
 
-  .segmented {
+  .command {
     position: absolute;
-    top: 4px;
-    height: 24px;
-    display: flex;
-    padding: 2px;
-    gap: 2px;
-    border-radius: var(--r-control);
-    background: var(--canvas);
-    box-shadow: inset 0 0 0 var(--hairline) var(--line);
-    transition: left var(--d-move) var(--ease);
-  }
-
-  .segmented button {
-    height: 20px;
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 0 var(--s2);
-    border-radius: var(--r-chip);
-    font-size: var(--t-sm);
-    font-weight: 500;
-    color: var(--ink-3);
-    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
-  }
-
-  .segmented button:hover {
-    color: var(--ink);
-  }
-
-  .segmented button.on {
-    color: var(--ink);
-    background: var(--pop);
-    box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
-  }
-
-  .right {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-  }
-
-  .sync {
-    height: 24px;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--s2);
-    padding: 0 var(--s2);
-    border-radius: var(--r-control);
-    color: var(--ink-3);
-  }
-
-  .sync:not(:disabled):hover {
-    background: var(--fill-hover);
-    color: var(--ink-2);
-  }
-
-  .sync.warn {
-    color: var(--warn);
-  }
-
-  /* Every state is a glyph and a colour: a ring is local, a dot is shared. */
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    box-shadow: inset 0 0 0 1.5px var(--ink-4);
-  }
-
-  .dot.shared {
-    background: var(--ok);
-    box-shadow: none;
-  }
-
-  .sync.warn .dot {
-    background: var(--warn);
-  }
-
-  .sync.busy .dot {
-    background: var(--accent);
-    animation: breathe 1800ms var(--ease) infinite alternate;
-  }
-
-  @keyframes breathe {
-    to {
-      opacity: 0.35;
-    }
-  }
-
-  .pending {
-    color: var(--ink-2);
-  }
-
-  .btn.primary {
-    height: 24px;
-  }
-
-  .search {
-    width: 200px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: clamp(260px, 34vw, 460px);
     height: 24px;
     display: flex;
     align-items: center;
@@ -211,16 +145,171 @@
     text-align: left;
   }
 
-  .search:hover {
+  .command:hover {
     box-shadow: inset 0 0 0 var(--hairline) var(--line-strong);
     color: var(--ink-3);
   }
 
-  .search span {
+  .command span {
     flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
-  .search kbd {
+  .command kbd {
     height: 16px;
+  }
+
+  .right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+  }
+
+  .health,
+  .feed {
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 var(--s2);
+    border-radius: var(--r-control);
+    color: var(--ink-3);
+    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
+  }
+
+  .health:hover,
+  .feed:hover,
+  .open {
+    background: var(--fill-hover);
+    color: var(--ink-2);
+  }
+
+  .health[data-tone='warn'] {
+    color: var(--warn);
+  }
+
+  /* Something new is waiting: the one place the strip spends the accent. */
+  .feed.lit {
+    color: var(--accent-ink);
+    background: var(--accent-soft);
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    flex: none;
+    border-radius: 50%;
+    background: var(--ok);
+  }
+
+  [data-tone='warn'] > .dot,
+  .dot[data-tone='warn'] {
+    background: var(--warn);
+  }
+
+  [data-tone='busy'] > .dot,
+  .dot[data-tone='busy'] {
+    background: var(--accent);
+    animation: breathe 1800ms var(--ease) infinite alternate;
+  }
+
+  [data-tone='pending'] > .dot,
+  .dot[data-tone='pending'] {
+    background: var(--ink-3);
+  }
+
+  .dot[data-tone='local'],
+  .dot[data-tone='none'] {
+    background: none;
+    box-shadow: inset 0 0 0 1.5px var(--ink-4);
+  }
+
+  @keyframes breathe {
+    to {
+      opacity: 0.35;
+    }
+  }
+
+  .catch {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+  }
+
+  .pop {
+    position: fixed;
+    z-index: 41;
+    top: calc(var(--strip-h) - 2px);
+    right: var(--gap);
+    width: 300px;
+    max-height: 420px;
+    overflow-y: auto;
+    padding: var(--s1);
+    border-radius: var(--r-card);
+    background: var(--pop);
+    box-shadow: var(--top-light), var(--shadow-float);
+    animation: open var(--d-open) var(--ease);
+  }
+
+  .pop.wide {
+    width: 380px;
+  }
+
+  @keyframes open {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+  }
+
+  .item {
+    width: 100%;
+    min-height: 32px;
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: 0 var(--s2);
+    border-radius: var(--r-control);
+    text-align: left;
+  }
+
+  .item:hover {
+    background: var(--fill-hover);
+  }
+
+  .item.two {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    padding: 7px var(--s2) 8px;
+  }
+
+  .label {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+
+  .meta {
+    color: var(--ink-3);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .empty {
+    margin: 0;
+    padding: var(--s3);
+    color: var(--ink-3);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
   }
 </style>

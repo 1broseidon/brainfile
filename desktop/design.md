@@ -20,16 +20,20 @@ Nothing decorates; everything on screen is a thing you can read or press.
 
 One family, **Workbench**:
 
-- The window's top strip is the well itself: 32px, the traffic lights,
-  then the **lockup** (the mark at 16px and the name written out, lowercase
-  `brainfile` in Plex Sans 600), always leftmost. Unlike Hotline's centred
-  toad, the box has a hard left edge, so it leads from the left. The
-  board's common keys live in the strip too: List / Board stands over the
-  board on the line of its title (just past the lockup when the rail is
-  closed), and the sync line, New task and the search sit at the right.
-- The board's **band** carries only the board's name and a folder key:
-  hover it for the path and where the board is kept, press it to reveal
-  the folder in Finder. Paths are not printed in the chrome.
+- The window's top strip is the well itself, and it belongs to the whole
+  desk, never to one repository: the **lockup** (the mark at 16px and the
+  name written out, lowercase `brainfile` in Plex Sans 600), always leftmost;
+  one **search** across every project's board, centred; and at the right,
+  every board's **health** in one line ("5 boards · all synced", or which
+  needs a look; press for the list) and the **feed** of changes that reached
+  any board from outside the window (agents, the CLI, other machines). The
+  feed's unread count is the one place the strip spends the accent.
+- Anything about one repository lives in its pane's **band**: the board's
+  name, a folder key (hover for the path and where the board is kept, press
+  to reveal it in Finder; paths are never printed in the chrome), List /
+  Board, its sync line and New task.
+- Each project in the rail carries its board's sync dot, so one that is
+  behind shows before it is opened.
 - The **rail's key** (⌘B) lives with the rail: in the rail's head beside
   Projects and add while it is open, and at the leading edge of the board's
   band, before the title, once it is closed. Nothing ever sits left of the
