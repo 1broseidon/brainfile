@@ -32,18 +32,19 @@ export function registerListTasksTool(server: McpServer, defaultFile: string): v
     'list_tasks',
     {
       title: 'List Tasks',
-      description: 'List board documents (epics, specs, plans, tasks and the board\'s own types), optionally filtered by column, tag or type; aliases work (issue is task, adr is decision). Decisions have no column and are left out unless type names them (type:"decision"). tree:true also returns the outline: open work nested by parentId, in reading order with depth.',
+      description: 'List board documents (epics, specs, plans, tasks and the board\'s own types), optionally filtered by column, tag, type or status; aliases work (issue is task, adr is decision). Decisions have no column and are left out unless type names them (type:"decision"). tree:true also returns the outline: open work nested by parentId, in reading order with depth.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               column: z.string().optional().describe('Filter by column ID or name'),
               tag: z.string().optional().describe('Filter by tag'),
               type: z.string().optional().describe('Filter by document type (e.g. epic, spec, plan, task, decision; aliases issue and adr work). type:"decision" lists decisions, which are otherwise left out.'),
+              status: z.string().optional().describe('Filter by status: a plan\'s free-form status (draft, active, superseded) or, with type:"decision", current, superseded, rejected or stale'),
               tree: z.boolean().optional().describe('Also return tree: the containment outline of open work (epic ▸ spec · plan · task), each entry with depth, parentId and children IDs, in reading order.'),
               related: z.union([z.boolean(), z.literal('all')]).optional().describe('Also list open tasks on related boards (related: in brainfile.md): true for the ones this board\'s tasks depend on, "all" for every open task there. Reference them as alias:task-id.'),
             }),
       outputSchema: listTasksOutputSchema
     },
-    async ({ file, column, tag, type: filterType, tree, related }) => {
+    async ({ file, column, tag, type: filterType, status: filterStatus, tree, related }) => {
       const filePath = file || defaultFile;
 
       const guard = requireV2(filePath);
@@ -52,12 +53,18 @@ export function registerListTasksTool(server: McpServer, defaultFile: string): v
       const board = buildBoardFromV2(filePath);
       const types = (board as { types?: TypesConfig }).types;
       const isDecision = (task: Task) => resolveDocType(task.type, types).role === 'decision';
+      const statusOf = (task: Task): string | undefined => {
+        const value = (task as Task & { status?: unknown }).status;
+        return typeof value === 'string' ? value : undefined;
+      };
       const summarize = (task: Task, columnId: string): TaskSummary => ({
         id: task.id,
         title: task.title,
         column: columnId,
         ...(task.type ? { type: task.type } : {}),
         ...(typeof task.parentId === 'string' && task.parentId ? { parentId: task.parentId } : {}),
+        // A plan's free-form status (draft, active, …); a decision's is set below.
+        ...(statusOf(task) ? { status: statusOf(task) } : {}),
         priority: task.priority,
         tags: task.tags,
         assignee: task.assignee,
@@ -109,9 +116,12 @@ export function registerListTasksTool(server: McpServer, defaultFile: string): v
           }))
         : undefined;
 
+      const wanted = filterStatus?.trim().toLowerCase();
+      const listed = wanted ? tasks.filter((task) => (task.status ?? '').toLowerCase() === wanted) : tasks;
+
       const output = {
-        tasks,
-        count: tasks.length,
+        tasks: listed,
+        count: listed.length,
         ...(outline ? { tree: outline } : {}),
         ...(related ? { related: listRelated(filePath, related === 'all' ? 'all' : 'depends') } : {}),
       };

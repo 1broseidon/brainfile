@@ -517,3 +517,197 @@ export const checkOutputSchema = z.union([
     exitCode: z.number(),
   }),
 ]);
+
+// ── spec-13: the rest of the CLI ───────────────────────────────────────────
+
+/** `note`: the line appended to a task's log. */
+export const noteOutputSchema = z.object({
+  taskId: z.string(),
+  /** `- <timestamp>: [<who>] <message>`, as written. */
+  entry: z.string(),
+  agent: z.string().optional(),
+  /** True when the task is completed (its file is in logs/). */
+  isLog: z.boolean(),
+});
+
+/** `log`: one task's log, a search of completed work, or the most recent. */
+export const logOutputSchema = z.object({
+  mode: z.enum(['task', 'search', 'recent']),
+  task: z.object({
+    id: z.string(),
+    title: z.string(),
+    completedAt: z.string().optional(),
+    isLog: z.boolean(),
+    description: z.string().optional(),
+    log: z.string().optional(),
+  }).optional(),
+  query: z.string().optional(),
+  entries: z.array(z.object({
+    id: z.string(),
+    title: z.string(),
+    completedAt: z.string().optional(),
+    /** search: where it matched (the title, the log line, or the description). */
+    match: z.string().optional(),
+    /** recent: only in ledger.jsonl, with no file in logs/. */
+    ledgerOnly: z.boolean().optional(),
+  })).optional(),
+  /** search and recent: how many there are in all (entries may be fewer, see limit). */
+  count: z.number().optional(),
+});
+
+/** A column as the board config writes it. Loose: columns may carry extension keys. */
+const columnConfigSchema = z.looseObject({
+  id: z.string(),
+  title: z.string(),
+  completionColumn: z.boolean().optional(),
+  order: z.number().optional(),
+});
+
+const columnSummarySchema = columnConfigSchema.extend({ taskCount: z.number() });
+
+/** `columns`: the columns after the action, in order, with task counts. */
+export const columnsOutputSchema = z.object({
+  action: z.enum(['list', 'add', 'rename', 'reorder', 'remove']),
+  columns: z.array(columnSummarySchema),
+  /** add, rename, remove: the column. */
+  column: columnConfigSchema.optional(),
+  /** remove: the tasks moved out first, and where to. */
+  moved: z.array(z.string()).optional(),
+  movedTo: columnConfigSchema.optional(),
+});
+
+/** `board`: the board's own settings, after any change. */
+export const boardOutputSchema = z.object({
+  title: z.string(),
+  /** agent.instructions: what every agent reads on its first brief. */
+  instructions: z.array(z.string()),
+  /** related: boards in other repos, by short name; reference their tasks as alias:task-id. */
+  related: z.array(z.object({ alias: z.string(), path: z.string() })),
+  columns: z.array(columnSummarySchema),
+  strict: z.boolean(),
+  /** Which settings this call changed: title, instructions, related. */
+  changed: z.array(z.string()),
+});
+
+const typeEntrySchema = z.looseObject({
+  idPrefix: z.string(),
+  completable: z.boolean().optional(),
+  schema: z.string().optional(),
+  like: z.string().optional(),
+});
+
+/** `types`: every type and its place in the graph (spec-12). */
+export const typesOutputSchema = z.object({
+  action: z.enum(['list', 'add']),
+  strict: z.boolean(),
+  /** The board's own types: entries, as written. */
+  types: z.record(z.string(), typeEntrySchema),
+  graph: z.array(z.looseObject({
+    name: z.string(),
+    role: z.string(),
+    builtIn: z.boolean(),
+    configured: z.boolean(),
+    like: z.string().optional(),
+    idPrefix: z.string(),
+    completable: z.boolean(),
+    glyph: z.string(),
+    parents: z.array(z.string()),
+    children: z.array(z.string()),
+    work: z.boolean(),
+    aliases: z.array(z.string()),
+    summary: z.string(),
+    schema: z.string().optional(),
+  })),
+  /** Entries under an alias name (adr, issue), which configure nothing. */
+  aliasEntries: z.array(z.string()),
+  /** add: the type saved. */
+  added: z.object({ name: z.string(), entry: typeEntrySchema }).optional(),
+});
+
+/** `template`: the templates, or the task made from one. */
+export const templateOutputSchema = z.object({
+  action: z.enum(['list', 'use']),
+  templates: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+    priority: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    subtasks: z.array(z.string()),
+  })).optional(),
+  task: z.object({
+    id: z.string(),
+    title: z.string(),
+    template: z.string(),
+    column: z.string(),
+  }).optional(),
+});
+
+const lintIssueSchema = z.object({
+  type: z.enum(['error', 'warning']),
+  message: z.string(),
+  line: z.number().optional(),
+  column: z.number().optional(),
+  fixable: z.boolean().optional(),
+  code: z.string().optional(),
+});
+
+/** `lint`: what it found and what fix changed. */
+export const lintOutputSchema = z.object({
+  /** No errors (warnings allowed), as the CLI's exit code. */
+  valid: z.boolean(),
+  issues: z.array(lintIssueSchema),
+  errorCount: z.number(),
+  warningCount: z.number(),
+  fixableCount: z.number(),
+  fixed: z.boolean(),
+  fixedCount: z.number(),
+  /** After a fix: what the config check still finds. */
+  remaining: z.array(lintIssueSchema),
+});
+
+/** `sync`: fetch, merge and push a shared board (spec-9). */
+export const syncOutputSchema = z.object({
+  ok: z.boolean(),
+  skipped: z.enum(['not-tracked', 'no-remote']).optional(),
+  remote: z.string().nullable(),
+  remoteRef: z.string().nullable(),
+  pulled: z.number(),
+  pushed: z.number(),
+  conflicts: z.array(z.string()),
+  warning: z.string().optional(),
+  failure: z.string().optional(),
+  movedFromBranch: z.string().optional(),
+  autosync: z.string().nullable(),
+  /** The CLI's one-line summary. */
+  message: z.string(),
+});
+
+/** `where`: where the board lives, how it is stored, how fresh it is. */
+export const whereOutputSchema = z.object({
+  path: z.string(),
+  storage: z.enum(['plain', 'branch', 'repository']),
+  branch: z.string().nullable(),
+  repository: z.string().nullable(),
+  remote: z.string().nullable(),
+  remoteUrl: z.string().nullable(),
+  remoteRef: z.string().nullable(),
+  webUrl: z.string().nullable(),
+  autosync: z.enum(['off', 'push', 'full']).nullable(),
+  lastSyncSecondsAgo: z.number().nullable(),
+  lastSyncOk: z.boolean().nullable(),
+  pendingChanges: z.number(),
+});
+
+/** `retire`: the decision, now in logs/ with its status. */
+export const retireOutputSchema = z.object({
+  decision: decisionSummarySchema.extend({ path: z.string() }),
+});
+
+/** `adr_promote`: a legacy ADR, accepted and moved to logs/. */
+export const adrPromoteOutputSchema = z.object({
+  taskId: z.string(),
+  title: z.string(),
+  status: z.literal('promoted'),
+  completedAt: z.string(),
+});

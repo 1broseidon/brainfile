@@ -42,7 +42,8 @@ export interface WhereReport {
   pendingChanges: number;
 }
 
-function ago(seconds: number): string {
+/** `42s ago`, `5m ago`, `3h ago`, `2d ago`. */
+export function ago(seconds: number): string {
   if (seconds < 60) return `${seconds}s ago`;
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;

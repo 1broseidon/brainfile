@@ -34,6 +34,25 @@ export function requireV2(filePath: string): { content: Array<{ type: 'text'; te
   return null;
 }
 
+/** A plain MCP error result. */
+export function mcpError(message: string): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+  return { content: [{ type: 'text' as const, text: `Error: ${message}` }], isError: true as const };
+}
+
+/** An MCP error result from anything thrown (a CLIError keeps its hint). */
+export function mcpErrorFrom(error: unknown): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+  if (error instanceof Error) {
+    const details = (error as { details?: unknown }).details;
+    return mcpError(typeof details === 'string' && details ? `${error.message}\n${details}` : error.message);
+  }
+  return mcpError(String(error));
+}
+
+/** A success result: a text block and the same payload as structuredContent. */
+export function mcpResult<T extends Record<string, unknown>>(text: string, structuredContent: T) {
+  return { content: [{ type: 'text' as const, text }], structuredContent };
+}
+
 export function mcpStructuredError(message: string, field: string, value: string) {
   return {
     content: [{
@@ -83,7 +102,7 @@ function describeToolCall(toolName: string, input: ToolInput): string {
   const action = typeof input.action === 'string' ? ` ${input.action}` : '';
   const rawId = input.taskId ?? input.task;
   const id = Array.isArray(rawId) ? ` ${rawId.join(',')}` : typeof rawId === 'string' ? ` ${rawId}` : '';
-  const detail = [input.title, input.column, input.claimKey]
+  const detail = [input.title, input.column, input.claimKey, input.name, input.template]
     .find((v): v is string => typeof v === 'string' && v.length > 0);
   return `${toolName}${action}${id}${detail ? `: ${detail}` : ''}`;
 }

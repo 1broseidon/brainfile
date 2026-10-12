@@ -18,20 +18,31 @@ import { WireClient, type Era } from './helpers/mcp-wire';
 const ERAS: Era[] = ['legacy', 'modern'];
 
 const EXPECTED_TOOLS = [
+  'adr_promote',
+  'board',
   'brief',
   'check',
+  'columns',
   'contract',
   'decide',
   'get_task',
+  'lint',
   'list_tasks',
+  'log',
+  'note',
+  'retire',
   'search',
   'subtask',
   'supersede',
+  'sync',
   'task_add',
   'task_complete',
   'task_delete',
   'task_move',
   'task_patch',
+  'template',
+  'types',
+  'where',
 ];
 
 /** A board with two tasks, one of which carries an extension field. */
@@ -93,7 +104,7 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
 
   // ── advertisement ────────────────────────────────────────────────────────
 
-  test('advertises exactly the 14 consolidated tools', async () => {
+  test('advertises exactly the 25 consolidated tools', async () => {
     const names = (await client.listTools()).map((t) => t.name).sort();
     expect(names).toEqual(EXPECTED_TOOLS);
   });
@@ -380,6 +391,18 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
       ['brief', { agent: `wire-sweep-${era}`, peek: true, maxChars: 0 }],
       ['check', { query: 'wire' }],
       ['check', { claimKeyPrefix: 'wire' }],
+      // spec-13: the read-only paths of the new tools.
+      ['log', {}],
+      ['log', { task: 'task-1' }],
+      ['log', { query: 'wire' }],
+      ['columns', {}],
+      ['board', {}],
+      ['types', {}],
+      ['template', {}],
+      ['lint', {}],
+      ['where', {}],
+      ['sync', {}],
+      ['list_tasks', { type: 'plan', status: 'draft' }],
     ];
     for (const [name, args] of calls) {
       const result = await client.callTool(name, args);
@@ -445,6 +468,10 @@ describe('mcp structured output is identical across protocol eras', () => {
     ['search', { task: 'task-1' }],
     ['subtask', { action: 'toggle', task: 'task-1', all: true }],
     ['task_patch', { task: 'task-2', priority: 'low' }],
+    ['columns', { action: 'add', title: 'Review', after: 'in-progress' }],
+    ['board', { addInstructions: ['Write tests'] }],
+    ['types', {}],
+    ['lint', {}],
   ];
 
   test.each(cases)('%s returns identical structuredContent on both eras', async (name, args) => {

@@ -14,24 +14,35 @@ for (const file of fs.readdirSync(toolsDir)) {
 const allToolSource = Object.values(toolSources).join('\n');
 
 describe('mcp consolidated tools contract', () => {
-  test('registers only the consolidated 14 tools', () => {
+  test('registers the 25 consolidated tools, one per CLI capability (spec-13)', () => {
     const names = [...allToolSource.matchAll(/server\.registerTool\(\s*'([^']+)'/g)].map(match => match[1]);
 
     expect(names.sort()).toEqual([
+      'adr_promote',
+      'board',
       'brief',
       'check',
+      'columns',
       'contract',
       'decide',
       'get_task',
+      'lint',
       'list_tasks',
+      'log',
+      'note',
+      'retire',
       'search',
       'subtask',
       'supersede',
+      'sync',
       'task_add',
       'task_complete',
       'task_delete',
       'task_move',
       'task_patch',
+      'template',
+      'types',
+      'where',
     ]);
   });
 
@@ -113,14 +124,16 @@ describe('mcp consolidated tools contract', () => {
    * same way this file already locks the tool count and consolidation shape;
    * the behavioural checks live in mcp-structured-output.test.ts.
    */
-  test('all 14 tools declare an outputSchema and return structuredContent', () => {
+  test('all 25 tools declare an outputSchema and return structuredContent', () => {
     const toolFiles = Object.keys(toolSources).filter(f => f.endsWith('_tool.ts'));
-    expect(toolFiles).toHaveLength(14);
+    expect(toolFiles).toHaveLength(25);
 
     for (const file of toolFiles) {
       const src = toolSources[file];
       expect(`${file}: ${src.includes('outputSchema:')}`).toBe(`${file}: true`);
-      expect(`${file}: ${src.includes('structuredContent:')}`).toBe(`${file}: true`);
+      // mcpResult (helpers.ts) always sets structuredContent beside the text.
+      const returnsStructured = src.includes('structuredContent:') || src.includes('mcpResult(');
+      expect(`${file}: ${returnsStructured}`).toBe(`${file}: true`);
     }
   });
 
@@ -147,6 +160,17 @@ describe('mcp consolidated tools contract', () => {
       'subtaskOutputSchema',
       'contractOutputSchema',
       'taskCompleteOutputSchema',
+      'noteOutputSchema',
+      'logOutputSchema',
+      'columnsOutputSchema',
+      'boardOutputSchema',
+      'typesOutputSchema',
+      'templateOutputSchema',
+      'lintOutputSchema',
+      'syncOutputSchema',
+      'whereOutputSchema',
+      'retireOutputSchema',
+      'adrPromoteOutputSchema',
     ]) {
       expect(schemaSource).toContain(`export const ${exported}`);
     }
