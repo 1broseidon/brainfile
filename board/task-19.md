@@ -18,7 +18,10 @@ subtasks:
   - id: task-19-3
     title: "Decision detail: claim key, kind, stance+subject, holds while, recheck, valid until, replaces/replaced by and resting work (navigable); no complete/move"
     completed: false
-updatedAt: "2026-10-12T15:37:34.523Z"
+  - id: task-19-4
+    title: Work detail shows Rests on (retired marked); rows on a retired decision say 'decision changed'
+    completed: false
+updatedAt: "2026-10-12T15:37:34.793Z"
 ---
 
 ## Description
