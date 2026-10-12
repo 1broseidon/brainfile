@@ -1,8 +1,6 @@
 ---
 id: task-30
 title: "spec-15 phase 4: desktop two-boards line and health"
-column: in-progress
-position: 2
 priority: high
 tags:
   - desktop
@@ -10,7 +8,8 @@ tags:
 assignee: claude
 parentId: spec-15
 createdAt: "2026-10-12T20:39:19.608Z"
-updatedAt: "2026-10-12T21:07:41.499Z"
+updatedAt: "2026-10-12T21:14:20.695Z"
+completedAt: "2026-10-12T21:14:20.695Z"
 ---
 
 ## Description
