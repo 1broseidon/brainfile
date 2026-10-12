@@ -22,7 +22,10 @@ subtasks:
   - id: spec-11-3
     title: "Local index: node:sqlite FTS5 in state/, mining with hash tracking and .gitignore, fallback to the scan"
     completed: false
-updatedAt: "2026-10-12T05:36:57.880Z"
+  - id: spec-11-4
+    title: "One search over the index: current first, history lane, path and line range on every hit"
+    completed: false
+updatedAt: "2026-10-12T05:36:58.159Z"
 ---
 
 ## Description
