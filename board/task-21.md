@@ -1,13 +1,13 @@
 ---
 id: task-21
 title: "Editors: detection across macOS, Windows and Linux, and terminal editors without Ghostty"
-column: todo
-position: 4
+column: in-progress
+position: 3
 tags:
   - desktop
   - editor
 createdAt: "2026-10-12T18:47:59.710Z"
-updatedAt: "2026-10-12T23:39:50.930Z"
+updatedAt: "2026-10-12T23:40:11.964Z"
 assignee: codex
 ---
 
