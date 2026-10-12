@@ -323,7 +323,15 @@ function decisionFields(input: DecideInput, projectRoot: string, supersedes: str
     const abs = resolveInProject(projectRoot, input.sourcePath.trim());
     const hash = hashFileSha256(abs);
     if (!hash) return { fields, error: `cannot read source ${input.sourcePath}` };
-    const rel = path.relative(projectRoot, abs);
+    // Through symlinks (macOS /var is /private/var), so a path typed in the shell stays relative.
+    const real = (p: string) => {
+      try {
+        return fs.realpathSync(p);
+      } catch {
+        return p;
+      }
+    };
+    const rel = path.relative(real(projectRoot), real(abs));
     fields.sourcePath = (!rel || rel.startsWith('..') || path.isAbsolute(rel) ? abs : rel).split(path.sep).join('/');
     fields.sourceHash = `sha256:${hash}`;
   }

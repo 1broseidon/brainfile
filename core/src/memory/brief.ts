@@ -197,6 +197,7 @@ export function composeBrief(dirs: V2Dirs, agent: string, options: ComposeBriefO
     for (const item of laneItems('changes')) changes.push(item);
     for (const item of laneItems('completions')) changes.push({ ...item, text: `completed: ${item.text}` });
     for (const item of laneItems('config')) changes.push(item);
+    if (changes.length === 0) changes.push({ text: 'Nothing new since your last brief.', why: '' });
   } else {
     for (const item of laneItems('notes')) changes.push({ ...item, text: `note: ${item.text}` });
     for (const item of laneItems('completions')) changes.push({ ...item, text: `completed: ${item.text}` });
@@ -219,8 +220,7 @@ export function composeBrief(dirs: V2Dirs, agent: string, options: ComposeBriefO
         index.refresh(budget === undefined ? {} : { deadline: Date.now() + budget });
         const best = new Map<string, MemoryHit>();
         for (const task of taskList.slice(0, 5)) {
-          const found = index.search(task.title, { limit: 2, sources: ['repo', 'plans'] });
-          for (const hit of found?.current ?? []) {
+          for (const hit of index.relatedDocs(task.title, { limit: 2, sources: ['repo', 'plans'] })) {
             const existing = best.get(hit.path);
             if (!existing || hit.score > existing.score) best.set(hit.path, hit);
           }
@@ -308,10 +308,26 @@ export function renderBriefText(header: string, sections: readonly BriefLane[], 
   };
 
   const counts = lines.map(() => 0);
-  // First pass: one item per lane, in lane order.
+  // First pass: every lane gets its first item, clipped if need be to an
+  // equal share of the budget, so a tight budget still shows each lane.
+  const full = lines.map((l) => l[0]);
+  const headingLength = (lane: BriefLane) => (heading(lane) ? heading(lane).length + 1 : 0);
+  const share = Math.floor((maxChars - header.length - more(total).length - 2) / lanes.length);
   for (let i = 0; i < lanes.length; i++) {
+    const cap = share - headingLength(lanes[i]) - 1;
+    if (full[i].length > cap) {
+      if (cap < 16) continue;
+      lines[i][0] = clip(full[i], cap);
+    }
     counts[i] = 1;
     if (!fits(counts)) counts[i] = 0;
+  }
+  // Where there is room, the clipped first lines get their whole text back, in lane order.
+  for (let i = 0; i < lanes.length; i++) {
+    if (counts[i] === 0 || lines[i][0] === full[i]) continue;
+    const clipped = lines[i][0];
+    lines[i][0] = full[i];
+    if (!fits(counts)) lines[i][0] = clipped;
   }
   // Second pass: fill lane by lane.
   for (let i = 0; i < lanes.length; i++) {

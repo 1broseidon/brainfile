@@ -104,6 +104,7 @@ export {
   decisionFamilyMembers,
   significantTokens,
   tokenCoverage,
+  stemLight,
   relatedClaimFamilies,
   requestedAction,
   stanceActionAligns,

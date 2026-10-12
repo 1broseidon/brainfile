@@ -240,13 +240,26 @@ export function significantTokens(text: string, ignore?: ReadonlySet<string>): s
   return pick(() => false);
 }
 
-/** The share of `tokens` that appear in `text` (case-insensitive, whole-word prefixes count). */
+/** recoil's light stem: `-ing`, `-edly`, `-ed`, `-ly`, `-s` off a long enough word. */
+export function stemLight(word: string): string {
+  for (const suffix of ['ing', 'edly', 'ed', 'ly', 's']) {
+    if (word.endsWith(suffix) && word.length > suffix.length + 3) return word.slice(0, -suffix.length);
+  }
+  return word;
+}
+
+/**
+ * The share of `tokens` found in `text`, case-insensitively: as a word, as
+ * the start of a word (three letters or more), or by light stem
+ * (`decisions` finds `decision`).
+ */
 export function tokenCoverage(tokens: readonly string[], text: string): number {
   if (tokens.length === 0) return 0;
   const words = new Set((text.match(TOKEN_PATTERN) ?? []).map((t) => t.toLowerCase()));
+  const stems = new Set([...words].map(stemLight));
   let hits = 0;
   for (const token of tokens) {
-    if (words.has(token)) {
+    if (words.has(token) || stems.has(stemLight(token))) {
       hits++;
       continue;
     }

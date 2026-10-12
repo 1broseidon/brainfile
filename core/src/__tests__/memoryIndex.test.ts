@@ -339,7 +339,9 @@ describe('ftsTerms', () => {
     expect(ftsTerms('fix the auth bug')).toEqual(['"fix"*', '"auth"*', '"bug"*']);
     expect(ftsTerms('task-1 dependency.http-client')).toEqual(['"task 1"', '"dependency http client"*']);
     expect(ftsTerms('use axios', new Set(['use']))).toEqual(['"axios"*']);
-    expect(ftsTerms('the of')).toEqual(['"the"*', '"of"']);
+    expect(ftsTerms('the of')).toEqual(['"the"*', '"of"*']);
+    expect(ftsTerms('ui db')).toEqual(['"ui"*', '"db"*']);
+    expect(ftsTerms('e x')).toEqual([]);
     expect(ftsTerms('!!!')).toEqual([]);
   });
 });

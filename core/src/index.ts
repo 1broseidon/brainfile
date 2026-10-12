@@ -431,6 +431,7 @@ export {
   isStopword,
   significantTokens,
   tokenCoverage,
+  stemLight,
   decisionSearchText,
   relatedClaimFamilies,
   requestedAction,

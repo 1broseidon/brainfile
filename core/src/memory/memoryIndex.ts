@@ -37,12 +37,12 @@ import { ensureDotBrainfileGitignore } from '../utils/files';
 import { resolveDocType } from '../docTypes';
 import { decisionStatus } from '../docGraph';
 import { parseSearchQuery, taskMatchesFilters, type SearchFilters } from '../search';
-import { claimKeyOf, isHistoricalStatus, significantTokens } from '../decisions';
+import { claimKeyOf, isHistoricalStatus, significantTokens, tokenCoverage } from '../decisions';
 import { chunkText, firstHeading, type TextChunk } from './chunk';
 import { listProjectDocs, type MineResult } from './mine';
 import { loadSqlite, type SqliteDatabase, type SqliteStatement } from './sqlite';
 
-export const INDEX_SCHEMA_VERSION = '1';
+export const INDEX_SCHEMA_VERSION = '2';
 export const INDEX_FILENAME = 'index.db';
 
 /** Where a chunk comes from. */
@@ -127,6 +127,12 @@ export interface IndexSearchOptions {
   role?: 'decision' | 'work';
   /** Words that never count on their own (dropped from the query unless nothing else is left). */
   ignoreWords?: ReadonlySet<string>;
+  /**
+   * Keep an OR (loose) match only when it covers at least this share of the
+   * query's words (0–1). AND matches always count. For long queries, such as
+   * a task's title, where one shared word is not relevance.
+   */
+  minCoverage?: number;
 }
 
 export interface IndexSearchResult {
@@ -280,10 +286,12 @@ function frontmatterLines(text: string): number {
 
 /**
  * The FTS5 terms for a query: one per word, stopwords (and `ignore` words)
- * dropped. A word made of several tokens (`task-1`, `dependency.http-client`,
- * `board-repo.ts`) is a phrase, so its parts must be adjacent; a final token
- * of three letters or more also matches as a prefix (`auth` finds
- * `authentication`). At most 32 terms.
+ * dropped. A single word matches as a prefix (`auth` finds `authentication`);
+ * a one-letter word means nothing to a full-text index and is left out, so a
+ * query of only those has no terms and the caller scans instead. A word made
+ * of several tokens (`task-1`, `dependency.http-client`, `board-repo.ts`) is
+ * a phrase, so its parts must be adjacent, its last token a prefix when it
+ * has three letters or more (`task-1` does not find `task-12`). At most 32.
  */
 export function ftsTerms(query: string, ignore?: ReadonlySet<string>): string[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
@@ -292,9 +300,10 @@ export function ftsTerms(query: string, ignore?: ReadonlySet<string>): string[] 
   const keep = (tokens: string[]) => {
     const key = tokens.join(' ');
     if (!key || seen.has(key) || terms.length >= 32) return;
+    if (tokens.length === 1 && key.length < 2) return;
     seen.add(key);
     const last = tokens[tokens.length - 1];
-    terms.push(`"${key}"${last.length >= 3 ? '*' : ''}`);
+    terms.push(`"${key}"${tokens.length === 1 || last.length >= 3 ? '*' : ''}`);
   };
   const significant = new Set(significantTokens(query, ignore));
   for (const word of words) {
@@ -609,16 +618,15 @@ export class MemoryIndex {
     const record = task as Task & Record<string, unknown>;
     const claimKey = claimKeyOf(task);
     const tags = Array.isArray(task.tags) ? task.tags.filter((t): t is string => typeof t === 'string') : [];
+    // Words that say what a document is about, beyond its title and body. Not
+    // its ID or type: a search for "task" should not match every task (an
+    // exact ID is looked up directly, and type: filters by type).
     const ident = [
-      task.id,
-      resolved.name,
-      claimKey ?? '',
       claimKey ? claimKey.replace(/[.-]/g, ' ') : '',
       ...tags,
       text(record.subject) ?? '',
       text(record.kind) ?? '',
       text(record.stance) ?? '',
-      text(task.assignee) ?? '',
     ].filter(Boolean).join(' ');
     const meta = JSON.stringify({
       ...(task.priority ? { priority: task.priority } : {}),
@@ -674,7 +682,7 @@ export class MemoryIndex {
         docId: record.id,
         title: typeof record.title === 'string' ? record.title : record.id,
         body: [typeof record.summary === 'string' ? record.summary : '', files ? `Files: ${files}` : ''].filter(Boolean).join('\n'),
-        ident: [record.id, typeof record.type === 'string' ? record.type : '', ...tags, text(record.assignee) ?? ''].filter(Boolean).join(' '),
+        ident: tags.join(' '),
         heading: null,
         startLine: index + 1,
         endLine: index + 1,
@@ -784,7 +792,10 @@ export class MemoryIndex {
     const sqlLimit = Math.max(limit * 6, 60);
 
     const best = new Map<string, MemoryHit>();
+    const coverageTokens = options.minCoverage ? significantTokens(parsed.text, options.ignoreWords) : [];
     const consider = (row: Record<string, unknown>, strict: boolean) => {
+      if (!strict && options.minCoverage
+        && tokenCoverage(coverageTokens, `${row.title}\n${row.body}\n${row.ident}`) < options.minCoverage) return;
       const hit = this.hitFromRow(row);
       if (structural && !this.rowMatchesFilters(hit, row, filters)) return;
       hit.score = normalizeRank(Number(row.rank)) + (strict ? 1 : 0) + pathPrior(hit.source, hit.path)
@@ -868,6 +879,43 @@ export class MemoryIndex {
       ...(typeof meta.contract === 'string' ? { contract: { status: meta.contract } as Task['contract'] } : {}),
     };
     return taskMatchesFilters(pseudo, filters);
+  }
+
+  /**
+   * Documents that share a text's most distinctive words: the query's terms
+   * that occur in `sources`, rarest first; the three rarest ANDed, then two,
+   * then one, until something matches. How the brief finds the docs that
+   * bear on a task from its title, where an OR over every word would match
+   * anything that says "board".
+   */
+  relatedDocs(text: string, options: { limit?: number; sources?: readonly IndexSource[] } = {}): MemoryHit[] {
+    const limit = options.limit ?? 2;
+    const sources = (options.sources ?? ['repo', 'plans']).filter((s) => INDEX_SOURCES.includes(s));
+    if (sources.length === 0) return [];
+    const placeholders = sources.map(() => '?').join(', ');
+    const countSql = `SELECT count(*) AS n FROM chunks_fts JOIN chunks ON chunks.id = chunks_fts.rowid
+      WHERE chunks_fts MATCH ? AND chunks.source IN (${placeholders})`;
+    const ranked = ftsTerms(text)
+      .map((term) => ({ term, n: Number(this.stmt(countSql).get(term, ...sources)?.n ?? 0) }))
+      .filter((t) => t.n > 0)
+      .sort((a, b) => a.n - b.n);
+    const sql = `SELECT chunks.*, bm25(chunks_fts, ${BM25_WEIGHTS}) AS rank,
+        snippet(chunks_fts, 1, '', '', '…', 16) AS snippet
+      FROM chunks_fts JOIN chunks ON chunks.id = chunks_fts.rowid
+      WHERE chunks_fts MATCH ? AND chunks.source IN (${placeholders})
+      ORDER BY rank LIMIT ?`;
+    for (let k = Math.min(3, ranked.length); k >= 1; k--) {
+      const match = ranked.slice(0, k).map((t) => t.term).join(' AND ');
+      const best = new Map<string, MemoryHit>();
+      for (const row of this.stmt(sql).all(match, ...sources, limit * 4)) {
+        const hit = this.hitFromRow(row);
+        hit.score = Math.round((normalizeRank(Number(row.rank)) + k + pathPrior(hit.source, hit.path)) * 10000) / 10000;
+        const existing = best.get(hit.path);
+        if (!existing || hit.score > existing.score) best.set(hit.path, hit);
+      }
+      if (best.size > 0) return [...best.values()].sort((a, b) => b.score - a.score).slice(0, limit);
+    }
+    return [];
   }
 
   /** The decisions whose words best match a text, best first (any status): how `check` finds a claim family. */
