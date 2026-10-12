@@ -45,3 +45,6 @@ Today the list nests by parentId only within a column, so a parent in In Progres
 - Completed children stay under their parent, ticked, until the parent itself is done; then they go with it.
 - A child is not shown a second time in its own column's group.
 - Same rule in the TUI's list and in the board view (a card shows its children's state).
+
+## Log
+- 2026-10-12T19:22:37.776Z: [claude] Built on feat/outline-across-columns (worktree ~/Projects/personal/brainfile-outline), 5 commits 21b8bea..8951df1, not pushed. Desktop: host keeps completed children of shown parents past the 50 limit; format.ts outline/childMap/childrenOf replace asTree; list, board cards, task pane, j/k follow it.
