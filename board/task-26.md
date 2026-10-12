@@ -47,3 +47,6 @@ Open questions:
 - Where the issue link lives on the task (e.g. a source/issue URL field) and whether closing the task should offer to close the issue.
 - Refresh: poll on focus/interval vs. on demand; rate limits.
 - Non-GitHub remotes (GitLab etc.) out of scope for now, but keep the detection pluggable.
+
+## Log
+- 2026-10-12T23:47:24.847Z: [claude] Built on branch dispatch/task-26 (commit 0178fbd): desktop detects GitHub from origin (pluggable src/main/forge.ts), reads open issues with gh login → GH_TOKEN/GITHUB_TOKEN → Keychain-saved token from Settings (anonymous for public repos), once a minute at most plus ETag 304s; Issues view (key I) offers Make task (title, body, labels as tags, `source:` = issue URL, per decision-4) and lists issues already on the board by their task; task pane shows the Source link. 15 new tests, all 63 pass, build clean, verified in the app against 1broseidon/brainfile. Not done: offering to close the issue when its task completes, OAuth device flow.
