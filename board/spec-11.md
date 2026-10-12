@@ -33,11 +33,11 @@ subtasks:
     completed: true
   - id: spec-11-7
     title: "Desktop: Decisions view; decisions carried in Hand to… and chat briefs"
-    completed: false
+    completed: true
   - id: spec-11-8
     title: "Recoil: last release pointing to Brainfile, archive (owner's call)"
     completed: false
-updatedAt: "2026-10-12T07:23:51.509Z"
+updatedAt: "2026-10-12T07:26:41.014Z"
 parentId: epic-2
 dependsOn:
   - spec-12
