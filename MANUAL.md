@@ -257,6 +257,7 @@ updatedAt: "2026-09-20T19:03:57.257Z"
 | `priority` | `low`, `medium`, `high` or `critical`. |
 | `tags`, `assignee`, `dueDate` | Free-form. `assignee` is how `brief` and the TUI's `@name` filter find an agent's work. |
 | `parentId` | The epic or plan this document belongs to. `list --parent` follows it. |
+| `dependsOn` | Tasks that come first. `mobile:task-12` names a task on a related board. See [Related boards](#related-boards). |
 | `relatedFiles` | Paths an agent should read first. |
 | `subtasks` | `{ id, title, completed }` rows, managed with `subtask`. |
 | `contract` | Deliverables, validation and constraints. See [Contracts](#contracts). |
@@ -305,6 +306,7 @@ type gets an ID prefix, a completable flag and an optional schema. With
 | Finish a task and record it | `complete` |
 | Read the whole board | `list` |
 | Read one task in full | `show` |
+| See what this board waits on in other repos | `list --related` |
 | Find something, active or done | `search` |
 | Write down what you learned while working | `note` |
 | Break a task into steps | `subtask` |
@@ -367,18 +369,23 @@ $ brainfile list -c todo
 $ brainfile list -t urgent             # by tag
 $ brainfile list --parent epic-1
 $ brainfile list --contract ready      # ready | in_progress | delivered | done | failed
+$ brainfile list --related             # open tasks on related boards this board waits on
+$ brainfile list --related all         # every open task on every related board
 ```
 
-Prints every column with its tasks, priorities and tags.
+Prints every column with its tasks, priorities and tags. A task waiting on a
+related board says so on a `Blocked by:` line.
 
 #### show — Full details of one task
 
 ```console
 $ brainfile show -t task-2
 $ brainfile show -t task-2 --json
+$ brainfile show -t mobile:task-12     # a task on a related board
 ```
 
 `--json` prints the document's frontmatter as one object, timestamps included.
+A task with `dependsOn` also lists each dependency and whether it is done.
 
 #### add — Create a document
 
@@ -896,6 +903,52 @@ onto the branch with its history, or imports a gitignored one as a fresh
 branch. `--commit` also commits the removal from the code branch. `migrate
 --to-plain` reverses it. Neither touches any other file in the repository.
 
+## Related boards
+
+Work often spans repositories: an app and its mobile client, a service and
+its SDK. Each keeps its own board. Name the others under `related:` in
+`brainfile.md`, and a task can point at theirs.
+
+```yaml
+related:
+  mobile: ../hotline-mobile
+  sdk: ../hotline-sdk
+```
+
+The folder is relative to the root of this repository, not to
+`.brainfile/`. The map is committed with the board, so everyone who shares it
+gets the same names.
+
+`mobile:task-12` is then a task ID like any other. It works in `dependsOn`,
+in `show`, and in the MCP `get_task` tool. brainfile finds that board exactly
+as running `brainfile` in `../hotline-mobile` would, branch worktree
+included, and only reads it.
+
+```console
+$ brainfile show -t mobile:task-12
+$ brainfile list --related
+```
+
+A task that depends on `mobile:task-12` is blocked until that task is
+completed there, meaning it has moved to that board's `logs/`. Until then
+`contract pickup` refuses it, `list` marks it `Blocked by: mobile:task-12`,
+and `show` lists each dependency with its state. Dependencies on this board
+work as they always have.
+
+`list --related` shows the open tasks on related boards that this board's
+tasks depend on, with the tasks that need them. `list --related all` shows
+every open task on every related board. The MCP `list_tasks` tool takes
+`related: true` or `related: "all"` for the same.
+
+To change a task on a related board, run `brainfile` in that folder, or
+point the MCP tools at its board with `file`. Nothing here writes to it.
+
+> A related folder that is not on this machine is still a valid reference.
+> `show` and `list` say the board is not on this machine, and a dependency
+> on it counts as not done. brainfile never clones or fetches it for you.
+> `lint` warns about a name `related:` does not have, or a reference that is
+> not `name:task-id`.
+
 ## The TUI
 
 `brainfile tui` opens the board in the terminal: columns across, a detail view
@@ -942,8 +995,8 @@ restart the agent. Eleven tools appear, mirroring the CLI.
 
 | Tool | Does |
 | --- | --- |
-| `list_tasks` | List board documents, filtered by column, tag or type. |
-| `get_task` | One document by ID, in full. |
+| `list_tasks` | List board documents, filtered by column, tag or type. `related` adds related boards' open tasks. |
+| `get_task` | One document by ID, in full. Takes `mobile:task-12` for a related board. |
 | `search` | Search tasks and logs, list recent completions, or view one log entry. |
 | `task_add` | Create a document. Takes `type`, and contract parts for `with_contract`. |
 | `task_move` | Move one task or many to a column. |
