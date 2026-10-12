@@ -28,22 +28,22 @@ relatedFiles:
 subtasks:
   - id: task-35-1
     title: Discuss key beside HandTo in TaskDetail
-    completed: false
+    completed: true
   - id: task-35-2
     title: Start a planning-only agent session with the task as context
-    completed: false
+    completed: true
   - id: task-35-3
     title: Agent can edit the task's description, subtasks and contract, and not code
-    completed: false
+    completed: true
   - id: task-35-4
     title: Keep the discussion with the task so the hand-off can see it
-    completed: false
+    completed: true
   - id: task-35-5
     title: Tests
-    completed: false
+    completed: true
 createdAt: "2026-10-12T22:24:00.756Z"
 assignee: claude
-updatedAt: "2026-10-12T23:45:33.858Z"
+updatedAt: "2026-10-12T23:45:40.223Z"
 decisions:
   - decision-3
 ---
