@@ -8,6 +8,11 @@ tags:
   - decisions
 parentId: epic-2
 createdAt: "2026-10-12T15:35:49.043Z"
+subtasks:
+  - id: task-19-1
+    title: Decisions leave the column list (no column, no longer fall into one)
+    completed: false
+updatedAt: "2026-10-12T15:37:33.984Z"
 ---
 
 ## Description
