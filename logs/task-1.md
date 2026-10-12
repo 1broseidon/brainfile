@@ -1,12 +1,12 @@
 ---
 id: task-1
 title: Triage marketing board
-column: todo
-position: 1
 tags:
   - marketing
 parentId: epic-1
 createdAt: "2026-08-11T21:59:29.778Z"
+completedAt: "2026-10-12T03:14:35.091Z"
+updatedAt: "2026-10-12T03:14:35.091Z"
 ---
 
 ## Description
