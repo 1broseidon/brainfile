@@ -9,14 +9,14 @@ tags:
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
-updatedAt: "2026-10-12T22:05:11.856Z"
+updatedAt: "2026-10-12T22:05:12.350Z"
 subtasks:
   - id: task-34-1
     title: "Health rows: problem sentence under the name, Fix / Ask agent keys; long row tooltip dropped, short words (two copies, old copy in main, N unsent…)"
     completed: true
   - id: task-34-2
     title: Host planFix / fixBoard / undoFix (HOST_METHODS, preload, api); logic in host/fix.ts, Fix offered only when the kept copy holds every other copy
-    completed: false
+    completed: true
   - id: task-34-3
     title: Fix backs up every copy first (core saveBoardBackup), nothing runs if a backup fails or the plan changed; untrack / adopt / prune per problem
     completed: false
