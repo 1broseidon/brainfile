@@ -9,7 +9,7 @@ tags:
   - integrity
   - sync
 createdAt: "2026-10-12T21:23:49.425Z"
-updatedAt: "2026-10-12T21:55:48.561Z"
+updatedAt: "2026-10-12T21:55:48.992Z"
 subtasks:
   - id: task-34-1
     title: "Health rows: problem sentence under the name, Fix / Ask agent keys; long row tooltip dropped, short words (two copies, old copy in main, N unsent…)"
@@ -28,6 +28,9 @@ subtasks:
     completed: false
   - id: task-34-6
     title: Tests on scratch repos (old copy in main, two copies contained either way, origin's copy, diverged, nothing to fix, backup failure, stale plan) + core saveBoardBackup test
+    completed: false
+  - id: task-34-7
+    title: "Checks: svelte-check 0/0, tsc, vite build, build-electron, desktop npm test 21/21, core jest 880/880; offscreen captures of list, confirm, done, undo, ask"
     completed: false
 ---
 
