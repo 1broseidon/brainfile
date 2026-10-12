@@ -20,8 +20,8 @@ subtasks:
     title: Fall back to the centered default when the saved bounds are off every display
     completed: false
 createdAt: "2026-10-12T19:06:07.091Z"
-assignee: claude
-updatedAt: "2026-10-12T21:52:20.874Z"
+assignee: cursor
+updatedAt: "2026-10-12T22:02:33.473Z"
 ---
 
 ## Description
