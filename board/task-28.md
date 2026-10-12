@@ -1,8 +1,8 @@
 ---
 id: task-28
 title: "spec-15 phase 2: backups as refs, merge-boards and adopt"
-column: todo
-position: 3
+column: in-progress
+position: 2
 priority: high
 tags:
   - sync
@@ -11,6 +11,7 @@ tags:
 assignee: claude
 parentId: spec-15
 createdAt: "2026-10-12T20:39:18.720Z"
+updatedAt: "2026-10-12T20:52:17.347Z"
 ---
 
 ## Description
