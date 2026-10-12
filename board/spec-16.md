@@ -30,7 +30,10 @@ subtasks:
   - id: spec-16-5
     title: "Phase 2: through completion: validation passes → done (bypass) or Review; retries to maxRetries then park; epic done with its last child"
     completed: false
-updatedAt: "2026-10-12T23:16:20.098Z"
+  - id: spec-16-6
+    title: "Phase 2: pause, resume, stop the queue from chat, dock and runner"
+    completed: false
+updatedAt: "2026-10-12T23:16:20.532Z"
 ---
 
 ## Description
