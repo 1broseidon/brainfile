@@ -19,7 +19,7 @@ subtasks:
     completed: true
   - id: spec-13-3
     title: "columns: new CLI command and MCP tool (list, add, rename, reorder, remove with move-to)"
-    completed: false
+    completed: true
   - id: spec-13-4
     title: "board tool: title, agent instructions, related entries; types and template tools"
     completed: false
@@ -32,7 +32,7 @@ subtasks:
   - id: spec-13-7
     title: "Docs: MANUAL and llms files list every tool"
     completed: false
-updatedAt: "2026-10-12T07:46:36.132Z"
+updatedAt: "2026-10-12T07:46:36.412Z"
 ---
 
 ## Description
