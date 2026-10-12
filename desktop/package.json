@@ -11,6 +11,7 @@
     "build:core": "npm run build --prefix ../core",
     "start": "electron .",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && svelte-check --tsconfig tsconfig.json --threshold error",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/",
     "package": "npm run build && electron-builder --mac --dir",
     "icons": "electron scripts/make-icons.mjs"
   },

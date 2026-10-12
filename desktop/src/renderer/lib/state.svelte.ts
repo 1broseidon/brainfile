@@ -21,7 +21,7 @@ import { diffBoards, type FeedItem } from './feed';
 
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
 const SETTLE_MS = 900;
-import { asTree, decisionGroups } from './format';
+import { decisionGroups, outline, visibleRows } from './format';
 
 declare global {
   interface Window {
@@ -205,12 +205,41 @@ class AppState {
   board = $derived(this.activeId ? (this.boards[this.activeId] ?? null) : null);
   view = $derived<ViewMode>((this.activeId && this.views[this.activeId]) || 'list');
 
-  /** What j / k step through, in the order the view shows it: tasks by column and outline, or decisions by family. */
+  /**
+   * The list's folds, per board: column groups folded shut and parents whose
+   * children are hidden. They live here so j / k walk only what is drawn.
+   */
+  folds = $state<Record<string, { groups: Record<string, boolean>; parents: Record<string, boolean> }>>({});
+
+  folded(kind: 'groups' | 'parents', id: string): boolean {
+    return !!(this.activeId && this.folds[this.activeId]?.[kind][id]);
+  }
+
+  toggleFold(kind: 'groups' | 'parents', id: string): void {
+    if (!this.activeId) return;
+    this.folds[this.activeId] ??= { groups: {}, parents: {} };
+    // Read back through the state proxy: the literal above is not reactive.
+    const mine = this.folds[this.activeId];
+    mine[kind][id] = !mine[kind][id];
+  }
+
+  /**
+   * What j / k step through, in the order the view draws it: the list's
+   * outline as it stands (children under their parent, whatever their
+   * column; Done when open), the board's cards column by column, or
+   * decisions by family.
+   */
   orderedTasks = $derived.by((): { id: string }[] => {
     const board = this.board;
     if (!board) return [];
     if (this.view === 'decisions') return decisionGroups(board.decisions).flatMap((g) => g.decisions);
-    return board.columns.flatMap((column) => asTree(board.tasks.filter((t) => t.column === column.id)).map((r) => r.task));
+    if (this.view === 'board') return board.columns.flatMap((column) => board.tasks.filter((t) => t.column === column.id));
+    const tree = outline(board.columns, board.tasks, board.completed);
+    const collapsed = (id: string) => this.folded('parents', id);
+    return [
+      ...tree.groups.filter((g) => !this.folded('groups', g.column.id)).flatMap((g) => visibleRows(g.rows, collapsed)),
+      ...(this.showCompleted ? visibleRows(tree.done, collapsed) : []),
+    ].map((row) => row.task);
   });
 
   #problemTimer: ReturnType<typeof setTimeout> | null = null;

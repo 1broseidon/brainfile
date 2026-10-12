@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tip } from '../lib/tooltip';
   import { app } from '../lib/state.svelte';
-  import { asTree, columnProgress } from '../lib/format';
+  import { columnProgress, outline, visibleRows, type OutlineRow } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import TaskRow from './TaskRow.svelte';
@@ -9,24 +9,17 @@
 
   let { board }: { board: BoardSnapshot } = $props();
 
-  let folded = $state<Record<string, boolean>>({});
-  let hidden = $state<Record<string, boolean>>({});
   let dropTarget = $state<string | null>(null);
 
+  const collapsed = (id: string) => app.folded('parents', id);
+
+  // A group counts what it holds: its own roots and everything under them,
+  // children from other columns and completed ones included, folded or not.
+  const tree = $derived(outline(board.columns, board.tasks, board.completed));
   const groups = $derived(
-    board.columns.map((column) => {
-      const rows = asTree(board.tasks.filter((t) => t.column === column.id));
-      // Drop the descendants of a collapsed parent.
-      const visible: typeof rows = [];
-      let skipBelow = Infinity;
-      for (const row of rows) {
-        if (row.depth > skipBelow) continue;
-        skipBelow = hidden[row.task.id] ? row.depth : Infinity;
-        visible.push(row);
-      }
-      return { column, rows: visible, count: rows.length };
-    })
+    tree.groups.map(({ column, rows }) => ({ column, rows: visibleRows(rows, collapsed), count: rows.length }))
   );
+  const done = $derived(visibleRows(tree.done, collapsed));
 
   function drop(e: DragEvent, column: string): void {
     const id = e.dataTransfer?.getData('text/brainfile-task');
@@ -34,6 +27,18 @@
     if (id) void app.moveTask(id, column);
   }
 </script>
+
+{#snippet outlineRow(row: OutlineRow)}
+  <TaskRow
+    task={row.task}
+    columns={board.columns}
+    done={row.done}
+    depth={row.depth}
+    children={row.children}
+    collapsed={collapsed(row.task.id)}
+    ontoggle={() => app.toggleFold('parents', row.task.id)}
+  />
+{/snippet}
 
 <div class="list" role="table">
   {#each groups.filter((g) => g.count > 0) as { column, rows, count } (column.id)}
@@ -49,44 +54,37 @@
       ondrop={(e) => drop(e, column.id)}
     >
       <header class="head">
-        <button class="fold" onclick={() => (folded[column.id] = !folded[column.id])}>
+        <button class="fold" onclick={() => app.toggleFold('groups', column.id)}>
           <StatusIcon progress={columnProgress(board.columns, column.id)} />
           <span class="name">{column.title}</span>
           <span class="count mono tabular">{count}</span>
-          <span class="chev" class:open={!folded[column.id]}><Icon name="chevron" size={12} stroke={1.8} /></span>
+          <span class="chev" class:open={!app.folded('groups', column.id)}><Icon name="chevron" size={12} stroke={1.8} /></span>
         </button>
         <button class="icon-btn add" use:tip={`New task in ${column.title}`} onclick={() => (app.composer = { column: column.id })}>
           <Icon name="plus" size={14} />
         </button>
       </header>
-      {#if !folded[column.id]}
+      {#if !app.folded('groups', column.id)}
         {#each rows as row (row.task.id)}
-          <TaskRow
-            task={row.task}
-            columns={board.columns}
-            depth={row.depth}
-            children={row.children}
-            collapsed={!!hidden[row.task.id]}
-            ontoggle={() => (hidden[row.task.id] = !hidden[row.task.id])}
-          />
+          {@render outlineRow(row)}
         {/each}
       {/if}
     </section>
   {/each}
 
-  {#if board.completed.length}
+  {#if tree.done.length}
     <section class="group">
       <header class="head">
         <button class="fold" onclick={() => (app.showCompleted = !app.showCompleted)}>
           <StatusIcon progress={1} />
           <span class="name">Done</span>
-          <span class="count mono tabular">{board.completed.length}</span>
+          <span class="count mono tabular">{tree.done.length}</span>
           <span class="chev" class:open={app.showCompleted}><Icon name="chevron" size={12} stroke={1.8} /></span>
         </button>
       </header>
       {#if app.showCompleted}
-        {#each board.completed as task (task.id)}
-          <TaskRow {task} columns={board.columns} done />
+        {#each done as row (row.task.id)}
+          {@render outlineRow(row)}
         {/each}
       {/if}
     </section>

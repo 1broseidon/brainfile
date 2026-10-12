@@ -29,24 +29,97 @@ export function columnProgress(columns: ColumnView[], columnId: string): number 
   return open.length <= 1 ? 0 : at / open.length;
 }
 
-/** Tasks in TUI order: each parent followed by its children in the same list, indented. */
-export function asTree(tasks: TaskView[]): { task: TaskView; depth: number; children: number }[] {
-  const ids = new Set(tasks.map((t) => t.id));
-  const kids = new Map<string, TaskView[]>();
-  for (const t of tasks) {
-    if (t.parentId && ids.has(t.parentId)) {
-      const list = kids.get(t.parentId) ?? [];
-      list.push(t);
-      kids.set(t.parentId, list);
-    }
-  }
-  const out: { task: TaskView; depth: number; children: number }[] = [];
-  const walk = (t: TaskView, depth: number) => {
-    const children = kids.get(t.id) ?? [];
-    out.push({ task: t, depth, children: children.length });
-    for (const c of children) walk(c, depth + 1);
+/** A document as the outline holds it: open, or completed (from logs/, ticked). */
+export interface Held {
+  task: TaskView;
+  done: boolean;
+}
+
+export interface OutlineRow extends Held {
+  depth: number;
+  /** Children drawn under it, hidden or not. */
+  children: number;
+}
+
+export interface Outline {
+  /** One per column, in board order: its open roots, each followed by everything under it. */
+  groups: { column: ColumnView; rows: OutlineRow[] }[];
+  /** Completed work no open parent holds, a completed child under its completed parent. */
+  done: OutlineRow[];
+}
+
+/**
+ * Each document's children wherever they are (task-20): open ones under an
+ * open parent, completed ones under any parent still shown. They run as the
+ * list's groups do, by column and then the completed ones, newest first.
+ */
+export function childMap(columns: ColumnView[], tasks: TaskView[], completed: TaskView[]): Map<string, Held[]> {
+  const open = new Set(tasks.map((t) => t.id));
+  const shown = new Set([...open, ...completed.map((t) => t.id)]);
+  const kids = new Map<string, Held[]>();
+  const hang = (task: TaskView, done: boolean, under: Set<string>) => {
+    const parent = task.parentId;
+    if (!parent || parent === task.id || !under.has(parent)) return;
+    const list = kids.get(parent);
+    if (list) list.push({ task, done });
+    else kids.set(parent, [{ task, done }]);
   };
-  for (const t of tasks) if (!t.parentId || !ids.has(t.parentId)) walk(t, 0);
+  for (const column of columns) for (const t of tasks) if (t.column === column.id) hang(t, false, open);
+  for (const t of completed) if (!open.has(t.id)) hang(t, true, shown);
+  return kids;
+}
+
+/** Every child of a document, open or completed, in the same order: what its task pane lists. */
+export function childrenOf(id: string, columns: ColumnView[], tasks: TaskView[], completed: TaskView[]): Held[] {
+  const open = columns.flatMap((column) => tasks.filter((t) => t.column === column.id && t.parentId === id));
+  const openIds = new Set(open.map((t) => t.id));
+  const done = completed.filter((t) => t.parentId === id && !openIds.has(t.id));
+  return [...open.map((task) => ({ task, done: false })), ...done.map((task) => ({ task, done: true }))];
+}
+
+/**
+ * The list's outline (task-20). A child stays under its parent wherever its
+ * own column is, and the outline is drawn in the parent's column group, so it
+ * is not shown again in its own. A completed child stays under its open
+ * parent, ticked, until the parent is done; then they go into Done together.
+ * An open child of a completed parent is a root in its own column.
+ */
+export function outline(columns: ColumnView[], tasks: TaskView[], completed: TaskView[]): Outline {
+  const kids = childMap(columns, tasks, completed);
+  const open = new Set(tasks.map((t) => t.id));
+  const closed = completed.filter((t) => !open.has(t.id));
+  const placed = new Set<string>();
+  const walk = (held: Held, depth: number, out: OutlineRow[]) => {
+    placed.add(held.task.id);
+    const children = (kids.get(held.task.id) ?? []).filter((c) => !placed.has(c.task.id));
+    out.push({ ...held, depth, children: children.length });
+    for (const c of children) if (!placed.has(c.task.id)) walk(c, depth + 1, out);
+  };
+  const isRoot = (t: TaskView, under: Set<string>) => !t.parentId || t.parentId === t.id || !under.has(t.parentId);
+  const groups = columns.map((column) => {
+    const rows: OutlineRow[] = [];
+    const here = tasks.filter((t) => t.column === column.id);
+    for (const t of here) if (isRoot(t, open)) walk({ task: t, done: false }, 0, rows);
+    return { column, rows, here };
+  });
+  const done: OutlineRow[] = [];
+  const shown = new Set([...open, ...closed.map((t) => t.id)]);
+  for (const t of closed) if (!placed.has(t.id) && isRoot(t, shown)) walk({ task: t, done: true }, 0, done);
+  // A parentId cycle has no root; its documents still show, flat, where they are.
+  for (const g of groups) for (const t of g.here) if (!placed.has(t.id)) walk({ task: t, done: false }, 0, g.rows);
+  for (const t of closed) if (!placed.has(t.id)) walk({ task: t, done: true }, 0, done);
+  return { groups: groups.map(({ column, rows }) => ({ column, rows })), done };
+}
+
+/** The rows still drawn once the collapsed parents' descendants are left out. */
+export function visibleRows(rows: OutlineRow[], collapsed: (id: string) => boolean): OutlineRow[] {
+  const out: OutlineRow[] = [];
+  let skipBelow = Infinity;
+  for (const row of rows) {
+    if (row.depth > skipBelow) continue;
+    skipBelow = collapsed(row.task.id) ? row.depth : Infinity;
+    out.push(row);
+  }
   return out;
 }
 
