@@ -365,9 +365,10 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('brief')
-    .description('Per-agent brief: what changed since this agent last checked in')
+    .description('Per-agent brief: current decisions, your tasks, what changed since you last checked in, the docs that bear on them')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('--agent <name>', 'Agent identifier (required — brief state is per-agent)')
+    .option('--max-chars <n>', 'Character budget for the block (default 1600; 0 for no limit)')
     .option('--peek', 'Read the brief without marking it as seen')
     .option('--offline', 'Skip syncing a shared board before the brief')
     .option('--json', 'Output as JSON')

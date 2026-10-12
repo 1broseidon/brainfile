@@ -377,6 +377,7 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
       ['search', { task: 'task-1' }],
       // peek keeps this sweep side-effect-free against the shared fixture.
       ['brief', { agent: `wire-sweep-${era}`, peek: true }],
+      ['brief', { agent: `wire-sweep-${era}`, peek: true, maxChars: 0 }],
       ['check', { query: 'wire' }],
       ['check', { claimKeyPrefix: 'wire' }],
     ];
@@ -405,6 +406,9 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
     const prefix = await client.callTool('check', { claimKeyPrefix: 'wire' });
     expect(prefix.structuredContent).toMatchObject({ claimKeyPrefix: 'wire', exitCode: expect.any(Number) });
 
+    const brief = await client.callTool('brief', { agent: `wire-decide-${era}`, peek: true });
+    const sections = (brief.structuredContent as { sections: Array<{ id: string }>; text: string }).sections;
+    expect(sections.map((s) => s.id)).toEqual(['warnings', 'decisions', 'tasks', 'changes', 'docs']);
   });
 
   test('the server keeps serving after an error result', async () => {

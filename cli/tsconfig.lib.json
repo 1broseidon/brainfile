@@ -21,6 +21,7 @@
     "src/**/*.test.tsx",
     "src/tui/**",
     "src/commands/tui.tsx",
-    "src/cli.ts"
+    "src/cli.ts",
+    "src/hook.ts"
   ]
 }

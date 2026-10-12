@@ -423,22 +423,31 @@ export const taskCompleteOutputSchema = z.discriminatedUnion('destination', [
  * optional: "this agent has never briefed" is a meaningful state a client must
  * be able to distinguish from an omitted field.
  */
+const briefLaneSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  items: z.array(z.object({
+    taskId: z.string().optional(),
+    text: z.string(),
+    why: z.string(),
+    at: z.string().optional(),
+  })),
+});
+
 export const briefOutputSchema = z.object({
   agent: z.string(),
   mode: z.enum(['full', 'delta']),
   generatedAt: z.string(),
   lastBriefAt: z.string().nullable(),
   peek: z.boolean(),
-  lanes: z.array(z.object({
-    id: z.string(),
-    label: z.string(),
-    items: z.array(z.object({
-      taskId: z.string().optional(),
-      text: z.string(),
-      why: z.string(),
-      at: z.string().optional(),
-    })),
-  })),
+  /** The checkpoint lanes (orientation/assigned/notes/completions, or the delta). */
+  lanes: z.array(briefLaneSchema),
+  /** spec-11: the session block's lanes (warnings, decisions, tasks, changes, docs). */
+  sections: z.array(briefLaneSchema).optional(),
+  /** spec-11: the block itself, within maxChars. */
+  text: z.string().optional(),
+  maxChars: z.number().optional(),
+  truncated: z.boolean().optional(),
 });
 
 // ── decide / supersede / check (spec-11) ───────────────────────────────────
