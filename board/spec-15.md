@@ -22,7 +22,10 @@ subtasks:
   - id: spec-15-3
     title: merge-boards and adopt, on the existing field-level merge; ID collisions renumbered with references rewritten
     completed: false
-updatedAt: "2026-10-12T19:03:42.878Z"
+  - id: spec-15-4
+    title: Backups as refs/brainfile/backups/<timestamp>; brainfile backups list and restore
+    completed: false
+updatedAt: "2026-10-12T19:03:43.185Z"
 ---
 
 ## Description
