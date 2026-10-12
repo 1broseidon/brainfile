@@ -2,8 +2,6 @@
 id: spec-13
 title: "MCP parity: every CLI capability has an MCP tool"
 type: spec
-column: review
-position: 2
 tags:
   - mcp
   - cli
@@ -32,7 +30,8 @@ subtasks:
   - id: spec-13-7
     title: "Docs: MANUAL and llms files list every tool"
     completed: true
-updatedAt: "2026-10-12T07:51:47.974Z"
+updatedAt: "2026-10-12T18:47:40.260Z"
+completedAt: "2026-10-12T18:47:40.260Z"
 ---
 
 ## Description
