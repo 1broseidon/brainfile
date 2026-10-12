@@ -10,7 +10,7 @@ tags:
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
 assignee: claude
-updatedAt: "2026-10-12T19:22:28.461Z"
+updatedAt: "2026-10-12T19:22:28.749Z"
 subtasks:
   - id: task-20-1
     title: "Host: completed children travel with their parent past the Done limit"
@@ -32,7 +32,7 @@ subtasks:
     completed: true
   - id: task-20-7
     title: "design.md: Rows section for the new rule"
-    completed: false
+    completed: true
   - id: task-20-8
     title: "Visual check: offscreen capture of a scratch board"
     completed: false
