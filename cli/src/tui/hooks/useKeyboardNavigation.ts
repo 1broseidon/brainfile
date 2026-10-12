@@ -204,6 +204,17 @@ export function useKeyboardNavigation({
 
   const currentTask: Task | undefined = rows[state.selectedTaskIndex]?.task;
   const maxRowIndex = Math.max(0, rows.length - 1);
+  /**
+   * The selected row is archived: the whole `done` stop, or a completed child
+   * kept under its open parent (task-20). Read-mostly either way (§B2).
+   */
+  const rowArchived = doneView || Boolean(rows[state.selectedTaskIndex]?.archived);
+
+  /** The move picker starts on the document's own column, which under a parent may not be the tab's (task-20). */
+  const ownColumnIndex = (task: Task | undefined, fallback: number): number => {
+    const at = task ? allColumns.findIndex((column) => column.tasks?.some((t) => t.id === task.id)) : -1;
+    return at >= 0 ? at : fallback;
+  };
 
   // An overlay (move / delete / complete-confirm) opened from the detail view
   // targets the drilled-into doc, not the list's own selection — they can
@@ -597,7 +608,7 @@ export function useKeyboardNavigation({
       // Board mutations are suppressed on an archived doc (§B2); `e` is not a
       // board mutation, so it stays available everywhere.
       if (input === 'm' && detailTask && !detailArchived) {
-        setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
+        setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: ownColumnIndex(detailTask, prev.activeColumnIndex) }));
         return;
       }
       if (input === 'c' && detailTask && !detailArchived && isCompletable(detailTask)) {
@@ -719,7 +730,7 @@ export function useKeyboardNavigation({
       return;
     }
     if (input === 'm') {
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.readOnly, 'info');
         return;
       }
@@ -727,11 +738,11 @@ export function useKeyboardNavigation({
         showStatus(STATUS.noDocument, 'error');
         return;
       }
-      setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: prev.activeColumnIndex }));
+      setState((prev) => ({ ...prev, mode: 'move', moveTargetIndex: ownColumnIndex(currentTask, prev.activeColumnIndex) }));
       return;
     }
     if (input === 'c') {
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.alreadyCompleted, 'info');
         return;
       }
@@ -747,7 +758,7 @@ export function useKeyboardNavigation({
       return;
     }
     if (input === 'd') {
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.readOnly, 'info');
         return;
       }
@@ -770,7 +781,7 @@ export function useKeyboardNavigation({
     }
     if (input === 'p') {
       if (!currentTask) return;
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.readOnly, 'info');
         return;
       }
@@ -810,7 +821,7 @@ export function useKeyboardNavigation({
     }
     if (input === 'A') {
       if (!currentTask) return;
-      if (doneView) {
+      if (rowArchived) {
         showStatus(STATUS.readOnly, 'info');
         return;
       }

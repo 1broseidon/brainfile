@@ -30,7 +30,7 @@ import { PALETTE } from './theme.js';
 import { CHROME, EMPTY } from './copy.js';
 import type { AppState, TUIProps, LayoutMode, BoardColumn } from './types.js';
 import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
-import { buildRows, buildFlatRows, markDecisionChanges, type DocRow } from './rows.js';
+import { buildOutline, buildFlatRows, collapseRows, markDecisionChanges, type DocRow } from './rows.js';
 import {
   NO_RELATIONS,
   boardTypes,
@@ -282,24 +282,72 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     Math.max(0, filteredColumns.length - 1),
   );
   const currentColumn = filteredColumns[activeColumnIndex];
+
+  /**
+   * The board outlined across columns (task-20): a child sits under its
+   * parent in the parent's column, however its own column differs, and a
+   * completed child stays there, ticked, until the parent is done. Completed
+   * documents answer the same filter as the board's. Under a type filter the
+   * lists are flat (§A2), so there is no outline.
+   */
+  const outline = useMemo(() => {
+    if (typeFilterActive || doneView || decisionsView) return null;
+    const logs = hasFilter
+      ? searchTasksRanked(state.logs.map((task) => ({ task, body: task.description ?? '' })), filterQuery).map(
+          (match) => match.doc.task,
+        )
+      : state.logs;
+    return buildOutline({ columns: filteredColumns, logs });
+  }, [typeFilterActive, doneView, decisionsView, hasFilter, filterQuery, state.logs, filteredColumns]);
+
+  /**
+   * A tab counts what its list holds (task-20): under the outline, its roots
+   * and everything under them, children from other columns and completed
+   * ones included; collapse still hides rows, not truth (§A1).
+   */
+  const tabCounts = useMemo(
+    () => (outline ? filteredColumns.map((column) => outline.get(column.id)?.length ?? 0) : undefined),
+    [outline, filteredColumns],
+  );
+
   // The decisions view's rows are its decisions only (headings are lines,
   // not stops), so the keyboard hook walks exactly those. `done` is one flat
   // list off `logs/`. Otherwise: under a type filter render flat (§A2) — no
   // pull-up-under-parent, no collapse (there is rarely a visible parent to
-  // collapse into) — else the normal hierarchy + collapse list (§A1). Rows
-  // resting on a retired decision are flagged for `decision changed`.
+  // collapse into) — else the column's outline with collapse applied (§A1).
+  // Rows resting on a retired decision are flagged for `decision changed`.
   const rows = useMemo<DocRow[]>(() => {
     if (decisionsView) return decisionModel.selectable.map((task) => ({ task, depth: 0 }));
     if (doneView) return buildFlatRows(filteredLogs);
     const tasks = currentColumn?.tasks ?? [];
     return markDecisionChanges(
-      typeFilterActive ? buildFlatRows(tasks) : buildRows(tasks, state.collapsedIds),
+      outline && currentColumn
+        ? collapseRows(outline.get(currentColumn.id) ?? [], state.collapsedIds)
+        : buildFlatRows(tasks),
       decisionChanged,
     );
-  }, [currentColumn, doneView, filteredLogs, typeFilterActive, state.collapsedIds, decisionsView, decisionModel, decisionChanged]);
+  }, [currentColumn, doneView, filteredLogs, outline, state.collapsedIds, decisionsView, decisionModel, decisionChanged]);
   const maxRowIndex = Math.max(0, rows.length - 1);
   const selectedIndex = Math.min(state.selectedTaskIndex, maxRowIndex);
   const selectedTask: Task | undefined = rows[selectedIndex]?.task;
+
+  // Selection survives a reload by id (§C4). The loader keeps the column's own
+  // index, but a list also holds children from other columns and completed
+  // ones (task-20), so the row is found again here once the board is re-read:
+  // a child moved or completed under its parent keeps the cursor.
+  const lastSelection = useRef<{ board: AppState['board']; logs: Task[]; id?: string }>({
+    board: null,
+    logs: [],
+  });
+  useEffect(() => {
+    const was = lastSelection.current;
+    const reloaded = was.board !== null && (was.board !== state.board || was.logs !== state.logs);
+    if (reloaded && was.id && rows[selectedIndex]?.task.id !== was.id) {
+      const found = rows.findIndex((row) => row.task.id === was.id);
+      if (found >= 0) setState((prev) => ({ ...prev, selectedTaskIndex: found }));
+    }
+    lastSelection.current = { board: state.board, logs: state.logs, id: rows[selectedIndex]?.task.id };
+  });
 
   /**
    * Every doc detail can resolve, board and archive alike. Drilling into a
@@ -512,13 +560,14 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
     ? detailActions(detailFooterCtx)
     : decisionsView
       ? decisionsActions({ historyCount: decisionModel.historyCount, historyOpen: state.decisionHistory })
-      : browseActions(selectedTask, doneView, state.decisions.length > 0);
+      : browseActions(selectedTask, doneView, state.decisions.length > 0, Boolean(rows[selectedIndex]?.archived));
 
   return (
     <Box flexDirection="column" width={termWidth} height={termHeight}>
       <HeaderBar
         title={boardTitle}
         columns={filteredColumns}
+        counts={tabCounts}
         activeColumnIndex={activeColumnIndex}
         width={termWidth}
         filterQuery={state.filterQuery}

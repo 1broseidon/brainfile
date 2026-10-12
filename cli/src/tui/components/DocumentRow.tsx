@@ -18,7 +18,10 @@
  *  - up to three right-aligned signal chips in fixed precedence: `decision
  *    changed` (it rests on a decision since replaced) → contract state →
  *    subtask progress → first tag;
- *  - the title truncates with `…` before a chip is ever dropped or wrapped.
+ *  - the title truncates with `…` before a chip is ever dropped or wrapped;
+ *  - a child under a parent in another column says its own column at the
+ *    right edge (`review`), and a completed one says `✓ done` with its title
+ *    muted (task-20): the tab no longer tells its status, so the row does.
  */
 import React from 'react';
 import { Text } from 'ink';
@@ -72,6 +75,18 @@ export function buildChips(row: DocRow): Chip[] {
   return chips.slice(0, MAX_CHIPS);
 }
 
+/**
+ * A row's own status when the list's column does not say it (task-20): a
+ * completed child's `✓ done`, or the column id of a child drawn under its
+ * parent in another column's list. The TUI says status as the column id, as
+ * the footer chip and the detail's children do.
+ */
+export function buildStatus(row: DocRow): Chip | undefined {
+  if (row.archived) return { text: `${GLYPHS.success} done`, color: PALETTE.success };
+  if (row.column) return { text: row.column, color: PALETTE.textSecondary };
+  return undefined;
+}
+
 /** `⚠ high` / `⚠ critical`, or nothing. Priority is signal, not decoration. */
 export function buildPriorityMarker(row: DocRow): Chip | undefined {
   const priority = row.task.priority;
@@ -118,10 +133,14 @@ export function DocumentRow({ row, selected, width, idWidth, archived = false }:
   const chips = buildChips(row);
   const orphan = orphanParentId ? `${GLYPHS.orphanParent} ${orphanParentId}` : undefined;
 
+  const status = buildStatus(row);
+  const muted = archived || Boolean(row.archived);
+
   const rightSegments: Chip[] = [];
   if (orphan) rightSegments.push({ text: orphan, color: PALETTE.textDim });
   if (marker) rightSegments.push(marker);
   rightSegments.push(...chips);
+  if (status) rightSegments.push(status);
 
   const rightWidth =
     rightSegments.reduce((sum, seg) => sum + seg.text.length, 0) +
@@ -139,7 +158,7 @@ export function DocumentRow({ row, selected, width, idWidth, archived = false }:
       <Text>{indent}</Text>
       <Text color={selected ? undefined : PALETTE.textSecondary}>{glyphCell}</Text>
       <Text color={dim}>{idCell}</Text>
-      <Text color={selected ? undefined : archived ? PALETTE.textMuted : PALETTE.text}>
+      <Text color={selected ? undefined : muted ? PALETTE.textMuted : PALETTE.text}>
         {title}
       </Text>
       <Text>{pad(gap)}</Text>

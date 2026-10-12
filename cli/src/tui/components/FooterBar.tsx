@@ -26,11 +26,22 @@ import { itemCountLabel } from '../copy.js';
  * the $EDITOR handoff opens the doc's real file and is orthogonal to board
  * mutation. Restoring stays a CLI verb this round.
  */
-export function browseActions(selected: Task | undefined, archived = false, hasDecisions = false): string[] {
+export function browseActions(
+  selected: Task | undefined,
+  archived = false,
+  hasDecisions = false,
+  selectedDone = false,
+): string[] {
   if (archived) return ['↵ detail', 'e edit', 't type', 'L board', 'q quit'];
 
-  const actions = ['↵ detail', 'm move'];
-  if (isCompletable(selected)) actions.push('c complete');
+  // A completed child kept under its open parent (task-20) is read-mostly,
+  // as in the done stop: nothing to move or complete.
+  const actions = ['↵ detail'];
+  if (selectedDone) actions.push('e edit');
+  else {
+    actions.push('m move');
+    if (isCompletable(selected)) actions.push('c complete');
+  }
   actions.push('a add', 't type', 'L done');
   // The way to the decisions view, once the board has any (task-19).
   if (hasDecisions) actions.push('D decisions');

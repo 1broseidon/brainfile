@@ -20,6 +20,8 @@ import { CHROME, matchCountLabel } from '../copy.js';
 export interface HeaderBarProps {
   title: string;
   columns: BoardColumn[];
+  /** What each tab's list holds, when it is not just the column's own documents (task-20). */
+  counts?: number[];
   activeColumnIndex: number;
   width: number;
   /** Present while `/` is open or a filter is applied. */
@@ -42,6 +44,7 @@ export interface HeaderBarProps {
 export function HeaderBar({
   title,
   columns,
+  counts,
   activeColumnIndex,
   width,
   filterQuery = '',
@@ -56,6 +59,7 @@ export function HeaderBar({
   const boardTitle = truncate(title, 24);
   const separator = ` ${GLYPHS.pointer} `;
   const typeLabel = activeType && activeType !== 'all' ? ` · ${activeType}` : '';
+  const countOf = (column: BoardColumn, index: number) => counts?.[index] ?? column.tasks?.length ?? 0;
 
   // Width of the tab strip, computed rather than measured so the affordances
   // can be right-aligned inside a single truncating Text row.
@@ -67,7 +71,7 @@ export function HeaderBar({
           return (
             sum +
             (index > 0 ? 3 : 0) +
-            `${column.title} ${column.tasks?.length ?? 0}`.length +
+            `${column.title} ${countOf(column, index)}`.length +
             (active ? 1 : 0)
           );
         }, 0)) + typeLabel.length;
@@ -93,7 +97,7 @@ export function HeaderBar({
           ) : (
             columns.map((column, index) => {
               const active = index === activeColumnIndex;
-              const count = column.tasks?.length ?? 0;
+              const count = countOf(column, index);
               return (
                 <Text key={column.id}>
                   {index > 0 ? <Text color={PALETTE.textDim}>{' │ '}</Text> : null}

@@ -56,11 +56,11 @@ describe('list collapse/expand (§A1)', () => {
 
   it('does not change the column tab counts — collapse hides rows, not truth', async () => {
     const before = plain(h.frame()).split('\n')[0];
-    expect(before).toContain('To Do 10*');
+    expect(before).toContain('To Do 9*');
 
     await h.press(SPACE);
     const after = plain(h.frame()).split('\n')[0];
-    expect(after).toContain('To Do 10*');
+    expect(after).toContain('To Do 9*');
   });
 
   it('is a no-op on a row with no children', async () => {
