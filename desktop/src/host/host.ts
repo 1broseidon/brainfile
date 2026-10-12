@@ -57,10 +57,13 @@ import {
   syncStatusLabel,
 } from '@brainfile/core/repo';
 import { integrityView } from './integrity';
+import { applyFix, planFix as planBoardFix, undoFix as undoBoardFix, type UndoRecord } from './fix';
 import type {
   BoardSnapshot,
   DecisionView,
   DependencyView,
+  FixPlan,
+  FixResult,
   HostMessage,
   HostRequest,
   IntegrityView,
@@ -167,9 +170,12 @@ function readIntegrity(board: OpenBoard, options: { fresh?: boolean; fetch?: boo
   try {
     const survey = surveyBoards(board.dotDir, { fetch: options.fetch });
     const unfinished = isTrackedBoard(board.dotDir) ? unmergedFiles(board.dotDir) : [];
-    board.integrity = { at: Date.now(), view: integrityView(survey, unfinished), behind: survey.lineage?.behind ?? 0 };
+    const view = integrityView(survey, unfinished);
+    // A problem says whether Fix can settle it without losing anything (task-34).
+    if (view.short) view.fix = fixPlanView(board, survey);
+    board.integrity = { at: Date.now(), view, behind: survey.lineage?.behind ?? 0 };
   } catch {
-    board.integrity = { at: Date.now(), view: { twoBoards: null, notes: [], short: null }, behind: 0 };
+    board.integrity = { at: Date.now(), view: { twoBoards: null, notes: [], short: null, line: null, fix: null, found: [] }, behind: 0 };
   }
   return board.integrity;
 }
@@ -604,6 +610,73 @@ function settleBoards(projectId: string, choice: SettleChoice): Result<{ message
   }
 }
 
+// ── Fix from the health list (task-34) ──────────────────────────────────────
+
+/** How long after a fix Undo can still put it back; the window offers it for ten seconds. */
+const UNDO_MS = 20_000;
+const undos = new Map<string, { record: UndoRecord; at: number }>();
+
+/** The plan as the window sees it, or null when there is no fix that loses nothing. Never throws. */
+function fixPlanView(board: OpenBoard, survey?: Parameters<typeof planBoardFix>[2]): FixPlan | null {
+  try {
+    const plan = planBoardFix(board.dotDir, board.projectId, survey);
+    return plan ? { kind: plan.kind, words: plan.words } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The board after a fix or its undo lives somewhere else: open it again there and publish. */
+function reopen(projectId: string): void {
+  closeBoard(projectId);
+  const reopened = openBoard(projectId);
+  if (reopened.ok) send({ kind: 'board', snapshot: reopened.value });
+}
+
+function planFix(projectId: string): Result<FixPlan | null> {
+  try {
+    return ok(fixPlanView(requireBoard(projectId)));
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Back up every copy of the board, then settle its problem with core's own
+ * steps; nothing runs if a backup fails, or if the plan is no longer the one
+ * the person confirmed.
+ */
+function fixBoard(projectId: string, expected?: string): Result<FixResult> {
+  try {
+    const board = requireBoard(projectId);
+    flushBoardCommits();
+    undos.delete(projectId);
+    const applied = applyFix(board.dotDir, { expected, project: projectId });
+    if (applied.undo) undos.set(projectId, { record: applied.undo, at: Date.now() });
+    reopen(projectId);
+    return ok({ message: applied.message, undo: !!applied.undo });
+  } catch (err) {
+    // Whatever happened, the window should see the board as it is now.
+    if (boards.has(projectId)) reopen(projectId);
+    return fail(err);
+  }
+}
+
+function undoFix(projectId: string): Result<{ message: string }> {
+  const kept = undos.get(projectId);
+  undos.delete(projectId);
+  if (!kept || Date.now() - kept.at > UNDO_MS) return fail('Too late to undo here; brainfile backups has every copy.');
+  try {
+    flushBoardCommits();
+    const message = undoBoardFix(kept.record);
+    reopen(projectId);
+    return ok({ message });
+  } catch (err) {
+    if (boards.has(projectId)) reopen(projectId);
+    return fail(err);
+  }
+}
+
 onBoardCommitted((dotDir) => {
   const board = [...boards.values()].find((b) => b.dotDir === dotDir);
   if (!board || effectiveAutosync(dotDir) === 'off' || !boardRemote(dotDir)) return;
@@ -656,6 +729,9 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   restoreTask,
   syncNow,
   settleBoards,
+  planFix,
+  fixBoard,
+  undoFix,
 };
 
 parentPort.on('message', async (event: { data: HostRequest }) => {

@@ -20,7 +20,7 @@
   const healthTipText = $derived.by(() => {
     const boards = unsentBoards;
     if (boards.length === 1) return `${projectName(boards[0].id)}: ${healthMeta(boards[0].id)}`;
-    return app.health.warn ? 'Board issues' : 'Unsent changes';
+    return app.health.warn ? `${boards.length} board issues` : `${boards.length} boards to sync`;
   });
 
   /** A board's state in a few words for the health list, worst first. */
@@ -29,11 +29,11 @@
     const project = app.projects.find((p) => p.id === projectId);
     if (!board) return project?.state.status === 'ready' ? '…' : 'no board';
     if (board.integrity.short) return board.integrity.short;
-    if (board.sync.warning) return 'couldn’t sync';
+    if (board.sync.warning) return 'sync failed';
     if (board.sync.busy) return 'syncing…';
-    if (board.sync.pending > 0) return `${board.sync.pending} ${board.sync.pending === 1 ? 'change' : 'changes'} not shared yet`;
-    if (board.sync.behind > 0) return `${board.sync.behind} ${board.sync.behind === 1 ? 'change' : 'changes'} to bring in`;
-    return board.sync.remote ? (board.sync.label ?? 'shared') : 'on this Mac only';
+    if (board.sync.pending > 0) return `${board.sync.pending} unsent`;
+    if (board.sync.behind > 0) return `${board.sync.behind} incoming`;
+    return board.sync.remote ? (board.sync.label ?? 'shared') : 'this Mac only';
   }
 
   /** A board with something to send or bring in can be synced from the list. */
@@ -42,19 +42,28 @@
     return !!b?.sync.remote && !b.sync.busy && (b.sync.pending > 0 || b.sync.behind > 0 || !!b.sync.warning);
   };
 
-  async function syncNow(e: MouseEvent, projectId: string): Promise<void> {
-    e.stopPropagation();
+  async function syncNow(projectId: string): Promise<void> {
     const result = await api.syncNow(projectId);
     if (!result.ok) app.notify(result.error, 'warn');
   }
 
-  /** What the health list's tip says about a board: the two-boards line and every note. */
-  function healthTip(projectId: string): string {
+  /**
+   * A board's problem in one plain sentence, under its name: where it lives
+   * (two copies, an old copy in main…) or why it could not sync. The list
+   * says it; tips stay a few words.
+   */
+  function healthLine(projectId: string): string | null {
     const board = app.boards[projectId];
-    if (!board) return '';
-    const two = board.integrity.twoBoards;
-    return [two ? `${two.message} ${two.detail}` : '', ...board.integrity.notes, board.sync.warning ?? ''].filter(Boolean).join(' ');
+    if (!board) return null;
+    if (board.integrity.short) return board.integrity.line;
+    return board.sync.warning ?? null;
   }
+
+  /** Who Ask agent hands a problem to: the project's own agent, by name. */
+  const askTip = (projectId: string): string => {
+    const agent = app.agentFor(projectId);
+    return agent ? `Ask ${app.agentName(agent)}` : 'Ask agent';
+  };
 
   const projectName = (id: string) => app.projects.find((p) => p.id === id)?.name ?? id;
 
@@ -102,7 +111,7 @@
       class="feed no-drag"
       class:lit={app.unseen > 0}
       class:open={opened === 'feed'}
-      use:tip={app.unseen > 0 ? `${app.unseen} outside changes` : 'Outside changes'}
+      use:tip={app.unseen > 0 ? `${app.unseen} outside ${app.unseen === 1 ? 'change' : 'changes'}` : 'Outside changes'}
       onclick={() => toggle('feed')}
     >
       <Icon name="bolt" size={13} />
@@ -116,20 +125,73 @@
   <div class="pop" class:wide={opened === 'feed'}>
     {#if opened === 'health'}
       {#each app.projects as project (project.id)}
-        <button
-          class="item"
-          use:tip={healthTip(project.id) || null}
-          onclick={() => {
-            opened = null;
-            void app.select(project.id);
-          }}
-        >
-          <span class="label">{project.name}</span>
-          <span class="mono meta" class:warn={app.quietHealth(app.boards[project.id]) === 'warn'}>{healthMeta(project.id)}</span>
-          {#if canSync(project.id)}
-            <span class="send" role="button" tabindex="0" onclick={(e) => syncNow(e, project.id)} onkeydown={() => {}}>Sync now</span>
+        {@const board = app.boards[project.id]}
+        {@const fix = app.fixes[project.id]}
+        {@const line = healthLine(project.id)}
+        {@const problem = !!board?.integrity.short}
+        <!-- A row is the board's name and state; a problem adds its sentence
+             and the keys that settle it: Fix (only when nothing is lost) and
+             Ask agent. A fix says what it will do before it runs. -->
+        <div class="row" class:stacked={!!line || !!fix}>
+          <button
+            class="pick"
+            onclick={() => {
+              opened = null;
+              void app.select(project.id);
+            }}
+          >
+            <span class="label">{project.name}</span>
+            <span class="mono meta" class:warn={app.quietHealth(board) === 'warn'}>{healthMeta(project.id)}</span>
+            {#if fix?.stage === 'confirm'}
+              <span class="say ink">{fix.words}.</span>
+            {:else if fix?.stage === 'running'}
+              <span class="say">{fix.words}</span>
+            {:else if fix?.stage === 'done'}
+              <span class="say ink">{fix.message}</span>
+            {:else if fix?.stage === 'failed'}
+              <span class="say warn">{fix.message}</span>
+            {:else if line}
+              <span class="say">{line}</span>
+            {/if}
+          </button>
+          {#if fix?.stage === 'confirm'}
+            <div class="keys">
+              <button class="key sure" onclick={() => app.confirmFix(project.id)}>Confirm</button>
+              <button class="key" onclick={() => app.cancelFix(project.id)}>Cancel</button>
+            </div>
+          {:else if fix?.stage === 'done'}
+            {#if fix.undo}
+              <div class="keys">
+                <button class="key" use:tip={'Put it back'} onclick={() => app.undoFix(project.id)}>Undo</button>
+              </div>
+            {/if}
+          {:else if fix?.stage === 'running'}
+            <!-- Nothing to press while it runs. -->
+          {:else if problem}
+            <!-- No Fix and no agent to ask: the sentence stands alone. -->
+            {#if board?.integrity.fix || app.agentFor(project.id)}
+              <div class="keys">
+                {#if board?.integrity.fix}
+                  <button class="key" use:tip={'Backs up first'} onclick={() => app.proposeFix(project.id)}>Fix</button>
+                {/if}
+                {#if app.agentFor(project.id)}
+                  <button
+                    class="key"
+                    use:tip={askTip(project.id)}
+                    onclick={() => {
+                      opened = null;
+                      void app.askAboutBoard(project.id);
+                    }}>Ask agent</button
+                  >
+                {/if}
+              </div>
+            {/if}
+          {:else if canSync(project.id)}
+            <div class="keys" class:side={!line}>
+              <button class="key" onclick={() => syncNow(project.id)}>Sync now</button>
+            </div>
           {/if}
-        </button>
+        </div>
       {/each}
     {:else}
       {#each app.feed as item (item.key)}
@@ -330,8 +392,73 @@
     color: var(--warn);
   }
 
-  /* Send what is waiting, from the board's own line. */
-  .send {
+  /* A board in the health list: its name and state, and under them, when
+     it has one, its problem in a sentence and the keys that settle it. The
+     sentence and the keys share the name's left edge. */
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    border-radius: var(--r-control);
+  }
+
+  .row:hover {
+    background: var(--fill-hover);
+  }
+
+  .pick {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 32px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: var(--s2);
+    padding: 0 var(--s2);
+    text-align: left;
+  }
+
+  .stacked .pick {
+    padding-top: 7px;
+  }
+
+  .stacked .pick:last-child {
+    padding-bottom: 8px;
+  }
+
+  .say {
+    flex-basis: 100%;
+    margin-top: 2px;
+    text-wrap: pretty;
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    color: var(--ink-3);
+  }
+
+  .say.ink {
+    color: var(--ink-2);
+  }
+
+  .say.warn {
+    color: var(--warn);
+  }
+
+  .keys {
+    flex-basis: 100%;
+    display: flex;
+    gap: var(--s1);
+    padding: 7px var(--s2) var(--s2);
+  }
+
+  /* Sync now, on a row with nothing else to say: at the end of its one line,
+     inset as far from the edge as from the top. */
+  .keys.side {
+    flex-basis: auto;
+    padding: 0 5px 0 0;
+  }
+
+  /* Quiet keys: a soft fill at rest, the words in ink-2. */
+  .key {
     flex: none;
     height: 22px;
     padding: 0 var(--s2);
@@ -341,11 +468,19 @@
     font-size: var(--t-sm);
     color: var(--ink-2);
     background: var(--fill-hover);
+    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
   }
 
-  .send:hover {
+  .key:hover,
+  .key:focus-visible {
     background: var(--fill-active);
     color: var(--ink);
+  }
+
+  /* The one that does what was just said. */
+  .key.sure {
+    color: var(--ink);
+    font-weight: 500;
   }
 
   .meta {

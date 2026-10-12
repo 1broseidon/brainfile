@@ -257,7 +257,7 @@ export interface BackupInfo {
 }
 
 /** `20261012T205217Z`. */
-function backupStamp(now = new Date()): string {
+export function backupStamp(now = new Date()): string {
   return now.toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z');
 }
 
@@ -267,6 +267,37 @@ function saveBackup(ctx: RepoContext, tree: string, parent: string | null, note:
   const commit = commitTree(ctx, tree, parent ? [parent] : [], `backup: ${note}`);
   must(git(['update-ref', `${BACKUP_NAMESPACE}/${unique}`, commit], ctx.cwd), 'save the backup');
   return unique;
+}
+
+/**
+ * One copy of a board to save: a folder on disk (a plain board, or a
+ * checkout of the board branch with its hand edits), or a board in git, as a
+ * commit (`refs/heads/brainfile`) or a tree (`<commit>:.brainfile`, the copy
+ * a code branch tracks). `parent` keeps the copy's history reachable from
+ * the backup; leave it out for a tree inside a code commit.
+ */
+export type BackupSource = { dir: string; parent?: string } | { treeish: string; parent?: string };
+
+/**
+ * Save one copy of a board under `refs/brainfile/backups/<stamp>-<what>`,
+ * the way `brainfile backups` lists and restores them, before anything that
+ * changes a board outside `adopt` / `merge-boards` (which back up what they
+ * replace themselves). Throws when the copy cannot be read or saved, so the
+ * caller changes nothing. Returns the backup's name.
+ */
+export function saveBoardBackup(dotDir: string, source: BackupSource, note: string, what: string, stamp = backupStamp()): string {
+  const ctx = repoContext(dotDir);
+  let tree: string;
+  if ('dir' in source) {
+    if (!fs.existsSync(path.join(source.dir, 'brainfile.md'))) throw new Error(`${source.dir} holds no board to back up.`);
+    tree = treeFromDir(ctx, source.dir);
+  } else {
+    // `<rev>:<path>` names a tree already; a commit-ish needs peeling.
+    tree = must(git(['rev-parse', '--verify', source.treeish.includes(':') ? source.treeish : `${source.treeish}^{tree}`], ctx.cwd), `read ${source.treeish}`);
+  }
+  const parent = source.parent ? resolveCommit(ctx.cwd, source.parent) : null;
+  const safe = what.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'board';
+  return saveBackup(ctx, tree, parent, note, `${stamp}-${safe}`);
 }
 
 /** Backups in the repository around `dotDir`, newest first. */
