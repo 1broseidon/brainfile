@@ -600,6 +600,9 @@ Brainfile file resolution (when you don't pass --file):
     .command('graph')
     .description('Attach contracts to multiple tasks as a dependency graph')
     .allowUnknownOption(true)
+    // The graph flags are parsed from argv by parseContractGraphArgs; their
+    // values must not count as positional arguments (commander 14 rejects them).
+    .allowExcessArguments(true)
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('--ready', 'Set attached contracts to status=ready instead of draft')
     .option('--show', 'Print the current task dependency graph')
