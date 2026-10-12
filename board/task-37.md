@@ -18,6 +18,13 @@ parentId: spec-16
 decisions:
   - decision-2
 createdAt: "2026-10-12T23:37:06.928Z"
+assignee: codex
+dispatch:
+  agent: codex
+  model: gpt-6.1-sol
+  by: chat
+  at: "2026-10-12T23:37:08.343Z"
+updatedAt: "2026-10-12T23:37:08.443Z"
 ---
 
 ## Description
