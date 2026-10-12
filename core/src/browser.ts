@@ -18,6 +18,25 @@ export {
   serializeBoardConfig,
 } from './boardContent';
 export {
+  COLUMN_ID_PATTERN,
+  columnIdFromTitle,
+  orderedColumns,
+  findColumnConfig,
+  addColumn,
+  renameColumn,
+  reorderColumns,
+  removeColumn,
+  readBoardSettings,
+  updateBoardSettings,
+} from './boardConfigEdits';
+export type {
+  AddColumnInput,
+  BoardConfigEditResult,
+  BoardSettings,
+  BoardSettingsPatch,
+  BoardSettingsResult,
+} from './boardConfigEdits';
+export {
   parseTaskContent,
   serializeTaskContent,
 } from './taskContent';

@@ -233,6 +233,39 @@ export {
   writeBoardConfig,
 } from './boardFile';
 
+// Editing the board config: columns, title, agent instructions, related boards (spec-13)
+export {
+  COLUMN_ID_PATTERN,
+  columnIdFromTitle,
+  orderedColumns,
+  findColumnConfig,
+  addColumn,
+  renameColumn,
+  reorderColumns,
+  removeColumn,
+  readBoardSettings,
+  updateBoardSettings,
+  type AddColumnInput,
+  type BoardConfigEditResult,
+  type BoardSettings,
+  type BoardSettingsPatch,
+  type BoardSettingsResult,
+} from './boardConfigEdits';
+export {
+  summarizeColumns,
+  listColumnsFile,
+  addColumnFile,
+  renameColumnFile,
+  reorderColumnsFile,
+  removeColumnFile,
+  readBoardSettingsFile,
+  updateBoardSettingsFile,
+  type ColumnSummary,
+  type ColumnsFileResult,
+  type RemoveColumnOptions,
+  type BoardSettingsFileResult,
+} from './boardConfigOperations';
+
 // Export task file reader/writer (v2 per-task file architecture)
 export {
   parseTaskContent,
