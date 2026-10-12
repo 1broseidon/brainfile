@@ -40,6 +40,16 @@ import { logCommand, logNoteCommand } from './commands/log';
 import { briefCommand } from './commands/brief';
 import { searchCommand } from './commands/search';
 import {
+  decideCommand,
+  supersedeCommand,
+  retireCommand,
+  DECIDE_COMMAND_HELP,
+  SUPERSEDE_COMMAND_HELP,
+  RETIRE_COMMAND_HELP,
+} from './commands/decide';
+import { indexCommand } from './commands/memory-index';
+import { checkCommand, CHECK_COMMAND_HELP } from './commands/check';
+import {
   githubAuthCommand,
   linearAuthCommand,
   authStatusCommand,
@@ -93,7 +103,7 @@ const packageJson = JSON.parse(
 );
 
 // Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'sync', 'where', 'merge-driver', 'help'];
+const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'decide', 'supersede', 'retire', 'check', 'index', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'sync', 'where', 'merge-driver', 'help'];
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -397,12 +407,93 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('search')
-    .description('Search across active tasks and completed logs')
+    .description('Search the board, its history and the project\'s docs (the local index when Node has node:sqlite)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-c, --column <name>', 'Filter by column')
     .option('--type <type>', 'Filter by document type (aliases work: adr finds decisions)')
-    .argument('<query>', 'Search query')
+    .option('--limit <n>', 'Most results per lane (default 20)')
+    .option('--no-history', 'Only current results: no completed work or superseded decisions')
+    .option('--json', 'Output as JSON')
+    .argument('<query>', 'Search query (filter tokens work: p:high #tag @user type:spec due:week contract:ready)')
     .action((query, options) => { searchCommand({ ...options, query }); });
+
+  const checkCmd = program
+    .command('check')
+    .description('Is a decision still safe to act on? use · review · use_replacement · no_decision (exit 0, 2, 3, 0)')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-k, --claim-key <key>', 'Check one claim family exactly')
+    .option('--claim-key-prefix <prefix>', 'Check every family under a prefix; the verdict is the worst')
+    .option('--json', 'Output as JSON')
+    .argument('[action...]', 'The action in words, or a decision ID')
+    .action((action: string[], options) => { checkCommand({ ...options, query: action.join(' ') }); });
+  checkCmd.addHelpText('after', `\n${CHECK_COMMAND_HELP}`);
+
+  program
+    .command('index')
+    .description('The local search index (.brainfile/state/index.db): refresh, rebuild or show it')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--rebuild', 'Drop it and index from scratch')
+    .option('--status', 'Show what is in it without refreshing')
+    .option('--json', 'Output as JSON')
+    .action((options) => { indexCommand(options); });
+
+  const decideCmd = program
+    .command('decide')
+    .description('Record a decision in its claim family; the family\'s current decision is superseded')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-k, --claim-key <key>', 'Dotted claim family, e.g. dependency.http-client (required)')
+    .option('--title <text>', 'Title (default: the first line of the text)')
+    .option('--kind <kind>', 'decision (default), preference, constraint or rule')
+    .option('--stance <stance>', 'prefers, rejects, requires or forbids (with --subject)')
+    .option('--subject <subject>', 'What the stance is about: a package, a pattern, a tool')
+    .option('--holds-while <text>', 'The condition under which the decision holds')
+    .option('--recheck <text>', 'When or why to look at it again')
+    .option('--valid-until <date>', 'Date after which it needs a look (YYYY-MM-DD)')
+    .option('--source <path>', 'A file it rests on; its sha256 is recorded and check notices a change')
+    .option('--package <spec>', 'A package version it rests on: name<op>version, e.g. zod>=4.3 or engines.node>=20')
+    .option('--for <ids>', 'Comma-separated work that rests on it (adds it to their decisions:)')
+    .option('--tags <tags>', 'Comma-separated tags')
+    .option('--no-supersede', 'Keep the family\'s current decision current too (check will say review)')
+    .option('--agent <name>', 'Who is deciding (default: the detected agent, else your git user.name)')
+    .option('--json', 'Output as JSON')
+    .argument('[text...]', 'The decision and why ("-" reads stdin)')
+    .action((text: string[], options) => { decideCommand({ ...options, text: text.join(' ') }); });
+  decideCmd.addHelpText('after', `\n${DECIDE_COMMAND_HELP}`);
+
+  const supersedeCmd = program
+    .command('supersede')
+    .description('Replace a decision by hand: a new one in the same family, the old one superseded')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('-k, --claim-key <key>', 'Claim family (default: the old decision\'s)')
+    .option('--title <text>', 'Title (default: the first line of the text)')
+    .option('--kind <kind>', 'decision, preference, constraint or rule (default: the old decision\'s)')
+    .option('--stance <stance>', 'prefers, rejects, requires or forbids (with --subject)')
+    .option('--subject <subject>', 'What the stance is about')
+    .option('--holds-while <text>', 'The condition under which the decision holds')
+    .option('--recheck <text>', 'When or why to look at it again')
+    .option('--valid-until <date>', 'Date after which it needs a look (YYYY-MM-DD)')
+    .option('--source <path>', 'A file it rests on (sha256 recorded)')
+    .option('--package <spec>', 'A package version it rests on: name<op>version')
+    .option('--for <ids>', 'Comma-separated work that rests on it')
+    .option('--tags <tags>', 'Comma-separated tags')
+    .option('--agent <name>', 'Who is deciding')
+    .option('--json', 'Output as JSON')
+    .argument('<id>', 'The decision to supersede')
+    .argument('[text...]', 'The new decision and why ("-" reads stdin)')
+    .action((id: string, text: string[], options) => { supersedeCommand(id, { ...options, text: text.join(' ') }); });
+  supersedeCmd.addHelpText('after', `\n${SUPERSEDE_COMMAND_HELP}`);
+
+  const retireCmd = program
+    .command('retire')
+    .description('Mark a decision rejected or stale; it moves to logs/')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--as <status>', 'rejected or stale (required)')
+    .option('--note <text>', 'Why, written on the decision\'s log')
+    .option('--agent <name>', 'Who is retiring it')
+    .option('--json', 'Output as JSON')
+    .argument('<id>', 'The decision to retire')
+    .action((id: string, options) => { retireCommand(id, options); });
+  retireCmd.addHelpText('after', `\n${RETIRE_COMMAND_HELP}`);
 
   program
     .command('subtask')

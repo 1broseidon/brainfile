@@ -17,7 +17,7 @@ import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError, fileNotFound, missingRequired, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { resolveActor } from '../utils/actor';
-import { readTasksDir, writeTaskFile, scoreTaskDocument, type TaskDocument } from '@brainfile/core';
+import { readTasksDir, resolveDocType, writeTaskFile, scoreTaskDocument, type TaskDocument } from '@brainfile/core';
 import {
   isV2,
   getV2Dirs,
@@ -232,7 +232,9 @@ function searchLogs(dirs: V2Dirs, query: string, logger: Logger): LogResult {
 }
 
 function listRecentLogs(dirs: V2Dirs, logger: Logger): LogResult {
-  const logDocs = readTasksDir(dirs.logsDir);
+  // A decision retired to logs/ (spec-11) was never completed: not a recent completion.
+  const logDocs = readTasksDir(dirs.logsDir)
+    .filter((d) => d.task.completedAt || resolveDocType(d.task.type).role !== 'decision');
 
   // Union in ledger records that have no markdown archive. Under the
   // dual-artifact model both always exist, but boards touched by the

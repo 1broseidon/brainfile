@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { z } from 'zod';
-import { readTasksDir, searchTasksRanked } from '@brainfile/core';
+import { readTasksDir, resolveDocType } from '@brainfile/core';
+import { searchMemory } from '@brainfile/core/memory';
 import {
   getV2Dirs,
   findV2Task,
@@ -15,7 +16,7 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
     'search',
     {
       title: 'Search',
-      description: 'Search tasks and logs by query, list recent logs, or view one task/log entry. All board documents are searchable, including epics, specs, plans and decisions. type filters by document type (aliases work: adr finds decisions); type:<name> in the query does the same.',
+      description: 'Search by query, list recent logs, or view one task/log entry. With the local index (Node 22.13+) a query searches board and logs documents, the ledger, plans/ and the project\'s own docs (README, AGENTS.md, docs/…); otherwise board and logs. Current results come first, history (completed work, superseded or rejected decisions) after, each with lane, path and line range; a doc hit\'s id is path:start-end. Filter tokens work in the query (p:high #tag @user type:spec due:week contract:ready). type filters by document type (aliases work: adr finds decisions).',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               query: z.string().optional().describe('Search query (matches title, description, tags, and log text in v2)'),
@@ -25,10 +26,12 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
               type: z.string().optional().describe('Filter by document type (epic, spec, plan, task, decision, or the board\'s own; issue and adr are aliases)'),
               recent: z.boolean().optional().describe('List recently completed tasks (v2 only)'),
               task: z.string().optional().describe('View a specific task/log entry (v2 only)'),
+              limit: z.number().int().positive().optional().describe('Most results per lane (default 20)'),
+              history: z.boolean().optional().describe('Include history (completed work, superseded decisions); default true'),
             }),
       outputSchema: searchOutputSchema
     },
-    async ({ file, query, column, priority, assignee, type, recent, task }) => {
+    async ({ file, query, column, priority, assignee, type, recent, task, limit, history }) => {
       const filePath = file || defaultFile;
 
       const guard = requireV2(filePath);
@@ -56,7 +59,9 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
 
       if (recent) {
         const dirs = getV2Dirs(filePath);
-        const logDocs = readTasksDir(dirs.logsDir);
+        // A decision retired to logs/ was never completed: it is not a recent completion.
+        const logDocs = readTasksDir(dirs.logsDir)
+          .filter((doc) => doc.task.completedAt || resolveDocType(doc.task.type).role !== 'decision');
         logDocs.sort((a, b) => (b.task.completedAt || '').localeCompare(a.task.completedAt || ''));
         const logs = logDocs.slice(0, 20).map(doc => ({
           id: doc.task.id,
@@ -74,25 +79,34 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
         return { content: [{ type: 'text' as const, text: 'Error: query is required unless recent or task is provided' }], isError: true };
       }
 
-      const dirs = getV2Dirs(filePath);
-      const matches: Array<{ id: string; title: string; column?: string; priority?: string; tags?: string[]; assignee?: string; score: number; isLog?: boolean }> = [];
+      const found = searchMemory(filePath, query, {
+        filters: { column, priority, assignee, type },
+        ...(limit ? { limit } : {}),
+      });
+      const hits = history === false ? found.current : found.results;
+      const matches = hits.map((hit) => ({
+        id: hit.id,
+        title: hit.title,
+        // Older clients read column 'Completed' for a log entry.
+        ...(hit.column ? { column: hit.column } : hit.source === 'logs' && hit.status === 'completed' ? { column: 'Completed' } : {}),
+        ...(hit.priority ? { priority: hit.priority } : {}),
+        ...(hit.tags ? { tags: hit.tags } : {}),
+        ...(hit.assignee ? { assignee: hit.assignee } : {}),
+        score: hit.score,
+        ...(hit.isLog ? { isLog: true } : {}),
+        lane: hit.lane,
+        source: hit.source,
+        path: hit.path,
+        startLine: hit.startLine,
+        endLine: hit.endLine,
+        ...(hit.snippet ? { snippet: hit.snippet } : {}),
+        ...(hit.type ? { type: hit.type } : {}),
+        ...(hit.status ? { status: hit.status } : {}),
+        ...(hit.claimKey ? { claimKey: hit.claimKey } : {}),
+        ...(hit.completedAt ? { completedAt: hit.completedAt } : {}),
+      }));
 
-      const boardMatches = searchTasksRanked(readTasksDir(dirs.boardDir), query, { column, priority, assignee, type });
-      for (const { doc, score } of boardMatches) {
-        const t = doc.task;
-        matches.push({ id: t.id, title: t.title, column: t.column, priority: t.priority, tags: t.tags, assignee: t.assignee, score });
-      }
-
-      if (!column) {
-        const logMatches = searchTasksRanked(readTasksDir(dirs.logsDir), query, { priority, assignee, type });
-        for (const { doc, score } of logMatches) {
-          const t = doc.task;
-          matches.push({ id: t.id, title: t.title, column: 'Completed', priority: t.priority, tags: t.tags, assignee: t.assignee, score, isLog: true });
-        }
-      }
-
-      matches.sort((a, b) => b.score - a.score);
-      const output = { results: matches, count: matches.length };
+      const output = { results: matches, count: matches.length, mode: found.mode };
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(output, null, 2) }],
         structuredContent: output,

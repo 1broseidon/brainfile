@@ -19,11 +19,14 @@ const ERAS: Era[] = ['legacy', 'modern'];
 
 const EXPECTED_TOOLS = [
   'brief',
+  'check',
   'contract',
+  'decide',
   'get_task',
   'list_tasks',
   'search',
   'subtask',
+  'supersede',
   'task_add',
   'task_complete',
   'task_delete',
@@ -90,7 +93,7 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
 
   // ── advertisement ────────────────────────────────────────────────────────
 
-  test('advertises exactly the 11 consolidated tools', async () => {
+  test('advertises exactly the 14 consolidated tools', async () => {
     const names = (await client.listTools()).map((t) => t.name).sort();
     expect(names).toEqual(EXPECTED_TOOLS);
   });
@@ -374,12 +377,34 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
       ['search', { task: 'task-1' }],
       // peek keeps this sweep side-effect-free against the shared fixture.
       ['brief', { agent: `wire-sweep-${era}`, peek: true }],
+      ['check', { query: 'wire' }],
+      ['check', { claimKeyPrefix: 'wire' }],
     ];
     for (const [name, args] of calls) {
       const result = await client.callTool(name, args);
       expect(WireClient.text(result) ?? '').not.toContain('Output validation error');
       expect(result.structuredContent).toBeDefined();
     }
+  });
+
+  test('decide, supersede and check round-trip through output validation (spec-11)', async () => {
+    const key = `wire.${era}`;
+    const first = await client.callTool('decide', { claimKey: key, text: 'Use the first wire', stance: 'prefers', subject: 'wire' });
+    expect(first.isError).toBeFalsy();
+    const decided = first.structuredContent as { decision: { id: string; status: string; claimKey: string }; superseded: string[] };
+    expect(decided.decision).toMatchObject({ status: 'current', claimKey: key });
+
+    const second = await client.callTool('supersede', { taskId: decided.decision.id, text: 'Use the second wire', stance: 'forbids', subject: 'cables' });
+    expect(second.isError).toBeFalsy();
+    expect((second.structuredContent as { superseded: string[] }).superseded).toEqual([decided.decision.id]);
+
+    const check = await client.callTool('check', { query: 'add cables to the rack', claimKey: key });
+    expect(WireClient.text(check) ?? '').not.toContain('Output validation error');
+    expect(check.structuredContent).toMatchObject({ verdict: 'review', recommendation: 'block_action', exitCode: 2 });
+
+    const prefix = await client.callTool('check', { claimKeyPrefix: 'wire' });
+    expect(prefix.structuredContent).toMatchObject({ claimKeyPrefix: 'wire', exitCode: expect.any(Number) });
+
   });
 
   test('the server keeps serving after an error result', async () => {

@@ -83,7 +83,7 @@ function describeToolCall(toolName: string, input: ToolInput): string {
   const action = typeof input.action === 'string' ? ` ${input.action}` : '';
   const rawId = input.taskId ?? input.task;
   const id = Array.isArray(rawId) ? ` ${rawId.join(',')}` : typeof rawId === 'string' ? ` ${rawId}` : '';
-  const detail = [input.title, input.column]
+  const detail = [input.title, input.column, input.claimKey]
     .find((v): v is string => typeof v === 'string' && v.length > 0);
   return `${toolName}${action}${id}${detail ? `: ${detail}` : ''}`;
 }

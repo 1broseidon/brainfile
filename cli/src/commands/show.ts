@@ -184,7 +184,7 @@ function renderTask(
     logger.log(`${chalk.bold('Column:')} ${chalk.white(columnTitle)}${archived ? chalk.gray(' (archived)') : ''}`);
   }
 
-  if (archived) {
+  if (archived && !isDecision) {
     logger.log(`${chalk.bold('Archived:')} ${chalk.yellow('yes')}`);
   }
 
@@ -363,7 +363,9 @@ function renderDecisionHeader(task: Task, logger: Logger): void {
     ['Subject', record.stance ? undefined : record.subject],
     ['Holds while', record.holdsWhile],
     ['Recheck', record.recheck],
-    ['Valid until', record.validUntil],
+    ['Valid until', record.validUntil instanceof Date ? record.validUntil.toISOString().slice(0, 10) : record.validUntil],
+    ['Source', record.sourcePath],
+    ['Package', record.packageVersion],
   ];
   for (const [label, value] of fields) {
     if (typeof value === 'string' && value.trim()) {

@@ -1,5 +1,5 @@
 /**
- * Output schemas for the 11 consolidated MCP tools.
+ * Output schemas for the consolidated MCP tools.
  *
  * Each tool declares one of these as `outputSchema`, and every non-error
  * success path returns the matching object as `structuredContent` alongside
@@ -187,15 +187,33 @@ const searchRecentSchema = z.object({
   count: z.number(),
 });
 
-/** `query:` — ranked matches across board and logs. */
+/**
+ * `query:` — ranked matches. With the local index (spec-11) they span board
+ * and logs documents, the ledger, plans/ and the project's own docs; without
+ * it, board and logs. Current results come first, history (completed work,
+ * superseded decisions) after, each hit with its `lane`, `path` and line
+ * range. A file's `id` is `path:start-end`.
+ */
 const searchResultsSchema = z.object({
   results: z.array(z.object({
     ...taskSummaryShape,
     column: z.string().optional(),
     score: z.number(),
     isLog: z.boolean().optional(),
+    lane: z.enum(['current', 'history']).optional(),
+    source: z.string().optional(),
+    path: z.string().optional(),
+    startLine: z.number().optional(),
+    endLine: z.number().optional(),
+    snippet: z.string().optional(),
+    type: z.string().optional(),
+    status: z.string().optional(),
+    claimKey: z.string().optional(),
+    completedAt: z.string().optional(),
   })),
   count: z.number(),
+  /** `index` when the local index answered, `scan` for the fallback. */
+  mode: z.enum(['index', 'scan']).optional(),
 });
 
 /**
@@ -422,3 +440,71 @@ export const briefOutputSchema = z.object({
     })),
   })),
 });
+
+// ── decide / supersede / check (spec-11) ───────────────────────────────────
+
+/** A decision as plain data. Loose: decisions carry hand-editable fields. */
+const decisionSummarySchema = z.looseObject({
+  id: z.string(),
+  title: z.string(),
+  status: z.string(),
+  claimKey: z.string().optional(),
+  kind: z.string().optional(),
+  stance: z.string().optional(),
+  subject: z.string().optional(),
+  supersedes: z.array(z.string()),
+  supersededBy: z.string().optional(),
+});
+
+export const decideOutputSchema = z.object({
+  decision: decisionSummarySchema,
+  /** True when the family's current decision already said this; nothing was written. */
+  duplicate: z.boolean(),
+  /** IDs this decision superseded (now in logs/). */
+  superseded: z.array(z.string()),
+  familyWasEmpty: z.boolean(),
+  /** Other claim families that may say the same thing (only when the family was empty). */
+  related: z.array(z.object({
+    id: z.string(),
+    claimKey: z.string(),
+    title: z.string(),
+    reason: z.string(),
+    coverage: z.number().optional(),
+  })),
+  linked: z.array(z.string()),
+  notFound: z.array(z.string()),
+});
+
+const checkResultSchema = z.object({
+  query: z.string().optional(),
+  claimKey: z.string().optional(),
+  verdict: z.enum(['use', 'review', 'use_replacement', 'no_decision']),
+  recommendation: z.string(),
+  reason: z.string(),
+  predicateStatus: z.string(),
+  predicates: z.array(z.looseObject({ kind: z.string(), status: z.string(), reason: z.string() })),
+  recheck: z.string().optional(),
+  advisory: z.string().optional(),
+  stance: z.string().optional(),
+  subject: z.string().optional(),
+  requestedAction: z.string().optional(),
+  matched: decisionSummarySchema.optional(),
+  current: decisionSummarySchema.optional(),
+  replacement: decisionSummarySchema.optional(),
+  family: z.array(decisionSummarySchema),
+});
+
+/** One family's verdict, or (with claimKeyPrefix) every family's and the worst. */
+export const checkOutputSchema = z.union([
+  checkResultSchema.extend({ matchedBy: z.string(), exitCode: z.number() }),
+  z.object({
+    claimKeyPrefix: z.string(),
+    verdict: z.enum(['use', 'review', 'use_replacement', 'no_decision']),
+    recommendation: z.string(),
+    reason: z.string(),
+    decidingClaimKey: z.string().optional(),
+    familyCount: z.number(),
+    families: z.array(checkResultSchema),
+    exitCode: z.number(),
+  }),
+]);
