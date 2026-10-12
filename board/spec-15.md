@@ -25,7 +25,10 @@ subtasks:
   - id: spec-15-4
     title: Backups as refs/brainfile/backups/<timestamp>; brainfile backups list and restore
     completed: false
-updatedAt: "2026-10-12T19:03:43.185Z"
+  - id: spec-15-5
+    title: "One home for the board branch: report and prune worktrees outside .brainfile/"
+    completed: false
+updatedAt: "2026-10-12T19:03:43.496Z"
 ---
 
 ## Description
