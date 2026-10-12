@@ -6,6 +6,7 @@
   import StatusIcon from './StatusIcon.svelte';
   import PriorityIcon from './PriorityIcon.svelte';
   import Avatar from './Avatar.svelte';
+  import Working from './Working.svelte';
 
   let {
     task,
@@ -88,7 +89,7 @@
   {/if}
   {#if app.runFor(task.id)}
     {@const run = app.runFor(task.id)!}
-    <span class="run mono">{run.agentId} · {run.state === 'waiting' ? 'needs you' : run.activity}</span>
+    <span class="run"><Working agent={run.agentId} activity={run.activity} waiting={run.state === 'waiting'} rotate={false} /></span>
   {/if}
   <span class="chips">
     {#if task.contractStatus}

@@ -2,6 +2,7 @@
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
   import Icon from './Icon.svelte';
+  import Working from './Working.svelte';
   import { renderMarkdown } from '../lib/markdown';
   import { relativeTime } from '../lib/format';
   import type { AgentId } from '../../shared/api';
@@ -65,6 +66,7 @@
     if (!agent || !text.trim() || live) return;
     void app.askBoard(text, agent);
     text = '';
+    if (field) field.style.height = '';
   }
 
   function fit(el: HTMLTextAreaElement): void {
@@ -186,7 +188,7 @@
         <p class="empty">Ask about this board, or have it managed: “add a task to…”, “sort To Do by priority”, “split epic-3”.</p>
       {/each}
       {#if live}
-        <p class="working mono">{live.agentId} · {live.state === 'waiting' ? 'needs you, above' : live.activity}</p>
+        <p class="status"><Working agent={live.agentId} activity={live.activity} waiting={live.state === 'waiting'} /></p>
       {/if}
     </div>
 
@@ -197,7 +199,7 @@
         bind:this={field}
         bind:value={text}
         rows="1"
-        placeholder={live ? 'Working…' : 'Ask or tell it something'}
+        placeholder="Ask or tell it something"
         oninput={(e) => fit(e.currentTarget)}
         onkeydown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey) {
@@ -466,9 +468,9 @@
     line-height: var(--lh-sm);
   }
 
-  .working {
+  .status {
     margin: 0;
-    color: var(--ink-3);
+    padding: 2px 0;
   }
 
   .composer {

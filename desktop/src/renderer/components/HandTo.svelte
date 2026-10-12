@@ -2,6 +2,7 @@
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
   import Icon from './Icon.svelte';
+  import Working from './Working.svelte';
   import type { AgentId } from '../../shared/api';
 
   /** Dispatch, the muted way: one key on a task, a short list of the person's own agents. */
@@ -45,7 +46,7 @@
 <svelte:window onkeydown={onkeydown} />
 
 {#if run}
-  <span class="running mono">{run.agentId} · {run.state === 'waiting' ? 'needs you' : run.activity}</span>
+  <span class="running"><Working agent={run.agentId} activity={run.activity} waiting={run.state === 'waiting'} /></span>
   <button class="icon-btn" use:tip={'Stop'} onclick={() => app.stopRun(run.id)}><Icon name="stop" size={13} /></button>
 {:else}
   <span class="anchor">

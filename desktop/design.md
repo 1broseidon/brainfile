@@ -163,8 +163,17 @@ The board reads like the TUI's list, calmed. A row is 36px:
 
 One curve, `cubic-bezier(0.16, 1, 0.3, 1)`, three durations: 90ms answers a
 press, 130ms opens something small, 220ms moves something across a pane. No
-overshoot, no hover scale. A sync in flight breathes at 1800ms. Reduced
-motion removes every transition and animation.
+overshoot, no hover scale. Reduced motion removes every transition and
+animation.
+
+Two things move on their own, because something is happening: a sync in
+flight breathes at 1800ms, and an agent at work shows a muted status line
+(`claude · Thinking…`, `components/Working.svelte`) with a slow band of light
+crossing the word every 1800ms. In the chat the word turns over every 2.6s
+among honest names for the kind of work under way (Thinking, Considering,
+Working it out); on a row and in the task pane it holds still, so a list of
+busy tasks stays quiet. An agent waiting on you stops shimmering and says
+"Needs you" in the warn colour.
 
 ## Calm
 
