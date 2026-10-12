@@ -19,7 +19,10 @@ subtasks:
   - id: spec-15-2
     title: brainfile where reports all boards with counts and last change; agents get a resolving error on write
     completed: false
-updatedAt: "2026-10-12T19:03:42.579Z"
+  - id: spec-15-3
+    title: merge-boards and adopt, on the existing field-level merge; ID collisions renumbered with references rewritten
+    completed: false
+updatedAt: "2026-10-12T19:03:42.878Z"
 ---
 
 ## Description
