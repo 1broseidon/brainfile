@@ -23,7 +23,10 @@ subtasks:
   - id: spec-13-4
     title: "board tool: title, agent instructions, related entries; types and template tools"
     completed: false
-updatedAt: "2026-10-12T05:56:10.210Z"
+  - id: spec-13-5
+    title: lint, sync and where tools; schemas as MCP resources
+    completed: false
+updatedAt: "2026-10-12T05:56:10.488Z"
 ---
 
 ## Description
