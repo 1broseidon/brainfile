@@ -308,6 +308,8 @@ class AppState {
   #fixTimers: Record<string, ReturnType<typeof setTimeout>> = {};
   /** The board as each chat turn found it, to say afterwards what the turn changed. */
   #turnStart = new Map<string, BoardSnapshot>();
+  /** The hand-offs each chat turn made (spec-16), by the turn's run ID, said under its reply. */
+  #handoffs = new Map<string, { id: string; what: string }[]>();
   #undoTimer: ReturnType<typeof setTimeout> | null = null;
 
   async init(): Promise<void> {
@@ -581,7 +583,11 @@ class AppState {
       ...(context.length ? { context } : {}),
     });
     const before = this.boards[projectId];
-    const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier, context);
+    // A hand-off the chat makes takes the model Hand to… would take for that agent here.
+    const models = Object.fromEntries(
+      this.agents.map((a) => [a.id, this.modelFor(a.id, projectId)] as const).filter(([, model]) => !!model)
+    ) as Partial<Record<AgentId, string>>;
+    const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier, context, models);
     if (result.ok && before) this.#turnStart.set(result.value.id, before);
     if (!result.ok) this.addLine(projectId, thread.id, { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true });
   }
@@ -592,6 +598,10 @@ class AppState {
     // A hand-off is kept at hand in the dock from the moment it starts.
     if (!before && run.kind === 'dispatch' && run.taskId && !this.tabs.some((t) => t.projectId === run.projectId && t.id === run.taskId)) {
       this.touchTab(run.projectId, run.taskId);
+    }
+    // One the chat made is said under the turn's reply, like a board change.
+    if (!before && run.kind === 'dispatch' && run.taskId && run.from) {
+      this.#handoffs.set(run.from, [...(this.#handoffs.get(run.from) ?? []), { id: run.taskId, what: `handed to ${run.agentId}` }]);
     }
     const ended = !isLive(run) && (!before || isLive(before));
     if (!ended) return;
@@ -607,13 +617,16 @@ class AppState {
         ...(run.endedAt ? { took: run.endedAt - run.startedAt } : {}),
       });
       const before = this.#turnStart.get(run.id);
+      const handed = this.#handoffs.get(run.id) ?? [];
       this.#turnStart.delete(run.id);
-      if (before && run.state !== 'failed') {
+      this.#handoffs.delete(run.id);
+      if ((before || handed.length) && run.state !== 'failed') {
         const { projectId, threadId } = run;
         setTimeout(() => {
           const after = this.boards[projectId];
-          if (!after) return;
-          const changes = diffBoards(before, after, Date.now()).map((c) => ({ id: c.taskId, what: c.what }));
+          const board = before && after ? diffBoards(before, after, Date.now()).map((c) => ({ id: c.taskId, what: c.what })) : [];
+          // A task handed off says so once: its record, and what its agent has done since, are the hand-off.
+          const changes = [...board.filter((c) => c.what === 'added' || !handed.some((h) => h.id === c.id)), ...handed];
           if (changes.length) this.patchLine(projectId, threadId!, run.id, { changes });
         }, SETTLE_MS);
       }

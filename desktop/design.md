@@ -415,6 +415,20 @@ board changes (and in the feed).
   reply (`task-18 added`, `task-11 moved to Todo`), read from the board
   itself by comparing it before and after, so the agent is told not to
   report its own changes, and never says it made none.
+- **The chat hands work off** (spec-16). Its agents get a second, small MCP
+  server from the app itself, the desk: `dispatch` (a task, and optionally an
+  agent and a model), `runs` (what is running on this Mac) and `stop`.
+  `dispatch` is Hand to…'s own path: the worktree, a tab in the dock, asks
+  in the task pane, Review. With no agent named it is the chat's own agent
+  and model; another agent named takes the model chosen for it on this
+  board, as Hand to… would. The task records who asked
+  (`dispatch: { agent, model, by: chat, at }` beside the assignee), committed
+  like any change. Under the reply a hand-off reads like a board change
+  (`task-35 added`, `task-35 handed to codex`), and the call shows in the
+  steps as `desk · dispatch`. The agent is told to create follow-ups with the
+  board tools, hand them off with dispatch, and ask before dispatching more
+  than three at once. A chat's desk reaches its own board only, and a
+  hand-off gets no desk, so it never hands off again.
 - **When an agent asks first**, it is said where you are looking: inside the
   chat for a chat turn, in the task pane for a dispatched task, and in the
   board's band either way, with Allow once · Always · Deny in that order

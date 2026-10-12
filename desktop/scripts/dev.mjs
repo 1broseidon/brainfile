@@ -20,7 +20,9 @@ let electron = null;
 let restarting = false;
 
 /** What each bundle was last time, to tell which ones a rebuild changed. */
-const BUNDLES = ['main', 'preload', 'host', 'agents'];
+const BUNDLES = ['main', 'preload', 'host', 'agents', 'desk-mcp'];
+/** Bundles that take effect without restarting Electron: main lets the agents process go; each chat session starts the desk's server afresh. */
+const NO_RESTART = new Set(['agents', 'desk-mcp']);
 let last = {};
 function changedBundles() {
   const now = {};
@@ -43,7 +45,13 @@ function launch() {
 }
 
 const ctx = await context({
-  entryPoints: { main: 'src/main/main.ts', preload: 'src/preload/preload.ts', host: 'src/host/host.ts', agents: 'src/agents/agents.ts' },
+  entryPoints: {
+    main: 'src/main/main.ts',
+    preload: 'src/preload/preload.ts',
+    host: 'src/host/host.ts',
+    agents: 'src/agents/agents.ts',
+    'desk-mcp': 'src/agents/desk-mcp.ts',
+  },
   outdir: 'dist-electron',
   bundle: true,
   platform: 'node',
@@ -60,7 +68,7 @@ const ctx = await context({
           const changed = changedBundles();
           if (electron && changed.length === 0) return;
           // main reloads the agents process itself; nothing else to do.
-          if (electron && changed.every((name) => name === 'agents')) return;
+          if (electron && changed.every((name) => NO_RESTART.has(name))) return;
           if (electron) {
             restarting = true;
             electron.once('exit', () => {
