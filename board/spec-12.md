@@ -14,7 +14,7 @@ createdAt: "2026-10-12T05:45:05.871Z"
 subtasks:
   - id: spec-12-1
     title: "Core: built-in registry of the five with roles, aliases (issue, adr) and like: for custom types"
-    completed: false
+    completed: true
   - id: spec-12-2
     title: "Containment: allowed parents per type; parents cannot complete with open children; lint warns, strict refuses"
     completed: false
@@ -30,7 +30,7 @@ subtasks:
   - id: spec-12-6
     title: "Docs and schemas: MANUAL, site/public/v2 schemas, llms.txt; init writes a short brainfile.md"
     completed: false
-updatedAt: "2026-10-12T06:04:13.884Z"
+updatedAt: "2026-10-12T06:27:53.899Z"
 parentId: epic-2
 ---
 
