@@ -260,6 +260,12 @@ export interface AgentModes {
   bypass: string | null;
 }
 
+/** An editor found on this Mac, or the file's default app (`system`). */
+export interface EditorInfo {
+  id: string;
+  name: string;
+}
+
 /** App-wide dispatch settings, kept in the app's dispatch.json. */
 export interface DispatchSettings {
   /** On: every agent runs in its bypass mode and nothing is asked. Off: each agent's own default, or the mode chosen for it. */
@@ -319,6 +325,13 @@ export interface Api {
   stopRun(runId: string): Promise<void>;
   answerPermission(askId: string, optionId: string | null): Promise<void>;
   onAgentEvent(listener: (event: AgentEvent) => void): () => void;
+
+  /** The editors on this Mac, best first, then the file's default app. */
+  listEditors(): Promise<EditorInfo[]>;
+  /** Which of these paths, relative to the project, are files in it. */
+  existingFiles(projectId: string, files: string[]): Promise<string[]>;
+  /** Opens a file in the project at a line, in the editor named, else the first found. */
+  openInEditor(projectId: string, file: string, line?: number, editorId?: string): Promise<Result>;
 
   onBoardChanged(listener: (snapshot: BoardSnapshot) => void): () => void;
   onProjectsChanged(listener: (projects: Project[]) => void): () => void;

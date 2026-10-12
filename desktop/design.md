@@ -320,6 +320,12 @@ rows' text, not the group's rim, so the column has one left edge.
 
 - **A switch is a box sliding in a sunk track**, the checkbox's corner kept;
   on, the track takes the accent, the one place a setting earns it.
+- **Editor** says where a file an agent names opens: the editors found on
+  this Mac (apps in Applications, best first; terminal editors when Ghostty
+  is here) and the file's default app. Unset, the first found. In a reply,
+  inline code that names a file in the project is underlined faintly and
+  opens at its line; the project is asked once per path, and a path outside
+  it, or not there, stays plain code.
 - **A choice is a quiet pick**, the current value in ink-2 with the agent's
   default marked `default` in mono; its menu gives each option's own
   description. When a switch overrides the choice, the value is said, not

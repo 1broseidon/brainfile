@@ -21,6 +21,7 @@ import {
 } from '../shared/api';
 import { loginShellPath } from './shellPath';
 import { ProjectStore } from './projects';
+import { existingFiles, listEditors, openInEditor } from './editors';
 
 // Launched from the Dock, the app inherits launchd's bare PATH: no Homebrew
 // git, and no `brainfile` for `init` or the merge driver sync registers.
@@ -176,6 +177,9 @@ const local: Record<string, (...args: any[]) => unknown> = {
   revealProject: (projectId: string) => shell.openPath(projectId),
   refreshProject: resolveProject,
   initBoard,
+  listEditors,
+  existingFiles,
+  openInEditor,
 };
 
 ipcMain.handle(CHANNEL.invoke, async (_event, method: string, ...args: unknown[]) => {

@@ -11,6 +11,7 @@ import type {
   Api,
   BoardSnapshot,
   DispatchSettings,
+  EditorInfo,
   ModelOption,
   PermissionAsk,
   Project,
@@ -56,6 +57,7 @@ const AGENT_KEY = 'brainfile.lastAgent';
 const MODEL_KEY = 'brainfile.models';
 const PREFS_KEY = 'brainfile.projectPrefs';
 const MODEL_NAMES_KEY = 'brainfile.modelNames';
+const EDITOR_KEY = 'brainfile.editor';
 const THREADS_KEY = 'brainfile.threads';
 const THREADS_KEPT = 30;
 
@@ -159,6 +161,9 @@ class AppState {
   /** Settings take the board's place in the pane until a project is picked or Esc. */
   settingsOpen = $state(false);
   settings = $state<DispatchSettings>({ bypass: false, modes: {} });
+  /** The editors on this Mac, and the one files open in (unset: the first found). */
+  editors = $state<EditorInfo[]>([]);
+  editor = $state<string | null>(localStorage.getItem(EDITOR_KEY));
   /** Each agent's permission modes, as it reports them; null when it has none. */
   modes = $state<Partial<Record<AgentId, AgentModes | null>>>({});
   models = $state<Partial<Record<AgentId, ModelOption[]>>>({});
@@ -267,6 +272,27 @@ class AppState {
   /** Which agents are on this Mac: asked at start, and again whenever a picker opens, so one installed since shows up. */
   async refreshAgents(): Promise<void> {
     this.agents = await api.listAgents();
+  }
+
+  async refreshEditors(): Promise<void> {
+    this.editors = await api.listEditors();
+  }
+
+  chooseEditor(id: string): void {
+    this.editor = id;
+    localStorage.setItem(EDITOR_KEY, id);
+  }
+
+  /** The editor files open in, as Settings shows it. */
+  editorName = $derived(
+    (this.editors.find((e) => e.id === this.editor) ?? this.editors[0])?.name ?? ''
+  );
+
+  /** A file in the project in front, opened at a line in the chosen editor. */
+  async openFile(file: string, line?: number): Promise<void> {
+    if (!this.activeId) return;
+    const result = await api.openInEditor(this.activeId, file, line, this.editor ?? undefined);
+    if (!result.ok) this.notify(result.error, 'warn');
   }
 
   agentName(id: AgentId): string {

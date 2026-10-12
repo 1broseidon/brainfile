@@ -10,14 +10,18 @@
   import Switch from './Switch.svelte';
   import type { AgentId } from '../../shared/api';
 
-  let picking = $state<AgentId | null>(null);
+  let picking = $state<AgentId | 'editor' | null>(null);
 
   const installed = $derived(app.agents.filter((a) => a.available));
   const missing = $derived(app.agents.filter((a) => !a.available));
 
   $effect(() => {
     void app.refreshAgents();
+    void app.refreshEditors();
   });
+
+  /** The editor files open in now: the one chosen, else the first found. */
+  const editorNow = $derived(app.editors.find((e) => e.id === app.editor) ?? app.editors[0]);
 
   $effect(() => {
     for (const a of installed) void app.loadModes(a.id);
@@ -105,6 +109,48 @@
       </div>
       <p class="foot">Brainfile’s own board tools never ask: each change they make is a commit on the board.</p>
     </section>
+
+    <section>
+      <h2>Editor</h2>
+      <p class="lede">Where a file an agent names in a reply opens, at its line.</p>
+      <div class="group">
+        <div class="row">
+          <span class="name">Open files in</span>
+          {#if app.editors.length === 0}
+            <span class="mono note">looking…</span>
+          {:else}
+            <span class="anchor">
+              <button class="pick" onclick={() => (picking = picking === 'editor' ? null : 'editor')}>
+                {editorNow?.name}
+                {#if !app.editor}<span class="mono dflt">default</span>{/if}
+                <Icon name="chevron" size={10} />
+              </button>
+              {#if picking === 'editor'}
+                <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
+                <div class="menu">
+                  {#each app.editors as e (e.id)}
+                    <button
+                      class="item"
+                      onclick={() => {
+                        app.chooseEditor(e.id);
+                        picking = null;
+                      }}
+                    >
+                      <span class="line">
+                        <span>{e.name}</span>
+                        <span class="spacer"></span>
+                        {#if e.id === editorNow?.id}<Icon name="check" size={12} />{/if}
+                      </span>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </span>
+          {/if}
+        </div>
+      </div>
+      <p class="foot">Found on this Mac: editors in Applications, and terminal editors when Ghostty is here.</p>
+    </section>
   </div>
 </div>
 
@@ -112,6 +158,10 @@
   .settings {
     height: 100%;
     overflow-y: auto;
+  }
+
+  section + section {
+    margin-top: var(--s10);
   }
 
   .column {

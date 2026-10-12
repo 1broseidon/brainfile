@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { app, CHAT } from '../lib/state.svelte';
+  import { api, app, CHAT } from '../lib/state.svelte';
   import { tip, tipWithin } from '../lib/tooltip';
   import Icon from './Icon.svelte';
   import Working from './Working.svelte';
@@ -134,13 +134,55 @@
     return title.replace(/^mcp(?:__|\.)([\w-]+?)(?:__|\.)/, '$1 · ');
   }
 
-  /** A board reference in a reply opens in the pane. */
+  /** A board reference in a reply opens in the pane; a file opens in your editor. */
   function openRef(e: MouseEvent): void {
-    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-ref]')?.dataset.ref;
+    const target = e.target as HTMLElement;
+    const file = target.closest<HTMLElement>('[data-path]');
+    if (file) {
+      void app.openFile(file.dataset.path!, file.dataset.line ? Number(file.dataset.line) : undefined);
+      return;
+    }
+    const id = target.closest<HTMLElement>('[data-ref]')?.dataset.ref;
     if (!id) return;
     app.selectedTaskId = id;
     app.openTaskId = id;
   }
+
+  /** `core/src/linter.ts:74-85`, `MANUAL.md`: a path, and the line it starts at. */
+  const FILE = /^(?:\.\/)?((?:[\w@.-]+\/)*[\w@-][\w@.-]*\.[A-Za-z0-9]+)(?::(\d+)(?:[-–]\d+)?)?$/;
+  /** What the project has been asked about already: path → is a file in it. */
+  const known = new Map<string, boolean>();
+
+  /**
+   * Inline code in a reply that names a file in the project becomes a link to
+   * it in your editor. The project is asked once per path; anything that is
+   * not a file there stays plain code.
+   */
+  $effect(() => {
+    void lines;
+    const projectId = app.activeId;
+    const box = list;
+    if (!projectId || !box) return;
+    const codes = [...box.querySelectorAll<HTMLElement>('.md code')].filter((c) => !c.closest('pre') && !c.dataset.path);
+    const found = codes
+      .map((code) => ({ code, match: FILE.exec(code.textContent?.trim() ?? '') }))
+      .filter((c): c is { code: HTMLElement; match: RegExpExecArray } => !!c.match);
+    if (found.length === 0) return;
+    const mark = () => {
+      for (const { code, match } of found) {
+        if (!known.get(match[1])) continue;
+        code.dataset.path = match[1];
+        if (match[2]) code.dataset.line = match[2];
+        code.classList.add('file');
+      }
+    };
+    const ask = [...new Set(found.map((f) => f.match[1]))].filter((p) => !known.has(p));
+    if (ask.length === 0) return mark();
+    void api.existingFiles(projectId, ask).then((files) => {
+      for (const p of ask) known.set(p, files.includes(p));
+      mark();
+    });
+  });
 
   async function copy(key: string, text: string): Promise<void> {
     await navigator.clipboard.writeText(text);
@@ -152,6 +194,10 @@
 
   $effect(() => {
     if (app.chatOpen) field?.focus();
+  });
+
+  $effect(() => {
+    if (app.chatOpen && app.editors.length === 0) void app.refreshEditors();
   });
 
   $effect(() => {
@@ -222,7 +268,10 @@
       bind:this={list}
       role="presentation"
       onclick={openRef}
-      use:tipWithin={{ selector: '[data-ref]', text: (el) => refs.get(el.dataset.ref ?? '')?.title }}
+      use:tipWithin={{
+        selector: '[data-ref], [data-path]',
+        text: (el) => (el.dataset.path ? `Open in ${app.editorName}` : refs.get(el.dataset.ref ?? '')?.title),
+      }}
     >
       {#if lines.length}
         <p class="when mono">{dayTime(app.currentThread?.startedAt ?? lines[0].at)}</p>
@@ -867,6 +916,20 @@
 
   .lines :global(.ref-mark[data-kind='decision'][data-retired])::before {
     content: '○';
+  }
+
+  /* A file the project has: inline code that opens in your editor. */
+  .md :global(code.file) {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: var(--line-strong);
+    text-underline-offset: 3px;
+    transition: color var(--d-press) var(--ease), text-decoration-color var(--d-press) var(--ease);
+  }
+
+  .md :global(code.file:hover) {
+    color: var(--ink);
+    text-decoration-color: var(--ink-3);
   }
 
   /* Copy waits under the reply for the hand. */
