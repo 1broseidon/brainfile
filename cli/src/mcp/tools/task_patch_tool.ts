@@ -3,6 +3,8 @@ import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
 import * as path from 'path';
 import {
+  checkDocumentLinks,
+  readBoardGraph,
   readTaskFile as coreReadTaskFile,
   patchTaskFile,
   taskFileName,
@@ -17,7 +19,7 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
     'task_patch',
     {
       title: 'Patch Task',
-      description: 'Update specific fields of a task. Set fields to null to remove them. parentId moves a document under its parent (a task under a plan, a spec under an epic); dependsOn replaces the list of tasks that come first.',
+      description: 'Update specific fields of a task. Set fields to null to remove them. parentId moves a document under its parent (a task under a plan, a spec under an epic); an off-pattern parent is a warning, refused on a strict board, and a loop is always refused. dependsOn replaces the list of tasks that come first; decisions replaces the list of decisions the work rests on.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to update'),
@@ -31,10 +33,11 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
               relatedFiles: z.array(z.string()).nullable().optional().describe('Related file paths (null to remove)'),
               parentId: z.string().nullable().optional().describe('Parent task ID (null to remove)'),
               dependsOn: z.array(z.string()).nullable().optional().describe('Task IDs this task depends on, replacing the list; alias:task-id names a task on a related board (null or [] to remove)'),
+              decisions: z.array(z.string()).nullable().optional().describe('IDs of the decisions this work rests on, replacing the list (null or [] to remove)'),
             }),
       outputSchema: taskPatchOutputSchema
     },
-    withBoardCommit('task_patch', defaultFile, async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles, parentId, dependsOn }) => {
+    withBoardCommit('task_patch', defaultFile, async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles, parentId, dependsOn, decisions }) => {
       const filePath = file || defaultFile;
       const rawTaskIds = taskId ?? task;
       if (!rawTaskIds) {
@@ -49,7 +52,11 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
       if (guard) return guard;
 
       const dirs = getV2Dirs(filePath);
-      const results: Array<{ taskId: string; success: boolean; error?: string }> = [];
+      const results: Array<{ taskId: string; success: boolean; error?: string; warnings?: string[] }> = [];
+      const linksChange = (typeof parentId === 'string' && !isNull(parentId))
+        || (Array.isArray(dependsOn) && dependsOn.length > 0)
+        || (Array.isArray(decisions) && decisions.length > 0);
+      const board = linksChange ? readBoardGraph(filePath) : null;
 
       for (const id of taskIds) {
         const taskPath = path.join(dirs.boardDir, taskFileName(id));
@@ -62,13 +69,21 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
         const nullable = <T>(v: T | null | undefined): T | null | undefined =>
           v === undefined ? undefined : (isNull(v) ? null : (v as T));
 
-        if (parentId && !isNull(parentId) && parentId === id) {
-          results.push({ taskId: id, success: false, error: `${id} cannot be its own parent` });
-          continue;
-        }
-        if (Array.isArray(dependsOn) && dependsOn.map((d) => d.trim()).includes(id)) {
-          results.push({ taskId: id, success: false, error: `${id} cannot depend on itself` });
-          continue;
+        // Links are checked against the board (spec-12): self links and loops are
+        // refused; an off-pattern link warns, and a strict board refuses it.
+        let warnings: string[] = [];
+        if (board) {
+          const check = checkDocumentLinks(board.graph, {
+            id,
+            ...(typeof parentId === 'string' && !isNull(parentId) && { parentId }),
+            ...(Array.isArray(dependsOn) && { dependsOn }),
+            ...(Array.isArray(decisions) && { decisions }),
+          }, { strict: board.config?.strict === true });
+          if (check.errors.length > 0) {
+            results.push({ taskId: id, success: false, error: check.errors.join('; ') });
+            continue;
+          }
+          warnings = check.warnings;
         }
 
         const result = patchTaskFile(taskPath, {
@@ -81,12 +96,13 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
           relatedFiles: nullable(relatedFiles),
           parentId: nullable(parentId),
           dependsOn: nullable(dependsOn),
+          decisions: nullable(decisions),
         });
         if (!result.success) {
           results.push({ taskId: id, success: false, error: result.error || 'Task not found' });
           continue;
         }
-        results.push({ taskId: id, success: true });
+        results.push({ taskId: id, success: true, ...(warnings.length > 0 && { warnings }) });
       }
 
       const successCount = results.filter(r => r.success).length;
@@ -104,8 +120,9 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
             isError: true,
           };
         }
+        const warned = single.warnings?.length ? `\nWarning: ${single.warnings.join('\nWarning: ')}` : '';
         return {
-          content: [{ type: 'text' as const, text: `Task ${taskIds[0]} updated successfully` }],
+          content: [{ type: 'text' as const, text: `Task ${taskIds[0]} updated successfully${warned}` }],
           structuredContent: output,
         };
       }

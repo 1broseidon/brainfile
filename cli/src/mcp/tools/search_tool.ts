@@ -15,19 +15,20 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
     'search',
     {
       title: 'Search',
-      description: 'Search tasks and logs by query, list recent logs, or view one task/log entry. All board documents are searchable, including epics, specs, adrs, and plans.',
+      description: 'Search tasks and logs by query, list recent logs, or view one task/log entry. All board documents are searchable, including epics, specs, plans and decisions. type filters by document type (aliases work: adr finds decisions); type:<name> in the query does the same.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               query: z.string().optional().describe('Search query (matches title, description, tags, and log text in v2)'),
               column: z.string().optional().describe('Filter by column ID or name'),
               priority: z.enum(['low', 'medium', 'high', 'critical']).optional().describe('Filter by priority'),
               assignee: z.string().optional().describe('Filter by assignee'),
+              type: z.string().optional().describe('Filter by document type (epic, spec, plan, task, decision, or the board\'s own; issue and adr are aliases)'),
               recent: z.boolean().optional().describe('List recently completed tasks (v2 only)'),
               task: z.string().optional().describe('View a specific task/log entry (v2 only)'),
             }),
       outputSchema: searchOutputSchema
     },
-    async ({ file, query, column, priority, assignee, recent, task }) => {
+    async ({ file, query, column, priority, assignee, type, recent, task }) => {
       const filePath = file || defaultFile;
 
       const guard = requireV2(filePath);
@@ -76,14 +77,14 @@ export function registerSearchTool(server: McpServer, defaultFile: string): void
       const dirs = getV2Dirs(filePath);
       const matches: Array<{ id: string; title: string; column?: string; priority?: string; tags?: string[]; assignee?: string; score: number; isLog?: boolean }> = [];
 
-      const boardMatches = searchTasksRanked(readTasksDir(dirs.boardDir), query, { column, priority, assignee });
+      const boardMatches = searchTasksRanked(readTasksDir(dirs.boardDir), query, { column, priority, assignee, type });
       for (const { doc, score } of boardMatches) {
         const t = doc.task;
         matches.push({ id: t.id, title: t.title, column: t.column, priority: t.priority, tags: t.tags, assignee: t.assignee, score });
       }
 
       if (!column) {
-        const logMatches = searchTasksRanked(readTasksDir(dirs.logsDir), query, { priority, assignee });
+        const logMatches = searchTasksRanked(readTasksDir(dirs.logsDir), query, { priority, assignee, type });
         for (const { doc, score } of logMatches) {
           const t = doc.task;
           matches.push({ id: t.id, title: t.title, column: 'Completed', priority: t.priority, tags: t.tags, assignee: t.assignee, score, isLog: true });

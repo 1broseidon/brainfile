@@ -79,9 +79,34 @@ const relatedListingSchema = z.object({
   neededBy: z.record(z.string(), z.array(z.string())),
 });
 
+/**
+ * `tree: true` (spec-12): open work as an outline, flattened in reading order.
+ * Flat rather than recursive so both protocol eras advertise a plain object
+ * schema; `depth`, `parentId` and `children` carry the nesting.
+ */
+const outlineEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  type: z.string(),
+  column: z.string(),
+  depth: z.number(),
+  parentId: z.string().optional(),
+  children: z.array(z.string()),
+  offPattern: z.boolean().optional(),
+  detachedFrom: z.string().optional(),
+});
+
 export const listTasksOutputSchema = z.object({
-  tasks: z.array(z.object({ ...taskSummaryShape, column: z.string() })),
+  tasks: z.array(z.object({
+    ...taskSummaryShape,
+    column: z.string(),
+    type: z.string().optional(),
+    parentId: z.string().optional(),
+    /** For a decision: current, superseded, rejected, stale or proposed. */
+    status: z.string().optional(),
+  })),
   count: z.number(),
+  tree: z.array(outlineEntrySchema).optional(),
   related: z.array(relatedListingSchema).optional(),
 });
 
@@ -126,6 +151,18 @@ export const getTaskOutputSchema = z.looseObject({
   dependencies: z.array(z.object({ ref: z.string(), state: z.string(), done: z.boolean() })).optional(),
   /** True while a dependency on a related board is not completed. */
   blocked: z.boolean().optional(),
+  /**
+   * Its place in the graph (spec-12): canonical type and role, parent (with
+   * offPattern when it does not fit), children, the decisions it rests on,
+   * restsOnSuperseded, and for a decision the work resting on it.
+   */
+  graph: z.looseObject({
+    id: z.string(),
+    type: z.string(),
+    role: z.string(),
+    glyph: z.string(),
+    restsOnSuperseded: z.array(z.string()),
+  }).optional(),
 });
 
 // ── search ─────────────────────────────────────────────────────────────────
@@ -179,6 +216,10 @@ export const searchOutputSchema = z.union([
 export const taskAddOutputSchema = z.object({
   id: z.string(),
   title: z.string(),
+  /** The canonical type written (absent for a plain task): `adr` comes back as `decision`. */
+  type: z.string().optional(),
+  /** Off-pattern links on a board that is not strict, and IDs not on the board (spec-12). */
+  warnings: z.array(z.string()).optional(),
 });
 
 // ── task_move / task_patch ─────────────────────────────────────────────────
@@ -209,6 +250,8 @@ export const taskPatchOutputSchema = z.object({
     taskId: z.string(),
     success: z.boolean(),
     error: z.string().optional(),
+    /** Off-pattern links on a board that is not strict, and IDs not on the board (spec-12). */
+    warnings: z.array(z.string()).optional(),
   })),
 });
 
