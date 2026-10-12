@@ -37,7 +37,7 @@ subtasks:
   - id: spec-15-8
     title: Tests on scratch repos reproducing runprism.ai's case end to end
     completed: false
-updatedAt: "2026-10-12T19:03:44.424Z"
+updatedAt: "2026-10-12T19:21:43.766Z"
 ---
 
 ## Description
