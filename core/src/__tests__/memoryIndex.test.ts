@@ -334,6 +334,57 @@ describe('the local index', () => {
   });
 });
 
+describe('loading node:sqlite', () => {
+  const proc = process as unknown as { getBuiltinModule?: (id: string) => unknown };
+  const realGet = proc.getBuiltinModule;
+  const realEmit = process.emitWarning;
+  afterEach(() => {
+    proc.getBuiltinModule = realGet;
+    process.emitWarning = realEmit;
+    setSqliteLoaderForTesting(undefined);
+  });
+
+  (realGet ? it : it.skip)('swallows the SQLite ExperimentalWarning, and only that', () => {
+    const seen: string[] = [];
+    const stub = ((warning: unknown, type?: unknown) => {
+      seen.push(`${typeof type === 'string' ? type : ''}: ${String((warning as Error)?.message ?? warning)}`);
+    }) as typeof process.emitWarning;
+    process.emitWarning = stub;
+    proc.getBuiltinModule = (id: string) => {
+      process.emitWarning('SQLite is an experimental feature and might change at any time', 'ExperimentalWarning');
+      process.emitWarning('Something else is experimental', 'ExperimentalWarning');
+      process.emitWarning(new Error('sqlite, but not experimental'), 'DeprecationWarning');
+      return realGet!.call(process, id);
+    };
+    setSqliteLoaderForTesting(undefined);
+    const loaded = loadSqlite();
+    expect(loaded === null).toBe(!HAS_SQLITE);
+    expect(seen).toEqual(['ExperimentalWarning: Something else is experimental', 'DeprecationWarning: sqlite, but not experimental']);
+    // The loader puts back the emitWarning it found.
+    expect(process.emitWarning).toBe(stub);
+  });
+
+  it('is null without getBuiltinModule (Node before 20.16), when it throws, or without FTS5', () => {
+    proc.getBuiltinModule = undefined;
+    setSqliteLoaderForTesting(undefined);
+    expect(loadSqlite()).toBeNull();
+
+    proc.getBuiltinModule = () => { throw Object.assign(new Error('No such built-in module: node:sqlite'), { code: 'ERR_UNKNOWN_BUILTIN_MODULE' }); };
+    setSqliteLoaderForTesting(undefined);
+    expect(loadSqlite()).toBeNull();
+
+    proc.getBuiltinModule = () => undefined;
+    setSqliteLoaderForTesting(undefined);
+    expect(loadSqlite()).toBeNull();
+
+    class NoFts { exec() { throw new Error('no such module: fts5'); } close() {} prepare() { return {}; } }
+    proc.getBuiltinModule = () => ({ DatabaseSync: NoFts });
+    setSqliteLoaderForTesting(undefined);
+    expect(loadSqlite()).toBeNull();
+    expect(process.emitWarning).toBe(realEmit);
+  });
+});
+
 describe('ftsTerms', () => {
   it('makes phrases of compound words and prefixes of longer tokens', () => {
     expect(ftsTerms('fix the auth bug')).toEqual(['"fix"*', '"auth"*', '"bug"*']);

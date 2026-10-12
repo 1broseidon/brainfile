@@ -307,27 +307,33 @@ export function renderBriefText(header: string, sections: readonly BriefLane[], 
     return (shown < total ? `${text}\n${more(total - shown)}` : text).length <= maxChars;
   };
 
-  const counts = lines.map(() => 0);
-  // First pass: every lane gets its first item, clipped if need be to an
-  // equal share of the budget, so a tight budget still shows each lane.
+  // First pass: every lane's first line. When they do not all fit whole,
+  // each lane (in order, while the budget allows) gets a short one, and the
+  // short ones grow together, ten characters a round, until it is spent: a
+  // tight budget shows every lane it can rather than a few lanes in full.
+  const counts = lines.map(() => 1);
   const full = lines.map((l) => l[0]);
-  const headingLength = (lane: BriefLane) => (heading(lane) ? heading(lane).length + 1 : 0);
-  const share = Math.floor((maxChars - header.length - more(total).length - 2) / lanes.length);
-  for (let i = 0; i < lanes.length; i++) {
-    const cap = share - headingLength(lanes[i]) - 1;
-    if (full[i].length > cap) {
-      if (cap < 16) continue;
-      lines[i][0] = clip(full[i], cap);
+  if (!fits(counts)) {
+    const MIN_LINE = 16;
+    for (let i = 0; i < lanes.length; i++) {
+      counts[i] = 0;
+      lines[i][0] = full[i].length > MIN_LINE ? clip(full[i], MIN_LINE) : full[i];
     }
-    counts[i] = 1;
-    if (!fits(counts)) counts[i] = 0;
-  }
-  // Where there is room, the clipped first lines get their whole text back, in lane order.
-  for (let i = 0; i < lanes.length; i++) {
-    if (counts[i] === 0 || lines[i][0] === full[i]) continue;
-    const clipped = lines[i][0];
-    lines[i][0] = full[i];
-    if (!fits(counts)) lines[i][0] = clipped;
+    for (let i = 0; i < lanes.length; i++) {
+      counts[i] = 1;
+      if (!fits(counts)) counts[i] = 0;
+    }
+    for (let grew = true; grew;) {
+      grew = false;
+      for (let i = 0; i < lanes.length; i++) {
+        if (counts[i] === 0 || lines[i][0] === full[i]) continue;
+        const before = lines[i][0];
+        const next = before.length + 10;
+        lines[i][0] = next >= full[i].length ? full[i] : clip(full[i], next);
+        if (fits(counts)) grew = true;
+        else lines[i][0] = before;
+      }
+    }
   }
   // Second pass: fill lane by lane.
   for (let i = 0; i < lanes.length; i++) {

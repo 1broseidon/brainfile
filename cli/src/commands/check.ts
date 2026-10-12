@@ -1,7 +1,7 @@
 /**
  * `brainfile check`: is a decision on the board still safe to act on? (spec-11)
  *
- *   brainfile check "switch the HTTP client to axios"
+ *   brainfile check "use axios for the retry client"
  *   brainfile check decision-3
  *   brainfile check --claim-key dependency.http-client
  *   brainfile check --claim-key-prefix dependency "add axios"
@@ -40,13 +40,16 @@ import { assertV2Brainfile } from '../utils/v2-only';
 
 export const CHECK_COMMAND_HELP = `
 Examples:
-  brainfile check "switch the HTTP client to axios"
+  brainfile check "use axios for the retry client"
   brainfile check decision-3
   brainfile check --claim-key dependency.http-client
   brainfile check --claim-key-prefix dependency "add axios"
   brainfile check "add axios" --json
 
-Verdicts: use · review · use_replacement · no_decision
+Verdicts: use (follow the current decision) · review (ask first) ·
+use_replacement (the decision you named was replaced) · no_decision.
+Name the subject next to the verb ("use axios", "drop axios") so the stance
+rule can catch a contradiction.
 Exit codes: 0 use or no_decision, 2 review, 3 use_replacement, 1 error.`.trimEnd();
 
 export interface CheckCommandOptions {

@@ -789,10 +789,17 @@ export function worstCheckResult<T extends Pick<CheckResult, 'verdict'>>(results
   return worst;
 }
 
-/** One line for a title from a decision's text: its first line, cut at a sentence or a word near 100 characters. */
+/**
+ * A title from a decision's text: the first sentence of its first line when
+ * another sentence follows, else the first line, cut at a sentence or a
+ * word near 100 characters.
+ */
 export function decisionTitleFromText(text: string, max = 100): string {
   const firstLine = text.trim().split(/\r?\n/).find((line) => line.trim())?.trim() ?? '';
   const line = firstLine.replace(/^#+\s*/, '');
+  // "Use undici. It ships with Node." → the decision, not the why.
+  const first = /^(.{12,}?[.!?])\s+[A-Z]/.exec(line);
+  if (first && first[1].length <= max) return first[1];
   if (line.length <= max) return line;
   const sentence = /^(.{20,}?[.!?])\s/.exec(line);
   if (sentence && sentence[1].length <= max) return sentence[1];

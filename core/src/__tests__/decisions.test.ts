@@ -360,6 +360,9 @@ describe('decisionTitleFromText', () => {
   it('takes the first line, cut at a sentence or a word', () => {
     expect(decisionTitleFromText('Use undici for HTTP\n\nBecause it ships with Node.')).toBe('Use undici for HTTP');
     expect(decisionTitleFromText('# Heading line')).toBe('Heading line');
+    expect(decisionTitleFromText('Use undici for HTTP, never axios. It ships with Node.')).toBe('Use undici for HTTP, never axios.');
+    expect(decisionTitleFromText('Prefer small libraries, e.g. zod over joi')).toBe('Prefer small libraries, e.g. zod over joi');
+    expect(decisionTitleFromText('Short. Then more')).toBe('Short. Then more');
     const long = `Use undici for every outbound HTTP request in the CLI and the desktop app. It ships with Node, so there is nothing to install and nothing to rebuild.`;
     expect(decisionTitleFromText(long)).toBe('Use undici for every outbound HTTP request in the CLI and the desktop app.');
     const noSentence = 'word '.repeat(40).trim();
