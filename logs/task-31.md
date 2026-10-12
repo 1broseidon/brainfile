@@ -1,15 +1,14 @@
 ---
 id: task-31
 title: "Command palette: the top is janky (scope chip, field and first section collide)"
-column: review
-position: 3
 priority: medium
 tags:
   - desktop
   - palette
   - polish
 createdAt: "2026-10-12T21:01:50.480Z"
-updatedAt: "2026-10-12T21:40:56.525Z"
+updatedAt: "2026-10-12T22:18:42.940Z"
+completedAt: "2026-10-12T22:18:42.940Z"
 ---
 
 ## Description
