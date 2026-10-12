@@ -22,7 +22,7 @@ subtasks:
     completed: true
   - id: spec-13-4
     title: "board tool: title, agent instructions, related entries; types and template tools"
-    completed: false
+    completed: true
   - id: spec-13-5
     title: lint, sync and where tools; schemas as MCP resources
     completed: false
@@ -32,7 +32,7 @@ subtasks:
   - id: spec-13-7
     title: "Docs: MANUAL and llms files list every tool"
     completed: false
-updatedAt: "2026-10-12T07:46:36.412Z"
+updatedAt: "2026-10-12T07:46:36.698Z"
 ---
 
 ## Description
