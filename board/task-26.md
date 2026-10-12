@@ -19,21 +19,21 @@ tags:
 subtasks:
   - id: task-26-1
     title: Detect GitHub from the repo's origin remote (https and ssh forms)
-    completed: false
+    completed: true
   - id: task-26-2
     title: Authenticate (gh CLI credentials first, token fallback)
-    completed: false
+    completed: true
   - id: task-26-3
     title: Fetch and show open issues for the repo in desktop
-    completed: false
+    completed: true
   - id: task-26-4
     title: Offer to create a task from an issue, linking back to it
-    completed: false
+    completed: true
   - id: task-26-5
     title: Mark issues that already have a linked task
-    completed: false
+    completed: true
 createdAt: "2026-10-12T20:34:18.677Z"
-updatedAt: "2026-10-12T23:47:19.782Z"
+updatedAt: "2026-10-12T23:47:22.030Z"
 assignee: claude
 decisions:
   - decision-4
