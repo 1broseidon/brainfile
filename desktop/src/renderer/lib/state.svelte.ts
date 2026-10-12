@@ -51,6 +51,7 @@ const SEEN_KEY = 'brainfile.feedSeen';
 const AGENT_KEY = 'brainfile.lastAgent';
 const MODEL_KEY = 'brainfile.models';
 const PREFS_KEY = 'brainfile.projectPrefs';
+const MODEL_NAMES_KEY = 'brainfile.modelNames';
 const THREADS_KEY = 'brainfile.threads';
 const THREADS_KEPT = 30;
 
@@ -152,6 +153,8 @@ class AppState {
   models = $state<Partial<Record<AgentId, ModelOption[]>>>({});
   /** The model last chosen for each agent anywhere: what a project with no choice of its own starts from. */
   modelChoice = $state<Partial<Record<AgentId, string>>>(load(MODEL_KEY, {}));
+  /** Each agent's model names as it last reported them, so a choice reads well before the list is asked for again. */
+  modelNames = $state<Partial<Record<AgentId, Record<string, string>>>>(load(MODEL_NAMES_KEY, {}));
   /** Per project, the agent last used there and the model last chosen for each agent (null: the agent's default). */
   prefs = $state<Record<string, { agent?: AgentId; models?: Partial<Record<AgentId, string | null>> }>>(load(PREFS_KEY, {}));
 
@@ -281,6 +284,23 @@ class AppState {
     if (this.models[agentId]) return;
     const result = await api.listModels(agentId);
     this.models[agentId] = result.ok ? result.value : [];
+    if (result.ok && result.value.length) {
+      this.modelNames[agentId] = Object.fromEntries(result.value.map((m) => [m.value, m.name]));
+      localStorage.setItem(MODEL_NAMES_KEY, JSON.stringify(this.modelNames));
+    }
+  }
+
+  /**
+   * A model as people read it: the name the agent gives it, from the list or
+   * remembered from the last time it was asked; failing both, its ID without
+   * the bracketed options some agents put on it (`grok-4.7[context=256k,…]`).
+   */
+  modelLabel(agentId: AgentId, value: string): string {
+    return (
+      this.models[agentId]?.find((m) => m.value === value)?.name ??
+      this.modelNames[agentId]?.[value] ??
+      (value.replace(/\[.*\]$/, '') || value)
+    );
   }
 
   async loadModes(agentId: AgentId): Promise<void> {

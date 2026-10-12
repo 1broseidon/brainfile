@@ -91,7 +91,7 @@
     if (!agent) return '';
     const chosen = app.modelFor(agent);
     if (!chosen) return 'default';
-    return app.models[agent]?.find((m) => m.value === chosen)?.name ?? chosen;
+    return app.modelLabel(agent, chosen);
   });
 
   $effect(() => {
@@ -174,7 +174,7 @@
       <span class="spacer"></span>
       <span class="anchor">
         <button class="pick mono" onclick={() => (picking = picking === 'agent' ? null : 'agent')} disabled={!app.defaultAgent}>
-          {agent ? app.agentName(agent) : 'no agent installed'}<Icon name="chevron" size={10} />
+          <span class="label">{agent ? app.agentName(agent) : 'no agent installed'}</span><Icon name="chevron" size={10} />
         </button>
         {#if picking === 'agent'}
           <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
@@ -204,7 +204,7 @@
               if (picking === 'model') void app.loadModels(agent);
             }}
           >
-            {modelName}<Icon name="chevron" size={10} />
+            <span class="label">{modelName}</span><Icon name="chevron" size={10} />
           </button>
           {#if picking === 'model'}
             <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
@@ -429,7 +429,13 @@
     padding: 0 var(--s1) 0 var(--s3);
   }
 
+  /* The header holds one line: the board's name and the picks give way first. */
   .where {
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     font-weight: 600;
   }
 
@@ -439,6 +445,8 @@
 
   .anchor {
     position: relative;
+    min-width: 0;
+    display: inline-flex;
   }
 
   .icon-btn {
@@ -452,6 +460,7 @@
   }
 
   .pick {
+    max-width: 168px;
     height: 24px;
     display: inline-flex;
     align-items: center;
@@ -459,6 +468,17 @@
     padding: 0 var(--s2);
     border-radius: var(--r-control);
     color: var(--ink-3);
+  }
+
+  .pick .label {
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .pick :global(svg) {
+    flex: none;
   }
 
   .pick :global(svg) {
