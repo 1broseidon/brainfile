@@ -18,3 +18,6 @@ Hand to… runs the agent in the person's working copy (Codex's task-15 fix land
 - A review moment in the task pane when it lands in Review: the branch, a diff summary, open in your editor, merge, send back with a note.
 - Clean up the worktree on merge or discard.
 - Not an IDE: no diff authoring, no terminals.
+
+## Log
+- 2026-10-12T19:03:44.732Z: [claude] From 2026-10-12: a dispatched agent fixing the desktop app edited desktop/src/host/host.ts in the running app's own checkout; the dev loop restarted Electron and the ACP session died mid-task (task-20). A worktree per dispatch also fixes this: the agent edits a different checkout than the running app.
