@@ -40,3 +40,6 @@ A throwaway task to try spec-14 end to end in the dev window: hand it to an agen
 Change: in desktop/README.md, add a short "## Hand-offs" section after "## Run" with two or three sentences: Hand to… runs the agent in its own git worktree on the branch dispatch/<task-id>; the agent commits there; when the task reaches Review you can see the diff, open it in your editor, merge it or send it back, and the worktree is removed on merge or discard.
 
 Touch only desktop/README.md. Commit the change on the dispatch branch, then move the task to Review.
+
+## Log
+- 2026-10-12T23:16:19.326Z: [George Dikeakos] Added a ## Hand-offs section to desktop/README.md after ## Run; committed on dispatch/task-36 (938309d).
