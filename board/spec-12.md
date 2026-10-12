@@ -23,14 +23,14 @@ subtasks:
     completed: true
   - id: spec-12-4
     title: "CLI: add --parent checks, list --tree, show with edges, types lists the graph; MCP accepts aliases and decisions"
-    completed: false
+    completed: true
   - id: spec-12-5
     title: "Desktop: outline and glyphs per type; decisions leave the list for their own view"
     completed: false
   - id: spec-12-6
     title: "Docs and schemas: MANUAL, site/public/v2 schemas, llms.txt; init writes a short brainfile.md"
     completed: false
-updatedAt: "2026-10-12T06:27:54.459Z"
+updatedAt: "2026-10-12T06:27:54.734Z"
 parentId: epic-2
 ---
 
