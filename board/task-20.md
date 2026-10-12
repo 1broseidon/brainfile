@@ -10,10 +10,13 @@ tags:
   - outline
 createdAt: "2026-10-12T18:47:59.125Z"
 assignee: claude
-updatedAt: "2026-10-12T19:10:16.071Z"
+updatedAt: "2026-10-12T19:10:16.378Z"
 subtasks:
   - id: task-20-1
     title: "Host: completed children travel with their parent past the Done limit"
+    completed: false
+  - id: task-20-2
+    title: "List: outline across columns (format.ts outline, ListView, counts)"
     completed: false
 ---
 
