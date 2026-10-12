@@ -1,8 +1,8 @@
 ---
 id: task-29
 title: "spec-15 phase 3: one home for the board branch; migrate --to-branch finishes the job"
-column: todo
-position: 4
+column: in-progress
+position: 2
 priority: high
 tags:
   - sync
@@ -11,6 +11,7 @@ tags:
 assignee: claude
 parentId: spec-15
 createdAt: "2026-10-12T20:39:19.176Z"
+updatedAt: "2026-10-12T21:01:16.740Z"
 ---
 
 ## Description
