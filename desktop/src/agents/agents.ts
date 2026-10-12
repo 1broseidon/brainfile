@@ -96,19 +96,96 @@ async function antigravityServer(): Promise<string> {
   return bin;
 }
 
+/**
+ * An agent server published on npm. It is installed once into the app's own
+ * folder and run with the real node binary, never through `npx` or a
+ * version-manager shim: from Finder a shim like mise's can hang or fail, and
+ * `npx` asks the registry and shares a cache other runs may be writing.
+ */
+interface NpmServer {
+  pkg: string;
+  version: string;
+}
+
+const CLAUDE_ACP: NpmServer = { pkg: '@agentclientprotocol/claude-agent-acp', version: '0.89.1' };
+const CODEX_ACP: NpmServer = { pkg: '@agentclientprotocol/codex-acp', version: '2.2.2' };
+
+const npmServerDir = (server: NpmServer) => path.join(AGENTS_DIR, server.pkg.replace('/', '__'), server.version);
+
+/** The installed server's command file, from its own package.json `bin`; null when it is not installed. */
+function npmServerEntry(server: NpmServer): string | null {
+  const pkgDir = path.join(npmServerDir(server), 'node_modules', ...server.pkg.split('/'));
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf-8')) as { bin?: string | Record<string, string> };
+    const bin = typeof manifest.bin === 'string' ? manifest.bin : Object.values(manifest.bin ?? {})[0];
+    const entry = bin ? path.join(pkgDir, bin) : null;
+    return entry && fs.existsSync(entry) ? entry : null;
+  } catch {
+    return null;
+  }
+}
+
+const installing = new Map<string, Promise<string>>();
+
+async function installNpmServer(server: NpmServer, node: string): Promise<string> {
+  const npmCli = path.join(path.dirname(node), '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  if (!fs.existsSync(npmCli)) throw new Error(`No npm beside ${node}`);
+  const dir = npmServerDir(server);
+  fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(path.join(dir, 'package.json'))) fs.writeFileSync(path.join(dir, 'package.json'), '{ "private": true }\n');
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      node,
+      [npmCli, 'install', '--prefix', dir, `${server.pkg}@${server.version}`, '--no-audit', '--no-fund', '--omit=dev', '--no-package-lock'],
+      { env: { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` }, stdio: ['ignore', 'ignore', 'pipe'] }
+    );
+    let err = '';
+    child.stderr?.on('data', (d) => (err = (err + d).slice(-2000)));
+    child.on('error', reject);
+    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Could not install ${server.pkg}: ${lastLine(err) || `npm exited ${code}`}`))));
+  });
+  const entry = npmServerEntry(server);
+  if (!entry) throw new Error(`${server.pkg} installed without a command`);
+  return entry;
+}
+
+/** How to start an npm agent server: the real node and its installed file; npx only when there is no real node. */
+async function npmServer(server: NpmServer): Promise<Launch> {
+  const node = realNode();
+  if (!node) return { command: 'npx', args: ['-y', `${server.pkg}@${server.version}`] };
+  let entry = npmServerEntry(server);
+  if (!entry) {
+    const key = `${server.pkg}@${server.version}`;
+    if (!installing.has(key)) installing.set(key, installNpmServer(server, node).finally(() => installing.delete(key)));
+    entry = await installing.get(key)!;
+  }
+  return { command: node, args: [entry] };
+}
+
+/** The last line of an agent's error output worth showing. */
+function lastLine(text: string): string {
+  return (
+    text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !/^at /.test(l))
+      .pop() ?? ''
+  ).slice(0, 240);
+}
+
 /** In the order the picker shows them. */
 const KNOWN: Known[] = [
   {
     id: 'claude',
     name: 'Claude Code',
     client: 'claude',
-    launch: async () => ({ command: 'npx', args: ['-y', '@agentclientprotocol/claude-agent-acp@0.89.1'] }),
+    launch: () => npmServer(CLAUDE_ACP),
   },
   {
     id: 'codex',
     name: 'Codex',
     client: 'codex',
-    launch: async () => ({ command: 'npx', args: ['-y', '@agentclientprotocol/codex-acp@2.2.2'] }),
+    launch: () => npmServer(CODEX_ACP),
   },
   {
     id: 'antigravity',
@@ -135,7 +212,14 @@ const KNOWN: Known[] = [
 function listAgents(): AgentInfo[] {
   return KNOWN.map((agent) => {
     const installed = which(agent.client) !== null;
-    const downloaded = agent.id !== 'antigravity' || fs.existsSync(path.join(AGENTS_DIR, 'antigravity', ANTIGRAVITY.version, ANTIGRAVITY.cmd));
+    const downloaded =
+      agent.id === 'antigravity'
+        ? fs.existsSync(path.join(AGENTS_DIR, 'antigravity', ANTIGRAVITY.version, ANTIGRAVITY.cmd))
+        : agent.id === 'claude'
+          ? !!npmServerEntry(CLAUDE_ACP)
+          : agent.id === 'codex'
+            ? !!npmServerEntry(CODEX_ACP)
+            : true;
     return {
       id: agent.id,
       name: agent.name,
@@ -360,7 +444,18 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
   const cwd = board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId;
   const launch = await known.launch();
-  const child = spawn(launch.command, launch.args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'ignore'] });
+  // The real node first on PATH, so nothing an agent starts finds a shim instead.
+  const node = realNode();
+  const env = node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
+  const child = spawn(launch.command, launch.args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+  // Kept so a failure can say why, not just that the agent stopped.
+  let stderr = '';
+  child.stderr?.on('data', (d) => (stderr = (stderr + d).slice(-4000)));
+  const why = () => (lastLine(stderr) ? `: ${lastLine(stderr)}` : '');
+  child.on('error', (err) => {
+    sessions.delete(key);
+    if (session.run) update(session.run, { state: 'failed', error: `${known.name} could not start: ${err.message}`, endedAt: Date.now() });
+  });
 
   const session: Session = {
     key,
@@ -405,11 +500,16 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   child.on('exit', () => {
     sessions.delete(key);
     if (session.run && (session.run.state === 'working' || session.run.state === 'starting' || session.run.state === 'waiting')) {
-      update(session.run, { state: 'failed', error: 'The agent stopped', endedAt: Date.now() });
+      update(session.run, { state: 'failed', error: `${known.name} stopped${why()}`, endedAt: Date.now() });
     }
   });
 
-  await session.connection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} });
+  try {
+    await session.connection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} });
+  } catch (err) {
+    child.kill();
+    throw new Error(`${known.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
+  }
   const created = await session.connection.newSession({ cwd, mcpServers: board ? brainfileMcp() : [] });
   session.sessionId = created.sessionId;
   const models = modelOption(created.configOptions);
