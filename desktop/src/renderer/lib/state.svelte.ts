@@ -58,6 +58,15 @@ const MODEL_KEY = 'brainfile.models';
 const PREFS_KEY = 'brainfile.projectPrefs';
 const MODEL_NAMES_KEY = 'brainfile.modelNames';
 const EDITOR_KEY = 'brainfile.editor';
+const TABS_KEY = 'brainfile.tabs';
+/** The most tabs the dock keeps; the oldest go first. */
+const TABS_KEPT = 12;
+
+/** A document kept at hand in the dock: opened in the pane, or handed to an agent. */
+export interface Tab {
+  projectId: string;
+  id: string;
+}
 const THREADS_KEY = 'brainfile.threads';
 const THREADS_KEPT = 30;
 
@@ -161,6 +170,14 @@ class AppState {
   /** Settings take the board's place in the pane until a project is picked or Esc. */
   settingsOpen = $state(false);
   settings = $state<DispatchSettings>({ bypass: false, modes: {} });
+  /** The dock's tabs, oldest first: the newest sits next to the chat key. */
+  tabs = $state<Tab[]>((() => {
+    try {
+      return JSON.parse(localStorage.getItem(TABS_KEY) ?? '[]') as Tab[];
+    } catch {
+      return [];
+    }
+  })());
   /** The editors on this Mac, and the one files open in (unset: the first found). */
   editors = $state<EditorInfo[]>([]);
   editor = $state<string | null>(localStorage.getItem(EDITOR_KEY));
@@ -351,6 +368,38 @@ class AppState {
     await this.patch(taskId, { assignee: agentId });
     const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId));
     if (!result.ok) this.notify(result.error, 'warn');
+    else this.touchTab(this.activeId, taskId);
+  }
+
+  // ── The dock's tabs ──────────────────────────────────────────────────────
+
+  /** Keeps a document at hand: added at the newest end; a tab already there keeps its place. */
+  touchTab(projectId: string, id: string): void {
+    if (this.tabs.some((t) => t.projectId === projectId && t.id === id)) return;
+    this.tabs = [...this.tabs, { projectId, id }].slice(-TABS_KEPT);
+    this.saveTabs();
+  }
+
+  closeTab(projectId: string, id: string): void {
+    this.tabs = this.tabs.filter((t) => !(t.projectId === projectId && t.id === id));
+    this.saveTabs();
+  }
+
+  /** Steps to the tab before or after the one open, and opens it. */
+  async cycleTab(step: number): Promise<void> {
+    if (this.tabs.length === 0) return;
+    const at = this.tabs.findIndex((t) => t.projectId === this.activeId && t.id === this.openTaskId);
+    const next = this.tabs[(at < 0 ? (step > 0 ? 0 : this.tabs.length - 1) : at + step + this.tabs.length) % this.tabs.length];
+    await this.goTo(next.projectId, next.id);
+  }
+
+  /** The live hand-off on a document of any board, if there is one. */
+  runOn(projectId: string, id: string): AgentRun | undefined {
+    return Object.values(this.runs).find((r) => r.kind === 'dispatch' && r.taskId === id && r.projectId === projectId && isLive(r));
+  }
+
+  private saveTabs(): void {
+    localStorage.setItem(TABS_KEY, JSON.stringify(this.tabs));
   }
 
   async loadModels(agentId: AgentId): Promise<void> {
@@ -465,6 +514,10 @@ class AppState {
   private onRun(run: AgentRun): void {
     const before = this.runs[run.id];
     this.runs[run.id] = run;
+    // A hand-off is kept at hand in the dock from the moment it starts.
+    if (!before && run.kind === 'dispatch' && run.taskId && !this.tabs.some((t) => t.projectId === run.projectId && t.id === run.taskId)) {
+      this.touchTab(run.projectId, run.taskId);
+    }
     const ended = !isLive(run) && (!before || isLive(before));
     if (!ended) return;
     if (run.kind === 'ask' && run.threadId) {

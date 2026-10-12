@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { app, RAIL, TASK_PANE } from './lib/state.svelte';
   import Titlebar from './components/Titlebar.svelte';
   import Sidebar from './components/Sidebar.svelte';
@@ -17,6 +17,13 @@
 
   onMount(() => {
     void app.init();
+  });
+
+  // Whatever opens in the pane is kept at hand in the dock.
+  $effect(() => {
+    const id = app.openTaskId;
+    const projectId = app.activeId;
+    if (id && projectId) untrack(() => app.touchTab(projectId, id));
   });
 
   function typing(target: EventTarget | null): boolean {
@@ -53,6 +60,11 @@
     if (meta && e.key === 'j' && app.board && !app.settingsOpen) {
       if (app.chatOpen) app.chatOpen = false;
       else app.openChat();
+      e.preventDefault();
+      return;
+    }
+    if (meta && e.shiftKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+      void app.cycleTab(e.code === 'BracketLeft' ? -1 : 1);
       e.preventDefault();
       return;
     }

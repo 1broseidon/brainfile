@@ -5,6 +5,7 @@
   import Mark from './Mark.svelte';
   import PathTip from './PathTip.svelte';
   import ChatPop from './ChatPop.svelte';
+  import Dock from './Dock.svelte';
   import Settings from './Settings.svelte';
   import AskLine from './AskLine.svelte';
   import ListView from './ListView.svelte';
@@ -182,6 +183,7 @@
         <ListView {board} />
       {/if}
     </div>
+    <Dock />
     <ChatPop projectName={project.name} />
   {:else if app.boardErrors[project.id]}
     <div class="center"><div class="empty"><p>{app.boardErrors[project.id]}</p></div></div>

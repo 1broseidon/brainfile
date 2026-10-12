@@ -215,6 +215,31 @@ off course. These rules win over every other section:
   every column to drop into).
 - The rail is one line per project: its storage icon, its name, its count.
 
+## Dock
+
+The top strip stays what it is (the lockup, search, the desk's news), so
+what you keep at hand lives at the board pane's bottom edge instead: the
+dock, one row with the chat key at its end, because the chat is an agent
+too and agents and work are one system.
+
+- **A tab is a document kept at hand:** one you opened in the pane, or one
+  handed to an agent (it gets a tab when the hand-off starts, opened or
+  not, and keeps it after the agent is done, as the handle to look at the
+  work). Tabs come from every board and keep their order; the newest sits
+  next to the chat key. They survive a restart.
+- **A tab says three things:** its status box (● for a decision), its title,
+  and one signal: the agent at work on it (`codex · Editing…`, still, or
+  `Needs you` in the warn colour) or else the board it is on when that is
+  not the board in front. The open one is on the pop plane. × waits for
+  the hand.
+- **Width decides how many show:** up to four, as many as fit in the
+  right-hand three quarters of the pane beside the key (or beside the chat
+  when it is open), the open one always among them; the rest wait under
+  `+N`, which opens upward. A tab is the chat key's sibling: the same
+  raised plane, hairline and halo.
+- **Keys:** ⌘⇧[ and ⌘⇧] step through the tabs, switching board when a tab is
+  on another. (⌘W stays the window's.)
+
 ## Kinds and decisions
 
 Every document is a file with frontmatter, and core says what each is for
