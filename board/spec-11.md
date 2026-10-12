@@ -2,8 +2,8 @@
 id: spec-11
 title: "Memory: fold recoil into Brainfile (decisions on the board, a local index, one brief)"
 type: spec
-column: in-progress
-position: 2
+column: review
+position: 1
 tags:
   - memory
   - recoil
@@ -37,7 +37,7 @@ subtasks:
   - id: spec-11-8
     title: "Recoil: last release pointing to Brainfile, archive (owner's call)"
     completed: false
-updatedAt: "2026-10-12T07:22:10.955Z"
+updatedAt: "2026-10-12T07:23:51.509Z"
 parentId: epic-2
 dependsOn:
   - spec-12
