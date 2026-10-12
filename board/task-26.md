@@ -33,7 +33,8 @@ subtasks:
     title: Mark issues that already have a linked task
     completed: false
 createdAt: "2026-10-12T20:34:18.677Z"
-updatedAt: "2026-10-12T21:58:41.137Z"
+updatedAt: "2026-10-12T23:38:50.477Z"
+assignee: claude
 ---
 
 ## Description
