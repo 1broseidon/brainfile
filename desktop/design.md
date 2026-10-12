@@ -233,8 +233,17 @@ board changes (and in the feed).
   whole. Beside the agent, a muted model picker lists the models the agent
   itself reports (asked once a day); unset means the agent's default, and
   Hand to… uses the same choice.
-- **When an agent asks first**, the board's band says so in one line, with
-  Allow once · Always · Deny; a board not in front is named in the strip.
+- **When an agent asks first**, it is said where you are looking: inside the
+  chat for a chat turn, in the task pane for a dispatched task, and in the
+  board's band either way, with Allow once · Always · Deny in that order
+  ("Antigravity wants to run `ls -a`"); a board not in front is named in the
+  strip. Brainfile's own board tools are never asked about: every change
+  they make is a commit on the board the agent was asked to manage.
+- **Every agent gets the board tools.** The MCP server is started as the
+  real `node` binary and the CLI's own file, with PATH and HOME passed,
+  because some agents (Codex) start MCP servers in a stripped environment
+  where a version-manager shim never answers. The brief also says to fall
+  back to the `brainfile` command line, never to edit board files by hand.
   Per repository, the answer can be `ask` (the default), `allow` or
   `bypass`, kept in the app's `dispatch.json` until repo settings exist.
 

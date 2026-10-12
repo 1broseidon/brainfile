@@ -223,9 +223,40 @@ function update(run: AgentRun, patch: Partial<AgentRun>): void {
   emit({ kind: 'run', run: { ...run } });
 }
 
+/** The first `node` on PATH that is a real binary, not a version-manager shim script. */
+function realNode(): string | null {
+  const r = spawnSync('/usr/bin/which', ['-a', 'node'], { encoding: 'utf-8' });
+  for (const candidate of (r.stdout ?? '').split('\n').map((l) => l.trim()).filter(Boolean)) {
+    try {
+      const fd = fs.openSync(candidate, 'r');
+      const head = Buffer.alloc(2);
+      fs.readSync(fd, head, 0, 2, 0);
+      fs.closeSync(fd);
+      if (head.toString() !== '#!') return fs.realpathSync(candidate);
+    } catch {
+      /* try the next */
+    }
+  }
+  return null;
+}
+
+/**
+ * Brainfile's MCP server, spelled out in full. Some agents (Codex) start MCP
+ * servers with a stripped environment, where a `#!/usr/bin/env node` script
+ * finds a version-manager shim that never answers; so the command is the
+ * real node binary and the CLI's own file, with PATH and HOME passed for the
+ * git calls the board makes.
+ */
 function brainfileMcp(): acp.McpServer[] {
-  const command = which('brainfile');
-  return command ? [{ name: 'brainfile', command, args: ['mcp'], env: [] }] : [];
+  const bin = which('brainfile');
+  if (!bin) return [];
+  const cli = fs.realpathSync(bin);
+  const node = realNode();
+  const env = [
+    { name: 'PATH', value: process.env.PATH ?? '' },
+    { name: 'HOME', value: os.homedir() },
+  ];
+  return node ? [{ name: 'brainfile', command: node, args: [cli, 'mcp'], env }] : [{ name: 'brainfile', command: bin, args: ['mcp'], env }];
 }
 
 async function open(projectId: string, agentId: AgentId, key: string, model?: string, board = true): Promise<Session> {
@@ -277,9 +308,15 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   return session;
 }
 
+/** Brainfile's own board tools: `brainfile_list_tasks`, `mcp__brainfile__task_add`, `mcp.brainfile.list_tasks`. */
+const BOARD_TOOL = /^(mcp(__|\.))?brainfile[_.]/i;
+
 async function requestPermission(session: Session, params: acp.RequestPermissionRequest): Promise<acp.RequestPermissionResponse> {
   const allowOnce = params.options.find((o) => o.kind === 'allow_once') ?? params.options.find((o) => o.kind.startsWith('allow'));
-  if (policyFor(session.projectId) !== 'ask' && allowOnce) {
+  // The dispatcher's own board tools are not asked about: every change they
+  // make is a commit on the board, and the board is what it was asked to manage.
+  const boardTool = BOARD_TOOL.test(params.toolCall.title ?? '');
+  if ((boardTool || policyFor(session.projectId) !== 'ask') && allowOnce) {
     return { outcome: { outcome: 'selected', optionId: allowOnce.optionId } };
   }
   const run = session.run;
@@ -289,6 +326,7 @@ async function requestPermission(session: Session, params: acp.RequestPermission
     projectId: session.projectId,
     agentId: session.agentId,
     title: params.toolCall.title ?? 'Run a tool',
+    kind: params.toolCall.kind ?? undefined,
     options: params.options.map((o) => ({ optionId: o.optionId, name: o.name, kind: o.kind })),
   };
   if (run) update(run, { state: 'waiting' });
@@ -354,7 +392,7 @@ function brief(projectId: string, taskId: string): string {
     `You have been handed ${task.id} on this repository's Brainfile board: "${task.title}".`,
     body.trim() ? `\n${body.trim()}` : '',
     contract,
-    `\n\nUse the brainfile MCP tools for the board: move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did. Do the work in this repository. Finish with a reply of one or two sentences.`,
+    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did. Do the work in this repository. Finish with a reply of one or two sentences.`,
   ].join('');
 }
 
@@ -379,6 +417,7 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId, mod
 
 const ASK_PREAMBLE =
   'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
+  'If those tools are not available, use the `brainfile` command line in this directory instead (`brainfile list`, `brainfile add`, `brainfile move`, `brainfile --help`); do not edit the board’s files by hand. ' +
   'Do not change code unless asked. Reply briefly, in a sentence or two; if you changed the board, end with what you changed, by task ID, and say nothing about changes when there were none.\n\n';
 
 async function ask(

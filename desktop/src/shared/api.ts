@@ -187,6 +187,8 @@ export interface PermissionAsk {
   projectId: string;
   agentId: AgentId;
   title: string;
+  /** The tool's kind as the agent reports it: execute, edit, read, fetch, other. */
+  kind?: string;
   options: { optionId: string; name: string; kind: string }[];
 }
 

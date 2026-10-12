@@ -9,6 +9,7 @@
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
   import HandTo from './HandTo.svelte';
+  import AskLine from './AskLine.svelte';
 
   let { board, taskId }: { board: BoardSnapshot; taskId: string } = $props();
 
@@ -156,6 +157,10 @@
           }}
         ></textarea>
       {/key}
+
+      {#each app.asks.filter((a) => a.runId === app.runFor(detail!.id)?.id) as ask (ask.id)}
+        <div class="asking"><AskLine {ask} stacked /></div>
+      {/each}
 
       <div class="group">
         <div class="prop">
@@ -405,6 +410,14 @@
     font-size: var(--t-xl);
     line-height: var(--lh-xl);
     font-weight: 600;
+  }
+
+  .asking {
+    margin-top: var(--s4);
+    padding: var(--s3);
+    border-radius: var(--r-group);
+    background: var(--raised);
+    box-shadow: var(--top-light);
   }
 
   /* A group in a pane column: a surface of its own, set in, radius 14. */

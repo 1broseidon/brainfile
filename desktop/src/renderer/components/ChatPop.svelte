@@ -3,6 +3,7 @@
   import { tip } from '../lib/tooltip';
   import Icon from './Icon.svelte';
   import Working from './Working.svelte';
+  import AskLine from './AskLine.svelte';
   import { renderMarkdown } from '../lib/markdown';
   import { relativeTime } from '../lib/format';
   import type { AgentId } from '../../shared/api';
@@ -189,6 +190,9 @@
       {/each}
       {#if live}
         <p class="status"><Working agent={live.agentId} activity={live.activity} waiting={live.state === 'waiting'} /></p>
+        {#each app.asks.filter((a) => a.runId === live.id) as ask (ask.id)}
+          <div class="asking"><AskLine {ask} stacked /></div>
+        {/each}
       {/if}
     </div>
 
@@ -466,6 +470,13 @@
     color: var(--ink-3);
     font-size: var(--t-sm);
     line-height: var(--lh-sm);
+  }
+
+  .asking {
+    padding: var(--s2) var(--s3);
+    border-radius: var(--r-card);
+    background: var(--raised);
+    box-shadow: var(--top-light);
   }
 
   .status {
