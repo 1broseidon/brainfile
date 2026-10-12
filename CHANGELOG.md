@@ -14,6 +14,20 @@ parity (spec-13): everything the CLI does to a board has an MCP tool, and
 columns get a command of their own. The TUI catches up with decisions
 (task-19): a view of their own, their detail, and the work resting on them.
 
+### Added (spec-15, board integrity)
+- Brainfile looks for every board a repository has: the `.brainfile/` folder
+  in the checkout (tracked by the code branch or not), the `brainfile` branch,
+  the remote's `refs/brainfile/<name>`, and checkouts of the board branch
+  outside `.brainfile/`. `brainfile where` (and the MCP `where` tool) lists
+  them with document counts and last change, says how the two stand (one
+  already has everything the other has, or each has changes the other
+  lacks), and `--fetch` / `fetch: true` asks the remote first.
+- While two boards disagree, every write from the CLI, the MCP tools and the
+  desktop app is refused, naming the command that settles it; reads still
+  work. A board ahead of or behind the remote is not two boards.
+- `where` says how many changes on the remote are not here yet, and reports a
+  code branch that still tracks an old copy of `.brainfile/`.
+
 ### Added (task-19)
 - The TUI has a decisions view, on `D` and at the type cycle's `decision`
   stop: standing decisions grouped by claim-key family, history (superseded,

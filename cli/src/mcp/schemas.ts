@@ -684,6 +684,20 @@ export const syncOutputSchema = z.object({
 });
 
 /** `where`: where the board lives, how it is stored, how fresh it is. */
+/** One copy of a board found in the repository (spec-15). */
+const boardSightingSchema = z.object({
+  kind: z.enum(['folder', 'branch', 'remote', 'code-branch']),
+  ref: z.string(),
+  label: z.string(),
+  path: z.string().optional(),
+  remote: z.string().optional(),
+  commit: z.string().optional(),
+  storage: z.enum(['plain', 'standalone', 'linked']).optional(),
+  trackedBy: z.string().optional(),
+  docs: z.number(),
+  lastChange: z.string().nullable(),
+});
+
 export const whereOutputSchema = z.object({
   path: z.string(),
   storage: z.enum(['plain', 'branch', 'repository']),
@@ -697,6 +711,17 @@ export const whereOutputSchema = z.object({
   lastSyncSecondsAgo: z.number().nullable(),
   lastSyncOk: z.boolean().nullable(),
   pendingChanges: z.number(),
+  behind: z.number(),
+  boards: z.array(boardSightingSchema),
+  conflict: z.object({
+    current: boardSightingSchema,
+    other: boardSightingSchema,
+    relation: z.enum(['same', 'contains', 'contained', 'diverged', 'unrelated']),
+    message: z.string(),
+    resolve: z.string(),
+  }).nullable(),
+  strayWorktrees: z.array(z.object({ path: z.string(), missing: z.boolean() })),
+  trackedTwice: boardSightingSchema.nullable(),
 });
 
 /** `retire`: the decision, now in logs/ with its status. */

@@ -927,13 +927,17 @@ is left as it was. `--to-plain` leaves the branch intact.
 
 ```console
 $ brainfile where
+$ brainfile where --fetch          # ask the remote for its copy first
 $ brainfile where --json
 ```
 
 Prints the board's location, how it is stored (plain files, a branch of this
 repository, or its own repository), the remote it is shared through, when it
-last synced, and how many changes are waiting to be sent. It never touches
-the network, so it is always safe to run.
+last synced, how many changes are waiting to be sent and how many on the
+remote are not here yet. It also looks for every other copy of the board in
+the repository (see [One board per repository](#one-board-per-repository)) and
+says when one disagrees with this one. It touches the network only with
+`--fetch`, so it is always safe to run.
 
 #### sync — Share a board through a git remote
 
@@ -1073,6 +1077,31 @@ Shared    through origin (git@github.com:me/app.git)
           Changes are sent automatically after each edit.
           Anyone who can read origin can read this board.
 ```
+
+### One board per repository
+
+A repository should have one board, and Brainfile notices when it has two: a
+`.brainfile/` folder in the checkout (plain files, or still tracked by the code
+branch) beside the `brainfile` branch, or a `brainfile` branch with no history
+in common with the board on the remote. `where` names both, with how many
+documents each holds and when each last changed:
+
+```console
+$ brainfile where
+...
+Boards    Two boards: this folder (7) and origin's (19, newer).
+          this folder    7 docs, last change 2026-08-12 /work/app/.brainfile
+          origin's      19 docs, last change 2026-10-12 refs/brainfile/remotes/origin/board
+          Origin's already has everything this folder has.
+          Nothing writes until you choose: brainfile adopt refs/brainfile/remotes/origin/board
+```
+
+While two boards disagree, every write (from the CLI, an agent's MCP tools or
+the desktop app) is refused with that same sentence and the command that
+settles it; reading still works. One board ahead of or behind its own copy on
+the remote is not two boards, just unsynced. A checkout of the board branch
+outside `.brainfile/`, and a code branch that still tracks an old copy of
+`.brainfile/`, are reported too.
 
 A board is a folder of Markdown. That is what makes it easy to read, and what
 made it hard to share: committed next to the code, every task move lands on a
@@ -1328,7 +1357,7 @@ to a board.
 | `template` | `action=` list, or use (`template`, `title`, `description`, `column`). |
 | `lint` | Check the board, the graph included; `fix: true` fixes what it can. Issues come back as data, with `valid` false only for errors. |
 | `sync` | Fetch, merge and push a shared board now; `pull` or `push` for one direction. A plain or unshared board says so in `skipped`. |
-| `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent. |
+| `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent; every other copy of the board in the repository, and `conflict` when one disagrees (writes are refused until `conflict.resolve` runs). `fetch: true` asks the remote first. |
 
 Every tool takes `file` to point at another board, and every one that writes
 is one board commit on a tracked board. The bundled JSON Schemas are

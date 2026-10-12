@@ -358,8 +358,9 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('where')
-    .description('Where the board lives, how it is stored, and who else has it (never touches the network)')
+    .description('Where the board lives, how it is stored, who else has it, and any other copy of it here (offline unless --fetch)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--fetch', 'Ask the remote for its copy of the board first')
     .option('--json', 'Output as JSON')
     .action((options) => { whereCommand(options); });
 

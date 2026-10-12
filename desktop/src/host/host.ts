@@ -40,6 +40,8 @@ import {
   fetchBeforeRead,
   flushBoardCommits,
   isTrackedBoard,
+  boardConflict,
+  boardConflictError,
   locateBoard,
   relatedBoards,
   onBoardCommitted,
@@ -378,10 +380,15 @@ function taskPath(board: OpenBoard, taskId: string): string {
   return found.filePath;
 }
 
-/** Run a core operation, then commit and republish. */
+/**
+ * Run a core operation, then commit and republish. Refused while another
+ * board in the repository disagrees with this one (spec-15).
+ */
 function mutate<T>(projectId: string, message: (board: OpenBoard) => string, op: (board: OpenBoard) => T): Result<T> {
   try {
     const board = requireBoard(projectId);
+    const conflict = boardConflict(board.dotDir);
+    if (conflict) throw new Error(boardConflictError(conflict));
     const value = op(board);
     scheduleBoardCommit(board.brainfilePath, message(board), COMMIT_DEBOUNCE_MS);
     publish(board);
