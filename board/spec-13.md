@@ -13,7 +13,7 @@ createdAt: "2026-10-12T05:56:09.083Z"
 subtasks:
   - id: spec-13-1
     title: "Parity test: enumerate CLI commands; each maps to an MCP tool or a reasoned exclusion"
-    completed: false
+    completed: true
   - id: spec-13-2
     title: note and log tools
     completed: false
@@ -32,7 +32,7 @@ subtasks:
   - id: spec-13-7
     title: "Docs: MANUAL and llms files list every tool"
     completed: false
-updatedAt: "2026-10-12T07:23:51.797Z"
+updatedAt: "2026-10-12T07:46:35.838Z"
 ---
 
 ## Description
