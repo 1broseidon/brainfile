@@ -290,7 +290,12 @@
     flex-direction: column;
     border-radius: var(--r-pane);
     background: var(--pop);
-    box-shadow: var(--top-light), var(--shadow-float);
+    /* The float shadow, and a wide halo in the pane's own colour, so the rows
+       behind it fall back rather than run up against its edge. */
+    box-shadow:
+      var(--top-light),
+      var(--shadow-float),
+      0 0 48px 20px color-mix(in oklch, var(--canvas) 85%, transparent);
   }
 
   /* While it grows, its contents wait for the room to read them. */
