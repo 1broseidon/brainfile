@@ -30,6 +30,8 @@ subtasks:
     title: Move the task to Review
     completed: false
 createdAt: "2026-10-12T23:14:13.926Z"
+assignee: grok
+updatedAt: "2026-10-12T23:14:46.965Z"
 ---
 
 ## Description
