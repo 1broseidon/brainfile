@@ -585,6 +585,19 @@ function standingDecisions(brainfilePath: string): string {
   }
 }
 
+/**
+ * Where finished work goes. A board with a review column wants a person to
+ * look before it is done, so the agent moves the task there and leaves
+ * completing it to them; a board without one lets the agent complete it.
+ */
+function finish(brainfilePath: string, taskId: string): string {
+  const columns = readBoardConfig(brainfilePath)?.config?.columns ?? [];
+  const review = columns.find((c) => /review/i.test(c.id) || /review/i.test(c.title ?? ''));
+  return review
+    ? `Then move ${taskId} to ${review.title ?? review.id} (column id \`${review.id}\`) for review. Do not complete it: a person completes it after looking at the work.`
+    : `Then complete ${taskId}.`;
+}
+
 function brief(projectId: string, taskId: string): string {
   const located = locateBoard(projectId, { materialize: false });
   if (!located.found) throw new Error(`No board in ${projectId}`);
@@ -599,7 +612,7 @@ function brief(projectId: string, taskId: string): string {
     body.trim() ? `\n${body.trim()}` : '',
     contract,
     standingDecisions(located.brainfilePath),
-    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did. Do the work in this repository. Finish with a reply of one or two sentences.`,
+    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did. ${finish(located.brainfilePath, task.id)} Do the work in this repository. Finish with a reply of one or two sentences.`,
   ].join('');
 }
 

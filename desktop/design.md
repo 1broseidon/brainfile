@@ -250,8 +250,10 @@ board changes (and in the feed).
   Hand to… alike. A project with no history starts from the last used
   anywhere. An old chat reopened from history keeps the agent it began with.
 - **Hand to…** is a muted key on a task. The brief is the task, its body
-  and its contract; the agent moves it to In Progress, does the work and
-  leaves a log note. At rest, the row's only trace is one mono line,
+  and its contract; the agent moves it to In Progress, does the work,
+  leaves a log note, and moves it to the board's review column when there
+  is one, leaving completing it to a person (it completes it only on a board
+  with no review column). At rest, the row's only trace is one mono line,
   `claude · editing`.
 - **Ask the board** is a muted key in the board's bottom-right corner (⌘J)
   that grows into a popover in its own corner (360 × 480 to start; its left
