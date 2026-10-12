@@ -18,7 +18,10 @@ subtasks:
   - id: spec-12-2
     title: "Containment: allowed parents per type; parents cannot complete with open children; lint warns, strict refuses"
     completed: false
-updatedAt: "2026-10-12T05:45:06.444Z"
+  - id: spec-12-3
+    title: "decisions: edge on work, computed reverse, flag work resting on a superseded decision"
+    completed: false
+updatedAt: "2026-10-12T05:45:06.722Z"
 ---
 
 ## Description
