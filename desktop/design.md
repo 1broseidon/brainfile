@@ -252,8 +252,9 @@ board changes (and in the feed).
   and its contract; the agent moves it to In Progress, does the work and
   leaves a log note. At rest, the row's only trace is one mono line,
   `claude · editing`.
-- **Ask the board** is a muted key in the board's bottom-right corner (⌘J):
-  a 360px popover for small things, asking about the board or having it
+- **Ask the board** is a muted key in the board's bottom-right corner (⌘J)
+  that grows into a 360px popover in its own corner, and shrinks back into
+  the key when closed: a popover for small things, asking about the board or having it
   managed (add, sort, split, close). It opens to a blank page every time;
   a muted history key in its header lists the board's recent chats (kept
   on this machine, the last 30), and any of them can be picked up again,

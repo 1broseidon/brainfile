@@ -7,14 +7,38 @@
   import { renderMarkdown } from '../lib/markdown';
   import { relativeTime } from '../lib/format';
   import type { AgentId } from '../../shared/api';
+  import { expoOut } from 'svelte/easing';
 
   /**
    * The dispatcher's small chat (design.md, Dispatch): a muted key in the
-   * board's bottom-right corner that opens a short popover for small things,
+   * board's bottom-right corner that grows into a short popover in its place,
+   * for small things,
    * asking about the board or having it managed. Not a chat app: one thread
    * per board, replies that land whole, and anything long belongs in Hotline.
    */
   let { projectName }: { projectName: string } = $props();
+
+  /** The key's size: the popover grows out of it and shrinks back into it. */
+  const KEY = 32;
+
+  /**
+   * The key becomes the popover: a clip from the key's square in the corner
+   * out to the whole panel, its contents coming up once there is room for
+   * them. Closing runs it back into the key. Reduced motion just shows it.
+   */
+  function grow(node: HTMLElement) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return { duration: 0 };
+    const { width, height } = node.getBoundingClientRect();
+    return {
+      duration: 220,
+      easing: expoOut,
+      css: (t: number) => {
+        const inset = (size: number) => ((1 - t) * (size - KEY)).toFixed(1);
+        const reveal = Math.max(0, (t - 0.4) / 0.6).toFixed(3);
+        return `clip-path: inset(${inset(height)}px 0 0 ${inset(width)}px round ${8 + 2 * t}px); --reveal: ${reveal};`;
+      },
+    };
+  }
 
   let text = $state('');
   /** An old thread reopened keeps its own agent; otherwise the project's last used. */
@@ -86,18 +110,14 @@
   }
 </script>
 
-<button
-  class="key"
-  class:on={app.chatOpen}
-  use:tip={'Ask the board  ⌘J'}
-  aria-label="Ask the board"
-  onclick={() => (app.chatOpen ? (app.chatOpen = false) : app.openChat())}
->
-  <Icon name="ask" size={15} />
-</button>
+{#if !app.chatOpen}
+  <button class="key" use:tip={'Ask the board  ⌘J'} aria-label="Ask the board" onclick={() => app.openChat()}>
+    <Icon name="ask" size={15} />
+  </button>
+{/if}
 
 {#if app.chatOpen}
-  <section class="pop" aria-label="Ask the board">
+  <section class="pop" aria-label="Ask the board" transition:grow>
     <header>
       <button class="icon-btn" class:on={view === 'history'} use:tip={'Recent chats'} onclick={() => (view = view === 'history' ? 'chat' : 'history')}>
         <Icon name="history" size={13} />
@@ -253,32 +273,29 @@
     transition: color var(--d-press) var(--ease), background var(--d-press) var(--ease);
   }
 
-  .key:hover,
-  .key.on {
+  .key:hover {
     color: var(--ink-2);
     background: var(--raised);
   }
 
+  /* Open, the popover takes the key's corner: same right and bottom edges. */
   .pop {
     position: absolute;
     z-index: var(--z-menu);
     right: var(--s3);
-    bottom: calc(var(--s3) + 32px + var(--s2));
+    bottom: var(--s3);
     width: 360px;
-    height: min(440px, calc(100% - 96px));
+    height: min(480px, calc(100% - var(--band-h) - var(--s3) * 2));
     display: flex;
     flex-direction: column;
     border-radius: var(--r-pane);
     background: var(--pop);
     box-shadow: var(--top-light), var(--shadow-float);
-    animation: rise var(--d-open) var(--ease);
   }
 
-  @keyframes rise {
-    from {
-      opacity: 0;
-      transform: translateY(6px);
-    }
+  /* While it grows, its contents wait for the room to read them. */
+  .pop > :global(*) {
+    opacity: var(--reveal, 1);
   }
 
   header {
