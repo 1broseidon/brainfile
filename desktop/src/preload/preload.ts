@@ -32,6 +32,7 @@ const api: Api = {
   restoreTask: invoke('restoreTask'),
   syncNow: invoke('syncNow'),
   listAgents: invoke('listAgents'),
+  listModels: invoke('listModels'),
   dispatch: invoke('dispatch'),
   ask: invoke('ask'),
   stopRun: invoke('stopRun'),

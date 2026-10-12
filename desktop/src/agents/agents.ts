@@ -23,6 +23,8 @@ import type {
   AgentMessage,
   AgentRequest,
   AgentRun,
+  ChatTurn,
+  ModelOption,
   PermissionAsk,
   PermissionPolicy,
   Result,
@@ -32,6 +34,9 @@ const parentPort = process.parentPort;
 const DATA_DIR = process.env.BRAINFILE_DATA_DIR ?? path.join(os.homedir(), 'Library', 'Application Support', 'Brainfile');
 const AGENTS_DIR = path.join(DATA_DIR, 'agents');
 const SETTINGS_FILE = path.join(DATA_DIR, 'dispatch.json');
+const MODELS_FILE = path.join(DATA_DIR, 'models.json');
+/** How long an agent's model list is trusted before it is asked again. */
+const MODELS_TTL_MS = 24 * 60 * 60_000;
 /** A chat session nobody has used for this long is let go. */
 const IDLE_MS = 10 * 60_000;
 
@@ -137,6 +142,51 @@ function policyFor(projectId: string): PermissionPolicy {
   }
 }
 
+// ── Models ───────────────────────────────────────────────────────────────────
+
+type ModelCache = Record<string, { at: number; options: ModelOption[] }>;
+
+function readModels(): ModelCache {
+  try {
+    return JSON.parse(fs.readFileSync(MODELS_FILE, 'utf-8')) as ModelCache;
+  } catch {
+    return {};
+  }
+}
+
+/** The session's model option, if the agent offers one: `category: model`, or an option named model. */
+function modelOption(options: acp.SessionConfigOption[] | null | undefined) {
+  const option = options?.find((o) => o.category === 'model' || o.id === 'model');
+  if (!option || option.type !== 'select') return null;
+  const flat: ModelOption[] = [];
+  for (const entry of option.options as Array<{ value?: string; name: string; options?: Array<{ value: string; name: string }> }>) {
+    if (entry.options) for (const o of entry.options) flat.push({ value: o.value, name: o.name });
+    else if (entry.value) flat.push({ value: entry.value, name: entry.name });
+  }
+  return { id: option.id, current: option.currentValue as string, options: flat };
+}
+
+function remember(agentId: AgentId, options: ModelOption[]): void {
+  if (!options.length) return;
+  const cache = readModels();
+  cache[agentId] = { at: Date.now(), options };
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(MODELS_FILE, JSON.stringify(cache, null, 2));
+}
+
+async function listModels(agentId: AgentId): Promise<Result<ModelOption[]>> {
+  const cached = readModels()[agentId];
+  if (cached && Date.now() - cached.at < MODELS_TTL_MS) return { ok: true, value: cached.options };
+  // Ask the agent itself: a throwaway session, no tools, then gone.
+  try {
+    const session = await open(DATA_DIR, agentId, `models:${agentId}`, undefined, false);
+    close(session);
+    return { ok: true, value: readModels()[agentId]?.options ?? [] };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 // ── Sessions ─────────────────────────────────────────────────────────────────
 
 interface Session {
@@ -178,12 +228,11 @@ function brainfileMcp(): acp.McpServer[] {
   return command ? [{ name: 'brainfile', command, args: ['mcp'], env: [] }] : [];
 }
 
-async function open(projectId: string, agentId: AgentId, key: string): Promise<Session> {
+async function open(projectId: string, agentId: AgentId, key: string, model?: string, board = true): Promise<Session> {
   const known = KNOWN.find((k) => k.id === agentId);
   if (!known) throw new Error(`Unknown agent ${agentId}`);
   if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
-  const located = locateBoard(projectId, { materialize: false });
-  const cwd = located.projectRoot;
+  const cwd = board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId;
   const launch = await known.launch();
   const child = spawn(launch.command, launch.args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'ignore'] });
 
@@ -211,8 +260,15 @@ async function open(projectId: string, agentId: AgentId, key: string): Promise<S
   });
 
   await session.connection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} });
-  const created = await session.connection.newSession({ cwd, mcpServers: brainfileMcp() });
+  const created = await session.connection.newSession({ cwd, mcpServers: board ? brainfileMcp() : [] });
   session.sessionId = created.sessionId;
+  const models = modelOption(created.configOptions);
+  if (models) {
+    remember(agentId, models.options);
+    if (model && model !== models.current && models.options.some((o) => o.value === model)) {
+      await session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => {});
+    }
+  }
   if (policyFor(projectId) === 'bypass') {
     const bypass = created.modes?.availableModes.find((m) => /bypass/i.test(m.id));
     if (bypass) await session.connection.setSessionMode({ sessionId: created.sessionId, modeId: bypass.id }).catch(() => {});
@@ -302,7 +358,7 @@ function brief(projectId: string, taskId: string): string {
   ].join('');
 }
 
-async function dispatch(projectId: string, taskId: string, agentId: AgentId): Promise<Result<AgentRun>> {
+async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>> {
   let prompt: string;
   try {
     prompt = brief(projectId, taskId);
@@ -312,7 +368,7 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId): Pr
   const run = newRun(projectId, agentId, 'dispatch', taskId);
   void (async () => {
     try {
-      const session = await open(projectId, agentId, run.id);
+      const session = await open(projectId, agentId, run.id, model);
       await turn(session, run, prompt);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
@@ -325,14 +381,26 @@ const ASK_PREAMBLE =
   'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
   'Do not change code unless asked. Reply briefly, in a sentence or two; if you changed the board, end with what you changed, by task ID, and say nothing about changes when there were none.\n\n';
 
-async function ask(projectId: string, agentId: AgentId, text: string): Promise<Result<AgentRun>> {
-  const key = `ask:${projectId}:${agentId}`;
+async function ask(
+  projectId: string,
+  agentId: AgentId,
+  text: string,
+  threadId: string,
+  model?: string,
+  earlier: ChatTurn[] = []
+): Promise<Result<AgentRun>> {
+  const key = `ask:${threadId}:${agentId}:${model ?? ''}`;
   const run = newRun(projectId, agentId, 'ask');
+  run.threadId = threadId;
   void (async () => {
     try {
       const existing = sessions.get(key);
-      const session = existing ?? (await open(projectId, agentId, key));
-      await turn(session, run, existing ? text : ASK_PREAMBLE + text);
+      const session = existing ?? (await open(projectId, agentId, key, model));
+      // A thread picked up again after its session was let go carries its own past.
+      const past = existing || earlier.length === 0
+        ? ''
+        : `Earlier in this conversation:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
+      await turn(session, run, existing ? text : ASK_PREAMBLE + past + text);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
     }
@@ -356,6 +424,7 @@ async function stopRun(runId: string): Promise<void> {
 
 const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   listAgents,
+  listModels,
   dispatch,
   ask,
   stopRun,

@@ -150,6 +150,16 @@ export interface AgentInfo {
   note: string;
 }
 
+export interface ModelOption {
+  value: string;
+  name: string;
+}
+
+export interface ChatTurn {
+  who: 'you' | 'agent';
+  text: string;
+}
+
 export type RunState = 'starting' | 'working' | 'waiting' | 'done' | 'failed' | 'stopped';
 
 /** One piece of agent work: a dispatched task, or a turn in the board's small chat. */
@@ -159,6 +169,8 @@ export interface AgentRun {
   agentId: AgentId;
   kind: 'dispatch' | 'ask';
   taskId?: string;
+  /** The chat thread an ask belongs to. */
+  threadId?: string;
   state: RunState;
   /** What kind of work, one word: reading, editing, running, searching, thinking. */
   activity: string;
@@ -215,8 +227,11 @@ export interface Api {
   syncNow(projectId: string): Promise<Result<SyncView>>;
 
   listAgents(): Promise<AgentInfo[]>;
-  dispatch(projectId: string, taskId: string, agentId: AgentId): Promise<Result<AgentRun>>;
-  ask(projectId: string, agentId: AgentId, text: string): Promise<Result<AgentRun>>;
+  /** The agent's models, as it reports them; probed once and cached. */
+  listModels(agentId: AgentId): Promise<Result<ModelOption[]>>;
+  dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>>;
+  /** One turn in a chat thread; earlier lines come along in case the agent's session has gone. */
+  ask(projectId: string, agentId: AgentId, text: string, threadId: string, model?: string, earlier?: ChatTurn[]): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
   answerPermission(askId: string, optionId: string | null): Promise<void>;
   onAgentEvent(listener: (event: AgentEvent) => void): () => void;
@@ -234,7 +249,7 @@ export const CHANNEL = {
 } as const;
 
 /** Methods main forwards to the agents process. */
-export const AGENT_METHODS = ['listAgents', 'dispatch', 'ask', 'stopRun', 'answerPermission'] as const;
+export const AGENT_METHODS = ['listAgents', 'listModels', 'dispatch', 'ask', 'stopRun', 'answerPermission'] as const;
 export type AgentMethod = (typeof AGENT_METHODS)[number];
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
 export type AgentMessage = { kind: 'reply'; id: number; result: unknown } | { kind: 'event'; event: AgentEvent };

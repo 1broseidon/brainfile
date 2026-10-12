@@ -3,6 +3,7 @@
   import { tip } from '../lib/tooltip';
   import Icon from './Icon.svelte';
   import { renderMarkdown } from '../lib/markdown';
+  import { relativeTime } from '../lib/format';
   import type { AgentId } from '../../shared/api';
 
   /**
@@ -15,12 +16,39 @@
 
   let text = $state('');
   let agentId = $state<AgentId | null>(null);
-  let picking = $state(false);
+  let picking = $state<'agent' | 'model' | null>(null);
+  let view = $state<'chat' | 'history'>('chat');
   let field = $state<HTMLTextAreaElement>();
   let list = $state<HTMLDivElement>();
 
   const agent = $derived(agentId ?? app.defaultAgent);
-  const lines = $derived(app.activeId ? (app.chats[app.activeId] ?? []) : []);
+  const lines = $derived(app.currentThread?.lines ?? []);
+  const history = $derived(app.activeId ? (app.threads[app.activeId] ?? []) : []);
+  const modelName = $derived.by(() => {
+    if (!agent) return '';
+    const chosen = app.modelChoice[agent];
+    if (!chosen) return 'default';
+    return app.models[agent]?.find((m) => m.value === chosen)?.name ?? chosen;
+  });
+
+  $effect(() => {
+    if (!app.chatOpen) view = 'chat';
+  });
+
+  function openThread(id: string): void {
+    if (app.activeId) app.thread[app.activeId] = id;
+    view = 'chat';
+  }
+
+  function newChat(): void {
+    if (app.activeId && !live) app.thread[app.activeId] = null;
+    view = 'chat';
+    field?.focus();
+  }
+
+  function titleOf(lines: { who: string; text: string }[]): string {
+    return lines.find((l) => l.who === 'you')?.text ?? 'Untitled';
+  }
   const live = $derived(app.liveAsk);
 
   $effect(() => {
@@ -50,7 +78,7 @@
   class:on={app.chatOpen}
   use:tip={'Ask the board  ⌘J'}
   aria-label="Ask the board"
-  onclick={() => (app.chatOpen = !app.chatOpen)}
+  onclick={() => (app.chatOpen ? (app.chatOpen = false) : app.openChat())}
 >
   <Icon name="ask" size={15} />
 </button>
@@ -58,14 +86,17 @@
 {#if app.chatOpen}
   <section class="pop" aria-label="Ask the board">
     <header>
-      <span class="where">{projectName}</span>
+      <button class="icon-btn" class:on={view === 'history'} use:tip={'Recent chats'} onclick={() => (view = view === 'history' ? 'chat' : 'history')}>
+        <Icon name="history" size={13} />
+      </button>
+      <span class="where">{view === 'history' ? 'Recent' : projectName}</span>
       <span class="spacer"></span>
       <span class="anchor">
-        <button class="agent mono" onclick={() => (picking = !picking)} disabled={!app.defaultAgent}>
+        <button class="pick mono" onclick={() => (picking = picking === 'agent' ? null : 'agent')} disabled={!app.defaultAgent}>
           {agent ? app.agentName(agent) : 'no agent installed'}<Icon name="chevron" size={10} />
         </button>
-        {#if picking}
-          <div class="catch" role="presentation" onmousedown={() => (picking = false)}></div>
+        {#if picking === 'agent'}
+          <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
           <div class="menu">
             {#each app.agents as a (a.id)}
               <button
@@ -73,7 +104,7 @@
                 disabled={!a.available}
                 onclick={() => {
                   agentId = a.id;
-                  picking = false;
+                  picking = null;
                 }}
               >
                 <span>{a.name}</span><span class="mono note">{a.note}</span>
@@ -82,9 +113,68 @@
           </div>
         {/if}
       </span>
+      {#if agent}
+        <span class="anchor">
+          <button
+            class="pick mono"
+            onclick={() => {
+              picking = picking === 'model' ? null : 'model';
+              if (picking === 'model') void app.loadModels(agent);
+            }}
+          >
+            {modelName}<Icon name="chevron" size={10} />
+          </button>
+          {#if picking === 'model'}
+            <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
+            <div class="menu">
+              {#if !(app.models[agent] ?? []).some((m) => /default/i.test(m.value) || /default/i.test(m.name))}
+                <button
+                  class="item"
+                  onclick={() => {
+                    app.chooseModel(agent, null);
+                    picking = null;
+                  }}
+                >
+                  <span>Default</span><span class="mono note">the agent’s own</span>
+                </button>
+              {/if}
+              {#if !app.models[agent]}
+                <p class="loading mono">asking {app.agentName(agent)}…</p>
+              {:else}
+                {#each app.models[agent] ?? [] as m (m.value)}
+                  <button
+                    class="item"
+                    onclick={() => {
+                      app.chooseModel(agent, m.value);
+                      picking = null;
+                    }}
+                  >
+                    <span>{m.name}</span>{#if app.modelChoice[agent] === m.value}<Icon name="check" size={12} />{/if}
+                  </button>
+                {/each}
+              {/if}
+            </div>
+          {/if}
+        </span>
+      {/if}
+      {#if app.currentThread && !live}
+        <button class="icon-btn" use:tip={'New chat'} onclick={newChat}><Icon name="plus" size={13} /></button>
+      {/if}
       <button class="icon-btn" use:tip={'Close  Esc'} onclick={() => (app.chatOpen = false)}><Icon name="close" size={13} /></button>
     </header>
 
+    {#if view === 'history'}
+      <div class="history">
+        {#each history as t (t.id)}
+          <button class="thread" class:current={t.id === app.currentThread?.id} onclick={() => openThread(t.id)}>
+            <span class="tt">{titleOf(t.lines)}</span>
+            <span class="mono meta">{app.agentName(t.agentId)} · {relativeTime(new Date(t.startedAt).toISOString())} · {t.lines.length}</span>
+          </button>
+        {:else}
+          <p class="empty">No chats on this board yet.</p>
+        {/each}
+      </div>
+    {:else}
     <div class="lines" bind:this={list}>
       {#each lines as line (line.key)}
         {#if line.who === 'agent' && !line.failed}
@@ -99,6 +189,8 @@
         <p class="working mono">{live.agentId} · {live.state === 'waiting' ? 'needs you, above' : live.activity}</p>
       {/if}
     </div>
+
+    {/if}
 
     <div class="composer">
       <textarea
@@ -193,7 +285,17 @@
     position: relative;
   }
 
-  .agent {
+  .icon-btn {
+    width: 24px;
+    height: 24px;
+  }
+
+  .icon-btn.on {
+    background: var(--fill-hover);
+    color: var(--ink-2);
+  }
+
+  .pick {
     height: 24px;
     display: inline-flex;
     align-items: center;
@@ -203,11 +305,11 @@
     color: var(--ink-3);
   }
 
-  .agent :global(svg) {
+  .pick :global(svg) {
     transform: rotate(90deg);
   }
 
-  .agent:hover {
+  .pick:hover {
     background: var(--fill-hover);
     color: var(--ink-2);
   }
@@ -224,6 +326,8 @@
     right: 0;
     top: calc(100% + 4px);
     width: 220px;
+    max-height: 300px;
+    overflow-y: auto;
     padding: var(--s1);
     border-radius: var(--r-card);
     background: var(--pressed);
@@ -250,6 +354,45 @@
 
   .note {
     color: var(--ink-4);
+  }
+
+  .loading {
+    margin: 0;
+    padding: var(--s2);
+    color: var(--ink-3);
+  }
+
+  .history {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: var(--s1) var(--s2) var(--s2);
+  }
+
+  .thread {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 7px var(--s2) 8px;
+    border-radius: var(--r-control);
+    text-align: left;
+  }
+
+  .thread:hover,
+  .thread.current {
+    background: var(--fill-hover);
+  }
+
+  .tt {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 500;
+  }
+
+  .meta {
+    color: var(--ink-3);
   }
 
   .lines {

@@ -3,7 +3,7 @@
  * whole; the window never edits a snapshot except to show a move before the
  * host confirms it.
  */
-import type { AgentId, AgentInfo, AgentRun, Api, BoardSnapshot, PermissionAsk, Project, TaskView } from '../../shared/api';
+import type { AgentId, AgentInfo, AgentRun, Api, BoardSnapshot, ModelOption, PermissionAsk, Project, TaskView } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
 import { asTree } from './format';
 
@@ -38,6 +38,24 @@ const ACTIVE_KEY = 'brainfile.active';
 const LAYOUT_KEY = 'brainfile.layout';
 const SEEN_KEY = 'brainfile.feedSeen';
 const AGENT_KEY = 'brainfile.lastAgent';
+const MODEL_KEY = 'brainfile.models';
+const THREADS_KEY = 'brainfile.threads';
+const THREADS_KEPT = 30;
+
+export interface Thread {
+  id: string;
+  agentId: AgentId;
+  startedAt: number;
+  lines: ChatLine[];
+}
+
+function load<T>(key: string, fallback: T): T {
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem(key) ?? '{}') };
+  } catch {
+    return fallback;
+  }
+}
 
 export interface ChatLine {
   key: string;
@@ -104,8 +122,14 @@ class AppState {
   lastAgent = $state<AgentId | null>(localStorage.getItem(AGENT_KEY) as AgentId | null);
   runs = $state<Record<string, AgentRun>>({});
   asks = $state<PermissionAsk[]>([]);
-  chats = $state<Record<string, ChatLine[]>>({});
+  /** Chat threads per board, newest first, kept on this machine. */
+  threads = $state<Record<string, Thread[]>>(load(THREADS_KEY, {}));
+  /** The thread in the popover, per board; null is the blank page it opens to. */
+  thread = $state<Record<string, string | null>>({});
   chatOpen = $state(false);
+  models = $state<Partial<Record<AgentId, ModelOption[]>>>({});
+  /** The model chosen for each agent; unset means the agent's own default. */
+  modelChoice = $state<Partial<Record<AgentId, string>>>(load(MODEL_KEY, {}));
 
   /** Whatever was used last, if it is still here; else the first one installed. */
   defaultAgent = $derived<AgentId | null>(
@@ -207,17 +231,57 @@ class AppState {
     if (!this.activeId) return;
     this.remember(agentId);
     await this.patch(taskId, { assignee: agentId });
-    const result = await api.dispatch(this.activeId, taskId, agentId);
+    const result = await api.dispatch(this.activeId, taskId, agentId, this.modelChoice[agentId]);
     if (!result.ok) this.notify(result.error, 'warn');
+  }
+
+  async loadModels(agentId: AgentId): Promise<void> {
+    if (this.models[agentId]) return;
+    const result = await api.listModels(agentId);
+    this.models[agentId] = result.ok ? result.value : [];
+  }
+
+  chooseModel(agentId: AgentId, model: string | null): void {
+    if (model) this.modelChoice[agentId] = model;
+    else delete this.modelChoice[agentId];
+    localStorage.setItem(MODEL_KEY, JSON.stringify(this.modelChoice));
+  }
+
+  /** The popover opens to a blank page, unless a reply is still on its way. */
+  openChat(): void {
+    if (this.activeId && !this.liveAsk) this.thread[this.activeId] = null;
+    this.chatOpen = true;
+  }
+
+  currentThread = $derived.by(() => {
+    const id = this.activeId ? this.thread[this.activeId] : null;
+    return id && this.activeId ? (this.threads[this.activeId] ?? []).find((t) => t.id === id) ?? null : null;
+  });
+
+  private saveThreads(): void {
+    localStorage.setItem(THREADS_KEY, JSON.stringify(this.threads));
+  }
+
+  private addLine(projectId: string, threadId: string, line: ChatLine): void {
+    const list = this.threads[projectId] ?? [];
+    this.threads[projectId] = list.map((t) => (t.id === threadId ? { ...t, lines: [...t.lines, line] } : t));
+    this.saveThreads();
   }
 
   async askBoard(text: string, agentId: AgentId): Promise<void> {
     const projectId = this.activeId;
     if (!projectId || !text.trim()) return;
     this.remember(agentId);
-    this.chats[projectId] = [...(this.chats[projectId] ?? []), { key: `you-${Date.now()}`, who: 'you', text: text.trim(), at: Date.now() }];
-    const result = await api.ask(projectId, agentId, text.trim());
-    if (!result.ok) this.chats[projectId] = [...this.chats[projectId], { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true }];
+    let thread = this.currentThread;
+    if (!thread) {
+      thread = { id: `t-${Date.now()}`, agentId, startedAt: Date.now(), lines: [] };
+      this.threads[projectId] = [thread, ...(this.threads[projectId] ?? [])].slice(0, THREADS_KEPT);
+      this.thread[projectId] = thread.id;
+    }
+    const earlier = thread.lines.filter((l) => !l.failed).map((l) => ({ who: l.who, text: l.text }));
+    this.addLine(projectId, thread.id, { key: `you-${Date.now()}`, who: 'you', text: text.trim(), at: Date.now() });
+    const result = await api.ask(projectId, agentId, text.trim(), thread.id, this.modelChoice[agentId], earlier);
+    if (!result.ok) this.addLine(projectId, thread.id, { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true });
   }
 
   private onRun(run: AgentRun): void {
@@ -225,10 +289,9 @@ class AppState {
     this.runs[run.id] = run;
     const ended = !isLive(run) && (!before || isLive(before));
     if (!ended) return;
-    if (run.kind === 'ask') {
+    if (run.kind === 'ask' && run.threadId) {
       const text = run.state === 'done' ? run.reply || 'Done.' : run.state === 'stopped' ? 'Stopped.' : (run.error ?? 'It stopped.');
-      const lines = this.chats[run.projectId] ?? [];
-      this.chats[run.projectId] = [...lines, { key: run.id, who: 'agent', text, at: Date.now(), failed: run.state === 'failed' }];
+      this.addLine(run.projectId, run.threadId, { key: run.id, who: 'agent', text, at: Date.now(), failed: run.state === 'failed' });
     } else if (run.state === 'failed') {
       this.notify(`${this.agentName(run.agentId)} stopped on ${run.taskId}: ${run.error ?? 'unknown error'}`, 'warn');
     }

@@ -51,7 +51,8 @@
       return;
     }
     if (meta && e.key === 'j' && app.board) {
-      app.chatOpen = !app.chatOpen;
+      if (app.chatOpen) app.chatOpen = false;
+      else app.openChat();
       e.preventDefault();
       return;
     }

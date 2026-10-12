@@ -217,8 +217,13 @@ board changes (and in the feed).
   `claude · editing`.
 - **Ask the board** is a muted key in the board's bottom-right corner (⌘J):
   a 360px popover for small things, asking about the board or having it
-  managed (add, sort, split, close). One thread per board; replies land
-  whole; no history beyond the session.
+  managed (add, sort, split, close). It opens to a blank page every time;
+  a muted history key in its header lists the board's recent chats (kept
+  on this machine, the last 30), and any of them can be picked up again,
+  its past carried along if the agent's session has gone. Replies land
+  whole. Beside the agent, a muted model picker lists the models the agent
+  itself reports (asked once a day); unset means the agent's default, and
+  Hand to… uses the same choice.
 - **When an agent asks first**, the board's band says so in one line, with
   Allow once · Always · Deny; a board not in front is named in the strip.
   Per repository, the answer can be `ask` (the default), `allow` or
