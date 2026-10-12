@@ -184,6 +184,10 @@ function captureAndQuit(target: BrowserWindow, file: string): void {
 }
 
 app.whenReady().then(() => {
+  // A packaged app takes its icon from the bundle; in development the Dock
+  // would show Electron's, so lend it the tile.
+  if (!app.isPackaged) app.dock?.setIcon(path.join(__dirname, '..', 'assets', 'icon.png'));
+  app.setName('Brainfile');
   store = new ProjectStore(path.join(app.getPath('userData'), 'projects.json'));
   host = startHost();
   createWindow();

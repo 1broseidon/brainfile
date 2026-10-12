@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Brainfile">
+	<!--
+		The Brainfile mark, the b. The Markdown bracket's stem runs down into the
+		box and is its left wall; the bracket's serif is the b's hook; the bowl is
+		a filled checkbox with the tick cut out. One shape, one 8-unit weight on a
+		64 grid. One colour: set fill on the root, or use currentColor.
+	-->
+	<defs>
+		<mask id="tick" maskUnits="userSpaceOnUse" x="0" y="0" width="64" height="64">
+			<rect width="64" height="64" fill="#fff" />
+			<path d="M24 40l6 6 11.5-12.5" fill="none" stroke="#000" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round" />
+		</mask>
+	</defs>
+	<path d="M15 4H31a4 4 0 0 1 0 8H19V19a1 1 0 0 0 1 1H42a11 11 0 0 1 11 11V48a11 11 0 0 1-11 11H15a4 4 0 0 1-4-4V8a4 4 0 0 1 4-4Z" fill="currentColor" mask="url(#tick)" />
+</svg>

@@ -11,7 +11,8 @@
     "build:core": "npm run build --prefix ../core",
     "start": "electron .",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && svelte-check --tsconfig tsconfig.json --threshold error",
-    "package": "npm run build && electron-builder --mac --dir"
+    "package": "npm run build && electron-builder --mac --dir",
+    "icons": "electron scripts/make-icons.mjs"
   },
   "dependencies": {
     "@brainfile/core": "file:../core"
@@ -41,11 +42,13 @@
     "files": [
       "dist",
       "dist-electron",
+      "assets/icon.png",
       "package.json"
     ],
     "mac": {
       "category": "public.app-category.productivity",
-      "target": "dir"
+      "target": "dir",
+      "icon": "assets/icon.icns"
     }
   },
   "allowScripts": {

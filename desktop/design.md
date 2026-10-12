@@ -39,15 +39,19 @@ One family, **Workbench**:
 
 ## The mark
 
-The logo is a brain wired with Markdown checkboxes, `[ ]` and `[x]`. The
-window draws it from `logo.png`, traced (`components/Mark.svelte`):
+The mark is **the b** (`assets/mark.svg`, `components/Mark.svelte`). The
+Markdown bracket's stem runs down into the box and becomes the box's left
+wall; the bracket's serif is the b's hook; the bowl is a filled checkbox
+with the tick cut out. One shape, one 8-unit weight on a 64 grid. It spells
+the name, the format and the job at once.
 
-- Above 28px, the whole logo: the brain and its wiring. Empty states use it.
-- At 28px and under, the wiring turns to mush, so it draws the brain's
-  outline holding one ticked box, the shape of done. The titlebar uses it.
-
-One shape in one colour. In chrome it is ink-3, the colour of furniture,
-never the accent.
+- One shape in one colour. In chrome it is ink-3, the colour of furniture,
+  never the accent; on the app tile (`assets/tile.svg`) it is the accent on
+  the dark rounded square, drawn as Hotline's tile is.
+- At 20px and under the tick is cut heavier (8 units instead of 6.2) so it
+  stays more than two pixels wide.
+- A literal `[x]` is not ours ([x]cube LABS sets it in its wordmark); the
+  b is.
 
 ## Theme
 
@@ -101,6 +105,23 @@ Controls are 26px; a field is 28px and is sunk into its surface (the well's
 colour, an inset hairline); a key is raised (the pop plane, the top-light).
 You press a key and type into a well.
 
+## Icons
+
+Linear gave the bones (a status, a priority, a kind and a dense row), not
+the drawing. Every glyph comes from Brainfile's own material:
+
+- **One root shape, the checkbox.** Boxes keep its 3px corner. Nothing is a
+  circle except a face and the sync dot.
+- **Drawn like type.** Interface icons (`components/Icon.svelte`) sit on a
+  16 grid with 1.5 strokes, square ends and mitred corners, to match IBM Plex
+  Mono rather than the rounded strokes of Lucide or Linear.
+- **Status** is the mark's checkbox: dashed for backlog, open, a level rising
+  inside it as the task moves right, ticked in the accent when done.
+- **Priority is heat, not signal bars.** Three square pips lit from the left
+  in the priority's colour. Urgent is the one shape no level shares: a
+  warning diamond. No priority draws nothing.
+- **Kinds** are the TUI's glyphs, so the terminal and the desktop read alike.
+
 ## Rows
 
 The board reads like the TUI's list. A row is 36px:
@@ -109,10 +130,8 @@ The board reads like the TUI's list. A row is 36px:
 [status] [priority] [kind] task-12  Title, which truncates first      ready  2/4  #sync  (face)
 ```
 
-- Status is the logo's checkbox: dashed for backlog, open for not started,
-  filling from the bottom as the task moves right, ticked in orange when
-  done.
-- No priority draws nothing; emptiness is legible.
+- Status and priority are drawn as Icons says; no priority draws nothing,
+  because emptiness is legible.
 - The kind is the TUI's glyph (▸ epic · ◆ spec · ● adr · ⎘ plan), blank for
   a plain task; a parent with children shows ▾ / ▸ instead and its children
   indent 20px beneath it.

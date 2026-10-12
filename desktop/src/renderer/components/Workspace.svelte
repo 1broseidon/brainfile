@@ -41,7 +41,7 @@
   {:else if !project}
     <div class="center">
       <div class="empty">
-        <div class="art"><Mark size={72} /></div>
+        <div class="art"><Mark size={64} /></div>
         <h1>Add your first project</h1>
         <p>
           A project is a repository, or any folder, with a Brainfile board. Brainfile finds the board in
@@ -56,7 +56,7 @@
     <div class="center">
       <div class="empty">
         {#if project.state.status === 'no-board'}
-          <div class="art"><Mark size={72} /></div>
+          <div class="art"><Mark size={64} /></div>
           <h1>No board in {project.name} yet</h1>
           <p>
             {#if project.state.inRepo}
