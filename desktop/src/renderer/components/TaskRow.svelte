@@ -37,11 +37,12 @@
   }
 </script>
 
-<!-- A calm row: the title, and only what is worth saying about it. Column 1 is
-     the TUI's kind glyph (blank for a plain task) and turns into the status
-     box under the hand; the ID, tags and an unset priority or assignee wait
-     for the hand too. Urgent and high priority, contract state, sub-task
-     progress and an assignee always show, because they are signals. -->
+<!-- A calm row: the status box, the title, and only what is worth saying
+     about it. The box always shows (an open task is still a box); a typed
+     document's TUI glyph sits small before its title, and a parent's ▾ / ▸
+     takes that place. The ID, tags and an unset priority or assignee wait for
+     the hand. Urgent and high priority, contract state, sub-task progress and
+     an assignee always show, because they are signals. -->
 <div
   class="row"
   class:selected
@@ -55,9 +56,8 @@
   onclick={() => (app.openTaskId = task.id)}
   onkeydown={() => {}}
 >
-  <button class="cell lead-cell" title="Status  S" onclick={(e) => pick('status', e)}>
-    <span class="kind">{kindGlyph(task.type)}</span>
-    <span class="box"><StatusIcon {progress} /></span>
+  <button class="cell" title="Status  S" onclick={(e) => pick('status', e)}>
+    <StatusIcon {progress} />
   </button>
   <span class="title-block" style:padding-left="{depth * 20}px">
     {#if children > 0}
@@ -69,6 +69,8 @@
           ontoggle?.();
         }}>{collapsed ? '▸' : '▾'}</button
       >
+    {:else if kindGlyph(task.type)}
+      <span class="kind" title={task.type}>{kindGlyph(task.type)}</span>
     {/if}
     <span class="title">{task.title}</span>
     <span class="id mono reveal">{task.id}</span>
@@ -148,41 +150,10 @@
     background: var(--fill-active);
   }
 
-  /* Column 1: the kind glyph at rest, the status box under the hand. A
-     finished row keeps its tick. */
-  .lead-cell {
-    position: relative;
-  }
-
-  .kind,
-  .box {
-    position: absolute;
-    inset: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: opacity var(--d-press) var(--ease);
-  }
-
   .kind {
-    font-size: 11px;
-    color: var(--ink-3);
-  }
-
-  .box {
-    opacity: 0;
-  }
-
-  .row:hover .box,
-  .row.selected .box,
-  .row.done .box {
-    opacity: 1;
-  }
-
-  .row:hover .kind,
-  .row.selected .kind,
-  .row.done .kind {
-    opacity: 0;
+    flex: none;
+    font-size: 10px;
+    color: var(--ink-4);
   }
 
   .title-block {
