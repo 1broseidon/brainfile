@@ -16,7 +16,10 @@ subtasks:
   - id: spec-11-1
     title: "Decision type: frontmatter, board/ while current, logs/ once superseded; ADRs fold in; list leaves decisions out"
     completed: false
-updatedAt: "2026-10-12T05:36:57.335Z"
+  - id: spec-11-2
+    title: decide and supersede commands with auto-supersede by claim key; MCP decide
+    completed: false
+updatedAt: "2026-10-12T05:36:57.615Z"
 ---
 
 ## Description
