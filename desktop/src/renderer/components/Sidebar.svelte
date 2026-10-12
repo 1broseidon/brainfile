@@ -37,9 +37,14 @@
 <aside class="rail" style:width="{app.layout.rail}px">
   <div class="head">
     <span>Projects</span>
-    <button class="icon-btn" title="Add project  ⌘O" onclick={() => app.addProject()}>
-      <Icon name="plus" size={14} />
-    </button>
+    <span class="keys">
+      <button class="icon-btn" title="Add project  ⌘O" onclick={() => app.addProject()}>
+        <Icon name="plus" size={14} />
+      </button>
+      <button class="icon-btn" title="Hide projects  ⌘B" onclick={() => app.toggleRail()}>
+        <Icon name="sidebar" size={14} />
+      </button>
+    </span>
   </div>
 
   <nav class="projects">
@@ -81,6 +86,11 @@
     justify-content: space-between;
     padding: 0 var(--s1) 0 var(--s3);
     font-weight: 600;
+  }
+
+  .keys {
+    display: inline-flex;
+    gap: 2px;
   }
 
   .projects {

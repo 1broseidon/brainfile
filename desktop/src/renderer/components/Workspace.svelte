@@ -35,7 +35,13 @@
   }
 </script>
 
-<main class="pane">
+<main class="pane" class:keyed={!app.layout.railOpen}>
+  <!-- With the rail closed, its key leads the pane, before the title. -->
+  {#if !app.layout.railOpen}
+    <button class="icon-btn railkey" title="Show projects  ⌘B" onclick={() => app.toggleRail()}>
+      <Icon name="sidebar" size={14} />
+    </button>
+  {/if}
   {#if !app.loaded}
     <div class="center"></div>
   {:else if !project}
@@ -156,6 +162,17 @@
     box-shadow: var(--top-light), 0 0 0 var(--hairline) var(--line);
     overflow: hidden;
     position: relative;
+  }
+
+  .railkey {
+    position: absolute;
+    z-index: 3;
+    top: calc((var(--band-h) - var(--control-h)) / 2);
+    left: var(--s2);
+  }
+
+  .keyed .band {
+    padding-left: calc(var(--s2) + var(--control-h) + var(--s2));
   }
 
   /* A pane's band has no line under it; what scrolls fades out beneath it. */

@@ -21,10 +21,14 @@ Nothing decorates; everything on screen is a thing you can read or press.
 One family, **Workbench**:
 
 - The window's top strip is the well itself: 32px, the traffic lights,
-  the key that shows and hides the rail (⌘B), then the **lockup** (the mark
-  at 16px and the name written out, lowercase `brainfile` in Plex Sans 600)
-  in the left corner, and the search at the right. Unlike Hotline's centred
-  toad, the box has a hard left edge, so it leads from the left.
+  then the **lockup** (the mark at 16px and the name written out, lowercase
+  `brainfile` in Plex Sans 600), always leftmost, and the search at the
+  right. Unlike Hotline's centred toad, the box has a hard left edge, so it
+  leads from the left.
+- The **rail's key** (⌘B) lives with the rail: in the rail's head beside
+  Projects and add while it is open, and at the leading edge of the board's
+  band, before the title, once it is closed. Nothing ever sits left of the
+  lockup.
 - The **rail** stands directly in the well: Projects, one row each, the
   folder's name over one mono line (`13 open · branch`). Its edge is the
   gutter beside it, dragged between 180 and 420px, remembered, put back by a

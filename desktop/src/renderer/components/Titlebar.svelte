@@ -4,19 +4,11 @@
   import Mark from './Mark.svelte';
 </script>
 
-<!-- The window's strip is the well itself: the lights, the rail's key, then
-     the lockup (the mark and the written name) in the left corner, the
-     search at the right. -->
+<!-- The window's strip is the well itself: the lights, then the lockup (the
+     mark and the written name), always leftmost, and the search at the
+     right. The rail's key lives with the rail (see Sidebar, Workspace). -->
 <header class="strip drag">
   <div class="left">
-    <button
-      class="icon-btn no-drag"
-      title={app.layout.railOpen ? 'Hide projects  ⌘B' : 'Show projects  ⌘B'}
-      aria-pressed={app.layout.railOpen}
-      onclick={() => app.toggleRail()}
-    >
-      <Icon name="sidebar" size={15} />
-    </button>
     <span class="lockup" aria-label="Brainfile">
       <span class="mark"><Mark size={16} /></span>
       <span class="name">brainfile</span>
@@ -49,16 +41,10 @@
     align-items: center;
   }
 
-  .left .icon-btn {
-    width: 26px;
-    height: 24px;
-  }
-
   .lockup {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-left: var(--s2);
   }
 
   .mark {
