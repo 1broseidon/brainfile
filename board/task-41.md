@@ -12,7 +12,7 @@ parentId: spec-17
 subtasks:
   - id: task-41-1
     title: Link URL parsing + key storage + expo-crypto randomness
-    completed: false
+    completed: true
   - id: task-41-2
     title: Scanner (expo-camera) + paste link + Local Network and camera strings
     completed: false
@@ -35,6 +35,7 @@ subtasks:
     title: Tests + simulator against link:dev
     completed: false
 createdAt: "2026-10-13T04:15:11.912Z"
+updatedAt: "2026-10-13T04:39:36.760Z"
 ---
 
 ## Description
