@@ -7,7 +7,8 @@
   import { renderMarkdown } from '../lib/markdown';
   import { dayTime, relativeTime, tookWords } from '../lib/format';
   import { linkRefs, refsOf } from '../lib/refs';
-  import type { AgentId } from '../../shared/api';
+  import type { AgentId, ModelOption } from '../../shared/api';
+  import { effortToSet } from '../../agents/effort';
   import type { Thread } from '../lib/state.svelte';
   import { expoOut } from 'svelte/easing';
   import { untrack } from 'svelte';
@@ -88,6 +89,10 @@
   /** An old thread reopened keeps its own agent; otherwise the project's last used. */
   let agentId = $state<AgentId | null>(null);
   let picking = $state<'agent' | 'model' | null>(null);
+  /** The model whose effort submenu is open, and where that submenu sits. */
+  let effortOpen = $state<string | null>(null);
+  let effortBox = $state<{ top: number; left: number } | null>(null);
+  let effortHide: ReturnType<typeof setTimeout> | undefined;
   let view = $state<'chat' | 'history'>('chat');
   let field = $state<HTMLTextAreaElement>();
   let list = $state<HTMLDivElement>();
@@ -95,12 +100,39 @@
   const agent = $derived(agentId ?? app.defaultAgent);
   const lines = $derived(app.currentThread?.lines ?? []);
   const history = $derived(app.activeId ? (app.threads[app.activeId] ?? []) : []);
-  const modelName = $derived.by(() => {
-    if (!agent) return '';
-    const chosen = app.modelFor(agent);
-    if (!chosen) return 'default';
-    return app.modelLabel(agent, chosen);
-  });
+  const modelName = $derived(agent ? app.modelNote(agent) || 'default' : '');
+
+  function showEffort(model: ModelOption, row: HTMLElement): void {
+    if (!model.efforts?.length) {
+      clearTimeout(effortHide);
+      effortOpen = null;
+      return;
+    }
+    clearTimeout(effortHide);
+    const rect = row.getBoundingClientRect();
+    const width = 168;
+    const left = rect.right + 6 + width > window.innerWidth - 8 ? Math.max(8, rect.left - width - 6) : rect.right + 6;
+    effortOpen = model.value;
+    effortBox = { top: rect.top, left };
+  }
+
+  function hideEffort(): void {
+    clearTimeout(effortHide);
+    effortHide = setTimeout(() => {
+      effortOpen = null;
+    }, 120);
+  }
+
+  function holdEffort(): void {
+    clearTimeout(effortHide);
+  }
+
+  function pickModel(model: string | null, effort?: string): void {
+    if (!agent) return;
+    app.chooseModel(agent, model, effort ?? null);
+    picking = null;
+    effortOpen = null;
+  }
 
   $effect(() => {
     if (!app.chatOpen) view = 'chat';
@@ -455,16 +487,11 @@
               <span class="label">{modelName}</span><Icon name="chevron" size={10} />
             </button>
             {#if picking === 'model'}
+              {@const hovered = (app.models[agent] ?? []).find((m) => m.value === effortOpen)}
               <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
-              <div class="menu">
+              <div class="menu" onscroll={() => (effortOpen = null)}>
                 {#if !(app.models[agent] ?? []).some((m) => /default/i.test(m.value) || /default/i.test(m.name))}
-                  <button
-                    class="item"
-                    onclick={() => {
-                      app.chooseModel(agent, null);
-                      picking = null;
-                    }}
-                  >
+                  <button class="item" onclick={() => pickModel(null)}>
                     <span>Default</span><span class="mono note">the agent’s own</span>
                   </button>
                 {/if}
@@ -474,16 +501,39 @@
                   {#each app.models[agent] ?? [] as m (m.value)}
                     <button
                       class="item"
-                      onclick={() => {
-                        app.chooseModel(agent, m.value);
-                        picking = null;
-                      }}
+                      onmouseenter={(e) => showEffort(m, e.currentTarget as HTMLElement)}
+                      onmouseleave={hideEffort}
+                      onclick={() => pickModel(m.value, m.efforts?.length ? effortToSet(m.efforts, app.rememberedEffort(agent, m.value)) : undefined)}
                     >
-                      <span>{m.name}</span>{#if app.modelFor(agent) === m.value}<Icon name="check" size={12} />{/if}
+                      <span>{m.name}</span>
+                      <span class="marks">
+                        {#if app.modelFor(agent) === m.value}<Icon name="check" size={12} />{/if}
+                        {#if m.efforts?.length}<Icon name="chevron" size={12} />{/if}
+                      </span>
                     </button>
                   {/each}
                 {/if}
               </div>
+              {#if hovered?.efforts?.length && effortBox}
+                <div
+                  class="submenu"
+                  role="menu"
+                  aria-label="Effort"
+                  tabindex="-1"
+                  style:top="{effortBox.top}px"
+                  style:left="{effortBox.left}px"
+                  onmouseenter={holdEffort}
+                  onmouseleave={hideEffort}
+                >
+                  <p class="effort-label mono">Effort</p>
+                  {#each hovered.efforts as level (level.value)}
+                    <button class="item" onclick={() => pickModel(hovered.value, level.value)}>
+                      <span>{level.name}</span>
+                      {#if app.modelFor(agent) === hovered.value && app.effortFor(agent) === level.value}<Icon name="check" size={12} />{/if}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
             {/if}
           </span>
         {/if}
@@ -684,7 +734,7 @@
   }
 
   .pick {
-    max-width: 136px;
+    max-width: 168px;
     height: 24px;
     display: inline-flex;
     align-items: center;
@@ -746,6 +796,32 @@
 
   .item:not(:disabled):hover {
     background: var(--fill-hover);
+  }
+
+  .marks {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    color: var(--ink-3);
+  }
+
+  /* A model's effort levels, beside the row under the pointer. */
+  .submenu {
+    position: fixed;
+    z-index: var(--z-menu);
+    width: 168px;
+    padding: var(--s1);
+    border-radius: var(--r-card);
+    background: var(--pressed);
+    box-shadow: var(--top-light), var(--shadow-float);
+  }
+
+  .effort-label {
+    margin: 0;
+    padding: 4px var(--s2) 2px;
+    color: var(--ink-4);
+    font-size: var(--t-xs);
   }
 
   .item:disabled {

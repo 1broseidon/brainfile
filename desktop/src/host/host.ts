@@ -597,7 +597,13 @@ function recordDispatch(projectId: string, taskId: string, record: DispatchRecor
       const file = taskPath(board, taskId);
       const doc = readTaskFile(file);
       if (!doc) throw new Error(`Could not read ${taskId}`);
-      const dispatch: DispatchRecord = { agent: record.agent, ...(record.model ? { model: record.model } : {}), by: record.by, at: record.at };
+      const dispatch: DispatchRecord = {
+        agent: record.agent,
+        ...(record.model ? { model: record.model } : {}),
+        ...(record.effort ? { effort: record.effort } : {}),
+        by: record.by,
+        at: record.at,
+      };
       writeTaskFile(file, { ...doc.task, assignee: record.agent, dispatch, updatedAt: new Date().toISOString() }, doc.body);
     }
   );

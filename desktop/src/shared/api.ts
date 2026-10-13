@@ -259,9 +259,16 @@ export interface AgentInfo {
   note: string;
 }
 
+export interface EffortOption {
+  value: string;
+  name: string;
+}
+
 export interface ModelOption {
   value: string;
   name: string;
+  /** Effort levels this model offers. Empty when it offers none; absent until they have been asked. */
+  efforts?: EffortOption[];
 }
 
 export interface ChatTurn {
@@ -303,6 +310,8 @@ export interface AgentRun {
 export interface DispatchRecord {
   agent: AgentId;
   model?: string;
+  /** The effort asked for with the model, when one was. */
+  effort?: string;
   by: 'chat';
   /** ISO 8601. */
   at: string;
@@ -497,7 +506,7 @@ export interface Api {
   getSettings(): Promise<DispatchSettings>;
   /** Applies at once, to sessions already open as well as new ones. */
   setSettings(patch: Partial<DispatchSettings>): Promise<DispatchSettings>;
-  dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>>;
+  dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Promise<Result<AgentRun>>;
   /** One turn in a chat thread; earlier lines come along in case the agent's session has gone. */
   /** `context` names what the person has open (a task's ID), so "this" means it. */
   /** `models` is the person's model for each agent on this board: what the chat's hand-offs use (spec-16). */
@@ -509,7 +518,9 @@ export interface Api {
     model?: string,
     earlier?: ChatTurn[],
     context?: string[],
-    models?: Partial<Record<AgentId, string>>
+    models?: Partial<Record<AgentId, string>>,
+    effort?: string,
+    efforts?: Partial<Record<AgentId, string>>
   ): Promise<Result<AgentRun>>;
   /**
    * One turn in a discussion of a task before it is handed off (task-35): the
@@ -523,7 +534,8 @@ export interface Api {
     threadId: string,
     taskId: string,
     model?: string,
-    earlier?: ChatTurn[]
+    earlier?: ChatTurn[],
+    effort?: string
   ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
   /** The hand-off's branch and what is on it, or null when the task has no worktree. */

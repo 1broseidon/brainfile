@@ -28,6 +28,7 @@ import { customLaunch } from './custom';
 import { readSettingsFile, settingsOf, writeSettings, type SettingsFile } from './settings';
 import { discussContext, discussMode, discussPermission, discussPreamble } from './discuss';
 import { Startups, unlessAborted } from './startup';
+import { effortSelect, effortToSet } from './effort';
 import { commandName, customId, customName, isCustom } from '../shared/agentServers';
 import type {
   AgentEvent,
@@ -403,13 +404,97 @@ function remember(agentId: AgentId, options: ModelOption[], modes: AgentModes | 
   fs.writeFileSync(MODELS_FILE, JSON.stringify(cache, null, 2));
 }
 
+/** A freshly listed model keeps the effort levels already asked for it. */
+function keepingEfforts(agentId: AgentId, options: ModelOption[]): ModelOption[] {
+  const prior = readModels()[agentId]?.options ?? [];
+  return options.map((option) => (Array.isArray(option.efforts) ? option : { ...option, efforts: prior.find((item) => item.value === option.value)?.efforts }));
+}
+
+/** How long a probe may spend asking each model's effort levels before it returns the list it has. */
+const EFFORT_SWEEP_MS = 8_000;
+
+/** A model list whose efforts have been asked: each entry carries `efforts`, possibly empty. */
+function effortsKnown(options: ModelOption[]): boolean {
+  return options.every((option) => Array.isArray(option.efforts));
+}
+
+/** Gives up when the work outlasts `ms`. The request itself is left to finish. */
+function within<T>(ms: number, work: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out')), Math.max(1, ms));
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+/**
+ * Each model's effort levels, asked on the probe session that listed the models.
+ * The agent publishes `thought_level` for the model the session is on, so selecting
+ * each model is what makes that model's levels appear. A model the sweep does not
+ * reach keeps an empty list. The session is put back on the model it opened on.
+ */
+async function learnEfforts(session: Session): Promise<void> {
+  const cached = readModels()[session.agentId];
+  const models = cached?.options ?? [];
+  const modes = cached?.modes ?? null;
+  const thought = effortSelect(session.configOptions);
+  if (!session.modelConfigId || !thought) {
+    remember(session.agentId, models.map((model) => ({ value: model.value, name: model.name, efforts: [] })), modes);
+    return;
+  }
+  const current = session.modelCurrent;
+  const deadline = Date.now() + EFFORT_SWEEP_MS;
+  const filled: ModelOption[] = [];
+  for (const model of models) {
+    if (model.value === current) {
+      filled.push({ value: model.value, name: model.name, efforts: thought.options });
+      continue;
+    }
+    const left = deadline - Date.now();
+    if (left <= 0) {
+      filled.push({ value: model.value, name: model.name, efforts: [] });
+      continue;
+    }
+    try {
+      const response = await within(
+        Math.min(1_000, left),
+        session.connection.setSessionConfigOption({ sessionId: session.sessionId, configId: session.modelConfigId, value: model.value })
+      );
+      const levels = effortSelect(response.configOptions);
+      filled.push({ value: model.value, name: model.name, efforts: levels?.options ?? [] });
+    } catch {
+      filled.push({ value: model.value, name: model.name, efforts: [] });
+    }
+  }
+  if (current && current !== filled.at(-1)?.value) {
+    await session.connection
+      .setSessionConfigOption({ sessionId: session.sessionId, configId: session.modelConfigId, value: current })
+      .catch(() => {});
+  }
+  remember(session.agentId, filled, modes);
+}
+
 /** What the agent reports about its sessions, asked once a day: a throwaway session, no tools, then gone. */
 async function probe(agentId: AgentId): Promise<Result<ModelCache[string]>> {
   const cached = readModels()[agentId];
-  if (cached && 'modes' in cached && Date.now() - cached.at < MODELS_TTL_MS) return { ok: true, value: cached };
+  if (cached && 'modes' in cached && effortsKnown(cached.options) && Date.now() - cached.at < MODELS_TTL_MS) return { ok: true, value: cached };
   try {
     const session = await open(DATA_DIR, agentId, `probe:${agentId}`, undefined, { board: false });
-    close(session);
+    try {
+      await learnEfforts(session);
+    } catch {
+      // The model list stands. Efforts are asked again the next time the list is stale.
+    } finally {
+      close(session);
+    }
     return { ok: true, value: readModels()[agentId] ?? { at: Date.now(), options: [], modes: null } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -457,6 +542,12 @@ interface Session {
   deskToken: string | null;
   /** The task a discussion is about (task-35); null for any other session. */
   discuss: string | null;
+  /** Config options the session last reported. A probe reads each model's effort from them. */
+  configOptions: acp.SessionConfigOption[] | null;
+  /** The model select's id, when the agent offers one. */
+  modelConfigId: string | null;
+  /** The model the session opened on, so a probe can put it back. */
+  modelCurrent: string | null;
 }
 
 const sessions = new Map<string, Session>();
@@ -533,18 +624,20 @@ interface OpenOptions {
   withDesk?: boolean;
   /** The task a discussion is about: it reads, and changes only that task's spec. */
   discuss?: string;
+  /** The effort to set once the model is selected. Unset starts on medium when the model offers it. */
+  effort?: string;
   /** Stops the startup: the agent is not spawned, or is killed. */
   signal?: AbortSignal;
 }
 
 async function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
-  const { board = true, at, withDesk = false, discuss = null, signal } = options;
+  const { board = true, at, withDesk = false, discuss = null, effort, signal } = options;
   const agent = agentOf(agentId);
   if (!agent) throw new Error(isCustom(agentId) ? `${customName(agentId)} is no longer among your agents` : `Unknown agent ${agentId}`);
   const missing = whyNot(agent);
   if (missing) throw new Error(missing);
   const cwd = at ?? (board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId);
-  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, models: {}, key }) : null;
+  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, effort, models: {}, efforts: {}, key }) : null;
   const launch = await unlessAborted(signal, launchOf(agent)).catch((err) => {
     if (deskToken) desk.revoke(deskToken);
     throw err;
@@ -582,6 +675,9 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     mode: null,
     deskToken,
     discuss,
+    configOptions: null,
+    modelConfigId: null,
+    modelCurrent: null,
   };
   const stream = acp.ndJsonStream(Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>);
   session.connection = new acp.ClientSideConnection(
@@ -624,12 +720,29 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   const mcpServers = board ? [...brainfileMcp(), ...(deskToken ? [deskMcp(deskToken, projectId)] : [])] : [];
   const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
   session.sessionId = created.sessionId;
-  const models = modelOption(created.configOptions);
+  let configOptions = created.configOptions ?? null;
+  const models = modelOption(configOptions);
   session.modes = modesOf(created);
   session.mode = session.modes?.initial ?? null;
-  remember(agentId, models?.options ?? [], session.modes && { initial: session.modes.initial, options: session.modes.options, bypass: session.modes.bypass });
+  session.modelConfigId = models?.id ?? null;
+  session.modelCurrent = models?.current ?? null;
+  remember(agentId, keepingEfforts(agentId, models?.options ?? []), session.modes && { initial: session.modes.initial, options: session.modes.options, bypass: session.modes.bypass });
   if (models && model && model !== models.current && models.options.some((o) => o.value === model)) {
-    await unlessAborted(signal, session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => {}));
+    const updated = await unlessAborted(
+      signal,
+      session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => null)
+    );
+    if (updated) configOptions = updated.configOptions;
+  }
+  session.configOptions = configOptions;
+  // A chosen model starts at medium unless the person picked another level this model still offers.
+  const thought = model ? effortSelect(configOptions) : null;
+  const want = thought ? effortToSet(thought.options, effort) : undefined;
+  if (board && thought && want && want !== thought.current) {
+    await unlessAborted(
+      signal,
+      session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: thought.id, value: want }).catch(() => {})
+    );
   }
   if (board) await unlessAborted(signal, applyMode(session));
   sessions.set(key, session);
@@ -921,7 +1034,8 @@ function startDispatch(
   taskId: string,
   agentId: AgentId,
   model?: string,
-  from?: string
+  from?: string,
+  effort?: string
 ): Result<{ run: AgentRun; worktree: Worktree | null }> {
   let prompt: string;
   let worktree: Worktree | null;
@@ -934,7 +1048,7 @@ function startDispatch(
   const run = newRun(projectId, agentId, 'dispatch', taskId, { model, from });
   void (async () => {
     try {
-      const session = await startups.open(run.id, (signal) => open(projectId, agentId, run.id, model, { at: worktree?.path, signal }), close);
+      const session = await startups.open(run.id, (signal) => open(projectId, agentId, run.id, model, { at: worktree?.path, effort, signal }), close);
       if (session) await turn(session, run, prompt);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
@@ -943,11 +1057,11 @@ function startDispatch(
   return { ok: true, value: { run: { ...run }, worktree } };
 }
 
-async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>> {
+async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Promise<Result<AgentRun>> {
   const held = reserve(projectId, taskId);
   if (!held.ok) return held;
   try {
-    const started = startDispatch(projectId, taskId, agentId, model);
+    const started = startDispatch(projectId, taskId, agentId, model, undefined, effort);
     return started.ok ? { ok: true, value: started.value.run } : started;
   } finally {
     held.value();
@@ -985,7 +1099,7 @@ const desk = new DeskBridge(
       const agent = agentOf(agentId);
       return agent ? whyNot(agent) : `Unknown agent ${agentId}`;
     },
-    async start(grant, taskId, agentId, model) {
+    async start(grant, taskId, agentId, model, effort) {
       // Who asked goes on the task first, as Hand to… sets the assignee first.
       // The task is held across that write, so nothing else starts on it meanwhile.
       const held = reserve(grant.projectId, taskId);
@@ -993,9 +1107,15 @@ const desk = new DeskBridge(
       let written: Result;
       let started: ReturnType<typeof startDispatch>;
       try {
-        const record: DispatchRecord = { agent: agentId, ...(model ? { model } : {}), by: 'chat', at: new Date().toISOString() };
+        const record: DispatchRecord = {
+          agent: agentId,
+          ...(model ? { model } : {}),
+          ...(effort ? { effort } : {}),
+          by: 'chat',
+          at: new Date().toISOString(),
+        };
         written = await callHost<Result>('recordDispatch', grant.projectId, taskId, record);
-        started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id);
+        started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id, effort);
       } finally {
         held.value();
       }
@@ -1064,17 +1184,19 @@ async function ask(
   model?: string,
   earlier: ChatTurn[] = [],
   context: string[] = [],
-  models: Partial<Record<AgentId, string>> = {}
+  models: Partial<Record<AgentId, string>> = {},
+  effort?: string,
+  efforts: Partial<Record<AgentId, string>> = {}
 ): Promise<Result<AgentRun>> {
-  const key = `ask:${threadId}:${agentId}:${model ?? ''}`;
+  const key = `ask:${threadId}:${agentId}:${model ?? ''}:${effort ?? ''}`;
   const run = newRun(projectId, agentId, 'ask', undefined, { model });
   run.threadId = threadId;
   void (async () => {
     try {
       const existing = sessions.get(key);
-      const session = existing ?? (await startups.open(run.id, (signal) => open(projectId, agentId, key, model, { withDesk: true, signal }), close));
+      const session = existing ?? (await startups.open(run.id, (signal) => open(projectId, agentId, key, model, { withDesk: true, effort, signal }), close));
       if (!session) return;
-      if (session.deskToken) desk.update(session.deskToken, { models });
+      if (session.deskToken) desk.update(session.deskToken, { models, efforts, model, effort });
       // A thread picked up again after its session was let go carries its own past.
       const past = existing || earlier.length === 0
         ? ''
@@ -1102,9 +1224,10 @@ async function discuss(
   threadId: string,
   taskId: string,
   model?: string,
-  earlier: ChatTurn[] = []
+  earlier: ChatTurn[] = [],
+  effort?: string
 ): Promise<Result<AgentRun>> {
-  const key = `discuss:${threadId}:${agentId}:${model ?? ''}`;
+  const key = `discuss:${threadId}:${agentId}:${model ?? ''}:${effort ?? ''}`;
   const run = newRun(projectId, agentId, 'ask', taskId, { model });
   run.threadId = threadId;
   void (async () => {
@@ -1118,7 +1241,7 @@ async function discuss(
         preamble = discussPreamble(discussContext(located.brainfilePath, taskId, standingDecisions(located.brainfilePath)));
         if (earlier.length) preamble += `Earlier in this discussion:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
       }
-      const session = existing ?? (await open(projectId, agentId, key, model, { discuss: taskId }));
+      const session = existing ?? (await open(projectId, agentId, key, model, { discuss: taskId, effort }));
       await turn(session, run, preamble + text);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });

@@ -32,6 +32,7 @@ const SETTLE_MS = 900;
 import { calmOrder, decisionGroups, glance, outline, restsFolded, visibleRows, type OutlineRow } from './format';
 import { intakeColumn, issueTask } from '../../shared/issues';
 import { customId } from '../../shared/agentServers';
+import { effortToSet } from '../../agents/effort';
 
 declare global {
   interface Window {
@@ -88,6 +89,8 @@ const AGENT_KEY = 'brainfile.lastAgent';
 const MODEL_KEY = 'brainfile.models';
 const PREFS_KEY = 'brainfile.projectPrefs';
 const MODEL_NAMES_KEY = 'brainfile.modelNames';
+/** Effort last chosen for each agent and model, so a model keeps its level. */
+const EFFORT_KEY = 'brainfile.efforts';
 const EDITOR_KEY = 'brainfile.editor';
 const TABS_KEY = 'brainfile.tabs';
 const CALM_KEY = 'brainfile.calm';
@@ -250,10 +253,14 @@ class AppState {
   models = $state<Partial<Record<AgentId, ModelOption[]>>>({});
   /** The model last chosen for each agent anywhere: what a project with no choice of its own starts from. */
   modelChoice = $state<Partial<Record<AgentId, string>>>(load(MODEL_KEY, {}));
+  /** Effort last chosen for each agent and model. Medium fills in where nothing is stored and the model offers it. */
+  effortChoice = $state<Partial<Record<AgentId, Record<string, string>>>>(load(EFFORT_KEY, {}));
   /** Each agent's model names as it last reported them, so a choice reads well before the list is asked for again. */
   modelNames = $state<Partial<Record<AgentId, Record<string, string>>>>(load(MODEL_NAMES_KEY, {}));
-  /** Per project, the agent last used there and the model last chosen for each agent (null: the agent's default). */
-  prefs = $state<Record<string, { agent?: AgentId; models?: Partial<Record<AgentId, string | null>> }>>(load(PREFS_KEY, {}));
+  /** Per project, the agent last used there and the model and effort last chosen for each agent (null model: the agent's default). */
+  prefs = $state<
+    Record<string, { agent?: AgentId; models?: Partial<Record<AgentId, string | null>>; efforts?: Partial<Record<AgentId, Record<string, string>>> }>
+  >(load(PREFS_KEY, {}));
 
   /** The agent last used on this project, if it is still here; else the last used anywhere; else the first installed. */
   agentFor(projectId: string | null): AgentId | null {
@@ -268,6 +275,42 @@ class AppState {
     const mine = projectId ? this.prefs[projectId]?.models : undefined;
     if (mine && agentId in mine) return mine[agentId] ?? undefined;
     return this.modelChoice[agentId];
+  }
+
+  /** The effort stored for this agent and model: the project's own, else the last chosen anywhere. */
+  rememberedEffort(agentId: AgentId, model: string, projectId: string | null = this.activeId): string | undefined {
+    return (projectId ? this.prefs[projectId]?.efforts?.[agentId]?.[model] : undefined) ?? this.effortChoice[agentId]?.[model];
+  }
+
+  /**
+   * The effort a turn should ask for. A remembered level wins when the model
+   * still offers it; otherwise medium, when the model offers that. Undefined
+   * when no model is chosen, or the model offers no effort.
+   */
+  effortFor(agentId: AgentId, projectId: string | null = this.activeId): string | undefined {
+    const model = this.modelFor(agentId, projectId);
+    if (!model) return undefined;
+    const levels = this.models[agentId]?.find((item) => item.value === model)?.efforts;
+    const remembered = this.rememberedEffort(agentId, model, projectId);
+    if (levels) return effortToSet(levels, remembered);
+    return remembered;
+  }
+
+  /** A model and its effort, as the picker and Hand to… read them. */
+  modelNote(agentId: AgentId, projectId: string | null = this.activeId): string {
+    const model = this.modelFor(agentId, projectId);
+    if (!model) return '';
+    const name = this.modelLabel(agentId, model);
+    const effort = this.effortLabel(agentId, projectId);
+    return effort ? `${name} · ${effort}` : name;
+  }
+
+  /** An effort as people read it: the name the agent gives it, or its value before the list is asked for again. */
+  effortLabel(agentId: AgentId, projectId: string | null = this.activeId): string {
+    const model = this.modelFor(agentId, projectId);
+    const effort = this.effortFor(agentId, projectId);
+    if (!model || !effort) return '';
+    return this.models[agentId]?.find((item) => item.value === model)?.efforts?.find((level) => level.value === effort)?.name ?? effort;
   }
 
   /** Changes from outside the window, newest first. */
@@ -596,7 +639,7 @@ class AppState {
     if (!this.activeId) return;
     this.remember(agentId);
     await this.patch(taskId, { assignee: agentId });
-    const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId));
+    const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId), this.effortFor(agentId));
     if (!result.ok) this.notify(result.error, 'warn');
     else this.touchTab(this.activeId, taskId);
   }
@@ -724,16 +767,36 @@ class AppState {
     void this.setSettings({ modes });
   }
 
-  /** Remembers the model for this project's agent, and as the last chosen anywhere. null is the agent's default. */
-  chooseModel(agentId: AgentId, model: string | null): void {
+  /** Remembers the model for this project's agent, and as the last chosen anywhere. null is the agent's default. `effort` is the level for that model; null clears it. */
+  chooseModel(agentId: AgentId, model: string | null, effort?: string | null): void {
     if (model) this.modelChoice[agentId] = model;
     else delete this.modelChoice[agentId];
     localStorage.setItem(MODEL_KEY, JSON.stringify(this.modelChoice));
+    if (model) this.rememberEffort(agentId, model, effort);
     const projectId = this.activeId;
     if (!projectId) return;
     const prefs = this.prefs[projectId] ?? {};
-    this.prefs[projectId] = { ...prefs, models: { ...prefs.models, [agentId]: model } };
+    const efforts = model ? this.writeEffort(prefs.efforts?.[agentId], model, effort) : prefs.efforts?.[agentId];
+    this.prefs[projectId] = {
+      ...prefs,
+      models: { ...prefs.models, [agentId]: model },
+      efforts: { ...prefs.efforts, [agentId]: efforts ?? {} },
+    };
     this.savePrefs();
+  }
+
+  /** Keeps or clears one model's effort, on this project and as the last chosen anywhere. */
+  private rememberEffort(agentId: AgentId, model: string, effort?: string | null): void {
+    this.effortChoice[agentId] = this.writeEffort(this.effortChoice[agentId], model, effort) ?? {};
+    if (!Object.keys(this.effortChoice[agentId] ?? {}).length) delete this.effortChoice[agentId];
+    localStorage.setItem(EFFORT_KEY, JSON.stringify(this.effortChoice));
+  }
+
+  private writeEffort(current: Record<string, string> | undefined, model: string, effort?: string | null): Record<string, string> | undefined {
+    const next = { ...current };
+    if (effort) next[model] = effort;
+    else delete next[model];
+    return Object.keys(next).length ? next : undefined;
   }
 
   /** The popover opens to a blank page, unless a reply is still on its way or waiting to be read. */
@@ -796,13 +859,27 @@ class AppState {
       ...(context.length ? { context } : {}),
     });
     const before = this.boards[projectId];
-    // A hand-off the chat makes takes the model Hand to… would take for that agent here.
+    // A hand-off the chat makes takes the model and effort Hand to… would take for that agent here.
     const models = Object.fromEntries(
       this.agents.map((a) => [a.id, this.modelFor(a.id, projectId)] as const).filter(([, model]) => !!model)
     ) as Partial<Record<AgentId, string>>;
+    const efforts = Object.fromEntries(
+      this.agents.map((a) => [a.id, this.effortFor(a.id, projectId)] as const).filter(([, effort]) => !!effort)
+    ) as Partial<Record<AgentId, string>>;
     const result = thread.taskId
-      ? await api.discuss(projectId, agentId, text.trim(), thread.id, thread.taskId, this.modelFor(agentId, projectId), earlier)
-      : await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier, context, models);
+      ? await api.discuss(projectId, agentId, text.trim(), thread.id, thread.taskId, this.modelFor(agentId, projectId), earlier, this.effortFor(agentId, projectId))
+      : await api.ask(
+          projectId,
+          agentId,
+          text.trim(),
+          thread.id,
+          this.modelFor(agentId, projectId),
+          earlier,
+          context,
+          models,
+          this.effortFor(agentId, projectId),
+          efforts
+        );
     if (result.ok && before) this.#turnStart.set(result.value.id, before);
     if (!result.ok) this.addLine(projectId, thread.id, { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true });
   }
