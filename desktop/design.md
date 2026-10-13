@@ -174,11 +174,6 @@ The board reads like the TUI's list, calmed. A row is 36px:
   them, children from other columns and completed ones included, collapsed or
   not. Done counts what is left in it. j / k walk the rows as drawn, folded
   groups and collapsed parents left out.
-- **Cards stay in their columns.** On the board view a card is what you drag,
-  so a child keeps its own card in its own column; a parent's card says where
-  its children are instead, one 12px box each in the outline's order,
-  completed ones ticked, among the card's signals (past twelve, one ticked box
-  and `done/total`). The task pane lists every child, completed ones ticked.
 - At rest the right side carries only signals: contract state, sub-task
   progress, urgent and high priority, an assignee. The ID, tags and an unset
   priority or assignee wait for the pointer or the selection, in space kept
@@ -289,8 +284,8 @@ off course. These rules win over every other section:
   assignee appear under the pointer or on the selected row, in space that is
   already kept for them, so nothing shifts. The calm list goes further: one
   signal a row, and nothing more under the pointer (Calm list).
-- **Empty groups are not shown** in the list (the board view still has
-  every column to drop into).
+- **Empty groups are not shown** in the list. The status box moves a task
+  to a column that has no group.
 - The rail is one line per project: its storage icon, its name, its count.
 
 ## Dock

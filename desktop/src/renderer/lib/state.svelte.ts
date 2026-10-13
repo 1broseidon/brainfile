@@ -56,7 +56,7 @@ for (const key of MUTATIONS) {
   };
 }
 
-export type ViewMode = 'list' | 'board' | 'decisions' | 'issues';
+export type ViewMode = 'list' | 'decisions' | 'issues';
 export type MenuKind = 'status' | 'priority' | 'assignee' | 'labels';
 
 /** The list's group of completed work; a column's slug never has a colon. */
@@ -185,9 +185,25 @@ function loadLayout(): Layout {
   }
 }
 
+const VIEW_MODES = new Set<ViewMode>(['list', 'decisions', 'issues']);
+
+function isViewMode(value: unknown): value is ViewMode {
+  return typeof value === 'string' && VIEW_MODES.has(value as ViewMode);
+}
+
+/** Saved views per project. A stored `'board'` (the removed kanban) is left out, so the list stands in. */
 function loadViews(): Record<string, ViewMode> {
   try {
-    return JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}');
+    const raw: unknown = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}');
+    if (!raw || typeof raw !== 'object') return {};
+    const views: Record<string, ViewMode> = {};
+    let dropped = false;
+    for (const [id, mode] of Object.entries(raw)) {
+      if (isViewMode(mode)) views[id] = mode;
+      else dropped = true;
+    }
+    if (dropped) localStorage.setItem(VIEW_KEY, JSON.stringify(views));
+    return views;
   } catch {
     return {};
   }
@@ -418,15 +434,13 @@ class AppState {
 
   /**
    * What j / k step through, in the order the view draws it: the list as it
-   * stands (a calm group's `N more` is a stop of its own), the board's cards
-   * column by column, or decisions by family.
+   * stands (a calm group's `N more` is a stop of its own), or decisions by family.
    */
   orderedTasks = $derived.by((): { id: string }[] => {
     const board = this.board;
     if (!board) return [];
     if (this.view === 'issues') return [];
     if (this.view === 'decisions') return decisionGroups(board.decisions).flatMap((g) => g.decisions);
-    if (this.view === 'board') return board.columns.flatMap((column) => board.tasks.filter((t) => t.column === column.id));
     return this.listGroups.flatMap((g) => [...g.rows.map((row) => row.task), ...(g.more ? [{ id: MORE + g.key }] : [])]);
   });
 
@@ -905,11 +919,6 @@ class AppState {
     if (!this.activeId) return;
     this.views[this.activeId] = mode;
     localStorage.setItem(VIEW_KEY, JSON.stringify(this.views));
-  }
-
-  /** V turns between the two views of the work; from decisions or issues it goes back to the list. */
-  toggleView(): void {
-    this.setView(this.view === 'list' ? 'board' : 'list');
   }
 
   /** Show a move at once; the host's snapshot replaces it moments later. */

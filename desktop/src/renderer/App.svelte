@@ -116,9 +116,6 @@
       case 'c':
         if (app.view !== 'decisions') app.composer = {};
         break;
-      case 'v':
-        app.toggleView();
-        break;
       case 'V':
         // ⇧V turns the list calm or full; from another view it opens the list, calm.
         if (app.view === 'list') app.setCalm(!app.calm);
