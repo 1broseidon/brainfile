@@ -204,7 +204,7 @@ class AppState {
   composer = $state<{ column?: string } | null>(null);
   showCompleted = $state(false);
   /** The calm list (design.md, Calm list): one signal a row, chosen once for the window. */
-  calm = $state(localStorage.getItem(CALM_KEY) === 'on');
+  calm = $state(localStorage.getItem(CALM_KEY) !== 'off');
   layout = $state(loadLayout());
   /** A problem worth saying, shown in the board's band until it times out. Success is silent. */
   problem = $state<string | null>(null);
@@ -360,9 +360,29 @@ class AppState {
     if (mine) mine.whole[key] = true;
   }
 
+  /**
+   * Turn the list calm or full without losing the selection: a task the calm
+   * list would rest folded or keep past a glance has its group opened, whole
+   * if need be, and a selected `N more`, which the full list does not have,
+   * hands its place to the first row that was waiting.
+   */
   setCalm(on: boolean): void {
+    const stop = this.listGroups.find((g) => g.more && MORE + g.key === this.selectedTaskId);
     this.calm = on;
     localStorage.setItem(CALM_KEY, on ? 'on' : 'off');
+    if (stop) {
+      this.selectedTaskId = this.listGroups.find((g) => g.key === stop.key)?.rows[stop.rows.length]?.task.id ?? null;
+      return;
+    }
+    const id = this.selectedTaskId;
+    const board = this.board;
+    if (!on || !id || !board || this.orderedTasks.some((t) => t.id === id)) return;
+    const tree = outline(board.columns, board.tasks, board.completed);
+    const holds = (rows: OutlineRow[]) => rows.some((r) => r.task.id === id);
+    const key = tree.groups.find((g) => holds(g.rows))?.column.id ?? (holds(tree.done) ? DONE_GROUP : null);
+    if (!key) return;
+    if (key !== DONE_GROUP && this.folded('groups', key)) this.toggleFold('groups', key);
+    if (!this.orderedTasks.some((t) => t.id === id)) this.showWhole(key);
   }
 
   /**

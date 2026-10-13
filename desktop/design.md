@@ -193,7 +193,8 @@ brainfile-mobile's board (`src/components/rows.tsx`, `src/data/outline.ts`)
 brought to the desk: the same row, the same order, the same glance. It is a
 mode of the list, not a view of its own, and it belongs to the reader, not
 to a board: one switch for the window (Settings › List › Calm list, ⇧V from
-the list, or the palette), remembered.
+the list, or the palette), remembered. It is how the list first reads: on
+until it is turned off, and the full rows are a press of ⇧V away.
 
 ```
 [status box]  [◆] Title, on one line, which truncates first          one signal
@@ -233,6 +234,11 @@ the list, or the palette), remembered.
 - **j / k walk the list as drawn**, folded groups, collapsed parents and
   what waits past a glance left out. `N more` is a stop of its own: Enter
   opens the group and selects the first row that was waiting.
+- **Switching keeps your place.** Turning the list calm, the selected task
+  stays on screen: its group opens if it rests folded, whole if the task
+  waits past the glance. Turning it full, a selected `N more` gives way to
+  the first row that was waiting. Either way the selected row is scrolled
+  into view.
 - Pressing and selection are fills, as in Rows; there are no lines between
   rows.
 

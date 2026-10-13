@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { tip } from '../lib/tooltip';
   import { app, MORE } from '../lib/state.svelte';
   import { columnProgress, type OutlineRow } from '../lib/format';
@@ -13,6 +14,15 @@
   let dropTarget = $state<string | null>(null);
 
   const collapsed = (id: string) => app.folded('parents', id);
+
+  // Turning the list calm or full moves its rows; the selected one is kept in view.
+  $effect(() => {
+    void app.calm;
+    untrack(() => {
+      const id = app.selectedTaskId;
+      if (id) document.querySelector(`[data-task="${id}"]`)?.scrollIntoView({ block: 'nearest' });
+    });
+  });
 
   function drop(e: DragEvent, column: string): void {
     const id = e.dataTransfer?.getData('text/brainfile-task');
