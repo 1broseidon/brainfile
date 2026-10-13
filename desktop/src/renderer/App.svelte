@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
-  import { app, RAIL, TASK_PANE } from './lib/state.svelte';
+  import { onMount, tick, untrack } from 'svelte';
+  import { app, isMore, MORE, RAIL, TASK_PANE } from './lib/state.svelte';
   import Titlebar from './components/Titlebar.svelte';
   import Sidebar from './components/Sidebar.svelte';
   import Gutter from './components/Gutter.svelte';
@@ -37,8 +37,19 @@
     const at = tasks.findIndex((t) => t.id === app.selectedTaskId);
     const next = at < 0 ? (step > 0 ? 0 : tasks.length - 1) : Math.min(Math.max(at + step, 0), tasks.length - 1);
     app.selectedTaskId = tasks[next].id;
-    if (app.openTaskId) app.openTaskId = tasks[next].id;
+    // A calm group's `N more` is a stop in the walk, not a task to open.
+    if (app.openTaskId && !isMore(tasks[next].id)) app.openTaskId = tasks[next].id;
     document.querySelector(`[data-task="${tasks[next].id}"]`)?.scrollIntoView({ block: 'nearest' });
+  }
+
+  /** Open a calm group past its glance and select the first row that was waiting, where `N more` stood. */
+  function showMore(stop: string): void {
+    const at = app.orderedTasks.findIndex((t) => t.id === stop);
+    app.showWhole(stop.slice(MORE.length));
+    const next = app.orderedTasks[at];
+    if (!next) return;
+    app.selectedTaskId = next.id;
+    void tick().then(() => document.querySelector(`[data-task="${next.id}"]`)?.scrollIntoView({ block: 'nearest' }));
   }
 
   function anchorFor(taskId: string): Element | null {
@@ -100,13 +111,21 @@
     }
     if (!app.board) return;
 
-    const focused = app.selectedTaskId ?? app.openTaskId;
+    const focused = isMore(app.selectedTaskId) ? app.openTaskId : (app.selectedTaskId ?? app.openTaskId);
     switch (e.key) {
       case 'c':
         if (app.view !== 'decisions') app.composer = {};
         break;
       case 'v':
         app.toggleView();
+        break;
+      case 'V':
+        // ⇧V turns the list calm or full; from another view it opens the list, calm.
+        if (app.view === 'list') app.setCalm(!app.calm);
+        else {
+          app.setView('list');
+          app.setCalm(true);
+        }
         break;
       case 'd':
         app.setView(app.view === 'decisions' ? 'list' : 'decisions');
@@ -123,7 +142,8 @@
         moveSelection(-1);
         break;
       case 'Enter':
-        if (app.selectedTaskId) app.openTaskId = app.selectedTaskId;
+        if (isMore(app.selectedTaskId)) showMore(app.selectedTaskId!);
+        else if (app.selectedTaskId) app.openTaskId = app.selectedTaskId;
         break;
       case 's':
         if (focused) app.openMenu('status', focused, anchorFor(focused));

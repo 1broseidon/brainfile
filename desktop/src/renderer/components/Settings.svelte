@@ -1,10 +1,10 @@
 <script lang="ts">
   /**
    * The app's settings (design.md, Settings): one quiet column in the pane.
-   * For now, how the agents you hand work to may act: one switch for the
-   * whole desk, and under it each agent's own permission modes, named as the
-   * agent itself reports them. Then the editor files open in, and how the
-   * issues view signs in to GitHub (task-26).
+   * How the list reads (calm or full), then how the agents you hand work to
+   * may act: one switch for the whole desk, and under it each agent's own
+   * permission modes, named as the agent itself reports them. Then the editor
+   * files open in, and how the issues view signs in to GitHub (task-26).
    */
   import { app } from '../lib/state.svelte';
   import Icon from './Icon.svelte';
@@ -53,6 +53,27 @@
 
 <div class="settings">
   <div class="column">
+    <section>
+      <h2>List</h2>
+      <p class="lede">How a board's list reads.</p>
+      <div class="group">
+        <div class="row toggle">
+          <span class="label">
+            <span class="name">Calm list</span>
+            <span class="sub">
+              {#if app.calm}
+                One signal a row, nearest done first, a few to a group. The rest waits for the task.
+              {:else}
+                Every signal on its row; the ID and tags under the pointer.
+              {/if}
+            </span>
+          </span>
+          <Switch on={app.calm} label="Calm list" onchange={(on) => app.setCalm(on)} />
+        </div>
+      </div>
+      <p class="foot">⇧V turns it on or off from the list.</p>
+    </section>
+
     <section>
       <h2>Agents</h2>
       <p class="lede">How the agents you hand work to may act on this Mac.</p>

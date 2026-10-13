@@ -35,6 +35,17 @@
         icon: app.view === 'list' ? 'board' : 'list',
         run: () => app.toggleView(),
       });
+      out.push({
+        key: 'calm',
+        section: 'Actions',
+        label: app.calm ? 'Show every signal in the list' : 'Calm the list',
+        hint: '⇧V',
+        icon: 'list',
+        run: () => {
+          app.setCalm(!app.calm);
+          app.setView('list');
+        },
+      });
       if (board.sync.remote) {
         out.push({
           key: 'sync',
