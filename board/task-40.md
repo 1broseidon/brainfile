@@ -18,7 +18,7 @@ subtasks:
     completed: true
   - id: task-40-3
     title: "Server: handshake + pairing + close codes + limits"
-    completed: false
+    completed: true
   - id: task-40-4
     title: "Bridge: whitelisted calls + events + board refcount"
     completed: false
@@ -35,7 +35,7 @@ subtasks:
     title: link:dev harness for the simulator
     completed: false
 createdAt: "2026-10-13T04:15:11.393Z"
-updatedAt: "2026-10-13T04:39:51.202Z"
+updatedAt: "2026-10-13T04:39:51.697Z"
 ---
 
 ## Description
