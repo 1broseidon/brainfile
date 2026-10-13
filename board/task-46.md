@@ -33,3 +33,6 @@ subtasks:
 
 ## Description
 decision-8. In three phases, each QA'd live by the person in the dev app before the next: A, the chat is a pane on the right that hides without losing its thread; B, the dock holds sessions (chats, discussions, hand-offs) and recent documents move to the palette; C, a hand-off's tab opens its run (steps, asks, Stop) in the chat pane with the task beside it.
+
+## Log
+- 2026-10-13T19:30:20.101Z: [claude] Phase A built, not committed: ChatPop split into ChatKey (the key at the dock's end, pressed while the chat shows) and ChatPane (a pane at the window's right edge with its own gutter, 340-600px, 400 to start). App.svelte lays out task and chat panes beside the board, or over it together under 520px. openChat no longer blanks: the thread last shown is kept per board (localStorage brainfile.thread) with its scroll and draft; + is the only new chat; hide is the band's mirrored rail key, Esc and ⌘J. A discussion picked from history opens its task. design.md › Macrostructure, Dock and Ask the board updated. 102/102 tests, typecheck clean. Waiting for QA.
