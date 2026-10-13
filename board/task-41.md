@@ -24,7 +24,7 @@ subtasks:
     completed: true
   - id: task-41-5
     title: "Board via desk: adapter + run signal + asks"
-    completed: false
+    completed: true
   - id: task-41-6
     title: "Task sheet: Hand to… + Stop + review"
     completed: false
@@ -35,7 +35,7 @@ subtasks:
     title: Tests + simulator against link:dev
     completed: false
 createdAt: "2026-10-13T04:15:11.912Z"
-updatedAt: "2026-10-13T05:01:35.433Z"
+updatedAt: "2026-10-13T05:01:35.915Z"
 ---
 
 ## Description
