@@ -166,6 +166,8 @@ export class LinkServer {
   private listenError: string | undefined;
   private paired: { name: string; at: number } | undefined;
   private nextConn = 1;
+  /** Listening and stopping, one after the other: the switch and a code pressed together never make two servers. */
+  private turns: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: LinkServerOptions) {
     this.limits = { ...LIMITS, ...options.limits };
@@ -279,8 +281,22 @@ export class LinkServer {
 
   // ── Listening ─────────────────────────────────────────────────────────────
 
+  private listen(): Promise<void> {
+    return this.inTurn(() => this.open());
+  }
+
+  private stop(): Promise<void> {
+    return this.inTurn(() => this.shut());
+  }
+
+  private inTurn(work: () => Promise<void>): Promise<void> {
+    const turn = this.turns.then(work, work);
+    this.turns = turn.catch(() => {});
+    return turn;
+  }
+
   /** Port 47210, else the next free one, which is remembered so the phones' addresses keep working. */
-  private async listen(): Promise<void> {
+  private async open(): Promise<void> {
     if (this.server) return;
     const server = http.createServer((_req, res) => {
       res.writeHead(404, { Connection: 'close' });
@@ -312,7 +328,7 @@ export class LinkServer {
     }
   }
 
-  private async stop(): Promise<void> {
+  private async shut(): Promise<void> {
     this.secret = null;
     if (this.pinger) clearInterval(this.pinger);
     this.pinger = null;

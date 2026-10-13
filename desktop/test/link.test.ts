@@ -544,6 +544,18 @@ test('off closes every socket and stops listening; the phones stay linked', asyn
   assert.ok(server.port);
 });
 
+test('the switch and a code pressed together make one server, on one port', async () => {
+  const probe = (await import('node:net')).createServer();
+  await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
+  const free = (probe.address() as { port: number }).port;
+  await new Promise((resolve) => probe.close(resolve));
+  store.port = free;
+  const [view, result] = await Promise.all([server.setOn(true), server.code(), server.setOn(true)]);
+  assert.ok(result.ok);
+  assert.equal(view.port, free);
+  assert.equal(store.port, free, 'a second server would have moved to the next port');
+});
+
 // ── The store and the addresses ────────────────────────────────────────────
 
 test('the desk key is made once, sealed at rest, and found again; the port is remembered', async () => {
