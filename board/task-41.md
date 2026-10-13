@@ -1,8 +1,8 @@
 ---
 id: task-41
 title: "Phone link, phone side: scan, connect, agents on the board, chat"
-column: todo
-position: 0
+column: review
+position: 9
 priority: high
 tags:
   - mobile
@@ -35,7 +35,7 @@ subtasks:
     title: Tests + simulator against link:dev
     completed: true
 createdAt: "2026-10-13T04:15:11.912Z"
-updatedAt: "2026-10-13T05:06:53.326Z"
+updatedAt: "2026-10-13T05:22:59.435Z"
 ---
 
 ## Description
