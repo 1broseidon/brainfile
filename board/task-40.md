@@ -24,7 +24,7 @@ subtasks:
     completed: true
   - id: task-40-5
     title: decide and live in host and agents
-    completed: false
+    completed: true
   - id: task-40-6
     title: Settings Phone section with QR and Forget
     completed: false
@@ -35,7 +35,7 @@ subtasks:
     title: link:dev harness for the simulator
     completed: false
 createdAt: "2026-10-13T04:15:11.393Z"
-updatedAt: "2026-10-13T04:39:52.179Z"
+updatedAt: "2026-10-13T04:39:52.678Z"
 ---
 
 ## Description
