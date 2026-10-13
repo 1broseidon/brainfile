@@ -1,8 +1,8 @@
 ---
 id: task-40
 title: "Phone link, desktop side: sealed LAN server, pairing QR, bridge to the API"
-column: in-progress
-position: 1
+column: review
+position: 8
 priority: high
 tags:
   - mobile
@@ -35,7 +35,7 @@ subtasks:
     title: link:dev harness for the simulator
     completed: true
 createdAt: "2026-10-13T04:15:11.393Z"
-updatedAt: "2026-10-13T04:50:04.816Z"
+updatedAt: "2026-10-13T05:22:58.924Z"
 ---
 
 ## Description
