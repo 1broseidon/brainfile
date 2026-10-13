@@ -20,7 +20,10 @@ subtasks:
   - id: spec-17-3
     title: Read a board through one GraphQL request and @brainfile/core/browser; cache for offline reading
     completed: false
-updatedAt: "2026-10-13T02:29:39.863Z"
+  - id: spec-17-4
+    title: "Board UI: list grouped by column with the outline, decisions view, task sheet (description, subtasks, log, decisions)"
+    completed: false
+updatedAt: "2026-10-13T02:29:40.354Z"
 ---
 
 ## Description
