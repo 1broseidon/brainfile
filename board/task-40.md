@@ -27,7 +27,7 @@ subtasks:
     completed: true
   - id: task-40-6
     title: Settings Phone section with QR and Forget
-    completed: false
+    completed: true
   - id: task-40-7
     title: Node end-to-end tests with a fake phone
     completed: true
@@ -35,7 +35,7 @@ subtasks:
     title: link:dev harness for the simulator
     completed: true
 createdAt: "2026-10-13T04:15:11.393Z"
-updatedAt: "2026-10-13T04:43:01.830Z"
+updatedAt: "2026-10-13T04:50:04.816Z"
 ---
 
 ## Description
