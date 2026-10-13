@@ -24,7 +24,9 @@ relatedFiles:
   - desktop/design.md
 decisions:
   - decision-3
+  - decision-6
 createdAt: "2026-10-13T16:56:44.812Z"
+updatedAt: "2026-10-13T17:03:25.892Z"
 ---
 
 ## Description
