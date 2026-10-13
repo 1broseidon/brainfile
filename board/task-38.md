@@ -12,6 +12,8 @@ parentId: spec-16
 decisions:
   - decision-2
 createdAt: "2026-10-12T23:38:24.028Z"
+assignee: claude
+updatedAt: "2026-10-13T00:00:55.817Z"
 ---
 
 ## Description
