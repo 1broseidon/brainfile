@@ -39,6 +39,7 @@ import type {
   DispatchRecord,
   DispatchSettings,
   HostReply,
+  LiveAgents,
   ModelOption,
   PermissionAsk,
   RunStep,
@@ -1099,6 +1100,14 @@ async function stopRun(runId: string): Promise<void> {
   }
 }
 
+/** What is running and asking now, for a phone that connects mid-run (task-40). */
+function live(): LiveAgents {
+  return {
+    runs: [...runs.values()].filter((run) => run.endedAt === undefined).map((run) => ({ ...run })),
+    asks: [...asks.values()].map((pending) => pending.ask),
+  };
+}
+
 // ── Dispatch ─────────────────────────────────────────────────────────────────
 
 const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
@@ -1111,6 +1120,7 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   ask,
   discuss,
   stopRun,
+  live,
   review,
   mergeReview: (projectId: string, taskId: string) => settle(projectId, taskId, (title) => mergeReview(projectId, taskId, title)),
   discardReview: (projectId: string, taskId: string) => settle(projectId, taskId, () => discardReview(projectId, taskId)),

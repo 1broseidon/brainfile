@@ -23,7 +23,8 @@ const options = {
   platform: 'node',
   format: 'cjs',
   target: 'node22',
-  external: ['electron'],
+  // ws (the phone link) tries these native speed-ups and does without them.
+  external: ['electron', 'bufferutil', 'utf-8-validate'],
   sourcemap: true,
   logLevel: 'info',
 };

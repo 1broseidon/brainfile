@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { CHANNEL, type AgentEvent, type Api, type BoardSnapshot, type Project } from '../shared/api';
+import { CHANNEL, type AgentEvent, type Api, type BoardSnapshot, type LinkView, type Project } from '../shared/api';
 
 const invoke =
   (method: string) =>
@@ -31,6 +31,7 @@ const api: Api = {
   deleteTask: invoke('deleteTask'),
   restoreTask: invoke('restoreTask'),
   noteTask: invoke('noteTask'),
+  decide: invoke('decide'),
   syncNow: invoke('syncNow'),
   settleBoards: invoke('settleBoards'),
   planFix: invoke('planFix'),
@@ -45,6 +46,7 @@ const api: Api = {
   ask: invoke('ask'),
   discuss: invoke('discuss'),
   stopRun: invoke('stopRun'),
+  live: invoke('live'),
   review: invoke('review'),
   mergeReview: invoke('mergeReview'),
   discardReview: invoke('discardReview'),
@@ -57,6 +59,11 @@ const api: Api = {
   listIssues: invoke('listIssues'),
   githubAuth: invoke('githubAuth'),
   setGitHubToken: invoke('setGitHubToken'),
+  linkState: invoke('linkState'),
+  setLink: invoke('setLink'),
+  linkCode: invoke('linkCode'),
+  forgetPhone: invoke('forgetPhone'),
+  onLinkChanged: (listener) => subscribe<LinkView>(CHANNEL.link, listener),
   onAgentEvent: (listener) => subscribe<AgentEvent>(CHANNEL.agent, listener),
   onBoardChanged: (listener) => subscribe<BoardSnapshot>(CHANNEL.board, listener),
   onProjectsChanged: (listener) => subscribe<Project[]>(CHANNEL.projects, listener),
