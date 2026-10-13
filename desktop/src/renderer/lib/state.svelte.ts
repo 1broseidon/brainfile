@@ -8,6 +8,7 @@ import type {
   AgentInfo,
   AgentModes,
   AgentRun,
+  AgentServer,
   Api,
   BoardSnapshot,
   ColumnView,
@@ -30,6 +31,7 @@ import { problemBrief } from './brief';
 const SETTLE_MS = 900;
 import { calmOrder, decisionGroups, glance, outline, restsFolded, visibleRows, type OutlineRow } from './format';
 import { intakeColumn, issueTask } from '../../shared/issues';
+import { customId } from '../../shared/agentServers';
 
 declare global {
   interface Window {
@@ -231,7 +233,7 @@ class AppState {
   chatKeyW = $state(32);
   /** Settings take the board's place in the pane until a project is picked or Esc. */
   settingsOpen = $state(false);
-  settings = $state<DispatchSettings>({ bypass: false, modes: {} });
+  settings = $state<DispatchSettings>({ bypass: false, modes: {}, agentServers: {} });
   /** The dock's tabs, oldest first: the newest sits next to the chat key. */
   tabs = $state<Tab[]>((() => {
     try {
@@ -687,6 +689,31 @@ class AppState {
   async setSettings(patch: Partial<DispatchSettings>): Promise<void> {
     this.settings = { ...this.settings, ...patch };
     this.settings = await api.setSettings($state.snapshot(patch) as Partial<DispatchSettings>);
+  }
+
+  /**
+   * The person's own agents (task-47), saved whole. One that changed or went
+   * is asked again for its models and modes; the picker learns at once.
+   */
+  async saveAgentServers(servers: Record<string, AgentServer>): Promise<void> {
+    const before = this.settings.agentServers;
+    await this.setSettings({ agentServers: servers });
+    for (const name of new Set([...Object.keys(before), ...Object.keys(servers)])) {
+      if (JSON.stringify(before[name]) === JSON.stringify(servers[name])) continue;
+      delete this.modes[customId(name)];
+      delete this.models[customId(name)];
+    }
+    await this.refreshAgents();
+  }
+
+  /** Removed at once, with an Undo that puts it back as it was. */
+  async removeAgentServer(name: string): Promise<void> {
+    const gone = this.settings.agentServers[name];
+    if (!gone) return;
+    const rest = { ...this.settings.agentServers };
+    delete rest[name];
+    await this.saveAgentServers(rest);
+    this.offerUndo(`Removed ${name}`, () => this.saveAgentServers({ ...this.settings.agentServers, [name]: gone }));
   }
 
   /** null is the agent's own default. */

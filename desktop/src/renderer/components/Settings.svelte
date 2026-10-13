@@ -3,18 +3,22 @@
    * The app's settings (design.md, Settings): one quiet column in the pane.
    * How the list reads (calm or full), then how the agents you hand work to
    * may act: one switch for the whole desk, and under it each agent's own
-   * permission modes, named as the agent itself reports them. Then the editor
-   * files open in, and how the issues view signs in to GitHub (task-26).
+   * permission modes, named as the agent itself reports them, and the
+   * person's own agents (task-47). Then the editor files open in, and how the
+   * issues view signs in to GitHub (task-26).
    */
   import { app } from '../lib/state.svelte';
+  import AgentServers from './AgentServers.svelte';
   import Icon from './Icon.svelte';
   import Switch from './Switch.svelte';
+  import { isCustom } from '../../shared/agentServers';
   import type { AgentId } from '../../shared/api';
 
   let picking = $state<AgentId | 'editor' | null>(null);
 
   const installed = $derived(app.agents.filter((a) => a.available));
-  const missing = $derived(app.agents.filter((a) => !a.available));
+  /** A custom agent whose command is not found says so in its own list, below. */
+  const missing = $derived(app.agents.filter((a) => !a.available && !isCustom(a.id)));
 
   $effect(() => {
     void app.refreshAgents();
@@ -137,11 +141,18 @@
         {#each missing as a (a.id)}
           <div class="row off">
             <span class="name">{a.name}</span>
-            <span class="mono note">not installed</span>
+            <span class="mono note">{a.note}</span>
           </div>
         {/each}
       </div>
       <p class="foot">Brainfile’s own board tools never ask: each change they make is a commit on the board.</p>
+
+      <h3>Custom agents</h3>
+      <AgentServers />
+      <p class="foot">
+        Any ACP server on this Mac, started as given, in the repository or a hand-off’s worktree, with the board’s tools. Each is an entry of
+        Zed’s agent_servers, kept in dispatch.json, so one pastes across either way.
+      </p>
     </section>
 
     <section>

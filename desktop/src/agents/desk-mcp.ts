@@ -18,6 +18,17 @@ const socketPath = process.env[DESK_ENV.socket] ?? '';
 const token = process.env[DESK_ENV.token] ?? '';
 const project = process.env[DESK_ENV.project] || undefined;
 
+/** The agents a dispatch may name, as the app passed them: the known ones and the person's own. */
+const agents = ((): string[] => {
+  try {
+    const ids: unknown = JSON.parse(process.env[DESK_ENV.agents] ?? '');
+    if (Array.isArray(ids) && ids.length && ids.every((id) => typeof id === 'string')) return ids;
+  } catch {
+    /* not passed: the known ones */
+  }
+  return [...AGENT_IDS];
+})();
+
 const TOOLS = [
   {
     name: 'dispatch',
@@ -30,7 +41,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         taskId: { type: 'string', description: 'The task to hand off, such as task-35.' },
-        agent: { type: 'string', enum: [...AGENT_IDS], description: 'Who does it. Default: the agent you are.' },
+        agent: { type: 'string', enum: agents, description: 'Who does it. Default: the agent you are.' },
         model: { type: 'string', description: 'A model ID the agent offers. Default: your own model when the agent is you, else the person’s choice for that agent.' },
       },
       required: ['taskId'],

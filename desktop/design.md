@@ -420,6 +420,19 @@ board changes (and in the feed).
   there, and for each agent the model last chosen there, in the chat and
   Hand to… alike. A project with no history starts from the last used
   anywhere. An old chat reopened from history keeps the agent it began with.
+- **Custom agents** (task-47) are any other ACP server on the Mac, added in
+  Settings under Agents the way Zed's `agent_servers` are: a display name
+  with a `command`, `args` and `env`, kept as `agentServers` in
+  dispatch.json in Zed's own keys, so an entry pastes across either way
+  (Paste from Zed takes an entry, the block or the whole settings file).
+  Each follows the known agents in the pickers as `custom:<name>` and goes
+  everywhere they do: Hand to…, the chat, Discuss, the desk's `dispatch`,
+  and models and modes when the server reports them. It is run as given,
+  nothing installed or downloaded: the command found on PATH as a shell
+  finds it (or the path it is, `~/` for home), `env` set over the app's
+  own, with the repository or the hand-off's worktree as its folder and
+  Brainfile's MCP server. When its command is not found, the pickers offer
+  it muted with `muse-acp not found`, rather than failing at start.
 - **Hand to…** is a muted key on a task. The brief is the task, its body
   and its contract; the agent moves it to In Progress, does the work,
   leaves a log note, and moves it to the board's review column when there
@@ -550,6 +563,12 @@ rows' text, not the group's rim, so the column has one left edge.
   on, the track takes the accent, the one place a setting earns it.
 - **List** comes first, because it is how the window reads: one switch,
   Calm list (Calm list), whose line says what it does in either state.
+- **Custom agents** sit under Agents, after each agent's modes: an entry's
+  name over the command line it runs, in mono, and `not found` in warn when
+  its command is not on the Mac. Add an agent and Edit open a small form in
+  the group (name, command, arguments one a line, environment `KEY=value`;
+  Esc leaves, ⌘↵ saves), Paste from Zed takes JSON as Zed writes it, and
+  Remove has an Undo.
 - **Editor** says where a file an agent names opens: the editors found on
   this Mac (apps in Applications, best first; terminal editors when Ghostty
   is here) and the file's default app. Unset, the first found. In a reply,

@@ -11,7 +11,8 @@
  * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
  * and `stop`, so a chat can hand work off the way Hand to… does. Discuss
  * (discuss.ts, task-35) is a chat about one task that may change its spec and
- * nothing else.
+ * nothing else. Besides the agents it knows, it starts any ACP server the
+ * person names in Settings (custom.ts, task-47), the way Zed's agent_servers do.
  */
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
@@ -23,8 +24,11 @@ import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDeci
 import { locateBoard } from '@brainfile/core/repo';
 import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
+import { customLaunch } from './custom';
+import { readSettingsFile, settingsOf, writeSettings, type SettingsFile } from './settings';
 import { discussContext, discussMode, discussPermission, discussPreamble } from './discuss';
 import { Startups, unlessAborted } from './startup';
+import { commandName, customId, customName, isCustom } from '../shared/agentServers';
 import type {
   AgentEvent,
   AgentHostMethod,
@@ -35,7 +39,9 @@ import type {
   AgentModes,
   AgentRequest,
   AgentRun,
+  AgentServer,
   ChatTurn,
+  CustomAgentId,
   DispatchRecord,
   DispatchSettings,
   HostReply,
@@ -75,6 +81,8 @@ function which(command: string): string | null {
 interface Launch {
   command: string;
   args: string[];
+  /** The whole environment, when the agent brings its own (a custom agent's `env`); else the one every agent gets. */
+  env?: NodeJS.ProcessEnv;
 }
 
 interface Known {
@@ -222,8 +230,53 @@ const KNOWN: Known[] = [
   },
 ];
 
+/**
+ * An agent the person named in Settings (task-47): their own ACP server,
+ * kept in dispatch.json's agentServers and run as given.
+ */
+interface Custom {
+  id: CustomAgentId;
+  name: string;
+  server: AgentServer;
+}
+
+type Agent = Known | Custom;
+
+/** The person's own agents, in the order they were added. */
+function customAgents(): Custom[] {
+  return Object.entries(getSettings().agentServers).map(([name, server]) => ({ id: customId(name), name, server }));
+}
+
+/** Every agent there is to start: the known ones, then the person's own. */
+function allAgents(): Agent[] {
+  return [...KNOWN, ...customAgents()];
+}
+
+function agentOf(agentId: AgentId): Agent | undefined {
+  return isCustom(agentId) ? customAgents().find((a) => a.id === agentId) : KNOWN.find((k) => k.id === agentId);
+}
+
+/** An agent's name in a sentence, even once a custom one has been removed. */
+function nameOf(agentId: AgentId): string {
+  return agentOf(agentId)?.name ?? (isCustom(agentId) ? customName(agentId) : agentId);
+}
+
+/** Why the agent cannot start on this Mac, or null when it can. */
+function whyNot(agent: Agent, env?: NodeJS.ProcessEnv): string | null {
+  if ('client' in agent) return which(agent.client) ? null : `${agent.name} is not installed on this Mac`;
+  return customLaunch(agent.server, env ?? agentEnv()) ? null : `${agent.name} cannot start: ${agent.server.command} is not found on this Mac`;
+}
+
+/** How to start the agent: a known one its own way, a custom one as the person wrote it. */
+async function launchOf(agent: Agent): Promise<Launch> {
+  if ('client' in agent) return agent.launch();
+  const launch = customLaunch(agent.server, agentEnv());
+  if (!launch) throw new Error(whyNot(agent) ?? `${agent.name} cannot start`);
+  return launch;
+}
+
 function listAgents(): AgentInfo[] {
-  return KNOWN.map((agent) => {
+  const known = KNOWN.map((agent) => {
     const installed = which(agent.client) !== null;
     const downloaded =
       agent.id === 'antigravity'
@@ -240,35 +293,34 @@ function listAgents(): AgentInfo[] {
       note: !installed ? 'not installed' : downloaded ? 'your login' : 'downloads once',
     };
   });
+  // A custom agent is offered when its command is found, and says so when it is not.
+  const env = agentEnv();
+  const custom = customAgents().map((agent) => {
+    const found = whyNot(agent, env) === null;
+    const command = commandName(agent.server.command);
+    return { id: agent.id, name: agent.name, available: found, note: found ? command : `${command} not found` };
+  });
+  return [...known, ...custom];
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
-/** dispatch.json: the app-wide settings, and per repository a policy that overrides them. */
-interface SettingsFile extends Partial<DispatchSettings> {
-  projects?: Record<string, { permissions?: PermissionPolicy }>;
-}
-
+/** dispatch.json (settings.ts): the app-wide settings, and per repository a policy that overrides them. */
 function readSettings(): SettingsFile {
-  try {
-    return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) as SettingsFile;
-  } catch {
-    return {};
-  }
+  return readSettingsFile(SETTINGS_FILE);
 }
 
 function getSettings(): DispatchSettings {
-  const file = readSettings();
-  return { bypass: file.bypass === true, modes: file.modes ?? {} };
+  return settingsOf(readSettings());
 }
 
 async function setSettings(patch: Partial<DispatchSettings>): Promise<DispatchSettings> {
-  const file = { ...readSettings(), ...patch };
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(file, null, 2));
+  const before = getSettings().agentServers;
+  const now = writeSettings(SETTINGS_FILE, patch);
+  if (patch.agentServers) forgetChanged(before, now.agentServers);
   // Sessions already open change mode now, not on their next start.
   await Promise.all([...sessions.values()].map((session) => applyMode(session)));
-  return getSettings();
+  return now;
 }
 
 /** A repository's own policy wins; otherwise the app-wide switch decides. */
@@ -332,6 +384,15 @@ function modesOf(created: acp.NewSessionResponse): (AgentModes & { via: { config
   }
   const bypass = options.find((m) => BYPASS_MODE.test(m.id) || BYPASS_MODE.test(m.name))?.id ?? null;
   return { initial, options, bypass, via };
+}
+
+/** A custom agent whose entry changed or went is asked again for its models and modes, not answered from the old entry's. */
+function forgetChanged(before: Record<string, AgentServer>, after: Record<string, AgentServer>): void {
+  const changed = Object.keys(before).filter((name) => JSON.stringify(before[name]) !== JSON.stringify(after[name]));
+  const cache = readModels();
+  if (!changed.some((name) => customId(name) in cache)) return;
+  for (const name of changed) delete cache[customId(name)];
+  fs.writeFileSync(MODELS_FILE, JSON.stringify(cache, null, 2));
 }
 
 function remember(agentId: AgentId, options: ModelOption[], modes: AgentModes | null): void {
@@ -421,6 +482,12 @@ function update(run: AgentRun, patch: Partial<AgentRun>): void {
   emit({ kind: 'run', run: { ...run } });
 }
 
+/** The environment every agent starts in: the real node first on PATH, so nothing an agent starts finds a shim instead. */
+function agentEnv(): NodeJS.ProcessEnv {
+  const node = realNode();
+  return node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
+}
+
 /** The first `node` on PATH that is a real binary, not a version-manager shim script. */
 function realNode(): string | null {
   const r = spawnSync('/usr/bin/which', ['-a', 'node'], { encoding: 'utf-8' });
@@ -472,12 +539,13 @@ interface OpenOptions {
 
 async function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
   const { board = true, at, withDesk = false, discuss = null, signal } = options;
-  const known = KNOWN.find((k) => k.id === agentId);
-  if (!known) throw new Error(`Unknown agent ${agentId}`);
-  if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
+  const agent = agentOf(agentId);
+  if (!agent) throw new Error(isCustom(agentId) ? `${customName(agentId)} is no longer among your agents` : `Unknown agent ${agentId}`);
+  const missing = whyNot(agent);
+  if (missing) throw new Error(missing);
   const cwd = at ?? (board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId);
   const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, models: {}, key }) : null;
-  const launch = await unlessAborted(signal, known.launch()).catch((err) => {
+  const launch = await unlessAborted(signal, launchOf(agent)).catch((err) => {
     if (deskToken) desk.revoke(deskToken);
     throw err;
   });
@@ -485,10 +553,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     if (deskToken) desk.revoke(deskToken);
     throw signal.reason;
   }
-  // The real node first on PATH, so nothing an agent starts finds a shim instead.
-  const node = realNode();
-  const env = node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
-  const child = spawn(launch.command, launch.args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(launch.command, launch.args, { cwd, env: launch.env ?? agentEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
   // Kept so a failure can say why, not just that the agent stopped.
   let stderr = '';
   child.stderr?.on('data', (d) => (stderr = (stderr + d).slice(-4000)));
@@ -497,7 +562,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   child.on('error', (err) => {
     sessions.delete(key);
     if (deskToken) desk.revoke(deskToken);
-    if (session.run) update(session.run, { state: 'failed', error: `${known.name} could not start: ${err.message}`, endedAt: Date.now() });
+    if (session.run) update(session.run, { state: 'failed', error: `${agent.name} could not start: ${err.message}`, endedAt: Date.now() });
   });
 
   const session: Session = {
@@ -546,7 +611,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     sessions.delete(key);
     if (deskToken) desk.revoke(deskToken);
     if (session.run && (session.run.state === 'working' || session.run.state === 'starting' || session.run.state === 'waiting')) {
-      update(session.run, { state: 'failed', error: `${known.name} stopped${why()}`, endedAt: Date.now() });
+      update(session.run, { state: 'failed', error: `${agent.name} stopped${why()}`, endedAt: Date.now() });
     }
   });
 
@@ -554,7 +619,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     await unlessAborted(signal, session.connection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} }));
   } catch (err) {
     child.kill();
-    throw new Error(`${known.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
+    throw new Error(`${agent.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
   }
   const mcpServers = board ? [...brainfileMcp(), ...(deskToken ? [deskMcp(deskToken, projectId)] : [])] : [];
   const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
@@ -840,7 +905,7 @@ const reserved = new Set<string>();
  */
 function reserve(projectId: string, taskId: string): Result<() => void> {
   const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, error: `${KNOWN.find((k) => k.id === live.agentId)?.name ?? live.agentId} is already working on ${taskId}` };
+  if (live) return { ok: false, error: `${nameOf(live.agentId)} is already working on ${taskId}` };
   const slot = `${projectId}\n${taskId}`;
   if (reserved.has(slot)) return { ok: false, error: `A hand-off is already starting on ${taskId}` };
   reserved.add(slot);
@@ -915,10 +980,10 @@ const desk = new DeskBridge(
       const found = findV2Task(getV2Dirs(located.brainfilePath), taskId);
       return found ? { title: found.doc.task.title } : null;
     },
+    agents: () => allAgents().map(({ id, name }) => ({ id, name })),
     unavailable(agentId) {
-      const known = KNOWN.find((k) => k.id === agentId);
-      if (!known) return `Unknown agent ${agentId}`;
-      return which(known.client) ? null : `${known.name} is not installed on this Mac`;
+      const agent = agentOf(agentId);
+      return agent ? whyNot(agent) : `Unknown agent ${agentId}`;
     },
     async start(grant, taskId, agentId, model) {
       // Who asked goes on the task first, as Hand to… sets the assignee first.
@@ -966,6 +1031,7 @@ function deskMcp(token: string, projectId: string): acp.McpServer {
       { name: DESK_ENV.socket, value: desk.socketPath },
       { name: DESK_ENV.token, value: token },
       { name: DESK_ENV.project, value: projectId },
+      { name: DESK_ENV.agents, value: JSON.stringify(allAgents().map((a) => a.id)) },
     ],
   };
 }
@@ -1074,7 +1140,7 @@ function review(projectId: string, taskId: string): Result<ReviewView | null> {
 /** Merge and discard wait for the agent: its worktree is not taken from under it. */
 function settle(projectId: string, taskId: string, act: (title?: string) => { message: string }): Result<{ message: string }> {
   const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, error: `${KNOWN.find((k) => k.id === live.agentId)?.name ?? live.agentId} is still working on ${taskId}` };
+  if (live) return { ok: false, error: `${nameOf(live.agentId)} is still working on ${taskId}` };
   if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, error: `A hand-off is starting on ${taskId}` };
   try {
     const located = locateBoard(projectId, { materialize: false });
