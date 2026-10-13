@@ -39,3 +39,6 @@ Let Discuss record a new decision, or replace or retire an existing one, with th
 4. Then record it, add it to the task's decisions (task_patch), and leave a note on the task.
 
 Update discuss.ts (the instructions in `discussPreamble` and `DISCUSS_TOOLS`), desktop/design.md › Dispatch (Discuss), and the tests for `discussPermission`. The other limits stay as they are: no other tasks changed, no moves, completions or deletions, no code.
+
+## Log
+- 2026-10-13T17:03:34.535Z: [claude] Done on feat/desktop-app (uncommitted): DISCUSS_TOOLS allows decide, supersede and retire; the preamble says check first, show claim key, title, text and what it replaces, wait for a yes, then record with the task in forWork and note it. design.md › Discuss and discuss.test.ts updated; tests and typecheck pass. decision-6 replaces decision-3.
