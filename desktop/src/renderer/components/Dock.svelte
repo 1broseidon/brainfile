@@ -18,7 +18,6 @@
 
   const TAB_W = 236;
   const GAP = 6;
-  const KEY = 32;
   const MAX_SHOWN = 4;
   /** The dock keeps to the right of the pane, so the rows it covers are few. */
   const SHARE = 0.72;
@@ -70,8 +69,8 @@
 
   const items = $derived(app.tabs.map(describe).filter((i): i is Item => i !== null));
 
-  /** Where the dock ends on the right: beside the chat key, or beside the chat when it is open. */
-  const right = $derived(app.chatOpen ? Math.min(app.layout.chat.w, Math.max(CHAT.minW, paneW - 24)) + 12 + GAP : 12 + KEY + GAP);
+  /** Where the dock ends on the right: beside the chat key (wider while a turn is at work), or beside the chat when it is open. */
+  const right = $derived(app.chatOpen ? Math.min(app.layout.chat.w, Math.max(CHAT.minW, paneW - 24)) + 12 + GAP : 12 + app.chatKeyW + GAP);
 
   /** As many tabs as the width allows, up to four, keeping room for +N. */
   const capacity = $derived(Math.max(0, Math.min(MAX_SHOWN, Math.floor((paneW * SHARE - right - 44 + GAP) / (TAB_W + GAP)))));
