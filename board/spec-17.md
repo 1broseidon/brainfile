@@ -28,14 +28,14 @@ subtasks:
     completed: true
   - id: spec-17-6
     title: "Build: simulator and a WiFi install on the iPhone (Release, team F3E8V88BVB, devicectl); scripts and README"
-    completed: false
+    completed: true
   - id: spec-17-7
     title: "v2: desktop link by QR (chat, hand-offs, runs, asks)"
     completed: false
   - id: spec-17-8
     title: Device-flow sign-in once an OAuth app is registered
     completed: false
-updatedAt: "2026-10-13T03:28:19.407Z"
+updatedAt: "2026-10-13T03:28:19.911Z"
 ---
 
 ## Description
