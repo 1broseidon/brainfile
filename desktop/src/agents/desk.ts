@@ -74,6 +74,12 @@ const str = (value: unknown): string | undefined => (typeof value === 'string' &
 export function deskTools(deps: DeskDeps) {
   const liveOn = (projectId: string, taskId: string) =>
     deps.runs().find((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId && isLive(r));
+  /**
+   * Tasks a dispatch is starting on: held from the busy check until `start`
+   * settles, so two calls that overlap its await cannot both start an agent
+   * in the task's one worktree (decision-2).
+   */
+  const starting = new Set<string>();
 
   async function dispatch(grant: DeskGrant, args: Record<string, unknown>): Promise<Result<string>> {
     const taskId = str(args.taskId);
@@ -90,9 +96,17 @@ export function deskTools(deps: DeskDeps) {
     if (!task) return { ok: false, error: `${taskId} is not an open task on this board. Create it with the brainfile tools first.` };
     const busy = liveOn(grant.projectId, taskId);
     if (busy) return { ok: false, error: `${busy.agentId} is already working on ${taskId}` };
+    const slot = `${grant.projectId}\n${taskId}`;
+    if (starting.has(slot)) return { ok: false, error: `A hand-off is already starting on ${taskId}` };
     const problem = deps.unavailable(agentId);
     if (problem) return { ok: false, error: problem };
-    const started = await deps.start(grant, taskId, agentId, model);
+    starting.add(slot);
+    let started: Awaited<ReturnType<DeskDeps['start']>>;
+    try {
+      started = await deps.start(grant, taskId, agentId, model);
+    } finally {
+      starting.delete(slot);
+    }
     if (!started.ok) return started;
     const where = started.value.branch ? ` in its own worktree on ${started.value.branch}` : ' in the repository';
     return {
