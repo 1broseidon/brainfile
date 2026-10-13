@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.node.json && svelte-check --tsconfig tsconfig.json --threshold error",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/",
     "package": "npm run build && electron-builder --mac --dir --arm64",
+    "link:dev": "node scripts/link-dev.mjs",
     "icons": "electron scripts/make-icons.mjs"
   },
   "devDependencies": {
