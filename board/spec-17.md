@@ -17,7 +17,10 @@ subtasks:
   - id: spec-17-2
     title: GitHub sign-in with a fine-grained token in SecureStore; projects = repos with refs/brainfile/*
     completed: false
-updatedAt: "2026-10-13T02:29:39.371Z"
+  - id: spec-17-3
+    title: Read a board through one GraphQL request and @brainfile/core/browser; cache for offline reading
+    completed: false
+updatedAt: "2026-10-13T02:29:39.863Z"
 ---
 
 ## Description
