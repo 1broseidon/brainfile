@@ -70,6 +70,8 @@ export class LinkStore {
    * The desk's static key pair, made on first use from 32 random bytes. A key
    * that no longer opens (the Keychain was reset) is replaced, and the phones
    * linked to the old one go with it: they could not reach this desk anyway.
+   * While nothing can be sealed (the Keychain is unavailable) this throws and
+   * changes nothing.
    */
   key(): KeyPair {
     if (this.pair) return this.pair;
@@ -78,11 +80,13 @@ export class LinkStore {
         this.pair = keyPair(fromBase64Url(this.sealer.open(Buffer.from(this.data.key, 'base64'))));
         return this.pair;
       } catch {
-        this.data.phones = [];
+        // Replaced below, if a new one can be sealed.
       }
     }
     const pair = keyPair(new Uint8Array(randomBytes(32)));
-    this.data.key = this.sealer.seal(toBase64Url(pair.secret)).toString('base64');
+    const sealed = this.sealer.seal(toBase64Url(pair.secret)).toString('base64');
+    if (this.data.key) this.data.phones = [];
+    this.data.key = sealed;
     this.write();
     this.pair = pair;
     return pair;

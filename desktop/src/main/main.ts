@@ -244,7 +244,10 @@ function startLink(): LinkServer {
       if (!safeStorage.isEncryptionAvailable()) throw new Error('The Keychain is not available');
       return safeStorage.encryptString(text);
     },
-    open: (sealed) => safeStorage.decryptString(sealed),
+    open: (sealed) => {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('The Keychain is not available');
+      return safeStorage.decryptString(sealed);
+    },
   });
   const server = new LinkServer({
     store: linkStore,

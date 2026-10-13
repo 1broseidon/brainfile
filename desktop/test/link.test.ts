@@ -577,8 +577,17 @@ test('the desk key is made once, sealed at rest, and found again; the port is re
   assert.equal(new LinkStore(path.join(dir, 'link.json'), sealer).port, server.port);
   blocker.close();
 
-  // A key that no longer opens is replaced, and the phones linked to it go.
+  // While the Keychain cannot seal, nothing changes: the key and the phones wait for it.
   store.link('a-phone', 'iPhone');
+  const locked = new LinkStore(path.join(dir, 'link.json'), {
+    seal: () => { throw new Error('The Keychain is not available'); },
+    open: () => { throw new Error('The Keychain is not available'); },
+  });
+  assert.throws(() => locked.key(), /Keychain/);
+  assert.equal(locked.phones().length, 1);
+  assert.deepEqual(new LinkStore(path.join(dir, 'link.json'), sealer).key().public, pair.public);
+
+  // A key that no longer opens is replaced, and the phones linked to it go.
   const broken = new LinkStore(path.join(dir, 'link.json'), { ...sealer, open: () => { throw new Error('Keychain reset'); } });
   assert.notDeepEqual(broken.key().public, pair.public);
   assert.deepEqual(broken.phones(), []);
