@@ -40,3 +40,6 @@ updatedAt: "2026-10-13T04:39:37.264Z"
 
 ## Description
 Protocol 1 in docs/link.md. Settings, Desktop: Link desktop (camera QR or pasted link), Linked/Away, Forget. Connection manager over noise.ts. Desk projects join GitHub ones by owner/name; desk-only boards appear. Via the desk: live run as a row's loudest signal, asks band and sheet, Hand to… and Stop on the task sheet, review summary, a chat key and chat sheet with harness and model pickers. Falls back to GitHub when the desk is away.
+
+## Log
+- 2026-10-13T04:39:37.743Z: [claude] Phone: link parsing, Keychain keys, connection manager (head starts, backoff, calls, events, close codes) and the desk store/adapter/joins/chat in pure TS, tested against a fake desk on noise.ts's Responder.
