@@ -27,6 +27,7 @@ import { LinkServer } from './server';
 import { LinkStore } from './store';
 import { deskAddresses, deskName } from './addresses';
 import { inProcessHost } from './inProcess';
+import { liveRuns } from '../agents/live';
 import type { AgentEvent, AgentId, AgentInfo, AgentMethod, AgentRun, LinkProject, LinkView, PermissionAsk, ProjectState, Result } from '../shared/api';
 
 const DEV_PORT = 47211;
@@ -104,7 +105,7 @@ class FakeAgents {
       case 'listModels':
         return MODELS[a] ? { ok: true, value: MODELS[a] } : { ok: false, error: `Unknown agent ${a}` };
       case 'live':
-        return { runs: [...this.runs.values()].filter((r) => r.endedAt === undefined), asks: [...this.asks.values()].map((p) => p.ask) };
+        return { runs: liveRuns(this.runs.values()), asks: [...this.asks.values()].map((p) => p.ask) };
       case 'dispatch':
         return this.start({ projectId: a, taskId: b, agentId: c as AgentId, model: d, kind: 'dispatch' });
       case 'ask':
@@ -267,6 +268,7 @@ const server = new LinkServer({
       if (phone.connected && !was?.connected) say(`  ${phone.name} connected`);
       if (!phone.connected && was?.connected) say(`  ${phone.name} left`);
     }
+    for (const was of before?.phones ?? []) if (!view.phones.some((p) => p.key === was.key)) say(`  ${was.name} forgotten`);
     if (view.paired && view.paired.at !== before?.paired?.at) {
       say(`  Linked · ${view.paired.name}`);
       void showCode();

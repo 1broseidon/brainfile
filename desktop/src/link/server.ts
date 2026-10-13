@@ -543,6 +543,12 @@ export class LinkServer {
     const checked = checkCall(message.call, message.args);
     if (!checked.ok) return this.send(conn, { id, error: checked.error });
     const { call, args, projectId } = checked;
+    // The phone forgets this desk: answered first, then let go as Forget in Settings lets it go.
+    if (call === 'forget') {
+      this.send(conn, { id, value: {} });
+      this.forget(conn.key!);
+      return;
+    }
     if (projectId !== null && !this.options.desk.knows(projectId)) return this.send(conn, { id, error: UNKNOWN_PROJECT });
     if (call === 'closeBoard') this.unsubscribe(conn, projectId!);
     let value: unknown;

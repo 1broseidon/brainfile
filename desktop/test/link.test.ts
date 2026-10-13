@@ -12,6 +12,7 @@ import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { bundled } from './bundle.ts';
+import { ENDED_MS, ENDED_RUNS, liveRuns } from '../src/agents/live.ts';
 
 type Link = typeof import('../src/link/server.ts') &
   typeof import('../src/link/noise.ts') &
@@ -433,6 +434,46 @@ test('checkCall: the shapes, cheaply', () => {
   assert.equal(checkCall('hasOwnProperty', []).ok, false);
 });
 
+test('a null in every call is an optional argument left out, never one that is needed', () => {
+  const args = (call: string, given: unknown[]) => {
+    const checked = checkCall(call, given);
+    assert.ok(checked.ok, `${call} is allowed`);
+    return checked.args;
+  };
+  assert.deepEqual(args('moveTask', [HERE, 'task-1', 'done', null]), [HERE, 'task-1', 'done', undefined]);
+  assert.deepEqual(args('dispatch', [HERE, 'task-1', 'claude', null]), [HERE, 'task-1', 'claude', undefined]);
+  assert.deepEqual(args('ask', [HERE, 'claude', 'hi', 't', null, null, null, { codex: 'gpt-5.5' }]), [HERE, 'claude', 'hi', 't', undefined, undefined, undefined, { codex: 'gpt-5.5' }]);
+  assert.deepEqual(args('answerPermission', ['ask-1', null]), ['ask-1', null], 'a choice: it declines');
+  for (const [call, given] of [
+    ['openBoard', [null]],
+    ['getTask', [HERE, null]],
+    ['addTask', [HERE, null]],
+    ['patchTask', [HERE, 'task-1', null]],
+    ['noteTask', [HERE, 'task-1', null]],
+    ['decide', [HERE, null]],
+    ['listModels', [null]],
+    ['dispatch', [HERE, null, 'claude']],
+    ['ask', [HERE, 'claude', null, 't']],
+    ['stopRun', [null]],
+    ['answerPermission', [null, 'allow_once']],
+  ] as const) {
+    assert.equal(checkCall(call, [...given]).ok, false, `${call} needs it`);
+  }
+});
+
+test('live: the runs not ended, and those that ended in the last 30 minutes, the latest 50', () => {
+  const now = 10 * ENDED_MS;
+  const run = (id: string, endedAt?: number) => ({ id, projectId: HERE, agentId: 'claude', kind: 'ask', state: endedAt === undefined ? 'working' : 'done', activity: 'thinking', startedAt: 0, ...(endedAt === undefined ? {} : { endedAt, reply: `reply ${id}` }) }) as never;
+  const told = liveRuns([run('working'), run('old', now - ENDED_MS - 1), run('lately', now - ENDED_MS), run('just', now - 1)], now);
+  assert.deepEqual(told.map((r: { id: string }) => r.id), ['working', 'lately', 'just']);
+  assert.equal((told[2] as { reply?: string }).reply, 'reply just', 'with its reply');
+  const many = Array.from({ length: ENDED_RUNS + 10 }, (_, i) => run(`run-${i}`, now - ENDED_RUNS - 10 + i));
+  const latest = liveRuns([...many, run('working')], now).map((r: { id: string }) => r.id);
+  assert.equal(latest.length, ENDED_RUNS + 1);
+  assert.equal(latest[0], 'run-10', 'the ten that ended first are left out');
+  assert.equal(latest.at(-1), 'working');
+});
+
 // ── Events ─────────────────────────────────────────────────────────────────
 
 test('board events reach a phone only for boards it opened, one per board per 500 ms, the latest winning', async () => {
@@ -506,6 +547,23 @@ test('Forget sends bye, closes with 4410, and the phone is no longer let in', as
   assert.deepEqual(view.phones, []);
   assert.deepEqual(await phone.event('bye'), { event: 'bye', reason: 'forgotten' });
   assert.equal((await phone.closed).code, 4410);
+  const back = new Phone(phone.key);
+  assert.equal(await back.open(port(), store.key().public, {}), null);
+  assert.equal((await back.closed).code, 4401);
+});
+
+test('forget from the phone: answered, then bye and 4410, and the phone is gone from the store', async () => {
+  const phone = await paired();
+  const other = await paired('Pixel 9');
+  const key = toBase64Url(phone.key.public);
+  assert.deepEqual(await phone.call('forget'), { id: (phone as any).nextId - 1, value: {} });
+  assert.deepEqual(await phone.event('bye'), { event: 'bye', reason: 'forgotten' });
+  assert.equal((await phone.closed).code, 4410);
+  assert.equal(store.phone(key), undefined);
+  assert.deepEqual(store.phones().map((p) => p.name), ['Pixel 9'], 'only this phone goes');
+  assert.deepEqual(server.view().phones.map((p) => [p.name, p.connected]), [['Pixel 9', true]]);
+  assert.deepEqual(calls, [], 'nothing reached the desk');
+  assert.equal(other.frames.some((f) => f.event === 'bye'), false);
   const back = new Phone(phone.key);
   assert.equal(await back.open(port(), store.key().public, {}), null);
   assert.equal((await back.closed).code, 4401);

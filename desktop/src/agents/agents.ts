@@ -24,6 +24,7 @@ import { locateBoard } from '@brainfile/core/repo';
 import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { discussContext, discussMode, discussPermission, discussPreamble } from './discuss';
+import { liveRuns } from './live';
 import { Startups, unlessAborted } from './startup';
 import type {
   AgentEvent,
@@ -1100,10 +1101,10 @@ async function stopRun(runId: string): Promise<void> {
   }
 }
 
-/** What is running and asking now, for a phone that connects mid-run (task-40). */
+/** What is running and asking now, and what ended lately, for a phone that connects mid-run or comes back (task-40). */
 function live(): LiveAgents {
   return {
-    runs: [...runs.values()].filter((run) => run.endedAt === undefined).map((run) => ({ ...run })),
+    runs: liveRuns(runs.values()),
     asks: [...asks.values()].map((pending) => pending.ask),
   };
 }

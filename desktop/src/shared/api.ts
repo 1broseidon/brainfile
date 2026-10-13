@@ -375,9 +375,9 @@ export interface ReviewView {
   merged: boolean;
 }
 
-/** What is running and asking now: what a phone that connects mid-run needs to catch up. */
+/** What is running and asking now: what a phone that connects mid-run, or comes back, needs to catch up. */
 export interface LiveAgents {
-  /** Runs not yet ended. */
+  /** Runs not yet ended, and those that ended in the last 30 minutes with their reply or error (the latest 50). */
   runs: AgentRun[];
   /** Permission asks not yet answered. */
   asks: PermissionAsk[];
@@ -566,7 +566,7 @@ export interface Api {
     earlier?: ChatTurn[]
   ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
-  /** The runs not yet ended and the asks not yet answered. */
+  /** The runs not yet ended or ended lately, and the asks not yet answered. */
   live(): Promise<LiveAgents>;
   /** The hand-off's branch and what is on it, or null when the task has no worktree. */
   review(projectId: string, taskId: string): Promise<Result<ReviewView | null>>;

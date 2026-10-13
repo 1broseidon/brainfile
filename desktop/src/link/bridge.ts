@@ -89,6 +89,8 @@ const CALLS = {
   stopRun: { args: [id] },
   answerPermission: { args: [id, optional(id)] },
   review: { args: [id, id], project: true },
+  // The phone forgets this desk: the server answers it, as Forget in Settings.
+  forget: { args: [] },
 } satisfies Record<string, { args: Check[]; project?: boolean }>;
 
 export type LinkCall = keyof typeof CALLS;
