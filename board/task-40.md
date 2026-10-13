@@ -12,7 +12,7 @@ parentId: spec-17
 subtasks:
   - id: task-40-1
     title: noise.ts copied with vector tests
-    completed: false
+    completed: true
   - id: task-40-2
     title: "Link store: desk key in safeStorage + linked phones"
     completed: false
@@ -35,6 +35,7 @@ subtasks:
     title: link:dev harness for the simulator
     completed: false
 createdAt: "2026-10-13T04:15:11.393Z"
+updatedAt: "2026-10-13T04:21:54.547Z"
 ---
 
 ## Description
