@@ -29,7 +29,10 @@ subtasks:
   - id: spec-17-6
     title: "Build: simulator and a WiFi install on the iPhone (Release, team F3E8V88BVB, devicectl); scripts and README"
     completed: false
-updatedAt: "2026-10-13T02:29:41.317Z"
+  - id: spec-17-7
+    title: "v2: desktop link by QR (chat, hand-offs, runs, asks)"
+    completed: false
+updatedAt: "2026-10-13T02:29:41.800Z"
 ---
 
 ## Description
