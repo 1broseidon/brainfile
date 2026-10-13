@@ -17,14 +17,11 @@ relatedFiles:
 decisions:
   - decision-6
 subtasks:
-  - id: task-45-7
-    title: uncommitted files
-    completed: false
   - id: task-45-8
     title: agent running now)
     completed: false
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-13T18:34:40.634Z"
+updatedAt: "2026-10-13T18:34:41.011Z"
 ---
 
 ## Description
