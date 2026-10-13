@@ -17,9 +17,6 @@ relatedFiles:
 decisions:
   - decision-6
 subtasks:
-  - id: task-45-5
-    title: worktree
-    completed: false
   - id: task-45-6
     title: commits ahead
     completed: false
@@ -30,7 +27,7 @@ subtasks:
     title: agent running now)
     completed: false
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-13T18:34:39.871Z"
+updatedAt: "2026-10-13T18:34:40.256Z"
 ---
 
 ## Description
