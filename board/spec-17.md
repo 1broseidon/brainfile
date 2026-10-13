@@ -25,7 +25,7 @@ subtasks:
     completed: true
   - id: spec-17-5
     title: "Writes as commits on the ref (Git Data API) with re-read and retry when it moved: add, move, priority, subtasks, note, complete, decide"
-    completed: false
+    completed: true
   - id: spec-17-6
     title: "Build: simulator and a WiFi install on the iPhone (Release, team F3E8V88BVB, devicectl); scripts and README"
     completed: false
@@ -35,7 +35,7 @@ subtasks:
   - id: spec-17-8
     title: Device-flow sign-in once an OAuth app is registered
     completed: false
-updatedAt: "2026-10-13T03:13:21.624Z"
+updatedAt: "2026-10-13T03:28:19.407Z"
 ---
 
 ## Description
