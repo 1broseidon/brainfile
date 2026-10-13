@@ -11,3 +11,6 @@ updatedAt: "2026-10-13T21:46:34.326Z"
 
 ## Description
 Instead of a separate effort dropdown, hovering over a model lets you choose its available effort levels in a > submenu. Medium is the default, as it is the most commonly available level.
+
+## Log
+- 2026-10-13T21:59:16.370Z: [cursor] Effort is chosen from a submenu on each model in the picker; medium is the default. The work is on dispatch/task-50.
