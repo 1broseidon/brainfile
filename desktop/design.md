@@ -225,8 +225,11 @@ until it is turned off, and the full rows are a press of ⇧V away.
 - **A group at a glance.** An open group shows its first three roots, each
   with everything under it (a family is never cut), and the rest under one
   quiet line on the titles' edge, `N more`; one row left over is shown
-  instead. Pressing it shows the whole group until the group is folded,
-  which puts it back to a glance.
+  instead. A task an agent is working — starting, working, or waiting —
+  stays in the drawn list, never behind `N more`, even when it is past
+  that glance. Its family stays with it, the same way a family is never
+  cut. The glance still holds for every other row. Pressing it shows the
+  whole group until the group is folded, which puts it back to a glance.
 - **A group's head is quieter than its rows**: its name in ink-3 at 500 and
   its count, no box (each row carries its own), the name on the boxes'
   edge. Open groups stand 20px apart; folded ones sit together, a short list

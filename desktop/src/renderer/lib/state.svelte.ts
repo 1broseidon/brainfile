@@ -29,7 +29,7 @@ import { problemBrief } from './brief';
 
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
 const SETTLE_MS = 900;
-import { calmOrder, decisionGroups, glance, outline, restsFolded, visibleRows, type OutlineRow } from './format';
+import { calmOrder, decisionGroups, glance, GLANCE, outline, restsFolded, rootsHeld, visibleRows, type OutlineRow } from './format';
 import { intakeColumn, issueTask } from '../../shared/issues';
 import { customId } from '../../shared/agentServers';
 
@@ -395,7 +395,8 @@ class AppState {
    * The list as it is drawn (design.md, Rows; Calm list): the outline's
    * groups with their visible rows, children under their parent whatever
    * their column, then Done. The calm list puts the groups nearest done
-   * first and shows each open group at a glance. ListView draws it and
+   * first and shows each open group at a glance. A task an agent is
+   * working stays in that list, with its family. ListView draws it and
    * j / k walk it.
    */
   listGroups = $derived.by((): ListGroup[] => {
@@ -403,10 +404,18 @@ class AppState {
     if (!board) return [];
     const tree = outline(board.columns, board.tasks, board.completed);
     const collapsed = (id: string) => this.folded('parents', id);
+    // Starting, working, or waiting: the same live dispatch the row names.
+    const working = new Set<string>();
+    if (this.calm && this.activeId) {
+      for (const run of Object.values(this.runs)) {
+        if (run.kind === 'dispatch' && run.taskId && run.projectId === this.activeId && isLive(run)) working.add(run.taskId);
+      }
+    }
     const group = (key: string, column: ColumnView | null, all: OutlineRow[], folded: boolean): ListGroup => {
       const rows = folded ? [] : visibleRows(all, collapsed);
       const whole = !!(this.activeId && this.folds[this.activeId]?.whole[key]);
-      const seen = this.calm && !whole ? glance(rows) : { shown: rows, more: 0 };
+      const keep = working.size ? rootsHeld(all, working) : undefined;
+      const seen = this.calm && !whole ? glance(rows, GLANCE, keep) : { shown: rows, more: 0 };
       return { key, column, title: column?.title ?? 'Done', count: all.length, folded, rows: seen.shown, more: seen.more };
     };
     const groups = (this.calm ? calmOrder(board.columns, tree.groups) : tree.groups)
