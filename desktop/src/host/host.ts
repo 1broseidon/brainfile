@@ -16,6 +16,7 @@ import {
   buildBoardFromV2,
   buildDocGraph,
   completeTaskFile,
+  decideFile,
   decisionStatus,
   idList,
   deleteTaskFile,
@@ -38,10 +39,12 @@ import {
 import {
   AUTOSYNC_DELAY_MS,
   boardRemote,
+  boardRemoteName,
   boardRepoKind,
   effectiveAutosync,
   fetchBeforeRead,
   flushBoardCommits,
+  git,
   isTrackedBoard,
   adoptBoard,
   boardConflict,
@@ -71,6 +74,7 @@ import type {
   HostMessage,
   HostRequest,
   IntegrityView,
+  NewDecisionInput,
   NewTaskInput,
   ProjectState,
   RemovedTask,
@@ -134,6 +138,20 @@ function locate(folder: string): ProjectState {
   } catch (err) {
     return { status: 'error', message: err instanceof Error ? err.message : String(err) };
   }
+}
+
+/**
+ * Where a board is shared, for the phone link: the URL of the remote its
+ * refs go to and its name under `refs/brainfile/` there, for a tracked board
+ * with a remote. Anything else is shared, if at all, as the code's origin.
+ */
+function sharing(folder: string): { url: string | null; ref: string | null } {
+  const state = locate(folder);
+  if (state.status !== 'ready' || !isTrackedBoard(state.dotDir)) return { url: null, ref: null };
+  const remote = boardRemote(state.dotDir);
+  if (!remote) return { url: null, ref: null };
+  const url = git(['remote', 'get-url', remote], state.dotDir);
+  return { url: url.ok && url.stdout ? url.stdout : null, ref: boardRemoteName(state.dotDir) };
 }
 
 // ── Reading ─────────────────────────────────────────────────────────────────
@@ -585,6 +603,33 @@ function noteTask(projectId: string, taskId: string, text: string): Result {
 }
 
 /**
+ * A decision, as `brainfile decide` records it (spec-11): through core, so
+ * the claim key's current decision is superseded (status, links both ways,
+ * moved to logs/), and the same words again are a duplicate that writes
+ * nothing. The title is the decision; the description, when there is one,
+ * is its why.
+ */
+function decide(projectId: string, input: NewDecisionInput): Result<DecisionView> {
+  let id = 'decision';
+  return mutate(
+    projectId,
+    () => `decide ${id}: ${input.title}`,
+    (board) => {
+      const dirs = getV2Dirs(board.brainfilePath);
+      const types = readBoardConfig(board.brainfilePath)?.config?.types;
+      const title = input.title.trim();
+      const claimKey = input.claimKey?.trim();
+      const result = decideFile(dirs, { title, text: input.description?.trim() || title, ...(claimKey ? { claimKey } : {}) }, { types });
+      if (!result.success || !result.decision || !result.filePath) throw new Error(result.error ?? 'The decision was not written');
+      id = result.decision.id;
+      const doc = readTaskFile(result.filePath);
+      const graph = buildDocGraph([...readTasksDir(dirs.boardDir), ...readTasksDir(dirs.logsDir)].map((d) => d.task), { types });
+      return toDecision(doc?.task ?? result.decision, doc?.body, graph);
+    }
+  );
+}
+
+/**
  * A hand-off the chat asked for (spec-16): the agent becomes the assignee, as
  * Hand to… makes it, and `dispatch:` says who asked, with what and when. Core
  * keeps the key as it keeps any it does not know; it commits like any change.
@@ -779,6 +824,7 @@ setInterval(() => {
 
 const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   locate,
+  sharing,
   openBoard,
   closeBoard,
   getTask,
@@ -791,6 +837,7 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   deleteTask,
   restoreTask,
   noteTask,
+  decide,
   recordDispatch,
   syncNow,
   settleBoards,

@@ -18,7 +18,10 @@ import type {
   GitHubAuthView,
   IssuesView,
   IssueView,
+  LinkView,
   ModelOption,
+  PairingCode,
+  Result,
   PermissionAsk,
   Project,
   RunStep,
@@ -374,6 +377,8 @@ class AppState {
   issues = $state<Record<string, { view: IssuesView | null; loading: boolean; error: string | null }>>({});
   /** How the window signs in to GitHub, as Settings last asked. */
   githubAuth = $state<GitHubAuthView | null>(null);
+  /** The phone link (task-40): the switch and the linked phones, as main last said. */
+  link = $state<LinkView | null>(null);
   /** Issues being made into tasks, by URL, so a second click waits for the first. */
   making = $state<Record<string, boolean>>({});
 
@@ -509,6 +514,7 @@ class AppState {
       this.projects = projects;
     });
     api.onBoardChanged((snapshot) => this.receive(snapshot));
+    api.onLinkChanged((view) => (this.link = view));
     api.onAgentEvent((event) => {
       if (event.kind === 'run') this.onRun(event.run);
       else if (event.kind === 'permission') this.asks = [...this.asks, event.ask];
@@ -590,6 +596,25 @@ class AppState {
     this.githubAuth = result.value;
     for (const id of Object.keys(this.issues)) this.issues[id].view = null;
     return true;
+  }
+
+  // ── Phone link (task-40) ────────────────────────────────────────────────
+
+  async loadLink(): Promise<void> {
+    this.link = await api.linkState();
+  }
+
+  async setLink(on: boolean): Promise<void> {
+    this.link = await api.setLink(on);
+  }
+
+  /** A fresh pairing code; it turns the link on and retires the last one. */
+  linkCode(): Promise<Result<PairingCode>> {
+    return api.linkCode();
+  }
+
+  async forgetPhone(key: string): Promise<void> {
+    this.link = await api.forgetPhone(key);
   }
 
   /** A fresh snapshot from the host. What changed without this window's hand goes in the feed. */

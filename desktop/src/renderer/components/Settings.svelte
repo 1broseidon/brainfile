@@ -4,12 +4,14 @@
    * How the list reads (calm or full), then how the agents you hand work to
    * may act: one switch for the whole desk, and under it each agent's own
    * permission modes, named as the agent itself reports them, and the
-   * person's own agents (task-47). Then the editor files open in, and how the
-   * issues view signs in to GitHub (task-26).
+   * person's own agents (task-47). Then the editor files open in, how the
+   * issues view signs in to GitHub (task-26), and the phone link (task-40).
    */
   import { app } from '../lib/state.svelte';
+  import { relativeTime } from '../lib/format';
   import AgentServers from './AgentServers.svelte';
   import Icon from './Icon.svelte';
+  import LinkPhone from './LinkPhone.svelte';
   import Switch from './Switch.svelte';
   import { isCustom } from '../../shared/agentServers';
   import type { AgentId } from '../../shared/api';
@@ -24,7 +26,28 @@
     void app.refreshAgents();
     void app.refreshEditors();
     void app.loadGitHubAuth();
+    void app.loadLink();
   });
+
+  /** Link a phone's code is open under the switch. */
+  let pairing = $state(false);
+  /** Forget asks once, in place, for a few seconds: the phone has to scan again to come back. */
+  let forgetting = $state<string | null>(null);
+  let forgetTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function forget(key: string): void {
+    if (forgetTimer) clearTimeout(forgetTimer);
+    if (forgetting !== key) {
+      forgetting = key;
+      forgetTimer = setTimeout(() => (forgetting = null), 4000);
+      return;
+    }
+    forgetting = null;
+    void app.forgetPhone(key);
+  }
+
+  /** Newest first. */
+  const phones = $derived([...(app.link?.phones ?? [])].sort((a, b) => b.pairedAt - a.pairedAt));
 
   let token = $state('');
   let saving = $state(false);
@@ -237,6 +260,40 @@
         token needs read access to Issues.
       </p>
     </section>
+
+    <section>
+      <h2>Phone</h2>
+      <p class="lede">Boards and agents, on your phone.</p>
+      <div class="group">
+        <div class="row toggle">
+          <span class="label">
+            <span class="name">Phone link</span>
+            {#if app.link?.on && app.link.error}<span class="sub warn">{app.link.error}</span>{/if}
+          </span>
+          <Switch on={!!app.link?.on} label="Phone link" onchange={(on) => app.setLink(on)} />
+        </div>
+        {#if pairing}
+          <LinkPhone onclose={() => (pairing = false)} />
+        {:else}
+          <button class="row add" onclick={() => (pairing = true)}>
+            <Icon name="plus" size={14} />Link a phone
+          </button>
+        {/if}
+      </div>
+
+      {#if phones.length}
+        <h3>Linked phones</h3>
+        <div class="group">
+          {#each phones as phone (phone.key)}
+            <div class="row phone" class:asking={forgetting === phone.key}>
+              <span class="name">{phone.name}</span>
+              <span class="mono note">{phone.connected ? 'connected' : `seen ${relativeTime(new Date(phone.lastSeen).toISOString())}`}</span>
+              <button class="btn danger forget" onclick={() => forget(phone.key)}>{forgetting === phone.key ? 'Forget phone?' : 'Forget'}</button>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </section>
   </div>
 </div>
 
@@ -344,8 +401,43 @@
     color: var(--ink-3);
   }
 
-  .note.warn {
+  .note.warn,
+  .sub.warn {
     color: var(--warn);
+  }
+
+  /* An action in a group: a row you press, inset so its fill sits concentric in the group's corners. */
+  .row.add {
+    width: calc(100% - 2 * var(--s1));
+    margin: 0 var(--s1);
+    padding-left: var(--s3);
+    gap: var(--s2);
+    border-radius: var(--r-pane);
+    color: var(--ink-2);
+    text-align: left;
+    transition: background var(--d-press) var(--ease);
+  }
+
+  .row.add :global(svg) {
+    color: var(--ink-3);
+  }
+
+  .row.add:hover,
+  .row.add:focus-visible {
+    background: var(--fill-hover);
+    color: var(--ink);
+  }
+
+  /* Forget waits for the hand, in space already kept for it. */
+  .forget {
+    opacity: 0;
+    transition: opacity var(--d-press) var(--ease);
+  }
+
+  .phone:hover .forget,
+  .phone:focus-within .forget,
+  .phone.asking .forget {
+    opacity: 1;
   }
 
   .token {

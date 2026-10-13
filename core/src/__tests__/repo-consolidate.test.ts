@@ -147,6 +147,22 @@ describe('one board out of two (spec-15 phase 2)', () => {
     expect(backups.find((b) => b.name.endsWith('-folder'))?.note).toBe(`the folder ${home} before adopt the 'brainfile' branch`);
   });
 
+  it('a board whose .gitignore lists state/ can be backed up and merged; state/ stays out of both', () => {
+    oldBoardOnMain();
+    branchBoard(NEW, path.join(base, 'wt'), false);
+    fs.mkdirSync(path.join(home, 'state'));
+    fs.writeFileSync(path.join(home, 'state', 'sync.json'), '{}');
+    fs.writeFileSync(path.join(home, '.gitignore'), 'state/\n');
+
+    const result = mergeBoards(home, 'refs/heads/brainfile');
+    expect(result).toMatchObject({ relation: 'contained', adopted: 'other' });
+    for (const backup of result.backups) {
+      expect(git(['ls-tree', '-r', '--name-only', `refs/brainfile/backups/${backup}`], repo)).not.toMatch(/^state\//m);
+    }
+    expect(git(['ls-tree', '-r', '--name-only', 'brainfile'], repo)).not.toMatch(/^state\//m);
+    expect(fs.readFileSync(path.join(home, 'state', 'sync.json'), 'utf-8')).toBe('{}');
+  });
+
   it('keeping this folder over the branch makes the branch hold the folder, descending from what it had', () => {
     branchBoard(OLD, path.join(base, 'wt'), false);
     const oldTip = git(['rev-parse', 'brainfile'], repo);

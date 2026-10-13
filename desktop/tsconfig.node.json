@@ -9,5 +9,5 @@
     "esModuleInterop": true,
     "types": ["node"]
   },
-  "include": ["src/main/**/*", "src/host/**/*", "src/agents/**/*", "src/preload/**/*", "src/shared/**/*"]
+  "include": ["src/main/**/*", "src/host/**/*", "src/agents/**/*", "src/link/**/*", "src/preload/**/*", "src/shared/**/*"]
 }

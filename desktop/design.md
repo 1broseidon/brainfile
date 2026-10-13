@@ -580,6 +580,34 @@ rows' text, not the group's rim, so the column has one left edge.
   description. When a switch overrides the choice, the value is said, not
   offered, in the same place.
 
+## Phone
+
+The desk can be reached from Brainfile on a phone on the same network
+(task-40; the contract is brainfile-mobile's `docs/link.md`, and
+`link.md` here points at it). It is one more section in Settings, Phone,
+drawn like the others:
+
+- **Phone link** is a switch, off by default. Off, nothing listens. On, the
+  desk listens and says nothing more; a port it could not have is said
+  under the switch in warn ink.
+- **Link a phone** is a row you press, a muted + before its words, that
+  opens the code in place under the switch: the QR, and beside it `Scan on
+  your phone`, **Copy link** for the same text, and `Valid 5 min` in mono.
+  Showing a code turns the link on. A code that runs out is replaced while
+  it is open. When a phone is let in by it the line says `Linked · iPhone 16
+  Pro` with a tick in the ok colour, the spent code steps back, and the
+  panel closes.
+- **The QR is for a camera.** Dark modules on a light plate in both themes
+  (`--qr-plate`, `--qr-ink`), with its quiet zone and the card's corner,
+  drawn as one SVG path. It is the one light thing in the dark window, and
+  only while it is asked for.
+- **Linked phones** lists each by the name it gave, with `connected` or
+  `seen 5h ago` in mono. **Forget** waits for the hand, danger ink with no
+  fill, and asks once, in place (`Forget phone?`); a phone forgotten while
+  connected is told and let go.
+- The phone's own words for what the desk says (`Code expired`, `Not linked
+  · scan again`, `Forgotten on desktop`) are the contract's, not this file's.
+
 ## Microinteractions stance
 
 - **One tooltip** (`lib/tooltip.ts`): a pop-plane label that waits 800ms for

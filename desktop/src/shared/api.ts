@@ -216,6 +216,15 @@ export interface NewTaskInput {
   source?: string;
 }
 
+/** A decision as the phone records it (`brainfile decide`): it supersedes the claim key's current one. */
+export interface NewDecisionInput {
+  title: string;
+  /** Dotted claim family, e.g. `dependency.http-client`. */
+  claimKey?: string;
+  /** The why, under the title. */
+  description?: string;
+}
+
 export interface TaskPatch {
   title?: string;
   description?: string | null;
@@ -390,6 +399,14 @@ export interface ReviewView {
   merged: boolean;
 }
 
+/** What is running and asking now: what a phone that connects mid-run, or comes back, needs to catch up. */
+export interface LiveAgents {
+  /** Runs not yet ended, and those that ended in the last 30 minutes with their reply or error (the latest 50). */
+  runs: AgentRun[];
+  /** Permission asks not yet answered. */
+  asks: PermissionAsk[];
+}
+
 /** App-wide dispatch settings, kept in the app's dispatch.json. */
 export interface DispatchSettings {
   /** On: every agent runs in its bypass mode and nothing is asked. Off: each agent's own default, or the mode chosen for it. */
@@ -456,6 +473,44 @@ export interface GitHubAuthView {
   error?: string;
 }
 
+// ── Phone link (task-40, brainfile-mobile docs/link.md) ───────────────────
+
+/** A project as a phone sees it: where it is shared, when it is, so the phone can join it to a GitHub project it follows. */
+export interface LinkProject extends Project {
+  repo?: { owner: string; name: string };
+  /** The board's name under `refs/brainfile/` on that repository: `board`. */
+  ref?: string;
+}
+
+/** A phone that may connect: its key, from the pairing it was let in by. */
+export interface LinkedPhone {
+  /** Its static X25519 public key, unpadded base64url. */
+  key: string;
+  /** The model it gave when it paired: `iPhone 16 Pro`. */
+  name: string;
+  pairedAt: number;
+  lastSeen: number;
+}
+
+export interface LinkView {
+  /** Settings, Phone, Phone link: listening on the network. Off by default. */
+  on: boolean;
+  /** The port it listens on, while it does. */
+  port: number | null;
+  /** Why it could not listen, in a few words. */
+  error?: string;
+  phones: (LinkedPhone & { connected: boolean })[];
+  /** The last phone let in by a code, so a code on screen can say so and close. */
+  paired?: { name: string; at: number };
+}
+
+/** A code a phone scans or is sent: `brainfile://link?v=1&k=…&s=…&a=…&n=…`. */
+export interface PairingCode {
+  link: string;
+  /** When its secret stops being accepted (ms). */
+  expiresAt: number;
+}
+
 export type Result<T = void> = { ok: true; value: T } | { ok: false; error: string };
 
 /** Requests the renderer can make. Each maps to one handler in the host or main. */
@@ -484,6 +539,8 @@ export interface Api {
   restoreTask(projectId: string, removed: RemovedTask): Promise<Result>;
   /** A line in the task's log, as the person. */
   noteTask(projectId: string, taskId: string, text: string): Promise<Result>;
+  /** Record a decision as `brainfile decide` does: the claim key's current decision is superseded. */
+  decide(projectId: string, input: NewDecisionInput): Promise<Result<DecisionView>>;
   syncNow(projectId: string): Promise<Result<SyncView>>;
   /** Make two boards one: take the other, merge them, or keep this one. What is replaced is backed up first. */
   settleBoards(projectId: string, choice: SettleChoice): Promise<Result<{ message: string }>>;
@@ -538,6 +595,8 @@ export interface Api {
     effort?: string
   ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
+  /** The runs not yet ended or ended lately, and the asks not yet answered. */
+  live(): Promise<LiveAgents>;
   /** The hand-off's branch and what is on it, or null when the task has no worktree. */
   review(projectId: string, taskId: string): Promise<Result<ReviewView | null>>;
   /** Merge the hand-off's branch into the checkout's branch, then let its worktree and branch go. */
@@ -565,6 +624,16 @@ export interface Api {
   /** Save a token for GitHub (kept in the Keychain's care), or forget it with null. Checked with GitHub before it is kept. */
   setGitHubToken(token: string | null): Promise<Result<GitHubAuthView>>;
 
+  /** The phone link: the switch, the linked phones. */
+  linkState(): Promise<LinkView>;
+  /** Off closes every phone's connection and stops listening. */
+  setLink(on: boolean): Promise<LinkView>;
+  /** A new pairing code, valid five minutes; it turns the link on and retires the last one. */
+  linkCode(): Promise<Result<PairingCode>>;
+  /** Removes the phone's key; a connected phone is told (`bye`) and let go. */
+  forgetPhone(key: string): Promise<LinkView>;
+  onLinkChanged(listener: (view: LinkView) => void): () => void;
+
   onBoardChanged(listener: (snapshot: BoardSnapshot) => void): () => void;
   onProjectsChanged(listener: (projects: Project[]) => void): () => void;
 }
@@ -575,6 +644,7 @@ export const CHANNEL = {
   board: 'brainfile:board',
   projects: 'brainfile:projects',
   agent: 'brainfile:agent',
+  link: 'brainfile:link',
 } as const;
 
 /** Methods main forwards to the agents process. */
@@ -588,6 +658,7 @@ export const AGENT_METHODS = [
   'ask',
   'discuss',
   'stopRun',
+  'live',
   'review',
   'mergeReview',
   'discardReview',
@@ -619,6 +690,7 @@ export const HOST_METHODS = [
   'deleteTask',
   'restoreTask',
   'noteTask',
+  'decide',
   'syncNow',
   'settleBoards',
   'planFix',
@@ -629,7 +701,7 @@ export const HOST_METHODS = [
 export type HostMethod = (typeof HOST_METHODS)[number];
 
 /** Messages between main and the board host (a utility process). */
-export type HostRequest = { id: number; method: HostMethod | AgentHostMethod | 'locate'; args: unknown[] };
+export type HostRequest = { id: number; method: HostMethod | AgentHostMethod | 'locate' | 'sharing'; args: unknown[] };
 export type HostMessage =
   | { kind: 'reply'; id: number; result: unknown }
   | { kind: 'board'; snapshot: BoardSnapshot };

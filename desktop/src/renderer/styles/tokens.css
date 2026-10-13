@@ -65,6 +65,11 @@
   --danger-soft: oklch(72% 0.17 25 / 0.14);
   --ok: oklch(78% 0.13 160);
 
+  /* A pairing code is read by a camera, not a person: dark modules on a
+   * light plate in both themes, since a scanner may not read one inverted. */
+  --qr-plate: oklch(96% 0.004 60);
+  --qr-ink: oklch(14% 0.005 60);
+
   /* Priority, the TUI's signal: urgent red, high yellow (moved off the
    * TUI's amber so it never reads as the accent), medium blue. */
   --p-urgent: oklch(68% 0.19 25);
@@ -202,6 +207,9 @@
     --danger: oklch(55% 0.19 27);
     --danger-soft: oklch(55% 0.19 27 / 0.1);
     --ok: oklch(55% 0.13 160);
+
+    --qr-plate: oklch(100% 0 0);
+    --qr-ink: oklch(20% 0.008 60);
 
     --p-urgent: oklch(55% 0.2 25);
     --p-high: oklch(68% 0.14 90);

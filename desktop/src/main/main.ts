@@ -1,7 +1,8 @@
 /**
  * Main process: the window, the project list, and the bridge to the board
  * host. A project is a folder the person added; its board is found, read and
- * written by the host, never here.
+ * written by the host, never here. The phone link (link/, task-40) reaches
+ * the same host and agents processes through the same forwarding.
  */
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, safeStorage, screen, shell, utilityProcess, type UtilityProcess } from 'electron';
 import { spawn } from 'child_process';
@@ -18,6 +19,7 @@ import {
   type HostMessage,
   type HostRequest,
   type IssuesView,
+  type LinkProject,
   type Project,
   type ProjectState,
   type Result,
@@ -26,9 +28,17 @@ import {
 import { loginShellPath } from './shellPath';
 import { ProjectStore } from './projects';
 import { existingFiles, listEditors, openFolder, openInEditor } from './editors';
-import { detectForge } from './forge';
+import { detectForge, forgeFromRemote } from './forge';
 import { fileTokenStore, ghCliToken, GitHub } from './github';
 import { readPlacement, resolvePlacement, writePlacement, type WindowPlacement } from './windowState';
+import { BoardHolds, linkDesk } from '../link/bridge';
+import { LinkServer } from '../link/server';
+import { LinkStore } from '../link/store';
+import { deskAddresses, deskName } from '../link/addresses';
+
+// A second copy (a test, a capture) keeps its own data and its own
+// single-instance lock, so it never touches the installed app's.
+if (process.env.BRAINFILE_USER_DATA) app.setPath('userData', path.resolve(process.env.BRAINFILE_USER_DATA));
 
 // Launched from the Dock, the app inherits launchd's bare PATH: no Homebrew
 // git, and no `brainfile` for `init` or the merge driver sync registers.
@@ -44,6 +54,12 @@ let store: ProjectStore;
 let github: GitHub;
 let nextRequest = 1;
 const pending = new Map<number, (result: unknown) => void>();
+let link: LinkServer | null = null;
+/** The boards the window and each phone hold open: the host closes one only when nobody does. */
+const holds = new BoardHolds({
+  open: (projectId) => callHost('openBoard', projectId),
+  close: (projectId) => callHost('closeBoard', projectId),
+});
 
 // ── Board host ──────────────────────────────────────────────────────────────
 
@@ -55,6 +71,7 @@ function startHost(): UtilityProcess {
       pending.delete(message.id);
     } else if (message.kind === 'board') {
       win?.webContents.send(CHANNEL.board, message.snapshot);
+      link?.board(message.snapshot);
     }
   });
   child.on('exit', () => {
@@ -93,6 +110,7 @@ function startAgents(): UtilityProcess {
       void result.then((value) => child.postMessage({ kind: 'host-reply', id: message.id, result: value } satisfies HostReply));
     } else {
       win?.webContents.send(CHANNEL.agent, message.event);
+      link?.agent(message.event);
     }
   });
   child.on('exit', () => {
@@ -138,6 +156,7 @@ async function listProjects(): Promise<Project[]> {
 
 async function broadcastProjects(): Promise<void> {
   win?.webContents.send(CHANNEL.projects, await listProjects());
+  void link?.projectsChanged();
 }
 
 async function addProject(): Promise<Project | null> {
@@ -198,12 +217,64 @@ function startGitHub(): GitHub {
   return new GitHub({ fetch: (...args) => fetch(...args), ghToken: ghCliToken, env: process.env, store });
 }
 
+// ── Phone link (task-40) ────────────────────────────────────────────────────
+
+/**
+ * Where a project is shared, for a phone joining it to a GitHub project it
+ * follows: a tracked board's remote and its name under `refs/brainfile/`,
+ * else the code's origin, with no ref.
+ */
+async function sharedOn(projectId: string): Promise<Pick<LinkProject, 'repo' | 'ref'>> {
+  const shared = await callHost<{ url?: string | null; ref?: string | null }>('sharing', projectId);
+  if (shared.url) {
+    const repo = forgeFromRemote(shared.url);
+    return repo && shared.ref ? { repo: { owner: repo.owner, name: repo.name }, ref: shared.ref } : {};
+  }
+  const origin = await detectForge(projectId);
+  return origin ? { repo: { owner: origin.owner, name: origin.name } } : {};
+}
+
+async function linkProjects(): Promise<LinkProject[]> {
+  return Promise.all((await listProjects()).map(async (project) => ({ ...project, ...(await sharedOn(project.id)) })));
+}
+
+function startLink(): LinkServer {
+  const linkStore = new LinkStore(path.join(app.getPath('userData'), 'link.json'), {
+    seal: (text) => {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('The Keychain is not available');
+      return safeStorage.encryptString(text);
+    },
+    open: (sealed) => {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('The Keychain is not available');
+      return safeStorage.decryptString(sealed);
+    },
+  });
+  const server = new LinkServer({
+    store: linkStore,
+    desk: linkDesk({
+      host: (method, ...args) => callHost(method, ...args),
+      agents: (method, ...args) => callAgents(method, ...args),
+      holds,
+      projects: linkProjects,
+      knows: (projectId) => store.list().includes(projectId),
+    }),
+    addresses: deskAddresses,
+    name: deskName(),
+    onChange: (view) => win?.webContents.send(CHANNEL.link, view),
+    // Development aid: `BRAINFILE_LINK_HOST=127.0.0.1` listens on this Mac only (a capture, a test).
+    listenHost: process.env.BRAINFILE_LINK_HOST,
+  });
+  void server.start();
+  return server;
+}
+
 // ── IPC ─────────────────────────────────────────────────────────────────────
 
 const local: Record<string, (...args: any[]) => unknown> = {
   listProjects,
   addProject,
   removeProject: async (projectId: string) => {
+    holds.forget(projectId);
     await callHost('closeBoard', projectId);
     store.remove(projectId);
     await broadcastProjects();
@@ -218,6 +289,10 @@ const local: Record<string, (...args: any[]) => unknown> = {
   listIssues,
   githubAuth: () => github.auth(),
   setGitHubToken: (token: string | null) => github.setToken(token),
+  linkState: () => link!.view(),
+  setLink: (on: boolean) => link!.setOn(on === true),
+  linkCode: () => link!.code(),
+  forgetPhone: (key: string) => link!.forget(key),
   // The folder comes from the agents process, never from the window.
   openWorktree: async (projectId: string, taskId: string, editorId?: string): Promise<Result> => {
     const review = await callAgents<Result<ReviewView | null>>('review', projectId, taskId);
@@ -228,6 +303,9 @@ const local: Record<string, (...args: any[]) => unknown> = {
 };
 
 ipcMain.handle(CHANNEL.invoke, async (_event, method: string, ...args: unknown[]) => {
+  // The window holds the boards it opens, as each phone does.
+  if (method === 'openBoard') return holds.open('window', args[0] as string);
+  if (method === 'closeBoard') return holds.close('window', args[0] as string);
   if ((HOST_METHODS as readonly string[]).includes(method)) return callHost(method as HostRequest['method'], ...args);
   if ((AGENT_METHODS as readonly string[]).includes(method)) return callAgents(method as AgentRequest['method'], ...args);
   const handler = local[method];
@@ -347,6 +425,7 @@ function start(): void {
   store = new ProjectStore(path.join(app.getPath('userData'), 'projects.json'));
   github = startGitHub();
   host = startHost();
+  link = startLink();
   if (DEV_URL) reloadAgentsOnRebuild();
   createWindow();
   app.on('activate', () => {
@@ -375,4 +454,5 @@ app.on('before-quit', () => {
   // The host flushes pending commits on exit.
   host?.kill();
   agents?.kill();
+  void link?.close();
 });
