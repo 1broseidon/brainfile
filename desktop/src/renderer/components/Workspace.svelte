@@ -12,9 +12,12 @@
   import ListView from './ListView.svelte';
   import BoardView from './BoardView.svelte';
   import DecisionsView from './DecisionsView.svelte';
+  import IssuesView from './IssuesView.svelte';
 
   const project = $derived(app.active);
   const board = $derived(app.board);
+  /** The GitHub repository the origin points at, when it does (task-26). */
+  const forge = $derived(project ? app.forges[project.id] : null);
   let initializing = $state(false);
 
   const storageLabel = $derived(
@@ -121,6 +124,18 @@
         >
           <Icon name="decision" size={14} />
         </button>
+        {#if forge}
+          <button
+            role="tab"
+            aria-label="Issues"
+            use:tip={'Issues  I'}
+            aria-selected={app.view === 'issues'}
+            class:on={app.view === 'issues'}
+            onclick={() => app.setView('issues')}
+          >
+            <Icon name="issue" size={14} />
+          </button>
+        {/if}
       </div>
       <span class="spacer"></span>
       {#each app.asks.filter((a) => a.projectId === project.id).slice(0, 1) as ask (ask.id)}
@@ -148,6 +163,8 @@
     <div class="content">
       {#if app.view === 'decisions'}
         <DecisionsView {board} />
+      {:else if app.view === 'issues'}
+        {#if forge}<IssuesView {board} repo={forge} />{/if}
       {:else if board.tasks.length === 0 && board.completed.length === 0}
         <div class="center">
           <div class="empty">

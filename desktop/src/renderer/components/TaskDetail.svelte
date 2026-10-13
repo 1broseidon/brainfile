@@ -3,6 +3,7 @@
   import { api, app } from '../lib/state.svelte';
   import { childrenOf, columnProgress, priorityLabel, relativeTime, shortDate } from '../lib/format';
   import { renderMarkdown } from '../lib/markdown';
+  import { sourceLabel } from '../../shared/issues';
   import type { BoardSnapshot, TaskDetail } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import PriorityIcon from './PriorityIcon.svelte';
@@ -272,6 +273,20 @@
               <span class="mono dim">{detail.parentId}</span>
               <span class="clip">{parent?.title ?? ''}</span>
             </button>
+          </div>
+        {/if}
+        {#if detail.source}
+          <!-- Where the work came from (task-26): the issue it was made from, opened in the browser. -->
+          <div class="prop">
+            <span class="key">Source</span>
+            {#if /^https?:\/\//.test(detail.source)}
+              <a class="value link" href={detail.source} target="_blank" rel="noreferrer" use:tip={detail.source}>
+                <span class="mono clip">{sourceLabel(detail.source)}</span>
+                <Icon name="reveal" size={12} />
+              </a>
+            {:else}
+              <span class="value static mono clip">{detail.source}</span>
+            {/if}
           </div>
         {/if}
         {#if detail.dueDate}
@@ -569,8 +584,19 @@
     overflow: hidden;
   }
 
-  button.value:not(:disabled):hover {
+  button.value:not(:disabled):hover,
+  a.value:hover {
     background: var(--fill-hover);
+  }
+
+  .value.link {
+    color: var(--ink-2);
+    text-decoration: none;
+  }
+
+  .value.link :global(svg) {
+    flex: none;
+    color: var(--ink-4);
   }
 
   .value.static {

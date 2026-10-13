@@ -164,7 +164,23 @@ function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
     completedAt: task.completedAt,
+    ...(text(task.source) ? { source: text(task.source) } : {}),
   };
+}
+
+/** A `source:` as compared: the same issue with or without a trailing slash is one source. */
+function sourceKey(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
+/** Every `source:` on the board, open and completed, to the task that carries it (task-26). */
+function sourcesOf(docs: { task: Task }[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const { task } of docs) {
+    const source = text(task.source);
+    if (source) out[sourceKey(source)] ??= task.id;
+  }
+  return out;
 }
 
 /** Every board in the repository, and the rest of where this one lives. Cached; `fetch` asks the remote first. */
@@ -294,6 +310,7 @@ function snapshot(board: OpenBoard): BoardSnapshot {
     related: sisters.map((b) => ({ alias: b.alias, folder: b.folder, status: b.status })),
     sync: syncView(board),
     integrity: readIntegrity(board).view,
+    sources: sourcesOf([...open, ...archived]),
   };
 }
 
@@ -460,7 +477,14 @@ function addTask(projectId: string, input: NewTaskInput): Result<TaskView> {
     (board) => {
       const dirs = getV2Dirs(board.brainfilePath);
       const types = readBoardConfig(board.brainfilePath)?.config?.types;
-      const result = unwrap(addTaskFile(dirs.boardDir, { ...input }, '', dirs.logsDir, { types }));
+      const { source: rawSource, ...rest } = input;
+      const source = rawSource?.trim() ? sourceKey(rawSource) : undefined;
+      // An issue becomes one task: a second click, or another window, finds the first.
+      if (source) {
+        const taken = sourcesOf([...readTasksDir(dirs.boardDir), ...readTasksDir(dirs.logsDir)])[source];
+        if (taken) throw new Error(`That issue is already ${taken}.`);
+      }
+      const result = unwrap(addTaskFile(dirs.boardDir, { ...rest, ...(source ? { fields: { source } } : {}) }, '', dirs.logsDir, { types }));
       id = result.task!.id;
       return toView(result.task!, undefined, types);
     }
