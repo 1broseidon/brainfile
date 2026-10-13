@@ -23,6 +23,8 @@ relatedFiles:
   - desktop/design.md
   - desktop/src/renderer
 createdAt: "2026-10-13T15:38:45.419Z"
+assignee: claude
+updatedAt: "2026-10-13T15:58:24.555Z"
 ---
 
 ## Description
