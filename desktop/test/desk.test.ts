@@ -168,6 +168,56 @@ test('a task already being worked on is not handed off twice', async () => {
   assert.equal(started.length, 1);
 });
 
+/** Deps whose start waits, as the real one waits on the host's board write, until `go` is called. */
+function deferredStart(outcome: () => 'ok' | 'fail' | 'throw') {
+  const base = deps();
+  const waiting: (() => void)[] = [];
+  const tools = deskTools({
+    ...base,
+    async start(grant, taskId, agentId, model) {
+      await new Promise<void>((resolve) => waiting.push(resolve));
+      const how = outcome();
+      if (how === 'throw') throw new Error('host went away');
+      if (how === 'fail') return { ok: false, error: 'worktree could not be made' };
+      return base.start(grant, taskId, agentId, model);
+    },
+  });
+  return { tools, go: () => waiting.splice(0).forEach((resolve) => resolve()), waiting: () => waiting.length };
+}
+
+test('two dispatches that overlap the start are not both let through to one task', async () => {
+  const { tools, go, waiting } = deferredStart(() => 'ok');
+  const first = tools.call(grantHere, 'dispatch', { taskId: 'task-1' });
+  const second = tools.call(grantHere, 'dispatch', { taskId: 'task-1', agent: 'codex' });
+  // Another task on the board is not held up.
+  const other = tools.call(grantHere, 'dispatch', { taskId: 'task-2' });
+  assert.equal(waiting(), 2);
+  go();
+  const [a, b, c] = await Promise.all([first, second, other]);
+  assert.equal(a.ok, true);
+  assert.equal(b.ok, false);
+  assert.match(!b.ok ? b.error : '', /already starting on task-1/);
+  assert.equal(c.ok, true);
+  assert.deepEqual(started.map((s) => s.taskId), ['task-1', 'task-2']);
+});
+
+test('a start that fails or throws lets go of the task', async () => {
+  for (const how of ['fail', 'throw'] as const) {
+    let next: 'ok' | 'fail' | 'throw' = how;
+    const { tools, go } = deferredStart(() => next);
+    const failing = Promise.resolve(tools.call(grantHere, 'dispatch', { taskId: 'task-1' })).catch((err: Error) => ({ ok: false, error: err.message }));
+    go();
+    const failed = await failing;
+    assert.equal(failed.ok, false);
+    next = 'ok';
+    const retry = tools.call(grantHere, 'dispatch', { taskId: 'task-1' });
+    go();
+    assert.equal((await retry).ok, true, `after a start that went ${how}`);
+    runs.length = 0;
+    started.length = 0;
+  }
+});
+
 test('stop stops the hand-off on this board, and only on this board', async () => {
   const token = bridge.grant(grantHere);
   const there = bridge.grant({ ...grantHere, projectId: THERE });

@@ -797,6 +797,33 @@ function brief(projectId: string, taskId: string, worktree: Worktree | null = nu
   ].join('');
 }
 
+/** The live hand-off on a task, if any. */
+function liveDispatch(projectId: string, taskId: string): AgentRun | undefined {
+  return [...runs.values()].find((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId && (r.state === 'starting' || r.state === 'working' || r.state === 'waiting'));
+}
+
+/**
+ * Tasks a hand-off is being started on, held from its busy check until its
+ * run exists: the desk awaits a board write in between, and a second hand-off
+ * (from the desk or Hand to…) let through then would share the task's one
+ * worktree (decision-2).
+ */
+const reserved = new Set<string>();
+
+/**
+ * Holds the task for one hand-off: a release, to call once its run exists or
+ * it has failed, or why the task cannot be had. Checked and taken in one
+ * step, with no await between.
+ */
+function reserve(projectId: string, taskId: string): Result<() => void> {
+  const live = liveDispatch(projectId, taskId);
+  if (live) return { ok: false, error: `${KNOWN.find((k) => k.id === live.agentId)?.name ?? live.agentId} is already working on ${taskId}` };
+  const slot = `${projectId}\n${taskId}`;
+  if (reserved.has(slot)) return { ok: false, error: `A hand-off is already starting on ${taskId}` };
+  reserved.add(slot);
+  return { ok: true, value: () => reserved.delete(slot) };
+}
+
 /**
  * A hand-off: its worktree, its brief, and the agent started on it. Hand to…
  * and the chat's `dispatch` both come here; `from` is the chat turn that asked.
@@ -829,8 +856,14 @@ function startDispatch(
 }
 
 async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>> {
-  const started = startDispatch(projectId, taskId, agentId, model);
-  return started.ok ? { ok: true, value: started.value.run } : started;
+  const held = reserve(projectId, taskId);
+  if (!held.ok) return held;
+  try {
+    const started = startDispatch(projectId, taskId, agentId, model);
+    return started.ok ? { ok: true, value: started.value.run } : started;
+  } finally {
+    held.value();
+  }
 }
 
 // ── The desk: the chat's own dispatch tools (spec-16) ────────────────────────
@@ -866,9 +899,18 @@ const desk = new DeskBridge(
     },
     async start(grant, taskId, agentId, model) {
       // Who asked goes on the task first, as Hand to… sets the assignee first.
-      const record: DispatchRecord = { agent: agentId, ...(model ? { model } : {}), by: 'chat', at: new Date().toISOString() };
-      const written = await callHost<Result>('recordDispatch', grant.projectId, taskId, record);
-      const started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id);
+      // The task is held across that write, so nothing else starts on it meanwhile.
+      const held = reserve(grant.projectId, taskId);
+      if (!held.ok) return held;
+      let written: Result;
+      let started: ReturnType<typeof startDispatch>;
+      try {
+        const record: DispatchRecord = { agent: agentId, ...(model ? { model } : {}), by: 'chat', at: new Date().toISOString() };
+        written = await callHost<Result>('recordDispatch', grant.projectId, taskId, record);
+        started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id);
+      } finally {
+        held.value();
+      }
       if (!started.ok) return started;
       return {
         ok: true,
@@ -1007,8 +1049,9 @@ function review(projectId: string, taskId: string): Result<ReviewView | null> {
 
 /** Merge and discard wait for the agent: its worktree is not taken from under it. */
 function settle(projectId: string, taskId: string, act: (title?: string) => { message: string }): Result<{ message: string }> {
-  const live = [...runs.values()].find((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId && (r.state === 'starting' || r.state === 'working' || r.state === 'waiting'));
+  const live = liveDispatch(projectId, taskId);
   if (live) return { ok: false, error: `${KNOWN.find((k) => k.id === live.agentId)?.name ?? live.agentId} is still working on ${taskId}` };
+  if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, error: `A hand-off is starting on ${taskId}` };
   try {
     const located = locateBoard(projectId, { materialize: false });
     const title = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId, true)?.doc.task.title : undefined;
