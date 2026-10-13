@@ -19,7 +19,7 @@ subtasks:
     completed: true
   - id: spec-17-3
     title: Read a board through one GraphQL request and @brainfile/core/browser; cache for offline reading
-    completed: false
+    completed: true
   - id: spec-17-4
     title: "Board UI: list grouped by column with the outline, decisions view, task sheet (description, subtasks, log, decisions)"
     completed: false
@@ -35,7 +35,7 @@ subtasks:
   - id: spec-17-8
     title: Device-flow sign-in once an OAuth app is registered
     completed: false
-updatedAt: "2026-10-13T03:13:20.654Z"
+updatedAt: "2026-10-13T03:13:21.142Z"
 ---
 
 ## Description
