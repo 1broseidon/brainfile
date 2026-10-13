@@ -33,9 +33,9 @@ subtasks:
     completed: true
   - id: task-40-8
     title: link:dev harness for the simulator
-    completed: false
+    completed: true
 createdAt: "2026-10-13T04:15:11.393Z"
-updatedAt: "2026-10-13T04:39:53.155Z"
+updatedAt: "2026-10-13T04:43:01.830Z"
 ---
 
 ## Description
