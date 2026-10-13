@@ -10,6 +10,11 @@ tags:
   - github
   - companion
 createdAt: "2026-10-13T02:29:38.358Z"
+subtasks:
+  - id: spec-17-1
+    title: "Repo brainfile-mobile: Expo SDK 57 app, native stack, theme from Forge tokens, Plex fonts, icon and splash from the box mark"
+    completed: false
+updatedAt: "2026-10-13T02:29:38.865Z"
 ---
 
 ## Description
