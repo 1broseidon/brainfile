@@ -71,7 +71,7 @@ test('a collapsed parent hides everything beneath it, and only that', () => {
   assert.deepEqual(ids(visibleRows(group(o, 'todo'), (id) => id === 'spec-1')), ['epic-1', '  spec-1', 'task-2']);
 });
 
-test('a card’s children and a task pane’s list run in the outline’s order', () => {
+test('a parent’s children and the task pane’s list run in the outline’s order', () => {
   const tasks = [doc('epic-1', 'in-progress'), doc('task-2', 'review', 'epic-1'), doc('task-1', 'todo', 'epic-1')];
   const completed = [doc('task-3', 'todo', 'epic-1')];
   const kids = childMap(columns, tasks, completed).get('epic-1')!;
