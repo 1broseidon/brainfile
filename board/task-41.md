@@ -33,9 +33,9 @@ subtasks:
     completed: true
   - id: task-41-8
     title: Tests + simulator against link:dev
-    completed: false
+    completed: true
 createdAt: "2026-10-13T04:15:11.912Z"
-updatedAt: "2026-10-13T05:01:36.868Z"
+updatedAt: "2026-10-13T05:06:53.326Z"
 ---
 
 ## Description
