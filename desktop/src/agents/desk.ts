@@ -44,6 +44,10 @@ export interface DeskGrant {
   model?: string;
   /** The person's model for each agent on this board, as Hand to… would use it. Refreshed every turn. */
   models: Partial<Record<AgentId, string>>;
+  /** The effort the model selector has for the chat's own model. */
+  effort?: string;
+  /** Each agent's effort, beside its model. A model the caller names itself starts on medium. */
+  efforts?: Partial<Record<AgentId, string>>;
   /** The chat session's key in the agents process, to find the turn that asked. */
   key: string;
 }
@@ -63,7 +67,8 @@ export interface DeskDeps {
     grant: DeskGrant,
     taskId: string,
     agentId: AgentId,
-    model: string | undefined
+    model: string | undefined,
+    effort?: string
   ): Promise<Result<{ run: AgentRun; branch: string | null; note?: string }>>;
   /** Every run this app has started since it opened. */
   runs(): AgentRun[];
@@ -109,7 +114,10 @@ export function deskTools(deps: DeskDeps) {
     const agentId = named ? agentNamed(agents, named) : grant.agentId;
     if (!agentId) return { ok: false, error: `Unknown agent ${named}: use one of ${agents.map((a) => a.id).join(', ')}` };
     // Your own model when it is you; else the person's choice for that agent here; else the agent's default.
-    const model = str(args.model) ?? (agentId === grant.agentId ? grant.model : grant.models[agentId]);
+    // A model named in the call starts on medium. The selector's effort goes with the selector's model.
+    const namedModel = str(args.model);
+    const model = namedModel ?? (agentId === grant.agentId ? grant.model : grant.models[agentId]);
+    const effort = namedModel ? undefined : agentId === grant.agentId ? grant.effort : grant.efforts?.[agentId];
     if (model && model.length > 200) return { ok: false, error: 'That model ID is too long' };
     const task = deps.findTask(grant.projectId, taskId);
     if (!task) return { ok: false, error: `${taskId} is not an open task on this board. Create it with the brainfile tools first.` };
@@ -122,7 +130,7 @@ export function deskTools(deps: DeskDeps) {
     starting.add(slot);
     let started: Awaited<ReturnType<DeskDeps['start']>>;
     try {
-      started = await deps.start(grant, taskId, agentId, model);
+      started = await deps.start(grant, taskId, agentId, model, effort);
     } finally {
       starting.delete(slot);
     }
@@ -131,7 +139,7 @@ export function deskTools(deps: DeskDeps) {
     return {
       ok: true,
       value:
-        `Handed ${taskId} ("${task.title}") to ${agentId}${model ? ` (${model})` : ''}. It works${where}, its tab is in the dock, and it moves the task to review when done.` +
+        `Handed ${taskId} ("${task.title}") to ${agentId}${model ? ` (${model}${effort ? `, ${effort}` : ''})` : ''}. It works${where}, its tab is in the dock, and it moves the task to review when done.` +
         (started.value.note ? ` ${started.value.note}` : ''),
     };
   }
@@ -228,8 +236,8 @@ export class DeskBridge {
     return token;
   }
 
-  /** Each turn brings the person's current model choices. */
-  update(token: string, patch: Partial<Pick<DeskGrant, 'models'>>): void {
+  /** Each turn brings the person's current model and effort choices. */
+  update(token: string, patch: Partial<Pick<DeskGrant, 'models' | 'efforts' | 'model' | 'effort'>>): void {
     const grant = this.grants.get(token);
     if (grant) Object.assign(grant, patch);
   }

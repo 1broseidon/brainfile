@@ -26,7 +26,7 @@ const BOARDS: Record<string, Record<string, string>> = {
 let base: string;
 let bridge: DeskBridge;
 let runs: AgentRun[];
-let started: { projectId: string; taskId: string; agentId: AgentId; model?: string }[];
+let started: { projectId: string; taskId: string; agentId: AgentId; model?: string; effort?: string }[];
 let stopped: string[];
 let nextRun: number;
 
@@ -46,8 +46,8 @@ function deps(): DeskDeps {
     agents: () => AGENTS,
     findTask: (projectId, taskId) => (BOARDS[projectId]?.[taskId] ? { title: BOARDS[projectId][taskId] } : null),
     unavailable: (agentId) => (agentId === 'grok' ? 'Grok Build is not installed on this Mac' : null),
-    async start(grant, taskId, agentId, model) {
-      started.push({ projectId: grant.projectId, taskId, agentId, model });
+    async start(grant, taskId, agentId, model, effort) {
+      started.push({ projectId: grant.projectId, taskId, agentId, model, ...(effort ? { effort } : {}) });
       const run: AgentRun = {
         id: `run-${nextRun++}`,
         projectId: grant.projectId,
@@ -137,6 +137,26 @@ test('an unknown task, a malformed ID, an unknown or missing agent are refused',
   assert.equal(started.length, 0);
 });
 
+test('a hand-off takes the selector’s effort with its model; a model named in the call does not', async () => {
+  const token = bridge.grant({ ...grantHere, effort: 'high', efforts: { codex: 'xhigh' } });
+  const call = (args: Record<string, unknown>) => callDesk(bridge.socketPath, { token, tool: 'dispatch', args });
+  const own = await call({ taskId: 'task-1' });
+  assert.match(own.ok ? own.value : '', /to claude \(opus, high\)/);
+  await call({ taskId: 'task-2', agent: 'codex', model: 'gpt-5.5-mini' });
+  assert.deepEqual(started, [
+    { projectId: HERE, taskId: 'task-1', agentId: 'claude', model: 'opus', effort: 'high' },
+    { projectId: HERE, taskId: 'task-2', agentId: 'codex', model: 'gpt-5.5-mini' },
+  ]);
+});
+
+test('another agent takes the effort chosen for it on this board', async () => {
+  const token = bridge.grant({ ...grantHere, efforts: { codex: 'xhigh' } });
+  const result = await callDesk(bridge.socketPath, { token, tool: 'dispatch', args: { taskId: 'task-2', agent: 'codex' } });
+  assert.equal(result.ok, true);
+  assert.equal(started[0].model, 'gpt-5.5');
+  assert.equal(started[0].effort, 'xhigh');
+});
+
 test('with no agent named it is the chat’s own, and its model; another agent takes the person’s model for it', async () => {
   const token = bridge.grant(grantHere);
   const call = (args: Record<string, unknown>) => callDesk(bridge.socketPath, { token, tool: 'dispatch', args });
@@ -204,12 +224,12 @@ function deferredStart(outcome: () => 'ok' | 'fail' | 'throw') {
   const waiting: (() => void)[] = [];
   const tools = deskTools({
     ...base,
-    async start(grant, taskId, agentId, model) {
+    async start(grant, taskId, agentId, model, effort) {
       await new Promise<void>((resolve) => waiting.push(resolve));
       const how = outcome();
       if (how === 'throw') throw new Error('host went away');
       if (how === 'fail') return { ok: false, error: 'worktree could not be made' };
-      return base.start(grant, taskId, agentId, model);
+      return base.start(grant, taskId, agentId, model, effort);
     },
   });
   return { tools, go: () => waiting.splice(0).forEach((resolve) => resolve()), waiting: () => waiting.length };

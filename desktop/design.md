@@ -475,8 +475,10 @@ board changes (and in the feed).
   whole, and only the answer: the narration an agent writes between tool
   calls ("I'll look at the board…") is dropped, and the reply is the turn's
   last message. Beside the agent, a muted model picker lists the models the agent
-  itself reports (asked once a day); unset means the agent's default, and
-  Hand to… uses the same choice.
+  itself reports (asked once a day). Hovering a model that offers effort
+  levels opens them in a submenu; Medium is the one a new choice starts on,
+  since it is the level most models have. Unset means the agent's default,
+  and Hand to… uses the same model and effort.
 - **The chat's thread learns from Linear's agent window.** The header carries
   only the thread: its title (its first line) once there is one, the board's
   name before, then new chat and close. Who answers and with what sits where
@@ -511,10 +513,10 @@ board changes (and in the feed).
   agent and a model), `runs` (what is running on this Mac) and `stop`.
   `dispatch` is Hand to…'s own path: the worktree, a tab in the dock, asks
   in the task pane, Review. With no agent named it is the chat's own agent
-  and model; another agent named takes the model chosen for it on this
+  and model; another agent named takes the model and effort chosen for it on this
   board, as Hand to… would. The task records who asked
-  (`dispatch: { agent, model, by: chat, at }` beside the assignee), committed
-  like any change. Under the reply a hand-off reads like a board change
+  (`dispatch: { agent, model, by: chat, at }` beside the assignee, plus `effort`
+  when one was set), committed like any change. Under the reply a hand-off reads like a board change
   (`task-35 added`, `task-35 handed to codex`), and the call shows in the
   steps as `desk · dispatch`. The agent is told to create follow-ups with the
   board tools, hand them off with dispatch, and ask before dispatching more
