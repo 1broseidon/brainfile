@@ -1,8 +1,8 @@
 ---
 id: task-47
 title: "Custom ACP agents: run any ACP server the person names, the way Zed's agent_servers does"
-column: backlog
-position: 6
+column: in-progress
+position: 3
 description: |-
   The agents Brainfile can start are a fixed list (`KNOWN` in desktop/src/agents/agents.ts; `AgentId` in desktop/src/shared/api.ts is a closed union: claude, codex, antigravity, cursor, grok). A person who has another ACP server on their machine has no way to use it.
 
@@ -69,7 +69,7 @@ dispatch:
   model: opus
   by: chat
   at: "2026-10-13T20:30:48.549Z"
-updatedAt: "2026-10-13T20:30:48.654Z"
+updatedAt: "2026-10-13T20:30:55.121Z"
 ---
 
 ## Description
