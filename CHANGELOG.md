@@ -6,6 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-10-13
+
 ### Fixed
 - A board never commits `state/`, this machine's bookkeeping (`sync.json`,
   `autosync.lock`, `tui.json`, brief checkpoints, the search index), whatever
