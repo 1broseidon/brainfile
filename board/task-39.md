@@ -9,6 +9,8 @@ relatedFiles:
   - desktop/src/agents/agents.ts
 parentId: spec-16
 createdAt: "2026-10-12T23:38:24.239Z"
+assignee: claude
+updatedAt: "2026-10-13T00:01:01.300Z"
 ---
 
 ## Description
