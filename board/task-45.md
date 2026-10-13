@@ -17,9 +17,6 @@ relatedFiles:
 decisions:
   - decision-6
 subtasks:
-  - id: task-45-4
-    title: "Phase 2: <work> section (branch"
-    completed: false
   - id: task-45-5
     title: worktree
     completed: false
@@ -33,7 +30,7 @@ subtasks:
     title: agent running now)
     completed: false
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-13T18:34:39.483Z"
+updatedAt: "2026-10-13T18:34:39.871Z"
 ---
 
 ## Description
