@@ -39,3 +39,6 @@ Reference (in ~/Projects/personal/brainfile-mobile):
 - src/theme.ts: ROW, INSET, INDENT, BOX_CELL spacing
 
 Goal: a list view (or a mode of the existing one) that cuts noise down to one thing per row, so the eye can land on what to do next without scanning signals. Keep the desktop's outline rules (children stay under their parent) and keyboard walk (j / k). Write down any change to desktop/design.md.
+
+## Log
+- 2026-10-13T16:05:39.771Z: [claude] Calm list added as a mode of the desktop list (Settings › List › Calm list, ⇧V, palette; off until turned on): box, one-line title, one resting signal; nearest done first, backlog/done rest folded, three roots at a glance with `N more`; outline and j / k kept (N more is a walk stop). Spec in desktop/design.md › Calm list, decision-5; tests in desktop/test/calm.test.ts (99/99 pass, typecheck clean). Not run in the app. On branch dispatch/task-43.
