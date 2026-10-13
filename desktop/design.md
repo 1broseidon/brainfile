@@ -563,6 +563,12 @@ rows' text, not the group's rim, so the column has one left edge.
   on, the track takes the accent, the one place a setting earns it.
 - **List** comes first, because it is how the window reads: one switch,
   Calm list (Calm list), whose line says what it does in either state.
+- **Custom agents** sit under Agents, after each agent's modes: an entry's
+  name over the command line it runs, in mono, and `not found` in warn when
+  its command is not on the Mac. Add an agent and Edit open a small form in
+  the group (name, command, arguments one a line, environment `KEY=value`;
+  Esc leaves, ⌘↵ saves), Paste from Zed takes JSON as Zed writes it, and
+  Remove has an Undo.
 - **Editor** says where a file an agent names opens: the editors found on
   this Mac (apps in Applications, best first; terminal editors when Ghostty
   is here) and the file's default app. Unset, the first found. In a reply,
