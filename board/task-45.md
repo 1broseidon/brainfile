@@ -20,8 +20,11 @@ subtasks:
   - id: task-45-1
     title: "Phase 1: the <task-information> block from the board, rules for any stage, and the visible line \"Let's discuss task-N.\""
     completed: false
+  - id: task-45-2
+    title: "Phase 2: the <work> section: branch, worktree, commits ahead, uncommitted files, and whether an agent is working on it now"
+    completed: false
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-13T18:34:41.768Z"
+updatedAt: "2026-10-13T18:34:42.147Z"
 ---
 
 ## Description
