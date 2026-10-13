@@ -16,6 +16,13 @@ relatedFiles:
 decisions:
   - decision-7
 createdAt: "2026-10-13T21:50:15.918Z"
+assignee: cursor
+dispatch:
+  agent: cursor
+  model: grok-4.7[context=256k,reasoning_effort=high,fast=true]
+  by: chat
+  at: "2026-10-13T21:50:18.614Z"
+updatedAt: "2026-10-13T21:50:18.721Z"
 ---
 
 ## Description
