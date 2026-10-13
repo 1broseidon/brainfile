@@ -38,6 +38,9 @@ subtasks:
     title: Tests and svelte-check pass
     completed: false
 createdAt: "2026-10-13T21:06:45.161Z"
+decisions:
+  - decision-9
+updatedAt: "2026-10-13T21:06:49.476Z"
 ---
 
 ## Description
