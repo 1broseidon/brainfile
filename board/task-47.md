@@ -46,22 +46,22 @@ decisions:
 subtasks:
   - id: task-47-1
     title: "Settings: agentServers map in dispatch.json, Zed's shape"
-    completed: false
+    completed: true
   - id: task-47-2
     title: AgentId and the picker take custom agents
-    completed: false
+    completed: true
   - id: task-47-3
     title: "Launch a custom server: command, args, env merged; unavailable when not on PATH"
-    completed: false
+    completed: true
   - id: task-47-4
     title: Settings UI to add, edit, remove a custom agent
-    completed: false
+    completed: true
   - id: task-47-5
     title: "Tests: settings round-trip, launch args/env, missing command"
-    completed: false
+    completed: true
   - id: task-47-6
     title: "design.md: custom agents under Dispatch"
-    completed: false
+    completed: true
 createdAt: "2026-10-13T20:29:58.653Z"
 assignee: claude
 dispatch:
@@ -69,7 +69,7 @@ dispatch:
   model: opus
   by: chat
   at: "2026-10-13T20:30:48.549Z"
-updatedAt: "2026-10-13T20:30:55.121Z"
+updatedAt: "2026-10-13T20:47:55.611Z"
 ---
 
 ## Description
