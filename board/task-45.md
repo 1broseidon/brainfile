@@ -16,12 +16,9 @@ relatedFiles:
   - desktop/design.md
 decisions:
   - decision-6
-subtasks:
-  - id: task-45-8
-    title: agent running now)
-    completed: false
+subtasks: []
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-13T18:34:41.011Z"
+updatedAt: "2026-10-13T18:34:41.388Z"
 ---
 
 ## Description
