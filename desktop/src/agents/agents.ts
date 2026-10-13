@@ -24,6 +24,7 @@ import { locateBoard } from '@brainfile/core/repo';
 import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { discussContext, discussMode, discussPermission, discussPreamble } from './discuss';
+import { Startups, unlessAborted } from './startup';
 import type {
   AgentEvent,
   AgentHostMethod,
@@ -400,6 +401,8 @@ interface Session {
 const sessions = new Map<string, Session>();
 const runs = new Map<string, AgentRun>();
 const asks = new Map<string, { ask: PermissionAsk; resolve: (optionId: string | null) => void }>();
+/** Runs whose agent is still starting, so stop reaches them before they have a session. */
+const startups = new Startups();
 let nextId = 1;
 
 const ACTIVITY: Record<string, string> = {
@@ -463,19 +466,25 @@ interface OpenOptions {
   withDesk?: boolean;
   /** The task a discussion is about: it reads, and changes only that task's spec. */
   discuss?: string;
+  /** Stops the startup: the agent is not spawned, or is killed. */
+  signal?: AbortSignal;
 }
 
 async function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
-  const { board = true, at, withDesk = false, discuss = null } = options;
+  const { board = true, at, withDesk = false, discuss = null, signal } = options;
   const known = KNOWN.find((k) => k.id === agentId);
   if (!known) throw new Error(`Unknown agent ${agentId}`);
   if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
   const cwd = at ?? (board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId);
   const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, models: {}, key }) : null;
-  const launch = await known.launch().catch((err) => {
+  const launch = await unlessAborted(signal, known.launch()).catch((err) => {
     if (deskToken) desk.revoke(deskToken);
     throw err;
   });
+  if (signal?.aborted) {
+    if (deskToken) desk.revoke(deskToken);
+    throw signal.reason;
+  }
   // The real node first on PATH, so nothing an agent starts finds a shim instead.
   const node = realNode();
   const env = node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
@@ -484,6 +493,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   let stderr = '';
   child.stderr?.on('data', (d) => (stderr = (stderr + d).slice(-4000)));
   const why = () => (lastLine(stderr) ? `: ${lastLine(stderr)}` : '');
+  signal?.addEventListener('abort', () => child.kill(), { once: true });
   child.on('error', (err) => {
     sessions.delete(key);
     if (deskToken) desk.revoke(deskToken);
@@ -541,22 +551,22 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   });
 
   try {
-    await session.connection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} });
+    await unlessAborted(signal, session.connection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} }));
   } catch (err) {
     child.kill();
     throw new Error(`${known.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
   }
   const mcpServers = board ? [...brainfileMcp(), ...(deskToken ? [deskMcp(deskToken, projectId)] : [])] : [];
-  const created = await session.connection.newSession({ cwd, mcpServers });
+  const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
   session.sessionId = created.sessionId;
   const models = modelOption(created.configOptions);
   session.modes = modesOf(created);
   session.mode = session.modes?.initial ?? null;
   remember(agentId, models?.options ?? [], session.modes && { initial: session.modes.initial, options: session.modes.options, bypass: session.modes.bypass });
   if (models && model && model !== models.current && models.options.some((o) => o.value === model)) {
-    await session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => {});
+    await unlessAborted(signal, session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => {}));
   }
-  if (board) await applyMode(session);
+  if (board) await unlessAborted(signal, applyMode(session));
   sessions.set(key, session);
   return session;
 }
@@ -678,6 +688,11 @@ function replyOf(session: Session): string {
   return '';
 }
 
+/** Read afresh: stop can land across any await. */
+function wasStopped(run: AgentRun): boolean {
+  return run.state === 'stopped';
+}
+
 async function turn(session: Session, run: AgentRun, prompt: string): Promise<void> {
   session.run = run;
   session.messages = [];
@@ -685,15 +700,17 @@ async function turn(session: Session, run: AgentRun, prompt: string): Promise<vo
   session.breakNext = false;
   session.tools = new Map();
   if (session.idle) clearTimeout(session.idle);
-  update(run, { state: 'working', activity: 'thinking' });
   try {
+    // Stopped before its turn came: the agent is not given the prompt.
+    if (wasStopped(run)) return;
+    update(run, { state: 'working', activity: 'thinking' });
     const result = await session.connection.prompt({ sessionId: session.sessionId, prompt: [{ type: 'text', text: prompt }] });
     if (run.state === 'stopped') return;
     const stopped = result.stopReason === 'cancelled';
     const reply = replyOf(session);
     update(run, { state: stopped ? 'stopped' : 'done', reply, steps: stepsOf(session, reply), endedAt: Date.now() });
   } catch (err) {
-    update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
+    if (!wasStopped(run)) update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
   } finally {
     session.run = null;
     if (run.kind === 'dispatch') close(session);
@@ -799,7 +816,13 @@ function brief(projectId: string, taskId: string, worktree: Worktree | null = nu
 
 /** The live hand-off on a task, if any. */
 function liveDispatch(projectId: string, taskId: string): AgentRun | undefined {
-  return [...runs.values()].find((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId && (r.state === 'starting' || r.state === 'working' || r.state === 'waiting'));
+  return [...runs.values()].find(
+    (r) =>
+      r.kind === 'dispatch' &&
+      r.projectId === projectId &&
+      r.taskId === taskId &&
+      (r.state === 'starting' || r.state === 'working' || r.state === 'waiting' || startups.starting(r.id))
+  );
 }
 
 /**
@@ -846,8 +869,8 @@ function startDispatch(
   const run = newRun(projectId, agentId, 'dispatch', taskId, { model, from });
   void (async () => {
     try {
-      const session = await open(projectId, agentId, run.id, model, { at: worktree?.path });
-      await turn(session, run, prompt);
+      const session = await startups.open(run.id, (signal) => open(projectId, agentId, run.id, model, { at: worktree?.path, signal }), close);
+      if (session) await turn(session, run, prompt);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
     }
@@ -983,7 +1006,8 @@ async function ask(
   void (async () => {
     try {
       const existing = sessions.get(key);
-      const session = existing ?? (await open(projectId, agentId, key, model, { withDesk: true }));
+      const session = existing ?? (await startups.open(run.id, (signal) => open(projectId, agentId, key, model, { withDesk: true, signal }), close));
+      if (!session) return;
       if (session.deskToken) desk.update(session.deskToken, { models });
       // A thread picked up again after its session was let go carries its own past.
       const past = existing || earlier.length === 0
@@ -1067,6 +1091,8 @@ async function stopRun(runId: string): Promise<void> {
   for (const [id, pending] of asks) if (pending.ask.runId === runId) answerPermission(id, null);
   const session = [...sessions.values()].find((s) => s.run?.id === runId);
   update(run, { state: 'stopped', endedAt: Date.now() });
+  // Still starting: there is no session yet, so the startup is what stops.
+  startups.stop(runId);
   if (session) {
     await session.connection.cancel({ sessionId: session.sessionId }).catch(() => {});
     if (run.kind === 'dispatch') close(session);
