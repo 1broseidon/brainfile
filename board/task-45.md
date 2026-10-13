@@ -17,9 +17,6 @@ relatedFiles:
 decisions:
   - decision-6
 subtasks:
-  - id: task-45-2
-    title: lifecycle-neutral rules
-    completed: false
   - id: task-45-3
     title: visible line 'Let's discuss task-N.'
     completed: false
@@ -39,7 +36,7 @@ subtasks:
     title: agent running now)
     completed: false
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-13T18:34:38.688Z"
+updatedAt: "2026-10-13T18:34:39.092Z"
 ---
 
 ## Description
