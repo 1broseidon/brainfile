@@ -15,7 +15,7 @@ subtasks:
     completed: true
   - id: task-41-2
     title: Scanner (expo-camera) + paste link + Local Network and camera strings
-    completed: false
+    completed: true
   - id: task-41-3
     title: "Connection manager: addresses + backoff + calls + events"
     completed: true
@@ -35,7 +35,7 @@ subtasks:
     title: Tests + simulator against link:dev
     completed: false
 createdAt: "2026-10-13T04:15:11.912Z"
-updatedAt: "2026-10-13T04:39:37.264Z"
+updatedAt: "2026-10-13T05:01:34.932Z"
 ---
 
 ## Description
