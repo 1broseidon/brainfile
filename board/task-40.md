@@ -40,3 +40,6 @@ updatedAt: "2026-10-13T04:21:54.547Z"
 
 ## Description
 Protocol 1 in brainfile-mobile/docs/link.md. Settings, Phone: link switch, Link a phone (QR + Copy link), linked phones with Forget. A ws server on port 47210 running Noise IK (desktop/src/link/noise.ts, identical to the phone's), bridging the whitelisted calls to the host and agents processes and forwarding projects, board and agent events. New calls: decide, live. Branch feat/phone-link.
+
+## Log
+- 2026-10-13T04:21:57.436Z: [claude] noise.ts copied verbatim to desktop/src/link with the IK and Hotline vector tests (b4b7b91 on feat/phone-link)
