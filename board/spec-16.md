@@ -2,8 +2,8 @@
 id: spec-16
 title: Dispatch from the chat, queues, and a shared dispatch surface
 type: spec
-column: in-progress
-position: 0
+column: review
+position: 6
 priority: high
 tags:
   - desktop
@@ -42,7 +42,7 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: false
-updatedAt: "2026-10-12T23:30:59.783Z"
+updatedAt: "2026-10-13T01:46:44.052Z"
 ---
 
 ## Description
