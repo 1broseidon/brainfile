@@ -1,8 +1,6 @@
 ---
 id: task-44
 title: "Discuss: record and update decisions from the chat, with the person's yes"
-column: review
-position: 10
 description: |-
   Discuss can only suggest decisions. Its instructions forbid recording them, and its allowed tool list (`DISCUSS_TOOLS` in desktop/src/agents/discuss.ts) leaves out `decide`, `supersede` and `retire`. In task-43's discussion, the person decided to make calm mode the default, against decision-5. The agent could only give them wording to record by hand.
 
@@ -26,7 +24,8 @@ decisions:
   - decision-3
   - decision-6
 createdAt: "2026-10-13T16:56:44.812Z"
-updatedAt: "2026-10-13T17:03:37.158Z"
+updatedAt: "2026-10-13T18:47:34.819Z"
+completedAt: "2026-10-13T18:47:34.819Z"
 ---
 
 ## Description
