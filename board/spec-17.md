@@ -14,7 +14,10 @@ subtasks:
   - id: spec-17-1
     title: "Repo brainfile-mobile: Expo SDK 57 app, native stack, theme from Forge tokens, Plex fonts, icon and splash from the box mark"
     completed: false
-updatedAt: "2026-10-13T02:29:38.865Z"
+  - id: spec-17-2
+    title: GitHub sign-in with a fine-grained token in SecureStore; projects = repos with refs/brainfile/*
+    completed: false
+updatedAt: "2026-10-13T02:29:39.371Z"
 ---
 
 ## Description
