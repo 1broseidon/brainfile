@@ -1,0 +1,24 @@
+---
+id: task-46
+title: "Dock and chat: sessions in the dock, the chat as a right-hand pane that hides"
+column: in-progress
+position: 2
+priority: high
+tags:
+  - desktop
+  - dock
+  - chat
+assignee: claude
+relatedFiles:
+  - desktop/src/renderer/components/ChatPop.svelte
+  - desktop/src/renderer/components/Dock.svelte
+  - desktop/src/renderer/App.svelte
+  - desktop/src/renderer/lib/state.svelte.ts
+  - desktop/design.md
+decisions:
+  - decision-7
+createdAt: "2026-10-13T19:25:57.699Z"
+---
+
+## Description
+decision-7. In three phases, each QA'd live by the person in the dev app before the next: A, the chat is a pane on the right that hides without losing its thread; B, the dock holds sessions (chats, discussions, hand-offs) and recent documents move to the palette; C, a hand-off's tab opens its run (steps, asks, Stop) in the chat pane with the task beside it.
