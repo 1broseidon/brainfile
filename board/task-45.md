@@ -29,3 +29,6 @@ updatedAt: "2026-10-13T18:34:42.147Z"
 
 ## Description
 A discussion can happen at any stage of a task's life, not only before hand-off. The person sees only "Let's discuss task-N."; ahead of it the agent gets a <task-information> block (stage among the columns, priority, assignee, tags, description, subtasks, contract, parent, the decisions it rests on in full with claim key, stance and recheck, files, the last 10 notes, the board's other current decisions, as-of time) and then <discussion-rules>, so it need not call get_task. Phase 2 adds <work>: the branch, worktree, commits ahead, uncommitted files and whether an agent is working on it now, because in Review the code that matters is on the branch, not the main checkout. The person QAs each phase live in the dev app.
+
+## Log
+- 2026-10-13T18:34:46.162Z: [claude] Phase 1 built, not committed: discuss.ts writes <task-information> (taskInformation) and <discussion-rules> (discussRules); discussContext reads stage, priority, assignee, tags, decisions in full, the last 10 notes and the board's other current decisions itself, and finds done tasks in logs/. The visible line is "Let's discuss task-N." and the Discuss tooltip is "Talk it over with an agent". design.md › Discuss updated. 95/95 desktop tests pass, typecheck clean. Waiting for the person's QA in the dev app.
