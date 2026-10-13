@@ -43,3 +43,4 @@ Protocol 1 in docs/link.md. Settings, Desktop: Link desktop (camera QR or pasted
 
 ## Log
 - 2026-10-13T04:39:37.743Z: [claude] Phone: link parsing, Keychain keys, connection manager (head starts, backoff, calls, events, close codes) and the desk store/adapter/joins/chat in pure TS, tested against a fake desk on noise.ts's Responder.
+- 2026-10-13T05:01:37.362Z: [claude] Phone: screens done and paired with link:dev in the simulator: Settings Desktop group, scanner + Paste link, desk-only section on Projects, joined board through the desk, run signal on rows, asks line + sheet, Hand to… + Stop, chat sheet with harness/model picks. Review block untested live (link:dev's review is always null).
