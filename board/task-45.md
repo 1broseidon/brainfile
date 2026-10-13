@@ -16,9 +16,12 @@ relatedFiles:
   - desktop/design.md
 decisions:
   - decision-6
-subtasks: []
+subtasks:
+  - id: task-45-1
+    title: "Phase 1: the <task-information> block from the board, rules for any stage, and the visible line \"Let's discuss task-N.\""
+    completed: false
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-13T18:34:41.388Z"
+updatedAt: "2026-10-13T18:34:41.768Z"
 ---
 
 ## Description
