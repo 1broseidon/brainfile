@@ -148,15 +148,46 @@ export function restsFolded(column: ColumnView): boolean {
 export const GLANCE = 3;
 
 /**
- * A group at a glance: its first three roots, each with everything under it
- * (a family is never cut), and how many rows wait under `N more`. One row
- * left over is shown, as `1 more` would take its place.
+ * Roots of families that hold one of `working`. Glance sees a group's visible
+ * rows, and a collapsed parent has already hidden its children, so the root
+ * is what keeps that family in the drawn list.
  */
-export function glance(rows: OutlineRow[], roots = GLANCE): { shown: OutlineRow[]; more: number } {
-  let seen = 0;
-  const end = rows.findIndex((r) => r.depth === 0 && ++seen > roots);
-  if (end < 0 || rows.length - end <= 1) return { shown: rows, more: 0 };
-  return { shown: rows.slice(0, end), more: rows.length - end };
+export function rootsHeld(rows: OutlineRow[], working: ReadonlySet<string>): Set<string> {
+  const held = new Set<string>();
+  if (working.size === 0) return held;
+  let root = '';
+  for (const row of rows) {
+    if (row.depth === 0) root = row.task.id;
+    if (root && working.has(row.task.id)) held.add(root);
+  }
+  return held;
+}
+
+/**
+ * A group at a glance: its first three roots, each with everything under it
+ * (a family is never cut), and how many rows wait under `N more`. A task an
+ * agent is working stays in the drawn list past that glance, and its family
+ * stays with it. `working` is those tasks' ids, or the roots `rootsHeld`
+ * names when a collapsed parent has hidden the task. The glance still holds
+ * for every other row. One row left over is shown, as `1 more` would take
+ * its place.
+ */
+export function glance(rows: OutlineRow[], roots = GLANCE, working?: ReadonlySet<string>): { shown: OutlineRow[]; more: number } {
+  const families: OutlineRow[][] = [];
+  for (const row of rows) {
+    if (row.depth === 0 || families.length === 0) families.push([row]);
+    else families[families.length - 1].push(row);
+  }
+  const shown: OutlineRow[] = [];
+  let hidden = 0;
+  for (let i = 0; i < families.length; i++) {
+    const family = families[i];
+    const stays = i < roots || (!!working && family.some((row) => working.has(row.task.id)));
+    if (stays) shown.push(...family);
+    else hidden += family.length;
+  }
+  if (hidden <= 1) return { shown: rows, more: 0 };
+  return { shown, more: hidden };
 }
 
 /** Contract states that ask something of you; ready and in progress wait for the task pane. */

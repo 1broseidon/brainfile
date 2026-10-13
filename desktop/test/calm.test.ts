@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { calmOrder, glance, outline, restingSignal, restsFolded, type OutlineRow } from '../src/renderer/lib/format.ts';
+import { calmOrder, glance, outline, restingSignal, restsFolded, rootsHeld, visibleRows, type OutlineRow } from '../src/renderer/lib/format.ts';
 import type { ColumnView, TaskView } from '../src/shared/api.ts';
 
 const columns: ColumnView[] = [
@@ -98,5 +98,51 @@ test('a family is never cut: a leftover root with children is said as more', () 
   const rows = outline(columns, tasks, []).groups.find((g) => g.column.id === 'todo')!.rows;
   const { shown, more } = glance(rows);
   assert.deepEqual(ids(shown), ['a', 'b', 'c']);
+  assert.equal(more, 2);
+});
+
+const todo = (tasks: ReturnType<typeof doc>[]) => outline(columns, tasks, []).groups.find((g) => g.column.id === 'todo')!.rows;
+
+test('a task an agent is working stays past the glance, and its family stays with it', () => {
+  const rows = todo([
+    doc('a'),
+    doc('b'),
+    doc('c'),
+    doc('d'),
+    doc('d1', { parentId: 'd' }),
+    doc('e'),
+    doc('e1', { parentId: 'e' }),
+    doc('e2', { parentId: 'e' }),
+    doc('f'),
+  ]);
+  const { shown, more } = glance(rows, 3, rootsHeld(rows, new Set(['e1'])));
+  assert.deepEqual(ids(shown), ['a', 'b', 'c', 'e', '  e1', '  e2']);
+  assert.equal(more, 3);
+});
+
+test('the glance still holds for every row an agent is not working', () => {
+  const rows = todo(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((id) => doc(id)));
+  const { shown, more } = glance(rows, 3, rootsHeld(rows, new Set(['e', 'g'])));
+  assert.deepEqual(ids(shown), ['a', 'b', 'c', 'e', 'g']);
+  assert.equal(more, 3);
+});
+
+test('a task already in the glance does not pull the rows past it', () => {
+  const rows = todo(['a', 'b', 'c', 'd', 'e'].map((id) => doc(id)));
+  const { shown, more } = glance(rows, 3, rootsHeld(rows, new Set(['b'])));
+  assert.deepEqual(ids(shown), ['a', 'b', 'c']);
+  assert.equal(more, 2);
+});
+
+test('one row left over is still shown when a later task is being worked', () => {
+  const rows = todo(['a', 'b', 'c', 'd', 'e'].map((id) => doc(id)));
+  assert.deepEqual(glance(rows, 3, rootsHeld(rows, new Set(['e']))), { shown: rows, more: 0 });
+});
+
+test('a collapsed child past the glance keeps its root in the drawn list', () => {
+  const all = todo([...['a', 'b', 'c', 'd', 'e', 'f'].map((id) => doc(id)), doc('f1', { parentId: 'f' })]);
+  const visible = visibleRows(all, (id) => id === 'f');
+  const { shown, more } = glance(visible, 3, rootsHeld(all, new Set(['f1'])));
+  assert.deepEqual(ids(shown), ['a', 'b', 'c', 'f']);
   assert.equal(more, 2);
 });

@@ -47,7 +47,8 @@
 <!-- A group counts what it holds: its own roots and everything under them,
      children from other columns and completed ones included, folded or not.
      The calm list starts nearest done, rests the backlog and Done folded, and
-     shows an open group at a glance, the rest under `N more`. -->
+     shows an open group at a glance, the rest under `N more`. A task an
+     agent is working stays drawn, with its family. -->
 <div class="list" class:calm={app.calm} role="table">
   {#each app.listGroups as group (group.key)}
     {@const column = group.column}
