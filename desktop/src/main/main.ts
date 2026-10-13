@@ -258,6 +258,8 @@ function startLink(): LinkServer {
     addresses: deskAddresses,
     name: deskName(),
     onChange: (view) => win?.webContents.send(CHANNEL.link, view),
+    // Development aid: `BRAINFILE_LINK_HOST=127.0.0.1` listens on this Mac only (a capture, a test).
+    listenHost: process.env.BRAINFILE_LINK_HOST,
   });
   void server.start();
   return server;
