@@ -16,9 +16,10 @@ relatedFiles:
   - desktop/src/renderer/lib/state.svelte.ts
   - desktop/design.md
 decisions:
-  - decision-7
+  - decision-8
 createdAt: "2026-10-13T19:25:57.699Z"
+updatedAt: "2026-10-13T19:26:10.820Z"
 ---
 
 ## Description
-decision-7. In three phases, each QA'd live by the person in the dev app before the next: A, the chat is a pane on the right that hides without losing its thread; B, the dock holds sessions (chats, discussions, hand-offs) and recent documents move to the palette; C, a hand-off's tab opens its run (steps, asks, Stop) in the chat pane with the task beside it.
+decision-8. In three phases, each QA'd live by the person in the dev app before the next: A, the chat is a pane on the right that hides without losing its thread; B, the dock holds sessions (chats, discussions, hand-offs) and recent documents move to the palette; C, a hand-off's tab opens its run (steps, asks, Stop) in the chat pane with the task beside it.
