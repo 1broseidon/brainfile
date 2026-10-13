@@ -14,6 +14,10 @@ export function priorityLabel(priority?: Priority | null): string {
 
 const BACKLOG = /backlog|icebox|someday/i;
 
+export function isBacklog(column: ColumnView): boolean {
+  return BACKLOG.test(column.id) || BACKLOG.test(column.title);
+}
+
 /**
  * Where a column sits on the way to done, for its checkbox: -1 for a
  * backlog, 0 for the first open column, 1 for a completion column, and the
@@ -23,8 +27,8 @@ export function columnProgress(columns: ColumnView[], columnId: string): number 
   const column = columns.find((c) => c.id === columnId);
   if (!column) return 0;
   if (column.completionColumn) return 1;
-  if (BACKLOG.test(column.id) || BACKLOG.test(column.title)) return -1;
-  const open = columns.filter((c) => !c.completionColumn && !BACKLOG.test(c.id) && !BACKLOG.test(c.title));
+  if (isBacklog(column)) return -1;
+  const open = columns.filter((c) => !c.completionColumn && !isBacklog(c));
   const at = open.findIndex((c) => c.id === columnId);
   return open.length <= 1 ? 0 : at / open.length;
 }
@@ -121,6 +125,69 @@ export function visibleRows(rows: OutlineRow[], collapsed: (id: string) => boole
     out.push(row);
   }
   return out;
+}
+
+// ── The calm list (design.md, Calm list), after brainfile-mobile's board ──
+
+/**
+ * The calm list's order: nearest done first, so the top of the list is what
+ * you can finish (Review, then In Progress, then To Do), and what can wait
+ * last: the backlog, then a completion column still holding work.
+ */
+export function calmOrder<G extends { column: ColumnView }>(columns: ColumnView[], groups: G[]): G[] {
+  const rank = (c: ColumnView) => (c.completionColumn ? -3 : isBacklog(c) ? -2 : columnProgress(columns, c.id));
+  return [...groups].sort((a, b) => rank(b.column) - rank(a.column));
+}
+
+/** A group the calm list starts folded: the backlog, and work already done. */
+export function restsFolded(column: ColumnView): boolean {
+  return isBacklog(column) || !!column.completionColumn;
+}
+
+/** How many roots an open group shows in the calm list before `N more`: a glance, not a wall. */
+export const GLANCE = 3;
+
+/**
+ * A group at a glance: its first three roots, each with everything under it
+ * (a family is never cut), and how many rows wait under `N more`. One row
+ * left over is shown, as `1 more` would take its place.
+ */
+export function glance(rows: OutlineRow[], roots = GLANCE): { shown: OutlineRow[]; more: number } {
+  let seen = 0;
+  const end = rows.findIndex((r) => r.depth === 0 && ++seen > roots);
+  if (end < 0 || rows.length - end <= 1) return { shown: rows, more: 0 };
+  return { shown: rows.slice(0, end), more: rows.length - end };
+}
+
+/** Contract states that ask something of you; ready and in progress wait for the task pane. */
+const ASKING = new Set(['delivered', 'failed', 'blocked']);
+
+export type Signal =
+  | { kind: 'run' }
+  | { kind: 'changed' }
+  | { kind: 'blocked'; on: string[] }
+  | { kind: 'contract'; status: string }
+  | { kind: 'priority'; priority: Priority }
+  | { kind: 'subtasks'; count: string };
+
+/**
+ * A calm row's one signal, the loudest it has: an agent at work on it above
+ * everything, then a decision it rests on changed, a sister task it waits
+ * on, a contract that asks for you, urgent or high priority, subtasks part
+ * done. Done work has none; the ID, tags, assignee, an untouched or finished
+ * checklist and the rest wait for the task pane.
+ */
+export function restingSignal(task: TaskView, done: boolean, running = false): Signal | null {
+  if (running) return { kind: 'run' };
+  if (done) return null;
+  if (task.restsOnRetired?.length) return { kind: 'changed' };
+  if (task.blockedOn?.length) return { kind: 'blocked', on: task.blockedOn };
+  if (task.contractStatus && ASKING.has(task.contractStatus)) return { kind: 'contract', status: task.contractStatus };
+  if (task.priority === 'critical' || task.priority === 'high') return { kind: 'priority', priority: task.priority };
+  const subtasks = task.subtasks ?? [];
+  const ticked = subtasks.filter((s) => s.completed).length;
+  if (ticked > 0 && ticked < subtasks.length) return { kind: 'subtasks', count: `${ticked}/${subtasks.length}` };
+  return null;
 }
 
 const FACE_HUES = [100, 135, 165, 195, 230, 265, 310];

@@ -140,6 +140,11 @@
   --id-w: 72px;
   /* One outline step: puts a child's status box, as drawn, under its parent's title. */
   --indent: 28px;
+  /* The calm list's row breathes a step more, as brainfile-mobile's does, and
+     its outline step is the box's cell and its gap, so a child's box sits
+     exactly under its parent's title. */
+  --row-calm-h: 40px;
+  --indent-calm: 34px;
 
   /* -------------------------------------------------------------- layers
    * Named, so nothing reaches for a bigger number to win. */

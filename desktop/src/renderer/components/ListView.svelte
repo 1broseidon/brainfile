@@ -1,10 +1,12 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { tip } from '../lib/tooltip';
-  import { app } from '../lib/state.svelte';
-  import { columnProgress, outline, visibleRows, type OutlineRow } from '../lib/format';
+  import { app, MORE } from '../lib/state.svelte';
+  import { columnProgress, type OutlineRow } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
   import TaskRow from './TaskRow.svelte';
+  import CalmRow from './CalmRow.svelte';
   import Icon from './Icon.svelte';
 
   let { board }: { board: BoardSnapshot } = $props();
@@ -13,13 +15,14 @@
 
   const collapsed = (id: string) => app.folded('parents', id);
 
-  // A group counts what it holds: its own roots and everything under them,
-  // children from other columns and completed ones included, folded or not.
-  const tree = $derived(outline(board.columns, board.tasks, board.completed));
-  const groups = $derived(
-    tree.groups.map(({ column, rows }) => ({ column, rows: visibleRows(rows, collapsed), count: rows.length }))
-  );
-  const done = $derived(visibleRows(tree.done, collapsed));
+  // Turning the list calm or full moves its rows; the selected one is kept in view.
+  $effect(() => {
+    void app.calm;
+    untrack(() => {
+      const id = app.selectedTaskId;
+      if (id) document.querySelector(`[data-task="${id}"]`)?.scrollIntoView({ block: 'nearest' });
+    });
+  });
 
   function drop(e: DragEvent, column: string): void {
     const id = e.dataTransfer?.getData('text/brainfile-task');
@@ -29,7 +32,8 @@
 </script>
 
 {#snippet outlineRow(row: OutlineRow)}
-  <TaskRow
+  {@const Row = app.calm ? CalmRow : TaskRow}
+  <Row
     task={row.task}
     columns={board.columns}
     done={row.done}
@@ -40,55 +44,56 @@
   />
 {/snippet}
 
-<div class="list" role="table">
-  {#each groups.filter((g) => g.count > 0) as { column, rows, count } (column.id)}
+<!-- A group counts what it holds: its own roots and everything under them,
+     children from other columns and completed ones included, folded or not.
+     The calm list starts nearest done, rests the backlog and Done folded, and
+     shows an open group at a glance, the rest under `N more`. -->
+<div class="list" class:calm={app.calm} role="table">
+  {#each app.listGroups as group (group.key)}
+    {@const column = group.column}
+    {@const more = MORE + group.key}
     <section
       class="group"
-      class:drop={dropTarget === column.id}
+      class:open={!group.folded}
+      class:drop={!!column && dropTarget === column.id}
       role="rowgroup"
       ondragover={(e) => {
+        if (!column) return;
         e.preventDefault();
         dropTarget = column.id;
       }}
       ondragleave={() => (dropTarget = null)}
-      ondrop={(e) => drop(e, column.id)}
+      ondrop={(e) => column && drop(e, column.id)}
     >
       <header class="head">
-        <button class="fold" onclick={() => app.toggleFold('groups', column.id)}>
-          <StatusIcon progress={columnProgress(board.columns, column.id)} />
-          <span class="name">{column.title}</span>
-          <span class="count mono tabular">{count}</span>
-          <span class="chev" class:open={!app.folded('groups', column.id)}><Icon name="chevron" size={12} stroke={1.8} /></span>
+        <button class="fold" onclick={() => app.toggleGroup(group.key)}>
+          {#if !app.calm}
+            <StatusIcon progress={column ? columnProgress(board.columns, column.id) : 1} />
+          {/if}
+          <span class="name">{group.title}</span>
+          <span class="count mono tabular">{group.count}</span>
+          <span class="chev" class:open={!group.folded}><Icon name="chevron" size={12} stroke={1.8} /></span>
         </button>
-        <button class="icon-btn add" use:tip={`New task`} onclick={() => (app.composer = { column: column.id })}>
-          <Icon name="plus" size={14} />
-        </button>
+        {#if column}
+          <button class="icon-btn add" use:tip={`New task`} onclick={() => (app.composer = { column: column.id })}>
+            <Icon name="plus" size={14} />
+          </button>
+        {/if}
       </header>
-      {#if !app.folded('groups', column.id)}
-        {#each rows as row (row.task.id)}
-          {@render outlineRow(row)}
-        {/each}
+      {#each group.rows as row (row.task.id)}
+        {@render outlineRow(row)}
+      {/each}
+      {#if group.more}
+        <button
+          class="more"
+          class:selected={app.selectedTaskId === more}
+          data-task={more}
+          onmouseenter={() => (app.selectedTaskId = more)}
+          onclick={() => app.showWhole(group.key)}>{group.more} more</button
+        >
       {/if}
     </section>
   {/each}
-
-  {#if tree.done.length}
-    <section class="group">
-      <header class="head">
-        <button class="fold" onclick={() => (app.showCompleted = !app.showCompleted)}>
-          <StatusIcon progress={1} />
-          <span class="name">Done</span>
-          <span class="count mono tabular">{tree.done.length}</span>
-          <span class="chev" class:open={app.showCompleted}><Icon name="chevron" size={12} stroke={1.8} /></span>
-        </button>
-      </header>
-      {#if app.showCompleted}
-        {#each done as row (row.task.id)}
-          {@render outlineRow(row)}
-        {/each}
-      {/if}
-    </section>
-  {/if}
 </div>
 
 <style>
@@ -163,5 +168,50 @@
     opacity: 1;
   }
 
+  /* The calm list: a group's head is quieter than its rows, a name and a
+     count with no box (each row carries its own), its name on the boxes' edge.
+     Open groups breathe apart; folded ones sit together, a quiet list of what
+     waits. */
+  .calm .group + .group {
+    margin-top: 0;
+  }
 
+  .calm .group.open + .group {
+    margin-top: var(--s5);
+  }
+
+  .calm .head {
+    height: 36px;
+  }
+
+  .calm .name {
+    margin-left: 0;
+    font-weight: 500;
+    color: var(--ink-3);
+  }
+
+  .more {
+    width: 100%;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    /* On the titles' edge. */
+    padding-left: calc(var(--s4) + var(--indent-calm));
+    font-size: var(--t-sm);
+    color: var(--ink-4);
+    text-align: left;
+    transition:
+      background var(--d-press) var(--ease),
+      color var(--d-press) var(--ease);
+  }
+
+  .more:hover {
+    color: var(--ink-2);
+    background: var(--fill-hover);
+  }
+
+  .more.selected {
+    color: var(--ink-2);
+    background: var(--fill-selected);
+  }
 </style>

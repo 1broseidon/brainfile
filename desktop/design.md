@@ -185,6 +185,63 @@ The board reads like the TUI's list, calmed. A row is 36px:
   for them.
 - Hover and selection are fills on the row; there are no lines between rows.
 
+## Calm list
+
+The list has a second reading, quieter than the rows above, for a reader
+who scans every signal on every row and loses the thread (task-43). It is
+brainfile-mobile's board (`src/components/rows.tsx`, `src/data/outline.ts`)
+brought to the desk: the same row, the same order, the same glance. It is a
+mode of the list, not a view of its own, and it belongs to the reader, not
+to a board: one switch for the window (Settings › List › Calm list, ⇧V from
+the list, or the palette), remembered. It is how the list first reads: on
+until it is turned off, and the full rows are a press of ⇧V away.
+
+```
+[status box]  [◆] Title, on one line, which truncates first          one signal
+```
+
+- **A row is its box, its title and at most one signal**, the loudest it
+  has: an agent at work on it (`claude · Editing…`, still, or `Needs you`),
+  then `decision changed`, then `blocked`, then a contract that asks for
+  you (`delivered`, `failed`, `blocked`, in its colour), then urgent or high
+  priority, then a checklist part done (`2/4`). Done work has none. The ID,
+  tags, assignee, a `ready` or `in progress` contract, an untouched or
+  finished checklist and dates wait for the task pane; they do not come
+  under the pointer. S, P, A and L still reach the pickers from the
+  keyboard, anchored on the row.
+- **The row breathes a step more**: 40px, its title at the reading size
+  (14px). The box keeps its 26px cell, and one outline step is that cell and
+  its gap (34px), so a child's box sits exactly under its parent's title. A
+  typed document keeps its glyph small before the title. A parent's ▾ hangs
+  in the gutter only under the hand; ▸, which hides something, always shows.
+- **The outline is unchanged.** Children stay under their parent, whatever
+  their column, and completed children stay until the parent is done
+  (Rows).
+- **Nearest done first.** The groups run Review, In Progress, To Do, so the
+  top of the list is what can be finished, then what can wait: the backlog,
+  then a completion column still holding work, then Done. The backlog and a
+  completion column rest folded; a fold the hand has made, in either
+  reading, is kept.
+- **A group at a glance.** An open group shows its first three roots, each
+  with everything under it (a family is never cut), and the rest under one
+  quiet line on the titles' edge, `N more`; one row left over is shown
+  instead. Pressing it shows the whole group until the group is folded,
+  which puts it back to a glance.
+- **A group's head is quieter than its rows**: its name in ink-3 at 500 and
+  its count, no box (each row carries its own), the name on the boxes'
+  edge. Open groups stand 20px apart; folded ones sit together, a short list
+  of what waits.
+- **j / k walk the list as drawn**, folded groups, collapsed parents and
+  what waits past a glance left out. `N more` is a stop of its own: Enter
+  opens the group and selects the first row that was waiting.
+- **Switching keeps your place.** Turning the list calm, the selected task
+  stays on screen: its group opens if it rests folded, whole if the task
+  waits past the glance. Turning it full, a selected `N more` gives way to
+  the first row that was waiting. Either way the selected row is scrolled
+  into view.
+- Pressing and selection are fills, as in Rows; there are no lines between
+  rows.
+
 ## Motion
 
 One curve, `cubic-bezier(0.16, 1, 0.3, 1)`, three durations: 90ms answers a
@@ -225,7 +282,8 @@ off course. These rules win over every other section:
   plus the signals that matter: urgent and high priority, contract state,
   sub-task progress, an assignee. The ID, the tags and any unset priority or
   assignee appear under the pointer or on the selected row, in space that is
-  already kept for them, so nothing shifts.
+  already kept for them, so nothing shifts. The calm list goes further: one
+  signal a row, and nothing more under the pointer (Calm list).
 - **Empty groups are not shown** in the list (the board view still has
   every column to drop into).
 - The rail is one line per project: its storage icon, its name, its count.
@@ -476,6 +534,8 @@ rows' text, not the group's rim, so the column has one left edge.
 
 - **A switch is a box sliding in a sunk track**, the checkbox's corner kept;
   on, the track takes the accent, the one place a setting earns it.
+- **List** comes first, because it is how the window reads: one switch,
+  Calm list (Calm list), whose line says what it does in either state.
 - **Editor** says where a file an agent names opens: the editors found on
   this Mac (apps in Applications, best first; terminal editors when Ghostty
   is here) and the file's default app. Unset, the first found. In a reply,

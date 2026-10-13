@@ -10,6 +10,7 @@ import type {
   AgentRun,
   Api,
   BoardSnapshot,
+  ColumnView,
   DispatchSettings,
   EditorInfo,
   ForgeRepo,
@@ -27,7 +28,7 @@ import { problemBrief } from './brief';
 
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
 const SETTLE_MS = 900;
-import { decisionGroups, outline, visibleRows } from './format';
+import { calmOrder, decisionGroups, glance, outline, restsFolded, visibleRows, type OutlineRow } from './format';
 import { intakeColumn, issueTask } from '../../shared/issues';
 
 declare global {
@@ -56,6 +57,27 @@ for (const key of MUTATIONS) {
 export type ViewMode = 'list' | 'board' | 'decisions' | 'issues';
 export type MenuKind = 'status' | 'priority' | 'assignee' | 'labels';
 
+/** The list's group of completed work; a column's slug never has a colon. */
+export const DONE_GROUP = ':done';
+/** A calm group's `N more` line is a stop in the j / k walk, under this prefix and the group's key. */
+export const MORE = 'more:';
+export const isMore = (id: string | null | undefined): boolean => !!id?.startsWith(MORE);
+
+/** A group of the list as it is drawn: a column's, or the completed work's. */
+export interface ListGroup {
+  /** The column's ID, or DONE_GROUP. */
+  key: string;
+  column: ColumnView | null;
+  title: string;
+  /** What it holds: its roots and everything under them, folded, collapsed or past the glance. */
+  count: number;
+  folded: boolean;
+  /** The rows drawn: none when folded; in the calm list, a glance until `N more` is pressed. */
+  rows: OutlineRow[];
+  /** Rows waiting under `N more` (the calm list only). */
+  more: number;
+}
+
 const VIEW_KEY = 'brainfile.view';
 const ACTIVE_KEY = 'brainfile.active';
 const LAYOUT_KEY = 'brainfile.layout';
@@ -66,6 +88,7 @@ const PREFS_KEY = 'brainfile.projectPrefs';
 const MODEL_NAMES_KEY = 'brainfile.modelNames';
 const EDITOR_KEY = 'brainfile.editor';
 const TABS_KEY = 'brainfile.tabs';
+const CALM_KEY = 'brainfile.calm';
 /** The most tabs the dock keeps; the oldest go first. */
 const TABS_KEPT = 12;
 
@@ -180,6 +203,8 @@ class AppState {
   paletteOpen = $state(false);
   composer = $state<{ column?: string } | null>(null);
   showCompleted = $state(false);
+  /** The calm list (design.md, Calm list): one signal a row, chosen once for the window. */
+  calm = $state(localStorage.getItem(CALM_KEY) !== 'off');
   layout = $state(loadLayout());
   /** A problem worth saying, shown in the board's band until it times out. Success is silent. */
   problem = $state<string | null>(null);
@@ -288,28 +313,107 @@ class AppState {
   making = $state<Record<string, boolean>>({});
 
   /**
-   * The list's folds, per board: column groups folded shut and parents whose
-   * children are hidden. They live here so j / k walk only what is drawn.
+   * The list's folds, per board: column groups folded shut, parents whose
+   * children are hidden, and calm groups opened past their glance. They live
+   * here so j / k walk only what is drawn.
    */
-  folds = $state<Record<string, { groups: Record<string, boolean>; parents: Record<string, boolean> }>>({});
+  folds = $state<
+    Record<string, { groups: Record<string, boolean>; parents: Record<string, boolean>; whole: Record<string, boolean> }>
+  >({});
 
+  #foldsHere() {
+    if (!this.activeId) return null;
+    this.folds[this.activeId] ??= { groups: {}, parents: {}, whole: {} };
+    // Read back through the state proxy: the literal above is not reactive.
+    return this.folds[this.activeId];
+  }
+
+  /** As the hand left it; untouched, as it rests: the calm list rests the backlog and a completion column folded. */
   folded(kind: 'groups' | 'parents', id: string): boolean {
-    return !!(this.activeId && this.folds[this.activeId]?.[kind][id]);
+    const set = this.activeId ? this.folds[this.activeId]?.[kind][id] : undefined;
+    if (set !== undefined) return set;
+    if (kind !== 'groups' || !this.calm) return false;
+    const column = this.board?.columns.find((c) => c.id === id);
+    return !!column && restsFolded(column);
   }
 
   toggleFold(kind: 'groups' | 'parents', id: string): void {
-    if (!this.activeId) return;
-    this.folds[this.activeId] ??= { groups: {}, parents: {} };
-    // Read back through the state proxy: the literal above is not reactive.
-    const mine = this.folds[this.activeId];
-    mine[kind][id] = !mine[kind][id];
+    const folded = this.folded(kind, id);
+    const mine = this.#foldsHere();
+    if (!mine) return;
+    mine[kind][id] = !folded;
+    // Folding a group puts it back to a glance for the next time it opens.
+    if (kind === 'groups' && !folded) delete mine.whole[id];
+  }
+
+  /** Fold or open a group of the list; Done's fold is the window's, as before. */
+  toggleGroup(key: string): void {
+    if (key !== DONE_GROUP) return this.toggleFold('groups', key);
+    this.showCompleted = !this.showCompleted;
+    const mine = this.#foldsHere();
+    if (mine && !this.showCompleted) delete mine.whole[key];
+  }
+
+  /** Show a calm group past its glance, until it is folded. */
+  showWhole(key: string): void {
+    const mine = this.#foldsHere();
+    if (mine) mine.whole[key] = true;
   }
 
   /**
-   * What j / k step through, in the order the view draws it: the list's
-   * outline as it stands (children under their parent, whatever their
-   * column; Done when open), the board's cards column by column, or
-   * decisions by family.
+   * Turn the list calm or full without losing the selection: a task the calm
+   * list would rest folded or keep past a glance has its group opened, whole
+   * if need be, and a selected `N more`, which the full list does not have,
+   * hands its place to the first row that was waiting.
+   */
+  setCalm(on: boolean): void {
+    const stop = this.listGroups.find((g) => g.more && MORE + g.key === this.selectedTaskId);
+    this.calm = on;
+    localStorage.setItem(CALM_KEY, on ? 'on' : 'off');
+    if (stop) {
+      this.selectedTaskId = this.listGroups.find((g) => g.key === stop.key)?.rows[stop.rows.length]?.task.id ?? null;
+      return;
+    }
+    const id = this.selectedTaskId;
+    const board = this.board;
+    if (!on || !id || !board || this.orderedTasks.some((t) => t.id === id)) return;
+    const tree = outline(board.columns, board.tasks, board.completed);
+    const holds = (rows: OutlineRow[]) => rows.some((r) => r.task.id === id);
+    const key = tree.groups.find((g) => holds(g.rows))?.column.id ?? (holds(tree.done) ? DONE_GROUP : null);
+    if (!key) return;
+    if (key !== DONE_GROUP && this.folded('groups', key)) this.toggleFold('groups', key);
+    if (!this.orderedTasks.some((t) => t.id === id)) this.showWhole(key);
+  }
+
+  /**
+   * The list as it is drawn (design.md, Rows; Calm list): the outline's
+   * groups with their visible rows, children under their parent whatever
+   * their column, then Done. The calm list puts the groups nearest done
+   * first and shows each open group at a glance. ListView draws it and
+   * j / k walk it.
+   */
+  listGroups = $derived.by((): ListGroup[] => {
+    const board = this.board;
+    if (!board) return [];
+    const tree = outline(board.columns, board.tasks, board.completed);
+    const collapsed = (id: string) => this.folded('parents', id);
+    const group = (key: string, column: ColumnView | null, all: OutlineRow[], folded: boolean): ListGroup => {
+      const rows = folded ? [] : visibleRows(all, collapsed);
+      const whole = !!(this.activeId && this.folds[this.activeId]?.whole[key]);
+      const seen = this.calm && !whole ? glance(rows) : { shown: rows, more: 0 };
+      return { key, column, title: column?.title ?? 'Done', count: all.length, folded, rows: seen.shown, more: seen.more };
+    };
+    const groups = (this.calm ? calmOrder(board.columns, tree.groups) : tree.groups)
+      .filter((g) => g.rows.length > 0)
+      .map((g) => group(g.column.id, g.column, g.rows, this.folded('groups', g.column.id)));
+    if (tree.done.length) groups.push(group(DONE_GROUP, null, tree.done, !this.showCompleted));
+    return groups;
+  });
+
+  /**
+   * What j / k step through, in the order the view draws it: the list as it
+   * stands (a calm group's `N more` is a stop of its own), the board's cards
+   * column by column, or decisions by family.
    */
   orderedTasks = $derived.by((): { id: string }[] => {
     const board = this.board;
@@ -317,12 +421,7 @@ class AppState {
     if (this.view === 'issues') return [];
     if (this.view === 'decisions') return decisionGroups(board.decisions).flatMap((g) => g.decisions);
     if (this.view === 'board') return board.columns.flatMap((column) => board.tasks.filter((t) => t.column === column.id));
-    const tree = outline(board.columns, board.tasks, board.completed);
-    const collapsed = (id: string) => this.folded('parents', id);
-    return [
-      ...tree.groups.filter((g) => !this.folded('groups', g.column.id)).flatMap((g) => visibleRows(g.rows, collapsed)),
-      ...(this.showCompleted ? visibleRows(tree.done, collapsed) : []),
-    ].map((row) => row.task);
+    return this.listGroups.flatMap((g) => [...g.rows.map((row) => row.task), ...(g.more ? [{ id: MORE + g.key }] : [])]);
   });
 
   #problemTimer: ReturnType<typeof setTimeout> | null = null;
