@@ -17,3 +17,6 @@ From Linear's minimised agent window, our way. Scope: chat turns on the board in
 - **When the turn ends,** the key goes back to the square. If the chat is still closed and the turn finished with a reply (not stopped or failed), the key shows a small muted badge in its top-right corner (muted ink: not the accent, not warn), and its tip becomes "Reply waiting". Opening the chat clears it. The badge belongs to the board the turn ran on, so it's still there when you come back to that board.
 - **Opening from the pill:** `grow()` in ChatPop starts its clip from the key's real width, not the 32px square.
 - **design.md:** Calm's "No indicators at rest" stays as it is for the rest of the app. Add one exception: the chat key may show the unread-reply badge, because a missed reply is worse than the noise of one muted badge. Nothing else gets a status indicator. Also update the "Ask the board" paragraph to describe the pill and the badge.
+
+## Log
+- 2026-10-13T01:52:21.915Z: [claude] Agreed with George: the key keeps the Working pill while a turn runs (word held still), then goes back to the square with a muted unread-reply badge until the chat opens. This is the one exception to design.md's "no indicators at rest", because a missed reply is worse UX than the noise of one badge; the rest of design.md is unchanged.
