@@ -30,12 +30,12 @@ subtasks:
     completed: false
   - id: task-40-7
     title: Node end-to-end tests with a fake phone
-    completed: false
+    completed: true
   - id: task-40-8
     title: link:dev harness for the simulator
     completed: false
 createdAt: "2026-10-13T04:15:11.393Z"
-updatedAt: "2026-10-13T04:39:52.678Z"
+updatedAt: "2026-10-13T04:39:53.155Z"
 ---
 
 ## Description
