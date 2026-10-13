@@ -11,7 +11,8 @@
  * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
  * and `stop`, so a chat can hand work off the way Hand to… does. Discuss
  * (discuss.ts, task-35) is a chat about one task that may change its spec and
- * nothing else.
+ * nothing else. Besides the agents it knows, it starts any ACP server the
+ * person names in Settings (custom.ts, task-47), the way Zed's agent_servers do.
  */
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
@@ -23,9 +24,13 @@ import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDeci
 import { locateBoard } from '@brainfile/core/repo';
 import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
+import { customLaunch } from './custom';
+import { readSettingsFile, settingsOf, writeSettings, type SettingsFile } from './settings';
 import { discussContext, discussMode, discussPermission, discussPreamble } from './discuss';
 import { liveRuns } from './live';
 import { Startups, unlessAborted } from './startup';
+import { effortSelect, effortToSet } from './effort';
+import { commandName, customId, customName, isCustom } from '../shared/agentServers';
 import type {
   AgentEvent,
   AgentHostMethod,
@@ -36,7 +41,9 @@ import type {
   AgentModes,
   AgentRequest,
   AgentRun,
+  AgentServer,
   ChatTurn,
+  CustomAgentId,
   DispatchRecord,
   DispatchSettings,
   HostReply,
@@ -77,6 +84,8 @@ function which(command: string): string | null {
 interface Launch {
   command: string;
   args: string[];
+  /** The whole environment, when the agent brings its own (a custom agent's `env`); else the one every agent gets. */
+  env?: NodeJS.ProcessEnv;
 }
 
 interface Known {
@@ -224,8 +233,53 @@ const KNOWN: Known[] = [
   },
 ];
 
+/**
+ * An agent the person named in Settings (task-47): their own ACP server,
+ * kept in dispatch.json's agentServers and run as given.
+ */
+interface Custom {
+  id: CustomAgentId;
+  name: string;
+  server: AgentServer;
+}
+
+type Agent = Known | Custom;
+
+/** The person's own agents, in the order they were added. */
+function customAgents(): Custom[] {
+  return Object.entries(getSettings().agentServers).map(([name, server]) => ({ id: customId(name), name, server }));
+}
+
+/** Every agent there is to start: the known ones, then the person's own. */
+function allAgents(): Agent[] {
+  return [...KNOWN, ...customAgents()];
+}
+
+function agentOf(agentId: AgentId): Agent | undefined {
+  return isCustom(agentId) ? customAgents().find((a) => a.id === agentId) : KNOWN.find((k) => k.id === agentId);
+}
+
+/** An agent's name in a sentence, even once a custom one has been removed. */
+function nameOf(agentId: AgentId): string {
+  return agentOf(agentId)?.name ?? (isCustom(agentId) ? customName(agentId) : agentId);
+}
+
+/** Why the agent cannot start on this Mac, or null when it can. */
+function whyNot(agent: Agent, env?: NodeJS.ProcessEnv): string | null {
+  if ('client' in agent) return which(agent.client) ? null : `${agent.name} is not installed on this Mac`;
+  return customLaunch(agent.server, env ?? agentEnv()) ? null : `${agent.name} cannot start: ${agent.server.command} is not found on this Mac`;
+}
+
+/** How to start the agent: a known one its own way, a custom one as the person wrote it. */
+async function launchOf(agent: Agent): Promise<Launch> {
+  if ('client' in agent) return agent.launch();
+  const launch = customLaunch(agent.server, agentEnv());
+  if (!launch) throw new Error(whyNot(agent) ?? `${agent.name} cannot start`);
+  return launch;
+}
+
 function listAgents(): AgentInfo[] {
-  return KNOWN.map((agent) => {
+  const known = KNOWN.map((agent) => {
     const installed = which(agent.client) !== null;
     const downloaded =
       agent.id === 'antigravity'
@@ -242,35 +296,34 @@ function listAgents(): AgentInfo[] {
       note: !installed ? 'not installed' : downloaded ? 'your login' : 'downloads once',
     };
   });
+  // A custom agent is offered when its command is found, and says so when it is not.
+  const env = agentEnv();
+  const custom = customAgents().map((agent) => {
+    const found = whyNot(agent, env) === null;
+    const command = commandName(agent.server.command);
+    return { id: agent.id, name: agent.name, available: found, note: found ? command : `${command} not found` };
+  });
+  return [...known, ...custom];
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
 
-/** dispatch.json: the app-wide settings, and per repository a policy that overrides them. */
-interface SettingsFile extends Partial<DispatchSettings> {
-  projects?: Record<string, { permissions?: PermissionPolicy }>;
-}
-
+/** dispatch.json (settings.ts): the app-wide settings, and per repository a policy that overrides them. */
 function readSettings(): SettingsFile {
-  try {
-    return JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8')) as SettingsFile;
-  } catch {
-    return {};
-  }
+  return readSettingsFile(SETTINGS_FILE);
 }
 
 function getSettings(): DispatchSettings {
-  const file = readSettings();
-  return { bypass: file.bypass === true, modes: file.modes ?? {} };
+  return settingsOf(readSettings());
 }
 
 async function setSettings(patch: Partial<DispatchSettings>): Promise<DispatchSettings> {
-  const file = { ...readSettings(), ...patch };
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(file, null, 2));
+  const before = getSettings().agentServers;
+  const now = writeSettings(SETTINGS_FILE, patch);
+  if (patch.agentServers) forgetChanged(before, now.agentServers);
   // Sessions already open change mode now, not on their next start.
   await Promise.all([...sessions.values()].map((session) => applyMode(session)));
-  return getSettings();
+  return now;
 }
 
 /** A repository's own policy wins; otherwise the app-wide switch decides. */
@@ -336,6 +389,15 @@ function modesOf(created: acp.NewSessionResponse): (AgentModes & { via: { config
   return { initial, options, bypass, via };
 }
 
+/** A custom agent whose entry changed or went is asked again for its models and modes, not answered from the old entry's. */
+function forgetChanged(before: Record<string, AgentServer>, after: Record<string, AgentServer>): void {
+  const changed = Object.keys(before).filter((name) => JSON.stringify(before[name]) !== JSON.stringify(after[name]));
+  const cache = readModels();
+  if (!changed.some((name) => customId(name) in cache)) return;
+  for (const name of changed) delete cache[customId(name)];
+  fs.writeFileSync(MODELS_FILE, JSON.stringify(cache, null, 2));
+}
+
 function remember(agentId: AgentId, options: ModelOption[], modes: AgentModes | null): void {
   if (!options.length && !modes) return;
   const cache = readModels();
@@ -344,13 +406,97 @@ function remember(agentId: AgentId, options: ModelOption[], modes: AgentModes | 
   fs.writeFileSync(MODELS_FILE, JSON.stringify(cache, null, 2));
 }
 
+/** A freshly listed model keeps the effort levels already asked for it. */
+function keepingEfforts(agentId: AgentId, options: ModelOption[]): ModelOption[] {
+  const prior = readModels()[agentId]?.options ?? [];
+  return options.map((option) => (Array.isArray(option.efforts) ? option : { ...option, efforts: prior.find((item) => item.value === option.value)?.efforts }));
+}
+
+/** How long a probe may spend asking each model's effort levels before it returns the list it has. */
+const EFFORT_SWEEP_MS = 8_000;
+
+/** A model list whose efforts have been asked: each entry carries `efforts`, possibly empty. */
+function effortsKnown(options: ModelOption[]): boolean {
+  return options.every((option) => Array.isArray(option.efforts));
+}
+
+/** Gives up when the work outlasts `ms`. The request itself is left to finish. */
+function within<T>(ms: number, work: Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timed out')), Math.max(1, ms));
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+/**
+ * Each model's effort levels, asked on the probe session that listed the models.
+ * The agent publishes `thought_level` for the model the session is on, so selecting
+ * each model is what makes that model's levels appear. A model the sweep does not
+ * reach keeps an empty list. The session is put back on the model it opened on.
+ */
+async function learnEfforts(session: Session): Promise<void> {
+  const cached = readModels()[session.agentId];
+  const models = cached?.options ?? [];
+  const modes = cached?.modes ?? null;
+  const thought = effortSelect(session.configOptions);
+  if (!session.modelConfigId || !thought) {
+    remember(session.agentId, models.map((model) => ({ value: model.value, name: model.name, efforts: [] })), modes);
+    return;
+  }
+  const current = session.modelCurrent;
+  const deadline = Date.now() + EFFORT_SWEEP_MS;
+  const filled: ModelOption[] = [];
+  for (const model of models) {
+    if (model.value === current) {
+      filled.push({ value: model.value, name: model.name, efforts: thought.options });
+      continue;
+    }
+    const left = deadline - Date.now();
+    if (left <= 0) {
+      filled.push({ value: model.value, name: model.name, efforts: [] });
+      continue;
+    }
+    try {
+      const response = await within(
+        Math.min(1_000, left),
+        session.connection.setSessionConfigOption({ sessionId: session.sessionId, configId: session.modelConfigId, value: model.value })
+      );
+      const levels = effortSelect(response.configOptions);
+      filled.push({ value: model.value, name: model.name, efforts: levels?.options ?? [] });
+    } catch {
+      filled.push({ value: model.value, name: model.name, efforts: [] });
+    }
+  }
+  if (current && current !== filled.at(-1)?.value) {
+    await session.connection
+      .setSessionConfigOption({ sessionId: session.sessionId, configId: session.modelConfigId, value: current })
+      .catch(() => {});
+  }
+  remember(session.agentId, filled, modes);
+}
+
 /** What the agent reports about its sessions, asked once a day: a throwaway session, no tools, then gone. */
 async function probe(agentId: AgentId): Promise<Result<ModelCache[string]>> {
   const cached = readModels()[agentId];
-  if (cached && 'modes' in cached && Date.now() - cached.at < MODELS_TTL_MS) return { ok: true, value: cached };
+  if (cached && 'modes' in cached && effortsKnown(cached.options) && Date.now() - cached.at < MODELS_TTL_MS) return { ok: true, value: cached };
   try {
     const session = await open(DATA_DIR, agentId, `probe:${agentId}`, undefined, { board: false });
-    close(session);
+    try {
+      await learnEfforts(session);
+    } catch {
+      // The model list stands. Efforts are asked again the next time the list is stale.
+    } finally {
+      close(session);
+    }
     return { ok: true, value: readModels()[agentId] ?? { at: Date.now(), options: [], modes: null } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -398,6 +544,12 @@ interface Session {
   deskToken: string | null;
   /** The task a discussion is about (task-35); null for any other session. */
   discuss: string | null;
+  /** Config options the session last reported. A probe reads each model's effort from them. */
+  configOptions: acp.SessionConfigOption[] | null;
+  /** The model select's id, when the agent offers one. */
+  modelConfigId: string | null;
+  /** The model the session opened on, so a probe can put it back. */
+  modelCurrent: string | null;
 }
 
 const sessions = new Map<string, Session>();
@@ -421,6 +573,12 @@ const ACTIVITY: Record<string, string> = {
 function update(run: AgentRun, patch: Partial<AgentRun>): void {
   Object.assign(run, patch);
   emit({ kind: 'run', run: { ...run } });
+}
+
+/** The environment every agent starts in: the real node first on PATH, so nothing an agent starts finds a shim instead. */
+function agentEnv(): NodeJS.ProcessEnv {
+  const node = realNode();
+  return node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
 }
 
 /** The first `node` on PATH that is a real binary, not a version-manager shim script. */
@@ -468,18 +626,21 @@ interface OpenOptions {
   withDesk?: boolean;
   /** The task a discussion is about: it reads, and changes only that task's spec. */
   discuss?: string;
+  /** The effort to set once the model is selected. Unset starts on medium when the model offers it. */
+  effort?: string;
   /** Stops the startup: the agent is not spawned, or is killed. */
   signal?: AbortSignal;
 }
 
 async function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
-  const { board = true, at, withDesk = false, discuss = null, signal } = options;
-  const known = KNOWN.find((k) => k.id === agentId);
-  if (!known) throw new Error(`Unknown agent ${agentId}`);
-  if (!which(known.client)) throw new Error(`${known.name} is not installed on this Mac`);
+  const { board = true, at, withDesk = false, discuss = null, effort, signal } = options;
+  const agent = agentOf(agentId);
+  if (!agent) throw new Error(isCustom(agentId) ? `${customName(agentId)} is no longer among your agents` : `Unknown agent ${agentId}`);
+  const missing = whyNot(agent);
+  if (missing) throw new Error(missing);
   const cwd = at ?? (board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId);
-  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, models: {}, key }) : null;
-  const launch = await unlessAborted(signal, known.launch()).catch((err) => {
+  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, effort, models: {}, efforts: {}, key }) : null;
+  const launch = await unlessAborted(signal, launchOf(agent)).catch((err) => {
     if (deskToken) desk.revoke(deskToken);
     throw err;
   });
@@ -487,10 +648,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     if (deskToken) desk.revoke(deskToken);
     throw signal.reason;
   }
-  // The real node first on PATH, so nothing an agent starts finds a shim instead.
-  const node = realNode();
-  const env = node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
-  const child = spawn(launch.command, launch.args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
+  const child = spawn(launch.command, launch.args, { cwd, env: launch.env ?? agentEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
   // Kept so a failure can say why, not just that the agent stopped.
   let stderr = '';
   child.stderr?.on('data', (d) => (stderr = (stderr + d).slice(-4000)));
@@ -499,7 +657,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
   child.on('error', (err) => {
     sessions.delete(key);
     if (deskToken) desk.revoke(deskToken);
-    if (session.run) update(session.run, { state: 'failed', error: `${known.name} could not start: ${err.message}`, endedAt: Date.now() });
+    if (session.run) update(session.run, { state: 'failed', error: `${agent.name} could not start: ${err.message}`, endedAt: Date.now() });
   });
 
   const session: Session = {
@@ -519,6 +677,9 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     mode: null,
     deskToken,
     discuss,
+    configOptions: null,
+    modelConfigId: null,
+    modelCurrent: null,
   };
   const stream = acp.ndJsonStream(Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>, Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>);
   session.connection = new acp.ClientSideConnection(
@@ -548,7 +709,7 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     sessions.delete(key);
     if (deskToken) desk.revoke(deskToken);
     if (session.run && (session.run.state === 'working' || session.run.state === 'starting' || session.run.state === 'waiting')) {
-      update(session.run, { state: 'failed', error: `${known.name} stopped${why()}`, endedAt: Date.now() });
+      update(session.run, { state: 'failed', error: `${agent.name} stopped${why()}`, endedAt: Date.now() });
     }
   });
 
@@ -556,17 +717,34 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
     await unlessAborted(signal, session.connection.initialize({ protocolVersion: acp.PROTOCOL_VERSION, clientCapabilities: {} }));
   } catch (err) {
     child.kill();
-    throw new Error(`${known.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
+    throw new Error(`${agent.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
   }
   const mcpServers = board ? [...brainfileMcp(), ...(deskToken ? [deskMcp(deskToken, projectId)] : [])] : [];
   const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
   session.sessionId = created.sessionId;
-  const models = modelOption(created.configOptions);
+  let configOptions = created.configOptions ?? null;
+  const models = modelOption(configOptions);
   session.modes = modesOf(created);
   session.mode = session.modes?.initial ?? null;
-  remember(agentId, models?.options ?? [], session.modes && { initial: session.modes.initial, options: session.modes.options, bypass: session.modes.bypass });
+  session.modelConfigId = models?.id ?? null;
+  session.modelCurrent = models?.current ?? null;
+  remember(agentId, keepingEfforts(agentId, models?.options ?? []), session.modes && { initial: session.modes.initial, options: session.modes.options, bypass: session.modes.bypass });
   if (models && model && model !== models.current && models.options.some((o) => o.value === model)) {
-    await unlessAborted(signal, session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => {}));
+    const updated = await unlessAborted(
+      signal,
+      session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => null)
+    );
+    if (updated) configOptions = updated.configOptions;
+  }
+  session.configOptions = configOptions;
+  // A chosen model starts at medium unless the person picked another level this model still offers.
+  const thought = model ? effortSelect(configOptions) : null;
+  const want = thought ? effortToSet(thought.options, effort) : undefined;
+  if (board && thought && want && want !== thought.current) {
+    await unlessAborted(
+      signal,
+      session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: thought.id, value: want }).catch(() => {})
+    );
   }
   if (board) await unlessAborted(signal, applyMode(session));
   sessions.set(key, session);
@@ -842,7 +1020,7 @@ const reserved = new Set<string>();
  */
 function reserve(projectId: string, taskId: string): Result<() => void> {
   const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, error: `${KNOWN.find((k) => k.id === live.agentId)?.name ?? live.agentId} is already working on ${taskId}` };
+  if (live) return { ok: false, error: `${nameOf(live.agentId)} is already working on ${taskId}` };
   const slot = `${projectId}\n${taskId}`;
   if (reserved.has(slot)) return { ok: false, error: `A hand-off is already starting on ${taskId}` };
   reserved.add(slot);
@@ -858,7 +1036,8 @@ function startDispatch(
   taskId: string,
   agentId: AgentId,
   model?: string,
-  from?: string
+  from?: string,
+  effort?: string
 ): Result<{ run: AgentRun; worktree: Worktree | null }> {
   let prompt: string;
   let worktree: Worktree | null;
@@ -871,7 +1050,7 @@ function startDispatch(
   const run = newRun(projectId, agentId, 'dispatch', taskId, { model, from });
   void (async () => {
     try {
-      const session = await startups.open(run.id, (signal) => open(projectId, agentId, run.id, model, { at: worktree?.path, signal }), close);
+      const session = await startups.open(run.id, (signal) => open(projectId, agentId, run.id, model, { at: worktree?.path, effort, signal }), close);
       if (session) await turn(session, run, prompt);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
@@ -880,11 +1059,11 @@ function startDispatch(
   return { ok: true, value: { run: { ...run }, worktree } };
 }
 
-async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>> {
+async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Promise<Result<AgentRun>> {
   const held = reserve(projectId, taskId);
   if (!held.ok) return held;
   try {
-    const started = startDispatch(projectId, taskId, agentId, model);
+    const started = startDispatch(projectId, taskId, agentId, model, undefined, effort);
     return started.ok ? { ok: true, value: started.value.run } : started;
   } finally {
     held.value();
@@ -917,12 +1096,12 @@ const desk = new DeskBridge(
       const found = findV2Task(getV2Dirs(located.brainfilePath), taskId);
       return found ? { title: found.doc.task.title } : null;
     },
+    agents: () => allAgents().map(({ id, name }) => ({ id, name })),
     unavailable(agentId) {
-      const known = KNOWN.find((k) => k.id === agentId);
-      if (!known) return `Unknown agent ${agentId}`;
-      return which(known.client) ? null : `${known.name} is not installed on this Mac`;
+      const agent = agentOf(agentId);
+      return agent ? whyNot(agent) : `Unknown agent ${agentId}`;
     },
-    async start(grant, taskId, agentId, model) {
+    async start(grant, taskId, agentId, model, effort) {
       // Who asked goes on the task first, as Hand to… sets the assignee first.
       // The task is held across that write, so nothing else starts on it meanwhile.
       const held = reserve(grant.projectId, taskId);
@@ -930,9 +1109,15 @@ const desk = new DeskBridge(
       let written: Result;
       let started: ReturnType<typeof startDispatch>;
       try {
-        const record: DispatchRecord = { agent: agentId, ...(model ? { model } : {}), by: 'chat', at: new Date().toISOString() };
+        const record: DispatchRecord = {
+          agent: agentId,
+          ...(model ? { model } : {}),
+          ...(effort ? { effort } : {}),
+          by: 'chat',
+          at: new Date().toISOString(),
+        };
         written = await callHost<Result>('recordDispatch', grant.projectId, taskId, record);
-        started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id);
+        started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id, effort);
       } finally {
         held.value();
       }
@@ -968,6 +1153,7 @@ function deskMcp(token: string, projectId: string): acp.McpServer {
       { name: DESK_ENV.socket, value: desk.socketPath },
       { name: DESK_ENV.token, value: token },
       { name: DESK_ENV.project, value: projectId },
+      { name: DESK_ENV.agents, value: JSON.stringify(allAgents().map((a) => a.id)) },
     ],
   };
 }
@@ -1000,17 +1186,19 @@ async function ask(
   model?: string,
   earlier: ChatTurn[] = [],
   context: string[] = [],
-  models: Partial<Record<AgentId, string>> = {}
+  models: Partial<Record<AgentId, string>> = {},
+  effort?: string,
+  efforts: Partial<Record<AgentId, string>> = {}
 ): Promise<Result<AgentRun>> {
-  const key = `ask:${threadId}:${agentId}:${model ?? ''}`;
+  const key = `ask:${threadId}:${agentId}:${model ?? ''}:${effort ?? ''}`;
   const run = newRun(projectId, agentId, 'ask', undefined, { model });
   run.threadId = threadId;
   void (async () => {
     try {
       const existing = sessions.get(key);
-      const session = existing ?? (await startups.open(run.id, (signal) => open(projectId, agentId, key, model, { withDesk: true, signal }), close));
+      const session = existing ?? (await startups.open(run.id, (signal) => open(projectId, agentId, key, model, { withDesk: true, effort, signal }), close));
       if (!session) return;
-      if (session.deskToken) desk.update(session.deskToken, { models });
+      if (session.deskToken) desk.update(session.deskToken, { models, efforts, model, effort });
       // A thread picked up again after its session was let go carries its own past.
       const past = existing || earlier.length === 0
         ? ''
@@ -1038,9 +1226,10 @@ async function discuss(
   threadId: string,
   taskId: string,
   model?: string,
-  earlier: ChatTurn[] = []
+  earlier: ChatTurn[] = [],
+  effort?: string
 ): Promise<Result<AgentRun>> {
-  const key = `discuss:${threadId}:${agentId}:${model ?? ''}`;
+  const key = `discuss:${threadId}:${agentId}:${model ?? ''}:${effort ?? ''}`;
   const run = newRun(projectId, agentId, 'ask', taskId, { model });
   run.threadId = threadId;
   void (async () => {
@@ -1054,7 +1243,7 @@ async function discuss(
         preamble = discussPreamble(discussContext(located.brainfilePath, taskId, standingDecisions(located.brainfilePath)));
         if (earlier.length) preamble += `Earlier in this discussion:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
       }
-      const session = existing ?? (await open(projectId, agentId, key, model, { discuss: taskId }));
+      const session = existing ?? (await open(projectId, agentId, key, model, { discuss: taskId, effort }));
       await turn(session, run, preamble + text);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
@@ -1076,7 +1265,7 @@ function review(projectId: string, taskId: string): Result<ReviewView | null> {
 /** Merge and discard wait for the agent: its worktree is not taken from under it. */
 function settle(projectId: string, taskId: string, act: (title?: string) => { message: string }): Result<{ message: string }> {
   const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, error: `${KNOWN.find((k) => k.id === live.agentId)?.name ?? live.agentId} is still working on ${taskId}` };
+  if (live) return { ok: false, error: `${nameOf(live.agentId)} is still working on ${taskId}` };
   if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, error: `A hand-off is starting on ${taskId}` };
   try {
     const located = locateBoard(projectId, { materialize: false });

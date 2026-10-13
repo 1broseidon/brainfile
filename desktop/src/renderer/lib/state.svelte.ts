@@ -8,8 +8,10 @@ import type {
   AgentInfo,
   AgentModes,
   AgentRun,
+  AgentServer,
   Api,
   BoardSnapshot,
+  ColumnView,
   DispatchSettings,
   EditorInfo,
   ForgeRepo,
@@ -30,8 +32,10 @@ import { problemBrief } from './brief';
 
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
 const SETTLE_MS = 900;
-import { decisionGroups, outline, visibleRows } from './format';
+import { calmOrder, decisionGroups, glance, GLANCE, outline, restsFolded, rootsHeld, visibleRows, type OutlineRow } from './format';
 import { intakeColumn, issueTask } from '../../shared/issues';
+import { customId } from '../../shared/agentServers';
+import { effortToSet } from '../../agents/effort';
 
 declare global {
   interface Window {
@@ -56,8 +60,29 @@ for (const key of MUTATIONS) {
   };
 }
 
-export type ViewMode = 'list' | 'board' | 'decisions' | 'issues';
+export type ViewMode = 'list' | 'decisions' | 'issues';
 export type MenuKind = 'status' | 'priority' | 'assignee' | 'labels';
+
+/** The list's group of completed work; a column's slug never has a colon. */
+export const DONE_GROUP = ':done';
+/** A calm group's `N more` line is a stop in the j / k walk, under this prefix and the group's key. */
+export const MORE = 'more:';
+export const isMore = (id: string | null | undefined): boolean => !!id?.startsWith(MORE);
+
+/** A group of the list as it is drawn: a column's, or the completed work's. */
+export interface ListGroup {
+  /** The column's ID, or DONE_GROUP. */
+  key: string;
+  column: ColumnView | null;
+  title: string;
+  /** What it holds: its roots and everything under them, folded, collapsed or past the glance. */
+  count: number;
+  folded: boolean;
+  /** The rows drawn: none when folded; in the calm list, a glance until `N more` is pressed. */
+  rows: OutlineRow[];
+  /** Rows waiting under `N more` (the calm list only). */
+  more: number;
+}
 
 const VIEW_KEY = 'brainfile.view';
 const ACTIVE_KEY = 'brainfile.active';
@@ -67,8 +92,11 @@ const AGENT_KEY = 'brainfile.lastAgent';
 const MODEL_KEY = 'brainfile.models';
 const PREFS_KEY = 'brainfile.projectPrefs';
 const MODEL_NAMES_KEY = 'brainfile.modelNames';
+/** Effort last chosen for each agent and model, so a model keeps its level. */
+const EFFORT_KEY = 'brainfile.efforts';
 const EDITOR_KEY = 'brainfile.editor';
 const TABS_KEY = 'brainfile.tabs';
+const CALM_KEY = 'brainfile.calm';
 /** The most tabs the dock keeps; the oldest go first. */
 const TABS_KEPT = 12;
 
@@ -163,9 +191,25 @@ function loadLayout(): Layout {
   }
 }
 
+const VIEW_MODES = new Set<ViewMode>(['list', 'decisions', 'issues']);
+
+function isViewMode(value: unknown): value is ViewMode {
+  return typeof value === 'string' && VIEW_MODES.has(value as ViewMode);
+}
+
+/** Saved views per project. A stored `'board'` (the removed kanban) is left out, so the list stands in. */
 function loadViews(): Record<string, ViewMode> {
   try {
-    return JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}');
+    const raw: unknown = JSON.parse(localStorage.getItem(VIEW_KEY) ?? '{}');
+    if (!raw || typeof raw !== 'object') return {};
+    const views: Record<string, ViewMode> = {};
+    let dropped = false;
+    for (const [id, mode] of Object.entries(raw)) {
+      if (isViewMode(mode)) views[id] = mode;
+      else dropped = true;
+    }
+    if (dropped) localStorage.setItem(VIEW_KEY, JSON.stringify(views));
+    return views;
   } catch {
     return {};
   }
@@ -183,6 +227,8 @@ class AppState {
   paletteOpen = $state(false);
   composer = $state<{ column?: string } | null>(null);
   showCompleted = $state(false);
+  /** The calm list (design.md, Calm list): one signal a row, chosen once for the window. */
+  calm = $state(localStorage.getItem(CALM_KEY) !== 'off');
   layout = $state(loadLayout());
   /** A problem worth saying, shown in the board's band until it times out. Success is silent. */
   problem = $state<string | null>(null);
@@ -203,9 +249,13 @@ class AppState {
   /** The thread in the popover, per board; null is the blank page it opens to. */
   thread = $state<Record<string, string | null>>({});
   chatOpen = $state(false);
+  /** Per board, the thread whose reply came while the chat was closed; opening the chat there reads it. */
+  unread = $state<Record<string, string>>({});
+  /** The chat key's width: the square, or wider while it shows a turn at work. The dock and the popover start from it. */
+  chatKeyW = $state(32);
   /** Settings take the board's place in the pane until a project is picked or Esc. */
   settingsOpen = $state(false);
-  settings = $state<DispatchSettings>({ bypass: false, modes: {} });
+  settings = $state<DispatchSettings>({ bypass: false, modes: {}, agentServers: {} });
   /** The dock's tabs, oldest first: the newest sits next to the chat key. */
   tabs = $state<Tab[]>((() => {
     try {
@@ -222,10 +272,14 @@ class AppState {
   models = $state<Partial<Record<AgentId, ModelOption[]>>>({});
   /** The model last chosen for each agent anywhere: what a project with no choice of its own starts from. */
   modelChoice = $state<Partial<Record<AgentId, string>>>(load(MODEL_KEY, {}));
+  /** Effort last chosen for each agent and model. Medium fills in where nothing is stored and the model offers it. */
+  effortChoice = $state<Partial<Record<AgentId, Record<string, string>>>>(load(EFFORT_KEY, {}));
   /** Each agent's model names as it last reported them, so a choice reads well before the list is asked for again. */
   modelNames = $state<Partial<Record<AgentId, Record<string, string>>>>(load(MODEL_NAMES_KEY, {}));
-  /** Per project, the agent last used there and the model last chosen for each agent (null: the agent's default). */
-  prefs = $state<Record<string, { agent?: AgentId; models?: Partial<Record<AgentId, string | null>> }>>(load(PREFS_KEY, {}));
+  /** Per project, the agent last used there and the model and effort last chosen for each agent (null model: the agent's default). */
+  prefs = $state<
+    Record<string, { agent?: AgentId; models?: Partial<Record<AgentId, string | null>>; efforts?: Partial<Record<AgentId, Record<string, string>>> }>
+  >(load(PREFS_KEY, {}));
 
   /** The agent last used on this project, if it is still here; else the last used anywhere; else the first installed. */
   agentFor(projectId: string | null): AgentId | null {
@@ -240,6 +294,42 @@ class AppState {
     const mine = projectId ? this.prefs[projectId]?.models : undefined;
     if (mine && agentId in mine) return mine[agentId] ?? undefined;
     return this.modelChoice[agentId];
+  }
+
+  /** The effort stored for this agent and model: the project's own, else the last chosen anywhere. */
+  rememberedEffort(agentId: AgentId, model: string, projectId: string | null = this.activeId): string | undefined {
+    return (projectId ? this.prefs[projectId]?.efforts?.[agentId]?.[model] : undefined) ?? this.effortChoice[agentId]?.[model];
+  }
+
+  /**
+   * The effort a turn should ask for. A remembered level wins when the model
+   * still offers it; otherwise medium, when the model offers that. Undefined
+   * when no model is chosen, or the model offers no effort.
+   */
+  effortFor(agentId: AgentId, projectId: string | null = this.activeId): string | undefined {
+    const model = this.modelFor(agentId, projectId);
+    if (!model) return undefined;
+    const levels = this.models[agentId]?.find((item) => item.value === model)?.efforts;
+    const remembered = this.rememberedEffort(agentId, model, projectId);
+    if (levels) return effortToSet(levels, remembered);
+    return remembered;
+  }
+
+  /** A model and its effort, as the picker and Hand to… read them. */
+  modelNote(agentId: AgentId, projectId: string | null = this.activeId): string {
+    const model = this.modelFor(agentId, projectId);
+    if (!model) return '';
+    const name = this.modelLabel(agentId, model);
+    const effort = this.effortLabel(agentId, projectId);
+    return effort ? `${name} · ${effort}` : name;
+  }
+
+  /** An effort as people read it: the name the agent gives it, or its value before the list is asked for again. */
+  effortLabel(agentId: AgentId, projectId: string | null = this.activeId): string {
+    const model = this.modelFor(agentId, projectId);
+    const effort = this.effortFor(agentId, projectId);
+    if (!model || !effort) return '';
+    return this.models[agentId]?.find((item) => item.value === model)?.efforts?.find((level) => level.value === effort)?.name ?? effort;
   }
 
   /** Changes from outside the window, newest first. */
@@ -293,41 +383,122 @@ class AppState {
   making = $state<Record<string, boolean>>({});
 
   /**
-   * The list's folds, per board: column groups folded shut and parents whose
-   * children are hidden. They live here so j / k walk only what is drawn.
+   * The list's folds, per board: column groups folded shut, parents whose
+   * children are hidden, and calm groups opened past their glance. They live
+   * here so j / k walk only what is drawn.
    */
-  folds = $state<Record<string, { groups: Record<string, boolean>; parents: Record<string, boolean> }>>({});
+  folds = $state<
+    Record<string, { groups: Record<string, boolean>; parents: Record<string, boolean>; whole: Record<string, boolean> }>
+  >({});
 
+  #foldsHere() {
+    if (!this.activeId) return null;
+    this.folds[this.activeId] ??= { groups: {}, parents: {}, whole: {} };
+    // Read back through the state proxy: the literal above is not reactive.
+    return this.folds[this.activeId];
+  }
+
+  /** As the hand left it; untouched, as it rests: the calm list rests the backlog and a completion column folded. */
   folded(kind: 'groups' | 'parents', id: string): boolean {
-    return !!(this.activeId && this.folds[this.activeId]?.[kind][id]);
+    const set = this.activeId ? this.folds[this.activeId]?.[kind][id] : undefined;
+    if (set !== undefined) return set;
+    if (kind !== 'groups' || !this.calm) return false;
+    const column = this.board?.columns.find((c) => c.id === id);
+    return !!column && restsFolded(column);
   }
 
   toggleFold(kind: 'groups' | 'parents', id: string): void {
-    if (!this.activeId) return;
-    this.folds[this.activeId] ??= { groups: {}, parents: {} };
-    // Read back through the state proxy: the literal above is not reactive.
-    const mine = this.folds[this.activeId];
-    mine[kind][id] = !mine[kind][id];
+    const folded = this.folded(kind, id);
+    const mine = this.#foldsHere();
+    if (!mine) return;
+    mine[kind][id] = !folded;
+    // Folding a group puts it back to a glance for the next time it opens.
+    if (kind === 'groups' && !folded) delete mine.whole[id];
+  }
+
+  /** Fold or open a group of the list; Done's fold is the window's, as before. */
+  toggleGroup(key: string): void {
+    if (key !== DONE_GROUP) return this.toggleFold('groups', key);
+    this.showCompleted = !this.showCompleted;
+    const mine = this.#foldsHere();
+    if (mine && !this.showCompleted) delete mine.whole[key];
+  }
+
+  /** Show a calm group past its glance, until it is folded. */
+  showWhole(key: string): void {
+    const mine = this.#foldsHere();
+    if (mine) mine.whole[key] = true;
   }
 
   /**
-   * What j / k step through, in the order the view draws it: the list's
-   * outline as it stands (children under their parent, whatever their
-   * column; Done when open), the board's cards column by column, or
-   * decisions by family.
+   * Turn the list calm or full without losing the selection: a task the calm
+   * list would rest folded or keep past a glance has its group opened, whole
+   * if need be, and a selected `N more`, which the full list does not have,
+   * hands its place to the first row that was waiting.
+   */
+  setCalm(on: boolean): void {
+    const stop = this.listGroups.find((g) => g.more && MORE + g.key === this.selectedTaskId);
+    this.calm = on;
+    localStorage.setItem(CALM_KEY, on ? 'on' : 'off');
+    if (stop) {
+      this.selectedTaskId = this.listGroups.find((g) => g.key === stop.key)?.rows[stop.rows.length]?.task.id ?? null;
+      return;
+    }
+    const id = this.selectedTaskId;
+    const board = this.board;
+    if (!on || !id || !board || this.orderedTasks.some((t) => t.id === id)) return;
+    const tree = outline(board.columns, board.tasks, board.completed);
+    const holds = (rows: OutlineRow[]) => rows.some((r) => r.task.id === id);
+    const key = tree.groups.find((g) => holds(g.rows))?.column.id ?? (holds(tree.done) ? DONE_GROUP : null);
+    if (!key) return;
+    if (key !== DONE_GROUP && this.folded('groups', key)) this.toggleFold('groups', key);
+    if (!this.orderedTasks.some((t) => t.id === id)) this.showWhole(key);
+  }
+
+  /**
+   * The list as it is drawn (design.md, Rows; Calm list): the outline's
+   * groups with their visible rows, children under their parent whatever
+   * their column, then Done. The calm list puts the groups nearest done
+   * first and shows each open group at a glance. A task an agent is
+   * working stays in that list, with its family. ListView draws it and
+   * j / k walk it.
+   */
+  listGroups = $derived.by((): ListGroup[] => {
+    const board = this.board;
+    if (!board) return [];
+    const tree = outline(board.columns, board.tasks, board.completed);
+    const collapsed = (id: string) => this.folded('parents', id);
+    // Starting, working, or waiting: the same live dispatch the row names.
+    const working = new Set<string>();
+    if (this.calm && this.activeId) {
+      for (const run of Object.values(this.runs)) {
+        if (run.kind === 'dispatch' && run.taskId && run.projectId === this.activeId && isLive(run)) working.add(run.taskId);
+      }
+    }
+    const group = (key: string, column: ColumnView | null, all: OutlineRow[], folded: boolean): ListGroup => {
+      const rows = folded ? [] : visibleRows(all, collapsed);
+      const whole = !!(this.activeId && this.folds[this.activeId]?.whole[key]);
+      const keep = working.size ? rootsHeld(all, working) : undefined;
+      const seen = this.calm && !whole ? glance(rows, GLANCE, keep) : { shown: rows, more: 0 };
+      return { key, column, title: column?.title ?? 'Done', count: all.length, folded, rows: seen.shown, more: seen.more };
+    };
+    const groups = (this.calm ? calmOrder(board.columns, tree.groups) : tree.groups)
+      .filter((g) => g.rows.length > 0)
+      .map((g) => group(g.column.id, g.column, g.rows, this.folded('groups', g.column.id)));
+    if (tree.done.length) groups.push(group(DONE_GROUP, null, tree.done, !this.showCompleted));
+    return groups;
+  });
+
+  /**
+   * What j / k step through, in the order the view draws it: the list as it
+   * stands (a calm group's `N more` is a stop of its own), or decisions by family.
    */
   orderedTasks = $derived.by((): { id: string }[] => {
     const board = this.board;
     if (!board) return [];
     if (this.view === 'issues') return [];
     if (this.view === 'decisions') return decisionGroups(board.decisions).flatMap((g) => g.decisions);
-    if (this.view === 'board') return board.columns.flatMap((column) => board.tasks.filter((t) => t.column === column.id));
-    const tree = outline(board.columns, board.tasks, board.completed);
-    const collapsed = (id: string) => this.folded('parents', id);
-    return [
-      ...tree.groups.filter((g) => !this.folded('groups', g.column.id)).flatMap((g) => visibleRows(g.rows, collapsed)),
-      ...(this.showCompleted ? visibleRows(tree.done, collapsed) : []),
-    ].map((row) => row.task);
+    return this.listGroups.flatMap((g) => [...g.rows.map((row) => row.task), ...(g.more ? [{ id: MORE + g.key }] : [])]);
   });
 
   #problemTimer: ReturnType<typeof setTimeout> | null = null;
@@ -516,7 +687,7 @@ class AppState {
     if (!this.activeId) return;
     this.remember(agentId);
     await this.patch(taskId, { assignee: agentId });
-    const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId));
+    const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId), this.effortFor(agentId));
     if (!result.ok) this.notify(result.error, 'warn');
     else this.touchTab(this.activeId, taskId);
   }
@@ -611,6 +782,31 @@ class AppState {
     this.settings = await api.setSettings($state.snapshot(patch) as Partial<DispatchSettings>);
   }
 
+  /**
+   * The person's own agents (task-47), saved whole. One that changed or went
+   * is asked again for its models and modes; the picker learns at once.
+   */
+  async saveAgentServers(servers: Record<string, AgentServer>): Promise<void> {
+    const before = this.settings.agentServers;
+    await this.setSettings({ agentServers: servers });
+    for (const name of new Set([...Object.keys(before), ...Object.keys(servers)])) {
+      if (JSON.stringify(before[name]) === JSON.stringify(servers[name])) continue;
+      delete this.modes[customId(name)];
+      delete this.models[customId(name)];
+    }
+    await this.refreshAgents();
+  }
+
+  /** Removed at once, with an Undo that puts it back as it was. */
+  async removeAgentServer(name: string): Promise<void> {
+    const gone = this.settings.agentServers[name];
+    if (!gone) return;
+    const rest = { ...this.settings.agentServers };
+    delete rest[name];
+    await this.saveAgentServers(rest);
+    this.offerUndo(`Removed ${name}`, () => this.saveAgentServers({ ...this.settings.agentServers, [name]: gone }));
+  }
+
   /** null is the agent's own default. */
   chooseMode(agentId: AgentId, mode: string | null): void {
     const modes = { ...this.settings.modes };
@@ -619,22 +815,51 @@ class AppState {
     void this.setSettings({ modes });
   }
 
-  /** Remembers the model for this project's agent, and as the last chosen anywhere. null is the agent's default. */
-  chooseModel(agentId: AgentId, model: string | null): void {
+  /** Remembers the model for this project's agent, and as the last chosen anywhere. null is the agent's default. `effort` is the level for that model; null clears it. */
+  chooseModel(agentId: AgentId, model: string | null, effort?: string | null): void {
     if (model) this.modelChoice[agentId] = model;
     else delete this.modelChoice[agentId];
     localStorage.setItem(MODEL_KEY, JSON.stringify(this.modelChoice));
+    if (model) this.rememberEffort(agentId, model, effort);
     const projectId = this.activeId;
     if (!projectId) return;
     const prefs = this.prefs[projectId] ?? {};
-    this.prefs[projectId] = { ...prefs, models: { ...prefs.models, [agentId]: model } };
+    const efforts = model ? this.writeEffort(prefs.efforts?.[agentId], model, effort) : prefs.efforts?.[agentId];
+    this.prefs[projectId] = {
+      ...prefs,
+      models: { ...prefs.models, [agentId]: model },
+      efforts: { ...prefs.efforts, [agentId]: efforts ?? {} },
+    };
     this.savePrefs();
   }
 
-  /** The popover opens to a blank page, unless a reply is still on its way. */
+  /** Keeps or clears one model's effort, on this project and as the last chosen anywhere. */
+  private rememberEffort(agentId: AgentId, model: string, effort?: string | null): void {
+    this.effortChoice[agentId] = this.writeEffort(this.effortChoice[agentId], model, effort) ?? {};
+    if (!Object.keys(this.effortChoice[agentId] ?? {}).length) delete this.effortChoice[agentId];
+    localStorage.setItem(EFFORT_KEY, JSON.stringify(this.effortChoice));
+  }
+
+  private writeEffort(current: Record<string, string> | undefined, model: string, effort?: string | null): Record<string, string> | undefined {
+    const next = { ...current };
+    if (effort) next[model] = effort;
+    else delete next[model];
+    return Object.keys(next).length ? next : undefined;
+  }
+
+  /** The popover opens to a blank page, unless a reply is still on its way or waiting to be read. */
   openChat(): void {
     if (this.activeId && !this.liveAsk) this.thread[this.activeId] = null;
     this.chatOpen = true;
+    if (this.activeId) this.readReply(this.activeId);
+  }
+
+  /** The chat is open on this board: a reply waiting on the key is the thread it shows, and is read. */
+  readReply(projectId: string, show = true): void {
+    const waiting = this.unread[projectId];
+    if (!waiting) return;
+    if (show && !this.liveAsk) this.thread[projectId] = waiting;
+    delete this.unread[projectId];
   }
 
   currentThread = $derived.by(() => {
@@ -682,13 +907,27 @@ class AppState {
       ...(context.length ? { context } : {}),
     });
     const before = this.boards[projectId];
-    // A hand-off the chat makes takes the model Hand to… would take for that agent here.
+    // A hand-off the chat makes takes the model and effort Hand to… would take for that agent here.
     const models = Object.fromEntries(
       this.agents.map((a) => [a.id, this.modelFor(a.id, projectId)] as const).filter(([, model]) => !!model)
     ) as Partial<Record<AgentId, string>>;
+    const efforts = Object.fromEntries(
+      this.agents.map((a) => [a.id, this.effortFor(a.id, projectId)] as const).filter(([, effort]) => !!effort)
+    ) as Partial<Record<AgentId, string>>;
     const result = thread.taskId
-      ? await api.discuss(projectId, agentId, text.trim(), thread.id, thread.taskId, this.modelFor(agentId, projectId), earlier)
-      : await api.ask(projectId, agentId, text.trim(), thread.id, this.modelFor(agentId, projectId), earlier, context, models);
+      ? await api.discuss(projectId, agentId, text.trim(), thread.id, thread.taskId, this.modelFor(agentId, projectId), earlier, this.effortFor(agentId, projectId))
+      : await api.ask(
+          projectId,
+          agentId,
+          text.trim(),
+          thread.id,
+          this.modelFor(agentId, projectId),
+          earlier,
+          context,
+          models,
+          this.effortFor(agentId, projectId),
+          efforts
+        );
     if (result.ok && before) this.#turnStart.set(result.value.id, before);
     if (!result.ok) this.addLine(projectId, thread.id, { key: `err-${Date.now()}`, who: 'agent', text: result.error, at: Date.now(), failed: true });
   }
@@ -717,6 +956,8 @@ class AppState {
         ...(run.steps?.length ? { steps: run.steps } : {}),
         ...(run.endedAt ? { took: run.endedAt - run.startedAt } : {}),
       });
+      // A reply that came with the chat closed waits on the key, on its own board.
+      if (run.state === 'done' && !(this.chatOpen && this.activeId === run.projectId)) this.unread[run.projectId] = run.threadId;
       const before = this.#turnStart.get(run.id);
       const handed = this.#handoffs.get(run.id) ?? [];
       this.#turnStart.delete(run.id);
@@ -756,6 +997,7 @@ class AppState {
     this.activeId = projectId;
     this.selectedTaskId = null;
     this.openTaskId = null;
+    if (this.chatOpen) this.readReply(projectId);
     localStorage.setItem(ACTIVE_KEY, projectId);
     const project = this.projects.find((p) => p.id === projectId);
     if (project?.state.status !== 'ready') return;
@@ -788,11 +1030,6 @@ class AppState {
     if (!this.activeId) return;
     this.views[this.activeId] = mode;
     localStorage.setItem(VIEW_KEY, JSON.stringify(this.views));
-  }
-
-  /** V turns between the two views of the work; from decisions or issues it goes back to the list. */
-  toggleView(): void {
-    this.setView(this.view === 'list' ? 'board' : 'list');
   }
 
   /** Show a move at once; the host's snapshot replaces it moments later. */
@@ -911,6 +1148,7 @@ class AppState {
     if (!board || !agent || !project) return;
     if (projectId !== this.activeId) await this.select(projectId);
     this.chatOpen = true;
+    this.readReply(projectId, false);
     // One turn at a time: a reply still on its way is shown, not talked over.
     if (this.liveAsk) return this.notify(`${this.agentName(this.liveAsk.agentId)} is still answering here.`, 'warn');
     this.thread[projectId] = null;
@@ -931,6 +1169,7 @@ class AppState {
     const live = this.liveAsk;
     const liveThread = live ? threads.find((t) => t.id === live.threadId) : undefined;
     this.chatOpen = true;
+    this.readReply(projectId, false);
     // One turn at a time: a reply still on its way is shown, not talked over.
     if (live && liveThread?.taskId !== taskId) return this.notify(`${this.agentName(live.agentId)} is still answering here.`, 'warn');
     const earlier = liveThread ?? threads.find((t) => t.taskId === taskId);

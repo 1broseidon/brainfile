@@ -26,18 +26,28 @@ const BOARDS: Record<string, Record<string, string>> = {
 let base: string;
 let bridge: DeskBridge;
 let runs: AgentRun[];
-let started: { projectId: string; taskId: string; agentId: AgentId; model?: string }[];
+let started: { projectId: string; taskId: string; agentId: AgentId; model?: string; effort?: string }[];
 let stopped: string[];
 let nextRun: number;
 
 const grantHere: DeskGrant = { projectId: HERE, agentId: 'claude', model: 'opus', models: { codex: 'gpt-5.5' }, key: 'ask:t-1:claude:opus' };
 
+/** The known agents and one of the person's own (task-47). */
+const AGENTS: { id: AgentId; name: string }[] = [
+  { id: 'claude', name: 'Claude Code' },
+  { id: 'codex', name: 'Codex' },
+  { id: 'cursor', name: 'Cursor' },
+  { id: 'grok', name: 'Grok Build' },
+  { id: 'custom:Muse Code', name: 'Muse Code' },
+];
+
 function deps(): DeskDeps {
   return {
+    agents: () => AGENTS,
     findTask: (projectId, taskId) => (BOARDS[projectId]?.[taskId] ? { title: BOARDS[projectId][taskId] } : null),
     unavailable: (agentId) => (agentId === 'grok' ? 'Grok Build is not installed on this Mac' : null),
-    async start(grant, taskId, agentId, model) {
-      started.push({ projectId: grant.projectId, taskId, agentId, model });
+    async start(grant, taskId, agentId, model, effort) {
+      started.push({ projectId: grant.projectId, taskId, agentId, model, ...(effort ? { effort } : {}) });
       const run: AgentRun = {
         id: `run-${nextRun++}`,
         projectId: grant.projectId,
@@ -127,6 +137,26 @@ test('an unknown task, a malformed ID, an unknown or missing agent are refused',
   assert.equal(started.length, 0);
 });
 
+test('a hand-off takes the selector’s effort with its model; a model named in the call does not', async () => {
+  const token = bridge.grant({ ...grantHere, effort: 'high', efforts: { codex: 'xhigh' } });
+  const call = (args: Record<string, unknown>) => callDesk(bridge.socketPath, { token, tool: 'dispatch', args });
+  const own = await call({ taskId: 'task-1' });
+  assert.match(own.ok ? own.value : '', /to claude \(opus, high\)/);
+  await call({ taskId: 'task-2', agent: 'codex', model: 'gpt-5.5-mini' });
+  assert.deepEqual(started, [
+    { projectId: HERE, taskId: 'task-1', agentId: 'claude', model: 'opus', effort: 'high' },
+    { projectId: HERE, taskId: 'task-2', agentId: 'codex', model: 'gpt-5.5-mini' },
+  ]);
+});
+
+test('another agent takes the effort chosen for it on this board', async () => {
+  const token = bridge.grant({ ...grantHere, efforts: { codex: 'xhigh' } });
+  const result = await callDesk(bridge.socketPath, { token, tool: 'dispatch', args: { taskId: 'task-2', agent: 'codex' } });
+  assert.equal(result.ok, true);
+  assert.equal(started[0].model, 'gpt-5.5');
+  assert.equal(started[0].effort, 'xhigh');
+});
+
 test('with no agent named it is the chat’s own, and its model; another agent takes the person’s model for it', async () => {
   const token = bridge.grant(grantHere);
   const call = (args: Record<string, unknown>) => callDesk(bridge.socketPath, { token, tool: 'dispatch', args });
@@ -138,6 +168,26 @@ test('with no agent named it is the chat’s own, and its model; another agent t
     { projectId: HERE, taskId: 'task-1', agentId: 'claude', model: 'opus' },
     { projectId: HERE, taskId: 'task-2', agentId: 'codex', model: 'gpt-5.5' },
   ]);
+});
+
+test('a custom agent is named by its ID, or by its name in any case, and takes the person’s model for it', async () => {
+  const token = bridge.grant({ ...grantHere, models: { 'custom:Muse Code': 'muse-large' } });
+  const call = (args: Record<string, unknown>) => callDesk(bridge.socketPath, { token, tool: 'dispatch', args });
+  const byId = await call({ taskId: 'task-1', agent: 'custom:Muse Code' });
+  assert.match(byId.ok ? byId.value : '', /to custom:Muse Code \(muse-large\)/);
+  assert.equal((await call({ taskId: 'task-2', agent: 'muse code' })).ok, true);
+  assert.deepEqual(
+    started.map((s) => [s.agentId, s.model]),
+    [
+      ['custom:Muse Code', 'muse-large'],
+      ['custom:Muse Code', 'muse-large'],
+    ]
+  );
+  // A known agent is found by its name too, and still refused when it is not installed.
+  const grok = await call({ taskId: 'task-1', agent: 'Grok Build' });
+  assert.match(!grok.ok ? grok.error : '', /already working|not installed/);
+  const unknown = await call({ taskId: 'task-1', agent: 'custom:Nobody' });
+  assert.match(!unknown.ok ? unknown.error : '', /Unknown agent custom:Nobody: use one of .*custom:Muse Code/);
 });
 
 test('a named model wins, and an agent with no choice here gets its own default', async () => {
@@ -174,12 +224,12 @@ function deferredStart(outcome: () => 'ok' | 'fail' | 'throw') {
   const waiting: (() => void)[] = [];
   const tools = deskTools({
     ...base,
-    async start(grant, taskId, agentId, model) {
+    async start(grant, taskId, agentId, model, effort) {
       await new Promise<void>((resolve) => waiting.push(resolve));
       const how = outcome();
       if (how === 'throw') throw new Error('host went away');
       if (how === 'fail') return { ok: false, error: 'worktree could not be made' };
-      return base.start(grant, taskId, agentId, model);
+      return base.start(grant, taskId, agentId, model, effort);
     },
   });
   return { tools, go: () => waiting.splice(0).forEach((resolve) => resolve()), waiting: () => waiting.length };
@@ -260,7 +310,13 @@ test('the stdio MCP server lists the tools and passes a call through with its to
   const script = path.join(base, 'desk-mcp.js');
   buildSync({ entryPoints: [path.join(import.meta.dirname, '..', 'src', 'agents', 'desk-mcp.ts')], outfile: script, bundle: true, platform: 'node', format: 'cjs', logLevel: 'silent' });
   const child = spawn(process.execPath, [script], {
-    env: { ...process.env, BRAINFILE_DESK_SOCKET: bridge.socketPath, BRAINFILE_DESK_TOKEN: token, BRAINFILE_DESK_PROJECT: HERE },
+    env: {
+      ...process.env,
+      BRAINFILE_DESK_SOCKET: bridge.socketPath,
+      BRAINFILE_DESK_TOKEN: token,
+      BRAINFILE_DESK_PROJECT: HERE,
+      BRAINFILE_DESK_AGENTS: JSON.stringify(AGENTS.map((a) => a.id)),
+    },
     stdio: ['pipe', 'pipe', 'inherit'],
   });
   const replies = new Map<number, (value: any) => void>();
@@ -289,6 +345,8 @@ test('the stdio MCP server lists the tools and passes a call through with its to
   child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
   const list = await request('tools/list');
   assert.deepEqual(list.result.tools.map((t: { name: string }) => t.name), ['dispatch', 'runs', 'stop']);
+  // The person's own agents are offered beside the known ones.
+  assert.deepEqual(list.result.tools[0].inputSchema.properties.agent.enum, AGENTS.map((a) => a.id));
   const call = await request('tools/call', { name: 'dispatch', arguments: { taskId: 'task-1', agent: 'codex' } });
   assert.equal(call.result.isError, undefined);
   assert.match(call.result.content[0].text, /Handed task-1/);

@@ -10,7 +10,6 @@
   import AskLine from './AskLine.svelte';
   import TwoBoardsLine from './TwoBoardsLine.svelte';
   import ListView from './ListView.svelte';
-  import BoardView from './BoardView.svelte';
   import DecisionsView from './DecisionsView.svelte';
   import IssuesView from './IssuesView.svelte';
 
@@ -108,11 +107,8 @@
       <span class="title">{board.title}</span>
       <PathTip path={project.path} line={storageLabel} projectId={project.id} />
       <div class="segmented" role="tablist">
-        <button role="tab" aria-label="List" use:tip={'List  V'} aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
+        <button role="tab" aria-label="List" use:tip={'List'} aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
           <Icon name="list" size={14} />
-        </button>
-        <button role="tab" aria-label="Board" use:tip={'Board  V'} aria-selected={app.view === 'board'} class:on={app.view === 'board'} onclick={() => app.setView('board')}>
-          <Icon name="board" size={14} />
         </button>
         <button
           role="tab"
@@ -175,8 +171,6 @@
             </button>
           </div>
         </div>
-      {:else if app.view === 'board'}
-        <BoardView {board} />
       {:else}
         <ListView {board} />
       {/if}

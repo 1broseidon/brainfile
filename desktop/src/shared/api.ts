@@ -243,19 +243,41 @@ export interface RemovedTask {
 
 // ── Agents (dispatch) ─────────────────────────────────────────────────────
 
-export type AgentId = 'claude' | 'codex' | 'antigravity' | 'cursor' | 'grok';
+/** The agents Brainfile knows how to start. */
+export type KnownAgentId = 'claude' | 'codex' | 'antigravity' | 'cursor' | 'grok';
+/** An agent the person added (task-47), by the name it has in dispatch.json's agentServers: `custom:Muse Code`. */
+export type CustomAgentId = `custom:${string}`;
+export type AgentId = KnownAgentId | CustomAgentId;
+
+/**
+ * An ACP server the person runs themselves, in the shape of Zed's
+ * `agent_servers` so an entry pastes across: started as given, the command
+ * found on PATH and `env` set over the app's own environment.
+ */
+export interface AgentServer {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+}
 
 export interface AgentInfo {
   id: AgentId;
   name: string;
   available: boolean;
-  /** Why it is or isn't offered, in a few words: `your login`, `downloads once`, `not installed`. */
+  /** Why it is or isn't offered, in a few words: `your login`, `downloads once`, `not installed`, a custom agent's command or `muse-acp not found`. */
   note: string;
+}
+
+export interface EffortOption {
+  value: string;
+  name: string;
 }
 
 export interface ModelOption {
   value: string;
   name: string;
+  /** Effort levels this model offers. Empty when it offers none; absent until they have been asked. */
+  efforts?: EffortOption[];
 }
 
 export interface ChatTurn {
@@ -297,6 +319,8 @@ export interface AgentRun {
 export interface DispatchRecord {
   agent: AgentId;
   model?: string;
+  /** The effort asked for with the model, when one was. */
+  effort?: string;
   by: 'chat';
   /** ISO 8601. */
   at: string;
@@ -389,6 +413,8 @@ export interface DispatchSettings {
   bypass: boolean;
   /** A mode chosen per agent for when bypass is off; unset is the agent's default. */
   modes: Partial<Record<AgentId, string>>;
+  /** The person's own ACP servers by display name, offered beside the known agents as `custom:<name>` (task-47). */
+  agentServers: Record<string, AgentServer>;
 }
 
 // ── Forges (task-26) ──────────────────────────────────────────────────────
@@ -537,7 +563,7 @@ export interface Api {
   getSettings(): Promise<DispatchSettings>;
   /** Applies at once, to sessions already open as well as new ones. */
   setSettings(patch: Partial<DispatchSettings>): Promise<DispatchSettings>;
-  dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string): Promise<Result<AgentRun>>;
+  dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Promise<Result<AgentRun>>;
   /** One turn in a chat thread; earlier lines come along in case the agent's session has gone. */
   /** `context` names what the person has open (a task's ID), so "this" means it. */
   /** `models` is the person's model for each agent on this board: what the chat's hand-offs use (spec-16). */
@@ -549,7 +575,9 @@ export interface Api {
     model?: string,
     earlier?: ChatTurn[],
     context?: string[],
-    models?: Partial<Record<AgentId, string>>
+    models?: Partial<Record<AgentId, string>>,
+    effort?: string,
+    efforts?: Partial<Record<AgentId, string>>
   ): Promise<Result<AgentRun>>;
   /**
    * One turn in a discussion of a task before it is handed off (task-35): the
@@ -563,7 +591,8 @@ export interface Api {
     threadId: string,
     taskId: string,
     model?: string,
-    earlier?: ChatTurn[]
+    earlier?: ChatTurn[],
+    effort?: string
   ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
   /** The runs not yet ended or ended lately, and the asks not yet answered. */

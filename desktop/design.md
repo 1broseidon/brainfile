@@ -174,16 +174,71 @@ The board reads like the TUI's list, calmed. A row is 36px:
   them, children from other columns and completed ones included, collapsed or
   not. Done counts what is left in it. j / k walk the rows as drawn, folded
   groups and collapsed parents left out.
-- **Cards stay in their columns.** On the board view a card is what you drag,
-  so a child keeps its own card in its own column; a parent's card says where
-  its children are instead, one 12px box each in the outline's order,
-  completed ones ticked, among the card's signals (past twelve, one ticked box
-  and `done/total`). The task pane lists every child, completed ones ticked.
 - At rest the right side carries only signals: contract state, sub-task
   progress, urgent and high priority, an assignee. The ID, tags and an unset
   priority or assignee wait for the pointer or the selection, in space kept
   for them.
 - Hover and selection are fills on the row; there are no lines between rows.
+
+## Calm list
+
+The list has a second reading, quieter than the rows above, for a reader
+who scans every signal on every row and loses the thread (task-43). It is
+brainfile-mobile's board (`src/components/rows.tsx`, `src/data/outline.ts`)
+brought to the desk: the same row, the same order, the same glance. It is a
+mode of the list, not a view of its own, and it belongs to the reader, not
+to a board: one switch for the window (Settings › List › Calm list, ⇧V from
+the list, or the palette), remembered. It is how the list first reads: on
+until it is turned off, and the full rows are a press of ⇧V away.
+
+```
+[status box]  [◆] Title, on one line, which truncates first          one signal
+```
+
+- **A row is its box, its title and at most one signal**, the loudest it
+  has: an agent at work on it (`claude · Editing…`, still, or `Needs you`),
+  then `decision changed`, then `blocked`, then a contract that asks for
+  you (`delivered`, `failed`, `blocked`, in its colour), then urgent or high
+  priority, then a checklist part done (`2/4`). Done work has none. The ID,
+  tags, assignee, a `ready` or `in progress` contract, an untouched or
+  finished checklist and dates wait for the task pane; they do not come
+  under the pointer. S, P, A and L still reach the pickers from the
+  keyboard, anchored on the row.
+- **The row breathes a step more**: 40px, its title at the reading size
+  (14px). The box keeps its 26px cell, and one outline step is that cell and
+  its gap (34px), so a child's box sits exactly under its parent's title. A
+  typed document keeps its glyph small before the title. A parent's ▾ hangs
+  in the gutter only under the hand; ▸, which hides something, always shows.
+- **The outline is unchanged.** Children stay under their parent, whatever
+  their column, and completed children stay until the parent is done
+  (Rows).
+- **Nearest done first.** The groups run Review, In Progress, To Do, so the
+  top of the list is what can be finished, then what can wait: the backlog,
+  then a completion column still holding work, then Done. The backlog and a
+  completion column rest folded; a fold the hand has made, in either
+  reading, is kept.
+- **A group at a glance.** An open group shows its first three roots, each
+  with everything under it (a family is never cut), and the rest under one
+  quiet line on the titles' edge, `N more`; one row left over is shown
+  instead. A task an agent is working — starting, working, or waiting —
+  stays in the drawn list, never behind `N more`, even when it is past
+  that glance. Its family stays with it, the same way a family is never
+  cut. The glance still holds for every other row. Pressing it shows the
+  whole group until the group is folded, which puts it back to a glance.
+- **A group's head is quieter than its rows**: its name in ink-3 at 500 and
+  its count, no box (each row carries its own), the name on the boxes'
+  edge. Open groups stand 20px apart; folded ones sit together, a short list
+  of what waits.
+- **j / k walk the list as drawn**, folded groups, collapsed parents and
+  what waits past a glance left out. `N more` is a stop of its own: Enter
+  opens the group and selects the first row that was waiting.
+- **Switching keeps your place.** Turning the list calm, the selected task
+  stays on screen: its group opens if it rests folded, whole if the task
+  waits past the glance. Turning it full, a selected `N more` gives way to
+  the first row that was waiting. Either way the selected row is scrolled
+  into view.
+- Pressing and selection are fills, as in Rows; there are no lines between
+  rows.
 
 ## Motion
 
@@ -197,8 +252,8 @@ work shows a muted status line
 (`claude · Thinking…`, `components/Working.svelte`) with a slow band of light
 crossing the word every 1800ms. In the chat the word turns over every 2.6s
 among honest names for the kind of work under way (Thinking, Considering,
-Working it out); on a row and in the task pane it holds still, so a list of
-busy tasks stays quiet. An agent waiting on you stops shimmering and says
+Working it out); on a row, in the task pane and in the chat key it holds
+still, so a list of busy tasks stays quiet. An agent waiting on you stops shimmering and says
 "Needs you" in the warn colour.
 
 ## Calm
@@ -216,6 +271,11 @@ off course. These rules win over every other section:
   with Sync now, and it takes the warn colour only for a real problem. The
   feed is the bolt and a count (`⚡ 10`), its tip "outside changes". At
   rest the corner is empty but for the bolt.
+- **One exception: a reply you have not read.** The chat key may carry a
+  small muted badge for a reply that landed while the chat was closed,
+  because a missed reply is worse than the noise of one muted badge. It is
+  muted ink, never the accent or warn, and opening the chat clears it.
+  Nothing else gets a status indicator.
 - **Tips are two or three words, five at most.** Anything longer is an
   explanation, and explanations live in the list or the line, never the tip.
 - **No big buttons.** New task is a muted + key in the board's band (C);
@@ -225,9 +285,10 @@ off course. These rules win over every other section:
   plus the signals that matter: urgent and high priority, contract state,
   sub-task progress, an assignee. The ID, the tags and any unset priority or
   assignee appear under the pointer or on the selected row, in space that is
-  already kept for them, so nothing shifts.
-- **Empty groups are not shown** in the list (the board view still has
-  every column to drop into).
+  already kept for them, so nothing shifts. The calm list goes further: one
+  signal a row, and nothing more under the pointer (Calm list).
+- **Empty groups are not shown** in the list. The status box moves a task
+  to a column that has no group.
 - The rail is one line per project: its storage icon, its name, its count.
 
 ## Dock
@@ -357,6 +418,19 @@ board changes (and in the feed).
   there, and for each agent the model last chosen there, in the chat and
   Hand to… alike. A project with no history starts from the last used
   anywhere. An old chat reopened from history keeps the agent it began with.
+- **Custom agents** (task-47) are any other ACP server on the Mac, added in
+  Settings under Agents the way Zed's `agent_servers` are: a display name
+  with a `command`, `args` and `env`, kept as `agentServers` in
+  dispatch.json in Zed's own keys, so an entry pastes across either way
+  (Paste from Zed takes an entry, the block or the whole settings file).
+  Each follows the known agents in the pickers as `custom:<name>` and goes
+  everywhere they do: Hand to…, the chat, Discuss, the desk's `dispatch`,
+  and models and modes when the server reports them. It is run as given,
+  nothing installed or downloaded: the command found on PATH as a shell
+  finds it (or the path it is, `~/` for home), `env` set over the app's
+  own, with the repository or the hand-off's worktree as its folder and
+  Brainfile's MCP server. When its command is not found, the pickers offer
+  it muted with `muse-acp not found`, rather than failing at start.
 - **Hand to…** is a muted key on a task. The brief is the task, its body
   and its contract; the agent moves it to In Progress, does the work,
   leaves a log note, and moves it to the board's review column when there
@@ -388,15 +462,26 @@ board changes (and in the feed).
   that grows into a popover in its own corner (360 × 480 to start; its left
   and top edges and the corner between them size it, double-click puts it
   back, and the size is kept), and shrinks back into the key when closed: a popover for small things, asking about the board or having it
-  managed (add, sort, split, close). It opens to a blank page every time;
+  managed (add, sort, split, close). While a turn runs with the chat
+  closed, the key widens into a small pill holding its Working line, the
+  word held still and shimmering (`claude · Thinking…`, or `Needs you` in
+  warn), at 130ms each way, and the popover grows from the pill as it
+  would from the square. When the turn ends the key is the square again;
+  if it ended with a reply, the key keeps a small muted badge in its
+  top-right corner and its tip says "Reply waiting" until the chat opens
+  (Calm's one exception). The badge is the board's: it waits there when
+  you switch away and come back. It opens to a blank page every time,
+  unless a reply is waiting, which it opens to;
   a muted history key in its header lists the board's recent chats (kept
   on this machine, the last 30), and any of them can be picked up again,
   its past carried along if the agent's session has gone. Replies land
   whole, and only the answer: the narration an agent writes between tool
   calls ("I'll look at the board…") is dropped, and the reply is the turn's
   last message. Beside the agent, a muted model picker lists the models the agent
-  itself reports (asked once a day); unset means the agent's default, and
-  Hand to… uses the same choice.
+  itself reports (asked once a day). Hovering a model that offers effort
+  levels opens them in a submenu; Medium is the one a new choice starts on,
+  since it is the level most models have. Unset means the agent's default,
+  and Hand to… uses the same model and effort.
 - **The chat's thread learns from Linear's agent window.** The header carries
   only the thread: its title (its first line) once there is one, the board's
   name before, then new chat and close. Who answers and with what sits where
@@ -431,10 +516,10 @@ board changes (and in the feed).
   agent and a model), `runs` (what is running on this Mac) and `stop`.
   `dispatch` is Hand to…'s own path: the worktree, a tab in the dock, asks
   in the task pane, Review. With no agent named it is the chat's own agent
-  and model; another agent named takes the model chosen for it on this
+  and model; another agent named takes the model and effort chosen for it on this
   board, as Hand to… would. The task records who asked
-  (`dispatch: { agent, model, by: chat, at }` beside the assignee), committed
-  like any change. Under the reply a hand-off reads like a board change
+  (`dispatch: { agent, model, by: chat, at }` beside the assignee, plus `effort`
+  when one was set), committed like any change. Under the reply a hand-off reads like a board change
   (`task-35 added`, `task-35 handed to codex`), and the call shows in the
   steps as `desk · dispatch`. The agent is told to create follow-ups with the
   board tools, hand them off with dispatch, and ask before dispatching more
@@ -476,6 +561,14 @@ rows' text, not the group's rim, so the column has one left edge.
 
 - **A switch is a box sliding in a sunk track**, the checkbox's corner kept;
   on, the track takes the accent, the one place a setting earns it.
+- **List** comes first, because it is how the window reads: one switch,
+  Calm list (Calm list), whose line says what it does in either state.
+- **Custom agents** sit under Agents, after each agent's modes: an entry's
+  name over the command line it runs, in mono, and `not found` in warn when
+  its command is not on the Mac. Add an agent and Edit open a small form in
+  the group (name, command, arguments one a line, environment `KEY=value`;
+  Esc leaves, ⌘↵ saves), Paste from Zed takes JSON as Zed writes it, and
+  Remove has an Undo.
 - **Editor** says where a file an agent names opens: the editors found on
   this Mac (apps in Applications, best first; terminal editors when Ghostty
   is here) and the file's default app. Unset, the first found. In a reply,

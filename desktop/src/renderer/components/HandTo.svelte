@@ -78,7 +78,7 @@
             onclick={() => pick(agent.id)}
           >
             <span class="name">{agent.name}</span>
-            <span class="note mono">{agent.available && app.modelFor(agent.id) ? app.modelLabel(agent.id, app.modelFor(agent.id)!) : agent.note}</span>
+            <span class="note mono">{agent.available && app.modelFor(agent.id) ? app.modelNote(agent.id) : agent.note}</span>
           </button>
         {/each}
         <p class="foot">The agent gets this task and its contract as its brief, works in the repo, and reports through the board.</p>

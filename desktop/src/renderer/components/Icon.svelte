@@ -8,7 +8,6 @@
     plus: 'M8 3v10M3 8h10',
     search: 'M3 3h7v7H3zM10 10l3.5 3.5',
     list: 'M2.5 4h2v2h-2zM2.5 10h2v2h-2zM7 5h6.5M7 11h6.5',
-    board: 'M2.5 2.5h3v11h-3zM6.5 2.5h3v7h-3zM10.5 2.5h3v4h-3z',
     git: 'M5 2v12M5 10.5c0-3.5 6-2.5 6-6M9.5 1.75h3v3h-3z',
     folder: 'M2.5 3.5h4l1.5 1.5h5.5v7.5h-11z',
     sync: 'M13 7A5 5 0 0 0 4 4.5M3 9a5 5 0 0 0 9 2.5M3.5 2v2.5H6M12.5 14v-2.5H10',

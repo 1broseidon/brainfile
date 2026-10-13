@@ -7,7 +7,8 @@
   import { renderMarkdown } from '../lib/markdown';
   import { dayTime, relativeTime, tookWords } from '../lib/format';
   import { linkRefs, refsOf } from '../lib/refs';
-  import type { AgentId } from '../../shared/api';
+  import type { AgentId, ModelOption } from '../../shared/api';
+  import { effortToSet } from '../../agents/effort';
   import type { Thread } from '../lib/state.svelte';
   import { expoOut } from 'svelte/easing';
   import { untrack } from 'svelte';
@@ -19,6 +20,8 @@
    * asking about the board or having it managed. Not a chat app: one thread
    * per board, replies that land whole, and anything long belongs in Hotline.
    * A task's Discuss key opens a thread about that task here (task-35).
+   * While a turn runs with it closed, the key widens into its Working line;
+   * a reply that lands meanwhile leaves a muted badge on it (task-23).
    */
   let { projectName }: { projectName: string } = $props();
 
@@ -61,21 +64,23 @@
   }
 
   /**
-   * The key becomes the popover: a clip from the key's square in the corner
-   * out to the whole panel, its contents coming up once there is room for
-   * them. Closing runs it back into the key. Reduced motion just shows it.
+   * The key becomes the popover: a clip from the key as it stands in the
+   * corner, the square or the pill of a turn at work, out to the whole panel,
+   * its contents coming up once there is room for them. Closing runs it back
+   * into the key. Reduced motion just shows it.
    */
   function grow(node: HTMLElement) {
     const { width, height } = node.getBoundingClientRect();
+    const from = Math.min(app.chatKeyW, width);
     // Not laid out yet, or reduced motion: just show it, never a stuck square.
     if (width <= KEY || height <= KEY || matchMedia('(prefers-reduced-motion: reduce)').matches) return { duration: 0 };
     return {
       duration: 220,
       easing: expoOut,
       css: (t: number) => {
-        const inset = (size: number) => ((1 - t) * (size - KEY)).toFixed(1);
+        const inset = (size: number, key: number) => ((1 - t) * (size - key)).toFixed(1);
         const reveal = Math.max(0, (t - 0.4) / 0.6).toFixed(3);
-        return `clip-path: inset(${inset(height)}px 0 0 ${inset(width)}px round ${8 + 2 * t}px); --reveal: ${reveal};`;
+        return `clip-path: inset(${inset(height, KEY)}px 0 0 ${inset(width, from)}px round ${8 + 2 * t}px); --reveal: ${reveal};`;
       },
     };
   }
@@ -84,6 +89,10 @@
   /** An old thread reopened keeps its own agent; otherwise the project's last used. */
   let agentId = $state<AgentId | null>(null);
   let picking = $state<'agent' | 'model' | null>(null);
+  /** The model whose effort submenu is open, and where that submenu sits. */
+  let effortOpen = $state<string | null>(null);
+  let effortBox = $state<{ top: number; left: number } | null>(null);
+  let effortHide: ReturnType<typeof setTimeout> | undefined;
   let view = $state<'chat' | 'history'>('chat');
   let field = $state<HTMLTextAreaElement>();
   let list = $state<HTMLDivElement>();
@@ -91,12 +100,39 @@
   const agent = $derived(agentId ?? app.defaultAgent);
   const lines = $derived(app.currentThread?.lines ?? []);
   const history = $derived(app.activeId ? (app.threads[app.activeId] ?? []) : []);
-  const modelName = $derived.by(() => {
-    if (!agent) return '';
-    const chosen = app.modelFor(agent);
-    if (!chosen) return 'default';
-    return app.modelLabel(agent, chosen);
-  });
+  const modelName = $derived(agent ? app.modelNote(agent) || 'default' : '');
+
+  function showEffort(model: ModelOption, row: HTMLElement): void {
+    if (!model.efforts?.length) {
+      clearTimeout(effortHide);
+      effortOpen = null;
+      return;
+    }
+    clearTimeout(effortHide);
+    const rect = row.getBoundingClientRect();
+    const width = 168;
+    const left = rect.right + 6 + width > window.innerWidth - 8 ? Math.max(8, rect.left - width - 6) : rect.right + 6;
+    effortOpen = model.value;
+    effortBox = { top: rect.top, left };
+  }
+
+  function hideEffort(): void {
+    clearTimeout(effortHide);
+    effortHide = setTimeout(() => {
+      effortOpen = null;
+    }, 120);
+  }
+
+  function holdEffort(): void {
+    clearTimeout(effortHide);
+  }
+
+  function pickModel(model: string | null, effort?: string): void {
+    if (!agent) return;
+    app.chooseModel(agent, model, effort ?? null);
+    picking = null;
+    effortOpen = null;
+  }
 
   $effect(() => {
     if (!app.chatOpen) view = 'chat';
@@ -138,6 +174,15 @@
     return thread.lines.find((l) => l.who === 'you')?.text.split('\n')[0] ?? 'Untitled';
   }
   const live = $derived(app.liveAsk);
+  /** A reply that came while the chat was closed on this board, waiting to be read. */
+  const waiting = $derived(!!app.activeId && !!app.unread[app.activeId]);
+  /** The Working line's width in the key; the key is the square without it. */
+  let statusW = $state(0);
+  const keyW = $derived(live && statusW ? statusW + KEY : KEY);
+  // The dock sits beside the key, and the popover grows from it, as it stood when last shown.
+  $effect(() => {
+    if (!app.chatOpen) app.chatKeyW = keyW;
+  });
   /** The IDs a reply can link to: everything the board in front can open. */
   const refs = $derived(refsOf(app.board));
   /** Which replies have their steps unfolded. */
@@ -235,8 +280,21 @@
 </script>
 
 {#if !app.chatOpen}
-  <button class="key" use:tip={'Ask the board  ⌘J'} aria-label="Ask the board" onclick={() => app.openChat()}>
-    <Icon name="ask" size={15} />
+  <button
+    class="key"
+    style:width="{keyW}px"
+    use:tip={waiting && !live ? 'Reply waiting' : 'Ask the board  ⌘J'}
+    aria-label={waiting && !live ? 'Ask the board: reply waiting' : 'Ask the board'}
+    onclick={() => app.openChat()}
+  >
+    <!-- A turn at work widens the key into its line, held still; the key keeps its glyph at the end. -->
+    {#if live}
+      <span class="at-work" bind:offsetWidth={statusW}><Working run={live} rotate={false} /></span>
+    {/if}
+    <span class="glyph"><Icon name="ask" size={15} /></span>
+    {#if waiting && !live}
+      <span class="badge" aria-hidden="true"></span>
+    {/if}
   </button>
 {/if}
 
@@ -429,16 +487,11 @@
               <span class="label">{modelName}</span><Icon name="chevron" size={10} />
             </button>
             {#if picking === 'model'}
+              {@const hovered = (app.models[agent] ?? []).find((m) => m.value === effortOpen)}
               <div class="catch" role="presentation" onmousedown={() => (picking = null)}></div>
-              <div class="menu">
+              <div class="menu" onscroll={() => (effortOpen = null)}>
                 {#if !(app.models[agent] ?? []).some((m) => /default/i.test(m.value) || /default/i.test(m.name))}
-                  <button
-                    class="item"
-                    onclick={() => {
-                      app.chooseModel(agent, null);
-                      picking = null;
-                    }}
-                  >
+                  <button class="item" onclick={() => pickModel(null)}>
                     <span>Default</span><span class="mono note">the agent’s own</span>
                   </button>
                 {/if}
@@ -448,16 +501,39 @@
                   {#each app.models[agent] ?? [] as m (m.value)}
                     <button
                       class="item"
-                      onclick={() => {
-                        app.chooseModel(agent, m.value);
-                        picking = null;
-                      }}
+                      onmouseenter={(e) => showEffort(m, e.currentTarget as HTMLElement)}
+                      onmouseleave={hideEffort}
+                      onclick={() => pickModel(m.value, m.efforts?.length ? effortToSet(m.efforts, app.rememberedEffort(agent, m.value)) : undefined)}
                     >
-                      <span>{m.name}</span>{#if app.modelFor(agent) === m.value}<Icon name="check" size={12} />{/if}
+                      <span>{m.name}</span>
+                      <span class="marks">
+                        {#if app.modelFor(agent) === m.value}<Icon name="check" size={12} />{/if}
+                        {#if m.efforts?.length}<Icon name="chevron" size={12} />{/if}
+                      </span>
                     </button>
                   {/each}
                 {/if}
               </div>
+              {#if hovered?.efforts?.length && effortBox}
+                <div
+                  class="submenu"
+                  role="menu"
+                  aria-label="Effort"
+                  tabindex="-1"
+                  style:top="{effortBox.top}px"
+                  style:left="{effortBox.left}px"
+                  onmouseenter={holdEffort}
+                  onmouseleave={hideEffort}
+                >
+                  <p class="effort-label mono">Effort</p>
+                  {#each hovered.efforts as level (level.value)}
+                    <button class="item" onclick={() => pickModel(hovered.value, level.value)}>
+                      <span>{level.name}</span>
+                      {#if app.modelFor(agent) === hovered.value && app.effortFor(agent) === level.value}<Icon name="check" size={12} />{/if}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
             {/if}
           </span>
         {/if}
@@ -480,16 +556,45 @@
     z-index: var(--z-band);
     right: var(--s3);
     bottom: var(--s3);
-    width: 32px;
     height: 32px;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    /* Widening, the line comes in from the left edge as the key opens out. */
+    justify-content: flex-end;
+    overflow: hidden;
     border-radius: var(--r-card);
     color: var(--ink-4);
     background: var(--canvas);
     box-shadow: inset 0 0 0 var(--hairline) var(--line);
-    transition: color var(--d-press) var(--ease), background var(--d-press) var(--ease);
+    transition:
+      width var(--d-open) var(--ease),
+      color var(--d-press) var(--ease),
+      background var(--d-press) var(--ease);
+  }
+
+  .at-work {
+    flex: none;
+    display: inline-flex;
+    padding-left: 10px;
+  }
+
+  .glyph {
+    flex: none;
+    width: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* The one indicator at rest (design.md, Calm): a reply you have not read. Muted ink, never the accent. */
+  .badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--ink-3);
   }
 
   .key:hover {
@@ -629,7 +734,7 @@
   }
 
   .pick {
-    max-width: 136px;
+    max-width: 168px;
     height: 24px;
     display: inline-flex;
     align-items: center;
@@ -691,6 +796,32 @@
 
   .item:not(:disabled):hover {
     background: var(--fill-hover);
+  }
+
+  .marks {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+    color: var(--ink-3);
+  }
+
+  /* A model's effort levels, beside the row under the pointer. */
+  .submenu {
+    position: fixed;
+    z-index: var(--z-menu);
+    width: 168px;
+    padding: var(--s1);
+    border-radius: var(--r-card);
+    background: var(--pressed);
+    box-shadow: var(--top-light), var(--shadow-float);
+  }
+
+  .effort-label {
+    margin: 0;
+    padding: 4px var(--s2) 2px;
+    color: var(--ink-4);
+    font-size: var(--t-xs);
   }
 
   .item:disabled {

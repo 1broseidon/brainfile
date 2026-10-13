@@ -23,12 +23,18 @@ import * as fs from 'fs';
 import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
-import type { AgentId, AgentRun, Result } from '../shared/api';
+import type { AgentId, AgentRun, KnownAgentId, Result } from '../shared/api';
 
-export const AGENT_IDS: readonly AgentId[] = ['claude', 'codex', 'antigravity', 'cursor', 'grok'];
+/** The agents Brainfile knows; the person's own (task-47) come from the agents process. */
+export const AGENT_IDS: readonly KnownAgentId[] = ['claude', 'codex', 'antigravity', 'cursor', 'grok'];
 
-/** The env a desk server is started with. */
-export const DESK_ENV = { socket: 'BRAINFILE_DESK_SOCKET', token: 'BRAINFILE_DESK_TOKEN', project: 'BRAINFILE_DESK_PROJECT' } as const;
+/** The env a desk server is started with. `agents` is every agent's ID, as JSON, for the tool's schema. */
+export const DESK_ENV = {
+  socket: 'BRAINFILE_DESK_SOCKET',
+  token: 'BRAINFILE_DESK_TOKEN',
+  project: 'BRAINFILE_DESK_PROJECT',
+  agents: 'BRAINFILE_DESK_AGENTS',
+} as const;
 
 /** One chat session's right to the desk: which board, and who is asking. */
 export interface DeskGrant {
@@ -38,6 +44,10 @@ export interface DeskGrant {
   model?: string;
   /** The person's model for each agent on this board, as Hand to… would use it. Refreshed every turn. */
   models: Partial<Record<AgentId, string>>;
+  /** The effort the model selector has for the chat's own model. */
+  effort?: string;
+  /** Each agent's effort, beside its model. A model the caller names itself starts on medium. */
+  efforts?: Partial<Record<AgentId, string>>;
   /** The chat session's key in the agents process, to find the turn that asked. */
   key: string;
 }
@@ -46,6 +56,8 @@ export type DeskTool = 'dispatch' | 'runs' | 'stop';
 
 /** What the desk needs from the agents process. */
 export interface DeskDeps {
+  /** Every agent there is, known and the person's own, by ID and name. */
+  agents(): { id: AgentId; name: string }[];
   /** The open task's title, or null when the board has no such open task. */
   findTask(projectId: string, taskId: string): { title: string } | null;
   /** Why the agent cannot be started here, or null when it can. */
@@ -55,7 +67,8 @@ export interface DeskDeps {
     grant: DeskGrant,
     taskId: string,
     agentId: AgentId,
-    model: string | undefined
+    model: string | undefined,
+    effort?: string
   ): Promise<Result<{ run: AgentRun; branch: string | null; note?: string }>>;
   /** Every run this app has started since it opened. */
   runs(): AgentRun[];
@@ -69,6 +82,18 @@ const TASK_ID = /^[A-Za-z0-9][\w.-]{0,79}$/;
 const RECENT = 10;
 
 const str = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+
+/**
+ * The agent a dispatch names, in any case: by ID (`codex`, `custom:Muse
+ * Code`), by name (`Muse Code`), or a custom one's name without its prefix.
+ */
+export function agentNamed(agents: { id: AgentId; name: string }[], named: string): AgentId | undefined {
+  const want = named.toLowerCase();
+  return (
+    agents.find((a) => a.id.toLowerCase() === want)?.id ??
+    agents.find((a) => a.name.toLowerCase() === want || a.id.toLowerCase() === `custom:${want}`)?.id
+  );
+}
 
 /** The desk's three tools over a set of deps. Every answer is a line or two of plain text for the agent. */
 export function deskTools(deps: DeskDeps) {
@@ -84,13 +109,15 @@ export function deskTools(deps: DeskDeps) {
   async function dispatch(grant: DeskGrant, args: Record<string, unknown>): Promise<Result<string>> {
     const taskId = str(args.taskId);
     if (!taskId || !TASK_ID.test(taskId)) return { ok: false, error: 'dispatch needs a taskId, such as task-12' };
-    const named = str(args.agent)?.toLowerCase();
-    if (named && !(AGENT_IDS as readonly string[]).includes(named)) {
-      return { ok: false, error: `Unknown agent ${named}: use one of ${AGENT_IDS.join(', ')}` };
-    }
-    const agentId = (named as AgentId | undefined) ?? grant.agentId;
+    const named = str(args.agent);
+    const agents = named ? deps.agents() : [];
+    const agentId = named ? agentNamed(agents, named) : grant.agentId;
+    if (!agentId) return { ok: false, error: `Unknown agent ${named}: use one of ${agents.map((a) => a.id).join(', ')}` };
     // Your own model when it is you; else the person's choice for that agent here; else the agent's default.
-    const model = str(args.model) ?? (agentId === grant.agentId ? grant.model : grant.models[agentId]);
+    // A model named in the call starts on medium. The selector's effort goes with the selector's model.
+    const namedModel = str(args.model);
+    const model = namedModel ?? (agentId === grant.agentId ? grant.model : grant.models[agentId]);
+    const effort = namedModel ? undefined : agentId === grant.agentId ? grant.effort : grant.efforts?.[agentId];
     if (model && model.length > 200) return { ok: false, error: 'That model ID is too long' };
     const task = deps.findTask(grant.projectId, taskId);
     if (!task) return { ok: false, error: `${taskId} is not an open task on this board. Create it with the brainfile tools first.` };
@@ -103,7 +130,7 @@ export function deskTools(deps: DeskDeps) {
     starting.add(slot);
     let started: Awaited<ReturnType<DeskDeps['start']>>;
     try {
-      started = await deps.start(grant, taskId, agentId, model);
+      started = await deps.start(grant, taskId, agentId, model, effort);
     } finally {
       starting.delete(slot);
     }
@@ -112,7 +139,7 @@ export function deskTools(deps: DeskDeps) {
     return {
       ok: true,
       value:
-        `Handed ${taskId} ("${task.title}") to ${agentId}${model ? ` (${model})` : ''}. It works${where}, its tab is in the dock, and it moves the task to review when done.` +
+        `Handed ${taskId} ("${task.title}") to ${agentId}${model ? ` (${model}${effort ? `, ${effort}` : ''})` : ''}. It works${where}, its tab is in the dock, and it moves the task to review when done.` +
         (started.value.note ? ` ${started.value.note}` : ''),
     };
   }
@@ -209,8 +236,8 @@ export class DeskBridge {
     return token;
   }
 
-  /** Each turn brings the person's current model choices. */
-  update(token: string, patch: Partial<Pick<DeskGrant, 'models'>>): void {
+  /** Each turn brings the person's current model and effort choices. */
+  update(token: string, patch: Partial<Pick<DeskGrant, 'models' | 'efforts' | 'model' | 'effort'>>): void {
     const grant = this.grants.get(token);
     if (grant) Object.assign(grant, patch);
   }

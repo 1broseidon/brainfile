@@ -28,12 +28,15 @@
     if (board) {
       out.push({ key: 'new', section: 'Actions', label: 'Create new task', hint: 'C', icon: 'plus', run: () => (app.composer = {}) });
       out.push({
-        key: 'view',
+        key: 'calm',
         section: 'Actions',
-        label: app.view === 'list' ? 'Switch to board view' : 'Switch to list view',
-        hint: 'V',
-        icon: app.view === 'list' ? 'board' : 'list',
-        run: () => app.toggleView(),
+        label: app.calm ? 'Show every signal in the list' : 'Calm the list',
+        hint: '⇧V',
+        icon: 'list',
+        run: () => {
+          app.setCalm(!app.calm);
+          app.setView('list');
+        },
       });
       if (board.sync.remote) {
         out.push({
