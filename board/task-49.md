@@ -27,20 +27,20 @@ relatedFiles:
 subtasks:
   - id: task-49-1
     title: Remove BoardView.svelte, the 'board' ViewMode, the Board tab and the v toggle
-    completed: false
+    completed: true
   - id: task-49-2
     title: Drop the board's row order; a saved 'board' view falls back to the list
-    completed: false
+    completed: true
   - id: task-49-3
     title: "design.md: remove the board view passages"
-    completed: false
+    completed: true
   - id: task-49-4
     title: Tests and svelte-check pass
-    completed: false
+    completed: true
 createdAt: "2026-10-13T21:06:45.161Z"
 decisions:
   - decision-9
-updatedAt: "2026-10-13T21:46:14.293Z"
+updatedAt: "2026-10-13T21:51:53.567Z"
 assignee: cursor
 ---
 
