@@ -43,3 +43,4 @@ Protocol 1 in brainfile-mobile/docs/link.md. Settings, Phone: link switch, Link 
 
 ## Log
 - 2026-10-13T04:21:57.436Z: [claude] noise.ts copied verbatim to desktop/src/link with the IK and Hotline vector tests (b4b7b91 on feat/phone-link)
+- 2026-10-13T04:39:53.629Z: [claude] Server, store, bridge, decide and live landed (347568c): Noise IK handshake, pairing, close codes, limits, board holds, paced board events; 20 fake-phone tests over a real socket plus decide on the real host
