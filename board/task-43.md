@@ -1,8 +1,8 @@
 ---
 id: task-43
 title: "Calm ADHD list view: take the mobile app's list as the reference"
-column: in-progress
-position: 1
+column: review
+position: 9
 description: |-
   A calmer, ADHD-friendly way to read the task list on the desktop, modelled on how brainfile-mobile shows its board. The mobile list is quieter than the desktop's rows (desktop/design.md, Rows): at rest a row is its status box, its title on one line, and at most one signal, the loudest it has. The ID, tags, assignee and everything else wait for the task's sheet. Pressing is a fill, and there are no lines between rows.
 
@@ -24,7 +24,7 @@ relatedFiles:
   - desktop/src/renderer
 createdAt: "2026-10-13T15:38:45.419Z"
 assignee: claude
-updatedAt: "2026-10-13T16:05:36.512Z"
+updatedAt: "2026-10-13T16:05:40.333Z"
 decisions:
   - decision-5
 ---
