@@ -415,6 +415,17 @@ board changes (and in the feed).
   reply (`task-18 added`, `task-11 moved to Todo`), read from the board
   itself by comparing it before and after, so the agent is told not to
   report its own changes, and never says it made none.
+- **Discuss** (task-35) is a muted key beside Hand to… that talks the task
+  over before it is handed off. It is a thread in the chat, not a chat of its
+  own: titled `Discuss task-35`, kept in the chat's history, and the key
+  reopens the task's latest one. Its agent is the one Hand to… offers first,
+  and the chat's picker changes it. The agent has the task, its parent, its
+  decisions and the files it names as context; it may change only that
+  task's description, subtasks and contract, with the person's agreement, and
+  notes what was agreed in the task's log, which is where the hand-off's
+  brief finds it. It has no desk, never runs in a bypass mode (read-only
+  when the agent has one), and its edits, commands, mode changes and other
+  board tools are refused before anyone is asked.
 - **The chat hands work off** (spec-16). Its agents get a second, small MCP
   server from the app itself, the desk: `dispatch` (a task, and optionally an
   agent and a model), `runs` (what is running on this Mac) and `stop`.

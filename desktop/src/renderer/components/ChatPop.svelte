@@ -8,7 +8,9 @@
   import { dayTime, relativeTime, tookWords } from '../lib/format';
   import { linkRefs, refsOf } from '../lib/refs';
   import type { AgentId } from '../../shared/api';
+  import type { Thread } from '../lib/state.svelte';
   import { expoOut } from 'svelte/easing';
+  import { untrack } from 'svelte';
 
   /**
    * The dispatcher's small chat (design.md, Dispatch): a muted key in the
@@ -16,6 +18,7 @@
    * for small things,
    * asking about the board or having it managed. Not a chat app: one thread
    * per board, replies that land whole, and anything long belongs in Hotline.
+   * A task's Discuss key opens a thread about that task here (task-35).
    */
   let { projectName }: { projectName: string } = $props();
 
@@ -105,6 +108,16 @@
     agentId = null;
   });
 
+  // A task's discussion opened from its pane keeps the agent it began with, as one picked from history does.
+  const threadId = $derived(app.currentThread?.id);
+  $effect(() => {
+    if (!threadId) return;
+    untrack(() => {
+      const thread = app.currentThread;
+      if (thread?.taskId && app.agents.some((a) => a.id === thread.agentId && a.available)) agentId = thread.agentId;
+    });
+  });
+
   function openThread(id: string): void {
     if (app.activeId) app.thread[app.activeId] = id;
     const thread = history.find((t) => t.id === id);
@@ -119,9 +132,10 @@
     field?.focus();
   }
 
-  /** A chat is titled by the first line of its first question. */
-  function titleOf(lines: { who: string; text: string }[]): string {
-    return lines.find((l) => l.who === 'you')?.text.split('\n')[0] ?? 'Untitled';
+  /** A chat is titled by the first line of its first question; a discussion by its task. */
+  function titleOf(thread: Pick<Thread, 'lines' | 'taskId'>): string {
+    if (thread.taskId) return `Discuss ${thread.taskId}`;
+    return thread.lines.find((l) => l.who === 'you')?.text.split('\n')[0] ?? 'Untitled';
   }
   const live = $derived(app.liveAsk);
   /** The IDs a reply can link to: everything the board in front can open. */
@@ -244,7 +258,7 @@
       <button class="icon-btn" class:on={view === 'history'} use:tip={'Recent chats'} onclick={() => (view = view === 'history' ? 'chat' : 'history')}>
         <Icon name="history" size={13} />
       </button>
-      <span class="where">{view === 'history' ? 'Recent' : app.currentThread ? titleOf(lines) : projectName}</span>
+      <span class="where">{view === 'history' ? 'Recent' : app.currentThread ? titleOf(app.currentThread) : projectName}</span>
       {#if app.currentThread && !live}
         <button class="icon-btn" use:tip={'New chat'} onclick={newChat}><Icon name="plus" size={13} /></button>
       {/if}
@@ -255,7 +269,7 @@
       <div class="history">
         {#each history as t (t.id)}
           <button class="thread" class:current={t.id === app.currentThread?.id} onclick={() => openThread(t.id)}>
-            <span class="tt">{titleOf(t.lines)}</span>
+            <span class="tt">{titleOf(t)}</span>
             <span class="mono meta">{app.agentName(t.agentId)} · {relativeTime(new Date(t.startedAt).toISOString())} · {t.lines.length}</span>
           </button>
         {:else}

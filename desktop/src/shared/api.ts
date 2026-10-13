@@ -259,7 +259,7 @@ export interface AgentRun {
   taskId?: string;
   /** The model asked for, when one was; unset is the agent's default. */
   model?: string;
-  /** The chat thread an ask belongs to. */
+  /** The chat thread an ask belongs to. An ask with a taskId is a discussion of that task (task-35). */
   threadId?: string;
   /** A hand-off the chat made: the chat turn (an ask's run) that asked for it (spec-16). */
   from?: string;
@@ -432,6 +432,20 @@ export interface Api {
     context?: string[],
     models?: Partial<Record<AgentId, string>>
   ): Promise<Result<AgentRun>>;
+  /**
+   * One turn in a discussion of a task before it is handed off (task-35): the
+   * agent has the task as context and may change its description, subtasks
+   * and contract, not code. The run is an ask on the thread, with the task's ID.
+   */
+  discuss(
+    projectId: string,
+    agentId: AgentId,
+    text: string,
+    threadId: string,
+    taskId: string,
+    model?: string,
+    earlier?: ChatTurn[]
+  ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
   /** The hand-off's branch and what is on it, or null when the task has no worktree. */
   review(projectId: string, taskId: string): Promise<Result<ReviewView | null>>;
@@ -472,6 +486,7 @@ export const AGENT_METHODS = [
   'setSettings',
   'dispatch',
   'ask',
+  'discuss',
   'stopRun',
   'review',
   'mergeReview',

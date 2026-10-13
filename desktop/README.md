@@ -32,6 +32,13 @@ Hand to… runs the agent in its own git worktree on the branch
 you can see the diff, open it in your editor, merge it or send it back, and
 the worktree is removed on merge or discard.
 
+Discuss, beside it, talks the task over first. The chat opens on the task
+with the project's agent, which reads the task, its parent, its decisions and
+the code, asks and pushes back, and with your agreement changes the task's
+description, subtasks or contract, noting what was agreed in its log. It
+writes no code and hands nothing off: when you hand the task off, the agent
+gets the spec as the discussion left it.
+
 ## Install
 
 `npm run package` builds `release/mac-arm64/Brainfile.app` for this Mac:
