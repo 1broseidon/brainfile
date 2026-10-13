@@ -23,12 +23,18 @@ import * as fs from 'fs';
 import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
-import type { AgentId, AgentRun, Result } from '../shared/api';
+import type { AgentId, AgentRun, KnownAgentId, Result } from '../shared/api';
 
-export const AGENT_IDS: readonly AgentId[] = ['claude', 'codex', 'antigravity', 'cursor', 'grok'];
+/** The agents Brainfile knows; the person's own (task-47) come from the agents process. */
+export const AGENT_IDS: readonly KnownAgentId[] = ['claude', 'codex', 'antigravity', 'cursor', 'grok'];
 
-/** The env a desk server is started with. */
-export const DESK_ENV = { socket: 'BRAINFILE_DESK_SOCKET', token: 'BRAINFILE_DESK_TOKEN', project: 'BRAINFILE_DESK_PROJECT' } as const;
+/** The env a desk server is started with. `agents` is every agent's ID, as JSON, for the tool's schema. */
+export const DESK_ENV = {
+  socket: 'BRAINFILE_DESK_SOCKET',
+  token: 'BRAINFILE_DESK_TOKEN',
+  project: 'BRAINFILE_DESK_PROJECT',
+  agents: 'BRAINFILE_DESK_AGENTS',
+} as const;
 
 /** One chat session's right to the desk: which board, and who is asking. */
 export interface DeskGrant {
@@ -46,6 +52,8 @@ export type DeskTool = 'dispatch' | 'runs' | 'stop';
 
 /** What the desk needs from the agents process. */
 export interface DeskDeps {
+  /** Every agent there is, known and the person's own, by ID and name. */
+  agents(): { id: AgentId; name: string }[];
   /** The open task's title, or null when the board has no such open task. */
   findTask(projectId: string, taskId: string): { title: string } | null;
   /** Why the agent cannot be started here, or null when it can. */
@@ -70,6 +78,18 @@ const RECENT = 10;
 
 const str = (value: unknown): string | undefined => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
 
+/**
+ * The agent a dispatch names, in any case: by ID (`codex`, `custom:Muse
+ * Code`), by name (`Muse Code`), or a custom one's name without its prefix.
+ */
+export function agentNamed(agents: { id: AgentId; name: string }[], named: string): AgentId | undefined {
+  const want = named.toLowerCase();
+  return (
+    agents.find((a) => a.id.toLowerCase() === want)?.id ??
+    agents.find((a) => a.name.toLowerCase() === want || a.id.toLowerCase() === `custom:${want}`)?.id
+  );
+}
+
 /** The desk's three tools over a set of deps. Every answer is a line or two of plain text for the agent. */
 export function deskTools(deps: DeskDeps) {
   const liveOn = (projectId: string, taskId: string) =>
@@ -84,11 +104,10 @@ export function deskTools(deps: DeskDeps) {
   async function dispatch(grant: DeskGrant, args: Record<string, unknown>): Promise<Result<string>> {
     const taskId = str(args.taskId);
     if (!taskId || !TASK_ID.test(taskId)) return { ok: false, error: 'dispatch needs a taskId, such as task-12' };
-    const named = str(args.agent)?.toLowerCase();
-    if (named && !(AGENT_IDS as readonly string[]).includes(named)) {
-      return { ok: false, error: `Unknown agent ${named}: use one of ${AGENT_IDS.join(', ')}` };
-    }
-    const agentId = (named as AgentId | undefined) ?? grant.agentId;
+    const named = str(args.agent);
+    const agents = named ? deps.agents() : [];
+    const agentId = named ? agentNamed(agents, named) : grant.agentId;
+    if (!agentId) return { ok: false, error: `Unknown agent ${named}: use one of ${agents.map((a) => a.id).join(', ')}` };
     // Your own model when it is you; else the person's choice for that agent here; else the agent's default.
     const model = str(args.model) ?? (agentId === grant.agentId ? grant.model : grant.models[agentId]);
     if (model && model.length > 200) return { ok: false, error: 'That model ID is too long' };

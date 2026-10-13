@@ -234,13 +234,28 @@ export interface RemovedTask {
 
 // ── Agents (dispatch) ─────────────────────────────────────────────────────
 
-export type AgentId = 'claude' | 'codex' | 'antigravity' | 'cursor' | 'grok';
+/** The agents Brainfile knows how to start. */
+export type KnownAgentId = 'claude' | 'codex' | 'antigravity' | 'cursor' | 'grok';
+/** An agent the person added (task-47), by the name it has in dispatch.json's agentServers: `custom:Muse Code`. */
+export type CustomAgentId = `custom:${string}`;
+export type AgentId = KnownAgentId | CustomAgentId;
+
+/**
+ * An ACP server the person runs themselves, in the shape of Zed's
+ * `agent_servers` so an entry pastes across: started as given, the command
+ * found on PATH and `env` set over the app's own environment.
+ */
+export interface AgentServer {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+}
 
 export interface AgentInfo {
   id: AgentId;
   name: string;
   available: boolean;
-  /** Why it is or isn't offered, in a few words: `your login`, `downloads once`, `not installed`. */
+  /** Why it is or isn't offered, in a few words: `your login`, `downloads once`, `not installed`, a custom agent's command or `muse-acp not found`. */
   note: string;
 }
 
@@ -372,6 +387,8 @@ export interface DispatchSettings {
   bypass: boolean;
   /** A mode chosen per agent for when bypass is off; unset is the agent's default. */
   modes: Partial<Record<AgentId, string>>;
+  /** The person's own ACP servers by display name, offered beside the known agents as `custom:<name>` (task-47). */
+  agentServers: Record<string, AgentServer>;
 }
 
 // ── Forges (task-26) ──────────────────────────────────────────────────────
