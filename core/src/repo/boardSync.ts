@@ -21,6 +21,7 @@ import * as os from 'os';
 import * as path from 'path';
 import {
   BOARD_NAME_CONFIG_KEY,
+  BOARD_STATE_DIR,
   DEFAULT_BOARD_NAME,
   LEGACY_REMOTE_BRANCH_CONFIG_KEY,
   boardBranch,
@@ -32,8 +33,10 @@ import {
   gitNetwork,
   homeBoardDir,
   isTrackedBoard,
+  keepBoardStateLocal,
   remoteBoardRef,
   unmergedFiles,
+  unstageBoardState,
 } from './boardRepo';
 import { summarizeFieldChanges } from './merge';
 
@@ -45,7 +48,7 @@ export const AUTOSYNC_CONFIG_KEY = 'brainfile.autosync';
 export const URL_REMOTE_NAME = 'board';
 export const MERGE_DRIVER_NAME = 'brainfile';
 export const DEFAULT_MERGE_DRIVER_COMMAND = 'brainfile merge-driver %O %A %B';
-const SYNC_STATE_FILE = path.join('state', 'sync.json');
+const SYNC_STATE_FILE = path.join(BOARD_STATE_DIR, 'sync.json');
 
 export const BOARD_GITATTRIBUTES = [
   'logs/ledger.jsonl merge=union',
@@ -248,7 +251,7 @@ export function readSyncState(dotDir: string): SyncState | null {
 
 function writeSyncState(dotDir: string, state: SyncState): void {
   try {
-    fs.mkdirSync(path.join(dotDir, 'state'), { recursive: true });
+    fs.mkdirSync(path.join(dotDir, BOARD_STATE_DIR), { recursive: true });
     fs.writeFileSync(path.join(dotDir, SYNC_STATE_FILE), `${JSON.stringify(state, null, 2)}\n`, 'utf-8');
   } catch {
     /* state is a convenience; never fail sync over it */
@@ -323,14 +326,63 @@ export function resolveCompleteVersusEdit(dotDir: string): string[] {
 
 type MergeOutcome = { ok: true; pulled: number } | { ok: false; result: SyncResult };
 
+/**
+ * A machine on an older version may still commit its own `state/`. Before a
+ * merge, keep this machine's copy of every `state/` file the incoming side
+ * changed, since git would write the other machine's over it.
+ */
+function saveLocalState(dotDir: string, incoming: string): Map<string, Buffer | null> {
+  const saved = new Map<string, Buffer | null>();
+  const r = git(['diff', '--name-only', '-z', '--no-renames', `HEAD...${incoming}`, '--', BOARD_STATE_DIR], dotDir);
+  if (!r.ok) return saved;
+  for (const rel of r.stdout.split('\0').filter(Boolean)) {
+    try {
+      saved.set(rel, fs.readFileSync(path.join(dotDir, rel)));
+    } catch {
+      saved.set(rel, null);
+    }
+  }
+  return saved;
+}
+
+function restoreLocalState(dotDir: string, saved: Map<string, Buffer | null>): void {
+  for (const [rel, content] of saved) {
+    const file = path.join(dotDir, rel);
+    try {
+      if (content === null) {
+        fs.rmSync(file, { force: true });
+      } else {
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, content);
+      }
+    } catch {
+      /* bookkeeping only */
+    }
+  }
+}
+
 /** Bring `incoming` into HEAD: nothing, a fast-forward, or a merge commit. */
 function mergeIncoming(dotDir: string, incoming: string, result: SyncResult): MergeOutcome {
   if (git(['merge-base', '--is-ancestor', incoming, 'HEAD'], dotDir).ok) return { ok: true, pulled: 0 };
+  const saved = saveLocalState(dotDir, incoming);
+  try {
+    return mergeIncomingInto(dotDir, incoming, result);
+  } finally {
+    restoreLocalState(dotDir, saved);
+  }
+}
+
+function mergeIncomingInto(dotDir: string, incoming: string, result: SyncResult): MergeOutcome {
   const before = git(['rev-parse', 'HEAD'], dotDir).stdout;
   const id = identityArgs(dotDir);
   const merge = git([...id, 'merge', '--quiet', '--no-edit', incoming], dotDir);
   if (!merge.ok) {
     resolveCompleteVersusEdit(dotDir);
+    // Another machine's `state/` is not this board's: leave it out of the
+    // merge, so a conflict there never stops a sync.
+    if (git(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], dotDir).ok) {
+      unstageBoardState(dotDir);
+    }
     const remaining = unmergedFiles(dotDir);
     if (remaining.length > 0) {
       return {
@@ -418,6 +470,8 @@ export function syncBoard(dotDir: string, options: SyncOptions = {}): SyncResult
       if (!merged.ok) return finish(dotDir, merged.result);
       result.pulled += merged.pulled;
     }
+    // What came in may still track `state/` (an older version committed it).
+    keepBoardStateLocal(dotDir);
   }
 
   if (push) {
