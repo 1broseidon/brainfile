@@ -254,8 +254,8 @@ work shows a muted status line
 (`claude · Thinking…`, `components/Working.svelte`) with a slow band of light
 crossing the word every 1800ms. In the chat the word turns over every 2.6s
 among honest names for the kind of work under way (Thinking, Considering,
-Working it out); on a row and in the task pane it holds still, so a list of
-busy tasks stays quiet. An agent waiting on you stops shimmering and says
+Working it out); on a row, in the task pane and in the chat key it holds
+still, so a list of busy tasks stays quiet. An agent waiting on you stops shimmering and says
 "Needs you" in the warn colour.
 
 ## Calm
@@ -273,6 +273,11 @@ off course. These rules win over every other section:
   with Sync now, and it takes the warn colour only for a real problem. The
   feed is the bolt and a count (`⚡ 10`), its tip "outside changes". At
   rest the corner is empty but for the bolt.
+- **One exception: a reply you have not read.** The chat key may carry a
+  small muted badge for a reply that landed while the chat was closed,
+  because a missed reply is worse than the noise of one muted badge. It is
+  muted ink, never the accent or warn, and opening the chat clears it.
+  Nothing else gets a status indicator.
 - **Tips are two or three words, five at most.** Anything longer is an
   explanation, and explanations live in the list or the line, never the tip.
 - **No big buttons.** New task is a muted + key in the board's band (C);
@@ -446,7 +451,16 @@ board changes (and in the feed).
   that grows into a popover in its own corner (360 × 480 to start; its left
   and top edges and the corner between them size it, double-click puts it
   back, and the size is kept), and shrinks back into the key when closed: a popover for small things, asking about the board or having it
-  managed (add, sort, split, close). It opens to a blank page every time;
+  managed (add, sort, split, close). While a turn runs with the chat
+  closed, the key widens into a small pill holding its Working line, the
+  word held still and shimmering (`claude · Thinking…`, or `Needs you` in
+  warn), at 130ms each way, and the popover grows from the pill as it
+  would from the square. When the turn ends the key is the square again;
+  if it ended with a reply, the key keeps a small muted badge in its
+  top-right corner and its tip says "Reply waiting" until the chat opens
+  (Calm's one exception). The badge is the board's: it waits there when
+  you switch away and come back. It opens to a blank page every time,
+  unless a reply is waiting, which it opens to;
   a muted history key in its header lists the board's recent chats (kept
   on this machine, the last 30), and any of them can be picked up again,
   its past carried along if the agent's session has gone. Replies land

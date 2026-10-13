@@ -225,6 +225,10 @@ class AppState {
   /** The thread in the popover, per board; null is the blank page it opens to. */
   thread = $state<Record<string, string | null>>({});
   chatOpen = $state(false);
+  /** Per board, the thread whose reply came while the chat was closed; opening the chat there reads it. */
+  unread = $state<Record<string, string>>({});
+  /** The chat key's width: the square, or wider while it shows a turn at work. The dock and the popover start from it. */
+  chatKeyW = $state(32);
   /** Settings take the board's place in the pane until a project is picked or Esc. */
   settingsOpen = $state(false);
   settings = $state<DispatchSettings>({ bypass: false, modes: {} });
@@ -705,10 +709,19 @@ class AppState {
     this.savePrefs();
   }
 
-  /** The popover opens to a blank page, unless a reply is still on its way. */
+  /** The popover opens to a blank page, unless a reply is still on its way or waiting to be read. */
   openChat(): void {
     if (this.activeId && !this.liveAsk) this.thread[this.activeId] = null;
     this.chatOpen = true;
+    if (this.activeId) this.readReply(this.activeId);
+  }
+
+  /** The chat is open on this board: a reply waiting on the key is the thread it shows, and is read. */
+  readReply(projectId: string, show = true): void {
+    const waiting = this.unread[projectId];
+    if (!waiting) return;
+    if (show && !this.liveAsk) this.thread[projectId] = waiting;
+    delete this.unread[projectId];
   }
 
   currentThread = $derived.by(() => {
@@ -791,6 +804,8 @@ class AppState {
         ...(run.steps?.length ? { steps: run.steps } : {}),
         ...(run.endedAt ? { took: run.endedAt - run.startedAt } : {}),
       });
+      // A reply that came with the chat closed waits on the key, on its own board.
+      if (run.state === 'done' && !(this.chatOpen && this.activeId === run.projectId)) this.unread[run.projectId] = run.threadId;
       const before = this.#turnStart.get(run.id);
       const handed = this.#handoffs.get(run.id) ?? [];
       this.#turnStart.delete(run.id);
@@ -830,6 +845,7 @@ class AppState {
     this.activeId = projectId;
     this.selectedTaskId = null;
     this.openTaskId = null;
+    if (this.chatOpen) this.readReply(projectId);
     localStorage.setItem(ACTIVE_KEY, projectId);
     const project = this.projects.find((p) => p.id === projectId);
     if (project?.state.status !== 'ready') return;
@@ -985,6 +1001,7 @@ class AppState {
     if (!board || !agent || !project) return;
     if (projectId !== this.activeId) await this.select(projectId);
     this.chatOpen = true;
+    this.readReply(projectId, false);
     // One turn at a time: a reply still on its way is shown, not talked over.
     if (this.liveAsk) return this.notify(`${this.agentName(this.liveAsk.agentId)} is still answering here.`, 'warn');
     this.thread[projectId] = null;
@@ -1005,6 +1022,7 @@ class AppState {
     const live = this.liveAsk;
     const liveThread = live ? threads.find((t) => t.id === live.threadId) : undefined;
     this.chatOpen = true;
+    this.readReply(projectId, false);
     // One turn at a time: a reply still on its way is shown, not talked over.
     if (live && liveThread?.taskId !== taskId) return this.notify(`${this.agentName(live.agentId)} is still answering here.`, 'warn');
     const earlier = liveThread ?? threads.find((t) => t.taskId === taskId);
