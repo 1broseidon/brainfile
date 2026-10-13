@@ -63,6 +63,13 @@ subtasks:
     title: "design.md: custom agents under Dispatch"
     completed: false
 createdAt: "2026-10-13T20:29:58.653Z"
+assignee: claude
+dispatch:
+  agent: claude
+  model: opus
+  by: chat
+  at: "2026-10-13T20:30:48.549Z"
+updatedAt: "2026-10-13T20:30:48.654Z"
 ---
 
 ## Description
