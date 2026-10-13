@@ -1,14 +1,13 @@
 ---
 id: task-23
 title: "Chat: while an agent works with the chat closed, the key widens into its status line"
-column: review
-position: 7
 tags:
   - desktop
   - chat
 createdAt: "2026-10-12T18:48:00.289Z"
-updatedAt: "2026-10-13T02:09:25.504Z"
+updatedAt: "2026-10-13T19:57:33.850Z"
 assignee: claude
+completedAt: "2026-10-13T19:57:33.850Z"
 ---
 
 ## Description
