@@ -8,7 +8,8 @@ const MARKER = '__BRAINFILE_PATH__';
  * cannot be asked.
  */
 export function loginShellPath(current: string): string {
-  const shell = process.env.SHELL || '/bin/zsh';
+  if (process.platform === 'win32') return current;
+  const shell = process.env.SHELL || (process.platform === 'darwin' ? '/bin/zsh' : '/bin/sh');
   let fromShell = '';
   try {
     const r = spawnSync(shell, ['-ilc', `printf '${MARKER}%s${MARKER}' "$PATH"`], {
