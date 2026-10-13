@@ -18,6 +18,7 @@ import {
   BOARD_REF_NAMESPACE,
   type WorktreeEntry,
   boardBranch,
+  boardIsDirty,
   boardRepoKind,
   boardTrackingRef,
   commitBoard,
@@ -28,6 +29,7 @@ import {
   gitCommonDir,
   listWorktrees,
   unmergedFiles,
+  unstageBoardState,
 } from './boardRepo';
 import { boardRemote, boardRemoteName, ensureBoardAttributes, registerMergeDriver } from './boardSync';
 import { type BoardRelation, codeBranchTracks, compareContents, readFolder, readTree } from './boards';
@@ -179,7 +181,10 @@ function treeFromDir(ctx: RepoContext, dir: string): string {
   const index = path.join(ctx.common, `brainfile-index-${process.pid}-${Date.now()}`);
   const env = { GIT_DIR: ctx.common, GIT_WORK_TREE: dir, GIT_INDEX_FILE: index };
   try {
-    must(git(['add', '-A', '--', '.', ':(exclude)state', ':(exclude).git'], dir, env), `read ${dir}`);
+    // `state/` is dropped after adding rather than excluded: `git add` fails
+    // on an exclude pathspec that names a directory `.gitignore` lists.
+    must(git(['add', '-A', '--', '.', ':(exclude).git'], dir, env), `read ${dir}`);
+    if (!unstageBoardState(dir, env)) throw new Error(`read ${dir}: could not leave out state/`);
     return must(git(['write-tree'], dir, env), `snapshot ${dir}`);
   } finally {
     fs.rmSync(index, { force: true });
@@ -407,7 +412,7 @@ function settle(dotDir: string, makePlan: (ctx: RepoContext) => Plan): SettleRes
   // then be clean, since it will be removed.
   for (const c of present) {
     commitHandEdits(c.path);
-    if (real(c.path) !== ctx.home && git(['status', '--porcelain'], c.path).stdout) {
+    if (real(c.path) !== ctx.home && boardIsDirty(c.path)) {
       throw new Error(`The board branch is also checked out at ${c.path} with files git could not commit. Clear them there first. Nothing else was changed.`);
     }
   }

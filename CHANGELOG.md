@@ -6,6 +6,21 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
+### Fixed
+- A board never commits `state/`, this machine's bookkeeping (`sync.json`,
+  `autosync.lock`, `tui.json`, brief checkpoints, the search index), whatever
+  its `.gitignore` says. A board that came to track it, from a commit made
+  before its `.gitignore` listed `state/`, had every sync rewrite it and the
+  next command commit it, reads included: history filled with `list`, `show`
+  and `edit: state/...` commits. The next commit or sync untracks it in a
+  commit of its own, keeping the files on disk, and adds `state/` to the
+  board's `.gitignore` when it is missing.
+- A sync that brings in another machine's `state/` (from an older version
+  still committing it) no longer stops on a conflict there, and leaves this
+  machine's copy as it was.
+- `merge-boards` and `adopt` no longer fail with "paths are ignored" on a
+  board folder whose `.gitignore` lists `state/`.
+
 ## [0.22.0] - 2026-10-12
 
 Memory moves onto the board, and the board learns its own shape. Decisions

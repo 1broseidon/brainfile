@@ -57,6 +57,19 @@ const FALLBACK_IDENTITY_EMAIL = 'brainfile@localhost';
 const MAX_MESSAGE_LENGTH = 72;
 const BOARD_SUBDIRS = ['board', 'logs'];
 
+/**
+ * `state/` is this machine's bookkeeping (sync status, the autosync lock, TUI
+ * view state, brief checkpoints, the search index). It never travels with the
+ * board, whatever the board's `.gitignore` says: a tracked copy is rewritten
+ * by every sync and would turn every command, reads included, into a commit.
+ */
+export const BOARD_STATE_DIR = 'state';
+/** Pathspec for everything on the board except `state/` (for status; `git add` rejects it once `state/` is ignored). */
+const BOARD_PATHSPEC = ['--', '.', `:(exclude)${BOARD_STATE_DIR}`];
+const STATE_IGNORE_LINES = ['state/', 'state', '/state/', '/state'];
+export const UNTRACK_STATE_MESSAGE = "untrack state/: this machine's sync bookkeeping never travels";
+export const IGNORE_STATE_MESSAGE = 'chore: keep state/ out of git';
+
 export interface GitResult {
   ok: boolean;
   status: number | null;
@@ -413,8 +426,9 @@ export function initStandaloneBoardRepo(dotDir: string): void {
   if (!r.ok) throw new Error(`Could not initialize a git repository in ${dotDir}: ${r.stderr}`);
 }
 
+/** Uncommitted changes to the board itself; `state/` never counts. */
 export function boardIsDirty(dotDir: string): boolean {
-  const r = git(['status', '--porcelain'], dotDir);
+  const r = git(['status', '--porcelain', ...BOARD_PATHSPEC], dotDir);
   return r.ok && r.stdout.length > 0;
 }
 
@@ -430,7 +444,7 @@ export function unmergedFiles(dotDir: string): string[] {
 }
 
 export function boardDirtyFiles(dotDir: string): string[] {
-  const r = git(['status', '--porcelain'], dotDir);
+  const r = git(['status', '--porcelain', ...BOARD_PATHSPEC], dotDir);
   if (!r.ok || !r.stdout) return [];
   // `git()` trims stdout, so the first line may have lost its leading status
   // column; strip the status letters and whitespace rather than a fixed width.
@@ -498,16 +512,7 @@ export function ensureBoardDirs(dotDir: string): boolean {
   return created;
 }
 
-export function commitBoard(dotDir: string, options: CommitBoardOptions): boolean {
-  if (!isTrackedBoard(dotDir)) return false;
-  ensureBoardDirs(dotDir);
-  // A merge a human still owns must not be committed with its markers.
-  if (unmergedFiles(dotDir).length > 0) return false;
-  if (!git(['add', '-A'], dotDir).ok) return false;
-  if (!boardIsDirty(dotDir)) return false;
-  const agent = options.agent?.replace(/[[\]<>\r\n]/g, '').trim();
-  const suffix = agent ? ` [${agent}]` : '';
-  const message = oneLine(options.message, suffix);
+function commitIndex(dotDir: string, message: string): boolean {
   const r = git(
     [...identityArgs(dotDir), '-c', 'commit.gpgsign=false', 'commit', '--quiet', '--no-verify', '-m', message],
     dotDir
@@ -516,12 +521,76 @@ export function commitBoard(dotDir: string, options: CommitBoardOptions): boolea
   return r.ok;
 }
 
+/** Append `state/` to the board's `.gitignore` unless it is already listed. Returns true when the file changed. */
+function ensureStateIgnored(dotDir: string): boolean {
+  const file = path.join(dotDir, '.gitignore');
+  let existing = '';
+  try {
+    existing = fs.readFileSync(file, 'utf-8');
+  } catch {
+    /* absent */
+  }
+  if (existing.split(/\r?\n/).some((line) => STATE_IGNORE_LINES.includes(line.trim()))) return false;
+  const separator = existing.length > 0 && !existing.endsWith('\n') ? '\n' : '';
+  try {
+    fs.writeFileSync(file, `${existing}${separator}${STATE_IGNORE_LINES[0]}\n`, 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Drop anything under `state/` from the index; the files stay on disk. */
+export function unstageBoardState(dotDir: string, env?: NodeJS.ProcessEnv): boolean {
+  return git(['rm', '-r', '--cached', '--quiet', '--ignore-unmatch', '--', BOARD_STATE_DIR], dotDir, env).ok;
+}
+
+/**
+ * Keep `state/` off the board: stop tracking anything under it that an older
+ * version or a hand `git add` committed (the files stay on disk), and list it
+ * in the board's `.gitignore` so older versions leave it alone too. Recorded
+ * in a commit of its own. Returns true when that commit was made.
+ */
+export function keepBoardStateLocal(dotDir: string): boolean {
+  if (!isTrackedBoard(dotDir)) return false;
+  // A merge a human still owns, or one waiting for its commit, is left alone.
+  if (unmergedFiles(dotDir).length > 0) return false;
+  if (git(['rev-parse', '--verify', '--quiet', 'MERGE_HEAD'], dotDir).ok) return false;
+  const staged = git(['ls-files', '--cached', '--', BOARD_STATE_DIR], dotDir).stdout.length > 0;
+  const committed = git(['rev-parse', '--verify', '--quiet', `HEAD:${BOARD_STATE_DIR}`], dotDir).ok;
+  if (!staged && !committed && !fs.existsSync(path.join(dotDir, BOARD_STATE_DIR))) return false;
+  const ignoreChanged = ensureStateIgnored(dotDir);
+  if (staged && !unstageBoardState(dotDir)) return false;
+  // On a board with no commits yet, the first commit carries both.
+  if ((!committed && !ignoreChanged) || !boardHasCommits(dotDir)) return false;
+  if (ignoreChanged && !git(['add', '--', '.gitignore'], dotDir).ok) return false;
+  return commitIndex(dotDir, committed ? UNTRACK_STATE_MESSAGE : IGNORE_STATE_MESSAGE);
+}
+
+export function commitBoard(dotDir: string, options: CommitBoardOptions): boolean {
+  if (!isTrackedBoard(dotDir)) return false;
+  ensureBoardDirs(dotDir);
+  // A merge a human still owns must not be committed with its markers.
+  if (unmergedFiles(dotDir).length > 0) return false;
+  const kept = keepBoardStateLocal(dotDir);
+  if (!git(['add', '-A'], dotDir).ok) return kept;
+  // `state/` stays out whatever `.gitignore` says (an older board may lack the
+  // entry, a person may edit it). Not an exclude pathspec: `git add` fails on
+  // one that names an ignored directory.
+  if (!unstageBoardState(dotDir)) return kept;
+  if (!boardIsDirty(dotDir)) return kept;
+  const agent = options.agent?.replace(/[[\]<>\r\n]/g, '').trim();
+  const suffix = agent ? ` [${agent}]` : '';
+  return commitIndex(dotDir, oneLine(options.message, suffix)) || kept;
+}
+
 /**
  * Commit outstanding hand edits (files changed outside the CLI) before a
  * command mutates, so they are never folded into that command's commit.
  */
 export function commitHandEdits(dotDir: string): boolean {
   if (!isTrackedBoard(dotDir)) return false;
+  keepBoardStateLocal(dotDir);
   // Boards created before the .gitkeep files existed get them in their own
   // commit, not folded into whatever command happens to run next.
   // git lists a directory holding only new files as `board/`, not its contents.

@@ -31,6 +31,7 @@ import {
   syncStatusLabel,
 } from '../utils/board-sync';
 import { whereCommand } from '../commands/where';
+import { UNTRACK_STATE_MESSAGE } from '@brainfile/core/repo';
 
 interface FakeCommand {
   name(): string;
@@ -419,6 +420,31 @@ describe('board sync (spec-9 phase 2)', () => {
       beforeCommand(fakeCommand('list', { file: 'brainfile.md' }));
       expect(fs.existsSync(path.join(dotB, 'board', 'task-2.md'))).toBe(true);
       expect(run(['rev-parse', 'refs/brainfile/board'], boardsRemote)).toBe(run(['rev-parse', 'HEAD'], dotA));
+    });
+
+    it('reads on a board that tracks state/ untrack it once, then commit nothing', () => {
+      // runprism.ai: an autosync commit picked up state/ before the board
+      // ignored it; from then on every read committed the rewritten sync.json.
+      const dotA = boardInA();
+      run(['add', '-f', 'state/sync.json'], dotA);
+      run(['commit', '--quiet', '-m', 'edit: state/sync.json'], dotA);
+      const start = run(['rev-parse', 'HEAD'], dotA);
+
+      process.chdir(repoA);
+      process.env.BRAINFILE_AUTOSYNC = 'full';
+      const list = fakeCommand('list', { file: 'brainfile.md' });
+      for (let i = 0; i < 3; i++) {
+        // A stale last sync, so each read fetches first and rewrites sync.json.
+        const state = JSON.parse(fs.readFileSync(path.join(dotA, 'state', 'sync.json'), 'utf-8'));
+        state.at = new Date(Date.now() - 120_000).toISOString();
+        fs.writeFileSync(path.join(dotA, 'state', 'sync.json'), JSON.stringify(state));
+        beforeCommand(list);
+        afterCommand(list);
+      }
+      expect(run(['log', '--format=%s', `${start}..HEAD`], dotA)).toBe(UNTRACK_STATE_MESSAGE);
+      expect(run(['ls-files', 'state'], dotA)).toBe('');
+      expect(fs.readFileSync(path.join(dotA, '.gitignore'), 'utf-8')).toMatch(/^state\/$/m);
+      expect(readSyncState(dotA)?.ok).toBe(true);
     });
 
     it('formats a header status that always says whether the board is shared', () => {
