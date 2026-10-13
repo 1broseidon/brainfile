@@ -55,3 +55,6 @@ A phone companion for Brainfile, like Hotline Mobile and Orca's. Serverless firs
 **Build.** A local native build, never Expo Go: `expo prebuild` (ios/ generated, not committed), the simulator from xcodebuild, and the phone over WiFi: a Release build signed by Apple team F3E8V88BVB and installed with `xcrun devicectl device install app`. The icon and splash are generated from the box mark.
 
 **Not in scope (v1).** Android builds (the code stays portable), push notifications, offline writes, GitLab and other forges, the App Store.
+
+## Log
+- 2026-10-13T03:13:17.502Z: [claude] Milestone: ~/Projects/personal/brainfile-mobile (local repo, not pushed) runs in the iPhone 18 Pro simulator as a Release build. Data layer is pure TS in src/data with 58 tsx tests; every write op (add, move, priority, subtask, note, complete with ledger, decide with supersede) matches @brainfile/core 0.22.0 file for file in tests/parity.test.ts. Reads use REST git/ref with ETag (304 when unchanged) then one GraphQL query at the commit oid: GraphQL ref(qualifiedName:) and refs(refPrefix:) do not reach refs/brainfile/*, but object(expression:) does. Signed in with the gh token in the simulator: discovery finds the 7 boards, brainfile reads in ~1.2 s. iOS 27 needs expo-build-properties enableSceneSupport (as hotline-mobile).
