@@ -2,7 +2,7 @@
 id: decision-5
 title: The calm list is a mode of the list, chosen once for the window
 type: decision
-status: current
+status: superseded
 claimKey: desktop.list.calm
 kind: decision
 stance: requires
@@ -13,6 +13,8 @@ tags:
   - calm
   - list
 createdAt: "2026-10-13T16:05:36.511Z"
+supersededBy: decision-7
+updatedAt: "2026-10-13T18:41:39.626Z"
 ---
 
 ## Description

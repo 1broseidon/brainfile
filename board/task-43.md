@@ -24,9 +24,10 @@ relatedFiles:
   - desktop/src/renderer
 createdAt: "2026-10-13T15:38:45.419Z"
 assignee: claude
-updatedAt: "2026-10-13T16:05:40.333Z"
+updatedAt: "2026-10-13T18:41:39.626Z"
 decisions:
   - decision-5
+  - decision-7
 ---
 
 ## Description
