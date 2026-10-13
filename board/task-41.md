@@ -30,12 +30,12 @@ subtasks:
     completed: true
   - id: task-41-7
     title: "Chat sheet: turns + harness/model + send + stop"
-    completed: false
+    completed: true
   - id: task-41-8
     title: Tests + simulator against link:dev
     completed: false
 createdAt: "2026-10-13T04:15:11.912Z"
-updatedAt: "2026-10-13T05:01:36.391Z"
+updatedAt: "2026-10-13T05:01:36.868Z"
 ---
 
 ## Description
