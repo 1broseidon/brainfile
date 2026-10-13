@@ -231,7 +231,7 @@
 
     <section>
       <h2>Phone</h2>
-      <p class="lede">Your boards and agents, from your phone.</p>
+      <p class="lede">Boards and agents, on your phone.</p>
       <div class="group">
         <div class="row toggle">
           <span class="label">
