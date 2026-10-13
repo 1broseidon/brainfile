@@ -55,3 +55,6 @@ Remove:
 - design.md: "Cards stay in their columns" and the board-view aside in "Empty groups are not shown"
 
 Keep: the format's `x-brainfile-renderer: kanban` hint and core's `RendererType.KANBAN` (the format's word for other tools; a separate question). A task lost by the empty-column drop is moved with Move to….
+
+## Log
+- 2026-10-13T21:51:53.830Z: [cursor] Removed the desktop kanban view (Board tab, BoardView, v toggle, board row order). A saved board view opens the list; an empty column is reached from the status box. On dispatch/task-49.
