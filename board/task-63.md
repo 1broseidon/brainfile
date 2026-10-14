@@ -3,7 +3,7 @@ id: task-63
 title: A conflict goes back to the hand-off's agent
 column: todo
 position: 6
-priority: high
+priority: medium
 tags:
   - git
   - dispatch
@@ -30,6 +30,7 @@ contract:
     commands:
       - cd desktop && npm run typecheck && npm test
 createdAt: "2026-10-14T15:16:10.374Z"
+updatedAt: "2026-10-14T19:11:57.029Z"
 ---
 
 ## Description
