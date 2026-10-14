@@ -33,11 +33,12 @@ tags:
   - github
   - relay
 relatedFiles:
-  - research/task-48.md
+  - reviews/task-48.md
 parentId: spec-17
 decisions:
   - decision-2
 createdAt: "2026-10-14T05:29:51.148Z"
+updatedAt: "2026-10-14T05:30:16.785Z"
 ---
 
 ## Description
