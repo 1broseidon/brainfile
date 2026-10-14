@@ -1,0 +1,107 @@
+# Release Brainfile Desktop (task-72): push a desktop-v<version> tag whose
+# version is desktop/package.json's, with its notes in desktop/notes/<version>.md.
+#
+# Builds the app for Apple silicon and Intel as zips (what the app updates
+# from) and disk images (what a person downloads). With the APPLE_* secrets,
+# signed with the Developer ID and notarized; without them, ad-hoc signed,
+# as Hotline's release is when its are missing. The update manifest is
+# signed with BRAINFILE_UPDATE_KEY, the key the app trusts
+# (desktop/src/main/update-key.ts), and the release is never marked latest:
+# the CLI's releases keep /releases/latest, and the app finds desktop-v*
+# releases by tag.
+name: Desktop release
+
+on:
+  push:
+    tags: ['desktop-v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+
+      - name: Version and notes
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#desktop-v}"
+          app="$(node -p "require('./desktop/package.json').version")"
+          if [ "$version" != "$app" ]; then
+            echo "::error::The tag says $version but desktop/package.json says $app" >&2
+            exit 1
+          fi
+          test -s "desktop/notes/$version.md" || { echo "::error::desktop/notes/$version.md is missing" >&2; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Install
+        run: |
+          npm ci
+          npm ci --prefix desktop
+
+      - name: Build
+        run: npm run build --prefix desktop
+
+      # Signing and notarization come from the repository's secrets, when they are there.
+      - name: Apple signing
+        env:
+          P12_BASE64: ${{ secrets.APPLE_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          if [ -z "$P12_BASE64" ]; then
+            echo "::warning::No APPLE_P12_BASE64 secret: this release is ad-hoc signed and not notarized"
+            exit 0
+          fi
+          echo "CSC_LINK=$P12_BASE64" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$P12_PASSWORD" >> "$GITHUB_ENV"
+          if [ -n "$API_KEY_P8" ]; then
+            keypath="$RUNNER_TEMP/AuthKey_$API_KEY_ID.p8"
+            printf '%s' "$API_KEY_P8" > "$keypath"
+            echo "APPLE_API_KEY=$keypath" >> "$GITHUB_ENV"
+            echo "APPLE_API_KEY_ID=$API_KEY_ID" >> "$GITHUB_ENV"
+            echo "APPLE_API_ISSUER=$API_ISSUER" >> "$GITHUB_ENV"
+          fi
+
+      - name: Package
+        working-directory: desktop
+        run: npx electron-builder --config electron-builder.release.cjs --mac --arm64 --x64 --publish never
+
+      - name: Update manifest
+        working-directory: desktop
+        env:
+          BRAINFILE_UPDATE_KEY: ${{ secrets.BRAINFILE_UPDATE_KEY }}
+        run: node scripts/update-manifest.mjs "${{ steps.version.outputs.version }}" release "notes/${{ steps.version.outputs.version }}.md" "$GITHUB_REPOSITORY"
+
+      - name: Publish
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Brainfile Desktop $version" \
+            --notes-file "notes/$version.md" \
+            --latest=false \
+            release/Brainfile-"$version"-*-mac.zip \
+            release/Brainfile-"$version"-*.dmg \
+            release/brainfile-desktop.json \
+            release/brainfile-desktop.json.sig

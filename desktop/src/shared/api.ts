@@ -442,6 +442,29 @@ export interface ReadyView {
   conflicts: boolean;
 }
 
+/** Where an update stands (task-71). */
+export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'installing' | 'waiting' | 'restarting';
+
+/** The app's updates, as Settings › Updates and the badge read them. */
+export interface UpdateStatus {
+  /** This app's version. */
+  current: string;
+  /** A later release, with its notes; null when this is the latest known. */
+  available: { version: string; notes: string } | null;
+  /** When GitHub was last asked (ms); null before the first check. */
+  checkedAt: number | null;
+  phase: UpdatePhase;
+  /** Bytes of the download so far, and of the whole. */
+  downloaded: number;
+  total: number | null;
+  /** What went wrong last, in a sentence; null when nothing did. */
+  error: string | null;
+  /** Why this app does not update itself (a development run); null when it does. */
+  disabledReason: string | null;
+  /** While the restart waits: how many agents are at work. */
+  waitingFor: number;
+}
+
 /** App-wide dispatch settings, kept in the app's dispatch.json. */
 export interface DispatchSettings {
   /** On: every agent runs in its bypass mode and nothing is asked. Off: each agent's own default, or the mode chosen for it. */
@@ -636,6 +659,13 @@ export interface Api {
   live(): Promise<LiveAgents>;
   /** The hand-off's branch and what is on it, or null when the task has no worktree. */
   review(projectId: string, taskId: string): Promise<Result<ReviewView | null>>;
+  /** Updates (task-71): where they stand, ask GitHub now, install a version, stop a download or a wait, or restart without waiting for agents. */
+  updateStatus(): Promise<UpdateStatus>;
+  checkUpdate(): Promise<UpdateStatus>;
+  installUpdate(version: string): Promise<UpdateStatus>;
+  cancelUpdate(): Promise<void>;
+  restartToUpdate(): Promise<void>;
+  onUpdate(listener: (status: UpdateStatus) => void): () => void;
   /** Every hand-off on the board that can merge now, or would conflict, with no agent still at it. */
   readyToMerge(projectId: string): Promise<Result<ReadyView[]>>;
   /** Merge the hand-off's branch into the checkout's branch, then let its worktree and branch go. */
@@ -684,6 +714,7 @@ export const CHANNEL = {
   projects: 'brainfile:projects',
   agent: 'brainfile:agent',
   link: 'brainfile:link',
+  update: 'brainfile:update',
 } as const;
 
 /** Methods main forwards to the agents process. */

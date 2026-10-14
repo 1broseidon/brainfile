@@ -301,7 +301,11 @@ off course. These rules win over every other section:
   tips), or `conflicts with main` in the warning colour and Send back. They are
   state, not news: a row goes when it merges, never when it is seen, and the
   count is only what can merge now. The changes follow under `Changes`.
-  Nothing else gets a status indicator.
+  And an update that is out (task-71): a small dot in the accent on the
+  settings key, its tip `Update to 0.2.0`; Settings › Updates, the first
+  section, says the version, what it brings and Update to 0.2.0, then its
+  progress with Cancel, `Restarts when the agent at work finishes` with
+  Restart now, and Restarting. Nothing else gets a status indicator.
 - **Tips are two or three words, five at most.** Anything longer is an
   explanation, and explanations live in the list or the line, never the tip.
   A menu explains nothing either: it is its head, its entries and their

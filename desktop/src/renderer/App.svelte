@@ -251,13 +251,15 @@
   <!-- The bottom strip, the top one's twin: the well itself; the dock at its right, then the settings key under the chat's. -->
   <footer class="foot">
     <Dock />
+    <!-- An update out (task-71) is the key's one badge: a small dot, and its tip says which. -->
     <button
       class="settings-key"
       class:open={app.settingsOpen}
-      use:tip={app.settingsOpen ? 'Close settings  Esc' : 'Settings  ⌘,'}
-      aria-label="Settings"
+      use:tip={app.settingsOpen ? 'Close settings  Esc' : app.update?.available ? `Update to ${app.update.available.version}` : 'Settings  ⌘,'}
+      aria-label={app.update?.available ? `Settings, update to ${app.update.available.version}` : 'Settings'}
       aria-pressed={app.settingsOpen}
-      onclick={() => (app.settingsOpen = !app.settingsOpen)}><Icon name="settings" size={13} /></button
+      onclick={() => (app.settingsOpen = !app.settingsOpen)}
+      ><Icon name="settings" size={13} />{#if app.update?.available}<span class="badge" aria-hidden="true"></span>{/if}</button
     >
   </footer>
 </div>
@@ -320,6 +322,21 @@
     border-radius: var(--r-control);
     color: var(--ink-4);
     transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
+  }
+
+  .settings-key {
+    position: relative;
+  }
+
+  .settings-key .badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--canvas);
   }
 
   .settings-key:hover,

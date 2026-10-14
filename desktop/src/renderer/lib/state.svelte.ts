@@ -26,6 +26,7 @@ import type {
   Project,
   ReadyView,
   RunStep,
+  UpdateStatus,
   SettleChoice,
 } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
@@ -251,6 +252,8 @@ class AppState {
   agents = $state<AgentInfo[]>([]);
   lastAgent = $state<AgentId | null>(localStorage.getItem(AGENT_KEY) as AgentId | null);
   runs = $state<Record<string, AgentRun>>({});
+  /** The app's updates (task-71): null until main has said. */
+  update = $state<UpdateStatus | null>(null);
   /** Each board's hand-offs that can merge now, or would conflict, with no agent still at them (task-69). */
   mergeable = $state<Record<string, ReadyView[]>>({});
   asks = $state<PermissionAsk[]>([]);
@@ -549,6 +552,8 @@ class AppState {
     });
     api.onBoardChanged((snapshot) => this.receive(snapshot));
     api.onLinkChanged((view) => (this.link = view));
+    api.onUpdate((status) => (this.update = status));
+    void api.updateStatus().then((status) => (this.update = status));
     api.onAgentEvent((event) => {
       if (event.kind === 'run') this.onRun(event.run);
       else if (event.kind === 'permission') this.asks = [...this.asks, event.ask];

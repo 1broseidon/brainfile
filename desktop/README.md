@@ -109,7 +109,23 @@ of the installed app (another `Brainfile.app`, or `open -n`) hands over to
 the first, but a dev run is a different binary it cannot see: quit one before
 starting the other.
 
-**To update**, quit Brainfile, pull, and package again. Delete the old app
+**A release updates itself.** An app from a release (a `desktop-v*` tag on
+GitHub) checks for the next one a little after it starts and every six
+hours, shows a dot on the settings key when one is out, and installs it in
+place from Settings › Updates: the download is checked against a manifest
+signed with Brainfile's update key, the bundle swapped where it stands, and
+the app restarted once no agent is at work. A dev run never updates itself;
+`BRAINFILE_PREVIEW_UPDATE=0.2.0 npm run dev` shows the badge and the section
+as if 0.2.0 were out.
+
+**To release**, set the version in this `package.json`, write its notes in
+`notes/<version>.md`, commit, and push a `desktop-v<version>` tag: the
+Desktop release workflow builds Apple silicon and Intel zips and disk
+images, signs and notarizes them when the repository has the `APPLE_*`
+secrets, signs the update manifest with `BRAINFILE_UPDATE_KEY`, and
+publishes the release, never marked latest (the CLI's releases keep that).
+
+**To update a build of your own**, quit Brainfile, pull, and package again. Delete the old app
 before copying the new one: an app written over in place can keep the old
 signature in macOS's cache and be killed at launch.
 

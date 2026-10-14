@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { CHANNEL, type AgentEvent, type Api, type BoardSnapshot, type LinkView, type Project } from '../shared/api';
+import { CHANNEL, type AgentEvent, type Api, type BoardSnapshot, type LinkView, type Project, type UpdateStatus } from '../shared/api';
 
 const invoke =
   (method: string) =>
@@ -50,6 +50,11 @@ const api: Api = {
   stopRun: invoke('stopRun'),
   live: invoke('live'),
   review: invoke('review'),
+  updateStatus: invoke('updateStatus'),
+  checkUpdate: invoke('checkUpdate'),
+  installUpdate: invoke('installUpdate'),
+  cancelUpdate: invoke('cancelUpdate'),
+  restartToUpdate: invoke('restartToUpdate'),
   readyToMerge: invoke('readyToMerge'),
   mergeReview: invoke('mergeReview'),
   discardReview: invoke('discardReview'),
@@ -67,6 +72,7 @@ const api: Api = {
   linkCode: invoke('linkCode'),
   forgetPhone: invoke('forgetPhone'),
   onLinkChanged: (listener) => subscribe<LinkView>(CHANNEL.link, listener),
+  onUpdate: (listener) => subscribe<UpdateStatus>(CHANNEL.update, listener),
   onAgentEvent: (listener) => subscribe<AgentEvent>(CHANNEL.agent, listener),
   onBoardChanged: (listener) => subscribe<BoardSnapshot>(CHANNEL.board, listener),
   onProjectsChanged: (listener) => subscribe<Project[]>(CHANNEL.projects, listener),

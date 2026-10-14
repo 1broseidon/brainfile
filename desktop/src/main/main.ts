@@ -23,6 +23,7 @@ import {
   type Project,
   type ProjectState,
   type Result,
+  type LiveAgents,
   type ReviewView,
 } from '../shared/api';
 import { loginShellPath } from './shellPath';
@@ -35,6 +36,8 @@ import { BoardHolds, linkDesk } from '../link/bridge';
 import { LinkServer } from '../link/server';
 import { LinkStore } from '../link/store';
 import { deskAddresses, deskName } from '../link/addresses';
+import { bundleOf, Updater } from './updater';
+import { UPDATE_PUBLIC_KEY } from './update-key';
 
 // A second copy (a test, a capture) keeps its own data and its own
 // single-instance lock, so it never touches the installed app's.
@@ -55,6 +58,7 @@ let github: GitHub;
 let nextRequest = 1;
 const pending = new Map<number, (result: unknown) => void>();
 let link: LinkServer | null = null;
+let updater: Updater;
 /** The boards the window and each phone hold open: the host closes one only when nobody does. */
 const holds = new BoardHolds({
   open: (projectId) => callHost('openBoard', projectId),
@@ -291,9 +295,55 @@ function startLink(): LinkServer {
   return server;
 }
 
+// ── Updates (task-71) ───────────────────────────────────────────────────────
+
+/** How many agents are at work now: an update's restart waits for none. */
+async function agentsWorking(): Promise<number> {
+  if (!agents) return 0;
+  const live = await callAgents<LiveAgents>('live');
+  return live.runs.filter((r) => r.state === 'starting' || r.state === 'working' || r.state === 'waiting').length;
+}
+
+function startUpdater(): Updater {
+  const bundle = process.platform === 'darwin' && app.isPackaged ? bundleOf(app.getPath('exe')) : null;
+  const disabledReason =
+    process.platform !== 'darwin' ? 'Brainfile updates itself on a Mac; elsewhere, install the new release.'
+    : !app.isPackaged || !bundle ? 'A development run: the installed Brainfile.app updates itself.'
+    : undefined;
+  const updates = new Updater({
+    current: app.getVersion(),
+    target: `${process.platform}-${process.arch}`,
+    bundle,
+    dataDir: app.getPath('userData'),
+    publicKey: UPDATE_PUBLIC_KEY,
+    fetch: (input, init) => fetch(input, init),
+    busy: agentsWorking,
+    // A normal quit, so the board host flushes its commits first.
+    relaunch: () => {
+      app.relaunch();
+      app.quit();
+    },
+    onChange: (status) => win?.webContents.send(CHANNEL.update, status),
+    disabledReason,
+    // Development aid: `BRAINFILE_PREVIEW_UPDATE=0.2.0` pretends that version is out, for the badge and Settings › Updates.
+    preview: DEV_URL ? process.env.BRAINFILE_PREVIEW_UPDATE : undefined,
+  });
+  updates.start();
+  return updates;
+}
+
 // ── IPC ─────────────────────────────────────────────────────────────────────
 
 const local: Record<string, (...args: any[]) => unknown> = {
+  updateStatus: () => updater.view(),
+  checkUpdate: () => updater.check(),
+  // It runs on: progress and the outcome reach the window as update events.
+  installUpdate: (version: string) => {
+    void updater.install(version);
+    return updater.view();
+  },
+  cancelUpdate: () => updater.cancel(),
+  restartToUpdate: () => updater.restart(),
   listProjects,
   addProject,
   removeProject: async (projectId: string) => {
@@ -470,6 +520,7 @@ function start(): void {
   github = startGitHub();
   host = startHost();
   link = startLink();
+  updater = startUpdater();
   if (DEV_URL) reloadAgentsOnRebuild();
   createWindow();
   app.on('activate', () => {
