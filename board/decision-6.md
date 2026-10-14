@@ -8,7 +8,7 @@ kind: decision
 stance: requires
 subject: task-scoped chat thread for Discuss
 sourcePath: desktop/src/agents/discuss.ts
-sourceHash: sha256:81e47b5d4f14f97b615abf61636f084c068442f54c21c653ac9a8ecaf8792d55
+sourceHash: sha256:2c53ae92acdf0ffb6b50e2bbd79b67d47a29c27ba3216e20ac1761278333c9c1
 supersedes: decision-3
 tags:
   - desktop

@@ -10,7 +10,8 @@ tags:
   - chat
 assignee: claude
 relatedFiles:
-  - desktop/src/renderer/components/ChatPop.svelte
+  - desktop/src/renderer/components/ChatPane.svelte
+  - desktop/src/renderer/components/ChatKey.svelte
   - desktop/src/renderer/components/Dock.svelte
   - desktop/src/renderer/App.svelte
   - desktop/src/renderer/lib/state.svelte.ts
