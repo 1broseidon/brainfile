@@ -30,3 +30,6 @@ Acceptance criteria:
 - Hand off a task using a different backend and/or model and confirm the main chat selections remain unchanged.
 - Subsequent messages in the main chat continue using its original backend and model.
 - Add regression coverage for hand-off session settings remaining separate from main chat settings.
+
+## Log
+- 2026-10-14T18:47:32.360Z: [codex] Traced hand-off preference leak to AppState.dispatch calling remember(agentId), which changes the chat backend and therefore its displayed/requested model. Fix will leave hand-off choices on the dispatched session and cover subsequent chat requests.
