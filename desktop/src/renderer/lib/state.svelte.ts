@@ -638,7 +638,9 @@ class AppState {
 
   /** Which agents are on this Mac: asked at start, and again whenever a picker opens, so one installed since shows up. */
   async refreshAgents(): Promise<void> {
-    this.agents = await api.listAgents();
+    const listed: unknown = await api.listAgents();
+    // An agents process that stopped mid-request answers with a failure, not a list; the last list stands.
+    if (Array.isArray(listed)) this.agents = listed as AgentInfo[];
   }
 
   async refreshEditors(): Promise<void> {
