@@ -31,7 +31,7 @@ subtasks:
     title: "Phase 2: the rules the lead cannot bend: dependsOn landed first, N at once per repo (default 3), retries to maxRetries then park in Review, only a lead dispatches, one lead per tree, new children wait as drafts unless until-done on bypass; epic done with its last child"
     completed: false
   - id: spec-16-6
-    title: "Phase 2: pause, resume, stop the queue from chat, dock and runner"
+    title: "Phase 2: pause, resume and stop the lead from chat, dock and runner"
     completed: false
   - id: spec-16-7
     title: "Phase 3: brainfile dispatch / dispatch status (CLI) and MCP dispatch, dispatch_status"
@@ -42,7 +42,7 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: false
-updatedAt: "2026-10-14T18:48:07.934Z"
+updatedAt: "2026-10-14T18:48:08.404Z"
 decisions:
   - decision-15
 ---
