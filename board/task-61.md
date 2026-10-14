@@ -1,7 +1,7 @@
 ---
 id: task-61
 title: Hand-offs fork from the trunk, and a hand-off that only reads leaves no branch
-column: todo
+column: in-progress
 position: 4
 priority: high
 tags:
@@ -15,7 +15,7 @@ parentId: epic-4
 decisions:
   - decision-11
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: desktop/src/agents/worktree.ts
@@ -28,8 +28,10 @@ contract:
       - cd desktop && npm run typecheck && npm test
   metrics:
     readyAt: "2026-10-14T19:20:58.988Z"
+    pickedUpAt: "2026-10-14T19:21:01.508Z"
+    reworkCount: 0
 createdAt: "2026-10-14T15:15:56.764Z"
-updatedAt: "2026-10-14T19:20:58.988Z"
+updatedAt: "2026-10-14T19:21:01.508Z"
 ---
 
 ## Description
