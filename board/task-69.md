@@ -17,7 +17,7 @@ relatedFiles:
   - desktop/src/renderer/components/TaskRow.svelte
 parentId: epic-4
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: file
       path: desktop/src/agents/worktree.ts
@@ -28,7 +28,10 @@ contract:
   validation:
     commands:
       - cd desktop && npm run typecheck && npm test
+  metrics:
+    readyAt: "2026-10-14T20:02:35.672Z"
 createdAt: "2026-10-14T20:02:32.484Z"
+updatedAt: "2026-10-14T20:02:35.672Z"
 ---
 
 ## Description
