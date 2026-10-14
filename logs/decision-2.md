@@ -2,7 +2,7 @@
 id: decision-2
 title: Each hand-off works in its own worktree on dispatch/<task-id>
 type: decision
-status: current
+status: superseded
 claimKey: desktop.dispatch.worktree
 kind: decision
 stance: requires
@@ -15,6 +15,8 @@ tags:
   - dispatch
   - git
 createdAt: "2026-10-12T23:12:07.287Z"
+supersededBy: decision-11
+updatedAt: "2026-10-14T15:14:37.161Z"
 ---
 
 ## Description
