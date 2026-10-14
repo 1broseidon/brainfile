@@ -37,3 +37,4 @@ decision-12. Today mergeReview runs git merge --no-ff in the person's own folder
 
 ## Log
 - 2026-10-14T20:43:04.480Z: [claude] Part of this is in (2026-10-14, unnumbered task under epic-4): Merge runs the contract's validation in the hand-off's worktree before merging. Still task-62's: bringing the trunk into the branch first, so the checks see the merged result, and the compare-and-swap landing.
+- 2026-10-14T20:43:09.116Z: [claude] That task is task-70.
