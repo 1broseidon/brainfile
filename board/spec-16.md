@@ -25,7 +25,7 @@ subtasks:
     title: "Phase 1: chat shows 'handed to codex' under the reply; dispatch from the task-in-context"
     completed: true
   - id: spec-16-4
-    title: "Phase 2: queues: tasks, a column, an epic; waves by dependsOn; N at once per repo (default 3)"
+    title: "Phase 2: a lead for an epic (decision-15): no worktree, no code; the desk scoped to its tree; woken with a turn when a child lands, fails, conflicts or asks; its plan in notes on the epic, so a new lead resumes from the board"
     completed: false
   - id: spec-16-5
     title: "Phase 2: through completion: validation passes → done (bypass) or Review; retries to maxRetries then park; epic done with its last child"
@@ -42,7 +42,7 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: false
-updatedAt: "2026-10-14T18:47:59.753Z"
+updatedAt: "2026-10-14T18:48:07.417Z"
 decisions:
   - decision-15
 ---
