@@ -20,3 +20,6 @@ updatedAt: "2026-10-14T18:47:48.089Z"
 
 ## Description
 Hand-offs fork from the trunk and land on it from their own worktree, checked first and moved by compare-and-swap; a conflict goes back to the agent, not the person; this repository keeps one trunk. Decisions 11, 12 and 13, from Anthropic's 'Redesigning source control' (2026-10-13) and a replay of this repository's merges: 4 of 27 conflicted, while the tending came from merging in the person's folder, integration branches and a main that had drifted 152 ahead and 7 behind origin. Left for later: review that leads with the contract and lets low-risk paths land once green, and an agent that watches the trunk after each landing.
+
+## Log
+- 2026-10-14T18:48:19.859Z: [claude] decision-15: epic-4 is meant to be the first epic a lead runs (spec-16 phase 2). Landing (task-62) is not a prerequisite for the lead; until it lands, children end in Review.
