@@ -1,8 +1,6 @@
 ---
 id: task-69
 title: A Ready to merge group at the top of the list, with Merge on the row
-column: review
-position: 9
 priority: high
 tags:
   - desktop
@@ -35,7 +33,8 @@ contract:
     deliveredAt: "2026-10-14T20:07:39.474Z"
     duration: 303
 createdAt: "2026-10-14T20:02:32.484Z"
-updatedAt: "2026-10-14T20:07:39.474Z"
+updatedAt: "2026-10-14T20:47:32.075Z"
+completedAt: "2026-10-14T20:47:32.075Z"
 ---
 
 ## Description
