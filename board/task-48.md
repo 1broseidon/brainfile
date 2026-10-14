@@ -1,8 +1,8 @@
 ---
 id: task-48
 title: "Research: linked parity through GitHub refs, without the chat"
-column: in-progress
-position: 2
+column: review
+position: 1
 description: |-
   How close the phone can get to what the desktop link gives through GitHub refs alone, leaving out the chat and anything else that needs an LLM. This is research: the result is a recommendation and, if it holds, work under spec-17. No code.
 
@@ -62,7 +62,7 @@ dispatch:
   effort: high
   by: chat
   at: "2026-10-14T05:23:44.486Z"
-updatedAt: "2026-10-14T05:30:17.509Z"
+updatedAt: "2026-10-14T05:30:21.137Z"
 ---
 
 ## Description
