@@ -3,8 +3,12 @@
   import { tildify } from '../lib/format';
   import Icon from './Icon.svelte';
 
-  /** Where a project lives, kept behind a folder key: hover to read the path, press to reveal it in Finder. */
-  let { path, line, projectId }: { path: string; line: string; projectId: string } = $props();
+  /**
+   * Where a project lives, kept behind a key: hover to read the path, press to
+   * reveal it in Finder. With a `label` the key is that name itself, as the
+   * board's band has it; without one it is a folder glyph.
+   */
+  let { path, line, projectId, label }: { path: string; line: string; projectId: string; label?: string } = $props();
 
   let open = $state(false);
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -21,9 +25,15 @@
   }
 </script>
 
-<span class="tip" role="presentation" onmouseenter={() => show(800)} onmouseleave={hide}>
-  <button class="icon-btn" aria-label="Reveal {tildify(path)} in Finder" onclick={() => api.revealProject(projectId)} onfocus={(e) => (e.currentTarget as HTMLElement).matches(':focus-visible') && show(0)} onblur={hide}>
-    <Icon name="folder" size={14} />
+<span class="where" role="presentation" onmouseenter={() => show(800)} onmouseleave={hide}>
+  <button
+    class={label ? 'name' : 'icon-btn'}
+    aria-label="Reveal {tildify(path)} in Finder"
+    onclick={() => api.revealProject(projectId)}
+    onfocus={(e) => (e.currentTarget as HTMLElement).matches(':focus-visible') && show(0)}
+    onblur={hide}
+  >
+    {#if label}{label}{:else}<Icon name="folder" size={14} />{/if}
   </button>
   {#if open}
     <span class="pop" role="tooltip">
@@ -35,7 +45,8 @@
 </span>
 
 <style>
-  .tip {
+  /* Not `.tip`: that is the window's tooltip (app.css), and its bubble would wrap the key. */
+  .where {
     position: relative;
     display: inline-flex;
   }
@@ -43,6 +54,21 @@
   .icon-btn {
     width: 24px;
     height: 24px;
+  }
+
+  /* The name as the key: set in its own weight, its hover fill the only sign it can be pressed. */
+  .name {
+    height: var(--control-h);
+    padding: 0 6px;
+    border-radius: var(--r-control);
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    transition: background var(--d-press) var(--ease);
+  }
+
+  .name:hover {
+    background: var(--fill-hover);
   }
 
   .pop {

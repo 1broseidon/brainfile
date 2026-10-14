@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
   import PathTip from './PathTip.svelte';
-  import ChatPop from './ChatPop.svelte';
+  import ChatKey from './ChatKey.svelte';
   import Dock from './Dock.svelte';
   import Settings from './Settings.svelte';
   import AskLine from './AskLine.svelte';
@@ -23,6 +23,33 @@
     (board?.storage === 'linked' ? 'brainfile branch' : board?.storage === 'standalone' ? 'own repo' : 'plain files') +
       (board?.sync.remote ? ` · ${board.sync.remote}` : ' · this Mac')
   );
+
+  /** The views' well, and where its chip sits: under the view in front, measured, so it can slide to the next one. */
+  let viewsEl = $state<HTMLElement>();
+  let chip = $state<{ x: number; w: number } | null>(null);
+  /** The chip is placed before it slides, so it never glides in from the well's edge. */
+  let sliding = $state(false);
+
+  $effect(() => {
+    const nav = viewsEl;
+    if (!nav) return;
+    // Placed again when the view changes, and when Issues comes or goes with the forge.
+    void app.view;
+    void forge;
+    const place = () => {
+      const on = nav.querySelector<HTMLElement>('[aria-current="page"]');
+      chip = on ? { x: on.offsetLeft, w: on.offsetWidth } : null;
+    };
+    place();
+    // A font that arrives late changes the words' widths.
+    const watch = new ResizeObserver(place);
+    watch.observe(nav);
+    const frame = requestAnimationFrame(() => (sliding = true));
+    return () => {
+      watch.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  });
 
   async function init(): Promise<void> {
     if (!project) return;
@@ -104,35 +131,30 @@
     </div>
   {:else if board}
     <header class="band">
-      <span class="title">{board.title}</span>
-      <PathTip path={project.path} line={storageLabel} projectId={project.id} />
-      <div class="segmented" role="tablist">
-        <button role="tab" aria-label="List" use:tip={'List'} aria-selected={app.view === 'list'} class:on={app.view === 'list'} onclick={() => app.setView('list')}>
-          <Icon name="list" size={14} />
-        </button>
+      <!-- The name is the folder key, its text on the list's edge; the views are words in a well beside it, a raised chip under the one in front. -->
+      <PathTip label={board.title} path={project.path} line={storageLabel} projectId={project.id} />
+      <nav class="views" aria-label="Views" bind:this={viewsEl}>
+        {#if chip}
+          <span class="chip-under" class:sliding style:transform="translateX({chip.x}px)" style:width="{chip.w}px" aria-hidden="true"></span>
+        {/if}
+        <button class="view" class:on={app.view === 'list'} aria-current={app.view === 'list' ? 'page' : undefined} onclick={() => app.setView('list')}>Work</button>
         <button
-          role="tab"
-          aria-label="Decisions"
-          use:tip={'Decisions  D'}
-          aria-selected={app.view === 'decisions'}
+          class="view"
           class:on={app.view === 'decisions'}
-          onclick={() => app.setView('decisions')}
+          aria-current={app.view === 'decisions' ? 'page' : undefined}
+          use:tip={'Decisions  D'}
+          onclick={() => app.setView('decisions')}>Decisions</button
         >
-          <Icon name="decision" size={14} />
-        </button>
         {#if forge}
           <button
-            role="tab"
-            aria-label="Issues"
-            use:tip={'Issues  I'}
-            aria-selected={app.view === 'issues'}
+            class="view"
             class:on={app.view === 'issues'}
-            onclick={() => app.setView('issues')}
+            aria-current={app.view === 'issues' ? 'page' : undefined}
+            use:tip={'Issues  I'}
+            onclick={() => app.setView('issues')}>Issues</button
           >
-            <Icon name="issue" size={14} />
-          </button>
         {/if}
-      </div>
+      </nav>
       <span class="spacer"></span>
       {#each app.asks.filter((a) => a.projectId === project.id).slice(0, 1) as ask (ask.id)}
         <AskLine {ask} />
@@ -176,7 +198,7 @@
       {/if}
     </div>
     <Dock />
-    <ChatPop projectName={project.name} />
+    <ChatKey />
   {:else if app.boardErrors[project.id]}
     <div class="center"><div class="empty"><p>{app.boardErrors[project.id]}</p></div></div>
   {/if}
@@ -221,15 +243,15 @@
 
   .title {
     font-weight: 600;
-    /* The folder key belongs to the name; sit it close. */
-    margin-right: calc(-1 * var(--s2));
   }
 
   .spacer {
     flex: 1;
   }
 
-  .segmented {
+  /* The views as words in a well, sunk as a field is: the one in front sits on a raised chip, which slides to the next one pressed. */
+  .views {
+    position: relative;
     height: var(--field-h);
     display: flex;
     padding: 2px;
@@ -240,26 +262,41 @@
     box-shadow: inset 0 0 0 var(--hairline) var(--line);
   }
 
-  .segmented button {
-    width: 28px;
-    height: 24px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  .chip-under {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 0;
     border-radius: var(--r-chip);
-    font-weight: 500;
-    color: var(--ink-3);
-    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
-  }
-
-  .segmented button:hover {
-    color: var(--ink);
-  }
-
-  .segmented button.on {
-    color: var(--ink);
     background: var(--pop);
     box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
+  }
+
+  .chip-under.sliding {
+    transition:
+      transform var(--d-open) var(--ease),
+      width var(--d-open) var(--ease);
+  }
+
+  .view {
+    position: relative;
+    height: 100%;
+    padding: 0 10px;
+    border-radius: var(--r-chip);
+    font-size: var(--t-sm);
+    font-weight: 500;
+    color: var(--ink-3);
+    transition: color var(--d-press) var(--ease);
+  }
+
+  .view:hover,
+  .view:focus-visible {
+    background: none;
+    color: var(--ink);
+  }
+
+  .view.on {
+    color: var(--ink);
   }
 
   .undo {

@@ -29,10 +29,14 @@ One family, **Workbench**:
   from outside the window (agents, the CLI, other machines): a muted key,
   with a count beside it only when something new has arrived.
 - Anything about one repository lives in its pane's **band**: the board's
-  name, a folder key (hover for the path and where the board is kept, press
-  to reveal it in Finder; paths are never printed in the chrome), List /
-  Board as two icons, and a muted + for a new task. Sync is never said in
-  the band; the strip carries it.
+  name, which is its folder key (hover for the path and where the board is
+  kept, press to reveal it in Finder; paths are never printed in the
+  chrome), its text on the list's edge; then its views as words in a well
+  beside it, Work · Decisions · Issues (the last only with a forge), sunk
+  as a field is: the one in front on a raised chip in full ink, the chip
+  sliding to the next one pressed (130ms), the others muted until the
+  pointer brightens them; and a muted + for a new task. Sync is never said
+  in the band; the strip carries it.
 - The **rail's key** (⌘B) lives with the rail: in the rail's head beside
   Projects and add while it is open, and at the leading edge of the board's
   band, before the title, once it is closed. Nothing ever sits left of the
@@ -337,8 +341,8 @@ window takes a document's role and glyph from core, never from its own table.
   `parentId` across columns (Rows); each kind keeps its TUI glyph (▸ epic,
   ◆ spec, ⎘ plan, ● decision) small before the title.
 - **Decisions are not work.** They have no column and never complete, so
-  they leave the list and the board for their own view, the band's third
-  key (a flag, D). Standing decisions are grouped by family, the claim
+  they leave the list for their own view, the band's Decisions word (D).
+  Standing decisions are grouped by family, the claim
   key's first word, set in mono; history (superseded, rejected, stale) folds
   away below, like Done. A row leads with ● where a task has its box, ○ once
   retired, and says at rest only a kind other than decision, a legacy
