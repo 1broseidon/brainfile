@@ -23,9 +23,10 @@ import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
-import { discardReview, mergeReview, prepareWorktree, reviewOf, uncommittedIn, type Worktree } from './worktree';
+import { discardReview, mergeReview, onlyReads, prepareWorktree, releaseReader, reviewOf, uncommittedIn, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { customLaunch } from './custom';
+import { AgentRegistry } from './registry';
 import { readSettingsFile, settingsOf, writeSettings, type SettingsFile } from './settings';
 import { discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
@@ -60,6 +61,7 @@ import type {
 const parentPort = process.parentPort;
 const DATA_DIR = process.env.BRAINFILE_DATA_DIR ?? path.join(os.homedir(), 'Library', 'Application Support', 'Brainfile');
 const AGENTS_DIR = path.join(DATA_DIR, 'agents');
+const registry = new AgentRegistry(DATA_DIR);
 const SETTINGS_FILE = path.join(DATA_DIR, 'dispatch.json');
 const MODELS_FILE = path.join(DATA_DIR, 'models.json');
 /** How long an agent's model list is trusted before it is asked again. */
@@ -966,6 +968,14 @@ function finish(brainfilePath: string, taskId: string): string {
  */
 function workplace(worktree: Worktree | null): string {
   if (!worktree) return '';
+  if (!worktree.branch) {
+    return (
+      `\n\nYou are in a read-only checkout of this repository, at ${worktree.path}: the tip of ${worktree.base ?? 'the trunk'}, detached, with no branch. ` +
+      'Read and run what you need, but change no files and make no commits: nothing here is kept, and the checkout goes when you finish. ' +
+      'What you find goes on the board, in notes on the task or in tasks you add. Untracked files such as installed dependencies are not here; set them up if you need to build or test. ' +
+      'The board is shared: the brainfile tools reach it from here.'
+    );
+  }
   const from = worktree.base ? ` (started from ${worktree.base})` : '';
   const again = worktree.resumed
     ? ' It has been here before: the branch already carries earlier work on this task. Pick up from there; the task\'s log says what the reviewer asked for.'
@@ -993,7 +1003,7 @@ function brief(projectId: string, taskId: string, worktree: Worktree | null = nu
     contract,
     standingDecisions(located.brainfilePath),
     workplace(worktree),
-    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did${worktree ? ' and that it is on its branch' : ''}. ${finish(located.brainfilePath, task.id)} Do the work in ${worktree ? 'this worktree' : 'this repository'}. Finish with a reply of one or two sentences.`,
+    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did${worktree?.branch ? ' and that it is on its branch' : ''}. ${finish(located.brainfilePath, task.id)} Do the work in ${worktree ? 'this worktree' : 'this repository'}. Finish with a reply of one or two sentences.`,
   ].join('');
 }
 
@@ -1045,7 +1055,9 @@ function startDispatch(
   let prompt: string;
   let worktree: Worktree | null;
   try {
-    worktree = prepareWorktree(projectId, taskId);
+    const located = locateBoard(projectId, { materialize: false });
+    const contract = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId)?.doc.task.contract : undefined;
+    worktree = prepareWorktree(projectId, taskId, undefined, onlyReads(contract));
     prompt = brief(projectId, taskId, worktree);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -1057,6 +1069,9 @@ function startDispatch(
       if (session) await turn(session, run, prompt);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
+    } finally {
+      // A read-only checkout keeps nothing: it goes with its run, unless something was left in it.
+      if (worktree && !worktree.branch) releaseReader(projectId, taskId);
     }
   })();
   return { ok: true, value: { run: { ...run }, worktree } };
@@ -1127,7 +1142,7 @@ const desk = new DeskBridge(
       if (!started.ok) return started;
       return {
         ok: true,
-        value: { run: started.value.run, branch: started.value.worktree?.branch ?? null, ...(written.ok ? {} : { note: `The board record was not written: ${written.error}` }) },
+        value: { run: started.value.run, branch: started.value.worktree?.branch ?? null, reads: !!started.value.worktree && !started.value.worktree.branch, ...(written.ok ? {} : { note: `The board record was not written: ${written.error}` }) },
       };
     },
     runs: () => [...runs.values()],
@@ -1323,6 +1338,8 @@ function live(): LiveAgents {
 
 const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   listAgents,
+  agentRegistry: () => registry.list(),
+  prepareRegistryAgent: (id: string) => registry.prepare(id),
   listModels,
   listModes,
   getSettings,

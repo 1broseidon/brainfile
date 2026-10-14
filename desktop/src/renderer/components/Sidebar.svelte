@@ -90,13 +90,6 @@
       </button>
     {/if}
   </nav>
-
-  <!-- Settings wait at the foot of the rail, as quiet as a project row. -->
-  <button class="project foot" class:active={app.settingsOpen} onclick={() => (app.settingsOpen = !app.settingsOpen)}>
-    <span class="where"><Icon name="settings" size={14} /></span>
-    <span class="name">Settings</span>
-    <span class="key mono">⌘,</span>
-  </button>
 </aside>
 
 <style>
@@ -207,20 +200,6 @@
 
   .project:hover .key {
     opacity: 1;
-  }
-
-  .foot {
-    flex: none;
-    margin-top: auto;
-  }
-
-  .foot .name {
-    font-weight: 400;
-    color: var(--ink-2);
-  }
-
-  .foot.active .name {
-    color: var(--ink);
   }
 
   .add {

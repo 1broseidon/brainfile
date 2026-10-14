@@ -13,7 +13,8 @@
   import AskLine from './AskLine.svelte';
   import Review from './Review.svelte';
 
-  let { board, taskId }: { board: BoardSnapshot; taskId: string } = $props();
+  /** `full`: the task takes the list's place beside the chat, with a way back to the list. */
+  let { board, taskId, full = false }: { board: BoardSnapshot; taskId: string; full?: boolean } = $props();
 
   let detail = $state<TaskDetail | null>(null);
   let error = $state<string | null>(null);
@@ -134,8 +135,11 @@
   }
 </script>
 
-<section class="pane">
+<section class="pane" class:full>
   <header class="band">
+    {#if full}
+      <button class="icon-btn back" use:tip={'Back to list  Esc'} aria-label="Back to list" onclick={close}><Icon name="back" size={14} /></button>
+    {/if}
     {#if detail?.glyph}<span class="glyph">{detail.glyph}</span>{/if}
     <span class="id mono">{taskId}</span>
     {#if detail?.archived && !decision}<span class="state mono">done</span>{/if}
@@ -154,7 +158,9 @@
       <button class="btn quiet" onclick={complete}><StatusIcon progress={1} size={13} />Complete</button>
       <button class="icon-btn destroy" use:tip={'Delete'} onclick={remove}><Icon name="trash" size={15} /></button>
     {/if}
-    <button class="icon-btn" use:tip={'Close  Esc'} onclick={close}><Icon name="close" size={14} /></button>
+    {#if !full}
+      <button class="icon-btn" use:tip={'Close  Esc'} onclick={close}><Icon name="close" size={14} /></button>
+    {/if}
   </header>
 
   {#if error}
@@ -522,6 +528,16 @@
     padding: var(--s1) var(--s5) var(--s12);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
     mask-image: linear-gradient(to bottom, transparent 0, #000 12px);
+  }
+
+  /* In the list's place the text keeps a reading measure, the rest of the width left empty. */
+  .full .scroll {
+    padding-right: max(var(--s5), calc(100% - 760px));
+  }
+
+  /* The way back sits where the eye starts, before the task's ID. */
+  .back {
+    margin-left: calc(-1 * var(--s1));
   }
 
   .title {

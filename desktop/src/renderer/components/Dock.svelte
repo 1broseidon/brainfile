@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
-   * The dock (design.md, Dock): what you keep at hand, along the board pane's
-   * bottom edge beside the chat key, one cohesive row of agents and work.
+   * The dock (design.md, Dock): what you keep at hand, at the right of the
+   * window's bottom strip, under the chat's key: one row of agents and work.
    * A tab is a document you opened in the pane or handed to an agent, on any
    * board: its status box, its title, and one signal, the agent at work on
    * it or else the board it is on when that is not the one in front. As many
@@ -16,10 +16,10 @@
   import StatusIcon from './StatusIcon.svelte';
   import Working from './Working.svelte';
 
-  const TAB_W = 236;
+  const TAB_W = 216;
   const GAP = 6;
   const MAX_SHOWN = 4;
-  /** The dock keeps to the right of the pane, so the rows it covers are few. */
+  /** The dock keeps to the strip's right, under the panes beside the board. */
   const SHARE = 0.72;
 
   interface Item {
@@ -35,15 +35,15 @@
   }
 
   let el = $state<HTMLElement>();
-  let paneW = $state(0);
+  let stripW = $state(0);
   let more = $state(false);
 
   onMount(() => {
-    const pane = el?.offsetParent as HTMLElement | null;
-    if (!pane) return;
-    const observer = new ResizeObserver(() => (paneW = pane.clientWidth));
-    observer.observe(pane);
-    paneW = pane.clientWidth;
+    const strip = el?.parentElement;
+    if (!strip) return;
+    const observer = new ResizeObserver(() => (stripW = strip.clientWidth));
+    observer.observe(strip);
+    stripW = strip.clientWidth;
     return () => observer.disconnect();
   });
 
@@ -69,13 +69,10 @@
 
   const items = $derived(app.tabs.map(describe).filter((i): i is Item => i !== null));
 
-  /** Where the dock ends on the right: beside the chat key, wider while a turn is at work, or in the corner while the chat shows and the key is away. */
-  const right = $derived(12 + (app.chatKeyW ? app.chatKeyW + GAP : 0));
-
   /** As many tabs as the width allows, up to four, keeping room for +N. */
-  const capacity = $derived(Math.max(0, Math.min(MAX_SHOWN, Math.floor((paneW * SHARE - right - 44 + GAP) / (TAB_W + GAP)))));
+  const capacity = $derived(Math.max(0, Math.min(MAX_SHOWN, Math.floor((stripW * SHARE - 44 + GAP) / (TAB_W + GAP)))));
 
-  /** The newest tabs next to the key; the one open always among them. */
+  /** The newest tabs at the right end; the one open always among them. */
   const shown = $derived.by(() => {
     if (capacity === 0) return [] as Item[];
     let list = items.slice(-capacity);
@@ -106,8 +103,8 @@
   {/if}
 {/snippet}
 
-<!-- Always here, so the pane's width is known before the first tab arrives. -->
-<div class="dock" bind:this={el} style:right="{right}px">
+<!-- Always here, so the strip's width is known before the first tab arrives. -->
+<div class="dock" bind:this={el}>
   {#if items.length}
     {#if hidden.length}
       <span class="anchor">
@@ -158,28 +155,21 @@
 
 <style>
   .dock {
-    position: absolute;
-    z-index: var(--z-band);
-    bottom: var(--s3);
     display: flex;
     align-items: center;
     gap: 6px;
-    transition: right var(--d-move) var(--ease);
   }
 
-  /* A tab is the chat key's sibling: the same plane, edge and halo. */
+  /* A tab is a chip in the well: the raised plane and a hairline, no halo, since nothing lies under it. */
   .tab {
-    height: 32px;
+    height: 26px;
     display: inline-flex;
     align-items: center;
     gap: var(--s2);
-    padding: 0 4px 0 10px;
-    border-radius: var(--r-card);
+    padding: 0 3px 0 var(--s2);
+    border-radius: var(--r-control);
     background: var(--raised);
-    box-shadow:
-      var(--top-light),
-      inset 0 0 0 var(--hairline) var(--line),
-      0 0 28px 10px color-mix(in oklch, var(--canvas) 80%, transparent);
+    box-shadow: var(--top-light), inset 0 0 0 var(--hairline) var(--line);
     cursor: default;
     transition: background var(--d-press) var(--ease);
   }
@@ -253,9 +243,9 @@
   }
 
   .more {
-    height: 32px;
+    height: 26px;
     padding: 0 var(--s2);
-    border-radius: var(--r-card);
+    border-radius: var(--r-control);
     color: var(--ink-3);
   }
 

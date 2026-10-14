@@ -136,7 +136,9 @@
   --r-group: 14px;
 
   /* ------------------------------------------------------------- chrome */
-  --strip-h: 32px;
+  --strip-h: 40px;
+  /* The bottom strip, holding the dock. */
+  --foot-h: 40px;
   --band-h: 44px;
   --row-h: 36px;
   --control-h: 26px;

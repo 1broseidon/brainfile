@@ -7,7 +7,7 @@
    */
   import { app } from '../lib/state.svelte';
   import { argsFrom, argsText, cleanName, commandName, customId, envFrom, envText, pastedServers } from '../../shared/agentServers';
-  import type { AgentServer } from '../../shared/api';
+  import type { AgentServer, RegistryView } from '../../shared/api';
 
   /** The entry being edited by its name, a new one (''), or pasting from Zed; null is the list at rest. */
   let editing = $state<string | null>(null);
@@ -18,10 +18,45 @@
   let env = $state('');
   let pasted = $state('');
   let error = $state<string | null>(null);
+  let registry = $state<RegistryView | null>(null);
+  let loading = $state(false);
+  let selected = $state('');
+  let adding = $state(false);
+  let registryError = $state<string | null>(null);
+  const chosen = $derived(registry?.agents.find((agent) => agent.id === selected));
+  const duplicate = $derived(!!chosen && chosen.name in app.settings.agentServers);
+
+  async function loadRegistry(): Promise<void> {
+    loading = true;
+    try {
+      registry = await window.brainfile.agentRegistry();
+    } catch {
+      registry = { agents: [], cached: false, warning: 'Cannot load the ACP registry. Retry or add an agent manually.' };
+    } finally { loading = false; }
+  }
+
+  async function addRegistry(): Promise<void> {
+    if (!chosen || duplicate || adding) return;
+    const agent = chosen;
+    adding = true;
+    registryError = null;
+    try {
+      const result = await window.brainfile.prepareRegistryAgent(agent.id);
+      if (!result.ok) { registryError = result.error; return; }
+      // A name added while a binary downloads must not be replaced.
+      if (agent.name in app.settings.agentServers) { registryError = `There is already an agent named ${agent.name}`; return; }
+      await app.saveAgentServers({ ...$state.snapshot(app.settings.agentServers), [agent.name]: result.value });
+      adding = false;
+      cancel();
+    } catch (err) {
+      registryError = err instanceof Error ? err.message : 'Cannot add the agent';
+    } finally { adding = false; }
+  }
 
   const entries = $derived(Object.entries(app.settings.agentServers));
 
   function edit(entry: string | null, server?: AgentServer): void {
+    if (adding) return;
     editing = entry;
     pasting = false;
     error = null;
@@ -29,9 +64,15 @@
     command = server?.command ?? '';
     args = argsText(server?.args ?? []);
     env = envText(server?.env ?? {});
+    if (entry === '') {
+      selected = '';
+      registryError = null;
+      void loadRegistry();
+    }
   }
 
   function paste(): void {
+    if (adding) return;
     editing = null;
     pasting = true;
     pasted = '';
@@ -39,13 +80,14 @@
   }
 
   function cancel(): void {
+    if (adding) return;
     editing = null;
     pasting = false;
     error = null;
   }
 
   async function save(): Promise<void> {
-    if (editing === null) return;
+    if (editing === null || adding) return;
     const named = cleanName(name);
     const parsedEnv = envFrom(env);
     error = !named
@@ -115,6 +157,34 @@
     {/if}
   {/each}
   {#if editing === ''}
+    <div class="form registry" aria-busy={loading || adding}>
+      <label class="field-row">
+        <span class="field-name">ACP registry</span>
+        <select class="field" bind:value={selected} disabled={loading || adding || !registry?.agents.length}>
+          <option value="">{loading ? 'Loading agents…' : 'Choose an agent'}</option>
+          {#each registry?.agents ?? [] as agent (agent.id)}
+            <option value={agent.id}>{agent.name} · {agent.version}</option>
+          {/each}
+        </select>
+      </label>
+      {#if registry?.warning}
+        <p class="hint" role="status">{registry.warning}</p>
+      {:else if registry?.cached}
+        <p class="hint">Using the saved ACP registry.</p>
+      {/if}
+      {#if chosen}
+        <p class="hint">{chosen.description}</p>
+        <p class="hint">{chosen.distribution === 'binary' ? 'Add downloads this agent to your computer.' : 'Requires Node.js and npx. The package downloads when the agent starts.'}</p>
+      {/if}
+      {#if duplicate}<p class="error">There is already an agent named {chosen?.name}.</p>{/if}
+      {#if registryError}<p class="error" role="alert">{registryError}</p>{/if}
+      <div class="actions">
+        {#if registry?.warning}<button class="btn quiet" onclick={loadRegistry} disabled={loading || adding}>Retry registry</button>{/if}
+        <span class="spacer"></span>
+        <button class="btn" onclick={addRegistry} disabled={!chosen || duplicate || loading || adding}>{adding ? 'Adding…' : 'Add'}</button>
+      </div>
+    </div>
+    <p class="manual">Add an agent manually</p>
     {@render form()}
   {:else if pasting}
     <!-- Esc lets the form go and ⌘↵ adds, from any of its fields. -->
@@ -173,8 +243,8 @@
     <div class="actions">
       {#if editing}<button class="btn danger" onclick={() => remove(editing!)}>Remove</button>{/if}
       <span class="spacer"></span>
-      <button class="btn quiet" onclick={cancel}>Cancel</button>
-      <button class="btn" onclick={save}>{editing ? 'Save' : 'Add'}</button>
+      <button class="btn quiet" disabled={adding} onclick={cancel}>Cancel</button>
+      <button class="btn" disabled={adding} onclick={save}>{editing ? 'Save' : 'Add'}</button>
     </div>
   </div>
 {/snippet}
@@ -242,6 +312,14 @@
     flex-direction: column;
     gap: var(--s2);
     padding: var(--s3) var(--s4);
+  }
+
+  .manual {
+    margin: 0;
+    padding: var(--s3) var(--s4) 0;
+    color: var(--ink-3);
+    border-top: 1px solid var(--fill-hover);
+    font-size: var(--t-sm);
   }
 
   .field-row {

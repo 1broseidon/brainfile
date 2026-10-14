@@ -61,17 +61,37 @@
   }
 
   const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+  /** Why Merge waits, said on its tip; empty when it does not. */
+  const mergeWaits = $derived(
+    !review
+      ? ''
+      : review.uncommitted > 0
+        ? 'Commit or send back first'
+        : review.ahead === 0
+          ? 'Nothing committed yet'
+          : review.merged
+            ? `Already in ${review.into}`
+            : review.into && review.checkout !== review.into
+              ? `Check out ${review.into} in your folder to merge`
+              : ''
+  );
 </script>
 
 {#if review}
   <section class="review">
     <h3>
-      {inReview ? 'Review' : 'Branch'}
-      <span class="mono branch">{review.branch}</span>
+      {#if review.branch}
+        {inReview ? 'Review' : 'Branch'}
+        <span class="mono branch">{review.branch}</span>
+      {:else}
+        <!-- A hand-off that only read: nothing to merge, only what was left in its checkout. -->
+        Read-only checkout
+      {/if}
     </h3>
     <div class="group">
       <div class="sum mono">
-        <span>{plural(review.ahead, 'commit')}</span>
+        {#if review.branch}<span>{plural(review.ahead, 'commit')}</span>{/if}
         {#if review.filesChanged}
           <span>{plural(review.filesChanged, 'file')}</span>
           <span class="add">+{review.added}</span>
@@ -132,17 +152,19 @@
         <button class="btn danger" disabled={busy || !!run} onclick={discard}>
           <Icon name="trash" size={13} />{confirming ? 'Discard its work?' : 'Discard'}
         </button>
-        <button class="btn quiet" disabled={busy || !!run} onclick={() => (sending = true)}><Icon name="hand" size={13} />Send back…</button>
-        <button
-          class="btn"
-          class:primary={inReview}
-          disabled={busy || !!run || !review.into || review.uncommitted > 0 || review.ahead === 0}
-          use:tip={review.uncommitted > 0 ? 'Commit or send back first' : review.ahead === 0 ? 'Nothing committed yet' : review.merged ? `Already in ${review.into}` : ''}
-          onclick={() => settle('merge')}
-        >
-          <!-- Once its commits are in the branch, the button says the one thing left for it to do (decision-10). -->
-          <Icon name="git" size={13} />{review.merged ? 'Merged · remove worktree' : `Merge into ${review.into ?? '…'}`}
-        </button>
+        {#if review.branch}
+          <button class="btn quiet" disabled={busy || !!run} onclick={() => (sending = true)}><Icon name="hand" size={13} />Send back…</button>
+          <button
+            class="btn"
+            class:primary={inReview}
+            disabled={busy || !!run || !review.into || (!!mergeWaits && !review.merged) || review.uncommitted > 0}
+            use:tip={mergeWaits}
+            onclick={() => settle('merge')}
+          >
+            <!-- Once its commits are in the branch, the button says the one thing left for it to do (decision-10). -->
+            <Icon name="git" size={13} />{review.merged ? 'Merged · remove worktree' : `Merge into ${review.into ?? '…'}`}
+          </button>
+        {/if}
       </div>
     {/if}
   </section>

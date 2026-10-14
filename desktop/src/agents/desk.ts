@@ -69,7 +69,7 @@ export interface DeskDeps {
     agentId: AgentId,
     model: string | undefined,
     effort?: string
-  ): Promise<Result<{ run: AgentRun; branch: string | null; note?: string }>>;
+  ): Promise<Result<{ run: AgentRun; branch: string | null; reads?: boolean; note?: string }>>;
   /** Every run this app has started since it opened. */
   runs(): AgentRun[];
   stop(runId: string): Promise<void>;
@@ -135,7 +135,11 @@ export function deskTools(deps: DeskDeps) {
       starting.delete(slot);
     }
     if (!started.ok) return started;
-    const where = started.value.branch ? ` in its own worktree on ${started.value.branch}` : ' in the repository';
+    const where = started.value.reads
+      ? ' in a read-only checkout of the trunk'
+      : started.value.branch
+        ? ` in its own worktree on ${started.value.branch}`
+        : ' in the repository';
     return {
       ok: true,
       value:

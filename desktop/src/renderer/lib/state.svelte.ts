@@ -258,8 +258,6 @@ class AppState {
   chatOpen = $state(false);
   /** Per board, the thread whose reply came while the chat was closed; opening the chat there reads it. */
   unread = $state<Record<string, string>>({});
-  /** The chat key's width: the square, wider while it shows a turn at work, or 0 while the chat shows and the key is away. The dock ends beside it. */
-  chatKeyW = $state(32);
   /** Settings take the board's place in the pane until a project is picked or Esc. */
   settingsOpen = $state(false);
   settings = $state<DispatchSettings>({ bypass: false, modes: {}, agentServers: {} });
@@ -703,7 +701,7 @@ class AppState {
 
   async dispatch(taskId: string, agentId: AgentId): Promise<void> {
     if (!this.activeId) return;
-    this.remember(agentId);
+    // A hand-off uses this agent's settings without changing the chat's choice.
     await this.patch(taskId, { assignee: agentId });
     const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId), this.effortFor(agentId));
     if (!result.ok) this.notify(result.error, 'warn');

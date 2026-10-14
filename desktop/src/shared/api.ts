@@ -378,14 +378,16 @@ export interface EditorInfo {
  * what the agent committed, and where Merge would put it.
  */
 export interface ReviewView {
-  /** `dispatch/task-15`. */
-  branch: string;
+  /** `dispatch/task-15`; null for a hand-off that only read, in a detached checkout of the trunk. */
+  branch: string | null;
   /** The worktree's folder. */
   path: string;
   /** The branch it was started from (a commit, when that was detached). */
   base: string | null;
-  /** The branch the project's checkout is on now: where Merge lands. Null when detached. */
+  /** Where Merge lands: the branch it was started from while that exists, else the trunk (decision-11). */
   into: string | null;
+  /** The branch the project's checkout is on now; Merge waits for it to be `into`. Null when detached. */
+  checkout: string | null;
   /** Commits on the branch since it started. */
   ahead: number;
   /** The newest first, the first few. */
@@ -407,6 +409,22 @@ export interface LiveAgents {
   runs: AgentRun[];
   /** Permission asks not yet answered. */
   asks: PermissionAsk[];
+}
+
+/** A compatible entry from the official ACP registry. */
+export interface RegistryAgent {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  distribution: 'npx' | 'binary';
+}
+
+export interface RegistryView {
+  agents: RegistryAgent[];
+  cached: boolean;
+  /** A failed refresh, or an empty registry when no cache exists. */
+  warning?: string;
 }
 
 /** App-wide dispatch settings, kept in the app's dispatch.json. */
@@ -558,6 +576,8 @@ export interface Api {
   undoFix(projectId: string): Promise<Result<{ message: string }>>;
 
   listAgents(): Promise<AgentInfo[]>;
+  agentRegistry(): Promise<RegistryView>;
+  prepareRegistryAgent(id: string): Promise<Result<AgentServer>>;
   /** The agent's models, as it reports them; probed once and cached. */
   listModels(agentId: AgentId): Promise<Result<ModelOption[]>>;
   /** The agent's permission modes, as it reports them; probed with the models and cached. */
@@ -652,6 +672,8 @@ export const CHANNEL = {
 /** Methods main forwards to the agents process. */
 export const AGENT_METHODS = [
   'listAgents',
+  'agentRegistry',
+  'prepareRegistryAgent',
   'listModels',
   'listModes',
   'getSettings',

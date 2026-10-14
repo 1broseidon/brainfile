@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { locateBoard } from '@brainfile/core/repo';
-import { canBranch, discardReview, mergeReview, prepareWorktree, reviewOf, uncommittedIn } from '../src/agents/worktree.ts';
+import { canBranch, discardReview, mergeReview, onlyReads, prepareWorktree, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
 
 function git(args: string[], cwd: string): string {
   const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -181,4 +181,121 @@ test('the files left uncommitted in a worktree are named, the first one too', ()
   work(wt.path, 'README.md', 'changed\n', false);
   work(wt.path, 'new.txt', 'new\n', false);
   assert.deepEqual(uncommittedIn(wt.path), { files: ['README.md', 'new.txt'], count: 2 });
+});
+
+// ── The trunk (decision-11) ─────────────────────────────────────────────────
+
+/** The person's checkout on a branch of their own, a commit ahead of main. */
+function onFeature(): string {
+  git(['checkout', '-q', '-b', 'feature'], repo);
+  fs.writeFileSync(path.join(repo, 'unfinished.txt'), 'mine\n');
+  git(['add', '-A'], repo);
+  git(['commit', '-q', '-m', 'unfinished'], repo);
+  return git(['rev-parse', 'main'], repo);
+}
+
+test('a hand-off forks from the trunk, not from the branch the checkout is on', () => {
+  const mainTip = onFeature();
+  const wt = prepareWorktree(repo, 'task-1', root)!;
+  assert.equal(wt.base, 'main');
+  assert.equal(git(['rev-parse', 'HEAD'], wt.path), mainTip);
+  assert.ok(!fs.existsSync(path.join(wt.path, 'unfinished.txt')));
+  // The person's checkout stays where it was.
+  assert.equal(git(['symbolic-ref', '--short', 'HEAD'], repo), 'feature');
+});
+
+test('its review goes into the trunk, and Merge waits until the checkout is on it', () => {
+  onFeature();
+  const wt = prepareWorktree(repo, 'task-1', root)!;
+  work(wt.path, 'a.txt', 'a\n');
+  const review = reviewOf(repo, 'task-1')!;
+  assert.equal(review.into, 'main');
+  assert.equal(review.checkout, 'feature');
+  const feature = git(['rev-parse', 'feature'], repo);
+  assert.throws(() => mergeReview(repo, 'task-1', 'One'), /goes into main, and your checkout is on feature/);
+  assert.equal(git(['rev-parse', 'feature'], repo), feature);
+  assert.ok(fs.existsSync(wt.path));
+
+  git(['checkout', '-q', 'main'], repo);
+  assert.match(mergeReview(repo, 'task-1', 'One').message, /into main/);
+  assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf-8'), 'a\n');
+  assert.equal(git(['rev-parse', 'feature'], repo), feature);
+});
+
+test('a branch made before decision-11 keeps going into the branch it was started from', () => {
+  onFeature();
+  const wt = prepareWorktree(repo, 'task-1', root)!;
+  git(['config', 'branch.dispatch/task-1.brainfileBase', 'feature'], repo);
+  work(wt.path, 'a.txt', 'a\n');
+  assert.equal(reviewOf(repo, 'task-1')!.into, 'feature');
+  assert.match(mergeReview(repo, 'task-1').message, /into feature/);
+});
+
+test('the trunk is the branch brainfile.trunk names, else origin\'s default, else main', () => {
+  assert.deepEqual(trunkOf(repo), { name: 'main', ref: 'main' });
+  // origin's default branch, known only as origin's copy: forked from there.
+  git(['update-ref', 'refs/remotes/origin/trunk', 'HEAD'], repo);
+  git(['symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk'], repo);
+  assert.deepEqual(trunkOf(repo), { name: 'trunk', ref: 'origin/trunk' });
+  // The repository's own setting wins.
+  git(['branch', 'next'], repo);
+  git(['config', 'brainfile.trunk', 'next'], repo);
+  assert.deepEqual(trunkOf(repo), { name: 'next', ref: 'next' });
+  const wt = prepareWorktree(repo, 'task-1', root)!;
+  assert.equal(wt.base, 'next');
+});
+
+// ── A hand-off that only reads (decision-11) ────────────────────────────────
+
+test('a contract only reads when every deliverable is research, a review or a link', () => {
+  assert.equal(onlyReads({ deliverables: [{ type: 'research' }, { type: 'link' }, { type: 'review' }] }), true);
+  assert.equal(onlyReads({ deliverables: [{ type: 'research' }, { type: 'docs' }] }), false);
+  assert.equal(onlyReads({ deliverables: [] }), false);
+  assert.equal(onlyReads(undefined), false);
+});
+
+test('a hand-off that only reads gets a detached checkout of the trunk and no branch', () => {
+  const mainTip = onFeature();
+  const wt = prepareWorktree(repo, 'task-1', root, true)!;
+  assert.equal(wt.branch, null);
+  assert.equal(wt.base, 'main');
+  assert.equal(git(['rev-parse', 'HEAD'], wt.path), mainTip);
+  assert.equal(spawnSync('git', ['symbolic-ref', '-q', 'HEAD'], { cwd: wt.path }).status, 1);
+  assert.ok(!branches().some((b) => b.startsWith('dispatch/')));
+  // The board is still the shared one.
+  const located = locateBoard(wt.path, { materialize: false });
+  assert.ok(located.found && located.storage === 'linked');
+  // Found again, not made twice.
+  assert.equal(prepareWorktree(repo, 'task-1', root, true)!.path, wt.path);
+
+  const review = reviewOf(repo, 'task-1')!;
+  assert.equal(review.branch, null);
+  assert.equal(review.ahead, 0);
+  assert.throws(() => mergeReview(repo, 'task-1'), /nothing to merge/);
+});
+
+test('a read-only checkout goes when its hand-off ends, unless something was left in it', () => {
+  const clean = prepareWorktree(repo, 'task-1', root, true)!;
+  assert.equal(releaseReader(repo, 'task-1'), true);
+  assert.ok(!fs.existsSync(clean.path));
+  assert.equal(reviewOf(repo, 'task-1'), null);
+
+  const left = prepareWorktree(repo, 'task-1', root, true)!;
+  work(left.path, 'notes.txt', 'left\n', false);
+  assert.equal(releaseReader(repo, 'task-1'), false);
+  assert.equal(reviewOf(repo, 'task-1')!.uncommitted, 1);
+  assert.match(discardReview(repo, 'task-1').message, /read-only checkout/);
+  assert.ok(!fs.existsSync(left.path));
+  assert.ok(!branches().some((b) => b.startsWith('dispatch/')));
+});
+
+test('a task that read and now writes gets its branch; one with a branch keeps it when it reads', () => {
+  const reader = prepareWorktree(repo, 'task-1', root, true)!;
+  const writer = prepareWorktree(repo, 'task-1', root)!;
+  assert.equal(writer.branch, 'dispatch/task-1');
+  assert.equal(writer.path, reader.path);
+  work(writer.path, 'a.txt', 'a\n');
+  const again = prepareWorktree(repo, 'task-1', root, true)!;
+  assert.equal(again.branch, 'dispatch/task-1');
+  assert.equal(again.resumed, true);
 });
