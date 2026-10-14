@@ -31,11 +31,11 @@ subtasks:
     completed: true
   - id: spec-17-7
     title: "v2: desktop link by QR (chat, hand-offs, runs, asks)"
-    completed: false
+    completed: true
   - id: spec-17-8
     title: Device-flow sign-in once an OAuth app is registered
     completed: false
-updatedAt: "2026-10-13T03:28:19.911Z"
+updatedAt: "2026-10-14T04:21:16.523Z"
 ---
 
 ## Description
