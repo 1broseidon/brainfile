@@ -38,3 +38,4 @@ Fetch the official ACP registry (https://cdn.agentclientprotocol.com/registry/v1
 
 ## Log
 - 2026-10-14T18:47:09.449Z: [codex] Started in dispatch/task-66. Verified official registry schema: npx package/args/env and per-platform binary archive/cmd/args/env. Implementing app-data cache and binary installation with Settings dropdown; existing manual and Zed entry forms remain available.
+- 2026-10-14T18:51:13.308Z: [codex] Implemented official ACP registry dropdown under Settings > Agents > Add an agent, preserving args/env for npx and downloading platform binaries to absolute app-data paths. Added 24-hour disk cache, offline fallback/retry, duplicate protection and documentation. Build/typecheck and all 168 desktop tests pass (7 new registry tests). Committed as f10dca6 on dispatch/task-66; worktree clean. Ready for a person to review and merge the branch.
