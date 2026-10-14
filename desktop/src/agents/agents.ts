@@ -26,6 +26,7 @@ import { locateBoard } from '@brainfile/core/repo';
 import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { customLaunch } from './custom';
+import { AgentRegistry } from './registry';
 import { readSettingsFile, settingsOf, writeSettings, type SettingsFile } from './settings';
 import { discussContext, discussMode, discussPermission, discussPreamble } from './discuss';
 import { liveRuns } from './live';
@@ -60,6 +61,7 @@ import type {
 const parentPort = process.parentPort;
 const DATA_DIR = process.env.BRAINFILE_DATA_DIR ?? path.join(os.homedir(), 'Library', 'Application Support', 'Brainfile');
 const AGENTS_DIR = path.join(DATA_DIR, 'agents');
+const registry = new AgentRegistry(DATA_DIR);
 const SETTINGS_FILE = path.join(DATA_DIR, 'dispatch.json');
 const MODELS_FILE = path.join(DATA_DIR, 'models.json');
 /** How long an agent's model list is trusted before it is asked again. */
@@ -1307,6 +1309,8 @@ function live(): LiveAgents {
 
 const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   listAgents,
+  agentRegistry: () => registry.list(),
+  prepareRegistryAgent: (id: string) => registry.prepare(id),
   listModels,
   listModes,
   getSettings,

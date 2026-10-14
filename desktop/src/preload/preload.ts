@@ -38,6 +38,8 @@ const api: Api = {
   fixBoard: invoke('fixBoard'),
   undoFix: invoke('undoFix'),
   listAgents: invoke('listAgents'),
+  agentRegistry: invoke('agentRegistry'),
+  prepareRegistryAgent: invoke('prepareRegistryAgent'),
   listModels: invoke('listModels'),
   listModes: invoke('listModes'),
   getSettings: invoke('getSettings'),
