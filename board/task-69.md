@@ -1,7 +1,7 @@
 ---
 id: task-69
 title: A Ready to merge group at the top of the list, with Merge on the row
-column: todo
+column: in-progress
 position: 9
 priority: high
 tags:
@@ -17,7 +17,7 @@ relatedFiles:
   - desktop/src/renderer/components/TaskRow.svelte
 parentId: epic-4
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: desktop/src/agents/worktree.ts
@@ -30,8 +30,10 @@ contract:
       - cd desktop && npm run typecheck && npm test
   metrics:
     readyAt: "2026-10-14T20:02:35.672Z"
+    pickedUpAt: "2026-10-14T20:02:36.070Z"
+    reworkCount: 0
 createdAt: "2026-10-14T20:02:32.484Z"
-updatedAt: "2026-10-14T20:02:35.672Z"
+updatedAt: "2026-10-14T20:02:36.070Z"
 ---
 
 ## Description
