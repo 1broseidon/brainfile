@@ -409,6 +409,22 @@ export interface LiveAgents {
   asks: PermissionAsk[];
 }
 
+/** A compatible entry from the official ACP registry. */
+export interface RegistryAgent {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  distribution: 'npx' | 'binary';
+}
+
+export interface RegistryView {
+  agents: RegistryAgent[];
+  cached: boolean;
+  /** A failed refresh, or an empty registry when no cache exists. */
+  warning?: string;
+}
+
 /** App-wide dispatch settings, kept in the app's dispatch.json. */
 export interface DispatchSettings {
   /** On: every agent runs in its bypass mode and nothing is asked. Off: each agent's own default, or the mode chosen for it. */
@@ -558,6 +574,8 @@ export interface Api {
   undoFix(projectId: string): Promise<Result<{ message: string }>>;
 
   listAgents(): Promise<AgentInfo[]>;
+  agentRegistry(): Promise<RegistryView>;
+  prepareRegistryAgent(id: string): Promise<Result<AgentServer>>;
   /** The agent's models, as it reports them; probed once and cached. */
   listModels(agentId: AgentId): Promise<Result<ModelOption[]>>;
   /** The agent's permission modes, as it reports them; probed with the models and cached. */
@@ -652,6 +670,8 @@ export const CHANNEL = {
 /** Methods main forwards to the agents process. */
 export const AGENT_METHODS = [
   'listAgents',
+  'agentRegistry',
+  'prepareRegistryAgent',
   'listModels',
   'listModes',
   'getSettings',

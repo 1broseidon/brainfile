@@ -39,6 +39,28 @@ description, subtasks or contract, noting what was agreed in its log. It
 writes no code and hands nothing off: when you hand the task off, the agent
 gets the spec as the discussion left it.
 
+## Add agents
+
+In Settings → Agents → Custom agents, expand **Add an agent**, choose an
+agent from the official ACP registry, and click **Add**. Compatible agents
+are listed for this computer. The entry is saved in `dispatch.json` with
+its command, arguments and environment, and can be edited like a manual
+entry. An existing agent with the same name is never replaced by this action.
+
+Npm distributions use `npx --yes` with the registry's versioned package;
+Node.js and npx must be on your PATH. Binary distributions download and
+extract into `registry-agents/` in the app's data folder, checking the
+registry's SHA-256 checksum when supplied. Their commands are absolute paths
+so they work from any repository or hand-off worktree. macOS's `tar` handles
+both zip and tar archives. Adding an entry does not sign in to the agent.
+
+The registry is saved as `acp-registry.json` in the app's data folder and
+refreshed after 24 hours. If the refresh fails, the saved registry remains
+available. Already downloaded binaries can be added offline; new downloads
+and uncached npm packages need a connection. With no saved registry, the
+dropdown shows a retry action; manual entry and Paste from Zed remain
+available.
+
 ## Issues
 
 When a project's `origin` is on GitHub, the band gets an Issues view (I):
