@@ -8,7 +8,7 @@
    * tabs show as the width allows, up to four; the rest wait under +N.
    */
   import { onMount } from 'svelte';
-  import { app, CHAT, type Tab } from '../lib/state.svelte';
+  import { app, type Tab } from '../lib/state.svelte';
   import { columnProgress } from '../lib/format';
   import { tip } from '../lib/tooltip';
   import type { AgentRun } from '../../shared/api';
@@ -69,8 +69,8 @@
 
   const items = $derived(app.tabs.map(describe).filter((i): i is Item => i !== null));
 
-  /** Where the dock ends on the right: beside the chat key (wider while a turn is at work), or beside the chat when it is open. */
-  const right = $derived(app.chatOpen ? Math.min(app.layout.chat.w, Math.max(CHAT.minW, paneW - 24)) + 12 + GAP : 12 + app.chatKeyW + GAP);
+  /** Where the dock ends on the right: beside the chat key, wider while a turn is at work, or in the corner while the chat shows and the key is away. */
+  const right = $derived(12 + (app.chatKeyW ? app.chatKeyW + GAP : 0));
 
   /** As many tabs as the width allows, up to four, keeping room for +N. */
   const capacity = $derived(Math.max(0, Math.min(MAX_SHOWN, Math.floor((paneW * SHARE - right - 44 + GAP) / (TAB_W + GAP)))));

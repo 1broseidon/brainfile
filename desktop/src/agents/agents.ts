@@ -11,8 +11,9 @@
  * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
  * and `stop`, so a chat can hand work off the way Hand to… does. Discuss
  * (discuss.ts, task-35) is a chat about one task that may change its spec and
- * nothing else. Besides the agents it knows, it starts any ACP server the
- * person names in Settings (custom.ts, task-47), the way Zed's agent_servers do.
+ * record decisions, and nothing else. Besides the agents it knows, it starts
+ * any ACP server the person names in Settings (custom.ts, task-47), the way
+ * Zed's agent_servers do.
  */
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
@@ -1218,8 +1219,10 @@ async function ask(
 
 /**
  * One turn in a discussion of a task (task-35): a chat thread about that one
- * task, whose agent reads freely and changes only the task's spec, with the
- * person's agreement. It has no desk: the person hands the task off.
+ * task, at any stage of its life, whose agent reads freely and changes only
+ * the task's spec and the board's decisions, with the person's agreement. It
+ * has no desk: the person hands the task off. The first turn carries the task
+ * as a block the person does not see, ahead of what they said.
  */
 async function discuss(
   projectId: string,
@@ -1242,7 +1245,7 @@ async function discuss(
         const located = locateBoard(projectId, { materialize: false });
         if (!located.found) throw new Error(`No board in ${projectId}`);
         // Read before the agent starts, so a task that has gone says so at once.
-        preamble = discussPreamble(discussContext(located.brainfilePath, taskId, standingDecisions(located.brainfilePath)));
+        preamble = discussPreamble(discussContext(located.brainfilePath, taskId));
         if (earlier.length) preamble += `Earlier in this discussion:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
       }
       const session = existing ?? (await open(projectId, agentId, key, model, { discuss: taskId, effort }));

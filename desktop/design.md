@@ -48,8 +48,9 @@ One family, **Workbench**:
 - A **pane** is a rounded canvas set 8px into the well with one hairline at
   its edge and a pixel of light along its top. Panes sit 8px apart. The
   board is a pane; an open task is a second pane beside it, sized at its own
-  gutter between 380 and 680px. When the board would be left under 520px,
-  the task pane lies over it on the float shadow instead of squeezing it.
+  gutter between 380 and 680px, and the chat, when shown, a third at the
+  window's right edge. When the board would be left under 520px, the panes
+  beside it lie over it together on the float shadow instead of squeezing it.
 - A pane's **band** is 44px and has no line under it: what scrolls fades out
   beneath it.
 - Menus, the command palette and the new-task dialog are pop-plane surfaces
@@ -256,8 +257,9 @@ work shows a muted status line
 (`claude · Thinking…`, `components/Working.svelte`) with a slow band of light
 crossing the word every 1800ms. In the chat the word turns over every 2.6s
 among honest names for the kind of work under way (Thinking, Considering,
-Working it out); on a row, in the task pane and in the chat key it holds
-still, so a list of busy tasks stays quiet. An agent waiting on you stops shimmering and says
+Working it out), on the line just above the composer, with anything the
+agent asks of you above it; on a row, in the task pane and in the chat key
+it holds still, so a list of busy tasks stays quiet. An agent waiting on you stops shimmering and says
 "Needs you" in the warn colour.
 
 ## Calm
@@ -322,8 +324,8 @@ too and agents and work are one system.
   not the board in front. The open one is on the pop plane. × waits for
   the hand.
 - **Width decides how many show:** up to four, as many as fit in the
-  right-hand three quarters of the pane beside the key (or beside the chat
-  when it is open), the open one always among them; the rest wait under
+  right-hand three quarters of the pane beside the key, the open one always
+  among them; the rest wait under
   `+N`, which opens upward. A tab is the chat key's sibling: the same
   raised plane, hairline and halo.
 - **Keys:** ⌘⇧[ and ⌘⇧] step through the tabs, switching board when a tab is
@@ -469,39 +471,49 @@ board changes (and in the feed).
   Undo), Send back… (a note in the task's log, then the same agent on the
   same branch), and Merge into the branch the person's checkout is on, the
   accent once the task is in Review. Merge waits for uncommitted work and
-  changes nothing on a conflict; merging or discarding lets the worktree and
-  its branch go. No diff authoring, no terminals.
-- **Ask the board** is a muted key in the board's bottom-right corner (⌘J)
-  that grows into a popover in its own corner (360 × 480 to start; its left
-  and top edges and the corner between them size it, double-click puts it
-  back, and the size is kept), and shrinks back into the key when closed: a popover for small things, asking about the board or having it
-  managed (add, sort, split, close). While a turn runs with the chat
-  closed, the key widens into a small pill holding its Working line, the
+  changes nothing on a conflict; merging or discarding removes the worktree
+  and its branch. When the branch was merged elsewhere (the terminal, a
+  pull request) and the worktree is still there, the same key reads
+  `Merged · remove worktree`, its tip `Already in <branch>`, and does only
+  that. No diff authoring, no terminals.
+- **Ask the board** is a muted key in the board's bottom-right corner, at
+  the dock's end (⌘J), that shows and hides the chat (decision-8): a pane at
+  the window's right edge, beside the task pane, sized at its own gutter
+  between 340 and 600px (400 to start, remembered), for small things, asking
+  about the board or having it managed (add, sort, split, close). Its band
+  holds the history key, the thread's title, new chat (+) and hide, which is
+  the rail's key mirrored; Esc and ⌘J hide it too. Hiding keeps the thread,
+  where it was scrolled to and what you were typing, and the key brings back
+  the thread last shown, across a restart too: only + gives a blank page.
+  While the chat shows, the key steps aside and the dock slides into its
+  corner; hiding the chat brings it back. While a turn runs with the chat
+  hidden, the key widens into a small pill holding its Working line, the
   word held still and shimmering (`claude · Thinking…`, or `Needs you` in
-  warn), at 130ms each way, and the popover grows from the pill as it
-  would from the square. When the turn ends the key is the square again;
+  warn), at 130ms each way. When the turn ends the key is the square again;
   if it ended with a reply, the key keeps a small muted badge in its
-  top-right corner and its tip says "Reply waiting" until the chat opens
-  (Calm's one exception). The badge is the board's: it waits there when
-  you switch away and come back. It opens to a blank page every time,
-  unless a reply is waiting, which it opens to;
-  a muted history key in its header lists the board's recent chats (kept
-  on this machine, the last 30), and any of them can be picked up again,
-  its past carried along if the agent's session has gone. Replies land
-  whole, and only the answer: the narration an agent writes between tool
-  calls ("I'll look at the board…") is dropped, and the reply is the turn's
-  last message. Beside the agent, a muted model picker lists the models the agent
-  itself reports (asked once a day). Hovering a model that offers effort
-  levels opens them in a submenu; Medium is the one a new choice starts on,
-  since it is the level most models have. Unset means the agent's default,
-  and Hand to… uses the same model and effort.
+  top-right corner and its tip says "Reply waiting" until the chat shows
+  (Calm's one exception), on that thread. The badge is the board's: it waits
+  there when you switch away and come back. The history key lists the
+  board's recent chats (kept on this machine, the last 30), and any of them
+  can be picked up again, its past carried along if the agent's session has
+  gone; a discussion comes back with its task beside it. Replies land whole,
+  and only the answer: the narration an agent writes between tool calls
+  ("I'll look at the board…") is dropped, and the reply is the turn's last
+  message. One that has just landed comes in from the top, a soft edge
+  passing down it a line at a time (about 70ms a line, 1.6s at most), the
+  thread following the edge; one read again later is simply there.
+  Beside the agent, a muted model picker lists the models the agent itself
+  reports (asked once a day). Hovering a model that offers effort levels
+  opens them in a submenu; Medium is the one a new choice starts on, since
+  it is the level most models have. Unset means the agent's default, and
+  Hand to… uses the same model and effort.
 - **The chat's thread learns from Linear's agent window.** The header carries
   only the thread: its title (its first line) once there is one, the board's
-  name before, then new chat and close. Who answers and with what sits where
+  name before, then new chat and hide. Who answers and with what sits where
   you type: the composer is a two-line well with a foot holding the agent
   and model picks (their menus open upward) and the send key, muted until
   there is something to send, then the composer's one accent. The thread's start is said once, centred, in mono. Yours sits
-  on the right on the raised plane; the reply is plain text on the popover,
+  on the right on the raised plane; the reply is plain text on the pane,
   with a copy key under it for the hand. The task open in the pane goes
   along as context (`task-10 in context` under your line), so "this" means
   it. Above a reply, "Worked for 19 seconds ›" folds away what the agent did
@@ -514,16 +526,24 @@ board changes (and in the feed).
   itself by comparing it before and after, so the agent is told not to
   report its own changes, and never says it made none.
 - **Discuss** (task-35) is a muted key beside Hand to… that talks the task
-  over before it is handed off. It is a thread in the chat, not a chat of its
-  own: titled `Discuss task-35`, kept in the chat's history, and the key
-  reopens the task's latest one. Its agent is the one Hand to… offers first,
-  and the chat's picker changes it. The agent has the task, its parent, its
-  decisions and the files it names as context; it may change only that
-  task's description, subtasks and contract, with the person's agreement, and
-  notes what was agreed in the task's log, which is where the hand-off's
-  brief finds it. It has no desk, never runs in a bypass mode (read-only
-  when the agent has one), and its edits, commands, mode changes and other
-  board tools are refused before anyone is asked.
+  over, wherever it is in its life: before it is handed off, while it is
+  worked on, in review. It is a thread in the chat, not a chat of its own:
+  titled `Discuss task-35`, kept in the chat's history, and the key reopens
+  the task's latest one. Its agent is the one Hand to… offers first, and the
+  chat's picker changes it. A new one says only `Let's discuss task-35.`;
+  the task goes to the agent ahead of it in a block you do not see
+  (`<task-information>`: its stage among the columns, description, subtasks,
+  contract, parent, the decisions it rests on in full, the files it names,
+  its latest notes and the board's other decisions, as of when it was read),
+  so it answers without looking the task up. It may change only that task's
+  description, subtasks and contract, and record, replace or retire a
+  decision (task-44), each with the person's agreement: a decision is run
+  past check first and shown with its claim key, title, text and what it
+  replaces, and the task is linked to it. It notes what was agreed in the
+  task's log, which is where the hand-off's brief finds it. It has no desk,
+  never runs in a bypass mode (read-only when the agent has one), and its
+  edits, commands, mode changes and other board tools are refused before
+  anyone is asked.
 - **The chat hands work off** (spec-16). Its agents get a second, small MCP
   server from the app itself, the desk: `dispatch` (a task, and optionally an
   agent and a model), `runs` (what is running on this Mac) and `stop`.

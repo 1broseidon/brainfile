@@ -1,50 +1,122 @@
 /**
- * Discuss (task-35): talking a task over with an agent before it is handed
- * off. The agent gets the task as context, can read the code and the board,
- * asks and pushes back, and with the person's agreement changes the task's
- * description, subtasks or contract. It writes no code and starts no work:
- * its session never runs in a bypass mode, it has no desk, and what it asks
- * to do is sorted here before anyone is asked.
+ * Discuss (task-35): talking a task over with an agent, wherever it is in its
+ * life. The agent gets the task as a block of context it need not look up
+ * again, can read the code and the board, asks and pushes back, and with the
+ * person's agreement changes the task's description, subtasks or contract and
+ * records the decisions they settle (task-44). It writes no code and starts
+ * no work: its session never runs in a bypass mode, it has no desk, and what
+ * it asks to do is sorted here before anyone is asked.
  */
-import { findV2Task, getV2Dirs, readBoardConfig } from '@brainfile/core';
+import { extractDescription, extractLog, findV2Task, getV2Dirs, parseNotes, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import type { AgentModes } from '../shared/api';
+
+/** A decision the task rests on, in full: the agent works within it. */
+export interface DiscussDecision {
+  id: string;
+  title: string;
+  claimKey?: string;
+  /** `current`, `superseded`, …; unset when the decision cannot be found. */
+  status?: string;
+  supersededBy?: string;
+  stance?: string;
+  subject?: string;
+  holdsWhile?: string;
+  recheck?: string;
+  /** The decision and why, without its title. */
+  text?: string;
+}
+
+/** A line of the task's log. */
+export interface DiscussNote {
+  at: string;
+  agent?: string;
+  text: string;
+}
 
 /** What the agent is told about the task, read from the board. */
 export interface DiscussContext {
   id: string;
   title: string;
   type?: string;
+  /** Its column's title; unset once it is done. */
   column?: string;
-  body: string;
+  /** The board's columns, in order, so the column says how far along it is. */
+  columns: string[];
+  /** Completed: it is in logs/. */
+  done: boolean;
+  priority?: string;
+  assignee?: string;
+  tags: string[];
+  description: string;
+  /** The latest notes, oldest first. */
+  notes: DiscussNote[];
+  /** Notes older than those shown. */
+  earlierNotes: number;
   /** Its deliverables and constraints, one line each. */
   contract?: { status: string; lines: string[] };
   subtasks: { title: string; completed: boolean }[];
   parent?: { id: string; title: string; type?: string };
-  /** The decisions the task rests on, one line each. */
-  decisions: string[];
+  decisions: DiscussDecision[];
   relatedFiles: string[];
-  /** The board's standing decisions, as `standingDecisions` writes them; empty when none. */
-  standing: string;
+  /** The board's other current decisions, one line each. */
+  standing: string[];
+  /** When the board was read. */
+  asOf: Date;
+}
+
+/** How many of the task's notes the agent is given; the rest it can read with the log tool. */
+const NOTES_SHOWN = 10;
+/** How many of the board's other decisions the agent is told about by name. */
+const STANDING_SHOWN = 15;
+
+/** A decision's text without the title its body repeats. */
+function decisionText(body: string, title: string): string | undefined {
+  const text = (extractDescription(body) ?? body).trim();
+  const lines = text.split('\n');
+  if (lines[0]?.trim() === title.trim()) lines.shift();
+  return lines.join('\n').trim() || undefined;
 }
 
 /**
- * The task a discussion is about, as the agent first sees it: its body,
- * subtasks and contract, its parent, the decisions it rests on, the files it
- * names. `standing` is the board's standing decisions, as the agents process
- * words them for every brief.
+ * The task a discussion is about, as the agent first sees it: where it is,
+ * its description, subtasks and contract, its parent, the decisions it rests
+ * on in full, the files it names, its latest notes, and the board's other
+ * current decisions.
  */
-export function discussContext(brainfilePath: string, taskId: string, standing = ''): DiscussContext {
+export function discussContext(brainfilePath: string, taskId: string, now = new Date()): DiscussContext {
   const dirs = getV2Dirs(brainfilePath);
-  const found = findV2Task(dirs, taskId);
+  const found = findV2Task(dirs, taskId, true);
   if (!found) throw new Error(`Task ${taskId} not found`);
   const { task, body } = found.doc;
   const parent = task.parentId ? findV2Task(dirs, task.parentId, true)?.doc.task : undefined;
   const config = readBoardConfig(brainfilePath)?.config;
-  const column = config?.columns?.find((c) => c.id === task.column);
-  const decisions = (task.decisions ?? []).map((id) => {
-    const doc = findV2Task(dirs, id, true)?.doc.task;
-    return doc ? `${id}: ${doc.title}` : id;
+  const columns = config?.columns ?? [];
+  const decisions = (task.decisions ?? []).map((id): DiscussDecision => {
+    const doc = findV2Task(dirs, id, true)?.doc;
+    if (!doc) return { id, title: id };
+    const d = summarizeDecision(doc.task);
+    return {
+      id,
+      title: d.title,
+      claimKey: d.claimKey,
+      status: d.status,
+      supersededBy: d.supersededBy,
+      stance: d.stance,
+      subject: d.subject,
+      holdsWhile: d.holdsWhile,
+      recheck: d.recheck,
+      text: decisionText(doc.body, d.title),
+    };
   });
+  const own = new Set(decisions.map((d) => d.id));
+  const standing = readDecisionDocs(dirs, config?.types)
+    .map((doc) => summarizeDecision(doc.task))
+    .filter((d) => d.status === 'current' && !own.has(d.id))
+    .map((d) => `${d.id}${d.claimKey ? ` [${d.claimKey}]` : ''} ${d.title}`);
+  if (standing.length > STANDING_SHOWN) standing.splice(STANDING_SHOWN, Infinity, `and ${standing.length - STANDING_SHOWN} more (list_tasks with type decision)`);
+  const parsed = parseNotes(body).reverse();
+  // A log with no dated lines is still shown, as it is.
+  const notes: DiscussNote[] = parsed.length ? parsed.slice(-NOTES_SHOWN).map((n) => ({ at: n.at, agent: n.agent, text: n.text })) : (extractLog(body) ? [{ at: '', text: extractLog(body)! }] : []);
   const contract = task.contract
     ? {
         status: task.contract.status,
@@ -58,49 +130,128 @@ export function discussContext(brainfilePath: string, taskId: string, standing =
     id: task.id,
     title: task.title,
     type: task.type,
-    column: column?.title ?? task.column,
-    body,
+    column: found.isLog ? undefined : (columns.find((c) => c.id === task.column)?.title ?? task.column),
+    columns: columns.map((c) => c.title),
+    done: found.isLog,
+    priority: task.priority,
+    assignee: task.assignee,
+    tags: task.tags ?? [],
+    description: (extractDescription(body) ?? body.split(/^## Log$/m)[0]).trim(),
+    notes,
+    earlierNotes: Math.max(0, parsed.length - NOTES_SHOWN),
     contract,
     subtasks: (task.subtasks ?? []).map((st) => ({ title: st.title, completed: !!st.completed })),
     parent: parent ? { id: parent.id, title: parent.title, type: parent.type } : undefined,
     decisions,
     relatedFiles: task.relatedFiles ?? [],
     standing,
+    asOf: now,
   };
 }
 
-/** The first turn's preamble: the task loaded, and what the agent may and may not do with it. */
-export function discussPreamble(ctx: DiscussContext): string {
-  const lines: string[] = [
-    `You are talking ${ctx.id} on this repository's Brainfile board over with the person before it is handed off to a coding agent. ` +
-      'Help them get the spec right: read the task, its parent, its decisions and the code it touches; ask what is unclear, push back on what seems wrong or too big, and suggest changes.',
-    '',
-    'You may change this task on the board, and only with the person\'s agreement: its description (the brainfile task_patch tool), its subtasks (subtask) and its contract (contract). ' +
-      'Say what you would change and wait for a yes before you change it. Do not change other tasks, move, complete or delete this one, or record decisions; suggest those instead.',
-    'Do not write or edit code, run commands that change anything, or start the work, and do not hand the task off: the person does that when the discussion is done, and the agent they hand it to reads the task as you leave it.',
-    `Each time you change the task, add one short note to it with the brainfile note tool saying what was agreed and why, so the agent that does the work sees it. ` +
-      'If the person says the discussion is done and nothing was noted yet, note what was agreed then.',
-    'Keep replies short: a question or two at a time, or the change you propose. Do not list the board changes you made: the window shows them under your reply.',
-    '',
-    `The task: ${ctx.id}${ctx.type && ctx.type !== 'task' ? ` (${ctx.type})` : ''}, "${ctx.title}"${ctx.column ? `, in ${ctx.column}` : ''}.`,
+/** `2026-10-13 16:05 UTC`: to the minute, and said to be UTC. */
+function stamp(at: string | Date): string {
+  const iso = typeof at === 'string' ? at : at.toISOString();
+  return `${iso.slice(0, 16).replace('T', ' ')} UTC`;
+}
+
+/** `a, b or c`. */
+function either(items: string[]): string {
+  return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`;
+}
+
+/** Where the task is: its column among the board's, or done. */
+function stage(ctx: DiscussContext): string {
+  if (ctx.done) return 'Stage: done (completed, in logs/).';
+  if (!ctx.column) return 'Stage: no column.';
+  return `Stage: ${ctx.column}${ctx.columns.length > 1 ? ` (${ctx.columns.join(' → ')})` : ''}.`;
+}
+
+/** The task as data, in a block the person does not see: everything the board says about it, so the agent need not look it up. */
+export function taskInformation(ctx: DiscussContext): string {
+  const facts = [
+    ctx.type ?? 'task',
+    ctx.priority && `priority ${ctx.priority}`,
+    ctx.assignee && `assigned to ${ctx.assignee}`,
+    ctx.tags.length > 0 && `tags ${ctx.tags.join(', ')}`,
+  ].filter(Boolean);
+  const missing = [
+    !ctx.parent && 'parent',
+    ctx.subtasks.length === 0 && 'subtasks',
+    !ctx.contract && 'contract',
+    ctx.decisions.length === 0 && 'decisions',
+    ctx.relatedFiles.length === 0 && 'files',
+  ].filter((x): x is string => !!x);
+
+  const lines = [
+    `<task-information id="${ctx.id}" as-of="${stamp(ctx.asOf)}">`,
+    `${ctx.id} · ${ctx.title}`,
+    stage(ctx),
+    facts.join(' · '),
   ];
-  if (ctx.parent) lines.push(`Its parent: ${ctx.parent.id}${ctx.parent.type ? ` (${ctx.parent.type})` : ''}, "${ctx.parent.title}".`);
-  if (ctx.body.trim()) lines.push('', ctx.body.trim());
-  if (ctx.subtasks.length) lines.push('', 'Subtasks:', ...ctx.subtasks.map((s) => `- [${s.completed ? 'x' : ' '}] ${s.title}`));
-  if (ctx.contract) {
-    lines.push('', `Contract (status ${ctx.contract.status})${ctx.contract.lines.length ? ':' : '.'}`, ...ctx.contract.lines.map((d) => `- ${d}`));
+  if (ctx.parent) lines.push(`Parent: ${ctx.parent.id}${ctx.parent.type ? ` (${ctx.parent.type})` : ''} · ${ctx.parent.title}`);
+  if (missing.length) lines.push(`No ${either(missing)}.`);
+  lines.push('', '<description>', ctx.description || '(none)', '</description>');
+  if (ctx.subtasks.length) lines.push('', '<subtasks>', ...ctx.subtasks.map((s) => `- [${s.completed ? 'x' : ' '}] ${s.title}`), '</subtasks>');
+  if (ctx.contract) lines.push('', `<contract status="${ctx.contract.status}">`, ...ctx.contract.lines.map((d) => `- ${d}`), '</contract>');
+  if (ctx.relatedFiles.length) lines.push('', `<files>${ctx.relatedFiles.join(', ')}</files>`);
+  if (ctx.decisions.length) {
+    lines.push('', '<decisions>');
+    for (const d of ctx.decisions) {
+      if (!d.status) {
+        lines.push(`${d.id} (not found on the board)`);
+        continue;
+      }
+      const state = d.supersededBy ? `${d.status} by ${d.supersededBy}` : d.status;
+      const stance = d.stance && d.subject ? ` · ${d.stance}: ${d.subject}` : '';
+      lines.push(`${d.id}${d.claimKey ? ` [${d.claimKey}]` : ''} ${state}${stance}`, `  ${d.title}`);
+      if (d.text) lines.push(...d.text.split('\n').map((l) => (l.trim() ? `  ${l}` : '')));
+      if (d.holdsWhile) lines.push(`  Holds while: ${d.holdsWhile}`);
+      if (d.recheck) lines.push(`  Recheck: ${d.recheck}`);
+    }
+    lines.push('</decisions>');
   }
-  if (ctx.decisions.length) lines.push('', 'It rests on these decisions:', ...ctx.decisions.map((d) => `- ${d}`));
-  if (ctx.relatedFiles.length) lines.push('', `The code it touches: ${ctx.relatedFiles.join(', ')}.`);
-  if (ctx.standing.trim()) lines.push('', ctx.standing.trim());
-  return `${lines.join('\n')}\n\n`;
+  if (ctx.notes.length) {
+    lines.push('', '<log newest="last">');
+    if (ctx.earlierNotes) lines.push(`(${ctx.earlierNotes} earlier ${ctx.earlierNotes === 1 ? 'note' : 'notes'}: the brainfile log tool)`);
+    lines.push(...ctx.notes.map((n) => (n.at ? `${stamp(n.at)}${n.agent ? ` ${n.agent}` : ''}: ${n.text}` : n.text)), '</log>');
+  }
+  if (ctx.standing.length) lines.push('', '<board-decisions>', ...ctx.standing, '</board-decisions>');
+  lines.push('</task-information>');
+  return lines.join('\n');
+}
+
+/** What the agent may and may not do in a discussion, at any stage of the task's life. */
+export function discussRules(ctx: DiscussContext): string {
+  return [
+    '<discussion-rules>',
+    `The person wants to talk ${ctx.id} over with you, wherever it is in its life: shaping it before it is handed off, steering it while it is worked on, reviewing what was done, or looking back. ` +
+      'Start from its stage. The block above is what the board says about it, so you need not look the task up again; read the code it touches as you need to. ' +
+      'Ask what is unclear, push back on what seems wrong or too big, and suggest changes.',
+    'With the person\'s yes, you may change this task\'s description (the brainfile task_patch tool), its subtasks (subtask) and its contract (contract). Say what you would change and wait for a yes before you change it.',
+    'When the person settles something that should outlive this task, you may record it as a decision on the same terms. ' +
+      'Run check on it first; then say its claim key, title and text, and which decision it replaces or retires, and wait for a yes. ' +
+      `Then record it with decide (its claim family's current decision is replaced) or supersede (to replace a given one), with ${ctx.id} in forWork so the task rests on it, or retire one as rejected or stale.`,
+    'Work within the decisions above. Before going against one, run check and say so in your reply.',
+    'Each time you change the task or record a decision, add one short note to it with the brainfile note tool saying what was agreed and why, so whoever works on it next sees it. ' +
+      'If the person says the discussion is done and nothing was noted yet, note what was agreed then.',
+    'Do not change other tasks, or move, complete or delete this one; suggest those instead. Do not write or edit code, run commands that change anything, start the work or hand the task off: the person does that.',
+    'The block was read at the time it gives. If the task may have changed since, read it again with get_task.',
+    'Keep replies short: a question or two at a time, or the change you propose. Do not list the board changes you made: the window shows them under your reply.',
+    '</discussion-rules>',
+  ].join('\n');
+}
+
+/** The first turn's preamble, ahead of what the person sees they said: the task as data, then the rules. */
+export function discussPreamble(ctx: DiscussContext): string {
+  return `${taskInformation(ctx)}\n\n${discussRules(ctx)}\n\n`;
 }
 
 /** Brainfile's board tools as an agent names them: `mcp__brainfile__task_patch`, `brainfile_get_task`, `mcp.brainfile.note`. */
 const BOARD_TOOL_NAME = /^(?:mcp(?:__|\.))?brainfile(?:__|[_.])(\w+)/i;
 
-/** The board tools a discussion may use: reading anything, and changing this task's description, subtasks and contract, and its log. */
-const DISCUSS_TOOLS = new Set(['brief', 'get_task', 'list_tasks', 'search', 'check', 'log', 'where', 'types', 'columns', 'template', 'lint', 'task_patch', 'subtask', 'contract', 'note']);
+/** The board tools a discussion may use: reading anything; changing this task's description, subtasks and contract, and its log; and recording, replacing or retiring decisions. */
+const DISCUSS_TOOLS = new Set(['brief', 'get_task', 'list_tasks', 'search', 'check', 'log', 'where', 'types', 'columns', 'template', 'lint', 'task_patch', 'subtask', 'contract', 'note', 'decide', 'supersede', 'retire']);
 
 /** What the agent does to the code, or to how it runs: never in a discussion. */
 const REFUSED_KINDS = new Set(['edit', 'delete', 'move', 'execute', 'switch_mode']);

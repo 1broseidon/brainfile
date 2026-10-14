@@ -146,7 +146,7 @@
     {#if detail && !detail.archived && !decision}
       {#if !app.runFor(detail.id)}
         <!-- Talk it over first (task-35): the chat opens on this task; the agent may change its spec, not its code. -->
-        <button class="btn quiet" use:tip={'Talk it over with an agent before handing it off'} onclick={() => detail && app.discussTask(detail.id)}
+        <button class="btn quiet" use:tip={'Talk it over with an agent'} onclick={() => detail && app.discussTask(detail.id)}
           ><Icon name="ask" size={13} />Discuss</button
         >
       {/if}

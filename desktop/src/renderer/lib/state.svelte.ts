@@ -107,13 +107,15 @@ export interface Tab {
 }
 const THREADS_KEY = 'brainfile.threads';
 const THREADS_KEPT = 30;
+/** The thread the chat last showed, per board. */
+const THREAD_KEY = 'brainfile.thread';
 
 export interface Thread {
   id: string;
   agentId: AgentId;
   startedAt: number;
   lines: ChatLine[];
-  /** A discussion of this task before it is handed off (task-35); unset for a chat about the board. */
+  /** A discussion of this task, at any stage of its life (task-35); unset for a chat about the board. */
   taskId?: string;
 }
 
@@ -177,15 +179,18 @@ const UNSENT_GRACE_MS = 60_000;
 
 export const RAIL = { min: 180, max: 420, initial: 232 };
 export const TASK_PANE = { min: 380, max: 680, initial: 500 };
-/** The chat popover: sized from its top-left corner; the pane caps it. */
-export const CHAT = { minW: 320, minH: 300, w: 360, h: 480 };
+/** The chat pane (decision-8): at the window's right edge, beside the task pane. */
+export const CHAT_PANE = { min: 340, max: 600, initial: 400 };
 
-type Layout = { rail: number; railOpen: boolean; pane: number; chat: { w: number; h: number } };
+type Layout = { rail: number; railOpen: boolean; pane: number; chat: number };
 
 function loadLayout(): Layout {
-  const initial: Layout = { rail: RAIL.initial, railOpen: true, pane: TASK_PANE.initial, chat: { w: CHAT.w, h: CHAT.h } };
+  const initial: Layout = { rail: RAIL.initial, railOpen: true, pane: TASK_PANE.initial, chat: CHAT_PANE.initial };
   try {
-    return { ...initial, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') };
+    const kept = { ...initial, ...JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}') };
+    // The popover's size, from before the chat was a pane, is not a pane's width.
+    if (typeof kept.chat !== 'number') kept.chat = CHAT_PANE.initial;
+    return kept;
   } catch {
     return initial;
   }
@@ -246,12 +251,14 @@ class AppState {
   asks = $state<PermissionAsk[]>([]);
   /** Chat threads per board, newest first, kept on this machine. */
   threads = $state<Record<string, Thread[]>>(load(THREADS_KEY, {}));
-  /** The thread in the popover, per board; null is the blank page it opens to. */
-  thread = $state<Record<string, string | null>>({});
+  /** The thread the chat shows, per board, kept while it is hidden and across a restart; null is a new chat. */
+  thread = $state<Record<string, string | null>>(load(THREAD_KEY, {}));
+  /** What you were typing, per board and thread, kept while the chat is hidden. */
+  drafts = $state<Record<string, string>>({});
   chatOpen = $state(false);
   /** Per board, the thread whose reply came while the chat was closed; opening the chat there reads it. */
   unread = $state<Record<string, string>>({});
-  /** The chat key's width: the square, or wider while it shows a turn at work. The dock and the popover start from it. */
+  /** The chat key's width: the square, wider while it shows a turn at work, or 0 while the chat shows and the key is away. The dock ends beside it. */
   chatKeyW = $state(32);
   /** Settings take the board's place in the pane until a project is picked or Esc. */
   settingsOpen = $state(false);
@@ -858,18 +865,23 @@ class AppState {
     return Object.keys(next).length ? next : undefined;
   }
 
-  /** The popover opens to a blank page, unless a reply is still on its way or waiting to be read. */
+  /** The chat comes back as it was left: the thread last shown, or a reply waiting to be read. Only a new chat is blank. */
   openChat(): void {
-    if (this.activeId && !this.liveAsk) this.thread[this.activeId] = null;
     this.chatOpen = true;
     if (this.activeId) this.readReply(this.activeId);
+  }
+
+  /** Shows a thread in the chat, or a new chat for null, and remembers it for when the chat comes back. */
+  showThread(projectId: string, id: string | null): void {
+    this.thread[projectId] = id;
+    localStorage.setItem(THREAD_KEY, JSON.stringify(this.thread));
   }
 
   /** The chat is open on this board: a reply waiting on the key is the thread it shows, and is read. */
   readReply(projectId: string, show = true): void {
     const waiting = this.unread[projectId];
     if (!waiting) return;
-    if (show && !this.liveAsk) this.thread[projectId] = waiting;
+    if (show && !this.liveAsk) this.showThread(projectId, waiting);
     delete this.unread[projectId];
   }
 
@@ -905,7 +917,7 @@ class AppState {
     if (!thread) {
       thread = { id: `t-${Date.now()}`, agentId, startedAt: Date.now(), lines: [], ...(discussing ? { taskId: discussing } : {}) };
       this.threads[projectId] = [thread, ...(this.threads[projectId] ?? [])].slice(0, THREADS_KEPT);
-      this.thread[projectId] = thread.id;
+      this.showThread(projectId, thread.id);
     }
     const earlier = thread.lines.filter((l) => !l.failed).map((l) => ({ who: l.who, text: l.text }));
     // What is open in the pane goes along, so "this" means it; a discussion is about its own task.
@@ -1162,14 +1174,15 @@ class AppState {
     this.readReply(projectId, false);
     // One turn at a time: a reply still on its way is shown, not talked over.
     if (this.liveAsk) return this.notify(`${this.agentName(this.liveAsk.agentId)} is still answering here.`, 'warn');
-    this.thread[projectId] = null;
+    this.showThread(projectId, null);
     await this.askBoard(problemBrief(project.name, board.integrity), agent);
   }
 
   /**
-   * Talks a task over before it is handed off (task-35). The chat opens on the
-   * task's latest discussion, kept like any chat, or starts one with the
-   * agent Hand to… offers first; the agent reads the task and answers.
+   * Talks a task over, wherever it is in its life (task-35). The chat opens on
+   * the task's latest discussion, kept like any chat, or starts one with the
+   * agent Hand to… offers first. What shows is only "Let's discuss task-43.":
+   * the task itself goes to the agent unseen, ahead of it (discuss.ts).
    */
   async discussTask(taskId: string): Promise<void> {
     const projectId = this.activeId;
@@ -1185,11 +1198,11 @@ class AppState {
     if (live && liveThread?.taskId !== taskId) return this.notify(`${this.agentName(live.agentId)} is still answering here.`, 'warn');
     const earlier = liveThread ?? threads.find((t) => t.taskId === taskId);
     if (earlier) {
-      this.thread[projectId] = earlier.id;
+      this.showThread(projectId, earlier.id);
       return;
     }
-    this.thread[projectId] = null;
-    await this.askBoard(`Talk ${taskId} over with me before I hand it off.`, agent, taskId);
+    this.showThread(projectId, null);
+    await this.askBoard(`Let's discuss ${taskId}.`, agent, taskId);
   }
 
   /** Success is silent; only a problem is said. */
