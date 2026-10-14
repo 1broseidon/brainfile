@@ -1,8 +1,6 @@
 ---
 id: task-57
 title: "Mobile: final polish with native iOS glass, cards and buttons, keeping desktop's look"
-column: review
-position: 3
 priority: medium
 tags:
   - mobile
@@ -19,7 +17,8 @@ decisions:
   - decision-7
   - decision-9
 createdAt: "2026-10-14T01:44:12.943Z"
-updatedAt: "2026-10-14T02:45:36.532Z"
+updatedAt: "2026-10-14T03:00:10.661Z"
+completedAt: "2026-10-14T03:00:10.661Z"
 ---
 
 ## Description
