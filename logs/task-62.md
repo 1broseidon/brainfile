@@ -1,8 +1,6 @@
 ---
 id: task-62
 title: "Merge lands from the worktree: a conflict said before, checks run there, the trunk moved by compare-and-swap"
-column: review
-position: 5
 priority: medium
 tags:
   - git
@@ -34,7 +32,8 @@ contract:
     deliveredAt: "2026-10-14T20:54:54.175Z"
     duration: 217
 createdAt: "2026-10-14T15:16:09.885Z"
-updatedAt: "2026-10-14T20:54:54.175Z"
+updatedAt: "2026-10-14T21:16:23.684Z"
+completedAt: "2026-10-14T21:16:23.684Z"
 ---
 
 ## Description
