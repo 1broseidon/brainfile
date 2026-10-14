@@ -67,6 +67,8 @@ contract:
     - Work within decisions 11, 12, 14 and 15; if a finding goes against one, run check and say so in the write-up
     - The epic's children name the files they touch and carry validation commands
 createdAt: "2026-10-14T22:07:16.454Z"
+assignee: claude
+updatedAt: "2026-10-14T22:10:13.763Z"
 ---
 
 ## Description
