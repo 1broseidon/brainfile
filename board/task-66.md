@@ -18,19 +18,19 @@ relatedFiles:
 subtasks:
   - id: task-66-1
     title: Fetch and cache registry.json from cdn.agentclientprotocol.com
-    completed: false
+    completed: true
   - id: task-66-2
     title: Registry dropdown and Add button in AgentServers under the add expand
-    completed: false
+    completed: true
   - id: task-66-3
     title: Map registry distribution (npx/binary) into agent command and args
-    completed: false
+    completed: true
   - id: task-66-4
     title: Offline and fetch error handling
-    completed: false
+    completed: true
 createdAt: "2026-10-14T18:45:19.838Z"
 assignee: codex
-updatedAt: "2026-10-14T18:46:17.505Z"
+updatedAt: "2026-10-14T18:51:13.018Z"
 ---
 
 ## Description
