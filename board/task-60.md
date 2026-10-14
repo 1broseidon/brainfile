@@ -3,7 +3,7 @@ id: task-60
 title: "One trunk for this repository: the release fixes in main, merged branches gone"
 column: todo
 position: 3
-priority: high
+priority: medium
 tags:
   - git
   - process
@@ -22,6 +22,7 @@ contract:
   constraints:
     - Ask before pushing or deleting any branch or folder
 createdAt: "2026-10-14T15:15:56.199Z"
+updatedAt: "2026-10-14T19:11:56.174Z"
 ---
 
 ## Description
