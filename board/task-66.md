@@ -1,8 +1,8 @@
 ---
 id: task-66
 title: Add ACP agents from official registry via dropdown in Settings
-column: backlog
-position: 9
+column: in-progress
+position: 2
 description: Fetch the official ACP registry (https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json) and present agents in a dropdown under the add expand in Settings > Agents. Selecting an agent and clicking Add populates its command, arguments, and environment into agentServers (supporting npx and binary distributions) without manual typing. Includes caching or offline fallback when the registry cannot be reached.
 priority: medium
 tags:
@@ -30,7 +30,7 @@ subtasks:
     completed: false
 createdAt: "2026-10-14T18:45:19.838Z"
 assignee: codex
-updatedAt: "2026-10-14T18:45:53.650Z"
+updatedAt: "2026-10-14T18:46:17.505Z"
 ---
 
 ## Description
