@@ -1,7 +1,7 @@
 ---
 id: task-62
 title: "Merge lands from the worktree: a conflict said before, checks run there, the trunk moved by compare-and-swap"
-column: in-progress
+column: review
 position: 5
 priority: medium
 tags:
@@ -17,7 +17,7 @@ dependsOn:
 decisions:
   - decision-12
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: desktop/src/agents/worktree.ts
@@ -31,8 +31,10 @@ contract:
   metrics:
     pickedUpAt: "2026-10-14T20:51:17.010Z"
     reworkCount: 0
+    deliveredAt: "2026-10-14T20:54:54.175Z"
+    duration: 217
 createdAt: "2026-10-14T15:16:09.885Z"
-updatedAt: "2026-10-14T20:51:17.010Z"
+updatedAt: "2026-10-14T20:54:54.175Z"
 ---
 
 ## Description
