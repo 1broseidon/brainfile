@@ -55,6 +55,14 @@ subtasks:
     title: Recommend what goes through refs, what stays link-only, and how it lands under spec-17
     completed: false
 createdAt: "2026-10-13T20:53:13.056Z"
+assignee: claude
+dispatch:
+  agent: claude
+  model: opus
+  effort: high
+  by: chat
+  at: "2026-10-14T05:23:44.486Z"
+updatedAt: "2026-10-14T05:23:44.593Z"
 ---
 
 ## Description
