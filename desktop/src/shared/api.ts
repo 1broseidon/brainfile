@@ -378,14 +378,16 @@ export interface EditorInfo {
  * what the agent committed, and where Merge would put it.
  */
 export interface ReviewView {
-  /** `dispatch/task-15`. */
-  branch: string;
+  /** `dispatch/task-15`; null for a hand-off that only read, in a detached checkout of the trunk. */
+  branch: string | null;
   /** The worktree's folder. */
   path: string;
   /** The branch it was started from (a commit, when that was detached). */
   base: string | null;
-  /** The branch the project's checkout is on now: where Merge lands. Null when detached. */
+  /** Where Merge lands: the branch it was started from while that exists, else the trunk (decision-11). */
   into: string | null;
+  /** The branch the project's checkout is on now; Merge waits for it to be `into`. Null when detached. */
+  checkout: string | null;
   /** Commits on the branch since it started. */
   ahead: number;
   /** The newest first, the first few. */

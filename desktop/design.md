@@ -464,7 +464,10 @@ board changes (and in the feed).
   `claude · editing`.
 - **Each hand-off works on its own branch** (spec-14, learned from Orca).
   Hand to… checks the task out into its own git worktree, on
-  `dispatch/<task-id>` from the commit the person is on, under
+  `dispatch/<task-id>` from the trunk's tip (decision-11: the branch
+  `brainfile.trunk` names in the repository's git config, else origin's
+  default branch, else main), not from whatever the person's checkout is
+  on, under
   `~/.brainfile-worktrees/<repo>-<hash>/`, so two hand-offs, or an agent and
   the person, never share a checkout, and an agent never edits the running
   app's own files. (`brainfile/<task-id>` cannot exist beside the board
@@ -473,14 +476,23 @@ board changes (and in the feed).
   says to commit there and leave nothing uncommitted, never to merge or push.
   A board kept as plain files in the code would be copied, not shared, so
   there the agent works in the folder as before. Handing the task off again
-  finds the same worktree.
+  finds the same worktree. A hand-off that only reads (its contract's
+  deliverables are all research, a review or a link) gets a detached
+  checkout of the trunk's tip instead and no branch; its brief says to
+  change nothing and put what it finds on the board, and the checkout goes
+  when its run ends, unless something was left in it.
 - **The review is a moment in the task pane**, not an IDE: while the task
   has a worktree, the pane says its branch, its commits and files with lines
   added and removed, and anything left uncommitted; then Open in the editor
   (the worktree as a folder), Discard (asked once, in place: it has no
   Undo), Send back… (a note in the task's log, then the same agent on the
-  same branch), and Merge into the branch the person's checkout is on, the
-  accent once the task is in Review. Merge waits for uncommitted work and
+  same branch), and Merge into the trunk (a branch made before decision-11
+  goes into the branch it was started from), the accent once the task is in
+  Review. Merge happens in the person's checkout, so it waits until that is
+  on the same branch, its tip `Check out main in your folder to merge`,
+  until a hand-off lands from its own worktree (decision-12). A read-only
+  checkout left with changes in it shows as `Read-only checkout`, with only
+  Open and Discard. Merge waits for uncommitted work and
   changes nothing on a conflict; merging or discarding removes the worktree
   and its branch. When the branch was merged elsewhere (the terminal, a
   pull request) and the worktree is still there, the same key reads

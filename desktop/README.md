@@ -28,7 +28,10 @@ does.
 ## Hand-offs
 
 Hand to… runs the agent in its own git worktree on the branch
-`dispatch/<task-id>`. The agent commits there. When the task reaches Review
+`dispatch/<task-id>`, forked from the trunk: the branch named by
+`git config brainfile.trunk`, else origin's default branch, else `main`.
+The agent commits there. A task whose contract only asks for research, a
+review or a link gets a read-only checkout and no branch. When the task reaches Review
 you can see the diff, open it in your editor, merge it or send it back, and
 the worktree is removed on merge or discard.
 
