@@ -2,8 +2,8 @@
 id: epic-3
 title: "Mobile parity: bring the phone up to par with desktop when linked"
 type: epic
-column: todo
-position: 2
+column: in-progress
+position: 3
 description: |-
   Since the last mobile work (task-40/task-41, phone link, completed 2026-10-13), desktop moved on: task-50 effort levels in the model selector, task-49 list-only (decision-9), task-52 calm list never hides a working task (decision-7), with task-51 per-task model + effort, task-46 dock/chat sessions (decision-8) and task-45 Discuss in flight. When linked, the phone should feel like the same platform, not an older companion.
 
@@ -15,7 +15,7 @@ tags:
   - parity
   - link
 createdAt: "2026-10-14T01:26:14.249Z"
-updatedAt: "2026-10-14T01:27:21.619Z"
+updatedAt: "2026-10-14T01:47:56.600Z"
 ---
 
 ## Description
