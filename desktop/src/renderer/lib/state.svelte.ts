@@ -701,7 +701,7 @@ class AppState {
 
   async dispatch(taskId: string, agentId: AgentId): Promise<void> {
     if (!this.activeId) return;
-    this.remember(agentId);
+    // A hand-off uses this agent's settings without changing the chat's choice.
     await this.patch(taskId, { assignee: agentId });
     const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId), this.effortFor(agentId));
     if (!result.ok) this.notify(result.error, 'warn');
