@@ -7,6 +7,8 @@
   import ChatKey from './ChatKey.svelte';
 
   let opened = $state<'health' | 'feed' | null>(null);
+  /** A Mac's traffic lights and menu bar name the app; elsewhere the lockup does. */
+  const mac = /mac/i.test(navigator.platform);
 
   /**
    * Sync says nothing while it works, which is almost always: autosync sends
@@ -75,14 +77,18 @@
 </script>
 
 <!-- The window's strip is the well itself and belongs to the whole desk:
-     the lockup, always leftmost; at the right, every board's health, the
+     the lockup leftmost (off a Mac: there the traffic lights stand alone);
+     at the right, every board's health, the
      feed of outside changes, and the chat's key above the chat pane. Search
-     is ⌘K alone: the palette is where it is typed. Anything about one repository lives in its pane. -->
-<header class="strip drag">
-  <span class="lockup" aria-label="Brainfile">
-    <span class="mark"><Mark size={16} /></span>
-    <span class="name">brainfile</span>
-  </span>
+     is ⌘K alone: the palette is where it is typed. Anything about one
+     repository lives in its pane. -->
+<header class="strip drag" class:mac>
+  {#if !mac}
+    <span class="lockup" aria-label="Brainfile">
+      <span class="mark"><Mark size={16} /></span>
+      <span class="name">brainfile</span>
+    </span>
+  {/if}
 
   <div class="right">
     {#each app.asks.filter((a) => a.projectId !== app.activeId).slice(0, 1) as ask (ask.id)}
@@ -217,9 +223,15 @@
     flex: none;
     display: flex;
     align-items: center;
-    /* Room for the traffic lights; at the right, the pane band's own inset, so the last key
-       stands over the pane's corner keys, not its outer edge. */
-    padding: 0 calc(var(--gap) + var(--s2)) 0 80px;
+    /* At the right, the pane band's own inset, so the last key stands over the pane's corner
+       keys, not its outer edge; off a Mac, past the system's window controls as well. */
+    padding: 0 calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + var(--gap) + var(--s2)) 0
+      calc(var(--gap) + var(--s3));
+  }
+
+  /* Room for the traffic lights. */
+  .strip.mac {
+    padding-left: 80px;
   }
 
   .lockup {
@@ -303,7 +315,7 @@
     position: fixed;
     z-index: var(--z-menu);
     top: calc(var(--strip-h) - 2px);
-    right: calc(var(--gap) + var(--s2));
+    right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + var(--gap) + var(--s2));
     width: 300px;
     max-height: 420px;
     overflow-y: auto;

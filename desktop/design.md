@@ -21,9 +21,13 @@ Nothing decorates; everything on screen is a thing you can read or press.
 One family, **Workbench**:
 
 - The window's top strip is the well itself, 40px, and it belongs to the
-  whole desk, never to one repository: the **lockup** (the mark at 16px and
-  the name written out, lowercase `brainfile` in Plex Sans 600), always
-  leftmost; and at the right, every board's **health**, in words and only
+  whole desk, never to one repository. On a Mac the traffic lights stand
+  alone at its left, as in most Mac apps: the menu bar and the Dock already
+  name the app. Elsewhere the **lockup** (the mark at 16px and the name
+  written out, lowercase `brainfile` in Plex Sans 600) is leftmost, and the
+  system draws its own window controls over the strip's right end in the
+  well's colour (titleBarOverlay), the strip's keys standing clear of them.
+  At the right, every board's **health**, in words and only
   when a board needs something (press for the list), the **feed** of changes
   that reached any board from outside the window (agents, the CLI, other
   machines): a muted key, with a count beside it only when something new has
@@ -314,23 +318,26 @@ off course. These rules win over every other section:
 ## Dock
 
 The top strip stays what it is (the lockup, the desk's news, the chat's
-key), so what you keep at hand lives at the board pane's bottom edge
-instead: the dock, one row ending in the board's corner.
+key), so what you keep at hand lives in its twin at the window's foot: a
+40px bottom strip, the well itself, taking the panes' bottom gap, with the
+dock at its right and then the settings key, under the chat's key (the
+same inset), so the strip is never empty. Nothing lies over the board.
 
 - **A tab is a document kept at hand:** one you opened in the pane, or one
   handed to an agent (it gets a tab when the hand-off starts, opened or
   not, and keeps it after the agent is done, as the handle to look at the
   work). Tabs come from every board and keep their order; the newest sits
-  in the corner. They survive a restart.
+  at the right end. They survive a restart.
 - **A tab says three things:** its status box (● for a decision), its title,
   and one signal: the agent at work on it (`codex · Editing…`, still, or
   `Needs you` in the warn colour) or else the board it is on when that is
   not the board in front. The open one is on the pop plane. × waits for
   the hand.
 - **Width decides how many show:** up to four, as many as fit in the
-  right-hand three quarters of the pane, the open one always among them; the
-  rest wait under `+N`, which opens upward. A tab is on the raised plane,
-  with a hairline and halo.
+  right-hand three quarters of the strip, the open one always among them;
+  the rest wait under `+N`, which opens upward. A tab is a 26px chip in the
+  well: the raised plane and a hairline, no halo, since nothing lies under
+  it.
 - **Keys:** ⌘⇧[ and ⌘⇧] step through the tabs, switching board when a tab is
   on another. (⌘W stays the window's.)
 
@@ -590,8 +597,9 @@ board changes (and in the feed).
 
 ## Settings
 
-Settings take the board's place in the pane (⌘, or the quiet row at the foot
-of the rail; Esc or a project leaves). One column, 560px, centred: a
+Settings take the board's place in the pane (⌘, or the settings key, an
+icon alone at the bottom strip's right end under the chat's key; Esc, the
+key again or a project leaves). One column, 560px, centred: a
 section's heading and its one-line lede, then its rows in a group (raised,
 radius 14) with no lines between them. Headings and notes stand on the
 rows' text, not the group's rim, so the column has one left edge.

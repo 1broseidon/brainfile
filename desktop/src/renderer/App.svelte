@@ -10,6 +10,9 @@
   import Palette from './components/Palette.svelte';
   import Composer from './components/Composer.svelte';
   import TaskMenus from './components/TaskMenus.svelte';
+  import Dock from './components/Dock.svelte';
+  import Icon from './components/Icon.svelte';
+  import { tip } from './lib/tooltip';
 
   let width = $state(window.innerWidth);
 
@@ -245,6 +248,18 @@
       {/if}
     {/if}
   </div>
+  <!-- The bottom strip, the top one's twin: the well itself; the dock at its right, then the settings key under the chat's. -->
+  <footer class="foot">
+    <Dock />
+    <button
+      class="settings-key"
+      class:open={app.settingsOpen}
+      use:tip={app.settingsOpen ? 'Close settings  Esc' : 'Settings  ⌘,'}
+      aria-label="Settings"
+      aria-pressed={app.settingsOpen}
+      onclick={() => (app.settingsOpen = !app.settingsOpen)}><Icon name="settings" size={13} /></button
+    >
+  </footer>
 </div>
 
 {#if app.paletteOpen}<Palette />{/if}
@@ -278,6 +293,39 @@
 
   .main.hidden {
     display: none;
+  }
+
+  .foot {
+    height: var(--foot-h);
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+    /* At the right, a pane band's inset, as the top strip's, so the dock ends under the chat's key. */
+    padding: 0 calc(var(--gap) + var(--s2)) 0 var(--gap);
+    /* It takes the panes' bottom gap, so its chips sit midway between the panes and the window's edge. */
+    margin-top: calc(-1 * var(--gap));
+  }
+
+  /* Drawn as the top strip's keys are: square at rest, a fill while settings show. */
+  .settings-key {
+    width: 24px;
+    height: 24px;
+    flex: none;
+    margin-left: var(--s2);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--r-control);
+    color: var(--ink-4);
+    transition: background var(--d-press) var(--ease), color var(--d-press) var(--ease);
+  }
+
+  .settings-key:hover,
+  .settings-key.open {
+    background: var(--fill-hover);
+    color: var(--ink-2);
   }
 
   .edge {

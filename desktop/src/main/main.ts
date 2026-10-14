@@ -351,6 +351,18 @@ function rememberWindow(target: BrowserWindow): void {
   });
 }
 
+/**
+ * The strip is the window's title bar on every platform: on a Mac the traffic
+ * lights sit in it; elsewhere the system draws its own controls over its
+ * right end (titleBarOverlay), in the well's colour with the strip's quiet ink.
+ */
+const MAC = process.platform === 'darwin';
+const STRIP_H = 40;
+function overlayColours(): { color: string; symbolColor: string; height: number } {
+  const dark = nativeTheme.shouldUseDarkColors;
+  return { color: dark ? '#0b0a09' : '#e9e7e5', symbolColor: dark ? '#8b8783' : '#77736e', height: STRIP_H };
+}
+
 function createWindow(): void {
   const forced = process.env.BRAINFILE_THEME;
   nativeTheme.themeSource = forced === 'light' || forced === 'dark' ? forced : 'system';
@@ -368,8 +380,9 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     title: 'Brainfile',
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 14, y: 14 },
+    ...(MAC
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 14 } }
+      : { titleBarStyle: 'hidden' as const, titleBarOverlay: overlayColours() }),
     // The well (tokens.css), so a resize never flashes another colour.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0b0a09' : '#e9e7e5',
     webPreferences: {
@@ -381,6 +394,14 @@ function createWindow(): void {
       offscreen: capturing,
     },
   });
+  if (!MAC) {
+    const target = win;
+    const recolour = () => {
+      if (!target.isDestroyed()) target.setTitleBarOverlay(overlayColours());
+    };
+    nativeTheme.on('updated', recolour);
+    target.once('closed', () => nativeTheme.off('updated', recolour));
+  }
   if (placement.fullscreen) win.setFullScreen(true);
   else if (placement.maximized) win.maximize();
   if (!capturing) rememberWindow(win);
