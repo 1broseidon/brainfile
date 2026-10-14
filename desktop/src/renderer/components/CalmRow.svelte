@@ -76,7 +76,11 @@
   {#if task.glyph && children === 0}
     <span class="kind">{task.glyph}</span>
   {/if}
-  <span class="title">{task.title}</span>
+  <!-- The ID is the one thing the hand brings: faint, after the title, in space kept for it. -->
+  <span class="name">
+    <span class="title">{task.title}</span>
+    <span class="id mono">{task.id}</span>
+  </span>
   {#if signal}
     <span class="signal">
       {#if signal.kind === 'run'}
@@ -161,8 +165,15 @@
     color: var(--ink-4);
   }
 
-  .title {
+  .name {
     flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: var(--s2);
+  }
+
+  .title {
     min-width: 0;
     overflow: hidden;
     white-space: nowrap;
@@ -173,6 +184,19 @@
 
   .row.done .title {
     color: var(--ink-3);
+  }
+
+  .id {
+    flex: none;
+    font-size: var(--t-xs);
+    color: var(--ink-4);
+    opacity: 0;
+    transition: opacity var(--d-press) var(--ease);
+  }
+
+  .row:hover .id,
+  .row.selected .id {
+    opacity: 1;
   }
 
   .signal {

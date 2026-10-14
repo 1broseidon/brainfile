@@ -213,11 +213,12 @@ until it is turned off, and the full rows are a press of ⇧V away.
   has: an agent at work on it (`claude · Editing…`, still, or `Needs you`),
   then `decision changed`, then `blocked`, then a contract that asks for
   you (`delivered`, `failed`, `blocked`, in its colour), then urgent or high
-  priority, then a checklist part done (`2/4`). Done work has none. The ID,
-  tags, assignee, a `ready` or `in progress` contract, an untouched or
-  finished checklist and dates wait for the task pane; they do not come
-  under the pointer. S, P, A and L still reach the pickers from the
-  keyboard, anchored on the row.
+  priority, then a checklist part done (`2/4`). Done work has none. The ID
+  is the one thing the pointer brings, or the selected row: small, mono and
+  faint, just after the title, in space kept for it, so a task can be named
+  without opening it. Tags, assignee, a `ready` or `in progress` contract,
+  an untouched or finished checklist and dates wait for the task pane. S, P,
+  A and L still reach the pickers from the keyboard, anchored on the row.
 - **The row breathes a step more**: 40px, its title at the reading size
   (14px). The box keeps its 26px cell, and one outline step is that cell and
   its gap (34px), so a child's box sits exactly under its parent's title. A
@@ -310,7 +311,7 @@ off course. These rules win over every other section:
   sub-task progress, an assignee. The ID, the tags and any unset priority or
   assignee appear under the pointer or on the selected row, in space that is
   already kept for them, so nothing shifts. The calm list goes further: one
-  signal a row, and nothing more under the pointer (Calm list).
+  signal a row, and only the ID under the pointer (Calm list).
 - **Empty groups are not shown** in the list. The status box moves a task
   to a column that has no group.
 - The rail is one line per project: its storage icon, its name, its count.
