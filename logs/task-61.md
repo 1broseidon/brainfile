@@ -1,8 +1,6 @@
 ---
 id: task-61
 title: Hand-offs fork from the trunk, and a hand-off that only reads leaves no branch
-column: review
-position: 4
 priority: high
 tags:
   - git
@@ -15,7 +13,7 @@ parentId: epic-4
 decisions:
   - decision-11
 contract:
-  status: delivered
+  status: done
   deliverables:
     - type: file
       path: desktop/src/agents/worktree.ts
@@ -33,7 +31,8 @@ contract:
     deliveredAt: "2026-10-14T19:24:25.189Z"
     duration: 204
 createdAt: "2026-10-14T15:15:56.764Z"
-updatedAt: "2026-10-14T19:24:25.189Z"
+updatedAt: "2026-10-14T19:24:36.954Z"
+completedAt: "2026-10-14T19:24:36.954Z"
 ---
 
 ## Description
