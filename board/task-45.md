@@ -32,3 +32,4 @@ A discussion can happen at any stage of a task's life, not only before hand-off.
 
 ## Log
 - 2026-10-13T18:34:46.162Z: [claude] Phase 1 built, not committed: discuss.ts writes <task-information> (taskInformation) and <discussion-rules> (discussRules); discussContext reads stage, priority, assignee, tags, decisions in full, the last 10 notes and the board's other current decisions itself, and finds done tasks in logs/. The visible line is "Let's discuss task-N." and the Discuss tooltip is "Talk it over with an agent". design.md › Discuss updated. 95/95 desktop tests pass, typecheck clean. Waiting for the person's QA in the dev app.
+- 2026-10-14T04:21:20.348Z: [xena] Checkpoint reconciliation: Phase 1 committed in a82f644 (discuss.ts taskInformation/discussRules, state.svelte.ts). Corrects 2026-10-13T18:34 log 'built, not committed'. Phase 2 (<work>) still open; stays in-progress.
