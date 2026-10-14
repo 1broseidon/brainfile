@@ -19,7 +19,7 @@ relatedFiles:
 decisions:
   - decision-8
 createdAt: "2026-10-13T19:25:57.699Z"
-updatedAt: "2026-10-14T04:21:16.119Z"
+updatedAt: "2026-10-14T22:12:48.937Z"
 subtasks:
   - id: task-46-1
     title: "Phase A: the chat is a pane on the right; hide keeps the thread; the key reopens it"
