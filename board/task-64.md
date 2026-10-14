@@ -1,7 +1,7 @@
 ---
 id: task-64
 title: "Fewer shared files: changelog fragments, Settings sections gathered by glob"
-column: todo
+column: review
 position: 7
 priority: low
 tags:
@@ -13,7 +13,7 @@ relatedFiles:
   - CHANGELOG.md
 parentId: epic-4
 contract:
-  status: draft
+  status: delivered
   deliverables:
     - type: file
       path: desktop/src/renderer/components/Settings.svelte
@@ -21,7 +21,10 @@ contract:
   validation:
     commands:
       - cd desktop && npm run typecheck && npm test
+  metrics:
+    deliveredAt: "2026-10-14T21:04:52.825Z"
 createdAt: "2026-10-14T15:16:10.887Z"
+updatedAt: "2026-10-14T21:04:52.825Z"
 ---
 
 ## Description
