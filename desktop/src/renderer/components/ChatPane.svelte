@@ -299,8 +299,6 @@
     {#if app.currentThread && !live}
       <button class="icon-btn" use:tip={'New chat'} onclick={newChat}><Icon name="plus" size={13} /></button>
     {/if}
-    <!-- Hiding keeps everything as it is; the key brings it back. -->
-    <button class="icon-btn hide" use:tip={'Hide  ⌘J'} aria-label="Hide the chat" onclick={() => (app.chatOpen = false)}><Icon name="sidebar" size={14} /></button>
   </header>
 
   {#if view === 'history'}
@@ -557,11 +555,6 @@
     padding: 0 var(--s2) 0 var(--s3);
   }
 
-  /* The rail's key, mirrored: this pane sits at the other edge. */
-  .hide :global(svg) {
-    transform: scaleX(-1);
-  }
-
   /* The header holds one line: the title gives way first, then the picks. */
   .where {
     min-width: 0;
@@ -571,7 +564,6 @@
     text-overflow: ellipsis;
     font-weight: 600;
   }
-
 
   .anchor {
     position: relative;

@@ -16,10 +16,12 @@
   const GAP = 8;
   const taskOpen = $derived(!!app.openTaskId && !!app.board && !app.settingsOpen);
   const chatShown = $derived(app.chatOpen && !!app.board && !app.settingsOpen);
+  /** With the chat open, a task opens in the list's place, at every width, and goes back to the list. */
+  const taskFull = $derived(taskOpen && chatShown);
   /** What sits beside the board: the task pane, then the chat pane at the window's edge (decision-8). */
-  const beside = $derived((taskOpen ? app.layout.pane : 0) + (chatShown ? app.layout.chat + (taskOpen ? GAP : 0) : 0));
-  /** The panes beside the board lie over it together, on the float shadow, when it would be left too narrow beside them. */
-  const overlay = $derived(beside > 0 && width - (app.layout.railOpen ? app.layout.rail : 0) - beside - 32 < 520);
+  const beside = $derived((taskOpen && !taskFull ? app.layout.pane : 0) + (chatShown ? app.layout.chat + (taskOpen && !taskFull ? GAP : 0) : 0));
+  /** The panes beside the board lie over it together, on the float shadow, when it would be left too narrow beside them; a task in the list's place never lies under the chat. */
+  const overlay = $derived(beside > 0 && !taskFull && width - (app.layout.railOpen ? app.layout.rail : 0) - beside - 32 < 520);
   /** Lying over, the task pane gives way to the chat before the window runs out. */
   const floatTaskW = $derived(Math.max(TASK_PANE.min, Math.min(app.layout.pane, width - (chatShown ? app.layout.chat + GAP : 0) - 3 * GAP - 48)));
 
@@ -194,10 +196,14 @@
     {:else}
       <div class="edge"></div>
     {/if}
-    <Workspace />
+    <!-- Kept while a task stands in its place, so the list comes back where it was. -->
+    <div class="main" class:hidden={taskFull}><Workspace /></div>
+    {#if taskFull && app.board && app.openTaskId}
+      <div class="main task"><TaskDetail board={app.board} taskId={app.openTaskId} full /></div>
+    {/if}
     {#if overlay}
       <div class="float">
-        {#if taskOpen && app.board && app.openTaskId}
+        {#if taskOpen && !taskFull && app.board && app.openTaskId}
           <div class="floating" style:width="{floatTaskW}px">
             <TaskDetail board={app.board} taskId={app.openTaskId} />
           </div>
@@ -209,7 +215,7 @@
         {/if}
       </div>
     {:else}
-      {#if taskOpen && app.board && app.openTaskId}
+      {#if taskOpen && !taskFull && app.board && app.openTaskId}
         <Gutter
           side="right"
           value={app.layout.pane}
@@ -258,6 +264,20 @@
     display: flex;
     padding-right: var(--gap);
     position: relative;
+  }
+
+  .main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+  }
+
+  .main.task {
+    padding-bottom: var(--gap);
+  }
+
+  .main.hidden {
+    display: none;
   }
 
   .edge {

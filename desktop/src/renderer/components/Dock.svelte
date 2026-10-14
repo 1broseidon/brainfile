@@ -69,8 +69,8 @@
 
   const items = $derived(app.tabs.map(describe).filter((i): i is Item => i !== null));
 
-  /** Where the dock ends on the right: beside the chat key, wider while a turn is at work, or in the corner while the chat shows and the key is away. */
-  const right = $derived(12 + (app.chatKeyW ? app.chatKeyW + GAP : 0));
+  /** Where the dock ends on the right: the board's corner (the chat's key is in the strip). */
+  const right = 12;
 
   /** As many tabs as the width allows, up to four, keeping room for +N. */
   const capacity = $derived(Math.max(0, Math.min(MAX_SHOWN, Math.floor((paneW * SHARE - right - 44 + GAP) / (TAB_W + GAP)))));

@@ -21,3 +21,10 @@
     {/if}
   {/if}
 </svg>
+
+<style>
+  /* A long title beside it never squeezes the box. */
+  svg {
+    flex: none;
+  }
+</style>

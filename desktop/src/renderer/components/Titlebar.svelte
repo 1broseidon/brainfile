@@ -4,6 +4,7 @@
   import { relativeTime } from '../lib/format';
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
+  import ChatKey from './ChatKey.svelte';
 
   let opened = $state<'health' | 'feed' | null>(null);
 
@@ -74,20 +75,14 @@
 </script>
 
 <!-- The window's strip is the well itself and belongs to the whole desk:
-     the lockup, always leftmost; one search across every project in the
-     middle; every board's health and the feed of outside changes at the
-     right. Anything about one repository lives in its pane. -->
+     the lockup, always leftmost; at the right, every board's health, the
+     feed of outside changes, and the chat's key above the chat pane. Search
+     is ⌘K alone: the palette is where it is typed. Anything about one repository lives in its pane. -->
 <header class="strip drag">
   <span class="lockup" aria-label="Brainfile">
     <span class="mark"><Mark size={16} /></span>
     <span class="name">brainfile</span>
   </span>
-
-  <button class="command field no-drag" onclick={() => (app.paletteOpen = true)}>
-    <Icon name="search" size={13} />
-    <span>Search</span>
-    <kbd>⌘K</kbd>
-  </button>
 
   <div class="right">
     {#each app.asks.filter((a) => a.projectId !== app.activeId).slice(0, 1) as ask (ask.id)}
@@ -117,6 +112,9 @@
       <Icon name="bolt" size={13} />
       {#if app.unseen > 0}<span class="mono">{app.unseen}</span>{/if}
     </button>
+    {#if app.board && !app.settingsOpen}
+      <ChatKey />
+    {/if}
   </div>
 </header>
 
@@ -219,8 +217,9 @@
     flex: none;
     display: flex;
     align-items: center;
-    /* Room for the traffic lights. */
-    padding: 0 var(--gap) 0 80px;
+    /* Room for the traffic lights; at the right, the pane band's own inset, so the last key
+       stands over the pane's corner keys, not its outer edge. */
+    padding: 0 calc(var(--gap) + var(--s2)) 0 80px;
   }
 
   .lockup {
@@ -242,36 +241,6 @@
     font-weight: 600;
     letter-spacing: -0.01em;
     color: var(--ink-3);
-  }
-
-  .command {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    width: clamp(220px, 26vw, 340px);
-    height: 24px;
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    padding: 0 3px 0 var(--s2);
-    color: var(--ink-4);
-    text-align: left;
-  }
-
-  .command:hover {
-    box-shadow: inset 0 0 0 var(--hairline) var(--line-strong);
-    color: var(--ink-3);
-  }
-
-  .command span {
-    flex: 1;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-
-  .command kbd {
-    height: 16px;
   }
 
   .right {
@@ -334,7 +303,7 @@
     position: fixed;
     z-index: var(--z-menu);
     top: calc(var(--strip-h) - 2px);
-    right: var(--gap);
+    right: calc(var(--gap) + var(--s2));
     width: 300px;
     max-height: 420px;
     overflow-y: auto;

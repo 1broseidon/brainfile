@@ -4,7 +4,6 @@
   import Icon from './Icon.svelte';
   import Mark from './Mark.svelte';
   import PathTip from './PathTip.svelte';
-  import ChatKey from './ChatKey.svelte';
   import Dock from './Dock.svelte';
   import Settings from './Settings.svelte';
   import AskLine from './AskLine.svelte';
@@ -198,7 +197,6 @@
       {/if}
     </div>
     <Dock />
-    <ChatKey />
   {:else if app.boardErrors[project.id]}
     <div class="center"><div class="empty"><p>{app.boardErrors[project.id]}</p></div></div>
   {/if}

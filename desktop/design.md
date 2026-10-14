@@ -20,14 +20,16 @@ Nothing decorates; everything on screen is a thing you can read or press.
 
 One family, **Workbench**:
 
-- The window's top strip is the well itself, and it belongs to the whole
-  desk, never to one repository: the **lockup** (the mark at 16px and the
-  name written out, lowercase `brainfile` in Plex Sans 600), always leftmost;
-  one **search** across every project's board, centred; and at the right,
-  every board's **health**, in words and only when a board needs something
-  (press for the list), and the **feed** of changes that reached any board
-  from outside the window (agents, the CLI, other machines): a muted key,
-  with a count beside it only when something new has arrived.
+- The window's top strip is the well itself, 40px, and it belongs to the
+  whole desk, never to one repository: the **lockup** (the mark at 16px and
+  the name written out, lowercase `brainfile` in Plex Sans 600), always
+  leftmost; and at the right, every board's **health**, in words and only
+  when a board needs something (press for the list), the **feed** of changes
+  that reached any board from outside the window (agents, the CLI, other
+  machines): a muted key, with a count beside it only when something new has
+  arrived, and last the **chat's key** (Dispatch). The right end is inset by
+  a pane band's padding, so the last key stands over the pane's corner keys.
+  Search has no key in the strip: ⌘K opens the palette, where it is typed.
 - Anything about one repository lives in its pane's **band**: the board's
   name, which is its folder key (hover for the path and where the board is
   kept, press to reveal it in Finder; paths are never printed in the
@@ -51,6 +53,9 @@ One family, **Workbench**:
   gutter between 380 and 680px, and the chat, when shown, a third at the
   window's right edge. When the board would be left under 520px, the panes
   beside it lie over it together on the float shadow instead of squeezing it.
+  With the chat shown, a task opens in the board's place instead, at every
+  width, its text kept to a reading measure, and a back arrow before its ID
+  (and Esc) returns to the list where it was.
 - A pane's **band** is 44px and has no line under it: what scrolls fades out
   beneath it.
 - Menus, the command palette and the new-task dialog are pop-plane surfaces
@@ -308,26 +313,24 @@ off course. These rules win over every other section:
 
 ## Dock
 
-The top strip stays what it is (the lockup, search, the desk's news), so
-what you keep at hand lives at the board pane's bottom edge instead: the
-dock, one row with the chat key at its end, because the chat is an agent
-too and agents and work are one system.
+The top strip stays what it is (the lockup, the desk's news, the chat's
+key), so what you keep at hand lives at the board pane's bottom edge
+instead: the dock, one row ending in the board's corner.
 
 - **A tab is a document kept at hand:** one you opened in the pane, or one
   handed to an agent (it gets a tab when the hand-off starts, opened or
   not, and keeps it after the agent is done, as the handle to look at the
   work). Tabs come from every board and keep their order; the newest sits
-  next to the chat key. They survive a restart.
+  in the corner. They survive a restart.
 - **A tab says three things:** its status box (● for a decision), its title,
   and one signal: the agent at work on it (`codex · Editing…`, still, or
   `Needs you` in the warn colour) or else the board it is on when that is
   not the board in front. The open one is on the pop plane. × waits for
   the hand.
 - **Width decides how many show:** up to four, as many as fit in the
-  right-hand three quarters of the pane beside the key, the open one always
-  among them; the rest wait under
-  `+N`, which opens upward. A tab is the chat key's sibling: the same
-  raised plane, hairline and halo.
+  right-hand three quarters of the pane, the open one always among them; the
+  rest wait under `+N`, which opens upward. A tab is on the raised plane,
+  with a hairline and halo.
 - **Keys:** ⌘⇧[ and ⌘⇧] step through the tabs, switching board when a tab is
   on another. (⌘W stays the window's.)
 
@@ -476,13 +479,14 @@ board changes (and in the feed).
   pull request) and the worktree is still there, the same key reads
   `Merged · remove worktree`, its tip `Already in <branch>`, and does only
   that. No diff authoring, no terminals.
-- **Ask the board** is a muted key in the board's bottom-right corner, at
-  the dock's end (⌘J), that shows and hides the chat (decision-8): a pane at
+- **Ask the board** is a muted key at the strip's right end, above the chat
+  pane (⌘J), that shows and hides the chat (decision-8), with a fill while
+  it shows: a pane at
   the window's right edge, beside the task pane, sized at its own gutter
   between 340 and 600px (400 to start, remembered), for small things, asking
   about the board or having it managed (add, sort, split, close). Its band
-  holds the history key, the thread's title, new chat (+) and hide, which is
-  the rail's key mirrored; Esc and ⌘J hide it too. Hiding keeps the thread,
+  holds the history key, the thread's title and new chat (+); the strip's
+  key, Esc and ⌘J hide it. Hiding keeps the thread,
   where it was scrolled to and what you were typing, and the key brings back
   the thread last shown, across a restart too: only + gives a blank page.
   While the chat shows, the key steps aside and the dock slides into its
@@ -509,7 +513,7 @@ board changes (and in the feed).
   Hand to… uses the same model and effort.
 - **The chat's thread learns from Linear's agent window.** The header carries
   only the thread: its title (its first line) once there is one, the board's
-  name before, then new chat and hide. Who answers and with what sits where
+  name before, then new chat. Who answers and with what sits where
   you type: the composer is a two-line well with a foot holding the agent
   and model picks (their menus open upward) and the send key, muted until
   there is something to send, then the composer's one accent. The thread's start is said once, centred, in mono. Yours sits
