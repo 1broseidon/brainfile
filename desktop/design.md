@@ -278,6 +278,15 @@ off course. These rules win over every other section:
   Nothing else gets a status indicator.
 - **Tips are two or three words, five at most.** Anything longer is an
   explanation, and explanations live in the list or the line, never the tip.
+  A menu explains nothing either: it is its head, its entries and their
+  notes, with no paragraph under them.
+- **Words say what they do** (decision-10). A label, button, tip, line or
+  message names the action or the fact in the person's words: what pressing
+  it will do, or what is true now (`Merged · remove worktree`, `Commit or
+  send back first`, `Deleted task-12 · Undo`). Never casual, cute or vague
+  (`Done, let it go`), never a joke or a reassurance: a reader who is
+  easily pulled off course stops to work out what a phrase means, and an
+  agent reads the window's words back.
 - **No big buttons.** New task is a muted + key in the board's band (C);
   there is no filled primary button at rest. The accent is left for the
   tick of done.

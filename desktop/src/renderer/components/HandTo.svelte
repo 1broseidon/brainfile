@@ -81,7 +81,6 @@
             <span class="note mono">{agent.available && app.modelFor(agent.id) ? app.modelNote(agent.id) : agent.note}</span>
           </button>
         {/each}
-        <p class="foot">The agent gets this task and its contract as its brief, works in the repo, and reports through the board.</p>
       </div>
     {/if}
   </span>
@@ -162,14 +161,5 @@
 
   .note {
     color: var(--ink-4);
-  }
-
-  .foot {
-    margin: var(--s1) 0 0;
-    padding: var(--s2);
-    color: var(--ink-3);
-    font-size: var(--t-sm);
-    line-height: var(--lh-sm);
-    box-shadow: inset 0 var(--hairline) 0 var(--line);
   }
 </style>

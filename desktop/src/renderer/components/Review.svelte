@@ -137,10 +137,11 @@
           class="btn"
           class:primary={inReview}
           disabled={busy || !!run || !review.into || review.uncommitted > 0 || review.ahead === 0}
-          use:tip={review.uncommitted > 0 ? 'Commit or send back first' : review.ahead === 0 ? 'Nothing committed yet' : ''}
+          use:tip={review.uncommitted > 0 ? 'Commit or send back first' : review.ahead === 0 ? 'Nothing committed yet' : review.merged ? `Already in ${review.into}` : ''}
           onclick={() => settle('merge')}
         >
-          <Icon name="git" size={13} />{review.merged ? 'Done, let it go' : `Merge into ${review.into ?? '…'}`}
+          <!-- Once its commits are in the branch, the button says the one thing left for it to do (decision-10). -->
+          <Icon name="git" size={13} />{review.merged ? 'Merged · remove worktree' : `Merge into ${review.into ?? '…'}`}
         </button>
       </div>
     {/if}
