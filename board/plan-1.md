@@ -36,9 +36,9 @@ relatedFiles:
   - reviews/task-48.md
 parentId: spec-17
 decisions:
-  - decision-2
+  - decision-11
 createdAt: "2026-10-14T05:29:51.148Z"
-updatedAt: "2026-10-14T05:30:16.785Z"
+updatedAt: "2026-10-14T15:15:13.850Z"
 ---
 
 ## Description
