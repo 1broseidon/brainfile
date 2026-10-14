@@ -82,12 +82,15 @@ const AGENTS: AgentInfo[] = [
   { id: 'codex', name: 'Codex', available: true, note: 'your login' },
 ];
 
-const MODELS: Record<string, { value: string; name: string }[]> = {
+const LEVELS = (...names: string[]) => names.map((name) => ({ value: name.toLowerCase(), name }));
+
+/** As a real agent lists them once their effort has been asked (task-50): Sonnet offers none, to show a model without levels. */
+const MODELS: Record<string, { value: string; name: string; efforts: { value: string; name: string }[] }[]> = {
   claude: [
-    { value: 'opus', name: 'Opus' },
-    { value: 'sonnet', name: 'Sonnet' },
+    { value: 'opus', name: 'Opus', efforts: LEVELS('Low', 'Medium', 'High', 'Max') },
+    { value: 'sonnet', name: 'Sonnet', efforts: [] },
   ],
-  codex: [{ value: 'gpt-5.5', name: 'GPT-5.5' }],
+  codex: [{ value: 'gpt-5.5', name: 'GPT-5.5', efforts: LEVELS('Low', 'Medium', 'High', 'XHigh') }],
 };
 
 class FakeAgents {
@@ -107,9 +110,9 @@ class FakeAgents {
       case 'live':
         return { runs: liveRuns(this.runs.values()), asks: [...this.asks.values()].map((p) => p.ask) };
       case 'dispatch':
-        return this.start({ projectId: a, taskId: b, agentId: c as AgentId, model: d, kind: 'dispatch' });
+        return this.start({ projectId: a, taskId: b, agentId: c as AgentId, model: d, effort: e, kind: 'dispatch' });
       case 'ask':
-        return this.start({ projectId: a, agentId: b as AgentId, text: c, threadId: d, model: e, kind: 'ask' });
+        return this.start({ projectId: a, agentId: b as AgentId, text: c, threadId: d, model: e, effort: args[8] as string | undefined, kind: 'ask' });
       case 'stopRun':
         return this.stop(a);
       case 'answerPermission':
@@ -126,7 +129,16 @@ class FakeAgents {
     this.emit({ kind: 'run', run: { ...run } });
   }
 
-  private start(spec: { projectId: string; agentId: AgentId; kind: AgentRun['kind']; taskId?: string; threadId?: string; model?: string; text?: string }): Result<AgentRun> {
+  private start(spec: {
+    projectId: string;
+    agentId: AgentId;
+    kind: AgentRun['kind'];
+    taskId?: string;
+    threadId?: string;
+    model?: string;
+    effort?: string;
+    text?: string;
+  }): Result<AgentRun> {
     if (!AGENTS.some((agent) => agent.id === spec.agentId)) return { ok: false, error: `Unknown agent ${spec.agentId}` };
     const run: AgentRun = {
       id: `run-${this.next++}`,
@@ -136,6 +148,7 @@ class FakeAgents {
       ...(spec.taskId ? { taskId: spec.taskId } : {}),
       ...(spec.threadId ? { threadId: spec.threadId } : {}),
       ...(spec.model ? { model: spec.model } : {}),
+      ...(spec.model && spec.effort ? { effort: spec.effort } : {}),
       state: 'starting',
       activity: 'starting',
       startedAt: Date.now(),

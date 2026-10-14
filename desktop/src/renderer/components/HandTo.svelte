@@ -59,6 +59,7 @@
 
 {#if run}
   <span class="running"><Working {run} /></span>
+  {#if app.runNote(run)}<span class="note mono">{app.runNote(run)}</span>{/if}
   <button class="icon-btn" use:tip={'Stop'} onclick={() => app.stopRun(run.id)}><Icon name="stop" size={13} /></button>
 {:else}
   <span class="anchor">
@@ -89,6 +90,10 @@
 <style>
   .running {
     color: var(--ink-3);
+    margin-right: var(--s1);
+  }
+
+  .running + .note {
     margin-right: var(--s1);
   }
 

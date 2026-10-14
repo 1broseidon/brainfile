@@ -247,7 +247,13 @@ test('a phone with the open code is let in, kept as linked, and told who the des
 
   const phone = new Phone();
   const hello = await phone.open(port(), deskKey(c), { pair: c.s, phone: 'iPhone 16 Pro' });
-  assert.deepEqual(hello, { desk: store.deskId, name: 'George’s MacBook Pro', addresses: [`127.0.0.1:${port()}`, `Desk.local:${port()}`], protocol: 1 });
+  assert.deepEqual(hello, {
+    desk: store.deskId,
+    name: 'George’s MacBook Pro',
+    addresses: [`127.0.0.1:${port()}`, `Desk.local:${port()}`],
+    protocol: 1,
+    features: ['effort'],
+  });
   const linked = store.phone(toBase64Url(phone.key.public));
   assert.equal(linked?.name, 'iPhone 16 Pro');
   assert.equal(server.view().paired?.name, 'iPhone 16 Pro');
@@ -432,6 +438,23 @@ test('checkCall: the shapes, cheaply', () => {
   assert.equal(checkCall('ask', [HERE, 'claude', 'hi', 't', 'opus', [{ who: 'you', text: 'a' }], [], { codex: 'gpt-5.5' }]).ok, true);
   assert.equal(checkCall('ask', [HERE, 'claude', 'hi', 't', 'opus', [{ who: 'them', text: 'a' }]]).ok, false);
   assert.equal(checkCall('hasOwnProperty', []).ok, false);
+});
+
+test('checkCall: effort, as the hello offers it, rides with dispatch and ask; one past it is refused', () => {
+  assert.deepEqual(checkCall('dispatch', [HERE, 'task-1', 'claude', 'opus', 'high']), {
+    ok: true,
+    call: 'dispatch',
+    args: [HERE, 'task-1', 'claude', 'opus', 'high'],
+    projectId: HERE,
+  });
+  assert.equal(checkCall('dispatch', [HERE, 'task-1', 'claude', 'opus', 'high', 'more']).ok, false);
+  assert.equal(checkCall('dispatch', [HERE, 'task-1', 'claude', 'opus', 3]).ok, false);
+  const ask = [HERE, 'claude', 'hi', 't', 'opus', [], [], { codex: 'gpt-5.5' }, 'high', { codex: 'xhigh' }];
+  assert.equal(checkCall('ask', ask).ok, true);
+  assert.equal(checkCall('ask', [...ask, 'more']).ok, false);
+  assert.equal(checkCall('ask', [...ask.slice(0, 9), { codex: 4 }]).ok, false);
+  // Left out, as an older phone sends it: the desk's defaults apply.
+  assert.deepEqual((checkCall('dispatch', [HERE, 'task-1', 'claude', 'opus', null]) as { args: unknown[] }).args, [HERE, 'task-1', 'claude', 'opus', undefined]);
 });
 
 test('a null in every call is an optional argument left out, never one that is needed', () => {

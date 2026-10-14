@@ -296,6 +296,8 @@ export interface AgentRun {
   taskId?: string;
   /** The model asked for, when one was; unset is the agent's default. */
   model?: string;
+  /** The effort level asked for with that model, when one was (task-50, task-54). */
+  effort?: string;
   /** The chat thread an ask belongs to. An ask with a taskId is a discussion of that task (task-35). */
   threadId?: string;
   /** A hand-off the chat made: the chat turn (an ask's run) that asked for it (spec-16). */

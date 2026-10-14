@@ -22,6 +22,13 @@ import type { AgentEvent, BoardSnapshot, LinkView, PairingCode, Result } from '.
 
 export const LINK_PATH = '/link/1';
 export const LINK_PROTOCOL = 1;
+/**
+ * What this desk understands beyond protocol 1's first calls, named in the
+ * hello so a phone sends them only to a desk that takes them; a phone that
+ * does not know a feature ignores it (link.md, Hello). `effort`: dispatch and
+ * ask take an effort level with the model, and a run says the one it has.
+ */
+export const LINK_FEATURES = ['effort'];
 
 /** The close codes the phone words (link.md, Connection). */
 export const CLOSE = {
@@ -457,7 +464,13 @@ export class LinkServer {
     } else {
       return this.refuse(conn, CLOSE.notLinked, 'Not linked');
     }
-    const hello = { desk: this.store.deskId, name: this.options.name, addresses: this.options.addresses(this.port ?? this.store.port), protocol: LINK_PROTOCOL };
+    const hello = {
+      desk: this.store.deskId,
+      name: this.options.name,
+      addresses: this.options.addresses(this.port ?? this.store.port),
+      protocol: LINK_PROTOCOL,
+      features: LINK_FEATURES,
+    };
     const second = responder.writeMessage2(encoder.encode(JSON.stringify(hello)));
     conn.session = second.session;
     conn.reader = new FrameReader(second.session.receive);

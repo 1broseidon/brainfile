@@ -898,7 +898,7 @@ async function turn(session: Session, run: AgentRun, prompt: string): Promise<vo
   }
 }
 
-function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], taskId?: string, extra: Pick<AgentRun, 'model' | 'from'> = {}): AgentRun {
+function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], taskId?: string, extra: Pick<AgentRun, 'model' | 'effort' | 'from'> = {}): AgentRun {
   const run: AgentRun = {
     id: `run-${nextId++}`,
     projectId,
@@ -906,6 +906,8 @@ function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], tas
     kind,
     taskId,
     ...(extra.model ? { model: extra.model } : {}),
+    // Effort belongs to a chosen model: the agent's default model takes its own.
+    ...(extra.model && extra.effort ? { effort: extra.effort } : {}),
     ...(extra.from ? { from: extra.from } : {}),
     state: 'starting',
     activity: 'starting',
@@ -1047,7 +1049,7 @@ function startDispatch(
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
-  const run = newRun(projectId, agentId, 'dispatch', taskId, { model, from });
+  const run = newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from });
   void (async () => {
     try {
       const session = await startups.open(run.id, (signal) => open(projectId, agentId, run.id, model, { at: worktree?.path, effort, signal }), close);
@@ -1191,7 +1193,7 @@ async function ask(
   efforts: Partial<Record<AgentId, string>> = {}
 ): Promise<Result<AgentRun>> {
   const key = `ask:${threadId}:${agentId}:${model ?? ''}:${effort ?? ''}`;
-  const run = newRun(projectId, agentId, 'ask', undefined, { model });
+  const run = newRun(projectId, agentId, 'ask', undefined, { model, effort });
   run.threadId = threadId;
   void (async () => {
     try {
@@ -1230,7 +1232,7 @@ async function discuss(
   effort?: string
 ): Promise<Result<AgentRun>> {
   const key = `discuss:${threadId}:${agentId}:${model ?? ''}:${effort ?? ''}`;
-  const run = newRun(projectId, agentId, 'ask', taskId, { model });
+  const run = newRun(projectId, agentId, 'ask', taskId, { model, effort });
   run.threadId = threadId;
   void (async () => {
     try {

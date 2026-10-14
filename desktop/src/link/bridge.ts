@@ -84,8 +84,12 @@ const CALLS = {
   listAgents: { args: [] },
   listModels: { args: [id] },
   live: { args: [] },
-  dispatch: { args: [id, id, id, optional(id)], project: true },
-  ask: { args: [id, id, line, id, optional(id), optional(EARLIER), optional(texts), optional(MODELS)], project: true },
+  // Effort (the fifth; ask's ninth and tenth) is what the hello's `effort` feature offers (link.md, Calls).
+  dispatch: { args: [id, id, id, optional(id), optional(id)], project: true },
+  ask: {
+    args: [id, id, line, id, optional(id), optional(EARLIER), optional(texts), optional(MODELS), optional(id), optional(MODELS)],
+    project: true,
+  },
   stopRun: { args: [id] },
   answerPermission: { args: [id, optional(id)] },
   review: { args: [id, id], project: true },

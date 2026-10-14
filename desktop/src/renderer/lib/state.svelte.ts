@@ -332,6 +332,15 @@ class AppState {
     return this.models[agentId]?.find((item) => item.value === model)?.efforts?.find((level) => level.value === effort)?.name ?? effort;
   }
 
+  /** The model and effort a run started on, as its line reads them (`Opus · High`); empty for the agent's default (task-54). */
+  runNote(run: AgentRun): string {
+    if (!run.model) return '';
+    const name = this.modelLabel(run.agentId, run.model);
+    const levels = this.models[run.agentId]?.find((item) => item.value === run.model)?.efforts;
+    const level = run.effort ? (levels?.find((item) => item.value === run.effort)?.name ?? run.effort) : '';
+    return level ? `${name} · ${level}` : name;
+  }
+
   /** Changes from outside the window, newest first. */
   feed = $state<FeedItem[]>([]);
   feedSeen = $state(Number(localStorage.getItem(SEEN_KEY) ?? 0));

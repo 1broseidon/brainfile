@@ -14,11 +14,17 @@
   const VERB: Record<string, string> = { execute: 'run', edit: 'edit', delete: 'delete', move: 'move', fetch: 'fetch', read: 'read' };
   /** A tool name reads as one (`use git_push`); a sentence reads as a sentence. */
   const what = $derived(/\s/.test(ask.title.trim()) ? ask.title.charAt(0).toLowerCase() + ask.title.slice(1) : null);
+  /** A title that starts with its own verb (`Edit board/task-4.md`) is not said twice, here or on the phone (runs.ts askWants). */
+  const bare = $derived.by(() => {
+    const said = /^(\S+)\s+(.+)$/.exec(ask.title.trim());
+    const verb = ask.kind ? VERB[ask.kind] : undefined;
+    return said && [verb, ask.kind].includes(said[1].toLowerCase()) ? said[2] : ask.title;
+  });
 </script>
 
 <span class="ask" class:stacked>
   <span class="what"
-    ><b>{app.agentName(ask.agentId)}</b> wants to {#if ask.kind && VERB[ask.kind]}{VERB[ask.kind]} <code>{ask.title}</code>{:else if what}{what}{:else}use <code>{ask.title}</code>{/if}</span
+    ><b>{app.agentName(ask.agentId)}</b> wants to {#if ask.kind && VERB[ask.kind]}{VERB[ask.kind]} <code>{bare}</code>{:else if what}{what}{:else}use <code>{ask.title}</code>{/if}</span
   >
   {#each shown as option (option.optionId)}
     <button class="btn quiet" onclick={() => api.answerPermission(ask.id, option.optionId)}>{label(option.kind, option.name)}</button>
