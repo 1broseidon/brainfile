@@ -1,8 +1,6 @@
 ---
 id: task-65
 title: The chat manages the board; code work goes to a hand-off
-column: review
-position: 2
 priority: high
 tags:
   - desktop
@@ -37,7 +35,8 @@ contract:
     commands:
       - cd desktop && npm run typecheck && npm test
 createdAt: "2026-10-14T15:16:21.592Z"
-updatedAt: "2026-10-14T20:43:04.069Z"
+updatedAt: "2026-10-14T20:47:47.905Z"
+completedAt: "2026-10-14T20:47:47.905Z"
 ---
 
 ## Description
