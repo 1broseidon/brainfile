@@ -38,22 +38,22 @@ decisions:
 subtasks:
   - id: task-48-1
     title: "Check what GitHub allows on a side ref outside refs/heads: force updates on refs/brainfile-live/*, ETags on git/ref, compare against dispatch/<task-id>"
-    completed: false
+    completed: true
   - id: task-48-2
     title: "Shape the hand-off request on the task: field or log line, how the desktop claims it, what the CLI shows"
-    completed: false
+    completed: true
   - id: task-48-3
     title: "Shape live.json and the inbox ref: phases, asks, answers, Stop; debounce and size"
-    completed: false
+    completed: true
   - id: task-48-4
     title: "Trust: HMAC over the pairing's shared secret (replay, unpair revokes) against a per-board opt-in"
-    completed: false
+    completed: true
   - id: task-48-5
     title: "Latency and rate: the desktop's fetch interval while a phone is active, against GitHub's API limits"
-    completed: false
+    completed: true
   - id: task-48-6
     title: Recommend what goes through refs, what stays link-only, and how it lands under spec-17
-    completed: false
+    completed: true
 createdAt: "2026-10-13T20:53:13.056Z"
 assignee: claude
 dispatch:
@@ -62,7 +62,7 @@ dispatch:
   effort: high
   by: chat
   at: "2026-10-14T05:23:44.486Z"
-updatedAt: "2026-10-14T05:23:53.125Z"
+updatedAt: "2026-10-14T05:30:17.509Z"
 ---
 
 ## Description
