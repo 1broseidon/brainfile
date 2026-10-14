@@ -1,14 +1,14 @@
 ---
 id: task-70
 title: "Ready to build an epic in the app: hand-offs survive merges, Merge checks then completes, hand-offs wait on dependencies"
-column: review
-position: 1
 tags:
   - desktop
   - dispatch
   - git
 parentId: epic-4
 createdAt: "2026-10-14T20:43:02.831Z"
+completedAt: "2026-10-14T20:47:42.816Z"
+updatedAt: "2026-10-14T20:47:42.816Z"
 ---
 
 ## Description
