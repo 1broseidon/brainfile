@@ -1,8 +1,8 @@
 ---
 id: task-67
 title: Fix task hand-off changing the main chat backend and model
-column: in-progress
-position: 3
+column: review
+position: 2
 description: |-
   Reported bug: handing off a task currently changes the main chat's selected backend and model.
 
@@ -18,7 +18,7 @@ tags:
   - dispatch
 createdAt: "2026-10-14T18:46:44.730Z"
 assignee: codex
-updatedAt: "2026-10-14T18:47:15.518Z"
+updatedAt: "2026-10-14T18:49:17.930Z"
 ---
 
 ## Description
