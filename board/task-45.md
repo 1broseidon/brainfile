@@ -22,9 +22,9 @@ subtasks:
     completed: true
   - id: task-45-2
     title: "Phase 2: the <work> section: branch, worktree, commits ahead, uncommitted files, and whether an agent is working on it now"
-    completed: false
+    completed: true
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-14T04:47:57.797Z"
+updatedAt: "2026-10-14T04:52:03.443Z"
 ---
 
 ## Description
