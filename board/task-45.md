@@ -1,8 +1,8 @@
 ---
 id: task-45
 title: "Discuss: hand the agent the task as a hidden block, at any stage of its life"
-column: in-progress
-position: 1
+column: review
+position: 0
 priority: medium
 tags:
   - desktop
@@ -24,7 +24,7 @@ subtasks:
     title: "Phase 2: the <work> section: branch, worktree, commits ahead, uncommitted files, and whether an agent is working on it now"
     completed: false
 createdAt: "2026-10-13T18:34:31.310Z"
-updatedAt: "2026-10-14T04:45:49.781Z"
+updatedAt: "2026-10-14T04:47:57.797Z"
 ---
 
 ## Description
