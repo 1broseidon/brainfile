@@ -1,8 +1,6 @@
 ---
 id: task-63
 title: A conflict goes back to the hand-off's agent
-column: review
-position: 6
 priority: medium
 tags:
   - git
@@ -35,7 +33,8 @@ contract:
     deliveredAt: "2026-10-14T21:00:35.112Z"
     duration: 292
 createdAt: "2026-10-14T15:16:10.374Z"
-updatedAt: "2026-10-14T21:00:35.112Z"
+updatedAt: "2026-10-14T21:16:24.095Z"
+completedAt: "2026-10-14T21:16:24.095Z"
 ---
 
 ## Description
