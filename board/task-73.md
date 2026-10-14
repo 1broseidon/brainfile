@@ -1,7 +1,7 @@
 ---
 id: task-73
 title: "Investigate: which runtime paths live only in the desktop, and plan an epic to make them work headless over MCP and the CLI"
-column: todo
+column: in-progress
 position: 3
 description: |-
   Goal: anything a person can do in the desktop, at least at the UX level, can also be done with no UI, from any MCP client or the CLI. Hand-offs, sending a task to an ACP agent, landing, conflict returns, epic leads, Discuss, issue import and so on should not depend on the desktop. When the desktop is open, it shows that headless activity live, because both run through the same code and the same board records.
@@ -49,7 +49,7 @@ decisions:
   - decision-15
   - decision-6
 contract:
-  status: draft
+  status: in_progress
   deliverables:
     - type: research
       path: .brainfile/plans/desktop-headless-parity.md
@@ -66,9 +66,12 @@ contract:
     - "Read only: no code changes in this task"
     - Work within decisions 11, 12, 14 and 15; if a finding goes against one, run check and say so in the write-up
     - The epic's children name the files they touch and carry validation commands
+  metrics:
+    pickedUpAt: "2026-10-14T22:10:22.074Z"
+    reworkCount: 0
 createdAt: "2026-10-14T22:07:16.454Z"
 assignee: claude
-updatedAt: "2026-10-14T22:10:13.763Z"
+updatedAt: "2026-10-14T22:10:22.074Z"
 ---
 
 ## Description
