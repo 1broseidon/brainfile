@@ -1,7 +1,7 @@
 ---
 id: task-63
 title: A conflict goes back to the hand-off's agent
-column: in-progress
+column: review
 position: 6
 priority: medium
 tags:
@@ -18,7 +18,7 @@ dependsOn:
 decisions:
   - decision-12
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: desktop/src/agents/agents.ts
@@ -32,8 +32,10 @@ contract:
   metrics:
     pickedUpAt: "2026-10-14T20:55:43.223Z"
     reworkCount: 0
+    deliveredAt: "2026-10-14T21:00:35.112Z"
+    duration: 292
 createdAt: "2026-10-14T15:16:10.374Z"
-updatedAt: "2026-10-14T20:55:43.223Z"
+updatedAt: "2026-10-14T21:00:35.112Z"
 ---
 
 ## Description
