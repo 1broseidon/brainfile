@@ -92,3 +92,4 @@ How close the phone can get to what the desktop link gives through GitHub refs a
 
 ## Log
 - 2026-10-14T05:30:19.743Z: [claude] Research written up in reviews/task-48.md, committed on dispatch/task-48. It holds, with three corrections: the desk does not poll the remote by default (push mode never fetches; full mode only polls open boards), board sync merges so it is no lock, and the review needs no pushed dispatch branch since ReviewView fits in the relay. Recommends a relay sealed with the pairing key on refs/brainfile-live/<desk>/{out,in/<phone>}, ETag polls (304s verified free), about 10–35 s to start a hand-off. Drafted as plan-1 under spec-17; the decisions to record wait for its acceptance.
+- 2026-10-14T15:15:13.288Z: [claude] decision-2 superseded by decision-11 (hand-offs fork from the trunk; read-only hand-offs get no branch). The dispatch/<task-id> branch this relies on is unchanged, so relinked to decision-11.
