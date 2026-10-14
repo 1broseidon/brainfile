@@ -22,3 +22,4 @@ Hand-offs fork from the trunk and land on it from their own worktree, checked fi
 
 ## Log
 - 2026-10-14T18:48:19.859Z: [claude] decision-15: epic-4 is meant to be the first epic a lead runs (spec-16 phase 2). Landing (task-62) is not a prerequisite for the lead; until it lands, children end in Review.
+- 2026-10-14T19:11:57.459Z: [claude] [claude] Priorities reset by the definitions in task-68: task-61 high (next, blocks task-62); task-60, 62, 63 medium; task-64 low; the epic itself none, its urgency is its children's. They were all high because I filed them so.
