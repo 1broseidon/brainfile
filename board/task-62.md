@@ -3,7 +3,7 @@ id: task-62
 title: "Merge lands from the worktree: a conflict said before, checks run there, the trunk moved by compare-and-swap"
 column: todo
 position: 5
-priority: high
+priority: medium
 tags:
   - git
   - dispatch
@@ -29,6 +29,7 @@ contract:
     commands:
       - cd desktop && npm run typecheck && npm test
 createdAt: "2026-10-14T15:16:09.885Z"
+updatedAt: "2026-10-14T19:11:56.608Z"
 ---
 
 ## Description
