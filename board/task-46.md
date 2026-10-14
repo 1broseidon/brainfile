@@ -1,8 +1,8 @@
 ---
 id: task-46
 title: "Dock and chat: sessions in the dock, the chat as a right-hand pane that hides"
-column: in-progress
-position: 2
+column: review
+position: 3
 priority: high
 tags:
   - desktop
@@ -19,7 +19,7 @@ relatedFiles:
 decisions:
   - decision-8
 createdAt: "2026-10-13T19:25:57.699Z"
-updatedAt: "2026-10-14T22:12:48.937Z"
+updatedAt: "2026-10-14T22:18:42.626Z"
 subtasks:
   - id: task-46-1
     title: "Phase A: the chat is a pane on the right; hide keeps the thread; the key reopens it"
