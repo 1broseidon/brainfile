@@ -28,7 +28,7 @@ subtasks:
     title: "Phase 2: a lead for an epic (decision-15): no worktree, no code; the desk scoped to its tree; woken with a turn when a child lands, fails, conflicts or asks; its plan in notes on the epic, so a new lead resumes from the board"
     completed: false
   - id: spec-16-5
-    title: "Phase 2: through completion: validation passes → done (bypass) or Review; retries to maxRetries then park; epic done with its last child"
+    title: "Phase 2: the rules the lead cannot bend: dependsOn landed first, N at once per repo (default 3), retries to maxRetries then park in Review, only a lead dispatches, one lead per tree, new children wait as drafts unless until-done on bypass; epic done with its last child"
     completed: false
   - id: spec-16-6
     title: "Phase 2: pause, resume, stop the queue from chat, dock and runner"
@@ -42,7 +42,7 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: false
-updatedAt: "2026-10-14T18:48:07.417Z"
+updatedAt: "2026-10-14T18:48:07.934Z"
 decisions:
   - decision-15
 ---
