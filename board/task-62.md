@@ -1,7 +1,7 @@
 ---
 id: task-62
 title: "Merge lands from the worktree: a conflict said before, checks run there, the trunk moved by compare-and-swap"
-column: todo
+column: in-progress
 position: 5
 priority: medium
 tags:
@@ -17,7 +17,7 @@ dependsOn:
 decisions:
   - decision-12
 contract:
-  status: draft
+  status: in_progress
   deliverables:
     - type: file
       path: desktop/src/agents/worktree.ts
@@ -28,8 +28,11 @@ contract:
   validation:
     commands:
       - cd desktop && npm run typecheck && npm test
+  metrics:
+    pickedUpAt: "2026-10-14T20:51:17.010Z"
+    reworkCount: 0
 createdAt: "2026-10-14T15:16:09.885Z"
-updatedAt: "2026-10-14T19:11:56.608Z"
+updatedAt: "2026-10-14T20:51:17.010Z"
 ---
 
 ## Description
