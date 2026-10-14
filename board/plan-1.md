@@ -63,3 +63,6 @@ Decisions to record once accepted:
 - mobile.relay.trust;
 - mobile.relay.refs;
 - desktop.dispatch.record.
+
+## Log
+- 2026-10-14T15:15:14.401Z: [claude] decision-2 superseded by decision-11 (hand-offs fork from the trunk; read-only hand-offs get no branch). The dispatch/<task-id> branch this relies on is unchanged, so relinked to decision-11.
