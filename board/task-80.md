@@ -1,0 +1,74 @@
+---
+id: task-80
+title: "Core: one shared runner that claims, starts, stops and lands hand-offs, used by the desktop first"
+column: backlog
+position: 16
+description: |-
+  The lifecycle of a hand-off lives in the desktop's agents process today: `reserve`, `liveDispatch`, `startDispatch`, `dispatch`, `newRun`, `update`, `stopRun`, `live`, `checkThenMerge`, `land`, `ready`, `settle` and `sendBackLanding`, with the in-memory `runs` map and `reserved` set. Move it to `Runner` in core/src/dispatch/runner.ts, built on task-75 (sessions), task-76 (worktrees and landing) and task-74 (the record and the run files).
+
+  - `queue(taskIds, {agent, model, effort, until, by})` writes the request.
+  - `start(taskId)` claims, prepares the worktree, writes the brief and runs the turn. It refuses while a dependsOn is open on this board (decision-15) or a run is live.
+  - `stop(runId)` works across processes: stopping its own run cancels the session; for another runner's run it writes `stop: true` in the run file, which that runner watches, and falls back to SIGTERM on its pid.
+  - `work()` takes queued requests in order while fewer than N run on this repository. N is `dispatch.maxRunning` in the board config, default 3 (spec-16-5).
+  - `land(taskId)` lands it. A conflict or a failed check sends it back to the same agent and model up to the contract's maxRetries, then it parks in Review.
+  - Run files: written on every state change and beat every 10 s. Events go out to an `onRun` listener as well.
+  - `until: done` with the repository's policy at bypass: land and complete when the validation passes; otherwise stop in Review.
+
+  Permission asks go to a callback the host gives. The desktop shows them in its band. A terminal runner asks at a prompt (task-82).
+
+  The desktop's agents.ts becomes a thin adapter. Hand to…, the desk's `dispatch` and Merge all go through the Runner, and the run registry is the run files. Hand to… now writes the request record too (spec-16 said it wrote none).
+tags:
+  - core
+  - dispatch
+  - runner
+relatedFiles:
+  - desktop/src/agents/agents.ts
+  - desktop/src/agents/live.ts
+  - desktop/src/agents/startup.ts
+  - core/src/dispatch
+  - core/src/repo/runFiles.ts
+parentId: epic-6
+dependsOn:
+  - task-74
+  - task-75
+  - task-76
+decisions:
+  - decision-11
+  - decision-12
+  - decision-15
+contract:
+  status: draft
+  deliverables:
+    - type: file
+      path: core/src/dispatch/runner.ts
+      description: Queue, claim, start, stop, work the queue, land and send back, with run files and events
+    - type: test
+      path: core/src/__tests__/dispatch-runner.test.ts
+      description: "A fake ACP agent: two runners never start one task, waits on dependsOn, at most N at once, a stop from another process, send-back up to maxRetries then Review, a lost runner's claim taken again"
+    - type: file
+      path: desktop/src/agents/agents.ts
+      description: A thin adapter over the Runner; IPC and behaviour unchanged
+  validation:
+    commands:
+      - npm run build -w core && npm run test:ci -w core
+      - cd desktop && npm run typecheck && npm test
+  constraints:
+    - "No daemon: a runner lives as long as the process that made it (spec-16)"
+    - Landings stay serial and by compare-and-swap (decision-12)
+createdAt: "2026-10-14T22:15:55.916Z"
+---
+
+## Description
+The lifecycle of a hand-off lives in the desktop's agents process today: `reserve`, `liveDispatch`, `startDispatch`, `dispatch`, `newRun`, `update`, `stopRun`, `live`, `checkThenMerge`, `land`, `ready`, `settle` and `sendBackLanding`, with the in-memory `runs` map and `reserved` set. Move it to `Runner` in core/src/dispatch/runner.ts, built on task-75 (sessions), task-76 (worktrees and landing) and task-74 (the record and the run files).
+
+- `queue(taskIds, {agent, model, effort, until, by})` writes the request.
+- `start(taskId)` claims, prepares the worktree, writes the brief and runs the turn. It refuses while a dependsOn is open on this board (decision-15) or a run is live.
+- `stop(runId)` works across processes: stopping its own run cancels the session; for another runner's run it writes `stop: true` in the run file, which that runner watches, and falls back to SIGTERM on its pid.
+- `work()` takes queued requests in order while fewer than N run on this repository. N is `dispatch.maxRunning` in the board config, default 3 (spec-16-5).
+- `land(taskId)` lands it. A conflict or a failed check sends it back to the same agent and model up to the contract's maxRetries, then it parks in Review.
+- Run files: written on every state change and beat every 10 s. Events go out to an `onRun` listener as well.
+- `until: done` with the repository's policy at bypass: land and complete when the validation passes; otherwise stop in Review.
+
+Permission asks go to a callback the host gives. The desktop shows them in its band. A terminal runner asks at a prompt (task-82).
+
+The desktop's agents.ts becomes a thin adapter. Hand to…, the desk's `dispatch` and Merge all go through the Runner, and the run registry is the run files. Hand to… now writes the request record too (spec-16 said it wrote none).
