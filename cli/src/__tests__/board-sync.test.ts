@@ -105,11 +105,18 @@ describe('board sync (spec-9 phase 2)', () => {
   const savedEnv: Record<string, string | undefined> = {};
 
   beforeAll(() => {
-    for (const key of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CONFIG_NOSYSTEM', 'BRAINFILE_AGENT', 'BRAINFILE_GLOBAL', 'BRAINFILE_AUTOSYNC', 'BRAINFILE_AUTOSYNC_DELAY_MS']) {
+    for (const key of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CONFIG_NOSYSTEM', 'GIT_CONFIG_COUNT', 'GIT_CONFIG_KEY_0', 'GIT_CONFIG_VALUE_0', 'GIT_CONFIG_KEY_1', 'GIT_CONFIG_VALUE_1', 'BRAINFILE_AGENT', 'BRAINFILE_GLOBAL', 'BRAINFILE_AUTOSYNC', 'BRAINFILE_AUTOSYNC_DELAY_MS']) {
       savedEnv[key] = process.env[key];
     }
     process.env.GIT_CONFIG_GLOBAL = os.devNull;
     process.env.GIT_CONFIG_NOSYSTEM = '1';
+    // No git maintenance or gc in the background after a fetch or commit: a
+    // detached one writes into .git while afterEach removes the folder (ENOTEMPTY on CI).
+    process.env.GIT_CONFIG_COUNT = '2';
+    process.env.GIT_CONFIG_KEY_0 = 'maintenance.auto';
+    process.env.GIT_CONFIG_VALUE_0 = 'false';
+    process.env.GIT_CONFIG_KEY_1 = 'gc.auto';
+    process.env.GIT_CONFIG_VALUE_1 = '0';
     delete process.env.BRAINFILE_AGENT;
     delete process.env.BRAINFILE_GLOBAL;
     // Background pushes would race the explicit syncs below; the autosync
@@ -152,7 +159,8 @@ describe('board sync (spec-9 phase 2)', () => {
   afterEach(() => {
     process.chdir(originalCwd);
     jest.restoreAllMocks();
-    fs.rmSync(base, { recursive: true, force: true });
+    // A background push queued by a test may still be writing state/ as it ends: retry while it finishes.
+    fs.rmSync(base, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   });
 
   /** A tracked board in A pointed at the boards remote, with its driver on the built CLI. */
