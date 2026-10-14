@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { discussContext, discussMode, discussPermission, discussPreamble, taskInformation } from '../src/agents/discuss.ts';
+import { discussContext, discussMode, discussPermission, discussPreamble, discussRules, taskInformation, workInformation, type DiscussWork } from '../src/agents/discuss.ts';
 import type { AgentModes } from '../src/shared/api.ts';
 
 const CONFIG = '---\ntitle: Test\ncolumns:\n  - id: todo\n    title: To Do\n  - id: review\n    title: Review\n---\n';
@@ -226,6 +226,50 @@ test('a discussion refuses edits, commands and mode changes, and asks about read
   assert.equal(discussPermission('Something', undefined), 'usual');
   // The desk is not a board tool: a discussion has none, and one asked for is not let through as the board's.
   assert.equal(discussPermission('mcp__desk__dispatch', 'other'), 'usual');
+});
+
+const REVIEW: DiscussWork = {
+  review: {
+    branch: 'dispatch/task-7',
+    path: '/tmp/wt/task-7',
+    base: 'main',
+    into: 'main',
+    ahead: 14,
+    commits: Array.from({ length: 12 }, (_, i) => ({ sha: `abc${i}`, subject: `Step ${14 - i}` })),
+    files: [{ path: 'desktop/src/agents/discuss.ts', added: 40, removed: 3 }],
+    filesChanged: 1,
+    added: 40,
+    removed: 3,
+    uncommitted: 2,
+    merged: false,
+  },
+  uncommittedFiles: ['desktop/test/discuss.test.ts', 'notes.md'],
+};
+
+test('in review, the block says where the code is: branch, worktree, commits, files and what is uncommitted', () => {
+  const ctx = { ...discussContext(brainfilePath, 'task-7', AT), work: REVIEW };
+  const text = taskInformation(ctx);
+  assert.match(text, /<work branch="dispatch\/task-7" worktree="\/tmp\/wt\/task-7">\nStarted from main; 14 commits ahead, 1 file changed \(\+40 −3\)\. Not merged into main\.\n/);
+  assert.match(text, /Commits, newest first:\n- abc0 Step 14\n/);
+  assert.match(text, /- abc11 Step 3\n- and 2 more\n/);
+  assert.match(text, /Files changed on the branch:\n- desktop\/src\/agents\/discuss\.ts \+40 −3\n/);
+  assert.match(text, /Not committed in the worktree \(2\): desktop\/test\/discuss\.test\.ts, notes\.md\.\nNo agent is working on it now\.\n<\/work>\n<\/task-information>$/);
+  // The rules send it to the worktree, not the main checkout.
+  const rules = discussRules(ctx);
+  assert.match(rules, /on the branch dispatch\/task-7, in the worktree at \/tmp\/wt\/task-7, not in the main checkout/);
+  assert.match(rules, /A merge takes only what is committed/);
+  assert.match(rules, /and the worktree's files again/);
+});
+
+test('the block says when an agent is on the task now, and when there is no branch', () => {
+  const live = workInformation({ ...REVIEW, working: { agent: 'Codex', state: 'working', model: 'gpt-5', effort: 'high' } });
+  assert.match(live, /\nCodex \(gpt-5, high\) is working on it now \(working\): its worktree may change while you talk\.\n<\/work>$/);
+  const merged = workInformation({ review: { ...REVIEW.review!, uncommitted: 0, merged: true }, uncommittedFiles: [] });
+  assert.match(merged, /Already merged into main\.\n/);
+  assert.match(merged, /\nNothing uncommitted in the worktree\.\n/);
+  const none = { ...discussContext(brainfilePath, 'task-7', AT), work: { review: null, uncommittedFiles: [] } };
+  assert.match(taskInformation(none), /<work>\nNo branch or worktree: it has not been handed off to one\. Its code, if any, is in the main checkout\.\nNo agent is working on it now\.\n<\/work>/);
+  assert.doesNotMatch(discussRules(none), /not in the main checkout/);
 });
 
 const claude: AgentModes = {

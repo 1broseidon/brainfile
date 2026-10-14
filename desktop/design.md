@@ -535,7 +535,11 @@ board changes (and in the feed).
   (`<task-information>`: its stage among the columns, description, subtasks,
   contract, parent, the decisions it rests on in full, the files it names,
   its latest notes and the board's other decisions, as of when it was read),
-  so it answers without looking the task up. It may change only that task's
+  so it answers without looking the task up. The block ends with `<work>`:
+  the task's branch and worktree, the commits on it and the files they
+  change, what is uncommitted there, and whether an agent is working on it
+  now; once handed off, the agent is told to read the code in the worktree,
+  not the main checkout, since that is where Review's code is. It may change only that task's
   description, subtasks and contract, and record, replace or retire a
   decision (task-44), each with the person's agreement: a decision is run
   past check first and shown with its claim key, title, text and what it

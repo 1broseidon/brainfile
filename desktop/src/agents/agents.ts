@@ -23,11 +23,11 @@ import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
-import { discardReview, mergeReview, prepareWorktree, reviewOf, type Worktree } from './worktree';
+import { discardReview, mergeReview, prepareWorktree, reviewOf, uncommittedIn, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { customLaunch } from './custom';
 import { readSettingsFile, settingsOf, writeSettings, type SettingsFile } from './settings';
-import { discussContext, discussMode, discussPermission, discussPreamble } from './discuss';
+import { discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
 import { Startups, unlessAborted } from './startup';
 import { effortSelect, effortToSet } from './effort';
@@ -1217,6 +1217,22 @@ async function ask(
   return { ok: true, value: { ...run } };
 }
 
+/** The task's branch, worktree and live hand-off, for a discussion: git that cannot be read leaves just the hand-off. */
+function workOf(projectId: string, taskId: string): DiscussWork {
+  let review: ReviewView | null = null;
+  try {
+    review = reviewOf(projectId, taskId);
+  } catch {
+    /* not a repository, or git refused: said as no branch */
+  }
+  const live = liveDispatch(projectId, taskId);
+  return {
+    review,
+    uncommittedFiles: review?.uncommitted ? uncommittedIn(review.path).files : [],
+    working: live ? { agent: nameOf(live.agentId), state: live.state, model: live.model, effort: live.effort } : undefined,
+  };
+}
+
 /**
  * One turn in a discussion of a task (task-35): a chat thread about that one
  * task, at any stage of its life, whose agent reads freely and changes only
@@ -1245,7 +1261,7 @@ async function discuss(
         const located = locateBoard(projectId, { materialize: false });
         if (!located.found) throw new Error(`No board in ${projectId}`);
         // Read before the agent starts, so a task that has gone says so at once.
-        preamble = discussPreamble(discussContext(located.brainfilePath, taskId));
+        preamble = discussPreamble({ ...discussContext(located.brainfilePath, taskId), work: workOf(projectId, taskId) });
         if (earlier.length) preamble += `Earlier in this discussion:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
       }
       const session = existing ?? (await open(projectId, agentId, key, model, { discuss: taskId, effort }));

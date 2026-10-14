@@ -174,6 +174,14 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
   };
 }
 
+/** The files changed in a worktree and not committed, as git names them, the first few; the count covers the rest. */
+export function uncommittedIn(at: string): { files: string[]; count: number } {
+  const status = git(['status', '--porcelain'], at);
+  const lines = status.ok ? status.stdout.split('\n').filter(Boolean) : [];
+  // `XY path`; the output comes trimmed, so the first line may have lost a leading blank.
+  return { files: lines.slice(0, SHOWN).map((l) => l.replace(/^\s?\S{1,2}\s+/, '')), count: lines.length };
+}
+
 /** The last line of git's complaint worth showing. */
 function said(r: { stderr: string; stdout: string }): string {
   const lines = `${r.stderr}\n${r.stdout}`.split('\n').map((l) => l.replace(/^(error|fatal|hint):\s*/, '').trim());
