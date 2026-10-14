@@ -31,7 +31,8 @@ One family, **Workbench**:
   when a board needs something (press for the list), the **feed** of changes
   that reached any board from outside the window (agents, the CLI, other
   machines): a muted key, with a count beside it only when something new has
-  arrived, and last the **chat's key** (Dispatch). The right end is inset by
+  arrived, and with what waits on you pinned above the changes (Dispatch),
+  and last the **chat's key** (Dispatch). The right end is inset by
   a pane band's padding, so the last key stands over the pane's corner keys.
   Search has no key in the strip: ⌘K opens the palette, where it is typed.
 - Anything about one repository lives in its pane's **band**: the board's
@@ -288,10 +289,18 @@ off course. These rules win over every other section:
   with Sync now, and it takes the warn colour only for a real problem. The
   feed is the bolt and a count (`⚡ 10`), its tip "outside changes". At
   rest the corner is empty but for the bolt.
-- **One exception: a reply you have not read.** The chat key may carry a
+- **Two exceptions.** A reply you have not read: the chat key may carry a
   small muted badge for a reply that landed while the chat was closed,
   because a missed reply is worse than the noise of one muted badge. It is
-  muted ink, never the accent or warn, and opening the chat clears it.
+  muted ink, never the accent or warn, and opening the chat clears it. And
+  work waiting on you (task-69): while any board has a hand-off that can
+  merge, the bolt counts those instead of the changes, in the accent, its
+  tip `2 ready to merge · 5 outside changes`. Opening the feed shows them
+  first, under `Waiting on you`, every board's, each with its board, ID and
+  lines added and removed, and Merge (the task pane's, with its rules and
+  tips), or `conflicts with main` in the warning colour and Open. They are
+  state, not news: a row goes when it merges, never when it is seen, and the
+  count is only what can merge now. The changes follow under `Changes`.
   Nothing else gets a status indicator.
 - **Tips are two or three words, five at most.** Anything longer is an
   explanation, and explanations live in the list or the line, never the tip.

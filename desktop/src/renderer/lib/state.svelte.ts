@@ -680,6 +680,24 @@ class AppState {
     else this.#readyTimers[projectId] = setTimeout(() => void ask(), 400);
   }
 
+  /**
+   * What waits on the person across every board (task-69): hand-offs that
+   * can merge, and ones that would conflict, in the rail's order. The feed
+   * pins them above its changes; they go when they merge, not when seen.
+   */
+  waiting = $derived.by(() =>
+    this.projects.flatMap((project) => {
+      const board = this.boards[project.id];
+      if (!board) return [];
+      return (this.mergeable[project.id] ?? []).flatMap((ready) => {
+        const task = board.tasks.find((t) => t.id === ready.taskId) ?? board.completed.find((t) => t.id === ready.taskId);
+        return task ? [{ projectId: project.id, title: task.title, ready }] : [];
+      });
+    })
+  );
+  /** How many can merge now: the number the feed's key says, in the accent. */
+  readyCount = $derived(this.waiting.filter((w) => !w.ready.conflicts).length);
+
   /** The hand-off on a task of the board in front that can merge, or would conflict. */
   readyFor(taskId: string): ReadyView | undefined {
     return this.activeId ? this.mergeable[this.activeId]?.find((r) => r.taskId === taskId) : undefined;
@@ -758,9 +776,8 @@ class AppState {
   }
 
   /** Merge or discard: the review goes when its worktree does. True when it went. */
-  async settleReview(taskId: string, how: 'merge' | 'discard'): Promise<boolean> {
-    if (!this.activeId) return false;
-    const projectId = this.activeId;
+  async settleReview(taskId: string, how: 'merge' | 'discard', projectId = this.activeId): Promise<boolean> {
+    if (!projectId) return false;
     const result = how === 'merge' ? await api.mergeReview(projectId, taskId) : await api.discardReview(projectId, taskId);
     if (!result.ok) this.notify(result.error, 'warn');
     this.refreshReady(projectId, true);

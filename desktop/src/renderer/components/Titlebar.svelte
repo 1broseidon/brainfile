@@ -74,12 +74,34 @@
     opened = opened === which ? null : which;
     if (opened === 'feed') app.markFeedSeen();
   }
+
+  /** The feed key's tip: what waits on you first, then what changed. */
+  const feedTip = $derived.by(() => {
+    const changes = app.unseen > 0 ? `${app.unseen} outside ${app.unseen === 1 ? 'change' : 'changes'}` : '';
+    if (!app.readyCount) return changes || 'Outside changes';
+    const ready = `${app.readyCount} ready to merge`;
+    return changes ? `${ready} · ${changes}` : ready;
+  });
+
+  let merging = $state<string | null>(null);
+
+  async function merge(projectId: string, taskId: string): Promise<void> {
+    merging = projectId + taskId;
+    await app.settleReview(taskId, 'merge', projectId);
+    merging = null;
+  }
+
+  function goTo(projectId: string, taskId: string): void {
+    opened = null;
+    void app.goTo(projectId, taskId);
+  }
 </script>
 
 <!-- The window's strip is the well itself and belongs to the whole desk:
      the lockup leftmost (off a Mac: there the traffic lights stand alone);
      at the right, every board's health, the
-     feed of outside changes, and the chat's key above the chat pane. Search
+     feed of outside changes with what waits on you pinned above them, and
+     the chat's key above the chat pane. Search
      is ⌘K alone: the palette is where it is typed. Anything about one
      repository lives in its pane. -->
 <header class="strip drag" class:mac>
@@ -108,15 +130,17 @@
         <Icon name="sync" size={13} />
       </button>
     {/if}
+    <!-- What can merge outranks what changed: its count, in the accent, until it merges. -->
     <button
       class="feed no-drag"
-      class:lit={app.unseen > 0}
+      class:lit={app.unseen > 0 || app.readyCount > 0}
+      class:waiting={app.readyCount > 0}
       class:open={opened === 'feed'}
-      use:tip={app.unseen > 0 ? `${app.unseen} outside ${app.unseen === 1 ? 'change' : 'changes'}` : 'Outside changes'}
+      use:tip={feedTip}
       onclick={() => toggle('feed')}
     >
       <Icon name="bolt" size={13} />
-      {#if app.unseen > 0}<span class="mono">{app.unseen}</span>{/if}
+      {#if app.readyCount > 0}<span class="mono">{app.readyCount}</span>{:else if app.unseen > 0}<span class="mono">{app.unseen}</span>{/if}
     </button>
     {#if app.board && !app.settingsOpen}
       <ChatKey />
@@ -198,6 +222,34 @@
         </div>
       {/each}
     {:else}
+      {#if app.waiting.length}
+        <!-- Waiting on you: state, not news. A row goes when it merges, never when it is seen. -->
+        <div class="section">Waiting on you</div>
+        {#each app.waiting as w (w.projectId + w.ready.taskId)}
+          {@const elsewhere = w.ready.checkout !== w.ready.into}
+          <div class="wait">
+            <button class="item two" onclick={() => goTo(w.projectId, w.ready.taskId)}>
+              <span class="label">{w.title}</span>
+              <span class="mono meta">
+                {projectName(w.projectId)} · {w.ready.taskId} ·
+                {#if w.ready.conflicts}<span class="warn">conflicts with {w.ready.into}</span>{:else}<span class="add" class:zero={!w.ready.added}>+{w.ready.added}</span>
+                  <span class="del" class:zero={!w.ready.removed}>−{w.ready.removed}</span>{/if}
+              </span>
+            </button>
+            {#if w.ready.conflicts}
+              <button class="key" use:tip={'Open it to send it back'} onclick={() => goTo(w.projectId, w.ready.taskId)}>Open</button>
+            {:else}
+              <button
+                class="key sure"
+                disabled={elsewhere || merging === w.projectId + w.ready.taskId}
+                use:tip={elsewhere ? `Check out ${w.ready.into} in ${projectName(w.projectId)} to merge` : `Merge into ${w.ready.into}`}
+                onclick={() => merge(w.projectId, w.ready.taskId)}>Merge</button
+              >
+            {/if}
+          </div>
+        {/each}
+        {#if app.feed.length}<div class="section">Changes</div>{/if}
+      {/if}
       {#each app.feed as item (item.key)}
         <button
           class="item two"
@@ -210,7 +262,7 @@
           <span class="mono meta">{projectName(item.projectId)} · {item.taskId} {item.what} · {relativeTime(new Date(item.at).toISOString())}</span>
         </button>
       {:else}
-        <p class="empty">Nothing yet. Changes that agents, the CLI or your other machines make to any board arrive here.</p>
+        {#if !app.waiting.length}<p class="empty">Nothing yet. Changes that agents, the CLI or your other machines make to any board arrive here, and work ready to merge waits at the top.</p>{/if}
       {/each}
     {/if}
   </div>
@@ -299,9 +351,14 @@
     color: var(--warn);
   }
 
-  /* Something new is waiting: said with a number, not a colour. */
+  /* Something new: said with a number, not a colour. */
   .feed.lit {
     color: var(--ink-2);
+  }
+
+  /* Work waiting on you is the one thing the strip says in the accent. */
+  .feed.waiting {
+    color: var(--accent-ink);
   }
 
 
@@ -369,8 +426,54 @@
     font-weight: 500;
   }
 
-  .meta.warn {
+  .meta.warn,
+  .warn {
     color: var(--warn);
+  }
+
+  .add {
+    color: var(--ok);
+  }
+
+  .del {
+    color: var(--danger);
+  }
+
+  .zero {
+    color: var(--ink-4);
+  }
+
+  /* The feed's two parts, named only when there are both. */
+  .section {
+    padding: var(--s2) var(--s2) var(--s1);
+    font-size: var(--t-xs);
+    font-weight: 600;
+    color: var(--ink-3);
+  }
+
+  .wait {
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+    padding-right: 5px;
+    border-radius: var(--r-control);
+  }
+
+  .wait:hover {
+    background: var(--fill-hover);
+  }
+
+  .wait .item:hover {
+    background: none;
+  }
+
+  .wait .item {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .key:disabled {
+    opacity: 0.5;
   }
 
   /* A board in the health list: its name and state, and under them, when
