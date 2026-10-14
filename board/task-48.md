@@ -34,7 +34,7 @@ tags:
   - research
 parentId: spec-17
 decisions:
-  - decision-2
+  - decision-11
 subtasks:
   - id: task-48-1
     title: "Check what GitHub allows on a side ref outside refs/heads: force updates on refs/brainfile-live/*, ETags on git/ref, compare against dispatch/<task-id>"
@@ -62,7 +62,7 @@ dispatch:
   effort: high
   by: chat
   at: "2026-10-14T05:23:44.486Z"
-updatedAt: "2026-10-14T05:30:21.137Z"
+updatedAt: "2026-10-14T15:15:12.731Z"
 ---
 
 ## Description
