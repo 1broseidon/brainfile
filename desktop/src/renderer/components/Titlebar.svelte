@@ -243,7 +243,7 @@
                 class="key sure"
                 disabled={elsewhere || merging === w.projectId + w.ready.taskId}
                 use:tip={elsewhere ? `Check out ${w.ready.into} in ${projectName(w.projectId)} to merge` : `Merge into ${w.ready.into}`}
-                onclick={() => merge(w.projectId, w.ready.taskId)}>Merge</button
+                onclick={() => merge(w.projectId, w.ready.taskId)}>{merging === w.projectId + w.ready.taskId ? 'Checking…' : 'Merge'}</button
               >
             {/if}
           </div>

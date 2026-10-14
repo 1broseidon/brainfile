@@ -21,6 +21,7 @@
  * Not an IDE: the review says what changed, opens it in the person's editor,
  * merges it or throws it away. It never edits a diff.
  */
+import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -325,19 +326,64 @@ function cleanUp(repoRoot: string, at: string, branch: string | null, force: boo
  * (decision-12). Refuses, and changes nothing, when the agent left work
  * uncommitted or the merge would conflict.
  */
+/** Why Merge would refuse this review, before anything runs; null when it would go ahead. */
+export function whyNotMerge(taskId: string, review: ReviewView | null): string | null {
+  if (!review) return `${taskId} has no worktree to merge`;
+  const { branch, into, checkout } = review;
+  if (!branch) return `${taskId} only read: there is nothing to merge`;
+  if (!into) return `${branch} has no branch to go into: the trunk is missing`;
+  if (review.uncommitted > 0) {
+    return `${review.uncommitted} ${review.uncommitted === 1 ? 'file is' : 'files are'} not committed in the worktree: send it back, or commit in your editor`;
+  }
+  if (review.ahead === 0) return `${branch} has no commits to merge`;
+  if (!review.merged && checkout !== into) return `${branch} goes into ${into}, and your checkout is on ${checkout ?? 'no branch'}: check out ${into} to merge`;
+  return null;
+}
+
+/** The last lines of what a check said, enough to see why it failed. */
+function tail(text: string, lines = 8): string {
+  return text.trim().split('\n').slice(-lines).join('\n');
+}
+
+/**
+ * Runs the contract's checks in the hand-off's worktree, one after another,
+ * as a shell would, and stops at the first that fails. Asynchronous: a test
+ * suite takes a while, and the agents process keeps answering meanwhile.
+ */
+export function runChecks(at: string, commands: string[], env: NodeJS.ProcessEnv = process.env, timeoutMs = 15 * 60_000): Promise<{ ok: true } | { ok: false; command: string; output: string }> {
+  return (async () => {
+    for (const command of commands) {
+      const failed = await new Promise<string | null>((resolve) => {
+        const child = spawn(command, { cwd: at, env, shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
+        let output = '';
+        const keep = (chunk: Buffer) => {
+          output = (output + chunk.toString()).slice(-16_000);
+        };
+        child.stdout.on('data', keep);
+        child.stderr.on('data', keep);
+        const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
+        child.on('error', (err) => {
+          clearTimeout(timer);
+          resolve(err.message);
+        });
+        child.on('close', (code, signal) => {
+          clearTimeout(timer);
+          resolve(code === 0 ? null : tail(output) || (signal ? `stopped (${signal})` : `exit ${code}`));
+        });
+      });
+      if (failed !== null) return { ok: false as const, command, output: failed };
+    }
+    return { ok: true as const };
+  })();
+}
+
 export function mergeReview(projectId: string, taskId: string, title?: string): { message: string } {
   const repoRoot = gitToplevel(projectId);
   const review = reviewOf(projectId, taskId);
-  if (!repoRoot || !review) throw new Error(`${taskId} has no worktree to merge`);
-  const { branch, path: at, into, checkout } = review;
-  if (!branch) throw new Error(`${taskId} only read: there is nothing to merge`);
-  if (!into) throw new Error(`${branch} has no branch to go into: the trunk is missing`);
-  if (review.uncommitted > 0) {
-    throw new Error(`${review.uncommitted} ${review.uncommitted === 1 ? 'file is' : 'files are'} not committed in the worktree: send it back, or commit in your editor`);
-  }
-  if (review.ahead === 0) throw new Error(`${branch} has no commits to merge`);
+  const refused = whyNotMerge(taskId, review);
+  if (!repoRoot || refused || !review?.branch || !review.into) throw new Error(refused ?? `${taskId} has no worktree to merge`);
+  const { branch, path: at, into } = review;
   if (!review.merged) {
-    if (checkout !== into) throw new Error(`${branch} goes into ${into}, and your checkout is on ${checkout ?? 'no branch'}: check out ${into} to merge`);
     const message = `Merge ${taskId}${title ? `: ${title}` : ''}`;
     const r = git(['merge', '--no-ff', '--no-edit', '-m', message, branch], repoRoot);
     if (!r.ok) {

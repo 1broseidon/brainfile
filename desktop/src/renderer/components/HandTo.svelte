@@ -7,7 +7,9 @@
   import type { AgentId } from '../../shared/api';
 
   /** Dispatch, the muted way: one key on a task, a short list of the person's own agents. */
-  let { taskId }: { taskId: string } = $props();
+  /** `waitsOn`: its dependencies still open on this board; it is handed off once they are done (decision-15). */
+  /** `small`: the key under a chat reply, a step quieter than the task pane's. */
+  let { taskId, waitsOn = [], small = false }: { taskId: string; waitsOn?: string[]; small?: boolean } = $props();
 
   let open = $state(false);
   let key = $state<HTMLButtonElement>();
@@ -63,7 +65,15 @@
   <button class="icon-btn" use:tip={'Stop'} onclick={() => app.stopRun(run.id)}><Icon name="stop" size={13} /></button>
 {:else}
   <span class="anchor">
-    <button class="btn quiet" class:on={open} bind:this={key} onclick={toggle}><Icon name="hand" size={13} />Hand to…</button>
+    <button
+      class="btn quiet"
+      class:small
+      class:on={open}
+      bind:this={key}
+      disabled={waitsOn.length > 0}
+      use:tip={waitsOn.length ? `Waits on ${waitsOn.join(', ')}` : ''}
+      onclick={toggle}><Icon name="hand" size={13} />Hand to…</button
+    >
     {#if open}
       <div class="catch" role="presentation" use:portal onmousedown={() => (open = false)}></div>
       <div class="menu" role="listbox" use:portal style:top="{place.top}px" style:left="{place.left}px" style:width="{MENU_W}px">
@@ -95,6 +105,13 @@
 
   .running + .note {
     margin-right: var(--s1);
+  }
+
+  .btn.small {
+    height: 22px;
+    padding: 0 var(--s2);
+    gap: 4px;
+    font-size: var(--t-sm);
   }
 
   .btn.on {

@@ -775,11 +775,23 @@ class AppState {
     if (!result.ok) this.notify(result.error, 'warn');
   }
 
-  /** Merge or discard: the review goes when its worktree does. True when it went. */
+  /** Merge or discard: the review goes when its worktree does, and a merged task is done. True when it went. */
   async settleReview(taskId: string, how: 'merge' | 'discard', projectId = this.activeId): Promise<boolean> {
     if (!projectId) return false;
     const result = how === 'merge' ? await api.mergeReview(projectId, taskId) : await api.discardReview(projectId, taskId);
-    if (!result.ok) this.notify(result.error, 'warn');
+    if (!result.ok) {
+      // A check that failed says its first line here; the whole of it goes in the task's log, where a send-back carries it to the agent.
+      const [first, ...rest] = result.error.split('\n');
+      this.notify(first, 'warn');
+      // A log entry is one line: the output's lines run on, marked, and its end is kept.
+      const said = rest.map((l) => l.trim()).filter(Boolean).join(' ⏎ ').slice(-800);
+      if (said) await api.noteTask(projectId, taskId, `Checks failed before merge: ${first.replace(/^Nothing was merged: /, '')} ${said}`);
+    }
+    // Merging is the person's yes: the task is done, unless the board will not have it so (a parent with open children).
+    if (result.ok && how === 'merge' && this.boards[projectId]?.tasks.some((t) => t.id === taskId)) {
+      const done = await api.completeTask(projectId, taskId);
+      if (!done.ok) this.notify(`Merged. ${taskId} stays open: ${done.error}`, 'warn');
+    }
     this.refreshReady(projectId, true);
     return result.ok;
   }

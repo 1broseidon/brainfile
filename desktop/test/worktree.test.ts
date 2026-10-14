@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { locateBoard } from '@brainfile/core/repo';
-import { canBranch, discardReview, mergeReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
+import { canBranch, discardReview, mergeReview, onlyReads, prepareWorktree, readyToMerge, runChecks, whyNotMerge, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
 
 function git(args: string[], cwd: string): string {
   const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -346,4 +346,30 @@ test('ready to merge says where the checkout is, and a read-only checkout is nev
   prepareWorktree(repo, 'task-2', root, true);
   const found = readyToMerge(repo);
   assert.deepEqual(found.map((r) => [r.taskId, r.into, r.checkout]), [['task-1', 'main', 'feature']]);
+});
+
+// ── Checks before Merge ─────────────────────────────────────────────────────
+
+test('the checks run in the worktree, in order, and stop at the first that fails', async () => {
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  assert.deepEqual(await runChecks(wt, ['test -f a.txt', 'true']), { ok: true });
+  const failed = await runChecks(wt, ['echo first > ran.txt', 'echo "two lines\nof why" >&2; exit 3', 'echo never > never.txt']);
+  assert.equal(failed.ok, false);
+  if (!failed.ok) {
+    assert.equal(failed.command, 'echo "two lines\nof why" >&2; exit 3');
+    assert.match(failed.output, /two lines\nof why/);
+  }
+  assert.ok(fs.existsSync(path.join(wt, 'ran.txt')));
+  assert.ok(!fs.existsSync(path.join(wt, 'never.txt')));
+});
+
+test('Merge says why it would refuse before anything runs', () => {
+  assert.match(whyNotMerge('task-1', null)!, /no worktree/);
+  const wt = handOff('task-1');
+  assert.match(whyNotMerge('task-1', reviewOf(repo, 'task-1'))!, /no commits/);
+  work(wt, 'a.txt', 'a\n');
+  assert.equal(whyNotMerge('task-1', reviewOf(repo, 'task-1')), null);
+  work(wt, 'b.txt', 'b\n', false);
+  assert.match(whyNotMerge('task-1', reviewOf(repo, 'task-1'))!, /not committed/);
 });

@@ -38,7 +38,7 @@
     class:busy
     disabled={busy || elsewhere}
     use:tip={elsewhere ? `Check out ${ready.into} in your folder to merge` : `Merge into ${ready.into}`}
-    onclick={merge}><Icon name="git" size={13} />Merge</button
+    onclick={merge}><Icon name="git" size={13} />{busy ? 'Checking…' : 'Merge'}</button
   >
 {/if}
 

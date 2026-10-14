@@ -154,7 +154,7 @@
           ><Icon name="ask" size={13} />Discuss</button
         >
       {/if}
-      <HandTo taskId={detail.id} />
+      <HandTo taskId={detail.id} waitsOn={detail.dependencies.filter((d) => !d.done && !d.ref.includes(':')).map((d) => d.ref)} />
       <button class="btn quiet" onclick={complete}><StatusIcon progress={1} size={13} />Complete</button>
       <button class="icon-btn destroy" use:tip={'Delete'} onclick={remove}><Icon name="trash" size={15} /></button>
     {/if}

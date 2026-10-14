@@ -474,7 +474,10 @@ board changes (and in the feed).
   with no review column). At rest, the row's only trace is one mono line,
   `claude · editing`.
 - **Each hand-off works on its own branch** (spec-14, learned from Orca).
-  Hand to… checks the task out into its own git worktree, on
+  Hand to… waits while the task depends on one still open on this board,
+  its tip `Waits on task-62` (decision-15): the agents process refuses the
+  same hand-off from the chat. Then it checks the task out into its own
+  git worktree, on
   `dispatch/<task-id>` from the trunk's tip (decision-11: the branch
   `brainfile.trunk` names in the repository's git config, else origin's
   default branch, else main), not from whatever the person's checkout is
@@ -504,8 +507,13 @@ board changes (and in the feed).
   until a hand-off lands from its own worktree (decision-12). A read-only
   checkout left with changes in it shows as `Read-only checkout`, with only
   Open and Discard. Merge waits for uncommitted work and
-  changes nothing on a conflict; merging or discarding removes the worktree
-  and its branch. When the branch was merged elsewhere (the terminal, a
+  changes nothing on a conflict. Before it merges, it runs the contract's
+  validation in the hand-off's own worktree, the key reading `Checking…`;
+  a check that fails merges nothing, says its first line, and puts the end
+  of its output in the task's log, where Send back… carries it to the
+  agent. Merging is the person's yes: the task is completed with it (a
+  parent with open children stays open, and says so). Merging or discarding
+  removes the worktree and its branch. When the branch was merged elsewhere (the terminal, a
   pull request) and the worktree is still there, the same key reads
   `Merged · remove worktree`, its tip `Already in <branch>`, and does only
   that. No diff authoring, no terminals.
@@ -527,7 +535,17 @@ board changes (and in the feed).
   it shows: a pane at
   the window's right edge, beside the task pane, sized at its own gutter
   between 340 and 600px (400 to start, remembered), for small things, asking
-  about the board or having it managed (add, sort, split, close). Its band
+  about the board or having it managed (add, sort, split, close). It
+  manages the board and never changes code (decision-14): its agent runs as
+  a discussion's does, never in bypass and read-only where it can, and an
+  edit, a delete, a move or a command is refused before anyone is asked,
+  except the `brainfile` command line and git that only reads. Asked for
+  code work, it writes the task, with a contract whose validation proves it,
+  and hands it off when asked to; asked to plan an epic, it adds the epic,
+  its children with `dependsOn` in the order they land, and a draft contract
+  on each. The composer says what it takes, `Ask, or add and change tasks`,
+  and under a reply a task the turn added, edited or moved and did not hand
+  off carries a small Hand to… key at the line's end. Its band
   holds the history key, the thread's title and new chat (+); the strip's
   key, Esc and ⌘J hide it. Hiding keeps the thread,
   where it was scrolled to and what you were typing, and the key brings back

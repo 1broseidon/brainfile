@@ -4,10 +4,16 @@
  * and Electron restarts when main, preload or the host change. A change to
  * the agents process alone restarts nothing: main lets the old process go
  * and the next request starts the new one, so the window stays as it is.
+ *
+ * Neither happens while an agent is at work: the agents process writes how
+ * many are in BRAINFILE_DEV_BUSY, and a restart waits for none, so merging
+ * one hand-off into this app's own code never ends another.
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer } from 'vite';
 import { context } from 'esbuild';
 import electronPath from 'electron';
@@ -18,6 +24,18 @@ const url = server.resolvedUrls.local[0];
 
 let electron = null;
 let restarting = false;
+
+const BUSY = join(tmpdir(), `brainfile-dev-busy-${process.pid}`);
+rmSync(BUSY, { force: true });
+process.on('exit', () => rmSync(BUSY, { force: true }));
+/** How many agents are at work in the running app. */
+function atWork() {
+  try {
+    return Number(readFileSync(BUSY, 'utf-8')) || 0;
+  } catch {
+    return 0;
+  }
+}
 
 /** What each bundle was last time, to tell which ones a rebuild changed. */
 const BUNDLES = ['main', 'preload', 'host', 'agents', 'desk-mcp'];
@@ -38,10 +56,33 @@ function changedBundles() {
   return changed;
 }
 function launch() {
-  electron = spawn(electronPath, ['.'], { stdio: 'inherit', env: { ...process.env, BRAINFILE_DEV_URL: url } });
+  electron = spawn(electronPath, ['.'], { stdio: 'inherit', env: { ...process.env, BRAINFILE_DEV_URL: url, BRAINFILE_DEV_BUSY: BUSY } });
   electron.on('exit', () => {
     if (!restarting) process.exit(0);
   });
+}
+
+/** Restart Electron on the new build, once no agent is at work; later rebuilds join the wait. */
+let waiting = null;
+function restart() {
+  if (waiting) return;
+  const working = atWork();
+  if (working > 0) {
+    console.log(`electron: the restart waits for ${working} agent run${working === 1 ? '' : 's'} to finish`);
+    const again = () => {
+      if (atWork() > 0) return void (waiting = setTimeout(again, 2000));
+      waiting = null;
+      restart();
+    };
+    waiting = setTimeout(again, 2000);
+    return;
+  }
+  restarting = true;
+  electron.once('exit', () => {
+    restarting = false;
+    launch();
+  });
+  electron.kill();
 }
 
 const ctx = await context({
@@ -69,16 +110,8 @@ const ctx = await context({
           if (electron && changed.length === 0) return;
           // main reloads the agents process itself; nothing else to do.
           if (electron && changed.every((name) => NO_RESTART.has(name))) return;
-          if (electron) {
-            restarting = true;
-            electron.once('exit', () => {
-              restarting = false;
-              launch();
-            });
-            electron.kill();
-          } else {
-            launch();
-          }
+          if (electron) restart();
+          else launch();
         });
       },
     },

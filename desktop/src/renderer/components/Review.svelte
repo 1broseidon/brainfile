@@ -13,6 +13,8 @@
 
   let review = $state<ReviewView | null>(null);
   let busy = $state(false);
+  /** Merge runs the contract's checks first, which takes a while: the key says so meanwhile. */
+  let merging = $state(false);
   let sending = $state(false);
   let note = $state('');
   /** Discard asks once, in place, for a few seconds: what it throws away has no Undo. */
@@ -36,9 +38,11 @@
 
   async function settle(how: 'merge' | 'discard'): Promise<void> {
     busy = true;
+    merging = how === 'merge';
     confirming = false;
     if (await app.settleReview(taskId, how)) review = null;
     busy = false;
+    merging = false;
   }
 
   function discard(): void {
@@ -162,7 +166,7 @@
             onclick={() => settle('merge')}
           >
             <!-- Once its commits are in the branch, the button says the one thing left for it to do (decision-10). -->
-            <Icon name="git" size={13} />{review.merged ? 'Merged · remove worktree' : `Merge into ${review.into ?? '…'}`}
+            <Icon name="git" size={13} />{merging ? 'Checking…' : review.merged ? 'Merged · remove worktree' : `Merge into ${review.into ?? '…'}`}
           </button>
         {/if}
       </div>

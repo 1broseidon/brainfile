@@ -321,6 +321,42 @@ export function discussPermission(title: string, kind?: string | null): 'allow' 
   return kind && REFUSED_KINDS.has(kind) ? 'refuse' : 'usual';
 }
 
+/** The desk's tools as an agent names them: `mcp__desk__dispatch`, `desk.runs`. */
+const DESK_TOOL_NAME = /^(?:mcp(?:__|\.))?desk(?:__|[_./])(?:dispatch|runs|stop)\b/i;
+
+/** The words of a command an agent asks to run: its raw input's `command` (a string, or argv), else the title without its backticks or `Run`. */
+export function commandOf(title: string, rawInput?: unknown): string {
+  const raw = rawInput && typeof rawInput === 'object' ? (rawInput as { command?: unknown }).command : undefined;
+  const words = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.map(String).join(' ') : title;
+  return words.trim().replace(/^`+|`+$/g, '').replace(/^run\s+/i, '').trim();
+}
+
+/** One command, nothing chained, piped, redirected or substituted after it. */
+const PLAIN = /^[^;&|<>`$\n]*$/;
+/** The board's own command line, its fallback when the MCP tools are missing. */
+const BOARD_COMMAND = /^(?:npx\s+)?brainfile(?:\s|$)/;
+/** git that only reads: what the chat may look at to write a task or answer the health line's Ask agent. */
+const READING_GIT = /^git\s+(?:status|log|diff|show|rev-parse|merge-base|ls-files|blame|shortlog|describe|worktree\s+list|branch\s+(?:--list|-a|-r|-v|-vv|--show-current|--contains|--merged))(?:\s|$)/;
+
+/**
+ * How the board's chat answers an agent that asks before it acts
+ * (decision-14): it manages the board and hands code to hand-offs. Board and
+ * desk tools, the brainfile command line and git that only reads are
+ * allowed; an edit, a delete, a move, a change of mode or any other command
+ * is refused before anyone is asked; reading and searching are asked as
+ * usual.
+ */
+export function chatPermission(title: string, kind?: string | null, rawInput?: unknown): 'allow' | 'refuse' | 'usual' {
+  const named = title.trim();
+  if (BOARD_TOOL_NAME.test(named) || DESK_TOOL_NAME.test(named)) return 'allow';
+  if (kind === 'execute') {
+    const command = commandOf(named, rawInput);
+    const reads = READING_GIT.test(command) && !/\s--output\b/.test(command);
+    return PLAIN.test(command) && (BOARD_COMMAND.test(command) || reads) ? 'allow' : 'refuse';
+  }
+  return kind && REFUSED_KINDS.has(kind) ? 'refuse' : 'usual';
+}
+
 /** A mode that only reads: Codex's Read Only. */
 const READ_ONLY = /read.?only/i;
 

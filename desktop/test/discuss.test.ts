@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { discussContext, discussMode, discussPermission, discussPreamble, discussRules, taskInformation, workInformation, type DiscussWork } from '../src/agents/discuss.ts';
+import { discussContext, discussMode, discussPermission, discussPreamble, discussRules, taskInformation, workInformation, type DiscussWork, chatPermission, commandOf } from '../src/agents/discuss.ts';
 import type { AgentModes } from '../src/shared/api.ts';
 
 const CONFIG = '---\ntitle: Test\ncolumns:\n  - id: todo\n    title: To Do\n  - id: review\n    title: Review\n---\n';
@@ -297,4 +297,37 @@ test('a discussion runs read-only when the agent can, else in its own default, n
   assert.equal(discussMode(claude), 'default');
   assert.equal(discussMode({ ...claude, initial: 'bypassPermissions' }), 'default');
   assert.equal(discussMode({ initial: 'yolo', options: [{ id: 'yolo', name: 'YOLO' }], bypass: 'yolo' }), 'yolo');
+});
+
+// ── The board's chat (decision-14) ──────────────────────────────────────────
+
+test('the chat manages the board: its tools, the desk and the brainfile command line are allowed', () => {
+  assert.equal(chatPermission('mcp__brainfile__task_add', 'other'), 'allow');
+  assert.equal(chatPermission('brainfile_task_delete'), 'allow');
+  assert.equal(chatPermission('mcp__desk__dispatch'), 'allow');
+  assert.equal(chatPermission('`brainfile list`', 'execute'), 'allow');
+  assert.equal(chatPermission('Run brainfile add -t "x"', 'execute'), 'allow');
+  assert.equal(chatPermission('Bash', 'execute', { command: 'npx brainfile show task-1' }), 'allow');
+});
+
+test('the chat reads git, and changes nothing: edits, other commands and chains are refused', () => {
+  assert.equal(chatPermission('`git log --oneline -5`', 'execute'), 'allow');
+  assert.equal(chatPermission('shell', 'execute', { command: ['git', 'status', '--short'] }), 'allow');
+  assert.equal(chatPermission('`git branch --show-current`', 'execute'), 'allow');
+  assert.equal(chatPermission('`git branch -D main`', 'execute'), 'refuse');
+  assert.equal(chatPermission('`git log --output=x.txt`', 'execute'), 'refuse');
+  assert.equal(chatPermission('`git status && rm -rf src`', 'execute'), 'refuse');
+  assert.equal(chatPermission('`brainfile list; rm x`', 'execute'), 'refuse');
+  assert.equal(chatPermission('`npm test`', 'execute'), 'refuse');
+  assert.equal(chatPermission('Edit src/app.ts', 'edit'), 'refuse');
+  assert.equal(chatPermission('Delete notes.md', 'delete'), 'refuse');
+  assert.equal(chatPermission('bypassPermissions', 'switch_mode'), 'refuse');
+  assert.equal(chatPermission('Read src/app.ts', 'read'), 'usual');
+});
+
+test('a command is read from the raw input when there is one, else from the title', () => {
+  assert.equal(commandOf('Bash', { command: 'git diff' }), 'git diff');
+  assert.equal(commandOf('x', { command: ['git', 'show', 'HEAD'] }), 'git show HEAD');
+  assert.equal(commandOf('`git status`'), 'git status');
+  assert.equal(commandOf('Run git status'), 'git status');
 });

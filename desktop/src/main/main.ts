@@ -121,16 +121,39 @@ function startAgents(): UtilityProcess {
   return child;
 }
 
+/** How many agents are at work, as the agents process writes it for the dev loop; 0 when it cannot say. */
+function agentsAtWork(file = process.env.BRAINFILE_DEV_BUSY): number {
+  if (!file) return 0;
+  try {
+    return Number(fs.readFileSync(file, 'utf-8')) || 0;
+  } catch {
+    return 0;
+  }
+}
+
 /**
  * In development, a rebuilt agents process takes over without a restart:
- * the old one is let go (its agents with it) and the next request starts
- * the new build. The window and the board host carry on.
+ * the old one is let go and the next request starts the new build. The
+ * window and the board host carry on. While an agent is at work the swap
+ * waits, so merging a hand-off into the app's own code never ends another.
  */
 function reloadAgentsOnRebuild(): void {
   let timer: NodeJS.Timeout | null = null;
+  let said = false;
+  const swap = () => {
+    const working = agentsAtWork();
+    if (working > 0) {
+      if (!said) console.log(`agents: the rebuild waits for ${working} agent run${working === 1 ? '' : 's'} to finish`);
+      said = true;
+      timer = setTimeout(swap, 2000);
+      return;
+    }
+    said = false;
+    agents?.kill();
+  };
   fs.watch(path.join(__dirname, 'agents.js'), () => {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => agents?.kill(), 250);
+    timer = setTimeout(swap, 250);
   });
 }
 

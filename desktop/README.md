@@ -13,7 +13,8 @@ building or testing the CLI and core does not touch it.
 ```bash
 cd desktop
 npm install
-npm run dev        # Vite with HMR for the window; Electron restarts on main/host changes
+npm run dev        # Vite with HMR for the window; Electron restarts on main/host changes,
+                   # once no agent is at work, so merging a hand-off never ends another
 npm run build      # core, typecheck, window and Electron bundles
 npm start          # run the build
 npm run package    # Brainfile.app in release/mac-arm64/ (see Install)

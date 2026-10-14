@@ -23,12 +23,12 @@ import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
-import { discardReview, mergeReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, uncommittedIn, type Worktree } from './worktree';
+import { discardReview, mergeReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, runChecks, uncommittedIn, whyNotMerge, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { customLaunch } from './custom';
 import { AgentRegistry } from './registry';
 import { readSettingsFile, settingsOf, writeSettings, type SettingsFile } from './settings';
-import { discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
+import { chatPermission, discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
 import { Startups, unlessAborted } from './startup';
 import { effortSelect, effortToSet } from './effort';
@@ -76,6 +76,23 @@ function send(message: AgentMessage): void {
 
 function emit(event: AgentEvent): void {
   send({ kind: 'event', event });
+  if (event.kind === 'run') markBusy();
+}
+
+/**
+ * In development, how many agents are at work, in the file the dev loop
+ * names: a rebuild waits for them to finish instead of ending them, so
+ * merging one hand-off into the app's own code never stops another.
+ */
+const BUSY_FILE = process.env.BRAINFILE_DEV_BUSY;
+function markBusy(): void {
+  if (!BUSY_FILE) return;
+  const working = [...runs.values()].filter((r) => r.state === 'starting' || r.state === 'working' || r.state === 'waiting').length;
+  try {
+    fs.writeFileSync(BUSY_FILE, String(working));
+  } catch {
+    /* the dev loop restarts as before */
+  }
 }
 
 function which(command: string): string | null {
@@ -764,7 +781,8 @@ async function applyMode(session: Session): Promise<void> {
   const modes = session.modes;
   if (!modes) return;
   const chosen = getSettings().modes[session.agentId];
-  const want = session.discuss
+  // A discussion and the board's chat (the sessions with the desk, decision-14) never run in bypass, and only read when they can.
+  const want = session.discuss || session.deskToken
     ? discussMode(modes)
     : policyFor(session.projectId) === 'bypass' && modes.bypass
       ? modes.bypass
@@ -791,6 +809,15 @@ async function requestPermission(session: Session, params: acp.RequestPermission
   // A discussion changes the task's spec and nothing else: the rest is refused before anyone is asked.
   if (session.discuss) {
     const verdict = discussPermission(params.toolCall.title ?? '', params.toolCall.kind);
+    if (verdict === 'allow' && allowOnce) return { outcome: { outcome: 'selected', optionId: allowOnce.optionId } };
+    if (verdict === 'refuse') {
+      const reject = params.options.find((o) => o.kind === 'reject_once') ?? params.options.find((o) => o.kind.startsWith('reject'));
+      return reject ? { outcome: { outcome: 'selected', optionId: reject.optionId } } : { outcome: { outcome: 'cancelled' } };
+    }
+  }
+  // The board's chat manages the board and hands code to hand-offs (decision-14): the rest is refused before anyone is asked.
+  if (session.deskToken && !session.discuss) {
+    const verdict = chatPermission(params.toolCall.title ?? '', params.toolCall.kind, params.toolCall.rawInput);
     if (verdict === 'allow' && allowOnce) return { outcome: { outcome: 'selected', optionId: allowOnce.optionId } };
     if (verdict === 'refuse') {
       const reject = params.options.find((o) => o.kind === 'reject_once') ?? params.options.find((o) => o.kind.startsWith('reject'));
@@ -1057,7 +1084,11 @@ function startDispatch(
   let worktree: Worktree | null;
   try {
     const located = locateBoard(projectId, { materialize: false });
-    const contract = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId)?.doc.task.contract : undefined;
+    const task = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId)?.doc.task : undefined;
+    // Work waits on what it depends on (decision-15): a dependency still open on this board is not landed yet.
+    const waits = located.found ? (task?.dependsOn ?? []).filter((ref) => !ref.includes(':') && !!findV2Task(getV2Dirs(located.brainfilePath), ref)) : [];
+    if (waits.length) return { ok: false, error: `${taskId} waits on ${waits.join(', ')}: hand it off once ${waits.length === 1 ? 'that is' : 'they are'} done` };
+    const contract = task?.contract;
     worktree = prepareWorktree(projectId, taskId, undefined, onlyReads(contract));
     prompt = brief(projectId, taskId, worktree);
   } catch (err) {
@@ -1181,8 +1212,10 @@ const ASK_PREAMBLE =
   'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
   'If those tools are not available, use the `brainfile` command line in this directory instead (`brainfile list`, `brainfile add`, `brainfile move`, `brainfile --help`); do not edit the board’s files by hand. ' +
   'To have work done, hand it to a coding agent with the desk tools: `dispatch` starts an agent on a task in its own worktree, as Hand to… does (agent and model are optional; by default, you and your model), `runs` says what is running, `stop` stops one. ' +
-  'For follow-up work, create the task with the brainfile tools first, then hand it off with dispatch; do not do the work yourself. Ask the person before dispatching more than three tasks at once. ' +
-  'Do not change code unless asked. Reply briefly, in a sentence or two, with the answer itself. Do not list or mention what you changed on the board or handed off, or that you changed nothing: the window shows the board\u2019s changes and hand-offs under your reply.\n\n';
+  'You manage the board; you never change code or run commands, other than the `brainfile` command line and git commands that only read: edits and other commands are refused. Read the code freely to write good tasks. ' +
+  'Asked for code work, write the task, or update the one in context: what to do, the files it touches, and a contract whose validation commands prove it is done. Hand it off with dispatch when the person asked for it done; otherwise say it is ready to hand off. ' +
+  'Asked to plan an epic, add the epic, then its children under it (parentId), each with dependsOn naming the children that must land first and a draft contract with deliverables and validation commands; add them in that order, so each dependency exists when it is named. Leave priority unset unless the person said how urgent it is. ' +
+  'Ask the person before dispatching more than three tasks at once, and never dispatch a task whose dependsOn are still open. Reply briefly, in a sentence or two, with the answer itself. Do not list or mention what you changed on the board or handed off, or that you changed nothing: the window shows the board\u2019s changes and hand-offs under your reply.\n\n';
 
 /**
  * What the person has open as they ask, so "this" and "it" mean something:
@@ -1299,6 +1332,35 @@ function review(projectId: string, taskId: string): Result<ReviewView | null> {
   }
 }
 
+/**
+ * Merge, once the work holds: the quick refusals first (an agent still at
+ * it, the checkout elsewhere, work left uncommitted), then the contract's
+ * validation, run in the hand-off's own worktree, and only then the merge.
+ * A check that fails merges nothing and says the command and its last lines.
+ */
+async function checkThenMerge(projectId: string, taskId: string): Promise<Result<{ message: string }>> {
+  const live = liveDispatch(projectId, taskId);
+  if (live) return { ok: false, error: `${nameOf(live.agentId)} is still working on ${taskId}` };
+  let review: ReviewView | null;
+  let commands: string[] = [];
+  try {
+    review = reviewOf(projectId, taskId);
+    const refused = whyNotMerge(taskId, review);
+    if (refused) return { ok: false, error: refused };
+    const located = locateBoard(projectId, { materialize: false });
+    const task = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId, true)?.doc.task : undefined;
+    commands = (task?.contract?.validation?.commands ?? []).map((c) => c.trim()).filter(Boolean);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+  // Commits already in the branch they go into need no checks: Merge only lets the worktree go.
+  if (review && !review.merged && commands.length) {
+    const checked = await runChecks(review.path, commands, agentEnv());
+    if (!checked.ok) return { ok: false, error: `Nothing was merged: \`${checked.command}\` failed.\n${checked.output}` };
+  }
+  return settle(projectId, taskId, (title) => mergeReview(projectId, taskId, title));
+}
+
 /** The board's hand-offs that can merge now; one an agent is still at is not ready yet. */
 function ready(projectId: string): Result<ReadyView[]> {
   try {
@@ -1361,7 +1423,7 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   live,
   review,
   readyToMerge: ready,
-  mergeReview: (projectId: string, taskId: string) => settle(projectId, taskId, (title) => mergeReview(projectId, taskId, title)),
+  mergeReview: checkThenMerge,
   discardReview: (projectId: string, taskId: string) => settle(projectId, taskId, () => discardReview(projectId, taskId)),
   answerPermission,
 };

@@ -9,6 +9,7 @@
   import Icon from './Icon.svelte';
   import Working from './Working.svelte';
   import AskLine from './AskLine.svelte';
+  import HandTo from './HandTo.svelte';
   import { renderMarkdown } from '../lib/markdown';
   import { dayTime, relativeTime, tookWords } from '../lib/format';
   import { linkRefs, refsOf } from '../lib/refs';
@@ -370,8 +371,15 @@
           {#if line.changes?.length}
             <!-- What the turn changed, read from the board, not from the reply. -->
             <ul class="changes">
-              {#each line.changes as c (c.id + c.what)}
+              {#each line.changes as c, i (c.id + c.what)}
                 {@const info = refs.get(c.id)}
+                {@const handed = line.changes.some((o) => o.id === c.id && o.what.startsWith('handed'))}
+                <!-- Code work goes to a hand-off (decision-14): a task the turn wrote and did not hand off can be, from here. -->
+                {@const offer =
+                  !handed &&
+                  line.changes.findIndex((o) => o.id === c.id) === i &&
+                  (c.what === 'added' || c.what === 'edited' || c.what.startsWith('moved to')) &&
+                  !!app.board?.tasks.some((t) => t.id === c.id)}
                 <li>
                   <button class="ref" data-ref={c.id}
                     ><span
@@ -383,6 +391,7 @@
                     ></span>{c.id}</button
                   >
                   <span class="what">{c.what}</span>
+                  {#if offer}<span class="hand"><HandTo taskId={c.id} small /></span>{/if}
                 </li>
               {/each}
             </ul>
@@ -414,7 +423,7 @@
       bind:this={field}
       bind:value={() => text, setText}
       rows="2"
-      placeholder={app.currentThread ? 'Reply…' : 'Ask or tell it something'}
+      placeholder={app.currentThread ? 'Reply…' : 'Ask, or add and change tasks'}
       oninput={(e) => fit(e.currentTarget)}
       onkeydown={(e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1075,5 +1084,11 @@
 
   .changes .ref {
     margin: 0;
+  }
+
+  .changes .hand {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
   }
 </style>
