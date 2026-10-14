@@ -23,7 +23,7 @@ import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
-import { discardReview, mergeReview, onlyReads, prepareWorktree, releaseReader, reviewOf, uncommittedIn, type Worktree } from './worktree';
+import { discardReview, mergeReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, uncommittedIn, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { customLaunch } from './custom';
 import { AgentRegistry } from './registry';
@@ -55,6 +55,7 @@ import type {
   RunStep,
   PermissionPolicy,
   Result,
+  ReadyView,
   ReviewView,
 } from '../shared/api';
 
@@ -1298,6 +1299,15 @@ function review(projectId: string, taskId: string): Result<ReviewView | null> {
   }
 }
 
+/** The board's hand-offs that can merge now; one an agent is still at is not ready yet. */
+function ready(projectId: string): Result<ReadyView[]> {
+  try {
+    return { ok: true, value: readyToMerge(projectId).filter((r) => !liveDispatch(projectId, r.taskId)) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /** Merge and discard wait for the agent: its worktree is not taken from under it. */
 function settle(projectId: string, taskId: string, act: (title?: string) => { message: string }): Result<{ message: string }> {
   const live = liveDispatch(projectId, taskId);
@@ -1350,6 +1360,7 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   stopRun,
   live,
   review,
+  readyToMerge: ready,
   mergeReview: (projectId: string, taskId: string) => settle(projectId, taskId, (title) => mergeReview(projectId, taskId, title)),
   discardReview: (projectId: string, taskId: string) => settle(projectId, taskId, () => discardReview(projectId, taskId)),
   answerPermission,

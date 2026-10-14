@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { tip } from '../lib/tooltip';
-  import { app, MORE } from '../lib/state.svelte';
+  import { app, MORE, READY_GROUP } from '../lib/state.svelte';
   import { columnProgress, type OutlineRow } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
@@ -69,7 +69,11 @@
       <header class="head">
         <button class="fold" onclick={() => app.toggleGroup(group.key)}>
           {#if !app.calm}
-            <StatusIcon progress={column ? columnProgress(board.columns, column.id) : 1} />
+            {#if group.key === READY_GROUP}
+              <span class="ready-mark"><Icon name="git" size={14} /></span>
+            {:else}
+              <StatusIcon progress={column ? columnProgress(board.columns, column.id) : 1} />
+            {/if}
           {/if}
           <span class="name">{group.title}</span>
           <span class="count mono tabular">{group.count}</span>
@@ -98,6 +102,11 @@
 </div>
 
 <style>
+  .ready-mark {
+    display: inline-flex;
+    color: var(--ink-3);
+  }
+
   .list {
     height: 100%;
     overflow-y: auto;

@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { locateBoard } from '@brainfile/core/repo';
-import { canBranch, discardReview, mergeReview, onlyReads, prepareWorktree, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
+import { canBranch, discardReview, mergeReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
 
 function git(args: string[], cwd: string): string {
   const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -298,4 +298,52 @@ test('a task that read and now writes gets its branch; one with a branch keeps i
   const again = prepareWorktree(repo, 'task-1', root, true)!;
   assert.equal(again.branch, 'dispatch/task-1');
   assert.equal(again.resumed, true);
+});
+
+// ── Ready to merge (task-69) ────────────────────────────────────────────────
+
+/** A board task for each id, so the worktrees are the board's hand-offs. */
+function handOff(taskId: string): string {
+  return prepareWorktree(repo, taskId, root)!.path;
+}
+
+test('ready to merge: commits not in the trunk, nothing uncommitted, not merged; a conflict is said', () => {
+  const ready = handOff('task-1');
+  work(ready, 'a.txt', 'one\ntwo\n');
+
+  const clashing = handOff('task-2');
+  work(clashing, 'README.md', 'theirs\n');
+
+  const loose = handOff('task-3');
+  work(loose, 'b.txt', 'b\n');
+  work(loose, 'c.txt', 'c\n', false);
+
+  handOff('task-4'); // nothing committed
+
+  const merged = handOff('task-5');
+  work(merged, 'd.txt', 'd\n');
+  git(['merge', '-q', '--no-ff', '-m', 'merged by hand', 'dispatch/task-5'], repo);
+
+  // The trunk moves under task-2's change.
+  fs.writeFileSync(path.join(repo, 'README.md'), 'mine\n');
+  git(['commit', '-q', '-am', 'mine'], repo);
+
+  const found = readyToMerge(repo).sort((x, y) => x.taskId.localeCompare(y.taskId));
+  assert.deepEqual(
+    found.map(({ taskId, into, ahead, added, removed, conflicts, checkout }) => ({ taskId, into, ahead, added, removed, conflicts, checkout })),
+    [
+      { taskId: 'task-1', into: 'main', ahead: 1, added: 2, removed: 0, conflicts: false, checkout: 'main' },
+      { taskId: 'task-2', into: 'main', ahead: 1, added: 1, removed: 1, conflicts: true, checkout: 'main' },
+    ]
+  );
+  // merge-tree wrote nothing: the trunk and the checkout are as they were.
+  assert.equal(git(['status', '--porcelain'], repo), '');
+});
+
+test('ready to merge says where the checkout is, and a read-only checkout is never ready', () => {
+  onFeature();
+  work(handOff('task-1'), 'a.txt', 'a\n');
+  prepareWorktree(repo, 'task-2', root, true);
+  const found = readyToMerge(repo);
+  assert.deepEqual(found.map((r) => [r.taskId, r.into, r.checkout]), [['task-1', 'main', 'feature']]);
 });

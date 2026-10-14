@@ -24,6 +24,7 @@ import type {
   Result,
   PermissionAsk,
   Project,
+  ReadyView,
   RunStep,
   SettleChoice,
 } from '../../shared/api';
@@ -65,13 +66,15 @@ export type MenuKind = 'status' | 'priority' | 'assignee' | 'labels';
 
 /** The list's group of completed work; a column's slug never has a colon. */
 export const DONE_GROUP = ':done';
+/** The list's group of hand-offs that can merge now (task-69), above every column. */
+export const READY_GROUP = ':ready';
 /** A calm group's `N more` line is a stop in the j / k walk, under this prefix and the group's key. */
 export const MORE = 'more:';
 export const isMore = (id: string | null | undefined): boolean => !!id?.startsWith(MORE);
 
 /** A group of the list as it is drawn: a column's, or the completed work's. */
 export interface ListGroup {
-  /** The column's ID, or DONE_GROUP. */
+  /** The column's ID, DONE_GROUP or READY_GROUP. */
   key: string;
   column: ColumnView | null;
   title: string;
@@ -248,6 +251,8 @@ class AppState {
   agents = $state<AgentInfo[]>([]);
   lastAgent = $state<AgentId | null>(localStorage.getItem(AGENT_KEY) as AgentId | null);
   runs = $state<Record<string, AgentRun>>({});
+  /** Each board's hand-offs that can merge now, or would conflict, with no agent still at them (task-69). */
+  mergeable = $state<Record<string, ReadyView[]>>({});
   asks = $state<PermissionAsk[]>([]);
   /** Chat threads per board, newest first, kept on this machine. */
   threads = $state<Record<string, Thread[]>>(load(THREADS_KEY, {}));
@@ -480,7 +485,17 @@ class AppState {
   listGroups = $derived.by((): ListGroup[] => {
     const board = this.board;
     if (!board) return [];
-    const tree = outline(board.columns, board.tasks, board.completed);
+    // What can merge now leaves its column for the group above them all; one that would conflict stays.
+    const merging = new Set((this.activeId ? (this.mergeable[this.activeId] ?? []) : []).filter((r) => !r.conflicts).map((r) => r.taskId));
+    const ready: OutlineRow[] = [
+      ...board.tasks.filter((t) => merging.has(t.id)).map((task) => ({ task, done: false, depth: 0, children: 0 })),
+      ...board.completed.filter((t) => merging.has(t.id)).map((task) => ({ task, done: true, depth: 0, children: 0 })),
+    ];
+    const tree = outline(
+      board.columns,
+      board.tasks.filter((t) => !merging.has(t.id)),
+      board.completed.filter((t) => !merging.has(t.id))
+    );
     const collapsed = (id: string) => this.folded('parents', id);
     // Starting, working, or waiting: the same live dispatch the row names.
     const working = new Set<string>();
@@ -499,6 +514,11 @@ class AppState {
     const groups = (this.calm ? calmOrder(board.columns, tree.groups) : tree.groups)
       .filter((g) => g.rows.length > 0)
       .map((g) => group(g.column.id, g.column, g.rows, this.folded('groups', g.column.id)));
+    if (ready.length) {
+      // Every one shows: it is the person's queue, not a glance.
+      const folded = this.folded('groups', READY_GROUP);
+      groups.unshift({ key: READY_GROUP, column: null, title: 'Ready to merge', count: ready.length, folded, rows: folded ? [] : ready, more: 0 });
+    }
     if (tree.done.length) groups.push(group(DONE_GROUP, null, tree.done, !this.showCompleted));
     return groups;
   });
@@ -557,6 +577,7 @@ class AppState {
     if (result.ok) {
       this.boards[projectId] = result.value;
       delete this.boardErrors[projectId];
+      this.refreshReady(projectId, true);
     } else {
       this.boardErrors[projectId] = result.error;
     }
@@ -638,12 +659,31 @@ class AppState {
     else this.#unsentSince[snapshot.projectId] ??= Date.now();
     const before = this.boards[snapshot.projectId];
     this.boards[snapshot.projectId] = snapshot;
+    this.refreshReady(snapshot.projectId);
     if (!before || this.settling === snapshot.projectId || Date.now() - (lastLocalWrite[snapshot.projectId] ?? 0) < LOCAL_WINDOW_MS) return;
     const items = diffBoards(before, snapshot, Date.now());
     if (items.length) this.feed = [...items.reverse(), ...this.feed].slice(0, FEED_LIMIT);
   }
 
   // ── Agents ──────────────────────────────────────────────────────────────
+
+  #readyTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+  /** Asks again which hand-offs can merge: a beat after the last change, so a burst of board writes asks once. */
+  refreshReady(projectId: string, now = false): void {
+    clearTimeout(this.#readyTimers[projectId]);
+    const ask = async () => {
+      const result = await api.readyToMerge(projectId);
+      if (result.ok) this.mergeable[projectId] = result.value;
+    };
+    if (now) void ask();
+    else this.#readyTimers[projectId] = setTimeout(() => void ask(), 400);
+  }
+
+  /** The hand-off on a task of the board in front that can merge, or would conflict. */
+  readyFor(taskId: string): ReadyView | undefined {
+    return this.activeId ? this.mergeable[this.activeId]?.find((r) => r.taskId === taskId) : undefined;
+  }
 
   /** The live dispatch on a task of the board in front, if any. */
   runFor(taskId: string): AgentRun | undefined {
@@ -720,8 +760,10 @@ class AppState {
   /** Merge or discard: the review goes when its worktree does. True when it went. */
   async settleReview(taskId: string, how: 'merge' | 'discard'): Promise<boolean> {
     if (!this.activeId) return false;
-    const result = how === 'merge' ? await api.mergeReview(this.activeId, taskId) : await api.discardReview(this.activeId, taskId);
+    const projectId = this.activeId;
+    const result = how === 'merge' ? await api.mergeReview(projectId, taskId) : await api.discardReview(projectId, taskId);
     if (!result.ok) this.notify(result.error, 'warn');
+    this.refreshReady(projectId, true);
     return result.ok;
   }
 
@@ -966,6 +1008,8 @@ class AppState {
     }
     const ended = !isLive(run) && (!before || isLive(before));
     if (!ended) return;
+    // A hand-off that ends may have left a branch to merge.
+    if (run.kind === 'dispatch') this.refreshReady(run.projectId, true);
     if (run.kind === 'ask' && run.threadId) {
       const text = run.state === 'done' ? run.reply || 'Done.' : run.state === 'stopped' ? 'Stopped.' : (run.error ?? 'It stopped.');
       this.addLine(run.projectId, run.threadId, {

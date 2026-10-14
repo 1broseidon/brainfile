@@ -50,6 +50,7 @@ const api: Api = {
   stopRun: invoke('stopRun'),
   live: invoke('live'),
   review: invoke('review'),
+  readyToMerge: invoke('readyToMerge'),
   mergeReview: invoke('mergeReview'),
   discardReview: invoke('discardReview'),
   openWorktree: invoke('openWorktree'),

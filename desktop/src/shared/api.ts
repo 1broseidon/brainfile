@@ -427,6 +427,21 @@ export interface RegistryView {
   warning?: string;
 }
 
+/** A hand-off that can merge now, for the list's Ready to merge group (task-69). */
+export interface ReadyView {
+  taskId: string;
+  /** The branch it merges into. */
+  into: string;
+  /** Commits on its branch. */
+  ahead: number;
+  added: number;
+  removed: number;
+  /** git's merge-tree found the merge would conflict: it waits in its column instead. */
+  conflicts: boolean;
+  /** The branch the project's checkout is on; Merge waits for it to be `into`. */
+  checkout: string | null;
+}
+
 /** App-wide dispatch settings, kept in the app's dispatch.json. */
 export interface DispatchSettings {
   /** On: every agent runs in its bypass mode and nothing is asked. Off: each agent's own default, or the mode chosen for it. */
@@ -621,6 +636,8 @@ export interface Api {
   live(): Promise<LiveAgents>;
   /** The hand-off's branch and what is on it, or null when the task has no worktree. */
   review(projectId: string, taskId: string): Promise<Result<ReviewView | null>>;
+  /** Every hand-off on the board that can merge now, or would conflict, with no agent still at it. */
+  readyToMerge(projectId: string): Promise<Result<ReadyView[]>>;
   /** Merge the hand-off's branch into the checkout's branch, then let its worktree and branch go. */
   mergeReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
   /** Throw the hand-off's work away: its worktree and its branch. */
@@ -684,6 +701,7 @@ export const AGENT_METHODS = [
   'stopRun',
   'live',
   'review',
+  'readyToMerge',
   'mergeReview',
   'discardReview',
   'answerPermission',

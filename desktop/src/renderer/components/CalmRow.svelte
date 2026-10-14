@@ -6,6 +6,7 @@
   import StatusIcon from './StatusIcon.svelte';
   import PriorityIcon from './PriorityIcon.svelte';
   import Working from './Working.svelte';
+  import MergeSignal from './MergeSignal.svelte';
 
   let {
     task,
@@ -31,6 +32,8 @@
   const where = $derived(done ? 'Done' : (columns.find((c) => c.id === task.column)?.title ?? task.column));
   const run = $derived(app.runFor(task.id));
   const signal = $derived(restingSignal(task, done, !!run));
+  /** A branch that can merge, or would conflict: louder than any resting signal, quieter than an agent at work. */
+  const ready = $derived(run ? undefined : app.readyFor(task.id));
 </script>
 
 <!-- The calm row (design.md, Calm list), after brainfile-mobile's: the
@@ -81,7 +84,9 @@
     <span class="title">{task.title}</span>
     <span class="id mono">{task.id}</span>
   </span>
-  {#if signal}
+  {#if ready}
+    <MergeSignal {ready} taskId={task.id} />
+  {:else if signal}
     <span class="signal">
       {#if signal.kind === 'run'}
         <Working {run} rotate={false} />

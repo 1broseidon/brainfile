@@ -7,6 +7,7 @@
   import PriorityIcon from './PriorityIcon.svelte';
   import Avatar from './Avatar.svelte';
   import Working from './Working.svelte';
+  import MergeSignal from './MergeSignal.svelte';
 
   let {
     task,
@@ -96,6 +97,8 @@
   {/if}
   {#if app.runFor(task.id)}
     <span class="run"><Working run={app.runFor(task.id)} rotate={false} /></span>
+  {:else if app.readyFor(task.id)}
+    <MergeSignal ready={app.readyFor(task.id)!} taskId={task.id} />
   {/if}
   <span class="chips">
     {#if task.contractStatus}

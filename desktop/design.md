@@ -227,7 +227,8 @@ until it is turned off, and the full rows are a press of ⇧V away.
 - **The outline is unchanged.** Children stay under their parent, whatever
   their column, and completed children stay until the parent is done
   (Rows).
-- **Nearest done first.** The groups run Review, In Progress, To Do, so the
+- **Nearest done first.** Ready to merge, when anything is (Dispatch),
+  then the groups run Review, In Progress, To Do, so the
   top of the list is what can be finished, then what can wait: the backlog,
   then a completion column still holding work, then Done. The backlog and a
   completion column rest folded; a fold the hand has made, in either
@@ -499,6 +500,19 @@ board changes (and in the feed).
   pull request) and the worktree is still there, the same key reads
   `Merged · remove worktree`, its tip `Already in <branch>`, and does only
   that. No diff authoring, no terminals.
+- **What can merge is at the top of the list** (task-69), in both
+  readings: a group above every column, `Ready to merge`, holds exactly the
+  hand-offs whose branch can merge now: commits not yet in the branch it
+  goes into, nothing uncommitted, no agent still at it, not merged
+  already, and git's merge-tree (which writes nothing) finds no conflict.
+  The task is drawn there instead of in its column, a completed one with an
+  unmerged branch included, and every one shows: it is the person's queue,
+  not a glance. Its row says the lines added and removed, and under the
+  pointer Merge, the task pane's own, with the same rules and tips. A branch
+  that would conflict stays in its column with `conflicts` as its signal,
+  in the warning colour. The board asks once for all its hand-offs, when
+  the board changes, when a hand-off ends and after a merge. The group goes
+  when it is empty; with landing (decision-12) it becomes Ready to land.
 - **Ask the board** is a muted key at the strip's right end, above the chat
   pane (⌘J), that shows and hides the chat (decision-8), with a fill while
   it shows: a pane at

@@ -26,7 +26,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { git, gitToplevel, listWorktrees, locateBoard } from '@brainfile/core/repo';
-import type { ReviewView } from '../shared/api';
+import type { ReadyView, ReviewView } from '../shared/api';
 
 export const BRANCH_PREFIX = 'dispatch/';
 const BASE_KEY = 'brainfileBase';
@@ -262,6 +262,38 @@ export function uncommittedIn(at: string): { files: string[]; count: number } {
   const lines = status.ok ? status.stdout.split('\n').filter(Boolean) : [];
   // `XY path`; the output comes trimmed, so the first line may have lost a leading blank.
   return { files: lines.slice(0, SHOWN).map((l) => l.replace(/^\s?\S{1,2}\s+/, '')), count: lines.length };
+}
+
+/**
+ * Every hand-off in the repository that can merge now (task-69): commits
+ * not yet in the branch it goes into, nothing uncommitted, not merged
+ * already. `conflicts` says git's merge-tree, which writes nothing, found
+ * the merge would conflict. Whether an agent is still at it is the caller's
+ * to know.
+ */
+export function readyToMerge(projectId: string): ReadyView[] {
+  const repoRoot = gitToplevel(projectId);
+  if (!repoRoot) return [];
+  const heads = `refs/heads/${BRANCH_PREFIX}`;
+  const ready: ReadyView[] = [];
+  for (const w of listWorktrees(repoRoot)) {
+    if (!w.branch?.startsWith(heads) || !fs.existsSync(w.path)) continue;
+    const taskId = w.branch.slice(heads.length);
+    const review = reviewOf(projectId, taskId);
+    if (!review?.branch || !review.into || review.ahead === 0 || review.merged || review.uncommitted > 0) continue;
+    // Exit 1 is a conflict; anything else git could not say, which is not a conflict found.
+    const tree = git(['merge-tree', '--write-tree', '--quiet', review.into, review.branch], repoRoot);
+    ready.push({
+      taskId,
+      into: review.into,
+      ahead: review.ahead,
+      added: review.added,
+      removed: review.removed,
+      conflicts: !tree.ok && tree.status === 1,
+      checkout: review.checkout,
+    });
+  }
+  return ready;
 }
 
 /** The last line of git's complaint worth showing. */
