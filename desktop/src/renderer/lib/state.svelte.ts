@@ -782,7 +782,8 @@ class AppState {
     if (!result.ok) {
       // A check that failed says its first line here; the whole of it goes in the task's log, where a send-back carries it to the agent.
       const [first, ...rest] = result.error.split('\n');
-      this.notify(first, 'warn');
+      // Sent back to its agent (task-63) is news, not a problem.
+      this.notify(first, /sent back to /.test(first) ? 'ok' : 'warn');
       // A log entry is one line: the output's lines run on, marked, and its end is kept.
       const said = rest.map((l) => l.trim()).filter(Boolean).join(' ⏎ ').slice(-800);
       if (said) await api.noteTask(projectId, taskId, `Checks failed before merge: ${first.replace(/^Nothing was merged: /, '')} ${said}`);

@@ -226,7 +226,6 @@
         <!-- Waiting on you: state, not news. A row goes when it merges, never when it is seen. -->
         <div class="section">Waiting on you</div>
         {#each app.waiting as w (w.projectId + w.ready.taskId)}
-          {@const elsewhere = w.ready.checkout !== w.ready.into}
           <div class="wait">
             <button class="item two" onclick={() => goTo(w.projectId, w.ready.taskId)}>
               <span class="label">{w.title}</span>
@@ -237,12 +236,17 @@
               </span>
             </button>
             {#if w.ready.conflicts}
-              <button class="key" use:tip={'Open it to send it back'} onclick={() => goTo(w.projectId, w.ready.taskId)}>Open</button>
+              <button
+                class="key"
+                disabled={merging === w.projectId + w.ready.taskId}
+                use:tip={'Its agent settles them'}
+                onclick={() => merge(w.projectId, w.ready.taskId)}>Send back</button
+              >
             {:else}
               <button
                 class="key sure"
-                disabled={elsewhere || merging === w.projectId + w.ready.taskId}
-                use:tip={elsewhere ? `Check out ${w.ready.into} in ${projectName(w.projectId)} to merge` : `Merge into ${w.ready.into}`}
+                disabled={merging === w.projectId + w.ready.taskId}
+                use:tip={`Merge into ${w.ready.into}`}
                 onclick={() => merge(w.projectId, w.ready.taskId)}>{merging === w.projectId + w.ready.taskId ? 'Checking…' : 'Merge'}</button
               >
             {/if}

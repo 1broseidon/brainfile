@@ -386,7 +386,7 @@ export interface ReviewView {
   base: string | null;
   /** Where Merge lands: the branch it was started from while that exists, else the trunk (decision-11). */
   into: string | null;
-  /** The branch the project's checkout is on now; Merge waits for it to be `into`. Null when detached. */
+  /** The branch the project's checkout is on now: when it is `into`, it follows a landing by fast-forward. Null when detached. */
   checkout: string | null;
   /** Commits on the branch since it started. */
   ahead: number;
@@ -401,6 +401,8 @@ export interface ReviewView {
   uncommitted: number;
   /** Its commits are already in `into`; Merge only lets the worktree go. */
   merged: boolean;
+  /** The files that would conflict if it merged into `into` now (git merge-tree, nothing written). */
+  conflicts: string[];
 }
 
 /** What is running and asking now: what a phone that connects mid-run, or comes back, needs to catch up. */
@@ -438,8 +440,6 @@ export interface ReadyView {
   removed: number;
   /** git's merge-tree found the merge would conflict: it waits in its column instead. */
   conflicts: boolean;
-  /** The branch the project's checkout is on; Merge waits for it to be `into`. */
-  checkout: string | null;
 }
 
 /** App-wide dispatch settings, kept in the app's dispatch.json. */
@@ -711,7 +711,7 @@ export type AgentMethod = (typeof AGENT_METHODS)[number];
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
 export type HostReply = { kind: 'host-reply'; id: number; result: unknown };
 /** The board writes the agents process may ask main to pass to the host. */
-export const AGENT_HOST_METHODS = ['recordDispatch'] as const;
+export const AGENT_HOST_METHODS = ['recordDispatch', 'noteTask'] as const;
 export type AgentHostMethod = (typeof AGENT_HOST_METHODS)[number];
 export type AgentMessage =
   | { kind: 'reply'; id: number; result: unknown }

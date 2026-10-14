@@ -298,7 +298,7 @@ off course. These rules win over every other section:
   tip `2 ready to merge · 5 outside changes`. Opening the feed shows them
   first, under `Waiting on you`, every board's, each with its board, ID and
   lines added and removed, and Merge (the task pane's, with its rules and
-  tips), or `conflicts with main` in the warning colour and Open. They are
+  tips), or `conflicts with main` in the warning colour and Send back. They are
   state, not news: a row goes when it merges, never when it is seen, and the
   count is only what can merge now. The changes follow under `Changes`.
   Nothing else gets a status indicator.
@@ -502,17 +502,32 @@ board changes (and in the feed).
   Undo), Send back… (a note in the task's log, then the same agent on the
   same branch), and Merge into the trunk (a branch made before decision-11
   goes into the branch it was started from), the accent once the task is in
-  Review. Merge happens in the person's checkout, so it waits until that is
-  on the same branch, its tip `Check out main in your folder to merge`,
-  until a hand-off lands from its own worktree (decision-12). A read-only
-  checkout left with changes in it shows as `Read-only checkout`, with only
-  Open and Discard. Merge waits for uncommitted work and
-  changes nothing on a conflict. Before it merges, it runs the contract's
-  validation in the hand-off's own worktree, the key reading `Checking…`;
-  a check that fails merges nothing, says its first line, and puts the end
-  of its output in the task's log, where Send back… carries it to the
-  agent. Merging is the person's yes: the task is completed with it (a
-  parent with open children stays open, and says so). Merging or discarding
+  Review. Merge lands the hand-off without the person's checkout
+  (decision-12): the trunk is brought into the branch inside the task's own
+  worktree, the contract's validation runs there on the result (the key
+  reading `Checking…`), and the landing commit, `Merge task-N: title`, moves
+  the trunk only from the tip that was checked: by fast-forward when the
+  person's checkout is on it, which keeps their uncommitted changes, else by
+  compare-and-swap; if the trunk moved meanwhile it starts again from the
+  new tip, and landings go one at a time. A landing that would overwrite a
+  file the person is changing waits and names it. Before Merge is pressed
+  the pane says whether the branch would conflict, `Conflicts with main in
+  a.ts` in the warning colour (git's merge-tree, nothing written), and the
+  key reads `Send back to settle`. A conflict, or a check that fails once
+  the trunk is in, changes nothing and goes back to the agent that did the
+  work (task-63), not to the person: a note in the task's log names the
+  conflicting files, the trunk's commits it met and the tasks that landed
+  them (`97d0e88 Notes (task-21)`), and says to merge the trunk in, keep
+  what both sides meant, commit and run the checks; then the same agent and
+  model, on the same branch, whose brief now lets it merge the trunk in for
+  that. Up to the contract's maxRetries, else once; past that Merge says it
+  was sent back already and leaves it with the person. A read-only checkout left
+  with changes in it shows as `Read-only checkout`, with only Open and
+  Discard. Merge waits for uncommitted work. A check that fails merges
+  nothing, says its first line, and puts the end of its output in the
+  task's log, where Send back… carries it to the agent. Merging is the
+  person's yes: the task is completed with it (a parent with open children
+  stays open, and says so). Merging or discarding
   removes the worktree and its branch. When the branch was merged elsewhere (the terminal, a
   pull request) and the worktree is still there, the same key reads
   `Merged · remove worktree`, its tip `Already in <branch>`, and does only
@@ -527,7 +542,7 @@ board changes (and in the feed).
   not a glance. Its row says the lines added and removed, and under the
   pointer Merge, the task pane's own, with the same rules and tips. A branch
   that would conflict stays in its column with `conflicts` as its signal,
-  in the warning colour. The board asks once for all its hand-offs, when
+  in the warning colour, and Send back under the pointer. The board asks once for all its hand-offs, when
   the board changes, when a hand-off ends and after a merge. The group goes
   when it is empty; with landing (decision-12) it becomes Ready to land.
 - **Ask the board** is a muted key at the strip's right end, above the chat
@@ -661,6 +676,10 @@ key again or a project leaves). One column, 560px, centred: a
 section's heading and its one-line lede, then its rows in a group (raised,
 radius 14) with no lines between them. Headings and notes stand on the
 rows' text, not the group's rim, so the column has one left edge.
+Each section is its own component under `components/settings/`, gathered
+by glob in the `order` it declares (task-64), so adding a section touches
+no file another section is in; what they share is `styles/settings.css`,
+scoped to the pane and stopping at a component a section holds.
 
 - **A switch is a box sliding in a sunk track**, the checkbox's corner kept;
   on, the track takes the accent, the one place a setting earns it.

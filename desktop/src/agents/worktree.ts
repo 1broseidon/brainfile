@@ -217,7 +217,7 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
     // A read-only checkout has nothing to merge: only what was left in it, to throw away.
     const reader = existingReader(repoRoot, taskId);
     if (!reader) return null;
-    const none = { ahead: 0, commits: [], files: [], filesChanged: 0, added: 0, removed: 0, merged: false };
+    const none = { ahead: 0, commits: [], files: [], filesChanged: 0, added: 0, removed: 0, merged: false, conflicts: [] };
     return { branch: null, path: reader, base: trunkOf(repoRoot)?.name ?? null, into: null, checkout, ...none, uncommitted: uncommittedIn(reader).count };
   }
   const branch = branchFor(taskId);
@@ -239,6 +239,7 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
 
   const uncommitted = uncommittedIn(at).count;
   const merged = !!into && commits.length > 0 && git(['merge-base', '--is-ancestor', branch, into], repoRoot).ok;
+  const conflicts = into && commits.length > 0 && !merged ? conflictsWith(repoRoot, into, branch) : [];
 
   return {
     branch,
@@ -254,7 +255,20 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
     removed: files.reduce((n, f) => n + f.removed, 0),
     uncommitted,
     merged,
+    conflicts,
   };
+}
+
+/**
+ * The files that would conflict if the branch merged into `into` now, as
+ * git's merge-tree says without writing anything; none when it would merge
+ * cleanly, or when git could not say.
+ */
+function conflictsWith(repoRoot: string, into: string, branch: string): string[] {
+  const tree = git(['merge-tree', '--write-tree', '--name-only', '--no-messages', into, branch], repoRoot);
+  if (tree.ok || tree.status !== 1) return [];
+  // The tree's ID, then one conflicted file a line.
+  return tree.stdout.split('\n').slice(1).filter(Boolean);
 }
 
 /** The files changed in a worktree and not committed, as git names them, the first few; the count covers the rest. */
@@ -282,16 +296,13 @@ export function readyToMerge(projectId: string): ReadyView[] {
     const taskId = w.branch.slice(heads.length);
     const review = reviewOf(projectId, taskId);
     if (!review?.branch || !review.into || review.ahead === 0 || review.merged || review.uncommitted > 0) continue;
-    // Exit 1 is a conflict; anything else git could not say, which is not a conflict found.
-    const tree = git(['merge-tree', '--write-tree', '--quiet', review.into, review.branch], repoRoot);
     ready.push({
       taskId,
       into: review.into,
       ahead: review.ahead,
       added: review.added,
       removed: review.removed,
-      conflicts: !tree.ok && tree.status === 1,
-      checkout: review.checkout,
+      conflicts: review.conflicts.length > 0,
     });
   }
   return ready;
@@ -318,25 +329,16 @@ function cleanUp(repoRoot: string, at: string, branch: string | null, force: boo
   }
 }
 
-/**
- * Merges the hand-off's branch into the branch it goes into (the trunk, or
- * the branch it was started from before decision-11), then lets go of the
- * worktree and the branch. The merge happens in the person's checkout, so it
- * must be on that branch, until a hand-off lands from its own worktree
- * (decision-12). Refuses, and changes nothing, when the agent left work
- * uncommitted or the merge would conflict.
- */
 /** Why Merge would refuse this review, before anything runs; null when it would go ahead. */
 export function whyNotMerge(taskId: string, review: ReviewView | null): string | null {
   if (!review) return `${taskId} has no worktree to merge`;
-  const { branch, into, checkout } = review;
+  const { branch, into } = review;
   if (!branch) return `${taskId} only read: there is nothing to merge`;
   if (!into) return `${branch} has no branch to go into: the trunk is missing`;
   if (review.uncommitted > 0) {
     return `${review.uncommitted} ${review.uncommitted === 1 ? 'file is' : 'files are'} not committed in the worktree: send it back, or commit in your editor`;
   }
   if (review.ahead === 0) return `${branch} has no commits to merge`;
-  if (!review.merged && checkout !== into) return `${branch} goes into ${into}, and your checkout is on ${checkout ?? 'no branch'}: check out ${into} to merge`;
   return null;
 }
 
@@ -377,27 +379,127 @@ export function runChecks(at: string, commands: string[], env: NodeJS.ProcessEnv
   })();
 }
 
-export function mergeReview(projectId: string, taskId: string, title?: string): { message: string } {
+/** What a landing came to: landed, or why not, with what task-63 needs to send a conflict back. */
+export type Landing =
+  | { ok: true; message: string }
+  | { ok: false; kind: 'refused'; error: string }
+  | { ok: false; kind: 'conflict'; error: string; branch: string; into: string; files: string[] }
+  | { ok: false; kind: 'check'; error: string; branch: string; into: string; command: string; output: string };
+
+/** The files a list names: the first three, and how many more. */
+function named(files: string[]): string {
+  return files.slice(0, 3).join(', ') + (files.length > 3 ? ` and ${files.length - 3} more` : '');
+}
+
+/**
+ * What a conflict collided with (task-63): the commits on `into` since the
+ * branch started that touch the conflicting files, newest first, each with
+ * the task whose landing brought it (`Merge task-N: title`), when one did.
+ */
+export function collisions(projectId: string, branch: string, into: string, files: string[]): { sha: string; subject: string; taskId?: string }[] {
   const repoRoot = gitToplevel(projectId);
-  const review = reviewOf(projectId, taskId);
-  const refused = whyNotMerge(taskId, review);
-  if (!repoRoot || refused || !review?.branch || !review.into) throw new Error(refused ?? `${taskId} has no worktree to merge`);
-  const { branch, path: at, into } = review;
-  if (!review.merged) {
-    const message = `Merge ${taskId}${title ? `: ${title}` : ''}`;
-    const r = git(['merge', '--no-ff', '--no-edit', '-m', message, branch], repoRoot);
-    if (!r.ok) {
-      const conflicted = git(['diff', '--name-only', '--diff-filter=U'], repoRoot).stdout.split('\n').filter(Boolean);
-      if (conflicted.length) {
-        git(['merge', '--abort'], repoRoot);
-        const named = conflicted.slice(0, 3).join(', ') + (conflicted.length > 3 ? ` and ${conflicted.length - 3} more` : '');
-        throw new Error(`${branch} conflicts with ${into} in ${named}. Nothing was merged.`);
-      }
-      throw new Error(`Nothing was merged: ${said(r)}`);
+  if (!repoRoot || !files.length) return [];
+  const base = git(['merge-base', into, branch], repoRoot).stdout;
+  if (!base) return [];
+  const log = git(['log', '--no-merges', '--format=%h%x09%s', `${base}..${into}`, '--', ...files], repoRoot);
+  // The landings on the trunk's own line since the branch started, oldest first.
+  const landings = git(['log', '--first-parent', '--merges', '--reverse', '--format=%H%x09%s', `${base}..${into}`], repoRoot)
+    .stdout.split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [sha, ...subject] = line.split('\t');
+      return { sha, taskId: /^Merge ([a-z]+-\d+)\b/.exec(subject.join('\t'))?.[1] };
+    });
+  return (log.ok ? log.stdout.split('\n').filter(Boolean) : []).slice(0, SHOWN).map((line) => {
+    const [sha, ...subject] = line.split('\t');
+    // The first landing that holds the commit is the one that brought it; a commit made on the trunk itself has none.
+    const by = landings.find((l) => git(['merge-base', '--is-ancestor', sha, l.sha], repoRoot).ok);
+    const onTrunk = git(['rev-list', '--first-parent', `${base}..${into}`], repoRoot).stdout.split('\n').some((c) => c.startsWith(sha));
+    const taskId = onTrunk ? undefined : by?.taskId;
+    return { sha, subject: subject.join('\t'), ...(taskId ? { taskId } : {}) };
+  });
+}
+
+/** Landings in flight, one chain per repository: one lands at a time. */
+const landings = new Map<string, Promise<unknown>>();
+
+function serially<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const next = (landings.get(key) ?? Promise.resolve()).then(work, work);
+  landings.set(
+    key,
+    next.catch(() => {})
+  );
+  return next;
+}
+
+/**
+ * Lands the hand-off on the branch it goes into (decision-12), without
+ * merging in the person's checkout: the trunk is brought into the branch
+ * inside the task's own worktree, `check` runs there on the result, and the
+ * landing commit (`Merge task-N: title`, the trunk's tip and the branch) is
+ * made with commit-tree. The trunk moves to it only from the tip that was
+ * checked: by fast-forward when the person's checkout is on it (which keeps
+ * their uncommitted changes, and waits, naming the file, when the landing
+ * would overwrite one), else by compare-and-swap with update-ref. If the
+ * trunk moved meanwhile it starts again from the new tip. One landing at a
+ * time per repository; the worktree and branch go once landed.
+ */
+export function landReview(
+  projectId: string,
+  taskId: string,
+  options: { title?: string; check?: (at: string) => Promise<{ ok: true } | { ok: false; command: string; output: string }>; attempts?: number } = {}
+): Promise<Landing> {
+  const repoRoot = gitToplevel(projectId);
+  if (!repoRoot) return Promise.resolve({ ok: false, kind: 'refused', error: `${taskId} has no worktree to merge` });
+  return serially(repoRoot, async (): Promise<Landing> => {
+    const review = reviewOf(projectId, taskId);
+    const refused = whyNotMerge(taskId, review);
+    if (refused || !review?.branch || !review.into) return { ok: false, kind: 'refused', error: refused ?? `${taskId} has no worktree to merge` };
+    const { branch, path: at, into } = review;
+    // Merged elsewhere already (the terminal, a pull request): only the worktree is left to go.
+    if (review.merged) {
+      cleanUp(repoRoot, at, branch, true);
+      return { ok: true, message: `${branch} was already in ${into}` };
     }
-  }
-  cleanUp(repoRoot, at, branch, false);
-  return { message: `Merged ${branch} into ${into}` };
+    const message = `Merge ${taskId}${options.title ? `: ${options.title}` : ''}`;
+    for (let attempt = 0; attempt < (options.attempts ?? 5); attempt++) {
+      const old = git(['rev-parse', '--verify', `refs/heads/${into}`], repoRoot).stdout;
+      if (!old) return { ok: false, kind: 'refused', error: `${into} is gone: nothing was merged` };
+      // The trunk into the branch, in the task's own worktree, unless it is there already.
+      if (!git(['merge-base', '--is-ancestor', old, 'HEAD'], at).ok) {
+        const brought = git(['merge', '--no-ff', '--no-edit', '-m', `Merge ${into} into ${branch}`, old], at);
+        if (!brought.ok) {
+          const files = git(['diff', '--name-only', '--diff-filter=U'], at).stdout.split('\n').filter(Boolean);
+          git(['merge', '--abort'], at);
+          if (files.length) return { ok: false, kind: 'conflict', branch, into, files, error: `${branch} conflicts with ${into} in ${named(files)}. Nothing was merged.` };
+          return { ok: false, kind: 'refused', error: `Nothing was merged: ${said(brought)}` };
+        }
+      }
+      if (options.check) {
+        const checked = await options.check(at);
+        if (!checked.ok) return { ok: false, kind: 'check', branch, into, command: checked.command, output: checked.output, error: `Nothing was merged: \`${checked.command}\` failed.` };
+      }
+      const head = git(['rev-parse', 'HEAD'], at).stdout;
+      const made = git(['commit-tree', `${head}^{tree}`, '-p', old, '-p', head, '-m', message], repoRoot);
+      if (!made.ok || !made.stdout) return { ok: false, kind: 'refused', error: `Nothing was merged: ${said(made)}` };
+      const landed = made.stdout;
+      if (currentBranch(repoRoot) === into) {
+        // The person's checkout follows by fast-forward, around their uncommitted changes in other files.
+        const ff = git(['merge', '--ff-only', '--quiet', landed], repoRoot);
+        if (ff.ok) break;
+        if (/would be overwritten/.test(`${ff.stderr}\n${ff.stdout}`)) {
+          const files = `${ff.stderr}\n${ff.stdout}`.split('\n').filter((l) => /^\s+\S/.test(l)).map((l) => l.trim());
+          return { ok: false, kind: 'refused', error: `The merge changes ${named(files)}, which you have changed in your folder: commit or set ${files.length === 1 ? 'it' : 'them'} aside, then Merge again` };
+        }
+      } else if (git(['update-ref', '-m', message, `refs/heads/${into}`, landed, old], repoRoot).ok) {
+        break;
+      }
+      // The trunk moved since it was read: again, from its new tip.
+      if (attempt === (options.attempts ?? 5) - 1) return { ok: false, kind: 'refused', error: `${into} kept moving: nothing was merged, try again` };
+    }
+    cleanUp(repoRoot, at, branch, true);
+    return { ok: true, message: `Merged ${branch} into ${into}` };
+  });
 }
 
 /** Throws the hand-off's work away: its worktree, uncommitted changes and all, and its branch. */

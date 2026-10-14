@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { locateBoard } from '@brainfile/core/repo';
-import { canBranch, discardReview, mergeReview, onlyReads, prepareWorktree, readyToMerge, runChecks, whyNotMerge, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
+import { canBranch, collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, runChecks, whyNotMerge, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
 
 function git(args: string[], cwd: string): string {
   const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -117,16 +117,29 @@ test('the review says what is on the branch and what is not committed', () => {
   assert.equal(review.merged, false);
 });
 
-test('merge waits for uncommitted work, then merges and lets the worktree and branch go', () => {
+/** A landing that must have landed; its message. */
+async function landed(taskId: string, options: Parameters<typeof landReview>[2] = {}): Promise<string> {
+  const result = await landReview(repo, taskId, options);
+  assert.ok(result.ok, result.ok ? '' : result.error);
+  return result.ok ? result.message : '';
+}
+
+/** A landing that must not have; why. */
+async function refused(taskId: string, options: Parameters<typeof landReview>[2] = {}) {
+  const result = await landReview(repo, taskId, options);
+  assert.ok(!result.ok, 'it landed');
+  return result as Exclude<typeof result, { ok: true }>;
+}
+
+test('merge waits for uncommitted work, then merges and lets the worktree and branch go', async () => {
   const wt = prepareWorktree(repo, 'task-1', root)!;
   work(wt.path, 'a.txt', 'a\n');
   work(wt.path, 'b.txt', 'b\n', false);
-  assert.throws(() => mergeReview(repo, 'task-1', 'One'), /not committed/);
+  assert.match((await refused('task-1', { title: 'One' })).error, /not committed/);
   assert.ok(fs.existsSync(wt.path));
   fs.rmSync(path.join(wt.path, 'b.txt'));
 
-  const result = mergeReview(repo, 'task-1', 'One');
-  assert.match(result.message, /Merged dispatch\/task-1 into main/);
+  assert.match(await landed('task-1', { title: 'One' }), /Merged dispatch\/task-1 into main/);
   assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf-8'), 'a\n');
   assert.equal(git(['log', '-1', '--format=%s'], repo), 'Merge task-1: One');
   assert.ok(!fs.existsSync(wt.path));
@@ -136,21 +149,28 @@ test('merge waits for uncommitted work, then merges and lets the worktree and br
   assert.ok(!fs.existsSync(path.dirname(wt.path)));
 });
 
-test('a merge that would conflict changes nothing', () => {
+test('a merge that would conflict is said before, and changes nothing', async () => {
   const wt = prepareWorktree(repo, 'task-1', root)!;
   work(wt.path, 'README.md', 'theirs\n');
   fs.writeFileSync(path.join(repo, 'README.md'), 'mine\n');
   git(['commit', '-q', '-am', 'mine'], repo);
+  assert.deepEqual(reviewOf(repo, 'task-1')!.conflicts, ['README.md']);
   const head = git(['rev-parse', 'HEAD'], repo);
-  assert.throws(() => mergeReview(repo, 'task-1'), /conflicts with main in README\.md/);
+  const branchTip = git(['rev-parse', 'dispatch/task-1'], repo);
+  const result = await refused('task-1');
+  assert.equal(result.kind, 'conflict');
+  assert.match(result.error, /conflicts with main in README\.md/);
+  if (result.kind === 'conflict') assert.deepEqual(result.files, ['README.md']);
   assert.equal(git(['rev-parse', 'HEAD'], repo), head);
   assert.equal(git(['status', '--porcelain'], repo), '');
-  assert.ok(fs.existsSync(wt.path));
+  // The worktree is as the agent left it: the merge was let go.
+  assert.equal(git(['rev-parse', 'HEAD'], wt.path), branchTip);
+  assert.equal(git(['status', '--porcelain'], wt.path), '');
 });
 
-test('nothing committed is nothing to merge', () => {
+test('nothing committed is nothing to merge', async () => {
   prepareWorktree(repo, 'task-1', root);
-  assert.throws(() => mergeReview(repo, 'task-1'), /no commits/);
+  assert.match((await refused('task-1')).error, /no commits/);
 });
 
 test('discard throws the work away, uncommitted and all', () => {
@@ -204,7 +224,7 @@ test('a hand-off forks from the trunk, not from the branch the checkout is on', 
   assert.equal(git(['symbolic-ref', '--short', 'HEAD'], repo), 'feature');
 });
 
-test('its review goes into the trunk, and Merge waits until the checkout is on it', () => {
+test('it lands on the trunk without the checkout: the person\'s branch and folder are untouched', async () => {
   onFeature();
   const wt = prepareWorktree(repo, 'task-1', root)!;
   work(wt.path, 'a.txt', 'a\n');
@@ -212,23 +232,25 @@ test('its review goes into the trunk, and Merge waits until the checkout is on i
   assert.equal(review.into, 'main');
   assert.equal(review.checkout, 'feature');
   const feature = git(['rev-parse', 'feature'], repo);
-  assert.throws(() => mergeReview(repo, 'task-1', 'One'), /goes into main, and your checkout is on feature/);
+  const mainBefore = git(['rev-parse', 'main'], repo);
+  assert.match(await landed('task-1', { title: 'One' }), /into main/);
   assert.equal(git(['rev-parse', 'feature'], repo), feature);
-  assert.ok(fs.existsSync(wt.path));
-
-  git(['checkout', '-q', 'main'], repo);
-  assert.match(mergeReview(repo, 'task-1', 'One').message, /into main/);
-  assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf-8'), 'a\n');
-  assert.equal(git(['rev-parse', 'feature'], repo), feature);
+  assert.equal(git(['symbolic-ref', '--short', 'HEAD'], repo), 'feature');
+  assert.ok(!fs.existsSync(path.join(repo, 'a.txt')));
+  // main is the landing commit: the old tip, then the branch.
+  assert.equal(git(['log', '-1', '--format=%s', 'main'], repo), 'Merge task-1: One');
+  assert.equal(git(['rev-parse', 'main^1'], repo), mainBefore);
+  assert.equal(git(['show', 'main:a.txt'], repo), 'a');
+  assert.ok(!branches().includes('dispatch/task-1'));
 });
 
-test('a branch made before decision-11 keeps going into the branch it was started from', () => {
+test('a branch made before decision-11 keeps going into the branch it was started from', async () => {
   onFeature();
   const wt = prepareWorktree(repo, 'task-1', root)!;
   git(['config', 'branch.dispatch/task-1.brainfileBase', 'feature'], repo);
   work(wt.path, 'a.txt', 'a\n');
   assert.equal(reviewOf(repo, 'task-1')!.into, 'feature');
-  assert.match(mergeReview(repo, 'task-1').message, /into feature/);
+  assert.match(await landed('task-1'), /into feature/);
 });
 
 test('the trunk is the branch brainfile.trunk names, else origin\'s default, else main', () => {
@@ -254,7 +276,7 @@ test('a contract only reads when every deliverable is research, a review or a li
   assert.equal(onlyReads(undefined), false);
 });
 
-test('a hand-off that only reads gets a detached checkout of the trunk and no branch', () => {
+test('a hand-off that only reads gets a detached checkout of the trunk and no branch', async () => {
   const mainTip = onFeature();
   const wt = prepareWorktree(repo, 'task-1', root, true)!;
   assert.equal(wt.branch, null);
@@ -271,7 +293,7 @@ test('a hand-off that only reads gets a detached checkout of the trunk and no br
   const review = reviewOf(repo, 'task-1')!;
   assert.equal(review.branch, null);
   assert.equal(review.ahead, 0);
-  assert.throws(() => mergeReview(repo, 'task-1'), /nothing to merge/);
+  assert.match((await refused('task-1')).error, /nothing to merge/);
 });
 
 test('a read-only checkout goes when its hand-off ends, unless something was left in it', () => {
@@ -330,22 +352,21 @@ test('ready to merge: commits not in the trunk, nothing uncommitted, not merged;
 
   const found = readyToMerge(repo).sort((x, y) => x.taskId.localeCompare(y.taskId));
   assert.deepEqual(
-    found.map(({ taskId, into, ahead, added, removed, conflicts, checkout }) => ({ taskId, into, ahead, added, removed, conflicts, checkout })),
+    found.map(({ taskId, into, ahead, added, removed, conflicts }) => ({ taskId, into, ahead, added, removed, conflicts })),
     [
-      { taskId: 'task-1', into: 'main', ahead: 1, added: 2, removed: 0, conflicts: false, checkout: 'main' },
-      { taskId: 'task-2', into: 'main', ahead: 1, added: 1, removed: 1, conflicts: true, checkout: 'main' },
+      { taskId: 'task-1', into: 'main', ahead: 1, added: 2, removed: 0, conflicts: false },
+      { taskId: 'task-2', into: 'main', ahead: 1, added: 1, removed: 1, conflicts: true },
     ]
   );
   // merge-tree wrote nothing: the trunk and the checkout are as they were.
   assert.equal(git(['status', '--porcelain'], repo), '');
 });
 
-test('ready to merge says where the checkout is, and a read-only checkout is never ready', () => {
+test('ready to merge whatever the checkout is on, and a read-only checkout is never ready', () => {
   onFeature();
   work(handOff('task-1'), 'a.txt', 'a\n');
   prepareWorktree(repo, 'task-2', root, true);
-  const found = readyToMerge(repo);
-  assert.deepEqual(found.map((r) => [r.taskId, r.into, r.checkout]), [['task-1', 'main', 'feature']]);
+  assert.deepEqual(readyToMerge(repo).map((r) => [r.taskId, r.into]), [['task-1', 'main']]);
 });
 
 // ── Checks before Merge ─────────────────────────────────────────────────────
@@ -372,4 +393,118 @@ test('Merge says why it would refuse before anything runs', () => {
   assert.equal(whyNotMerge('task-1', reviewOf(repo, 'task-1')), null);
   work(wt, 'b.txt', 'b\n', false);
   assert.match(whyNotMerge('task-1', reviewOf(repo, 'task-1'))!, /not committed/);
+});
+
+// ── Landing (decision-12, task-62) ──────────────────────────────────────────
+
+test('the trunk is brought into the branch in its worktree, and the checks run on the result', async () => {
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  // The trunk moves on meanwhile, in another file.
+  fs.writeFileSync(path.join(repo, 'b.txt'), 'b\n');
+  git(['add', '-A'], repo);
+  git(['commit', '-q', '-m', 'b on main'], repo);
+  const seen: string[] = [];
+  await landed('task-1', {
+    check: async (at) => {
+      seen.push(fs.existsSync(path.join(at, 'a.txt')) && fs.existsSync(path.join(at, 'b.txt')) ? 'both' : 'one');
+      return { ok: true };
+    },
+  });
+  assert.deepEqual(seen, ['both']);
+  // The checkout is on main: it followed by fast-forward.
+  assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf-8'), 'a\n');
+  assert.equal(git(['status', '--porcelain'], repo), '');
+});
+
+test('a check that fails lands nothing', async () => {
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  const before = git(['rev-parse', 'main'], repo);
+  const result = await refused('task-1', { check: async () => ({ ok: false, command: 'npm test', output: '1 failing' }) });
+  assert.equal(result.kind, 'check');
+  if (result.kind === 'check') assert.equal(result.output, '1 failing');
+  assert.equal(git(['rev-parse', 'main'], repo), before);
+  assert.ok(fs.existsSync(wt));
+});
+
+test('when the trunk moves while the checks run, it starts again from the new tip', async () => {
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  let runs = 0;
+  await landed('task-1', {
+    check: async () => {
+      runs++;
+      // Someone lands meanwhile, the first time round.
+      if (runs === 1) {
+        fs.writeFileSync(path.join(repo, 'c.txt'), 'c\n');
+        git(['add', '-A'], repo);
+        git(['commit', '-q', '-m', 'c on main meanwhile'], repo);
+      }
+      return { ok: true };
+    },
+  });
+  assert.equal(runs, 2);
+  assert.equal(git(['show', 'main:c.txt'], repo), 'c');
+  assert.equal(git(['show', 'main:a.txt'], repo), 'a');
+  assert.equal(git(['log', '-1', '--format=%s', 'main'], repo), 'Merge task-1');
+});
+
+test('the person\'s uncommitted work on the trunk is kept, and a landing that would overwrite it waits', async () => {
+  const one = handOff('task-1');
+  work(one, 'a.txt', 'a\n');
+  // Their own change in progress, in another file: kept across the landing.
+  fs.writeFileSync(path.join(repo, 'README.md'), 'code, mine in progress\n');
+  await landed('task-1');
+  assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf-8'), 'a\n');
+  assert.equal(fs.readFileSync(path.join(repo, 'README.md'), 'utf-8'), 'code, mine in progress\n');
+
+  // One that changes the file they are changing waits, and names it.
+  const two = handOff('task-2');
+  work(two, 'README.md', 'code, theirs\n');
+  const before = git(['rev-parse', 'main'], repo);
+  const result = await refused('task-2');
+  assert.match(result.error, /changes README\.md, which you have changed/);
+  assert.equal(git(['rev-parse', 'main'], repo), before);
+  assert.equal(fs.readFileSync(path.join(repo, 'README.md'), 'utf-8'), 'code, mine in progress\n');
+});
+
+test('landings run one at a time per repository', async () => {
+  work(handOff('task-1'), 'a.txt', 'a\n');
+  work(handOff('task-2'), 'b.txt', 'b\n');
+  const order: string[] = [];
+  const slow = (name: string) => async () => {
+    order.push(`${name} starts`);
+    await new Promise((r) => setTimeout(r, 30));
+    order.push(`${name} ends`);
+    return { ok: true as const };
+  };
+  await Promise.all([landed('task-1', { check: slow('one') }), landed('task-2', { check: slow('two') })]);
+  assert.deepEqual(order, ['one starts', 'one ends', 'two starts', 'two ends']);
+  assert.equal(git(['show', 'main:a.txt'], repo), 'a');
+  assert.equal(git(['show', 'main:b.txt'], repo), 'b');
+});
+
+// ── A conflict, sent back (task-63) ─────────────────────────────────────────
+
+test('a conflict names the trunk commits it collided with and the tasks that landed them', async () => {
+  const mine = handOff('task-1');
+  work(mine, 'README.md', 'task-1 says\n');
+  // task-2 lands first, touching the same file.
+  const theirs = handOff('task-2');
+  work(theirs, 'README.md', 'task-2 says\n');
+  work(theirs, 'other.txt', 'x\n');
+  await landed('task-2', { title: 'Two' });
+  const result = await refused('task-1');
+  assert.equal(result.kind, 'conflict');
+  if (result.kind !== 'conflict') return;
+  const met = collisions(repo, result.branch, result.into, result.files);
+  assert.deepEqual(met.map((c) => [c.subject, c.taskId]), [['edit README.md', 'task-2']]);
+  // A commit straight on the trunk names no task.
+  fs.writeFileSync(path.join(repo, 'README.md'), 'by hand\n');
+  git(['commit', '-q', '-am', 'by hand'], repo);
+  assert.deepEqual(collisions(repo, result.branch, result.into, result.files).map((c) => [c.subject, c.taskId ?? null]), [
+    ['by hand', null],
+    ['edit README.md', 'task-2'],
+  ]);
 });

@@ -14,12 +14,10 @@
   let { ready, taskId }: { ready: ReadyView; taskId: string } = $props();
 
   let busy = $state(false);
-  /** Merge happens in the person's checkout, so it waits until that is on the branch it goes into (decision-12 lifts this). */
-  const elsewhere = $derived(ready.checkout !== ready.into);
 
   async function merge(e: MouseEvent): Promise<void> {
     e.stopPropagation();
-    if (busy || elsewhere) return;
+    if (busy) return;
     busy = true;
     await app.settleReview(taskId, 'merge');
     busy = false;
@@ -27,7 +25,9 @@
 </script>
 
 {#if ready.conflicts}
-  <span class="conflicts mono" use:tip={`Would conflict with ${ready.into}: open it to send it back`}>conflicts</span>
+  <span class="conflicts mono" use:tip={`Would conflict with ${ready.into}`}>conflicts</span>
+  <!-- Merge on a conflict sends it back to its agent to settle (task-63). -->
+  <button class="btn merge" class:busy disabled={busy} use:tip={'Its agent settles them'} onclick={merge}>{busy ? 'Sending…' : 'Send back'}</button>
 {:else}
   <span class="lines mono" use:tip={`${ready.ahead} commit${ready.ahead === 1 ? '' : 's'} on its branch`}>
     <span class="add" class:zero={!ready.added}>+{ready.added}</span>
@@ -36,8 +36,8 @@
   <button
     class="btn merge"
     class:busy
-    disabled={busy || elsewhere}
-    use:tip={elsewhere ? `Check out ${ready.into} in your folder to merge` : `Merge into ${ready.into}`}
+    disabled={busy}
+    use:tip={`Merge into ${ready.into}`}
     onclick={merge}><Icon name="git" size={13} />{busy ? 'Checking…' : 'Merge'}</button
   >
 {/if}

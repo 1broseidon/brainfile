@@ -290,9 +290,13 @@ Releases are managed per package:
 3. GitHub Actions builds and publishes VSIX
 
 **Core & CLI**:
-1. Update version in respective `package.json`
-2. Build: `npm run build`
-3. Publish: `npm publish` (when ready)
+1. Write each change as a file in `changes/` while the work happens, not in
+   `CHANGELOG.md` (see `changes/README.md`); `npm run changelog` shows the
+   next release.
+2. `npm run version:set <version>`: sets the versions and folds `changes/`
+   into a dated section of `CHANGELOG.md`.
+3. Build: `npm run build`
+4. Publish: `npm publish` (when ready)
 
 ### Future (Multi-Repo)
 Each repository will have independent releases:

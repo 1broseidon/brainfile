@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Usage: node .github/scripts/sync-version.mjs 0.18.0
 import { readFileSync, writeFileSync } from 'node:fs';
+import { releaseChangelog } from './changelog.mjs';
 
 const version = process.argv[2];
 if (!/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(version || '')) {
@@ -21,4 +22,7 @@ edit('cli/package.json', (p) => {
   p.version = version;
   if (p.dependencies?.['@brainfile/core']) p.dependencies['@brainfile/core'] = `^${version}`;
 });
+// The changes written as fragments while the work happened become this release's section (task-64).
+const folded = releaseChangelog(version);
+console.log(`CHANGELOG.md → ${version}, ${folded} change${folded === 1 ? '' : 's'} from changes/`);
 console.log('\nNext: commit, tag, and create a GitHub Release to trigger publish.yml.');

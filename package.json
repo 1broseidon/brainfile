@@ -15,7 +15,8 @@
   "scripts": {
     "build": "npm run build -w core && npm run build -w cli",
     "test": "npm run test:ci -w core && npm test -w cli",
-    "version:set": "node .github/scripts/sync-version.mjs"
+    "version:set": "node .github/scripts/sync-version.mjs",
+    "changelog": "node .github/scripts/changelog.mjs"
   },
   "overrides": {
     "zod": "4.3.6"

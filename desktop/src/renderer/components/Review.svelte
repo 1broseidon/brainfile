@@ -76,8 +76,8 @@
           ? 'Nothing committed yet'
           : review.merged
             ? `Already in ${review.into}`
-            : review.into && review.checkout !== review.into
-              ? `Check out ${review.into} in your folder to merge`
+            : review.conflicts.length
+              ? 'Its agent settles them'
               : ''
   );
 </script>
@@ -108,6 +108,12 @@
       {/if}
       {#if review.merged}
         <div class="line dim">Already in {review.into}: merging only lets the worktree go.</div>
+      {/if}
+      {#if review.conflicts.length}
+        <!-- Said before Merge is pressed (decision-12): git's merge-tree, nothing written. -->
+        <div class="line warn">
+          Conflicts with {review.into} in {review.conflicts.slice(0, 3).join(', ')}{review.conflicts.length > 3 ? ` and ${review.conflicts.length - 3} more` : ''}
+        </div>
       {/if}
       {#each review.commits as c (c.sha)}
         <div class="row"><span class="mono dim sha">{c.sha}</span><span class="clip">{c.subject}</span></div>
@@ -161,12 +167,13 @@
           <button
             class="btn"
             class:primary={inReview}
-            disabled={busy || !!run || !review.into || (!!mergeWaits && !review.merged) || review.uncommitted > 0}
+            disabled={busy || !!run || !review.into || (!!mergeWaits && !review.merged && !review.conflicts.length) || review.uncommitted > 0}
             use:tip={mergeWaits}
             onclick={() => settle('merge')}
           >
             <!-- Once its commits are in the branch, the button says the one thing left for it to do (decision-10). -->
-            <Icon name="git" size={13} />{merging ? 'Checking…' : review.merged ? 'Merged · remove worktree' : `Merge into ${review.into ?? '…'}`}
+            <!-- A conflict goes back to the agent that did the work (task-63): the key says that is what it does. -->
+            <Icon name="git" size={13} />{merging ? 'Checking…' : review.merged ? 'Merged · remove worktree' : review.conflicts.length ? 'Send back to settle' : `Merge into ${review.into ?? '…'}`}
           </button>
         {/if}
       </div>

@@ -1,0 +1,203 @@
+/*
+ * What every Settings section shares (design.md, Settings): headings, notes,
+ * groups, rows, pickers and their menus. Within `.settings`, and not into a
+ * component a section holds, which is wrapped in `.own` and keeps its own.
+ */
+@scope (.settings) to (.own) {
+  /* One left edge: headings and notes stand on the rows' text, not the group's rim. */
+  h2,
+  .lede,
+  h3,
+  .foot {
+    padding: 0 var(--s4);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: var(--t-lg);
+    line-height: var(--lh-lg);
+    font-weight: 600;
+  }
+
+  .lede {
+    margin: var(--s1) 0 0;
+    color: var(--ink-3);
+  }
+
+  h3 {
+    margin: var(--s6) 0 0;
+    font-size: var(--t-md);
+    line-height: var(--lh-md);
+    font-weight: 500;
+    color: var(--ink-2);
+  }
+
+  .foot {
+    margin: var(--s3) 0 0;
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+    color: var(--ink-4);
+  }
+
+  /* A group in a pane column: a surface of its own, set in, radius 14. */
+  .group {
+    margin-top: var(--s3);
+    padding: var(--s1) 0;
+    border-radius: var(--r-group);
+    background: var(--raised);
+    box-shadow: var(--top-light);
+  }
+
+  .row {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: var(--s4);
+    padding: var(--s2) var(--s2) var(--s2) var(--s4);
+  }
+
+  .row.toggle {
+    padding-right: var(--s4);
+  }
+
+  .label {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .row > .name {
+    flex: 1;
+  }
+
+  .name {
+    font-weight: 500;
+  }
+
+  .sub {
+    color: var(--ink-3);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+  }
+
+  .note {
+    padding-right: var(--s2);
+    color: var(--ink-3);
+  }
+
+  /* In bypass the mode is said, not offered: the pick's words, where the pick stood. */
+  .note.mode {
+    color: var(--ink-3);
+  }
+
+  .note.warn,
+  .sub.warn {
+    color: var(--warn);
+  }
+
+  /* An action in a group: a row you press, inset so its fill sits concentric in the group's corners. */
+  .row.add {
+    width: calc(100% - 2 * var(--s1));
+    margin: 0 var(--s1);
+    padding-left: var(--s3);
+    gap: var(--s2);
+    border-radius: var(--r-pane);
+    color: var(--ink-2);
+    text-align: left;
+    transition: background var(--d-press) var(--ease);
+  }
+
+  .row.add svg {
+    color: var(--ink-3);
+  }
+
+  .row.add:hover,
+  .row.add:focus-visible {
+    background: var(--fill-hover);
+    color: var(--ink);
+  }
+
+  .off .name,
+  .off .note {
+    color: var(--ink-4);
+  }
+
+  .anchor {
+    position: relative;
+  }
+
+  .pick {
+    height: var(--control-h);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 var(--s2);
+    border-radius: var(--r-control);
+    color: var(--ink-2);
+    transition: background var(--d-press) var(--ease);
+  }
+
+  .pick svg {
+    color: var(--ink-3);
+    transform: rotate(90deg);
+  }
+
+  .pick:hover {
+    background: var(--fill-hover);
+    color: var(--ink);
+  }
+
+  .dflt {
+    color: var(--ink-4);
+  }
+
+  .catch {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-catch);
+  }
+
+  .menu {
+    position: absolute;
+    z-index: var(--z-menu);
+    right: 0;
+    top: calc(100% + 4px);
+    width: 280px;
+    padding: var(--s1);
+    border-radius: var(--r-card);
+    background: var(--pressed);
+    box-shadow: var(--top-light), var(--shadow-float);
+  }
+
+  .item {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px var(--s2);
+    border-radius: var(--r-control);
+    text-align: left;
+  }
+
+  .item:hover {
+    background: var(--fill-hover);
+  }
+
+  .line {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+  }
+
+  .spacer {
+    flex: 1;
+  }
+
+  .desc {
+    color: var(--ink-3);
+    font-size: var(--t-sm);
+    line-height: var(--lh-sm);
+  }
+}

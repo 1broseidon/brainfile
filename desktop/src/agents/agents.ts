@@ -23,7 +23,7 @@ import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
-import { discardReview, mergeReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, runChecks, uncommittedIn, whyNotMerge, type Worktree } from './worktree';
+import { collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, runChecks, uncommittedIn, type Landing, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { customLaunch } from './custom';
 import { AgentRegistry } from './registry';
@@ -1011,7 +1011,7 @@ function workplace(worktree: Worktree | null): string {
   return (
     `\n\nYou are working in your own git worktree of this repository, at ${worktree.path}, on the branch \`${worktree.branch}\`${from}. ` +
     'Commit your work on this branch as you go, with clear messages, and leave nothing uncommitted when you finish: a person reviews and merges the branch. ' +
-    'Do not switch branches, merge, rebase or push. Untracked files such as installed dependencies are not here; set them up if you need to build or test. ' +
+    `Do not switch branches, rebase or push, and merge nothing but ${worktree.base ?? 'the branch it goes into'} into this branch, only when the task's log asks you to settle a conflict with it. Untracked files such as installed dependencies are not here; set them up if you need to build or test. ` +
     `The board is shared: the brainfile tools reach it from here.${again}`
   );
 }
@@ -1333,32 +1333,87 @@ function review(projectId: string, taskId: string): Result<ReviewView | null> {
 }
 
 /**
- * Merge, once the work holds: the quick refusals first (an agent still at
- * it, the checkout elsewhere, work left uncommitted), then the contract's
- * validation, run in the hand-off's own worktree, and only then the merge.
- * A check that fails merges nothing and says the command and its last lines.
+ * Merge lands the hand-off (decision-12): an agent still at it refuses, and
+ * so does a hand-off starting on it; the rest is landReview's, in the task's
+ * worktree, with the contract's validation as its check. A check that fails
+ * merges nothing and says the command and its last lines.
  */
 async function checkThenMerge(projectId: string, taskId: string): Promise<Result<{ message: string }>> {
+  const landing = await land(projectId, taskId);
+  if (landing.ok) return { ok: true, value: { message: landing.message } };
+  // A conflict, or a check that fails once the trunk is in, goes back to an agent before it stops at the person (decision-12).
+  if (landing.kind === 'conflict' || landing.kind === 'check') {
+    const back = await sendBackLanding(projectId, taskId, landing);
+    if (back.sent) return { ok: false, error: back.said };
+    return { ok: false, error: `${landing.error} ${back.said}${landing.kind === 'check' ? `\n${landing.output}` : ''}` };
+  }
+  return { ok: false, error: landing.error };
+}
+
+/** A log entry is one line: a check's output runs on, its lines marked, its end kept. */
+const oneLine = (text: string, keep = 600) => text.split('\n').map((l) => l.trim()).filter(Boolean).join(' ⏎ ').slice(-keep);
+
+/**
+ * Sends a landing that failed back to the agent that did the work (task-63):
+ * a note in the task's log saying what collided (the conflicting files, the
+ * trunk's commits and the tasks that brought them) or what failed, and how
+ * to settle it, then the same agent and model on the same branch. Up to the
+ * contract's maxRetries, else once; after that it stays with the person.
+ */
+async function sendBackLanding(
+  projectId: string,
+  taskId: string,
+  landing: Extract<Landing, { kind: 'conflict' | 'check' }>
+): Promise<{ sent: boolean; said: string }> {
+  const located = locateBoard(projectId, { materialize: false });
+  const found = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
+  if (!found) return { sent: false, said: 'Settle it in its worktree, or send it back with a note.' };
+  const { task, body } = found.doc;
+  const allowed = Math.max(0, task.contract?.maxRetries ?? 1);
+  const before = (body.match(/Landing sent back/g) ?? []).length;
+  if (before >= allowed) return { sent: false, said: `It was sent back ${before === 1 ? 'once' : `${before} times`} already: settle it, or send it back with a note.` };
+  const last = [...runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId).at(-1);
+  const named = (id: string | undefined) => (id && allAgents().some((a) => a.id === id && !whyNot(a)) ? (id as AgentId) : null);
+  const agentId = named(last?.agentId) ?? named(task.assignee) ?? allAgents().find((a) => !whyNot(a))?.id ?? null;
+  if (!agentId) return { sent: false, said: 'No agent is at hand to settle it.' };
+  const commands = (task.contract?.validation?.commands ?? []).join(' && ');
+  const round = `${before + 1} of ${allowed}`;
+  let note: string;
+  if (landing.kind === 'conflict') {
+    const met = collisions(projectId, landing.branch, landing.into, landing.files)
+      .map((c) => `${c.sha} ${c.subject}${c.taskId ? ` (${c.taskId})` : ''}`)
+      .join('; ');
+    note =
+      `Landing sent back (${round}): ${landing.branch} conflicts with ${landing.into} in ${landing.files.join(', ')}.` +
+      (met ? ` On ${landing.into} since this branch started: ${met}.` : '') +
+      ` Merge ${landing.into} into this branch (git merge ${landing.into}), keep what both sides meant, commit the merge, and run the checks${commands ? `: ${commands}` : ''}.`;
+  } else {
+    note = `Landing sent back (${round}): with ${landing.into} brought in, \`${landing.command}\` failed: ${oneLine(landing.output)}. Fix it on this branch, commit, and run the checks again.`;
+  }
+  const noted = await callHost<Result>('noteTask', projectId, taskId, note);
+  if (!noted.ok) return { sent: false, said: `It could not be sent back: ${noted.error}` };
+  const started = await dispatch(projectId, taskId, agentId, last?.model, last?.effort);
+  if (!started.ok) return { sent: false, said: `It could not be sent back: ${started.error}` };
+  const what = landing.kind === 'conflict' ? `conflicts with ${landing.into} in ${landing.files.slice(0, 3).join(', ')}` : `failed \`${landing.command}\``;
+  return { sent: true, said: `${taskId} ${what}: sent back to ${nameOf(agentId)} to settle (${round})` };
+}
+
+/** One landing of a task's hand-off, with its contract's checks. */
+async function land(projectId: string, taskId: string): Promise<Landing> {
   const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, error: `${nameOf(live.agentId)} is still working on ${taskId}` };
-  let review: ReviewView | null;
+  if (live) return { ok: false, kind: 'refused', error: `${nameOf(live.agentId)} is still working on ${taskId}` };
+  if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, kind: 'refused', error: `A hand-off is starting on ${taskId}` };
+  let title: string | undefined;
   let commands: string[] = [];
   try {
-    review = reviewOf(projectId, taskId);
-    const refused = whyNotMerge(taskId, review);
-    if (refused) return { ok: false, error: refused };
     const located = locateBoard(projectId, { materialize: false });
     const task = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId, true)?.doc.task : undefined;
+    title = task?.title;
     commands = (task?.contract?.validation?.commands ?? []).map((c) => c.trim()).filter(Boolean);
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, kind: 'refused', error: err instanceof Error ? err.message : String(err) };
   }
-  // Commits already in the branch they go into need no checks: Merge only lets the worktree go.
-  if (review && !review.merged && commands.length) {
-    const checked = await runChecks(review.path, commands, agentEnv());
-    if (!checked.ok) return { ok: false, error: `Nothing was merged: \`${checked.command}\` failed.\n${checked.output}` };
-  }
-  return settle(projectId, taskId, (title) => mergeReview(projectId, taskId, title));
+  return landReview(projectId, taskId, { title, check: commands.length ? (at) => runChecks(at, commands, agentEnv()) : undefined });
 }
 
 /** The board's hand-offs that can merge now; one an agent is still at is not ready yet. */
