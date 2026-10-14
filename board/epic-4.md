@@ -2,8 +2,8 @@
 id: epic-4
 title: Agent work lands on one trunk
 type: epic
-column: todo
-position: 2
+column: in-progress
+position: 3
 tags:
   - git
   - dispatch
@@ -14,7 +14,7 @@ decisions:
   - decision-13
   - decision-15
 createdAt: "2026-10-14T15:15:46.397Z"
-updatedAt: "2026-10-14T19:11:55.745Z"
+updatedAt: "2026-10-14T20:51:53.407Z"
 ---
 
 ## Description
