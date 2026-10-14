@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { locateBoard } from '@brainfile/core/repo';
-import { canBranch, discardReview, mergeReview, onlyReads, prepareWorktree, releaseReader, reviewOf, trunkOf } from '../src/agents/worktree.ts';
+import { canBranch, discardReview, mergeReview, onlyReads, prepareWorktree, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
 
 function git(args: string[], cwd: string): string {
   const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -174,6 +174,13 @@ test('a board kept as files in the code is not branched: it would be copied, not
   git(['commit', '-q', '-m', 'init'], plain);
   assert.equal(canBranch(plain), null);
   assert.equal(prepareWorktree(plain, 'task-1', root), null);
+});
+
+test('the files left uncommitted in a worktree are named, the first one too', () => {
+  const wt = prepareWorktree(repo, 'task-1', root)!;
+  work(wt.path, 'README.md', 'changed\n', false);
+  work(wt.path, 'new.txt', 'new\n', false);
+  assert.deepEqual(uncommittedIn(wt.path), { files: ['README.md', 'new.txt'], count: 2 });
 });
 
 // ── The trunk (decision-11) ─────────────────────────────────────────────────

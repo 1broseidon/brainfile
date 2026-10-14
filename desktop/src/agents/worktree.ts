@@ -206,12 +206,6 @@ export function prepareWorktree(projectId: string, taskId: string, root = worktr
   return { path: at, branch, base: recorded(repoRoot, branch, BASE_KEY), resumed: ahead(repoRoot, branch) > 0 };
 }
 
-/** What is not committed in a checkout. */
-function uncommittedIn(at: string): number {
-  const status = git(['status', '--porcelain'], at);
-  return status.ok ? status.stdout.split('\n').filter(Boolean).length : 0;
-}
-
 /** The work a hand-off left on its branch, for the review in the task pane; null when it has no worktree. */
 export function reviewOf(projectId: string, taskId: string): ReviewView | null {
   const repoRoot = gitToplevel(projectId);
@@ -223,7 +217,7 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
     const reader = existingReader(repoRoot, taskId);
     if (!reader) return null;
     const none = { ahead: 0, commits: [], files: [], filesChanged: 0, added: 0, removed: 0, merged: false };
-    return { branch: null, path: reader, base: trunkOf(repoRoot)?.name ?? null, into: null, checkout, ...none, uncommitted: uncommittedIn(reader) };
+    return { branch: null, path: reader, base: trunkOf(repoRoot)?.name ?? null, into: null, checkout, ...none, uncommitted: uncommittedIn(reader).count };
   }
   const branch = branchFor(taskId);
   const into = intoOf(repoRoot, branch);
@@ -242,7 +236,7 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
     return { path: file.join('\t'), added: Number(added) || 0, removed: Number(removed) || 0 };
   });
 
-  const uncommitted = uncommittedIn(at);
+  const uncommitted = uncommittedIn(at).count;
   const merged = !!into && commits.length > 0 && git(['merge-base', '--is-ancestor', branch, into], repoRoot).ok;
 
   return {
@@ -260,6 +254,14 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
     uncommitted,
     merged,
   };
+}
+
+/** The files changed in a worktree and not committed, as git names them, the first few; the count covers the rest. */
+export function uncommittedIn(at: string): { files: string[]; count: number } {
+  const status = git(['status', '--porcelain'], at);
+  const lines = status.ok ? status.stdout.split('\n').filter(Boolean) : [];
+  // `XY path`; the output comes trimmed, so the first line may have lost a leading blank.
+  return { files: lines.slice(0, SHOWN).map((l) => l.replace(/^\s?\S{1,2}\s+/, '')), count: lines.length };
 }
 
 /** The last line of git's complaint worth showing. */

@@ -8,7 +8,7 @@
  * it asks to do is sorted here before anyone is asked.
  */
 import { extractDescription, extractLog, findV2Task, getV2Dirs, parseNotes, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
-import type { AgentModes } from '../shared/api';
+import type { AgentModes, ReviewView } from '../shared/api';
 
 /** A decision the task rests on, in full: the agent works within it. */
 export interface DiscussDecision {
@@ -31,6 +31,20 @@ export interface DiscussNote {
   at: string;
   agent?: string;
   text: string;
+}
+
+/**
+ * The task's code, when it was handed off (phase 2): its branch and worktree,
+ * what is on them, and whether an agent is on it now. In Review the code that
+ * matters is there, not in the main checkout.
+ */
+export interface DiscussWork {
+  /** The hand-off's branch and worktree; null when it has none. */
+  review: ReviewView | null;
+  /** Files changed in the worktree and not committed, the first few; `review.uncommitted` counts them all. */
+  uncommittedFiles: string[];
+  /** The hand-off running on it now, if any. */
+  working?: { agent: string; state: string; model?: string; effort?: string };
 }
 
 /** What the agent is told about the task, read from the board. */
@@ -62,6 +76,8 @@ export interface DiscussContext {
   standing: string[];
   /** When the board was read. */
   asOf: Date;
+  /** Its branch and worktree, read from git by the caller; unset when not looked at. */
+  work?: DiscussWork;
 }
 
 /** How many of the task's notes the agent is given; the rest it can read with the log tool. */
@@ -167,6 +183,35 @@ function stage(ctx: DiscussContext): string {
   return `Stage: ${ctx.column}${ctx.columns.length > 1 ? ` (${ctx.columns.join(' → ')})` : ''}.`;
 }
 
+/** The task's branch, worktree and live agent, so a discussion in Review reads the code where it is. */
+export function workInformation(work: DiscussWork): string {
+  const { review: r, working } = work;
+  const now = working
+    ? `${working.agent}${working.model ? ` (${working.model}${working.effort ? `, ${working.effort}` : ''})` : ''} is working on it now (${working.state}): its worktree may change while you talk.`
+    : 'No agent is working on it now.';
+  if (!r) return ['<work>', 'No branch or worktree: it has not been handed off to one. Its code, if any, is in the main checkout.', now, '</work>'].join('\n');
+  const plural = (n: number, one: string) => `${n} ${n === 1 ? one : `${one}s`}`;
+  const lines = [
+    `<work branch="${r.branch}" worktree="${r.path}">`,
+    `Started from ${r.base ?? 'an unknown commit'}; ${plural(r.ahead, 'commit')} ahead, ${plural(r.filesChanged, 'file')} changed (+${r.added} −${r.removed}).` +
+      (r.merged ? ` Already merged into ${r.into}.` : r.into ? ` Not merged into ${r.into}.` : ''),
+  ];
+  if (r.commits.length) {
+    lines.push('Commits, newest first:', ...r.commits.map((c) => `- ${c.sha} ${c.subject}`));
+    if (r.ahead > r.commits.length) lines.push(`- and ${r.ahead - r.commits.length} more`);
+  }
+  if (r.files.length) {
+    lines.push('Files changed on the branch:', ...r.files.map((f) => `- ${f.path} +${f.added} −${f.removed}`));
+    if (r.filesChanged > r.files.length) lines.push(`- and ${r.filesChanged - r.files.length} more`);
+  }
+  if (r.uncommitted) {
+    const more = r.uncommitted - work.uncommittedFiles.length;
+    lines.push(`Not committed in the worktree (${r.uncommitted}): ${work.uncommittedFiles.join(', ')}${more > 0 ? ` and ${more} more` : ''}.`);
+  } else lines.push('Nothing uncommitted in the worktree.');
+  lines.push(now, '</work>');
+  return lines.join('\n');
+}
+
 /** The task as data, in a block the person does not see: everything the board says about it, so the agent need not look it up. */
 export function taskInformation(ctx: DiscussContext): string {
   const facts = [
@@ -217,6 +262,7 @@ export function taskInformation(ctx: DiscussContext): string {
     lines.push(...ctx.notes.map((n) => (n.at ? `${stamp(n.at)}${n.agent ? ` ${n.agent}` : ''}: ${n.text}` : n.text)), '</log>');
   }
   if (ctx.standing.length) lines.push('', '<board-decisions>', ...ctx.standing, '</board-decisions>');
+  if (ctx.work) lines.push('', workInformation(ctx.work));
   lines.push('</task-information>');
   return lines.join('\n');
 }
@@ -232,11 +278,18 @@ export function discussRules(ctx: DiscussContext): string {
     'When the person settles something that should outlive this task, you may record it as a decision on the same terms. ' +
       'Run check on it first; then say its claim key, title and text, and which decision it replaces or retires, and wait for a yes. ' +
       `Then record it with decide (its claim family's current decision is replaced) or supersede (to replace a given one), with ${ctx.id} in forWork so the task rests on it, or retire one as rejected or stale.`,
+    ...(ctx.work?.review
+      ? [
+          `Its code is on the branch ${ctx.work.review.branch}, in the worktree at ${ctx.work.review.path}, not in the main checkout: read its files there. ` +
+            'You run no commands, so the commits and files in <work> are its history; compare a file with the main checkout\'s to see what changed. ' +
+            'A merge takes only what is committed: say so when something that matters is uncommitted.',
+        ]
+      : []),
     'Work within the decisions above. Before going against one, run check and say so in your reply.',
     'Each time you change the task or record a decision, add one short note to it with the brainfile note tool saying what was agreed and why, so whoever works on it next sees it. ' +
       'If the person says the discussion is done and nothing was noted yet, note what was agreed then.',
     'Do not change other tasks, or move, complete or delete this one; suggest those instead. Do not write or edit code, run commands that change anything, start the work or hand the task off: the person does that.',
-    'The block was read at the time it gives. If the task may have changed since, read it again with get_task.',
+    `The block was read at the time it gives. If the task may have changed since, read it again with get_task${ctx.work?.review ? ', and the worktree\'s files again' : ''}.`,
     'Keep replies short: a question or two at a time, or the change you propose. Do not list the board changes you made: the window shows them under your reply.',
     '</discussion-rules>',
   ].join('\n');
