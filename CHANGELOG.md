@@ -6,13 +6,8 @@ All notable changes to this project are documented here. Format follows
 
 ## [Unreleased]
 
-Memory moves onto the board (spec-11): decisions with claim families, one
-search over a local index, a brief that starts every session, and `check`
-before acting. Default types and the graph (spec-12): every board has epics,
-specs, plans, tasks and decisions, and knows how they fit together. MCP
-parity (spec-13): everything the CLI does to a board has an MCP tool, and
-columns get a command of their own. The TUI catches up with decisions
-(task-19): a view of their own, their detail, and the work resting on them.
+## [0.22.1] - 2026-10-13
+
 ### Fixed
 - A board never commits `state/`, this machine's bookkeeping (`sync.json`,
   `autosync.lock`, `tui.json`, brief checkpoints, the search index), whatever
@@ -30,11 +25,93 @@ columns get a command of their own. The TUI catches up with decisions
 
 ## [0.22.0] - 2026-10-12
 
-### Changed (spec-15)
-- `migrate --to-branch` always commits the old copy's removal from the code
-  branch; `--commit` is accepted and hidden.
+Memory moves onto the board, and the board learns its own shape. Decisions
+with claim families, one search over a local index, a brief that starts
+every session, and `check` before acting (spec-11). Every board has epics,
+specs, plans, tasks and decisions, and knows how they fit together
+(spec-12). A repository has one board, and Brainfile notices when it has two
+(spec-15). Boards name their sisters in other repositories (spec-10).
+Everything the CLI does to a board has an MCP tool (spec-13), and the TUI
+catches up (task-19, task-20).
 
-### Added (spec-15, board integrity)
+### Upgrading
+
+- A parent with open children no longer completes, whatever its type (it was
+  only epics); `--force` still overrides.
+- Decisions are not listed in columns; `list --type decision` lists them.
+  `--type adr` now writes a `decision` (`decision-N`); existing `type: adr`
+  files read as decisions and keep their IDs, and a board's own `types.adr`
+  entry no longer applies.
+- `idPrefix` in `types:` now names new IDs; a `strict` board with no
+  `types:` map refuses types it doesn't know.
+- The SessionStart hook prints a real brief (about 1,600 characters) where
+  it printed a reminder.
+- `search` answers from a local index on Node 22.13 and later
+  (`node:sqlite`); older Node scans as before. `engines` stays `>=20`.
+- While two copies of a board disagree, writes are refused until `adopt` or
+  `merge-boards` settles it; `migrate --to-branch` always commits the old
+  copy's removal from the code branch.
+- `contract validate` and `template` exit 1 when they fail; scripts that
+  ignored a failed validation will now see it.
+
+### Added
+
+#### Memory and decisions
+
+- `brainfile decide -k <claim.key> "text"` records a decision in its claim
+  family (`--kind`, `--stance`/`--subject`, `--holds-while`, `--recheck`,
+  `--valid-until`, `--source` with its sha256, `--package name<op>version`,
+  `--for` work that rests on it). The family's current decision is
+  superseded: status, `supersedes`/`supersededBy` both ways, moved to
+  `logs/`. An empty family lists related ones (same parent key, same words).
+  `supersede <id> "text"` replaces one by hand; `retire <id> --as
+  rejected|stale` lets one go. One board commit per command; no ledger lines.
+- `brainfile check "<action>"` (or a decision ID, `--claim-key`,
+  `--claim-key-prefix`) answers `use`, `review`, `use_replacement` or
+  `no_decision` in recoil's order, with the stance rule and the predicates
+  `validUntil`, source unchanged and package version (package.json,
+  go.mod, pyproject.toml). Exit codes 0, 2, 3, 0; errors 1.
+- A local search index at `.brainfile/state/index.db` (gitignored,
+  rebuildable) on Node's own `node:sqlite` with FTS5: board and logs
+  documents, the ledger, `plans/` and the project's Markdown, via `git
+  ls-files` so `.gitignore` holds. Tracked by size, mtime and sha256; changed
+  files replace their chunks. `brainfile index [--rebuild] [--status]`.
+- MCP: `decide`, `supersede` and `check` (fourteen tools).
+- Core: `decisions` (claim families, stance rule, verdicts; also in
+  `@brainfile/core/browser`), `decideFile`, `supersedeDecisionFile`,
+  `retireDecisionFile` and the file predicates in the main entry, and the new
+  Node-only `@brainfile/core/memory`: `MemoryIndex`, `searchMemory`,
+  `composeBrief`, `checkDecision`, `checkClaimKeyPrefix`.
+- `/v2/decision.json` documents `sourcePath`, `sourceHash` and
+  `packageVersion`.
+
+#### Types and the graph
+
+- Five built-in types that need no `types:` entry: `epic`, `spec`, `plan`,
+  `task` (alias `issue`) and `decision` (alias `adr`). `brainfile types`
+  prints each with its place in the graph; `types add <name> --like <type>`
+  takes a built-in's place (parents, children, completion rule, glyph).
+- Containment by `parentId`: epic ▸ spec · plan · task, spec ▸ plan · task,
+  plan ▸ task, task ▸ task. `list --tree` prints the outline (`--parent` for a
+  subtree); `show` names the parent and children.
+- `decisions: [ids]` on work: the decisions it rests on. `add --decisions`,
+  `patch --decisions`; `show` lists them with where each stands and says when
+  one is superseded, and a decision shows the work resting on it. The reverse
+  is computed, never written.
+- `patch --parent / --clear-parent` and `--depends-on / --clear-depends-on`;
+  `add --depends-on`; `list --type` and `search --type`, aliases included.
+- MCP: `task_add` and `task_patch` take `decisions` (and `dependsOn`);
+  `list_tasks` takes `tree: true` and lists decisions with `type: "decision"`;
+  `get_task` returns `graph`; `search` takes `type`.
+- `/v2/decision.json`; `task.json` documents `parentId` and `decisions`;
+  `board.json` documents `like`.
+- Core: `docTypes` (registry, `resolveDocType`, `parentFit`) and `docGraph`
+  (`buildDocGraph`, `docPlace`, `checkDocumentLinks`, `lintDocGraph`), both in
+  `@brainfile/core/browser`; `readBoardGraph` and
+  `findWorkOnSupersededDecisions` in the main entry.
+
+#### Board integrity
+
 - Brainfile looks for every board a repository has: the `.brainfile/` folder
   in the checkout (tracked by the code branch or not), the `brainfile` branch,
   the remote's `refs/brainfile/<name>`, and checkouts of the board branch
@@ -42,8 +119,8 @@ columns get a command of their own. The TUI catches up with decisions
   them with document counts and last change, says how the two stand (one
   already has everything the other has, or each has changes the other
   lacks), and `--fetch` / `fetch: true` asks the remote first.
-- While two boards disagree, every write from the CLI, the MCP tools and the
-  desktop app is refused, naming the command that settles it; reads still
+- While two boards disagree, every write from the CLI or the MCP tools is
+  refused, naming the command that settles it; reads still
   work. A board ahead of or behind the remote is not two boards.
 - `where` says how many changes on the remote are not here yet, and reports a
   code branch that still tracks an old copy of `.brainfile/`.
@@ -64,46 +141,29 @@ columns get a command of their own. The TUI catches up with decisions
   outside `.brainfile/`; a checkout whose folder is gone is forgotten before
   the board is checked out (it used to block that) or by `lint --fix`. `lint`
   reports two boards as an error.
-- The desktop app says "Two boards: this folder (7) and origin's (19,
-  newer)" in the board's band with Use origin's / Merge / Keep this one, and
-  its health covers two boards, a checkout outside `.brainfile/`, a code
-  branch tracking an old copy, a merge left half-done, and changes on the
-  remote not here yet (`↓N`). A plain folder board asks the remote for its
-  copy when it opens.
 - Backups: anything that replaces a board saves it first as
   `refs/brainfile/backups/<UTC time>-folder|branch`. `brainfile backups` lists
   them; `brainfile backups restore <name>` puts one back.
 
-### Added (task-19)
-- The TUI has a decisions view, on `D` and at the type cycle's `decision`
-  stop: standing decisions grouped by claim-key family, history (superseded,
-  rejected, stale) folded below and opened with `L`. Rows lead with `●`
-  (`○` once retired) and say only a kind other than `decision`, `proposed`,
-  `review` past `validUntil`, or where a retired one went.
-- A decision's detail in the TUI: claim key, kind, stance and subject, holds
-  while, recheck, valid until (`review` once past), replaces and replaced by,
-  and the open work resting on it, each opened from the detail cursor.
-- Work's detail in the TUI lists the decisions it rests on, a retired one
-  marked `superseded → decision-2`; its row says `decision changed`.
+#### Related boards
 
-### Changed (task-19)
-- The TUI no longer puts decisions in a column (with none they landed in
-  `todo`) or retired decisions in the done view. In the decisions view the
-  board's mutating keys say how decisions change (`decide`, `supersede`,
-  `retire`) instead of acting; `e` still edits.
-- The TUI's detail cursor is drawn as a bar as well as reverse video, so it
-  shows under `NO_COLOR`; archived documents show their description.
+- `related:` in `brainfile.md` names sister boards in other repositories:
+  a short alias for a folder relative to this repository's root, committed
+  with the board.
+- `alias:task-id` (for example `mobile:task-12`) works anywhere a task ID
+  does: `dependsOn`, `show`, and MCP tool arguments. The alias resolves to
+  that folder's board exactly as running `brainfile` there would, branch
+  worktree included.
+- A `dependsOn` on a related board blocks until that task is completed
+  there; contract pickup uses the same rule. A folder that is not on this
+  machine keeps the reference valid, says so in `show` and `list`, and
+  counts as not done.
+- `list --related` shows the open tasks on related boards that this board's
+  tasks depend on, `--related all` every related board's open tasks; MCP
+  `list_tasks` takes the same option. `lint` checks the `related:` map.
 
-### Changed (task-20)
-- The TUI's list keeps a child under its parent across columns: it is drawn
-  in the parent's tab, says its own column at the row's right edge (`review`),
-  and is no longer listed in its own tab with `← epic-1`. A child completed
-  into logs/ stays under its open parent as `✓ done`, read-only, until the
-  parent is done. Grandchildren nest too. A tab counts what its list holds;
-  `m` starts on the document's own column, and the cursor follows a child
-  moved or completed under it.
+#### MCP and the command line
 
-### Added (spec-13)
 - `brainfile columns`: list (the default, with task counts and `--json`),
   `add <title>` (`--id`, `--after`/`--before`, `--completion`), `rename
   <column> <title>` (the ID stays, so its tasks do), `reorder <columns...>`
@@ -133,39 +193,30 @@ columns get a command of their own. The TUI catches up with decisions
   `summarizeColumns`; `removeColumnFile` moves a column's tasks first or
   refuses.
 
-### Changed (spec-13)
-- The commander program is built by `createProgram()` in `src/program.ts`;
-  `cli.ts` parses it. Nothing changes for the command line.
+#### TUI
 
-### Added (spec-11)
-- `brainfile decide -k <claim.key> "text"` records a decision in its claim
-  family (`--kind`, `--stance`/`--subject`, `--holds-while`, `--recheck`,
-  `--valid-until`, `--source` with its sha256, `--package name<op>version`,
-  `--for` work that rests on it). The family's current decision is
-  superseded: status, `supersedes`/`supersededBy` both ways, moved to
-  `logs/`. An empty family lists related ones (same parent key, same words).
-  `supersede <id> "text"` replaces one by hand; `retire <id> --as
-  rejected|stale` lets one go. One board commit per command; no ledger lines.
-- `brainfile check "<action>"` (or a decision ID, `--claim-key`,
-  `--claim-key-prefix`) answers `use`, `review`, `use_replacement` or
-  `no_decision` in recoil's order, with the stance rule and the predicates
-  `validUntil`, source unchanged and package version (package.json,
-  go.mod, pyproject.toml). Exit codes 0, 2, 3, 0; errors 1.
-- A local search index at `.brainfile/state/index.db` (gitignored,
-  rebuildable) on Node's own `node:sqlite` with FTS5: board and logs
-  documents, the ledger, `plans/` and the project's Markdown, via `git
-  ls-files` so `.gitignore` holds. Tracked by size, mtime and sha256; changed
-  files replace their chunks. `brainfile index [--rebuild] [--status]`.
-- MCP: `decide`, `supersede` and `check` (fourteen tools).
-- Core: `decisions` (claim families, stance rule, verdicts; also in
-  `@brainfile/core/browser`), `decideFile`, `supersedeDecisionFile`,
-  `retireDecisionFile` and the file predicates in the main entry, and the new
-  Node-only `@brainfile/core/memory`: `MemoryIndex`, `searchMemory`,
-  `composeBrief`, `checkDecision`, `checkClaimKeyPrefix`.
-- `/v2/decision.json` documents `sourcePath`, `sourceHash` and
-  `packageVersion`.
+- The TUI has a decisions view, on `D` and at the type cycle's `decision`
+  stop: standing decisions grouped by claim-key family, history (superseded,
+  rejected, stale) folded below and opened with `L`. Rows lead with `●`
+  (`○` once retired) and say only a kind other than `decision`, `proposed`,
+  `review` past `validUntil`, or where a retired one went.
+- A decision's detail in the TUI: claim key, kind, stance and subject, holds
+  while, recheck, valid until (`review` once past), replaces and replaced by,
+  and the open work resting on it, each opened from the detail cursor.
+- Work's detail in the TUI lists the decisions it rests on, a retired one
+  marked `superseded → decision-2`; its row says `decision changed`.
 
-### Changed (spec-11)
+#### Core
+
+- `@brainfile/core/repo`: the board's git storage, sync, merge driver and
+  autosync, moved from the CLI into core for other hosts to use (Node and
+  git only; the main and browser entries stay free of git). The CLI behaves
+  as before.
+
+### Changed
+
+#### Memory and decisions
+
 - `search` (CLI and MCP) uses the index when Node has `node:sqlite` (22.13
   and later): AND then OR, titles over bodies, current results first and
   history (completed work, superseded decisions) in its own lane, every hit
@@ -185,31 +236,8 @@ columns get a command of their own. The TUI catches up with decisions
 - `log --recent` and MCP `search recent` leave out decisions retired to
   `logs/`; they were never completed.
 
-### Added (spec-12)
-- Five built-in types that need no `types:` entry: `epic`, `spec`, `plan`,
-  `task` (alias `issue`) and `decision` (alias `adr`). `brainfile types`
-  prints each with its place in the graph; `types add <name> --like <type>`
-  takes a built-in's place (parents, children, completion rule, glyph).
-- Containment by `parentId`: epic ▸ spec · plan · task, spec ▸ plan · task,
-  plan ▸ task, task ▸ task. `list --tree` prints the outline (`--parent` for a
-  subtree); `show` names the parent and children.
-- `decisions: [ids]` on work: the decisions it rests on. `add --decisions`,
-  `patch --decisions`; `show` lists them with where each stands and says when
-  one is superseded, and a decision shows the work resting on it. The reverse
-  is computed, never written.
-- `patch --parent / --clear-parent` and `--depends-on / --clear-depends-on`;
-  `add --depends-on`; `list --type` and `search --type`, aliases included.
-- MCP: `task_add` and `task_patch` take `decisions` (and `dependsOn`);
-  `list_tasks` takes `tree: true` and lists decisions with `type: "decision"`;
-  `get_task` returns `graph`; `search` takes `type`.
-- `/v2/decision.json`; `task.json` documents `parentId` and `decisions`;
-  `board.json` documents `like`.
-- Core: `docTypes` (registry, `resolveDocType`, `parentFit`) and `docGraph`
-  (`buildDocGraph`, `docPlace`, `checkDocumentLinks`, `lintDocGraph`), both in
-  `@brainfile/core/browser`; `readBoardGraph` and
-  `findWorkOnSupersededDecisions` in the main entry.
+#### Types and the graph
 
-### Changed (spec-12)
 - A parent with open children refuses to complete, whatever its type (it was
   only epics); `--force` still overrides. A decision is never completed.
 - An off-pattern parent (an epic under a task, anything under a decision) is a
@@ -224,6 +252,38 @@ columns get a command of their own. The TUI catches up with decisions
 - `list` leaves decisions out of the columns (they have none) and says how
   many; `list --type decision` lists them. `brief` orients against current
   decisions as well as accepted ADRs.
+
+#### Board integrity
+
+- `migrate --to-branch` always commits the old copy's removal from the code
+  branch; `--commit` is accepted and hidden.
+
+#### MCP and the command line
+
+- The commander program is built by `createProgram()` in `src/program.ts`;
+  `cli.ts` parses it. Nothing changes for the command line.
+
+#### TUI
+
+- The TUI no longer puts decisions in a column (with none they landed in
+  `todo`) or retired decisions in the done view. In the decisions view the
+  board's mutating keys say how decisions change (`decide`, `supersede`,
+  `retire`) instead of acting; `e` still edits.
+- The TUI's detail cursor is drawn as a bar as well as reverse video, so it
+  shows under `NO_COLOR`; archived documents show their description.
+- The TUI's list keeps a child under its parent across columns: it is drawn
+  in the parent's tab, says its own column at the row's right edge (`review`),
+  and is no longer listed in its own tab with `← epic-1`. A child completed
+  into logs/ stays under its open parent as `✓ done`, read-only, until the
+  parent is done. Grandchildren nest too. A tab counts what its list holds;
+  `m` starts on the document's own column, and the cursor follows a child
+  moved or completed under it.
+
+### Fixed
+
+- `contract validate` and `template` exit non-zero when they fail; the
+  result was dropped, so a failed contract read as passed (task-15).
+- `contract graph` accepts its own flags again.
 
 ## [0.21.2] - 2026-10-11
 
