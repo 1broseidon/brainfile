@@ -29,6 +29,8 @@ subtasks:
     title: Offline and fetch error handling
     completed: false
 createdAt: "2026-10-14T18:45:19.838Z"
+assignee: codex
+updatedAt: "2026-10-14T18:45:53.650Z"
 ---
 
 ## Description
