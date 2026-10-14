@@ -15,7 +15,7 @@ parentId: epic-4
 decisions:
   - decision-11
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: file
       path: desktop/src/agents/worktree.ts
@@ -26,7 +26,10 @@ contract:
   validation:
     commands:
       - cd desktop && npm run typecheck && npm test
+  metrics:
+    readyAt: "2026-10-14T19:20:58.988Z"
 createdAt: "2026-10-14T15:15:56.764Z"
+updatedAt: "2026-10-14T19:20:58.988Z"
 ---
 
 ## Description
