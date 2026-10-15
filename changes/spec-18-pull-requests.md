@@ -21,3 +21,10 @@ kind: Added
   pull request as its fourth choice. When the trunk has commits origin
   lacks (landing never pushes), Ready to merge and the feed say `main is 3
   commits ahead of origin` (core's `unpushed`).
+- A pull request is refused when the branch it goes into has landings here
+  that origin's copy lacks (Merge lands locally and never pushes), since it
+  would carry them too: it names them and says to push that branch first,
+  or Merge instead. Once a pull request merges, the local branch it went
+  into follows origin's (a fast-forward, or onto a squash that has all it
+  had), unless it is checked out or has work origin's lacks; the task's log
+  says which. Core: `carriedUnpushed` and `followOrigin`.

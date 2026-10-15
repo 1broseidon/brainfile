@@ -25,6 +25,7 @@ import type { PullRequestRecord } from '../types/base';
 import { git, gitToplevel } from '../repo/boardRepo';
 import { locateBoard } from '../repo/locate';
 import { discardReview, reviewOf, whyNotMerge, type HandOffReview } from '../repo/worktree';
+import { carriedUnpushed, followOrigin } from '../repo/unpushed';
 import type { ForgeResult, GitHub, NewPullRequest, PullRequestView } from './github';
 import { detectForge, type ForgeRepo } from './remote';
 
@@ -95,13 +96,31 @@ const recordOf = (view: PullRequestView, pr: Pick<NewPullRequest, 'head' | 'base
 });
 
 /**
+ * Why a pull request from `head` into origin's `base` would carry more than
+ * `head`'s own work: landings Merge made on the local `base` and never pushed
+ * (task-102). Null when it would carry only its own.
+ */
+export function whyNotCarry(projectId: string, head: string, base: string): string | null {
+  const carried = carriedUnpushed(projectId, head, base);
+  if (!carried) return null;
+  const what = carried.tasks.length ? `the landings of ${carried.tasks.join(', ')}` : `${carried.count} ${carried.count === 1 ? 'commit' : 'commits'}`;
+  return `${base} has ${carried.count} ${carried.count === 1 ? 'commit' : 'commits'} here that origin's ${base} does not (${what}), and the pull request would carry them too. Push ${base} first, or Merge instead.`;
+}
+
+/**
  * Pushes `head` and opens a pull request from it into `base`, for any two
  * branches: a hand-off's, or an epic branch's. `base` must be on the forge
  * already; it is never pushed here. One already open from `head` is found.
+ * Refused when it would carry landings the local `base` has and origin's
+ * lacks (whyNotCarry), after fetching origin's `base` to know.
  */
 export async function openBranchPullRequest(projectId: string, pr: NewPullRequest, deps: PullRequestDeps): Promise<ForgeResult<PullRequestRecord>> {
   const repo = await forgeRepo(projectId, deps);
   if (!repo.ok) return repo;
+  const repoRoot = gitToplevel(projectId);
+  if (repoRoot) await gitRemote(['fetch', '--quiet', '--no-tags', 'origin', `refs/heads/${pr.base}:refs/remotes/origin/${pr.base}`], repoRoot, FETCH_TIMEOUT_MS);
+  const carries = whyNotCarry(projectId, pr.head, pr.base);
+  if (carries) return { ok: false, error: carries };
   const pushed = await pushBranch(projectId, pr.head);
   if (!pushed.ok) return pushed;
   const opened = await deps.github.openPullRequest(repo.value, pr);
@@ -188,21 +207,25 @@ export async function openHandOffPullRequest(projectId: string, taskId: string, 
  * carried (`headSha`). Uncommitted files, or commits made after it was
  * pushed, keep the worktree, and say so.
  */
-export async function releaseMergedHandOff(projectId: string, taskId: string, merged: Pick<PullRequestView, 'base' | 'headSha'>): Promise<{ released: boolean; said: string }> {
+export async function releaseMergedHandOff(projectId: string, taskId: string, merged: Pick<PullRequestView, 'base' | 'headSha'>): Promise<{ released: boolean; said: string; followed?: string }> {
   const repoRoot = gitToplevel(projectId);
   if (!repoRoot) return { released: false, said: `${projectId} is not a git repository` };
-  if (merged.base) await gitRemote(['fetch', '--quiet', '--no-tags', 'origin', merged.base], repoRoot, FETCH_TIMEOUT_MS);
+  if (merged.base) await gitRemote(['fetch', '--quiet', '--no-tags', 'origin', `refs/heads/${merged.base}:refs/remotes/origin/${merged.base}`], repoRoot, FETCH_TIMEOUT_MS);
+  // The branch it went into follows origin's here, so what is handed off next starts from the merge (task-102).
+  const followed = merged.base ? followOrigin(projectId, merged.base) : null;
+  const also = followed ? `; ${followed.said}` : '';
+  const saying = (text: string) => ({ said: `${text}${also}`, ...(followed ? { followed: followed.said } : {}) });
   const review = reviewOf(projectId, taskId);
-  if (!review?.branch) return { released: true, said: `${taskId}'s worktree was gone already` };
-  if (review.uncommitted > 0) return { released: false, said: `${review.uncommitted} ${review.uncommitted === 1 ? 'file is' : 'files are'} not committed in ${taskId}'s worktree, so it stays` };
+  if (!review?.branch) return { released: true, ...saying(`${taskId}'s worktree was gone already`) };
+  if (review.uncommitted > 0) return { released: false, ...saying(`${review.uncommitted} ${review.uncommitted === 1 ? 'file is' : 'files are'} not committed in ${taskId}'s worktree, so it stays`) };
   const sha = merged.headSha;
   const known = (s: string) => git(['cat-file', '-e', `${s}^{commit}`], repoRoot).ok;
   // Someone pushed to the pull request from elsewhere (GitHub's Update branch): what it carried is fetched.
   if (sha && !known(sha)) await gitRemote(['fetch', '--quiet', '--no-tags', 'origin', sha], repoRoot, FETCH_TIMEOUT_MS);
   const carried = !!sha && known(sha) && git(['merge-base', '--is-ancestor', review.branch, sha], repoRoot).ok;
-  if (!review.merged && !carried) return { released: false, said: `${review.branch} has commits the pull request did not carry, so its worktree stays` };
+  if (!review.merged && !carried) return { released: false, ...saying(`${review.branch} has commits the pull request did not carry, so its worktree stays`) };
   discardReview(projectId, taskId);
-  return { released: true, said: `${review.branch} and its worktree are gone` };
+  return { released: true, ...saying(`${review.branch} and its worktree are gone`) };
 }
 
 /** Where a hand-off's pull request was found, and what was done about it. */
@@ -243,6 +266,7 @@ export async function followHandOffPullRequest(
   }
   const released = await releaseMergedHandOff(projectId, taskId, { base: view.base || open.base, headSha: view.headSha });
   const record = { ...open, state: 'merged' as const };
-  await write(record, `Pull request #${open.number} was merged into ${record.base}${released.released ? '' : `; ${released.said}`}`);
+  const also = released.released ? released.followed : released.said;
+  await write(record, `Pull request #${open.number} was merged into ${record.base}${also ? `; ${also}` : ''}`);
   return { ok: true, value: { state: 'merged', record, ...released } };
 }

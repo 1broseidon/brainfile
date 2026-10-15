@@ -22,7 +22,7 @@ import {
   type PullRequestForge,
   type PullRequestView,
 } from '../forge';
-import { landReview, offerEpicBranch, prepareEpicBranch, prepareTarget, prepareWorktree, readyToMerge, reviewOf, unpushed, withOpenPullRequest } from '../repo';
+import { carriedUnpushed, followOrigin, landReview, offerEpicBranch, prepareEpicBranch, prepareTarget, prepareWorktree, readyToMerge, reviewOf, unpushed, withOpenPullRequest } from '../repo';
 import { parsePullRequest } from '../pullRequest';
 import { readTaskFile } from '../taskFile';
 
@@ -320,4 +320,94 @@ test('the trunk ahead of origin is counted from what origin was last fetched as'
   assert.equal(unpushed(repo, 'dispatch/none'), null);
   git(['remote', 'remove', 'origin'], repo);
   assert.equal(unpushed(repo), null);
+});
+
+// ── What a pull request carries, and the branch it went into after (task-102) ──
+
+/** A landing on the local `branch` that is never pushed, as Merge makes one. */
+function landHere(branch: string, taskId: string, file: string): void {
+  const tip = git(['rev-parse', branch], repo);
+  const blob = spawnSync('git', ['hash-object', '-w', '--stdin'], { cwd: repo, input: `${taskId}\n`, encoding: 'utf-8' }).stdout.trim();
+  const tree = spawnSync('git', ['mktree'], { cwd: repo, input: `${git(['ls-tree', tip], repo)}\n100644 blob ${blob}\t${file}\n`, encoding: 'utf-8' }).stdout.trim();
+  const commit = git(['commit-tree', tree, '-p', tip, '-m', `Merge ${taskId}: landed here`], repo);
+  git(['update-ref', `refs/heads/${branch}`, commit, tip], repo);
+}
+
+test('a pull request that would carry landings its branch has here and origin lacks is refused, naming them, and nothing is pushed', async () => {
+  git(['branch', 'release'], repo);
+  git(['push', '-q', 'origin', 'release'], repo);
+  landHere('release', 'task-8', 'eight.txt');
+  landHere('release', 'task-9', 'nine.txt');
+  const wt = prepareWorktree(repo, 'task-1', root, false, 'release')!;
+  work(wt.path, 'parser.ts', 'parse\n');
+  assert.deepEqual(carriedUnpushed(repo, 'dispatch/task-1', 'release'), { base: 'release', count: 2, tasks: ['task-8', 'task-9'] });
+  const { forge, opened } = fakeForge();
+
+  const refused = await openHandOffPullRequest(repo, 'task-1', { github: forge, repo: REPO });
+  assert.ok(!refused.ok);
+  assert.match(refused.error, /release has 2 commits here that origin's release does not \(the landings of task-8, task-9\).*Push release first, or Merge instead/);
+  assert.equal(opened.length, 0);
+  assert.equal(onOrigin('refs/heads/dispatch/task-1'), '');
+  assert.equal(recorded(), null);
+
+  // Pushed, it carries only its own.
+  git(['push', '-q', 'origin', 'release'], repo);
+  assert.equal(carriedUnpushed(repo, 'dispatch/task-1', 'release'), null);
+  const opens = await openHandOffPullRequest(repo, 'task-1', { github: forge, repo: REPO });
+  assert.ok(opens.ok, opens.ok ? '' : opens.error);
+});
+
+test('squash-merged into a branch nobody has checked out, the local branch follows origin\'s, so the next hand-off starts from it', async () => {
+  git(['branch', 'release'], repo);
+  git(['push', '-q', 'origin', 'release'], repo);
+  const wt = prepareWorktree(repo, 'task-1', root, false, 'release')!;
+  work(wt.path, 'parser.ts', 'parse\n');
+  const { forge, set } = fakeForge();
+  await openHandOffPullRequest(repo, 'task-1', { github: forge, repo: REPO });
+  const clone = path.join(base, 'forge-release');
+  git(['clone', '-q', '-b', 'release', origin, clone], base);
+  identity(clone);
+  git(['merge', '-q', '--squash', 'origin/dispatch/task-1'], clone);
+  git(['commit', '-q', '-m', 'Parse the thing (#7)'], clone);
+  git(['push', '-q', 'origin', 'HEAD:release'], clone);
+  set({ state: 'merged', base: 'release' });
+
+  const merged = await followHandOffPullRequest(repo, 'task-1', { github: forge, repo: REPO });
+  assert.ok(merged?.ok && merged.value.state === 'merged' && merged.value.released);
+  assert.equal(git(['rev-parse', 'release'], repo), git(['rev-parse', 'origin/release'], repo));
+  assert.match(readTaskFile(taskFile)!.body, /Pull request #7 was merged into release; release here is brought up to origin's/);
+});
+
+test('the local branch follows origin\'s only when nothing would be lost and nobody has it checked out', () => {
+  git(['branch', 'release'], repo);
+  git(['push', '-q', 'origin', 'release'], repo);
+  assert.equal(followOrigin(repo, 'release'), null);
+  // Landed here, then squashed onto origin's from another clone: diverged, but origin's has it all.
+  landHere('release', 'task-8', 'eight.txt');
+  const clone = path.join(base, 'forge-squash');
+  git(['clone', '-q', '-b', 'release', origin, clone], base);
+  identity(clone);
+  fs.writeFileSync(path.join(clone, 'eight.txt'), 'task-8\n');
+  git(['add', '-A'], clone);
+  git(['commit', '-q', '-m', 'task-8 (#3)'], clone);
+  git(['push', '-q', 'origin', 'HEAD:release'], clone);
+  git(['fetch', '-q', 'origin'], repo);
+  assert.deepEqual(followOrigin(repo, 'release'), { moved: true, said: "release here now matches origin's, which has everything it had" });
+  assert.equal(git(['rev-parse', 'release'], repo), git(['rev-parse', 'origin/release'], repo));
+  // Something here origin's lacks: left as it is.
+  landHere('release', 'task-9', 'nine.txt');
+  fs.writeFileSync(path.join(clone, 'other.txt'), 'other\n');
+  git(['add', '-A'], clone);
+  git(['commit', '-q', '-m', 'other'], clone);
+  git(['push', '-q', 'origin', 'HEAD:release'], clone);
+  git(['fetch', '-q', 'origin'], repo);
+  const tip = git(['rev-parse', 'release'], repo);
+  assert.deepEqual(followOrigin(repo, 'release'), { moved: false, said: "release here has commits origin's release does not: it is left as it is" });
+  assert.equal(git(['rev-parse', 'release'], repo), tip);
+  // Behind, but checked out in the person's folder: they pull it themselves.
+  git(['push', '-q', 'origin', 'main'], repo);
+  work(clone, 'x.txt', 'x\n');
+  git(['push', '-q', 'origin', 'HEAD:main'], clone);
+  git(['fetch', '-q', 'origin'], repo);
+  assert.match(followOrigin(repo, 'main')!.said, /main is checked out at .*: pull origin's main there/);
 });
