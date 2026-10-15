@@ -22,23 +22,24 @@ dependsOn:
 subtasks:
   - id: task-98-1
     title: "--help lists fix, issues and pr"
-    completed: false
+    completed: true
   - id: task-98-2
     title: fix --dry-run reports, exit 0
-    completed: false
+    completed: true
   - id: task-98-3
     title: issues lists this repository's open issues, marked when on the board
-    completed: false
+    completed: true
   - id: task-98-4
     title: issues --import makes one task with source; a second import and add --source are refused
-    completed: false
+    completed: true
   - id: task-98-5
     title: pr --status gives the state and link
-    completed: false
+    completed: true
   - id: task-98-6
     title: lint is clean apart from deliberate warnings
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:21:50.418Z"
+updatedAt: "2026-10-15T20:30:42.464Z"
 ---
 
 ## Description
