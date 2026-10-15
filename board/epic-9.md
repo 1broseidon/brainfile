@@ -17,8 +17,7 @@ decisions:
   - decision-15
 createdAt: "2026-10-15T18:20:49.911Z"
 landsOn: qa/parity
-updatedAt: "2026-10-15T20:31:13.158Z"
-epicBranch: true
+updatedAt: "2026-10-15T20:31:13.439Z"
 ---
 
 ## Description
