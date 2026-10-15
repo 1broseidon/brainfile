@@ -11,6 +11,9 @@ relatedFiles:
   - qa/parity-wave-1.md
 parentId: epic-9
 createdAt: "2026-10-15T18:20:54.384Z"
+dependsOn:
+  - task-89
+updatedAt: "2026-10-15T18:21:59.732Z"
 ---
 
 ## Description
