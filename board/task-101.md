@@ -52,3 +52,12 @@ Last. When every other task under epic-8 is done (or its failures have qa-bug ta
 3. Move the dev app back to your checkout: stop the one in `~/.brainfile-worktrees/parity/integration/desktop` and run `npm run dev` in `desktop/`.
 4. Tidy: delete `qa/parity` here and on origin (`git push origin --delete qa/parity`) and any `dispatch/task-9x` left on origin, remove the `~/.brainfile-worktrees/parity/*` worktrees and their `parity/*` branches, and complete or delete epic-9.
 5. Then epic-6's next wave: task-79, task-80 and task-81 (the shared runner), then task-82, task-83, task-84 and task-88.
+
+## Log
+- 2026-10-15T21:19:18.021Z: [claude] Signed off (Claude, at the person's go):
+- parity/integration fast-forwarded main from 2cff04e to f9a03b9 (25 commits). Then 7457249: the desktop lockfile records core's new ACP SDK dependency, so npm ci agrees. Not pushed: main is now 37 ahead of origin.
+- On main in the checkout: core 1115, CLI 657 + 189, desktop typecheck clean and 189 tests.
+- task-74 to task-78 and spec-18 completed.
+- The dev app runs from the checkout again, with no errors.
+- Removed the eight parity worktrees and their branches (each clean and merged). Deleted qa/parity here and on origin, and dispatch/task-92 and dispatch/task-93 on origin.
+Follow-ups filed: task-103 (feed), task-104 (Antigravity sign-in), task-106 (mode selector in the chat box).
