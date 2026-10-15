@@ -171,6 +171,31 @@ composeBrief(dirs, "claude", { lastBriefAt: null }).text;   // the session-start
 checkDecision(dirs.brainfilePath, { query: "add axios" });  // { result: { verdict: 'review', … } }
 ```
 
+### Dispatch: ACP agents
+
+Starting the person's own coding agents over the Agent Client Protocol is in
+the Node-only `@brainfile/core/dispatch`, which depends on
+`@agentclientprotocol/sdk` and loads it when a session opens: the agents
+Brainfile knows and how each starts, custom agents (`agentServers` in Zed's
+shape) and the ACP registry, dispatch.json and models.json in the data folder
+(`BRAINFILE_DATA_DIR`, else the platform's, the same one the desktop uses),
+sessions and their turns, permissions as policy, and a hand-off's brief. What
+runs the sessions keeps the runs and answers the asks.
+
+```typescript
+import { dataDir, listAgents, open, turn, brief, type SessionContext } from "@brainfile/core/dispatch";
+
+const ctx: SessionContext = {
+  dataDir: dataDir(),
+  sessions: new Map(),
+  update: (run, patch) => Object.assign(run, patch),
+  ask: async (ask) => ask.options.find((o) => o.kind === "allow_once")?.optionId ?? null,
+};
+listAgents(ctx.dataDir);                 // [{ id: 'claude', name: 'Claude Code', available: true, note: 'your login' }, …]
+const session = await open(ctx, "/path/to/repo", "claude", "run-1");
+await turn(ctx, session, run, brief("/path/to/repo", "task-12"));   // run.state, run.reply, run.steps
+```
+
 ### Utilities
 
 Helper functions for common tasks.

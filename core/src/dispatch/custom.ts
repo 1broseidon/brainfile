@@ -3,12 +3,11 @@
  * dispatch.json, run as given. Nothing is installed or downloaded: its
  * command is found on PATH as a shell would find it, or taken as the path it
  * is, and its `env` is set over the environment the app gives every agent.
- * Nothing here touches Electron, so it is tested on its own.
  */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { AgentServer } from '../shared/api';
+import type { AgentServer } from './types';
 
 function executable(file: string): boolean {
   try {
