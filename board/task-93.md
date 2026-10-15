@@ -50,3 +50,6 @@ dispatch:
 2. On GitHub, close the pull request without merging.
 3. Keep the window open: within about a minute it is back in Ready to merge, and `bfq show -t <this task>` has `pullRequest:` with `state: closed`.
 4. Discard it from Review. The worktree and `dispatch/<this task>` are gone, `qa/parity` has no line from it, and the task stays open. Then delete the branch on GitHub, and complete this task by hand once the checks pass.
+
+## Log
+- 2026-10-15T20:22:21.804Z: [claude] Appended "- QA hand-off 4 (task-93): its pull request was closed unmerged, 2026-10-15T20:21:33Z" to qa/parity-wave-1.md and committed it (77a773b) on dispatch/task-93; nothing else changed, subtasks left for the person. Nothing from task-89 needed wiring here.
