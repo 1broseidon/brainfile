@@ -51,3 +51,13 @@ Not a hand-off. In a terminal at this repository, with `bfq` from the setup task
 5. `bfq pr <task-92> --status` (hand-off 3, once its pull request is open or merged): the state and the link.
 6. `bfq lint`: no errors; the only lands-on warnings are ones you made on purpose.
 7. `bfq where`: unchanged from the published `brainfile where`, apart from a fix section in `--json`.
+
+## Log
+- 2026-10-15T20:30:42.736Z: [claude] QA passed (Claude, with the integration CLI):
+- --help lists fix, issues and pr.
+- fix --dry-run says "Nothing to fix: one board, where it belongs" and exits 0; --json gives {problems: [], plan: null}.
+- issues lists #1 "Ideas for docs and enhancements" through gh's login; --json gives repo, auth: gh and issues.
+- issues --import 1 --column backlog made task-103 in backlog with source set; the issue had no labels, so it got no tags. issues then marks #1 "on the board: task-103". A second import says "#1 is already task-103", and add --source is refused with "That issue is already task-103." (exit 1). task-103 was deleted afterwards.
+- pr --status: task-92 says "#6 … merged", task-93 says "#7 … closed without merging" (both from logs/).
+- lint is clean; where's text matches the published brainfile's.
+Two notes, neither a bug. The guide was wrong that where --json carries fix: the fix plan is in `brainfile fix --json` and on MCP where. For a discarded hand-off, pr --status still says "Merge it, or open another", though there is nothing left to merge (a wording nit).
