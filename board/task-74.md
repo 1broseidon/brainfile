@@ -74,3 +74,6 @@ This builds spec-16-1 in core, and changes where the heartbeat lives.
 - Written atomically (temp file, then rename). A run whose pid is gone, or whose beat is older than 30 s, is lost: its claim can be taken again on this host. A claim from another host is never taken without `--force`. Ended runs are pruned after 30 minutes, as live.ts does today.
 
 Desktop: host.ts `recordDispatch` calls core. api.ts `DispatchRecord` becomes core's type.
+
+## Log
+- 2026-10-15T17:38:18.658Z: [claude] Built on parity/task-74 (c5c80f0, ff96e89), merged into parity/integration. DispatchRecord type, core/src/dispatchRecord.ts (request/claim/release with a per-file lock + compare-and-swap, lint MALFORMED_DISPATCH), core/src/repo/runFiles.ts (runs/runners, atomic, lost after 30 s, prune). recordDispatch goes through core. Not yet: nothing writes a claim or run files (task-80's runner does). Awaiting QA.
