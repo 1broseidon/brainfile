@@ -1,8 +1,8 @@
 ---
 id: task-90
 title: "QA hand-off 1: Lands on, inherited from the epic, and Merge onto qa/parity with main untouched"
-column: review
-position: 5
+column: in-progress
+position: 10
 description: |-
   **For the agent this is handed to:** append one line to `qa/parity-wave-1.md` (make the file and the folder if they are not there): `- QA hand-off 1 (<task id>): landed through Merge, <the time now, ISO>`. Commit it on your branch. Change nothing else, and do not tick this task's subtasks: they are the person's checks. Then do as your brief says when you finish.
 
@@ -42,7 +42,7 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:11.927Z"
 assignee: claude
-updatedAt: "2026-10-15T19:05:24.573Z"
+updatedAt: "2026-10-15T19:08:09.793Z"
 dispatch:
   agent: claude
   model: opus
@@ -63,3 +63,4 @@ dispatch:
 
 ## Log
 - 2026-10-15T19:05:12.729Z: [claude] Made qa/parity-wave-1.md with "- QA hand-off 1 (task-90): landed through Merge, 2026-10-15T19:04:47Z", committed as 9e2aa24 on dispatch/task-90 (forked from qa/parity). Nothing else changed and the subtasks are left for QA. For whoever comes next: .gitignore ignores everything outside its allowlist (/*), and qa/ isn't on it, so I had to force-add the file (git add -f). Now that it's tracked, later appends commit normally. A new file under qa/ would need -f again, or an !/qa/ line in .gitignore. Nothing is left unwired.
+- 2026-10-15T19:08:09.793Z: Merged; 2 of 6 subtasks left, so it stays open
