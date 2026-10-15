@@ -42,7 +42,7 @@ contract:
   metrics:
     readyAt: "2026-10-15T21:40:11.044Z"
 createdAt: "2026-10-14T22:16:23.437Z"
-updatedAt: "2026-10-15T22:31:24.865Z"
+updatedAt: "2026-10-15T22:56:00.917Z"
 ---
 
 ## Description
@@ -58,4 +58,6 @@ The TUI shows `codex · editing` on a row from the run files and refreshes when 
 
 From task-80: build on `Runner(dataDir, runner, board, ask, cancelAsk, onRun, ledBy, landed)` with `fileBoard()` as its board; `ask`/`cancelAsk` are where the terminal prompt goes, and `onRun` gives the change lines. fileBoard's board commits are debounced: call `flushBoardCommits` on Ctrl-C and before `--once` returns, or claims released and landings made are left uncommitted. `runner.live()` already reads every runner's run files, for the TUI's rows too.
 
-From task-81: add `run` to EXCLUDED in cli/src/__tests__/mcp-parity.test.ts (the comment with its reason is already there). Build on `openRunner(kind, {sendBack: 'start', ask, onRun})` in cli/src/commands/dispatch.ts: a long-lived runner sends a failed landing back by starting the agent, where CLI/MCP calls use 'queue'. `dispatch --now` (runNow + terminalAsk in dispatch.ts) is a minimal foreground loop that `brainfile run` should take over, so there is one loop, not two. Once task-83 lands, `brainfile run` also picks up lead requests (role:lead) through the Runner.
+From task-81: add `run` to EXCLUDED in cli/src/__tests__/mcp-parity.test.ts (the comment with its reason is already there). Build on `openRunner(kind, {sendBack: 'start', ask, onRun})` in cli/src/commands/dispatch.ts: a long-lived runner sends a failed landing back by starting the agent, where CLI/MCP calls use 'queue'. `dispatch --now` (runNow + terminalAsk in dispatch.ts) is a minimal foreground loop that `brainfile run` should take over, so there is one loop, not two.
+
+From task-83 (landed): the Runner runs leads when it works the queue with `leads: true`: it takes up lead requests (dispatch: with role lead on an epic), runs the lead's turns read-only with brainfile mcp scoped to its tree, starts what the lead queues inside its rules (workLed), parks a child whose tries are spent in Review, and follows the board (boardChanged, plus a look every 2 s while it leads). `brainfile run` must open its Runner with `leads: true` and sendBack 'start', print lead changes (onLead) as change lines too, and on Ctrl-C let go of the lead's claim on the epic as well as its children's. `dispatch <epic> --now` already runs a lead here: fold that into the one loop as well. Test: `brainfile dispatch <epic>` then `brainfile run --once` with fake agents runs the lead and its children to Review/landed.
