@@ -42,3 +42,6 @@ assignee: claude
 
 ## Description
 Append one line to `qa/parity-wave-1.md` (make the file and the folder if they are not there): `- Drill child 1 (<task id>): on <the branch you started from>, <the time now, ISO>`. Commit it on your branch. Change nothing else.
+
+## Log
+- 2026-10-15T20:56:16.480Z: [claude] Appended "- Drill child 1 (task-95): on dispatch/epic-9, 2026-10-15T20:56:07Z" to qa/parity-wave-1.md, existing three lines kept; committed as 1f52e33 on dispatch/task-95 (one file, one line). Both validation greps pass. For the next child: qa/ is matched by .gitignore but qa/parity-wave-1.md is tracked, so `git add qa/parity-wave-1.md` warns yet still stages it (or use `git commit -a`). Nothing left unwired.
