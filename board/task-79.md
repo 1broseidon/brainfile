@@ -30,7 +30,7 @@ decisions:
   - decision-6
   - decision-14
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: file
       path: core/src/dispatch/discuss.ts
@@ -51,8 +51,12 @@ contract:
     commands:
       - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
       - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
+  constraints:
+    - Ask the person and record the decision before going against decision-6
+  metrics:
+    readyAt: "2026-10-15T21:40:10.253Z"
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-15T21:39:29.786Z"
+updatedAt: "2026-10-15T21:40:10.253Z"
 ---
 
 ## Description
