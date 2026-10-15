@@ -22,26 +22,27 @@ dependsOn:
 subtasks:
   - id: task-99-1
     title: brainfile-qa attaches with 28 tools
-    completed: false
+    completed: true
   - id: task-99-2
     title: issues list matches bfq issues
-    completed: false
+    completed: true
   - id: task-99-3
     title: pull_request status gives state and link
-    completed: false
+    completed: true
   - id: task-99-4
     title: where carries a fix section; undo with nothing to undo says so
-    completed: false
+    completed: true
   - id: task-99-5
     title: task_patch sets and clears landsOn and epicBranch
-    completed: false
+    completed: true
   - id: task-99-6
     title: lint warns MALFORMED_DISPATCH (or skipped, trusting the test)
-    completed: false
+    completed: true
   - id: task-99-7
     title: brainfile-qa detached
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:21:50.701Z"
+updatedAt: "2026-10-15T20:33:12.019Z"
 ---
 
 ## Description
