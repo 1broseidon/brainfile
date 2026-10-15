@@ -36,13 +36,13 @@ subtasks:
     completed: true
   - id: task-90-5
     title: Review says from qa/parity and Merge into qa/parity
-    completed: false
+    completed: true
   - id: task-90-6
     title: "After Merge: the line is on qa/parity and not on main; worktree and branch gone; task done"
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:20:11.927Z"
 assignee: claude
-updatedAt: "2026-10-15T19:08:09.793Z"
+updatedAt: "2026-10-15T19:08:27.664Z"
 dispatch:
   agent: claude
   model: opus
