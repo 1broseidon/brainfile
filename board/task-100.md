@@ -59,6 +59,8 @@ subtasks:
     title: A restart keeps settings and models
     completed: false
 createdAt: "2026-10-15T18:21:50.981Z"
+landsOn: qa/parity
+updatedAt: "2026-10-15T20:31:12.556Z"
 ---
 
 ## Description
