@@ -70,7 +70,11 @@ One family, **Workbench**:
   `every project` as a quiet mono chip at the end. The row is the pop itself,
   not a field sunk into it, and it keeps the entries' insets, so the mark,
   the text and the chip stand on their icon, label and key edges; the first
-  section label stands 16 below the line.
+  section label stands 16 below the line. Before anything is typed, its
+  first section is **Recent**: the documents last opened in the pane on any
+  board, newest first (the last 8 of 12 kept, the one open now left out),
+  each with its status box (● for a decision) and its ID, or its board and ID
+  when it is on another (decision-8).
 
 ## The mark
 
@@ -338,23 +342,35 @@ key), so what you keep at hand lives in its twin at the window's foot: a
 dock at its right and then the settings key, under the chat's key (the
 same inset), so the strip is never empty. Nothing lies over the board.
 
-- **A tab is a document kept at hand:** one you opened in the pane, or one
-  handed to an agent (it gets a tab when the hand-off starts, opened or
-  not, and keeps it after the agent is done, as the handle to look at the
-  work). Tabs come from every board and keep their order; the newest sits
-  at the right end. They survive a restart.
-- **A tab says three things:** its status box (● for a decision), its title,
-  and one signal: the agent at work on it (`codex · Editing…`, still, or
-  `Needs you` in the warn colour) or else the board it is on when that is
-  not the board in front. The open one is on the pop plane. × waits for
-  the hand.
+- **A tab is an agent session** on the board in front (decision-8): a
+  chat, a discussion of a task, or a hand-off. Every thread shown in the
+  chat is its own tab from its first line until its × closes it (it stays
+  in the chat's history, and picking it there again brings its tab back); a
+  hand-off gets one when it starts, from Hand to… or the chat, and keeps it
+  after its agent is done, as the handle to look at the work. Tabs keep
+  their order, the newest at the right end, up to 12 a board, and survive a
+  restart. Another board's sessions are not in the dock; one that needs you
+  shows in the strip, as asks already do. Opening a document no longer makes
+  a tab: recent documents are in the palette.
+- **A tab says three things:** its mark (the chat's for a chat or a
+  discussion, the task's status box for a hand-off), its title (a chat's
+  first question, the task's title for a discussion or a hand-off; the tip
+  says which), and one signal: the agent and where it stands. At work it is
+  the Working line, still (`codex · Editing…`, or `Needs you` in the warn
+  colour); at rest the agent, muted, with `Reply waiting`, or how a hand-off
+  ended: `Done`, `Stopped`, `Ready to merge`, or `Failed` and `Conflicts` in
+  the warn colour. The one in front (the thread the chat shows, or the
+  hand-off whose task is open) is on the pop plane. × waits for the hand.
+- **A tab opens its session where it was left:** a chat in the chat pane,
+  with its own agent; a discussion there with its task beside it; a
+  hand-off, for now, as its task in the pane.
 - **Width decides how many show:** up to four, as many as fit in the
-  right-hand three quarters of the strip, the open one always among them;
+  right-hand three quarters of the strip, the one in front always among them;
   the rest wait under `+N`, which opens upward. A tab is a 26px chip in the
   well: the raised plane and a hairline, no halo, since nothing lies under
   it.
-- **Keys:** ⌘⇧[ and ⌘⇧] step through the tabs, switching board when a tab is
-  on another. (⌘W stays the window's.)
+- **Keys:** ⌘⇧[ and ⌘⇧] step through the board's tabs, opening each.
+  (⌘W stays the window's.)
 
 ## Kinds and decisions
 

@@ -30,6 +30,7 @@ import type {
   SettleChoice,
 } from '../../shared/api';
 import { diffBoards, type FeedItem } from './feed';
+import { dropSession, keepRecent, keepSession, RECENT_KEPT, type Doc, type Session } from './sessions';
 import { problemBrief } from './brief';
 
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
@@ -99,16 +100,11 @@ const MODEL_NAMES_KEY = 'brainfile.modelNames';
 /** Effort last chosen for each agent and model, so a model keeps its level. */
 const EFFORT_KEY = 'brainfile.efforts';
 const EDITOR_KEY = 'brainfile.editor';
+/** Before sessions (decision-8) the dock kept documents: they become the palette's recent ones. */
 const TABS_KEY = 'brainfile.tabs';
+const SESSIONS_KEY = 'brainfile.sessions';
+const RECENT_KEY = 'brainfile.recent';
 const CALM_KEY = 'brainfile.calm';
-/** The most tabs the dock keeps; the oldest go first. */
-const TABS_KEPT = 12;
-
-/** A document kept at hand in the dock: opened in the pane, or handed to an agent. */
-export interface Tab {
-  projectId: string;
-  id: string;
-}
 const THREADS_KEY = 'brainfile.threads';
 const THREADS_KEPT = 30;
 /** The thread the chat last showed, per board. */
@@ -121,6 +117,15 @@ export interface Thread {
   lines: ChatLine[];
   /** A discussion of this task, at any stage of its life (task-35); unset for a chat about the board. */
   taskId?: string;
+}
+
+function loadList<T>(key: string): T[] | null {
+  try {
+    const kept = JSON.parse(localStorage.getItem(key) ?? 'null');
+    return Array.isArray(kept) ? (kept as T[]) : null;
+  } catch {
+    return null;
+  }
 }
 
 function load<T>(key: string, fallback: T): T {
@@ -269,14 +274,10 @@ class AppState {
   /** Settings take the board's place in the pane until a project is picked or Esc. */
   settingsOpen = $state(false);
   settings = $state<DispatchSettings>({ bypass: false, modes: {}, agentServers: {} });
-  /** The dock's tabs, oldest first: the newest sits next to the chat key. */
-  tabs = $state<Tab[]>((() => {
-    try {
-      return JSON.parse(localStorage.getItem(TABS_KEY) ?? '[]') as Tab[];
-    } catch {
-      return [];
-    }
-  })());
+  /** The dock's sessions on every board, oldest first: the newest sits next to the chat key. */
+  sessions = $state<Session[]>(loadList<Session>(SESSIONS_KEY) ?? []);
+  /** Documents opened in the pane on any board, newest first, for the palette. */
+  recent = $state<Doc[]>(loadList<Doc>(RECENT_KEY) ?? []);
   /** The available editors; unset uses a running editor, then the first found. */
   editors = $state<EditorInfo[]>([]);
   editor = $state<string | null>(localStorage.getItem(EDITOR_KEY));
@@ -768,7 +769,7 @@ class AppState {
     await this.patch(taskId, { assignee: agentId });
     const result = await api.dispatch(this.activeId, taskId, agentId, this.modelFor(agentId), this.effortFor(agentId));
     if (!result.ok) this.notify(result.error, 'warn');
-    else this.touchTab(this.activeId, taskId);
+    else this.keepSession({ projectId: this.activeId, kind: 'handoff', id: taskId });
   }
 
   // ── A hand-off's review (spec-14) ────────────────────────────────────────
@@ -810,35 +811,70 @@ class AppState {
     await this.dispatch(taskId, agentId);
   }
 
-  // ── The dock's tabs ──────────────────────────────────────────────────────
+  // ── The dock's sessions (decision-8) ─────────────────────────────────────
 
-  /** Keeps a document at hand: added at the newest end; a tab already there keeps its place. */
-  touchTab(projectId: string, id: string): void {
-    if (this.tabs.some((t) => t.projectId === projectId && t.id === id)) return;
-    this.tabs = [...this.tabs, { projectId, id }].slice(-TABS_KEPT);
-    this.saveTabs();
+  /** Keeps a session at hand: added at the newest end; one already there keeps its place. */
+  keepSession(session: Session): void {
+    const next = keepSession(this.sessions, session);
+    if (next === this.sessions) return;
+    this.sessions = next;
+    this.saveSessions();
   }
 
-  closeTab(projectId: string, id: string): void {
-    this.tabs = this.tabs.filter((t) => !(t.projectId === projectId && t.id === id));
-    this.saveTabs();
+  /** × on a tab: the session leaves the dock; a thread stays in the chat's history. */
+  closeSession(session: Session): void {
+    this.sessions = dropSession(this.sessions, session);
+    this.saveSessions();
   }
 
-  /** Steps to the tab before or after the one open, and opens it. */
-  async cycleTab(step: number): Promise<void> {
-    if (this.tabs.length === 0) return;
-    const at = this.tabs.findIndex((t) => t.projectId === this.activeId && t.id === this.openTaskId);
-    const next = this.tabs[(at < 0 ? (step > 0 ? 0 : this.tabs.length - 1) : at + step + this.tabs.length) % this.tabs.length];
-    await this.goTo(next.projectId, next.id);
+  /** The board in front's sessions, oldest first. */
+  boardSessions = $derived(this.sessions.filter((s) => s.projectId === this.activeId));
+
+  /** The session in front: the thread the chat shows, or a hand-off whose task is open. */
+  isCurrent(session: Session): boolean {
+    if (session.projectId !== this.activeId) return false;
+    if (session.kind === 'chat') return this.chatOpen && this.thread[session.projectId] === session.id;
+    return this.openTaskId === session.id && !(this.chatOpen && this.currentThread?.taskId === session.id);
   }
 
-  /** The live hand-off on a document of any board, if there is one. */
-  runOn(projectId: string, id: string): AgentRun | undefined {
-    return Object.values(this.runs).find((r) => r.kind === 'dispatch' && r.taskId === id && r.projectId === projectId && isLive(r));
+  /**
+   * Opens a session where it was left: a thread in the chat (a discussion
+   * with its task beside it), a hand-off as its task in the pane.
+   */
+  openSession(session: Session): void {
+    if (session.projectId !== this.activeId) return;
+    if (session.kind === 'handoff') {
+      this.selectedTaskId = session.id;
+      this.openTaskId = session.id;
+      return;
+    }
+    this.chatOpen = true;
+    this.showThread(session.projectId, session.id);
+    if (this.unread[session.projectId] === session.id) delete this.unread[session.projectId];
+    const taskId = this.threads[session.projectId]?.find((t) => t.id === session.id)?.taskId;
+    if (taskId) {
+      this.selectedTaskId = taskId;
+      this.openTaskId = taskId;
+    }
   }
 
-  private saveTabs(): void {
-    localStorage.setItem(TABS_KEY, JSON.stringify(this.tabs));
+  /** Steps to the session before or after the one in front, on the board in front, and opens it. */
+  cycleSession(step: number): void {
+    const list = this.boardSessions;
+    if (list.length === 0) return;
+    const at = list.findIndex((s) => this.isCurrent(s));
+    this.openSession(list[(at < 0 ? (step > 0 ? 0 : list.length - 1) : at + step + list.length) % list.length]);
+  }
+
+  /** A document opened in the pane is remembered for the palette. */
+  keepRecent(projectId: string, id: string): void {
+    if (this.recent[0]?.projectId === projectId && this.recent[0]?.id === id) return;
+    this.recent = keepRecent(this.recent, { projectId, id });
+    localStorage.setItem(RECENT_KEY, JSON.stringify(this.recent));
+  }
+
+  private saveSessions(): void {
+    localStorage.setItem(SESSIONS_KEY, JSON.stringify(this.sessions));
   }
 
   async loadModels(agentId: AgentId): Promise<void> {
@@ -950,6 +986,8 @@ class AppState {
   showThread(projectId: string, id: string | null): void {
     this.thread[projectId] = id;
     localStorage.setItem(THREAD_KEY, JSON.stringify(this.thread));
+    // Every thread shown is a session in the dock until its × closes it.
+    if (id) this.keepSession({ projectId, kind: 'chat', id });
   }
 
   /** The chat is open on this board: a reply waiting on the key is the thread it shows, and is read. */
@@ -1033,10 +1071,8 @@ class AppState {
   private onRun(run: AgentRun): void {
     const before = this.runs[run.id];
     this.runs[run.id] = run;
-    // A hand-off is kept at hand in the dock from the moment it starts.
-    if (!before && run.kind === 'dispatch' && run.taskId && !this.tabs.some((t) => t.projectId === run.projectId && t.id === run.taskId)) {
-      this.touchTab(run.projectId, run.taskId);
-    }
+    // A hand-off is a session in its board's dock from the moment it starts.
+    if (!before && run.kind === 'dispatch' && run.taskId) this.keepSession({ projectId: run.projectId, kind: 'handoff', id: run.taskId });
     // One the chat made is said under the turn's reply, like a board change.
     if (!before && run.kind === 'dispatch' && run.taskId && run.from) {
       this.#handoffs.set(run.from, [...(this.#handoffs.get(run.from) ?? []), { id: run.taskId, what: `handed to ${run.agentId}` }]);
@@ -1312,4 +1348,20 @@ class AppState {
   }
 }
 
+/**
+ * The dock before sessions kept documents (decision-8): they become the
+ * palette's recent ones, newest first, and each board's thread last shown is
+ * its first session.
+ */
+function migrateDock(): void {
+  if (localStorage.getItem(SESSIONS_KEY) !== null) return;
+  const tabs = loadList<Doc>(TABS_KEY) ?? [];
+  if (localStorage.getItem(RECENT_KEY) === null) localStorage.setItem(RECENT_KEY, JSON.stringify([...tabs].reverse().slice(0, RECENT_KEPT)));
+  const shown = load<Record<string, string | null>>(THREAD_KEY, {});
+  const sessions: Session[] = Object.entries(shown).flatMap(([projectId, id]) => (id ? [{ projectId, kind: 'chat' as const, id }] : []));
+  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+  localStorage.removeItem(TABS_KEY);
+}
+
+migrateDock();
 export const app = new AppState();

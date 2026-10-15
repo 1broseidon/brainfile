@@ -93,13 +93,13 @@
     agentId = null;
   });
 
-  // A task's discussion opened from its pane keeps the agent it began with, as one picked from history does.
+  // A thread opened from the dock, a task's pane or history keeps the agent it began with.
   const threadId = $derived(app.currentThread?.id);
   $effect(() => {
     if (!threadId) return;
     untrack(() => {
       const thread = app.currentThread;
-      if (thread?.taskId && app.agents.some((a) => a.id === thread.agentId && a.available)) agentId = thread.agentId;
+      if (thread && app.agents.some((a) => a.id === thread.agentId && a.available)) agentId = thread.agentId;
     });
   });
 

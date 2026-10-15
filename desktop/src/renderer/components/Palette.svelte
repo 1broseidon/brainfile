@@ -11,7 +11,9 @@
     hint?: string;
     icon?: IconName;
     detail?: string;
-    progress?: number;
+    /** A document's status box; null is a decision's dot. */
+    progress?: number | null;
+    retired?: boolean;
     run: () => void;
   }
 
@@ -66,6 +68,35 @@
     return out;
   });
 
+  /** The most recent documents the palette offers before anything is typed. */
+  const RECENT_SHOWN = 8;
+
+  /** Documents opened lately on any board, newest first, without the one open now (decision-8). */
+  const recent = $derived.by((): Entry[] => {
+    const out: Entry[] = [];
+    for (const { projectId, id } of app.recent) {
+      if (out.length === RECENT_SHOWN) break;
+      if (projectId === app.activeId && id === app.openTaskId) continue;
+      const board = app.boards[projectId];
+      if (!board) continue;
+      const here = projectId === app.activeId;
+      const name = app.projects.find((p) => p.id === projectId)?.name ?? '';
+      const task = board.tasks.find((t) => t.id === id) ?? board.completed.find((t) => t.id === id);
+      const decision = task ? undefined : board.decisions.find((d) => d.id === id);
+      if (!task && !decision) continue;
+      out.push({
+        key: `r:${projectId}:${id}`,
+        section: 'Recent',
+        label: task?.title ?? decision!.title,
+        detail: here ? id : `${name} · ${id}`,
+        progress: task ? (task.completedAt ? 1 : columnProgress(board.columns, task.column)) : null,
+        retired: !!decision && decision.status !== 'current' && decision.status !== 'proposed',
+        run: () => app.goTo(projectId, id),
+      });
+    }
+    return out;
+  });
+
   const entries = $derived.by((): Entry[] => {
     const q = query.trim().toLowerCase();
     const match = (s: string) => s.toLowerCase().includes(q);
@@ -99,7 +130,7 @@
         }
       }
     }
-    return [...tasks.slice(0, 40), ...actions.filter((a) => !q || match(a.label)), ...projects.filter((p) => !q || match(p.label))];
+    return [...(q ? [] : recent), ...tasks.slice(0, 40), ...actions.filter((a) => !q || match(a.label)), ...projects.filter((p) => !q || match(p.label))];
   });
 
   $effect(() => {
@@ -165,6 +196,8 @@
         <span class="lead">
           {#if entry.icon}
             <Icon name={entry.icon} size={15} />
+          {:else if entry.progress === null}
+            <span class="dmark" class:retired={entry.retired}>{entry.retired ? '○' : '●'}</span>
           {:else if entry.progress !== undefined}
             <StatusIcon progress={entry.progress} />
           {/if}
@@ -302,6 +335,12 @@
     display: inline-flex;
     justify-content: center;
     color: var(--ink-2);
+  }
+
+  /* A decision's dot, as the dock's and the list's. */
+  .dmark {
+    font-size: var(--t-xs);
+    color: var(--ink-3);
   }
 
   .label {

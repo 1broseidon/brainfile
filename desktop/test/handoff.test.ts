@@ -42,6 +42,7 @@ test('hand-offs keep chat backend, model and effort preferences separate', async
         localStorage: {
           getItem: (key: string) => stored.get(key) ?? null,
           setItem: (key: string, value: string) => stored.set(key, value),
+          removeItem: (key: string) => stored.delete(key),
         },
         window: { brainfile: {
           patchTask: async (...args: Parameters<Api['patchTask']>) => { patches.push(args); return { ok: true }; },

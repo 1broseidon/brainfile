@@ -32,11 +32,11 @@
     void app.init();
   });
 
-  // Whatever opens in the pane is kept at hand in the dock.
+  // Whatever opens in the pane is remembered for the palette; the dock holds sessions (decision-8).
   $effect(() => {
     const id = app.openTaskId;
     const projectId = app.activeId;
-    if (id && projectId) untrack(() => app.touchTab(projectId, id));
+    if (id && projectId) untrack(() => app.keepRecent(projectId, id));
   });
 
   function typing(target: EventTarget | null): boolean {
@@ -88,7 +88,7 @@
       return;
     }
     if (meta && e.shiftKey && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
-      void app.cycleTab(e.code === 'BracketLeft' ? -1 : 1);
+      app.cycleSession(e.code === 'BracketLeft' ? -1 : 1);
       e.preventDefault();
       return;
     }
