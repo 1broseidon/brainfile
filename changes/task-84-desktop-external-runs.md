@@ -21,3 +21,7 @@ kind: Changed
   from the queue. `writeRunAnswer`, `readRunAnswer`, `removeRunAnswer` and
   `runAnswerPath` are in `@brainfile/core/repo`; `pruneRunFiles` removes
   answers whose run has ended. `DESK_TOOL` is gone.
+- A request the desktop wrote before runners claimed tasks (no claim and no
+  `tries`, by the person, the chat or a lead) on a task already in Review or
+  done is no longer queued (`answeredBefore`): its hand-off has run, so a
+  runner working the queue does not run it again.

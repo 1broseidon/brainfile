@@ -270,6 +270,21 @@ test('work takes queued requests in order, at most dispatch.maxRunning at once, 
   expect(lines('started')).toEqual(['task-1', 'task-2', 'task-3']);
 });
 
+test('a request the desktop wrote before runners claimed, on a task in Review, is not queued again; a send-back is', () => {
+  const at = 'at: "2026-10-01T10:00:00.000Z"';
+  plainBoard({
+    'task-1': ['dispatch:', '  agent: codex', '  by: lead', `  ${at}`],
+    'task-2': ['dispatch:', '  agent: codex', '  by: lead', `  ${at}`, '  tries: 1'],
+    'task-3': ['dispatch:', '  agent: codex', '  by: person', `  ${at}`],
+    'task-4': ['dispatch:', '  agent: codex', '  by: cli', `  ${at}`],
+  });
+  for (const id of ['task-1', 'task-2', 'task-4']) {
+    const file = path.join(dotDir(), 'board', `${id}.md`);
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('column: todo', 'column: review'));
+  }
+  expect(runner().queued(project)).toEqual(['task-2', 'task-3', 'task-4']);
+});
+
 test('the board config wins over the app setting, which wins over 3', () => {
   plainBoard({});
   const a = runner();

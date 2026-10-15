@@ -854,15 +854,18 @@ export class Runner {
   /**
    * The tasks asked for and not claimed, oldest request first: a request
    * nobody claimed, or whose claim's runner is lost. One that ended has been
-   * answered.
+   * answered, and so has one the desktop wrote before runners claimed
+   * (`answeredBefore`).
    */
   queued(projectId: string): string[] {
     const dotDir = this.dotDirOf(projectId);
     const located = locateBoard(projectId, { materialize: false });
     if (!located.found || !dotDir) return [];
+    const columns = readBoardConfig(located.brainfilePath)?.config?.columns ?? [];
     return readTasksDir(getV2Dirs(located.brainfilePath).boardDir)
-      .map((d) => ({ id: d.task.id, record: readDispatchRecord(d.task) }))
-      .filter((t): t is { id: string; record: DispatchRecord } => !!t.record && t.record.role !== 'lead')
+      .map((d) => ({ id: d.task.id, column: d.task.column, record: readDispatchRecord(d.task) }))
+      .filter((t): t is { id: string; column: string | undefined; record: DispatchRecord } => !!t.record && t.record.role !== 'lead')
+      .filter(({ column, record }) => !answeredBefore(record, column, columns))
       .filter(({ record }) => !record.claim || (claimHeld(record.claim) && isClaimLost(dotDir, record.claim)))
       .sort((a, b) => a.record.at.localeCompare(b.record.at))
       .map((t) => t.id);
@@ -1365,6 +1368,19 @@ export class Runner {
 }
 
 const leadKey = (lead: Lead) => `lead:${lead.projectId}\n${lead.epicId}`;
+
+/**
+ * A request the desktop wrote before runners claimed (task-74's record:
+ * Hand to…, its chat or its lead started the agent at once): no claim and no
+ * `tries`, which every start under a runner counts, on a task already in
+ * Review or done. Its hand-off has run; working the queue must not run it
+ * again (task-84). One a send-back queued carries its `tries`.
+ */
+export function answeredBefore(record: DispatchRecord, column: string | undefined, columns: ColumnConfig[]): boolean {
+  if (record.claim || record.tries !== undefined || !['person', 'chat', 'lead'].includes(record.by)) return false;
+  const at = columns.find((c) => c.id === column);
+  return !!at && (at === reviewColumn(columns) || !!at.completionColumn);
+}
 
 /** Who asks, by what is running: the desktop's person, the CLI, an MCP client. */
 function byOf(runner: DispatchRunner): DispatchBy {
