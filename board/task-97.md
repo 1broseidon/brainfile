@@ -68,3 +68,10 @@ Not a hand-off itself: it drives epic-9 (the drill epic, with task-95 and task-9
 6. Merge task-96. The lead ends with "epic-9 is in Ready to merge, dispatch/epic-9 into qa/parity". The epic is one item in Ready to merge; the children each completed as they landed.
 7. The epic's Merge opens a menu: Merge into qa/parity · Merge into another branch… · Open a pull request · Keep as a branch. Choose **Merge into qa/parity**. qa/parity has both children's lines; `dispatch/epic-9` and its worktree are gone; epic-9 is done; main is untouched.
 8. Optional, to try **Keep as a branch** instead: run it again on a copy of epic-9 and choose Keep. The worktree goes, the branch stays, the epic is done.
+
+## Log
+- 2026-10-15T20:58:33.872Z: [claude] QA passed (person + Claude), with two checks left to core's tests.
+- `bfq patch --epic-branch` turned it on, and show said epic-9's children land on dispatch/epic-9.
+- Handed off, epic-9's lead made dispatch/epic-9 from qa/parity (880d7b8, brainfileEpic true) with no worktree. It handed off task-95, then task-96; each forked from and landed on dispatch/epic-9 and completed as it landed.
+- The epic was then the only item in Ready to merge (into qa/parity). Merge ▾ → Merge into qa/parity made 605ba26 "Merge epic-9: …": both drill lines on qa/parity, dispatch/epic-9 and its worktree gone, epic-9 completed, main untouched.
+- Not exercised live: bringing the target in. The lead landed task-95 and handed off task-96 within seconds, leaving no gap to move qa/parity. Covered by repo-worktree tests (fast-forward, merge aside, and conflict). Keep as a branch is covered by the keepBranch test.
