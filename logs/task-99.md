@@ -1,8 +1,6 @@
 ---
 id: task-99
 title: "QA: the MCP tools from an agent — issues, pull_request, where fix and undo, task_patch landsOn and epicBranch, and the dispatch lint"
-column: todo
-position: 16
 description: |-
   Not a hand-off. Tests the MCP half of task-74, task-77, task-78 and spec-18, through the integration build's server.
   1. Attach it to a Claude Code session in this repository: `claude mcp add brainfile-qa -- node ~/.brainfile-worktrees/parity/integration/cli/dist/cli.js mcp`, start a new session, and check `/mcp` lists brainfile-qa with 28 tools.
@@ -42,7 +40,8 @@ subtasks:
     title: brainfile-qa detached
     completed: true
 createdAt: "2026-10-15T18:21:50.701Z"
-updatedAt: "2026-10-15T20:33:12.019Z"
+updatedAt: "2026-10-15T20:33:12.533Z"
+completedAt: "2026-10-15T20:33:12.533Z"
 ---
 
 ## Description
