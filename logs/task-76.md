@@ -1,8 +1,6 @@
 ---
 id: task-76
 title: "Core: hand-off worktrees, review, compare-and-swap landing and send-back move out of the desktop"
-column: in-progress
-position: 5
 tags:
   - core
   - dispatch
@@ -42,7 +40,8 @@ contract:
     - Landing never runs in the person's checkout (decision-12)
     - Hand-offs fork from the trunk (decision-11)
 createdAt: "2026-10-14T22:15:08.235Z"
-updatedAt: "2026-10-15T17:11:59.873Z"
+updatedAt: "2026-10-15T21:18:23.672Z"
+completedAt: "2026-10-15T21:18:23.672Z"
 ---
 
 ## Description
