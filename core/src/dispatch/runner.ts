@@ -100,8 +100,8 @@ export interface RunnerBoard {
    * when the task has none.
    */
   claim(projectId: string, taskId: string, claim: ClaimInput, options: TakeOptions): Promise<ClaimTaken>;
-  /** The claim given back when its run ends, kept with how it ended. */
-  release(projectId: string, taskId: string, holder: Pick<DispatchClaim, 'host' | 'pid'>, outcome: DispatchOutcome): Promise<Result>;
+  /** The claim given back when its run ends, kept with how it ended; with no outcome, cleared, so the task is queued again (a runner letting go). */
+  release(projectId: string, taskId: string, holder: Pick<DispatchClaim, 'host' | 'pid'>, outcome?: DispatchOutcome): Promise<Result>;
   /** A line in the task's log. */
   note(projectId: string, taskId: string, text: string): Promise<Result>;
   /** After a landing: done, unless subtasks are left, which send it back to work. */
@@ -174,7 +174,7 @@ export function fileBoard(): RunnerBoard {
       return Promise.resolve(taken);
     },
     release: (projectId, taskId, holder, outcome) =>
-      committed(projectId, `release ${taskId}: ${outcome}`, () => giveBackClaim(taskFileOf(projectId, taskId), holder, outcome)),
+      committed(projectId, `release ${taskId}: ${outcome ?? 'queued again'}`, () => giveBackClaim(taskFileOf(projectId, taskId), holder, outcome)),
     note: (projectId, taskId, text) => committed(projectId, `note ${taskId}`, () => void unwrap(appendLog(taskFileOf(projectId, taskId), text.replace(/\s+/g, ' ').trim()))),
     settleLanded: (projectId, taskId) =>
       committed(projectId, `land ${taskId}`, () => {
@@ -219,8 +219,8 @@ export interface RunnerOptions {
   board?: RunnerBoard;
   /** An agent asks before it acts: the option the person picked, or null to cancel. The desktop's band, a terminal's prompt. */
   ask(ask: PermissionAsk): Promise<string | null>;
-  /** An ask the runner gave up on (its run stopped): the host takes it down. */
-  cancelAsk?(askId: string): void;
+  /** An ask no longer open here, answered from another process or given up on (its run stopped): the host takes it down. */
+  cancelAsk?(askId: string, why?: 'answered' | 'stopped'): void;
   /** Every change to a run this runner keeps, a copy, with the state it was in before (null for a new run). */
   onRun?(run: AgentRun, was: RunState | null): void;
   /**
@@ -246,6 +246,10 @@ export interface RunnerOptions {
    * works the queue (a CLI command or an MCP call that ends when it answers).
    */
   sendBack?: 'start' | 'queue';
+  /** How far a hand-off goes when its request names nothing (`brainfile run --until`). */
+  until?: DispatchUntil;
+  /** At most this many of this runner's own hand-offs at once, within the repository's limit (`brainfile run --max`). */
+  maxRunning?: number;
   /** For tests: this machine and process, as the claim and files say. */
   host?: string;
   pid?: number;
@@ -362,6 +366,14 @@ export class Runner {
   private lastLook = 0;
   /** What each board's folders looked like when its leads last looked. */
   private readonly stamps = new Map<string, string>();
+  /** Hand-offs ending: their claims given back, a landing, the next taken. */
+  private readonly ending = new Set<Promise<void>>();
+  /** Runs stopped because the runner is letting go: their tasks go back to the queue. */
+  private readonly lettingGo = new Set<string>();
+  /** Passes over the queue under way, by project. */
+  private readonly inPass = new Map<string, number>();
+  /** The runner is letting go (letGo): it starts nothing more. */
+  private goingDown = false;
 
   /** This runner as a claim names it. */
   private get holder(): Pick<DispatchClaim, 'host' | 'pid'> {
@@ -549,7 +561,12 @@ export class Runner {
     Object.assign(run, patch);
     this.persist(run);
     this.options.onRun?.({ ...run }, was);
-    if (run.kind === 'dispatch' && LIVE.has(was) && !LIVE.has(run.state)) void this.ended(run);
+    if (run.kind === 'dispatch' && LIVE.has(was) && !LIVE.has(run.state)) {
+      const ending: Promise<void> = this.ended(run)
+        .catch(() => {})
+        .finally(() => this.ending.delete(ending));
+      this.ending.add(ending);
+    }
   }
 
   /** This runner's runs, as they are. */
@@ -587,6 +604,11 @@ export class Runner {
   live(projectId: string): AgentRun[] {
     const mine = [...this.runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && this.liveHere(r));
     return [...mine, ...this.othersLive(projectId).filter((r) => r.kind === 'dispatch')];
+  }
+
+  /** This runner's own live hand-offs on the project. */
+  private ownLive(projectId: string): number {
+    return [...this.runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && this.liveHere(r)).length;
   }
 
   /** The live hand-off on a task, if any, whichever runner has it. */
@@ -670,7 +692,7 @@ export class Runner {
     const resolve = this.asking.get(runId)?.get(askId);
     if (!resolve) return false;
     resolve(optionId);
-    this.options.cancelAsk?.(askId);
+    this.options.cancelAsk?.(askId, 'answered');
     return true;
   }
 
@@ -712,6 +734,7 @@ export class Runner {
    * request written, then started, the task held across both.
    */
   async dispatch(projectId: string, taskId: string, handOff: HandOff & { from?: string }): Promise<Result<Started>> {
+    if (this.goingDown) return { ok: false, error: 'This runner is letting go: it starts nothing more' };
     const behind = await this.refreshFor(projectId, taskId);
     const held = this.reserve(projectId, taskId);
     if (!held.ok) return held;
@@ -734,6 +757,7 @@ export class Runner {
    * given.
    */
   async start(projectId: string, taskId: string, options: StartOptions = {}): Promise<Result<Started>> {
+    if (this.goingDown) return { ok: false, error: 'This runner is letting go: it starts nothing more' };
     const behind = options.refresh ? await this.refreshFor(projectId, taskId) : null;
     const held = this.reserve(projectId, taskId);
     if (!held.ok) return held;
@@ -784,7 +808,7 @@ export class Runner {
       return { ok: false, error: message(err) };
     }
     const from = options.from ?? this.options.fromOf?.(projectId, taskId, record);
-    const run = this.newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from }, { worktree, claimed: claimed.ok, until: record?.until ?? options.request?.until });
+    const run = this.newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from }, { worktree, claimed: claimed.ok, until: record?.until ?? options.request?.until ?? this.options.until });
     void (async () => {
       try {
         const session = await this.startups.open(
@@ -879,8 +903,25 @@ export class Runner {
    * another, so two runs ending at once never start past the limit.
    */
   work(projectId: string): Promise<Started[]> {
+    if (this.goingDown) return Promise.resolve([]);
     this.working.add(projectId);
-    const next = (this.passes.get(projectId) ?? Promise.resolve([])).catch(() => []).then(() => this.pass(projectId));
+    // A runner that works a queue is up for it: its runner file is written and beaten while it lives, runs or none.
+    this.dotDirOf(projectId);
+    this.watch();
+    return this.chain(projectId, false);
+  }
+
+  /** A pass after the one before it on the project, counted from when it is asked for until it is done. */
+  private chain(projectId: string, onlyLed: boolean): Promise<Started[]> {
+    this.inPass.set(projectId, (this.inPass.get(projectId) ?? 0) + 1);
+    const next = (this.passes.get(projectId) ?? Promise.resolve([]))
+      .catch(() => [])
+      .then(() => this.pass(projectId, onlyLed))
+      .finally(() => {
+        const left = (this.inPass.get(projectId) ?? 1) - 1;
+        if (left) this.inPass.set(projectId, left);
+        else this.inPass.delete(projectId);
+      });
     this.passes.set(projectId, next);
     return next;
   }
@@ -889,8 +930,11 @@ export class Runner {
     const started: Started[] = [];
     if (this.options.leads && !onlyLed) await this.takeLeads(projectId);
     const limit = this.limit(projectId);
+    const max = this.options.maxRunning;
     for (const taskId of this.queued(projectId)) {
+      if (this.goingDown) break;
       if (this.live(projectId).length + this.reservedOn(projectId) >= limit) break;
+      if (max && this.ownLive(projectId) + this.reservedOn(projectId) >= max) break;
       if (this.busy(projectId, taskId)) continue;
       const lead = this.leads.leadOver(projectId, taskId);
       if (onlyLed && !lead) continue;
@@ -947,10 +991,24 @@ export class Runner {
    * one after another, as work's do.
    */
   workLed(projectId: string): Promise<Started[]> {
-    if (!this.leads.running(projectId).length) return Promise.resolve([]);
-    const next = (this.passes.get(projectId) ?? Promise.resolve([])).catch(() => []).then(() => this.pass(projectId, true));
-    this.passes.set(projectId, next);
-    return next;
+    if (!this.leads.running(projectId).length || this.goingDown) return Promise.resolve([]);
+    return this.chain(projectId, true);
+  }
+
+  /**
+   * Nothing of this runner's is under way on the project: no hand-off of its
+   * own live or starting, none ending (its claim given back, a landing), no
+   * pass taking from the queue, and no lead of its own in a turn or with one
+   * coming. A lead that waits on what it handed off, or on the person, is
+   * settled. `brainfile run --once` returns when this holds and a pass
+   * starts nothing.
+   */
+  settled(projectId: string): boolean {
+    if (this.ownLive(projectId) || this.reservedOn(projectId) || this.ending.size || this.inPass.has(projectId)) return false;
+    if ([...this.runs.values()].some((r) => r.projectId === projectId && r.kind === 'lead' && this.liveHere(r))) return false;
+    return !this.leads
+      .running(projectId)
+      .some((l) => l.state === 'leading' && (l.busy || l.queue.length > 0 || l.timer !== null || l.landing.size > 0 || l.marking > 0));
   }
 
   /** Stops taking from a project's queue as runs end. */
@@ -970,6 +1028,11 @@ export class Runner {
     const { projectId, taskId } = run;
     if (!taskId) return;
     const outcome: DispatchOutcome = run.state === 'done' ? 'review' : run.state === 'stopped' ? 'stopped' : 'failed';
+    if (this.lettingGo.has(run.id)) {
+      // Stopped as the runner lets go: the task goes back to the queue for the next runner, and its lead hears nothing.
+      if (meta?.claimed) await this.board.release(projectId, taskId, this.holder).catch(() => {});
+      return;
+    }
     // A child of a lead this runner runs is landed by its lead, which hears how it went.
     const led = this.leads.leadOver(projectId, taskId);
     const through = !led && run.state === 'done' && meta?.until === 'done' && !!meta.worktree?.branch && policyFor(this.dataDir, projectId) === 'bypass';
@@ -990,8 +1053,10 @@ export class Runner {
     } catch {
       /* the board refused: the claim is lost with the runner, and taken again */
     } finally {
-      if (led) await this.leads.childEnded(run).catch(() => {});
-      if (this.working.has(projectId)) void this.work(projectId);
+      if (led && !this.goingDown) await this.leads.childEnded(run).catch(() => {});
+      if (this.goingDown) {
+        /* it starts nothing more */
+      } else if (this.working.has(projectId)) void this.work(projectId);
       else void this.workLed(projectId);
     }
   }
@@ -1308,7 +1373,7 @@ export class Runner {
     const run = this.runs.get(runId);
     if (run) {
       for (const [askId, resolve] of this.asking.get(runId) ?? []) {
-        this.options.cancelAsk?.(askId);
+        this.options.cancelAsk?.(askId, 'stopped');
         resolve(null);
       }
       const session = [...this.sessions.values()].find((s) => s.run?.id === runId);
@@ -1342,6 +1407,29 @@ export class Runner {
     } catch {
       /* gone already */
     }
+  }
+
+  /**
+   * The runner lets go of what it holds before it goes down (`brainfile run`
+   * on Ctrl-C, or done with `--once`), so another runner takes it up at once
+   * rather than once this process is gone: it starts nothing more; what is
+   * ending (a landing) finishes; its hand-offs are stopped and their claims
+   * cleared, so their tasks wait in the queue again; its leads end here,
+   * their claims given back as stopped, so a runner takes each up from its
+   * record and notes. Then it closes. Worktrees stay as they are.
+   */
+  async letGo(): Promise<void> {
+    this.goingDown = true;
+    this.working.clear();
+    await Promise.allSettled([...this.passes.values()]);
+    const live = [...this.runs.values()].filter((r) => r.kind === 'dispatch' && this.liveHere(r));
+    for (const run of live) this.lettingGo.add(run.id);
+    await Promise.allSettled(live.map((run) => this.stop(run.id)));
+    while (this.ending.size) await Promise.allSettled([...this.ending]);
+    const leads = this.leads.running();
+    this.leads.closeAll();
+    for (const lead of leads) await this.board.release(lead.projectId, lead.epicId, this.holder, 'stopped').catch(() => {});
+    this.close();
   }
 
   /** The runner goes down: its leads and agents are let go, its timers stop and its runner files go. Its leads' records stay, for another runner to take up. */

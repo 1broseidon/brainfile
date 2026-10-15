@@ -321,7 +321,8 @@ describe('dispatch --now, review, land and discard: with a fake agent', () => {
     const said = logger.logs.map((l) => String(l[0])).join('\n');
     expect(said).toContain('Queued task-1 for Fake.');
     expect(said).not.toContain(NO_RUNNER);
-    expect(said).toMatch(/task-1 · Fake · done/);
+    expect(said).toMatch(/task-1 · Fake · (starting|working|thinking|editing)/);
+    expect(said).toContain('task-1 in Review');
     // Its claim was given back as a hand-off for review.
     expect(recordOf('task-1')!.claim).toMatchObject({ runner: 'cli', outcome: 'review' });
     // The agent's board server was told it is a worker.
