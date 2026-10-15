@@ -2,8 +2,8 @@
 id: spec-17
 title: "Mobile companion: serverless on GitHub refs, desktop link for agents"
 type: spec
-column: in-progress
-position: 0
+column: backlog
+position: 14
 priority: high
 tags:
   - mobile
@@ -35,7 +35,7 @@ subtasks:
   - id: spec-17-8
     title: Device-flow sign-in once an OAuth app is registered
     completed: false
-updatedAt: "2026-10-14T04:21:16.523Z"
+updatedAt: "2026-10-15T21:25:56.490Z"
 ---
 
 ## Description
