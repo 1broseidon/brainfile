@@ -53,3 +53,6 @@ Two parts hold state in memory today, which works only while one process lands:
 - `sendBackLanding` (agents.ts) builds the note (`Landing sent back (n of m)`, the colliding commits and the tasks that brought them) and counts earlier send-backs from the task's log. Move how it composes the note and decides whether it may send back again into core as `sendBackNote(task, landing)`. The re-dispatch itself stays with the runner (task-80).
 
 Keep the checks in `land` (agents.ts): refuse while a run is live on the task (now from the run files of task-74) or while a claim is starting. The desktop keeps its Review pane and calls core.
+
+## Log
+- 2026-10-15T15:49:44.635Z: [claude] Since this was planned (2026-10-15, commits 2cff04e and 0d3ff0e), worktree.ts gained what must move with it: `freshest` (fork from origin/<trunk> when the local trunk is only behind it; a local trunk with its own commits is kept) and `unlanded(projectId, taskId)` (a branch with commits not yet in where it lands), plus landedIn's forge checks (into@{upstream}, origin/<trunk>, squash by merge-tree). host.settleLanded is a no-op for a task its worker already completed. Build the fork-base and landing-target choice here so spec-18's landsOn (decision-16) needs no second implementation.
