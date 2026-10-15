@@ -30,7 +30,7 @@ dependsOn:
 subtasks:
   - id: task-97-1
     title: patch --epic-branch sets it; show has epicBranch and landsOn
-    completed: false
+    completed: true
   - id: task-97-2
     title: Hand to… on a child says it lands on epic-9's branch
     completed: false
@@ -53,6 +53,7 @@ subtasks:
     title: "Optional: Keep as a branch keeps the branch and completes the epic"
     completed: false
 createdAt: "2026-10-15T18:21:50.129Z"
+updatedAt: "2026-10-15T20:33:24.552Z"
 ---
 
 ## Description
