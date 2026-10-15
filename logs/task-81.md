@@ -1,8 +1,6 @@
 ---
 id: task-81
 title: MCP tools and CLI commands for dispatch, status, stop, review, land and discard, with roles so a worker cannot dispatch
-column: review
-position: 9
 tags:
   - cli
   - mcp
@@ -60,7 +58,7 @@ contract:
     deliveredAt: "2026-10-15T22:28:09.457Z"
     duration: 1114
 createdAt: "2026-10-14T22:16:11.028Z"
-updatedAt: "2026-10-15T22:28:09.457Z"
+updatedAt: "2026-10-15T22:30:43.514Z"
 dispatch:
   agent: claude
   model: opus
@@ -68,6 +66,7 @@ dispatch:
   by: lead
   at: "2026-10-15T22:09:25.352Z"
 assignee: claude
+completedAt: "2026-10-15T22:30:43.514Z"
 ---
 
 ## Description
