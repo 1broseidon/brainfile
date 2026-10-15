@@ -1,8 +1,6 @@
 ---
 id: task-85
 title: "Link: the merge feature on the desk — readyToMerge, mergeReview, discardReview"
-column: review
-position: 3
 priority: high
 tags:
   - desktop
@@ -15,7 +13,8 @@ relatedFiles:
   - desktop/src/link/dev.ts
 parentId: epic-7
 createdAt: "2026-10-15T01:34:58.774Z"
-updatedAt: "2026-10-15T01:43:20.273Z"
+updatedAt: "2026-10-15T02:09:03.220Z"
+completedAt: "2026-10-15T02:09:03.220Z"
 ---
 
 ## Description
