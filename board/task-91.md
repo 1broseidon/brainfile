@@ -58,3 +58,6 @@ dispatch:
 3. In its conversation, its first prompt includes "It builds on work already landed" with hand-off 1's last notes.
 4. Its line on `qa/parity` quotes hand-off 1's note.
 5. The lock, optional: when this one and another task under epic-8 are both in Ready to merge, merge them back to back without waiting. Both land, one after the other. `qa/parity` has two `Merge` commits, and `.brainfile/state/landing.lock` is gone afterwards. From a terminal, `bfq`-side landings share the same lock.
+
+## Log
+- 2026-10-15T19:11:28.271Z: [claude] Appended "- QA hand-off 2 (task-91): built on task-90, which said "QA passed (person + Claude)", 2026-10-15T19:11:01Z" to qa/parity-wave-1.md, committed as 467831c on dispatch/task-91 (forked from qa/parity at b4e24ab). Nothing else changed; subtasks left for QA. For whoever comes next: task-90's note says later appends to the tracked file commit normally, but a plain `git add qa/parity-wave-1.md` is still refused because qa/ is ignored; `git add -u` (or `git commit -a`) works. Nothing is left unwired.
