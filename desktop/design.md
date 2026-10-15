@@ -481,7 +481,7 @@ board changes (and in the feed).
   dispatch.json in Zed's own keys, so an entry pastes across either way
   (Paste from Zed takes an entry, the block or the whole settings file).
   Each follows the known agents in the pickers as `custom:<name>` and goes
-  everywhere they do: Hand to…, the chat, Discuss, the desk's `dispatch`,
+  everywhere they do: Hand to…, the chat, Discuss, the chat's `dispatch`,
   and models and modes when the server reports them. It is run as given,
   nothing installed or downloaded: the command found on PATH as a shell
   finds it (or the path it is, `~/` for home), `env` set over the app's
@@ -714,31 +714,37 @@ board changes (and in the feed).
   decision (task-44), each with the person's agreement: a decision is run
   past check first and shown with its claim key, title, text and what it
   replaces, and the task is linked to it. It notes what was agreed in the
-  task's log, which is where the hand-off's brief finds it. It has no desk,
-  never runs in a bypass mode (read-only when the agent has one), and its
+  task's log, which is where the hand-off's brief finds it. Its board lists
+  no dispatch, it never runs in a bypass mode (read-only when the agent has one), and its
   edits, commands, mode changes and other board tools are refused before
   anyone is asked.
-- **The chat hands work off** (spec-16). Its agents get a second, small MCP
-  server from the app itself, the desk: `dispatch` (a task, and optionally an
-  agent and a model), `runs` (what is running on this Mac) and `stop`.
-  `dispatch` is Hand to…'s own path: the worktree, a tab in the dock, asks
-  in the task pane, Review. With no agent named it is the chat's own agent
-  and model; another agent named takes the model and effort chosen for it on this
-  board, as Hand to… would. Every hand-off records who asked
-  (`dispatch: { agent, model, by, at }` beside the assignee, plus `effort`
-  when one was set; `by` is `person` for Hand to…, `chat` or `lead`),
-  committed like any change. Under the reply a hand-off reads like a board change
-  (`task-35 added`, `task-35 handed to codex`), and the call shows in the
-  steps as `desk · dispatch`. The agent is told to create follow-ups with the
-  board tools, hand them off with dispatch, to hand off an epic itself to
-  have it run (its lead does the rest), and otherwise to ask before
-  dispatching more than three at once. A chat's desk reaches its own board
-  only, and a hand-off gets no desk, so it never hands off again.
+- **The chat hands work off** (spec-16, task-84) through its own board
+  tools: its `brainfile mcp` is told it is the chat (role chat, task-81),
+  so it lists `dispatch`, `dispatch_status`, `dispatch_stop` and
+  `dispatch_lead`, as the CLI's `brainfile dispatch` has them. `dispatch`
+  queues: it writes the request on the task (`dispatch: { agent, model, by,
+  at }` beside the assignee, plus `effort` when one was set; `by` is
+  `person` for Hand to…, `chat`, `lead`, `cli` or `mcp`), committed like
+  any change, and the window's runner takes it from the queue at once, by
+  Hand to…'s own path: the worktree, a tab in the dock, asks in the task
+  pane, Review. Each turn the agent is told whom a hand-off goes to: itself
+  and its model unless the person names another, then the model and effort
+  chosen for that agent on this board, as Hand to… would. Under the reply a
+  hand-off reads like a board change (`task-35 added`, `task-35 handed to
+  codex`): its request says the chat asked, and the run started from it
+  carries the turn under way when it was written, so one that starts after
+  the reply has landed joins the reply's line then. The call shows in the
+  steps as `brainfile · dispatch`. The agent is told to create follow-ups
+  with the board tools, hand them off with dispatch, to hand off an epic
+  itself to have it run (its lead does the rest), and otherwise to ask
+  before dispatching more than three at once. A hand-off's own board lists
+  no dispatch (role worker), so it never hands off again.
 - **An epic is run by its lead** (decision-15, spec-16 phase 2; lead.ts).
   Handing off anything with open children, from Hand to… (its menu reads
   `Lead with`) or the chat's `dispatch`, starts a lead instead of a
   hand-off: the agent picked, read-only as the chat is (decision-14), with
-  the board's tools and the desk scoped to that tree, and no worktree. Its
+  the board's tools, dispatch among them, scoped to that tree (role lead),
+  and no worktree. Its
   first turn checks the plan before anything goes: it reads each child, the
   files it names and the code, makes a child wait where two would change
   the same code or one needs another's work (`task_patch` dependsOn),
@@ -748,7 +754,7 @@ board changes (and in the feed).
   neither waiting on the other, dependencies missing, circular, or outside
   the epic and open, children with no files or no validation, and the order
   dependsOn gives. Then it hands off what is ready. The app holds the rules
-  it cannot bend, refusing the desk call that breaks one: a child only once
+  it cannot bend, refusing the dispatch that breaks one: a child only once
   its dependsOn are done; at most three hand-offs at once in the repository
   (`projects[<repo>].concurrency` in dispatch.json); a child handed off at
   most once plus its contract's maxRetries; only children under the epic
@@ -771,12 +777,39 @@ board changes (and in the feed).
   said, what waits for you) with Pause (it hands off nothing; what runs
   goes on), Resume and Stop (what it handed off is yours); one left on the
   epic by a restart reads `not running`, and Resume carries on from its
-  notes. Its tab in the dock says `Leading`, `Needs you`, `Paused` or
-  `Done`, and opens the epic. Three failed turns in a row, or a turn the
-  person stops, pause it.
+  notes; one a terminal leads (`brainfile run`) says where it runs, and its
+  Pause and Resume reach it through the board. Its tab in the dock says
+  `Leading`, `Needs you`, `Paused` or `Done`, and opens the epic. Three
+  failed turns in a row, or a turn the person stops, pause it.
+- **The window works the queue, and shows every run on the Mac** (task-80,
+  task-84). Its runner is core's, the one `brainfile run` and the MCP tools
+  use, so a hand-off is the same wherever it was asked for. While the window
+  is open it takes each open board's queue: a request the chat, `brainfile
+  dispatch` or an MCP client wrote starts here, at most the repository's
+  limit at once, an epic's lead included; a terminal's `brainfile run`
+  works the same queue, and a claim on the task decides which of them
+  starts it. A run another runner works shows as the window's own do,
+  marked with where it runs, in the faint mono: the row's line `codex ·
+  Editing… · in a terminal`, a tab in the dock (`Handed off: … (in a
+  terminal)`), Stop (which asks that runner to stop it through its run
+  file, and ends its process if it has not within 15 seconds), and Ready to
+  merge asked again when it ends. Every runner writes its runs under
+  `.brainfile/state/runs/`; the host's watch lets those and
+  `state/runners/` through (the rest of `state/` it ignores), says so to
+  the agents process at most every quarter second, and the runner reads
+  them, with a look every five seconds while one is going, so a run whose
+  runner went away without a word is said as failed (`Its runner went away
+  before it finished`). Its ask is in the band like any other, saying where
+  it waits (`Codex wants to run make test, waiting in a terminal`): Allow
+  or Deny writes `state/runs/<run-id>.answer.json`, which that runner
+  applies within a second, taking its own prompt down; the answer is a file
+  of its own, never a field in the run file, which only its runner writes.
+  The phone hears all of it the same way: `live` and the events carry every
+  run on the Mac. An update's restart waits only for the window's own.
 - **When an agent asks first**, it is said where you are looking: inside the
   chat for a chat turn, in the task pane for a dispatched task, and in the
-  board's band either way, with Allow once · Always · Deny in that order
+  board's band either way (a run in a terminal too, answered through its
+  file, as above), with Allow once · Always · Deny in that order
   ("Antigravity wants to run `ls -a`"); a board not in front is named in the
   strip. Brainfile's own board tools are never asked about: every change
   they make is a commit on the board the agent was asked to manage.
