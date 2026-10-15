@@ -93,7 +93,7 @@ types           — every type and its place in the graph; action=add (name, lik
 template        — action= list | use (template, title, column?)
 lint            — check the board; fix: true fixes what it can
 sync            — fetch, merge and push a shared board now (pull? push?)
-where           — where the board lives, how it is stored, how fresh it is
+where           — where the board lives, how it is stored, how fresh it is; action= fix | undo (expected: fix.plan.words) when nothing would be lost
 ```
 
 The bundled JSON Schemas are resources: `brainfile://schema/board` and `brainfile://schema/base`.

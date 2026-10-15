@@ -34,7 +34,7 @@ export const TOOL_PURPOSES: ReadonlyArray<readonly [string, string]> = [
   ['template', 'list the task templates; add a task from one'],
   ['lint', 'check the board and fix what can be fixed'],
   ['sync', 'fetch, merge and push a shared board now'],
-  ['where', 'where the board lives, how it is stored and how fresh it is'],
+  ['where', 'where the board lives, how it is stored and how fresh it is; fix or undo a problem with it when nothing would be lost'],
 ];
 
 /** The server instructions `brainfile mcp` sends in its handshake. */

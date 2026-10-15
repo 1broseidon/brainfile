@@ -62,6 +62,7 @@ const TOOL_FOR: Record<string, string> = {
   lint: 'lint',
   sync: 'sync',
   where: 'where',
+  fix: 'where', // action: fix | undo, with expected
 };
 
 /** CLI capability → the MCP resources that serve it. */

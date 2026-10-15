@@ -16,3 +16,4 @@ export * from './boards';
 export * from './consolidate';
 export * from './worktree';
 export * from './landingLock';
+export * from './fix';
