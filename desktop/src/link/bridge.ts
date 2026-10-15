@@ -9,7 +9,7 @@
  * closes it after its last, so a phone letting go never closes the window's
  * board, nor the window a phone's.
  */
-import { AGENT_METHODS, type AgentMethod, type BoardSnapshot, type HostMethod, type LinkProject, type Result } from '../shared/api';
+import { AGENT_METHODS, type AgentMethod, type BoardSnapshot, type HostMethod, type LinkProject, type Result, type TaskDetail } from '../shared/api';
 
 type Check = (value: unknown) => boolean;
 
@@ -93,6 +93,10 @@ const CALLS = {
   stopRun: { args: [id] },
   answerPermission: { args: [id, optional(id)] },
   review: { args: [id, id], project: true },
+  // What the hello's `merge` feature offers (link.md, Merge from the phone): the window's own calls.
+  readyToMerge: { args: [id], project: true },
+  mergeReview: { args: [id, id], project: true },
+  discardReview: { args: [id, id], project: true },
   // The phone forgets this desk: the server answers it, as Forget in Settings.
   forget: { args: [] },
 } satisfies Record<string, { args: Check[]; project?: boolean }>;
@@ -192,7 +196,28 @@ export function linkDesk(parts: {
   holds: BoardHolds;
   projects(): Promise<LinkProject[]>;
   knows(projectId: string): boolean;
+  /** A phone merged or discarded a hand-off: the window asks its Ready to merge again, as after its own. */
+  settled?(projectId: string): void;
 }): LinkDesk {
+  /**
+   * Merge and Discard as the window's keys do them (design.md, Dispatch):
+   * the agents process lands or discards, and merging is the person's yes,
+   * so a task still on the board is completed with it. A parent with open
+   * children stays open, and the answer says so.
+   */
+  async function settle(call: 'mergeReview' | 'discardReview', projectId: string, taskId: string): Promise<unknown> {
+    try {
+      const result = (await parts.agents(call, projectId, taskId)) as Result<{ message: string }>;
+      if (call !== 'mergeReview' || !result?.ok) return result;
+      const task = (await parts.host('getTask', projectId, taskId)) as Result<TaskDetail>;
+      if (!task?.ok || task.value.archived) return result;
+      const done = (await parts.host('completeTask', projectId, taskId)) as Result;
+      return done?.ok ? result : { ok: true, value: { message: `Merged. ${taskId} stays open: ${done?.error ?? 'not completed'}` } };
+    } finally {
+      parts.settled?.(projectId);
+    }
+  }
+
   return {
     projects: parts.projects,
     knows: parts.knows,
@@ -200,6 +225,7 @@ export function linkDesk(parts: {
       if (call === 'projects') return parts.projects();
       if (call === 'openBoard') return parts.holds.open(holder, args[0] as string);
       if (call === 'closeBoard') return parts.holds.close(holder, args[0] as string);
+      if (call === 'mergeReview' || call === 'discardReview') return settle(call, args[0] as string, args[1] as string);
       if ((AGENT_METHODS as readonly string[]).includes(call)) return parts.agents(call as AgentMethod, ...args);
       return parts.host(call as HostMethod, ...args);
     },

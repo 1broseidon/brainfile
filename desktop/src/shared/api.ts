@@ -726,6 +726,8 @@ export interface Api {
   mergeReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
   /** Throw the hand-off's work away: its worktree and its branch. */
   discardReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
+  /** A phone merged or discarded a hand-off on this board: what can merge is asked again. */
+  onReadyChanged(listener: (projectId: string) => void): () => void;
   /** Opens the hand-off's worktree in the editor named, else the first found. */
   openWorktree(projectId: string, taskId: string, editorId?: string): Promise<Result>;
   answerPermission(askId: string, optionId: string | null): Promise<void>;
@@ -769,6 +771,7 @@ export const CHANNEL = {
   agent: 'brainfile:agent',
   link: 'brainfile:link',
   update: 'brainfile:update',
+  ready: 'brainfile:ready',
 } as const;
 
 /** Methods main forwards to the agents process. */

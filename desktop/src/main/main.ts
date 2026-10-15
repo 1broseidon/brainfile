@@ -286,6 +286,7 @@ function startLink(): LinkServer {
       holds,
       projects: linkProjects,
       knows: (projectId) => store.list().includes(projectId),
+      settled: (projectId) => win?.webContents.send(CHANNEL.ready, projectId),
     }),
     addresses: deskAddresses,
     name: deskName(),

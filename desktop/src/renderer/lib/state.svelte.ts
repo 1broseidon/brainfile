@@ -555,6 +555,8 @@ class AppState {
       this.projects = projects;
     });
     api.onBoardChanged((snapshot) => this.receive(snapshot));
+    // A phone's merge or discard: the board may not change (a discard never does), so Ready to merge is asked again here.
+    api.onReadyChanged((projectId) => this.refreshReady(projectId, true));
     api.onLinkChanged((view) => (this.link = view));
     api.onUpdate((status) => (this.update = status));
     void api.updateStatus().then((status) => (this.update = status));

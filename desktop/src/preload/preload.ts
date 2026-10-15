@@ -80,6 +80,7 @@ const api: Api = {
   onLinkChanged: (listener) => subscribe<LinkView>(CHANNEL.link, listener),
   onUpdate: (listener) => subscribe<UpdateStatus>(CHANNEL.update, listener),
   onAgentEvent: (listener) => subscribe<AgentEvent>(CHANNEL.agent, listener),
+  onReadyChanged: (listener) => subscribe<string>(CHANNEL.ready, listener),
   onBoardChanged: (listener) => subscribe<BoardSnapshot>(CHANNEL.board, listener),
   onProjectsChanged: (listener) => subscribe<Project[]>(CHANNEL.projects, listener),
 } as Api;
