@@ -33,13 +33,20 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:41.058Z"
 assignee: claude
-updatedAt: "2026-10-15T20:22:22.186Z"
+updatedAt: "2026-10-15T20:22:36.442Z"
 dispatch:
   agent: claude
   model: opus
   effort: high
   by: person
   at: "2026-10-15T20:22:03.351Z"
+pullRequest:
+  number: 7
+  url: https://github.com/1broseidon/brainfile/pull/7
+  state: open
+  base: qa/parity
+  head: dispatch/task-93
+  at: "2026-10-15T20:22:36.320Z"
 ---
 
 ## Description
@@ -53,3 +60,4 @@ dispatch:
 
 ## Log
 - 2026-10-15T20:22:21.804Z: [claude] Appended "- QA hand-off 4 (task-93): its pull request was closed unmerged, 2026-10-15T20:21:33Z" to qa/parity-wave-1.md and committed it (77a773b) on dispatch/task-93; nothing else changed, subtasks left for the person. Nothing from task-89 needed wiring here.
+- 2026-10-15T20:22:36.442Z: Opened pull request #7 from dispatch/task-93 into qa/parity: https://github.com/1broseidon/brainfile/pull/7
