@@ -60,3 +60,6 @@ dispatch:
 3. Hand it to an agent. `git worktree list` shows its worktree on `dispatch/<this task>`, and `git config branch.dispatch/<this task>.brainfileBase` says `qa/parity`.
 4. When it is in Review / Ready to merge: the review says it is from qa/parity, and the key reads "Merge into qa/parity".
 5. Merge. `git log --oneline -3 qa/parity` shows `Merge <this task>: …`; `git log main` does not; `git show qa/parity:qa/parity-wave-1.md` has the line. The worktree and `dispatch/<this task>` are gone, and the task is done.
+
+## Log
+- 2026-10-15T19:05:12.729Z: [claude] Made qa/parity-wave-1.md with "- QA hand-off 1 (task-90): landed through Merge, 2026-10-15T19:04:47Z", committed as 9e2aa24 on dispatch/task-90 (forked from qa/parity). Nothing else changed and the subtasks are left for QA. For whoever comes next: .gitignore ignores everything outside its allowlist (/*), and qa/ isn't on it, so I had to force-add the file (git add -f). Now that it's tracked, later appends commit normally. A new file under qa/ would need -f again, or an !/qa/ line in .gitignore. Nothing is left unwired.
