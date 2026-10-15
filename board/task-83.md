@@ -45,7 +45,7 @@ contract:
   metrics:
     readyAt: "2026-10-15T21:40:11.314Z"
 createdAt: "2026-10-14T22:16:33.537Z"
-updatedAt: "2026-10-15T21:40:11.314Z"
+updatedAt: "2026-10-15T22:09:23.616Z"
 ---
 
 ## Description
@@ -57,6 +57,8 @@ The lead now exists in the desktop (spec-16-4/5/6): desktop/src/agents/lead.ts h
 - `attempts` (handed off per child) is counted from the children's request records, not in memory, so a resumed lead keeps the count.
 - Pause, resume and stop from `brainfile dispatch pause|resume|stop <epic>` and MCP, beside the desktop's Lead block.
 - The desktop's agents.ts keeps only the wiring: the Runner calls back for turns, and the window keeps the Lead block and the dock tab.
+
+From task-80: the Runner (core/src/dispatch/runner.ts) already writes run files for lead runs, and the desktop's lead uses `runner.live`, `runner.lastRun` and `runner.limit`. `queued()` skips requests with role:lead today, so a lead request is something this task gives the Runner to pick up. The Runner already holds the rules from task-80's first note (a dependsOn counts only once complete and landed; a worker on a branch is never told to complete; the brief carries each dependency's last notes): the lead's guard should use the Runner's check, not a copy of it. A CLI command (pause/resume/stop) that writes through `fileBoard()` must call `flushBoardCommits` before it exits.
 
 ## Log
 - 2026-10-15T15:49:45.181Z: [claude] The lead's prompt changed in 2cff04e: its plan check makes sure one child wires the parts together and tests the whole (Hotline's epic-6 had none, and every child deferred its wiring), and on later turns it moves what a child left for later into the task that will do it. Its rules line says dependsOn done and landed. TreeDoc has `unlanded`; boardChanged says a complete-but-unlanded child is not yet built on.
