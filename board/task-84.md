@@ -32,6 +32,7 @@ parentId: epic-6
 dependsOn:
   - task-80
   - task-81
+  - task-83
 decisions:
   - decision-8
   - decision-14
@@ -59,7 +60,7 @@ contract:
   metrics:
     readyAt: "2026-10-15T21:40:11.572Z"
 createdAt: "2026-10-14T22:16:44.174Z"
-updatedAt: "2026-10-15T21:40:11.572Z"
+updatedAt: "2026-10-15T21:40:12.089Z"
 ---
 
 ## Description
