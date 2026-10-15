@@ -46,7 +46,17 @@ hand-off too. Set `epicBranch: true` on an epic and its lead first makes
 merges into that branch, which the app brings the target into before each
 hand-off. When the last child is done the epic is one item in Ready to
 merge, and its Merge asks where the branch goes: its target, another
-branch, or kept as a branch.
+branch, a pull request, or kept as a branch.
+
+Beside Merge, when the project's origin is on GitHub, Open pull request
+pushes the hand-off's branch (only that branch) and opens a pull request
+into where it lands, titled with the task's title. The task records it as
+`pullRequest:`, it leaves Ready to merge and shows its number on its row,
+in Review and in the feed, and the app follows it about once a minute:
+merged on GitHub, the task completes and its worktree and local branch go;
+closed without merging, it is back in Ready to merge. Merge itself never
+pushes, so when the trunk has commits origin lacks, Ready to merge and the
+feed say `main is 3 commits ahead of origin`.
 
 Hand an epic off, or any task with open children, and the agent leads it
 instead: it reads the children and the code they touch, fixes the

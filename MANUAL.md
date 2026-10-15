@@ -269,6 +269,7 @@ updatedAt: "2026-09-20T19:03:57.257Z"
 | `source` | The page of the issue the task was made from, e.g. `https://github.com/o/r/issues/12`. Written by `add --source` and `issues --import`; one task per issue. |
 | `landsOn` | The branch a hand-off of this work forks from and merges back into, e.g. `release/0.38.0`. Inherited by everything under it unless something nearer sets its own; absent all the way up means the trunk. `lint` warns when the branch is neither in the repository nor on origin. |
 | `epicBranch` | `true` on an epic: its lead makes the epic a branch of its own, `dispatch/<epic-id>`, from the epic's target. Its children fork from and land on that branch, and the epic is merged as one when the last is done. Off by default. |
+| `pullRequest` | The pull request the task's hand-off was opened as instead of merged: `{ number, url, state, base, head, at }`, `state` being `open`, `merged` or `closed`. Written by `pr` and the desktop's Open pull request. While `open` the hand-off is not ready to merge; `merged` completes the task, `closed` puts it back. |
 | `subtasks` | `{ id, title, completed }` rows, managed with `subtask`. |
 | `contract` | Deliverables, validation and constraints. See [Contracts](#contracts). |
 | `dispatch` | A hand-off: the `agent`, `model` and `effort` asked for, who asked (`by`: `chat`, `cli`, `mcp`, `lead`, `phone` or `person`), `at`, `until` (`review` or `done`) and `role` (`worker` or `lead`), and the `claim` of the runner that started it (`host`, `runner`, `pid`, `at`), so two runners never start the same task. The run's heartbeat stays in `state/`, never here. |
@@ -393,6 +394,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | See the board and work it by keyboard | `tui` |
 | Create a task | `add` |
 | See the repository's GitHub issues, or make a task from one | `issues` |
+| Land a hand-off by GitHub pull request instead of a merge | `pr` |
 | Advance a task to another column | `move` |
 | Add, rename, reorder or remove a column | `columns` |
 | Change a task's fields | `patch` |
@@ -559,6 +561,33 @@ made again. GitHub is asked with the gh CLI's login (`gh auth token`), then
 `GH_TOKEN` or `GITHUB_TOKEN`, then the token `brainfile auth github` saved;
 with none, public repositories still answer, on GitHub's smaller rate limit.
 The desktop app looks in the same order.
+
+#### pr — A hand-off as a GitHub pull request
+
+```console
+$ brainfile pr task-12             # push dispatch/task-12, open a pull request into where it lands
+$ brainfile pr task-12 --status    # where it stands; merged completes the task
+$ brainfile pr task-12 --json
+```
+
+Landing by pull request instead of a merge (decision-16). The task's
+hand-off branch, `dispatch/<task>`, is pushed to `origin`, and only that
+branch: the trunk is never pushed. A pull request is opened from it into the
+branch the task lands on (its `landsOn`, inherited, else the trunk), titled
+with the task's title, its body the task's ID, the first lines of its
+description and the last of its log, and the task records it as
+`pullRequest:`. It is refused, as a merge is, while the worktree has
+uncommitted work, the branch has nothing to land, a runner holds the task, or
+one is open already; checks are the forge's. While it is open the hand-off is
+not ready to merge.
+
+`--status` asks GitHub where it stands. Merged, origin's copy of the target
+is fetched, the worktree and the local branch go (a squash or rebase merge
+counts when the branch is what the pull request carried; work committed
+after it was pushed keeps the worktree, and says so), and the task
+completes, unless subtasks are left. Closed without merging, `pullRequest:`
+says `closed`, and the hand-off can be merged, or opened again. Credentials
+as `issues`; opening one needs them.
 
 #### move — Change a task's column
 
@@ -1481,6 +1510,7 @@ to a board.
 | `lint` | Check the board, the graph included; `fix: true` fixes what it can. Issues come back as data, with `valid` false only for errors. |
 | `sync` | Fetch, merge and push a shared board now; `pull` or `push` for one direction. A plain or unshared board says so in `skipped`. |
 | `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent; every other copy of the board in the repository, and `conflict` when one disagrees (writes are refused until `conflict.resolve` runs). `fetch: true` asks the remote first. `fix` has the problems in the desktop's words and `plan`, what `brainfile fix` would do; `action=fix` with `expected` (the plan's `words`) runs it, `action=undo` puts back the last fix within 20 seconds. |
+| `pull_request` | A task's hand-off as a GitHub pull request, as `brainfile pr`: `action=open` (default) pushes its branch and opens one into where it lands, recorded as `pullRequest`; `action=status` asks where it stands, and merged completes the task and removes its worktree. |
 | `issues` | The open issues of the project's GitHub repository, each with `task` when one on the board carries its URL as `source`; `action=import` with `numbers` (and `column`) makes a task from each, and reports one already on the board with `made: false`. Credentials as `brainfile issues`. |
 
 Every tool takes `file` to point at another board, and every one that writes
