@@ -2,8 +2,8 @@
 id: epic-8
 title: "QA: the core groundwork (task-74 to task-78) and where a hand-off lands (spec-18), run on this repository before parity/integration lands on main"
 type: epic
-column: todo
-position: 4
+column: in-progress
+position: 9
 description: |-
   The QA guide for everything built on 2026-10-15: task-74 (dispatch record, run files), task-75 (ACP agents in @brainfile/core/dispatch), task-76 (worktrees and landing in core, the shared landing lock), task-77 (issues from the CLI and MCP), task-78 (board Fix and Undo in core), and spec-18 (landsOn and the Lands on picker, pull requests as a landing, the trunk-ahead line, the opt-in epic branch). It all sits on the local branch `parity/integration`, not on main. The last child, sign-off, lands it.
 
@@ -41,7 +41,7 @@ decisions:
   - decision-18
 createdAt: "2026-10-15T18:19:44.057Z"
 landsOn: qa/parity
-updatedAt: "2026-10-15T18:19:48.924Z"
+updatedAt: "2026-10-15T19:03:23.123Z"
 ---
 
 ## Description
