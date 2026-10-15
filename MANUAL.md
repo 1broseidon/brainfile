@@ -266,6 +266,8 @@ updatedAt: "2026-09-20T19:03:57.257Z"
 | `dependsOn` | Tasks that come first. `mobile:task-12` names a task on a related board. See [Related boards](#related-boards). |
 | `decisions` | The decisions this work rests on, e.g. `[decision-3]`. The reverse is worked out, never written on the decision. |
 | `relatedFiles` | Paths an agent should read first. |
+| `landsOn` | The branch a hand-off of this work forks from and merges back into, e.g. `release/0.38.0`. Inherited by everything under it unless something nearer sets its own; absent all the way up means the trunk. `lint` warns when the branch is neither in the repository nor on origin. |
+| `epicBranch` | `true` on an epic: its lead makes the epic a branch of its own, `dispatch/<epic-id>`, from the epic's target. Its children fork from and land on that branch, and the epic is merged as one when the last is done. Off by default. |
 | `subtasks` | `{ id, title, completed }` rows, managed with `subtask`. |
 | `contract` | Deliverables, validation and constraints. See [Contracts](#contracts). |
 
@@ -547,13 +549,17 @@ $ brainfile patch -t task-1 --tags perf,cache        # replaces the tag list
 $ brainfile patch -t task-1 --clear-due-date
 $ brainfile patch -t spec-3 --parent epic-2
 $ brainfile patch -t task-7 --depends-on task-5,task-6 --decisions decision-2
+$ brainfile patch -t epic-3 --lands-on release/0.38.0 --epic-branch
 ```
 
 Takes `--title`, `-d`, `-p`, `--tags`, `--assignee`, `--due-date`, `--parent`,
-`--depends-on` and `--decisions`, plus `--clear-tags`, `--clear-assignee`,
-`--clear-due-date`, `--clear-priority`, `--clear-parent`, `--clear-depends-on`
-and `--clear-decisions`. `-p none` also removes the priority. A new parent
-must fit the type, as for `add`, and neither link may loop.
+`--depends-on`, `--decisions`, `--lands-on` and `--epic-branch`, plus
+`--clear-tags`, `--clear-assignee`, `--clear-due-date`, `--clear-priority`,
+`--clear-parent`, `--clear-depends-on`, `--clear-decisions`,
+`--clear-lands-on` and `--clear-epic-branch`. `-p none` also removes the
+priority. A new parent must fit the type, as for `add`, and neither link may
+loop. `--lands-on` must be a name git takes for a branch; cleared, the task
+inherits its parent's target again.
 
 #### complete — Finish a task
 
@@ -878,7 +884,8 @@ a `like:` that names no type. Off-pattern links are warnings, and errors on a
 strict board. It also checks where the board lives: two boards that disagree
 are an error; the board branch checked out away from `.brainfile/`, a checkout
 whose folder is gone (`--fix` forgets it), and a code branch still tracking an
-old copy are warnings.
+old copy are warnings. So is a `landsOn` that names a branch the repository has
+neither locally nor on origin.
 
 #### index — The local search index
 
@@ -1396,7 +1403,7 @@ to a board.
 | `brief` | The agent's brief: `text` (budgeted by `maxChars`) and its `sections`, plus the checkpoint `lanes`. Takes `agent=`, `peek`. |
 | `check` | `use`, `review`, `use_replacement` or `no_decision` for an action (`query`), a decision, a `claimKey` or a `claimKeyPrefix`, with `exitCode` as the CLI's. |
 | `task_add` | Create a document. Takes `type` (aliases work), `parentId`, `dependsOn`, `decisions`, `status`, and contract parts for `with_contract`. |
-| `task_patch` | Update fields on one task or many, `parentId`, `dependsOn` and `decisions` included; `null` removes a field. |
+| `task_patch` | Update fields on one task or many, `parentId`, `dependsOn`, `decisions`, `landsOn` and `epicBranch` included; `null` removes a field. |
 | `task_move` | Move one task or many to a column. |
 | `task_complete` | Complete to the ledger, or export to GitHub or Linear. A parent with open children and a decision refuse. |
 | `task_restore` | Reopen a completed task into a `column`, out of the ledger, with `reason` in its log. |
