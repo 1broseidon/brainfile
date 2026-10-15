@@ -1,0 +1,3 @@
+- QA hand-off 1 (task-90): landed through Merge, 2026-10-15T19:04:47Z
+- QA hand-off 2 (task-91): built on task-90, which said "QA passed (person + Claude)", 2026-10-15T19:11:01Z
+- QA hand-off 3 (task-92): landed through a pull request, 2026-10-15T19:29:09Z
