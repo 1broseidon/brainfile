@@ -87,6 +87,17 @@ export interface PermissionAsk {
   options: { optionId: string; name: string; kind: string }[];
 }
 
+/**
+ * What an agent is to the board (task-81), as the `brainfile mcp` started for
+ * it is told in BRAINFILE_AGENT_ROLE: the board's chat, an epic's lead, a
+ * hand-off's worker, or a discussion of one task. A worker's and a
+ * discussion's server lists no tools that dispatch, stop or land; a lead's
+ * reaches only its tree. Unset (a person's own client) lists everything. A
+ * rule for agents, not a security boundary: anyone on the machine can run the
+ * CLI.
+ */
+export type AgentRole = 'chat' | 'lead' | 'worker' | 'discuss';
+
 /** Per repository, how the dispatcher answers an agent that asks first. */
 export type PermissionPolicy = 'ask' | 'allow' | 'bypass';
 

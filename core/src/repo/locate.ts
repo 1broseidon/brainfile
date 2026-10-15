@@ -11,6 +11,7 @@ import {
   boardRepoKind,
   findTrackedBoardDir,
   gitToplevel,
+  listWorktrees,
   materializeBoardWorktree,
 } from './boardRepo';
 import { type BoardConflict, boardConflict } from './boards';
@@ -84,6 +85,23 @@ export function locateBoard(folder: string, options: LocateOptions = {}): Locate
     }
   }
   return { found: false, projectRoot, inRepo };
+}
+
+/**
+ * The project a board belongs to, from its brainfile.md, as a runner and the
+ * desktop name it (task-81): for a board on its own branch, the repository's
+ * main checkout, not the board's worktree; else the repository the board is
+ * in, or the folder that holds `.brainfile/`. Hand-offs' worktrees and the
+ * repository's dispatch settings go by this path.
+ */
+export function projectOfBoard(brainfilePath: string): string {
+  const dotDir = path.dirname(path.resolve(brainfilePath));
+  const folder = path.dirname(dotDir);
+  if (boardRepoKind(dotDir) === 'linked') {
+    const main = listWorktrees(dotDir).find((w) => !w.bare);
+    if (main) return main.path;
+  }
+  return (boardRepoKind(dotDir) === 'standalone' ? null : gitToplevel(folder)) ?? folder;
 }
 
 function findInFolder(dir: string): FoundBrainfile | null {

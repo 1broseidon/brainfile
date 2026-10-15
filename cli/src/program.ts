@@ -21,6 +21,8 @@ import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
 import { whereCommand } from './commands/where';
 import { issuesCommand, ISSUES_COMMAND_HELP } from './commands/issues';
 import { prCommand, PR_COMMAND_HELP } from './commands/pr';
+import { agentsCommand, dispatchCommand, dispatchStatusCommand, dispatchStopCommand, DISPATCH_COMMAND_HELP } from './commands/dispatch';
+import { discardCommand, landCommand, reviewCommand, REVIEW_COMMAND_HELP } from './commands/review';
 import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
 import { fixCommand } from './commands/fix';
 import { mergeDriverCommand } from './commands/merge-driver';
@@ -393,6 +395,69 @@ Brainfile file resolution (when you don't pass --file):
     .argument('<task>', 'The task whose hand-off it is, e.g. task-12')
     .action(async (task, options) => { await prCommand(task, options); });
   prCmd.addHelpText('after', `\n${PR_COMMAND_HELP}`);
+
+  // Hand-offs (task-81, spec-16-7): queued on the board for a runner, as the
+  // desktop's Hand to… and the MCP dispatch tools do.
+  const dispatchCmd = program
+    .command('dispatch')
+    .description('Queue tasks for a coding agent, in its own worktree; a runner on this machine starts them. status and stop below')
+    .argument('[ids...]', 'The tasks to hand off, e.g. task-12 task-13')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--column <column>', 'Every open task in this column')
+    .option('--parent <id>', "The parent's open children")
+    .option('--agent <agent>', 'Who does it (brainfile agents lists them). Default: the agent it was last handed to, else its assignee')
+    .option('--model <model>', 'A model the agent offers. Default: the agent\'s own')
+    .option('--effort <effort>', 'The effort level for that model')
+    .addOption(new Option('--until <until>', 'review: it stops in Review for you (default); done: it lands on its own where the repository allows').choices(['review', 'done']))
+    .option('--now', 'Also run it here in the foreground until it ends; asks come to this terminal')
+    .option('--json', 'Output as JSON')
+    .action(async (ids: string[], options) => { await dispatchCommand(ids, options); });
+  dispatchCmd.addHelpText('after', `\n${DISPATCH_COMMAND_HELP}`);
+
+  // The parent takes its own options wherever they are, so a subcommand reads them all through optsWithGlobals.
+  dispatchCmd
+    .command('status')
+    .description('The queue, the claims and the live runs on this machine, from the board and the run files')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--json', 'Output as JSON')
+    .action(async (_options, cmd: Command) => { await dispatchStatusCommand(cmd.optsWithGlobals()); });
+
+  dispatchCmd
+    .command('stop <ref>')
+    .description('Stop a run by its run id or its task id, whichever runner on this machine has it; its worktree stays')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--json', 'Output as JSON')
+    .action(async (ref: string, _options, cmd: Command) => { await dispatchStopCommand(ref, cmd.optsWithGlobals()); });
+
+  const reviewCmd = program
+    .command('review [task]')
+    .description("A hand-off's branch, commits, files and conflicts, and whether it can land; --ready lists every hand-off that can land now")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--ready', 'Every hand-off that can land now')
+    .option('--json', 'Output as JSON')
+    .action(async (task: string | undefined, options) => { await reviewCommand(task, options); });
+  reviewCmd.addHelpText('after', `\n${REVIEW_COMMAND_HELP}`);
+
+  program
+    .command('land <task>')
+    .description("Check a hand-off with its contract's validation, then land it on its target; a conflict or a failed check goes back to its agent")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--into <branch>', 'Land it on this branch instead of its target')
+    .option('--json', 'Output as JSON')
+    .action(async (task: string, options) => { await landCommand(task, options); });
+
+  program
+    .command('discard <task>')
+    .description("Throw a hand-off's work away: its worktree, uncommitted changes and all, and its branch")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output as JSON')
+    .action(async (task: string, options) => { await discardCommand(task, options); });
+
+  program
+    .command('agents')
+    .description('The coding agents Brainfile can hand work to, which are installed here, and the models each offers')
+    .option('--json', 'Output as JSON')
+    .action((options) => { agentsCommand(options); });
 
   program
     .command('adopt')

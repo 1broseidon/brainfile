@@ -12,7 +12,7 @@ import type * as acp from '@agentclientprotocol/sdk';
 import { commandName, customId, customName, isCustom } from './agentServers';
 import { customLaunch } from './custom';
 import { getSettings } from './settings';
-import type { AgentId, AgentInfo, AgentServer, CustomAgentId } from './types';
+import type { AgentId, AgentInfo, AgentRole, AgentServer, CustomAgentId } from './types';
 
 export function which(command: string): string | null {
   const r = spawnSync('/usr/bin/which', [command], { encoding: 'utf-8' });
@@ -251,6 +251,20 @@ export function listAgents(dataDir: string): AgentInfo[] {
 
 // ── The environment an agent gets ────────────────────────────────────────────
 
+export const AGENT_ROLES: readonly AgentRole[] = ['chat', 'lead', 'worker', 'discuss'];
+/** The env `brainfile mcp` reads its role from. */
+export const AGENT_ROLE_ENV = 'BRAINFILE_AGENT_ROLE';
+/** The env a lead's `brainfile mcp` reads its tree from: the epic it leads. */
+export const LEAD_SCOPE_ENV = 'BRAINFILE_LEAD_SCOPE';
+
+/** The role and lead scope an environment gives; no role when it names none or one that is not a role. */
+export function agentRoleOf(env: NodeJS.ProcessEnv = process.env): { role?: AgentRole; scope?: string } {
+  const role = (env[AGENT_ROLE_ENV] ?? '').trim().toLowerCase() as AgentRole;
+  const scope = (env[LEAD_SCOPE_ENV] ?? '').trim();
+  if (!AGENT_ROLES.includes(role)) return {};
+  return { role, ...(role === 'lead' && scope ? { scope } : {}) };
+}
+
 /** The environment every agent starts in: the real node first on PATH, so nothing an agent starts finds a shim instead. */
 export function agentEnv(): NodeJS.ProcessEnv {
   const node = realNode();
@@ -279,9 +293,11 @@ export function realNode(): string | null {
  * servers with a stripped environment, where a `#!/usr/bin/env node` script
  * finds a version-manager shim that never answers; so the command is the
  * real node binary and the CLI's own file, with PATH and HOME passed for the
- * git calls the board makes.
+ * git calls the board makes. `role` is what the agent is to the board
+ * (BRAINFILE_AGENT_ROLE), and a lead's `scope` the epic it leads
+ * (BRAINFILE_LEAD_SCOPE): a worker's server lists no dispatch, stop or land.
  */
-export function brainfileMcp(): acp.McpServer[] {
+export function brainfileMcp(role?: { role: AgentRole; scope?: string }): acp.McpServer[] {
   const bin = which('brainfile');
   if (!bin) return [];
   const cli = fs.realpathSync(bin);
@@ -289,6 +305,8 @@ export function brainfileMcp(): acp.McpServer[] {
   const env = [
     { name: 'PATH', value: process.env.PATH ?? '' },
     { name: 'HOME', value: os.homedir() },
+    ...(role ? [{ name: AGENT_ROLE_ENV, value: role.role }] : []),
+    ...(role?.scope ? [{ name: LEAD_SCOPE_ENV, value: role.scope }] : []),
   ];
   return node ? [{ name: 'brainfile', command: node, args: [cli, 'mcp'], env }] : [{ name: 'brainfile', command: bin, args: ['mcp'], env }];
 }
