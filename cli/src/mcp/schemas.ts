@@ -729,6 +729,13 @@ export const whereOutputSchema = z.object({
   strayWorktrees: z.array(z.object({ path: z.string(), missing: z.boolean() })),
   outsideHome: z.string().nullable(),
   trackedTwice: boardSightingSchema.nullable(),
+  /** What is wrong with where the board lives and what Fix would do (task-78); with action fix or undo, what it did. */
+  fix: z.object({
+    problems: z.array(z.object({ short: z.string(), line: z.string() })),
+    plan: z.object({ kind: z.enum(['untrack', 'adopt', 'prune']), words: z.string() }).nullable(),
+    applied: z.object({ message: z.string(), backups: z.array(z.string()), undoUntil: z.string().nullable() }).optional(),
+    undone: z.string().optional(),
+  }),
 });
 
 /** `retire`: the decision, now in logs/ with its status. */

@@ -1,5 +1,6 @@
 /**
- * Fix a board problem from its line in the health list (task-34).
+ * Fix a board problem from its line in the health list (task-34), for the
+ * desktop, `brainfile fix` and the MCP `where` tool alike (task-78).
  *
  * A fix is offered only when it loses nothing: the copy that is kept already
  * holds every document every other copy has, at least as new. Running it
@@ -21,40 +22,45 @@
  * repository (its own history would go) and a live checkout with work in it
  * are never fixed here: a person decides those, with an agent's help.
  *
- * For a few seconds after, Undo puts back what the fix changed. Node only, no
- * Electron, so `node --test` runs it on scratch repositories.
+ * For 20 seconds after, Undo puts back what the fix changed. What it needs is
+ * kept in `.brainfile/state/last-fix.json`, so Undo works from another
+ * process than the fix: the desktop's Undo after `brainfile fix`, or
+ * `brainfile fix --undo` after the desktop's Fix.
  */
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-  BACKUP_NAMESPACE,
-  adoptBoard,
-  backupStamp,
   boardBranch,
   boardRepoKind,
-  codeBranchTracks,
-  compareContents,
   git,
   gitCommonDir,
   isTrackedBoard,
   listWorktrees,
   pruneLostBoardCheckouts,
-  readFolder,
-  readTree,
-  saveBoardBackup,
-  surveyBoards,
   unmergedFiles,
-  untrackBoardOnCodeBranch,
-  type BackupSource,
+} from './boardRepo';
+import {
   type BoardSighting,
   type BoardSurvey,
   type Contents,
-} from '@brainfile/core/repo';
-import type { FixPlan } from '../shared/api';
+  codeBranchTracks,
+  compareContents,
+  readFolder,
+  readTree,
+  surveyBoards,
+} from './boards';
+import {
+  BACKUP_NAMESPACE,
+  type BackupSource,
+  adoptBoard,
+  backupStamp,
+  saveBoardBackup,
+  untrackBoardOnCodeBranch,
+} from './consolidate';
 
 /** One copy of the board to save before anything changes. */
-interface Copy {
+export interface FixCopy {
   label: string;
   what: string;
   source: BackupSource;
@@ -62,19 +68,23 @@ interface Copy {
   dir?: string;
 }
 
-/** A plan as the host keeps it: the window's words, and what to run. */
-export interface Plan extends FixPlan {
+/** What Fix would do, and what it runs. The desktop's window sees `kind` and `words`. */
+export interface FixPlan {
+  /** `untrack` the code branch's old copy, `adopt` the copy that has everything, or `prune` a lost checkout. */
+  kind: 'untrack' | 'adopt' | 'prune';
+  /** What it will do, in a few words, said before it runs: `Back up both, then untrack main's copy`. */
+  words: string;
   /** What it does, without the backing up: `untrack main's copy`. */
   does: string;
   /** For `adopt`: the board to keep, as core's `adopt` takes it. */
   keep?: string;
-  copies: Copy[];
+  copies: FixCopy[];
   /** The repository's main worktree. */
   root: string;
 }
 
-/** What Undo needs to put things back. Kept by the host for a few seconds. */
-export interface UndoRecord {
+/** What Undo needs to put things back. Kept in `state/last-fix.json` for 20 seconds. */
+export interface FixUndoRecord {
   root: string;
   /** The code branch the fix committed on, and where it was. */
   code: { branch: string; before: string; after: string; gitignore: string | null } | null;
@@ -97,11 +107,12 @@ export interface UndoRecord {
   } | null;
 }
 
-export interface Applied {
+export interface AppliedFix {
   /** `Untracked main's copy. Push main to share it.` (the push only when there is a remote) */
   message: string;
   backups: string[];
-  undo: UndoRecord | null;
+  /** What Undo puts back, also kept in `state/last-fix.json`; null when there is nothing to undo. */
+  undo: FixUndoRecord | null;
 }
 
 /** Paths compared as git reports them: symlinks resolved (`/tmp` is `/private/tmp` on macOS). */
@@ -191,7 +202,7 @@ function shortLabel(s: BoardSighting): string {
   return 'the folder';
 }
 
-function copyOf(s: BoardSighting, repo: Repo): Copy {
+function copyOf(s: BoardSighting, repo: Repo): FixCopy {
   const label = s.kind === 'folder' ? `the folder ${s.path}` : s.label;
   if (s.kind === 'folder') return { label, what: 'folder', source: { dir: s.path! }, dir: s.path };
   if (s.kind === 'code-branch') {
@@ -204,6 +215,68 @@ function copyOf(s: BoardSighting, repo: Repo): Copy {
   return { label, what: 'branch', source: { treeish: tip!, parent: tip } };
 }
 
+// ── The problem, in the health list's words ─────────────────────────────────
+
+/** One thing wrong with where the board lives: its few words for the list, and its one plain sentence under them. */
+export interface BoardProblem {
+  /** `two copies`, `merge unfinished`, `open elsewhere`, `open twice`, `old copy in main`. */
+  short: string;
+  /** `Origin's (19) already has everything this folder (7) has.` */
+  line: string;
+}
+
+const capital = (text: string): string => `${text[0]?.toUpperCase() ?? ''}${text.slice(1)}`;
+
+/** `this folder (7)`. */
+const counted = (b: BoardSighting): string => `${b.label} (${b.docs})`;
+
+/** `board/task-3.md`, `board/task-3.md and 2 more`. */
+function firstOf(files: string[]): string {
+  return files.length > 1 ? `${files[0]} and ${files.length - 1} more` : files[0];
+}
+
+/**
+ * Every problem with where the board lives, worst first, as the desktop's
+ * health list says them and `brainfile fix` prints them. `survey` is
+ * `surveyBoards`; `unfinished` the files a merge left with conflict markers.
+ */
+export function boardProblems(survey: BoardSurvey, unfinished: string[] = []): BoardProblem[] {
+  const problems: BoardProblem[] = [];
+  const conflict = survey.conflict;
+  if (conflict) {
+    const { current, other, relation } = conflict;
+    const line =
+      relation === 'contained'
+        ? `${capital(counted(other))} already has everything ${counted(current)} has.`
+        : relation === 'contains'
+          ? `${capital(counted(current))} already has everything ${counted(other)} has.`
+          : relation === 'unrelated'
+            ? `${capital(counted(current))} and ${counted(other)} share no history.`
+            : `${capital(counted(current))} and ${counted(other)} each have changes the other lacks.`;
+    problems.push({ short: 'two copies', line });
+  }
+  if (unfinished.length > 0) {
+    problems.push({ short: 'merge unfinished', line: `A merge stopped with conflicts in ${firstOf(unfinished)}.` });
+  }
+  if (survey.outsideHome) {
+    problems.push({ short: 'open elsewhere', line: 'This board is checked out outside .brainfile/, where it belongs.' });
+  }
+  const elsewhere = survey.strayWorktrees.filter((w) => !w.missing);
+  if (elsewhere.length > 0) {
+    problems.push({
+      short: 'open twice',
+      line: elsewhere.length === 1 ? `Also checked out at ${elsewhere[0].path}.` : `Also checked out in ${elsewhere.length} other folders.`,
+    });
+  }
+  if (survey.trackedTwice) {
+    const branch = survey.trackedTwice.label.replace(/^the copy on /, '');
+    problems.push({ short: `old copy in ${branch}`, line: `An old copy of .brainfile/ (${survey.trackedTwice.docs} docs) is still tracked on ${branch}.` });
+  }
+  return problems;
+}
+
+// ── Fix ─────────────────────────────────────────────────────────────────────
+
 const backUp = (n: number): string => (n <= 1 ? 'Back up' : n === 2 ? 'Back up both' : `Back up all ${n}`);
 
 /**
@@ -212,7 +285,7 @@ const backUp = (n: number): string => (n <= 1 ? 'Back up' : n === 2 ? 'Back up b
  * opened it from: a fix that would remove the checkout it lives in is not
  * offered. `surveyed` saves surveying again when the caller just did.
  */
-export function planFix(dotDir: string, project?: string, surveyed?: BoardSurvey): Plan | null {
+export function planFix(dotDir: string, project?: string, surveyed?: BoardSurvey): FixPlan | null {
   const repo = repoOf(dotDir);
   if (!repo) return null;
   const survey = surveyed ?? surveyBoards(dotDir);
@@ -287,16 +360,67 @@ export function planFix(dotDir: string, project?: string, surveyed?: BoardSurvey
   return null;
 }
 
+// ── Undo, kept in state/ ────────────────────────────────────────────────────
+
+/** How long after a fix Undo can still put it back, from any process; the desktop offers it for ten seconds. */
+export const FIX_UNDO_MS = 20_000;
+
+/** The last fix, as `state/last-fix.json` keeps it. */
+export interface LastFix {
+  /** When it ran (ISO); Undo is refused once `FIX_UNDO_MS` has passed. */
+  at: string;
+  /** The plan's words: `Back up both, then untrack main's copy`. */
+  words: string;
+  record: FixUndoRecord;
+}
+
+/** `state/last-fix.json` of the board at `dotDir`: in `.brainfile/` of the main worktree, where every fix leaves the board. */
+export function lastFixFile(dotDir: string): string {
+  const repo = repoOf(dotDir);
+  return path.join(repo ? repo.home : real(dotDir), 'state', 'last-fix.json');
+}
+
+/** The last fix, while Undo can still put it back; null when there is none, or it is too late. */
+export function lastFix(dotDir: string, now = Date.now()): LastFix | null {
+  let kept: LastFix;
+  try {
+    kept = JSON.parse(fs.readFileSync(lastFixFile(dotDir), 'utf-8')) as LastFix;
+  } catch {
+    return null;
+  }
+  const at = Date.parse(kept?.at);
+  if (!kept?.record || Number.isNaN(at) || now - at > FIX_UNDO_MS) return null;
+  return kept;
+}
+
+function forgetFix(dotDir: string): void {
+  fs.rmSync(lastFixFile(dotDir), { force: true });
+}
+
 /**
  * Back up every copy, then run the plan. `expected` is the plan's words as
  * the person confirmed them: if the plan is different now, nothing runs.
+ * What Undo needs goes in `state/last-fix.json`; a fix that cannot be undone
+ * clears the last one's, which would no longer put things back as they were.
  */
-export function applyFix(dotDir: string, options: { expected?: string; project?: string } = {}): Applied {
+export function applyFix(dotDir: string, options: { expected?: string; project?: string; now?: number } = {}): AppliedFix {
   const plan = planFix(dotDir, options.project);
   if (!plan) throw new Error('No safe fix here now. Nothing was changed.');
   if (options.expected && plan.words !== options.expected) {
     throw new Error(`The board changed: Fix would now ${plan.does}. Nothing was changed.`);
   }
+  forgetFix(dotDir);
+  const applied = runFix(dotDir, plan);
+  if (applied.undo) {
+    const file = lastFixFile(dotDir);
+    const kept: LastFix = { at: new Date(options.now ?? Date.now()).toISOString(), words: plan.words, record: applied.undo };
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${JSON.stringify(kept, null, 2)}\n`, 'utf-8');
+  }
+  return applied;
+}
+
+function runFix(dotDir: string, plan: FixPlan): AppliedFix {
   const repo = repoOf(dotDir)!;
 
   // Backups first. If one fails, it throws and nothing else runs.
@@ -386,11 +510,19 @@ function checkoutInto(root: string, common: string, ref: string, dir: string): v
 }
 
 /**
- * Put back what a fix changed. Refuses, changing nothing, when the board or
- * the code branch has moved on since. The board it replaces is backed up
- * first.
+ * Put back what the last fix changed, within `FIX_UNDO_MS` of it, whichever
+ * process ran it. Refuses, changing nothing, when the board or the code
+ * branch has moved on since. The board it replaces is backed up first. One
+ * go: refused or not, the fix cannot be undone again.
  */
-export function undoFix(record: UndoRecord): string {
+export function undoFix(dotDir: string, options: { now?: number } = {}): string {
+  const kept = lastFix(dotDir, options.now);
+  forgetFix(dotDir);
+  if (!kept) throw new Error('Too late to undo; brainfile backups has every copy.');
+  return putBack(kept.record);
+}
+
+function putBack(record: FixUndoRecord): string {
   const { root, code, board } = record;
   const common = gitCommonDir(root);
   if (!common) throw new Error('The repository is gone. Nothing was put back.');

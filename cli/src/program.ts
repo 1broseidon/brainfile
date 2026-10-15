@@ -20,6 +20,7 @@ import { migrateCommand } from './commands/migrate';
 import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
 import { whereCommand } from './commands/where';
 import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
+import { fixCommand } from './commands/fix';
 import { mergeDriverCommand } from './commands/merge-driver';
 import { patchCommand, PATCH_COMMAND_HELP } from './commands/patch';
 import { deleteCommand } from './commands/delete';
@@ -388,6 +389,16 @@ Brainfile file resolution (when you don't pass --file):
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('--json', 'Output as JSON')
     .action((action, name, options) => { backupsCommand({ ...options, action, name }); });
+
+  program
+    .command('fix')
+    .description("Fix where the board lives when nothing would be lost, as the desktop's Fix does: every copy backed up first; --undo within 20 seconds")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--dry-run', 'Say what is wrong and what Fix would do; change nothing')
+    .option('--undo', 'Put back what the last fix changed (from here, an agent or the desktop), within 20 seconds of it')
+    .option('--expected <words>', 'Run only if the plan is still these words, as --dry-run said them')
+    .option('--json', 'Output as JSON')
+    .action((options) => { fixCommand(options); });
 
   program
     .command('merge-driver', { hidden: true })

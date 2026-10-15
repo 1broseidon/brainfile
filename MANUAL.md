@@ -411,6 +411,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | Export finished work to GitHub or Linear, or reopen it | `archive`, `restore` |
 | Share the board with another machine or person | `sync` |
 | See where the board lives and who has it | `where` |
+| Fix where it lives when nothing would be lost, or undo that | `fix` |
 | Upgrade a v1 board, or move a board onto its own branch | `migrate` |
 
 > Every command that touches a task takes `-t <id>`. Every command finds the
@@ -977,6 +978,35 @@ first as `refs/brainfile/backups/<UTC time>-folder` or `-branch`; `backups`
 lists them and `backups restore <name>` puts one back, backing up what it
 replaces. Backups stay on this machine unless you push one by name.
 
+#### fix — Fix where the board lives, when nothing would be lost
+
+```console
+$ brainfile fix --dry-run                 # what is wrong, and what fix would do
+$ brainfile fix                           # do it
+$ brainfile fix --expected "Back up both, then untrack main's copy"
+$ brainfile fix --undo                    # put it back, within 20 seconds
+```
+
+The desktop app's Fix, from the command line. It says what is wrong with
+where the board lives, in the words the desktop's health list uses, and what
+fix would do, then does it, as long as that is still the plan it printed
+(`--expected` names the plan as `--dry-run` said it, for a script or an
+agent). It only offers a fix that loses nothing: the copy it keeps already
+has every document every other copy has, each the same or newer. It backs up
+every copy first, as `adopt` does, and changes nothing if a backup fails.
+Then it does one of three things: stops the code branch tracking an old copy
+of `.brainfile/` (one commit, as `migrate --to-branch` makes), adopts the copy
+that has everything (two copies, a checkout outside `.brainfile/`, or the
+board branch checked out twice), or forgets a checkout whose folder is gone.
+
+An unfinished merge, two copies that each have changes, a board that is its
+own repository and a checkout with uncommitted work are never fixed: fix
+says so, and `adopt` or `merge-boards` is your call. For 20 seconds after a
+fix, `--undo` puts back what it changed, whether the CLI, an agent or the
+desktop ran it (the fix is kept in `.brainfile/state/last-fix.json`). It
+backs up the board it replaces first, and refuses if the board or the code
+branch has moved on since; after that, `backups` has every copy.
+
 #### sync — Share a board through a git remote
 
 ```console
@@ -1149,7 +1179,9 @@ Boards    Two boards: this folder (7) and origin's (19, newer).
 While two boards disagree, every write (from the CLI, an agent's MCP tools or
 the desktop app) is refused with that same sentence and the command that
 settles it; reading still works. `adopt` or `merge-boards` settles it (see
-[adopt, merge-boards, backups](#adopt-merge-boards-backups--settle-two-boards-into-one)).
+[adopt, merge-boards, backups](#adopt-merge-boards-backups--settle-two-boards-into-one)),
+or, when one copy already has everything, `fix` (see
+[fix](#fix--fix-where-the-board-lives-when-nothing-would-be-lost)).
 One board ahead of or behind its own copy on the remote is not two boards,
 just unsynced. A checkout of the board branch
 outside `.brainfile/`, and a code branch that still tracks an old copy of
@@ -1415,7 +1447,7 @@ to a board.
 | `template` | `action=` list, or use (`template`, `title`, `description`, `column`). |
 | `lint` | Check the board, the graph included; `fix: true` fixes what it can. Issues come back as data, with `valid` false only for errors. |
 | `sync` | Fetch, merge and push a shared board now; `pull` or `push` for one direction. A plain or unshared board says so in `skipped`. |
-| `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent; every other copy of the board in the repository, and `conflict` when one disagrees (writes are refused until `conflict.resolve` runs). `fetch: true` asks the remote first. |
+| `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent; every other copy of the board in the repository, and `conflict` when one disagrees (writes are refused until `conflict.resolve` runs). `fetch: true` asks the remote first. `fix` has the problems in the desktop's words and `plan`, what `brainfile fix` would do; `action=fix` with `expected` (the plan's `words`) runs it, `action=undo` puts back the last fix within 20 seconds. |
 
 Every tool takes `file` to point at another board, and every one that writes
 is one board commit on a tracked board. The bundled JSON Schemas are

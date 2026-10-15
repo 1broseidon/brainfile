@@ -65,7 +65,7 @@ import {
 } from '@brainfile/core/repo';
 import { integrityView } from './integrity';
 import { workColumn } from '../shared/columns';
-import { applyFix, planFix as planBoardFix, undoFix as undoBoardFix, type UndoRecord } from './fix';
+import { applyFix, lastFix, planFix as planBoardFix, undoFix as undoBoardFix } from '@brainfile/core/repo';
 import type {
   BoardSnapshot,
   DecisionView,
@@ -800,10 +800,6 @@ function settleBoards(projectId: string, choice: SettleChoice): Result<{ message
 
 // ── Fix from the health list (task-34) ──────────────────────────────────────
 
-/** How long after a fix Undo can still put it back; the window offers it for ten seconds. */
-const UNDO_MS = 20_000;
-const undos = new Map<string, { record: UndoRecord; at: number }>();
-
 /** The plan as the window sees it, or null when there is no fix that loses nothing. Never throws. */
 function fixPlanView(board: OpenBoard, survey?: Parameters<typeof planBoardFix>[2]): FixPlan | null {
   try {
@@ -838,9 +834,7 @@ function fixBoard(projectId: string, expected?: string): Result<FixResult> {
   try {
     const board = requireBoard(projectId);
     flushBoardCommits();
-    undos.delete(projectId);
     const applied = applyFix(board.dotDir, { expected, project: projectId });
-    if (applied.undo) undos.set(projectId, { record: applied.undo, at: Date.now() });
     reopen(projectId);
     return ok({ message: applied.message, undo: !!applied.undo });
   } catch (err) {
@@ -850,13 +844,13 @@ function fixBoard(projectId: string, expected?: string): Result<FixResult> {
   }
 }
 
+/** Core keeps the last fix in the board's state/ for 20 seconds, so one from brainfile fix can be undone here too. */
 function undoFix(projectId: string): Result<{ message: string }> {
-  const kept = undos.get(projectId);
-  undos.delete(projectId);
-  if (!kept || Date.now() - kept.at > UNDO_MS) return fail('Too late to undo here; brainfile backups has every copy.');
+  const board = boards.get(projectId);
+  if (!board || !lastFix(board.dotDir)) return fail('Too late to undo here; brainfile backups has every copy.');
   try {
     flushBoardCommits();
-    const message = undoBoardFix(kept.record);
+    const message = undoBoardFix(board.dotDir);
     reopen(projectId);
     return ok({ message });
   } catch (err) {

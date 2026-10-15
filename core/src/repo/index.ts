@@ -14,3 +14,4 @@ export * from './locate';
 export * from './related';
 export * from './boards';
 export * from './consolidate';
+export * from './fix';

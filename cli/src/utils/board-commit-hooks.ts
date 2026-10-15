@@ -19,7 +19,7 @@ interface CommandLike {
 }
 
 /** Long-running or board-unrelated commands that manage their own commits, or none. */
-const SKIP_COMMANDS = new Set(['mcp', 'tui', 'hooks', 'auth', 'sync', 'merge-driver', 'where', 'adopt', 'merge-boards', 'backups']);
+const SKIP_COMMANDS = new Set(['mcp', 'tui', 'hooks', 'auth', 'sync', 'merge-driver', 'where', 'adopt', 'merge-boards', 'backups', 'fix']);
 
 export function topLevelCommandName(command: CommandLike): string {
   let cursor: CommandLike = command;

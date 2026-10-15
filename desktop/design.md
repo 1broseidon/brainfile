@@ -446,7 +446,8 @@ opens.
   dialog. Confirmed, every copy is backed up to `brainfile backups` first,
   and nothing else runs if one fails; then core's own step: the code
   branch's old copy untracked in one commit (as `migrate --to-branch`), the
-  copy that has everything adopted, a lost checkout forgotten. The line then
+  copy that has everything adopted, a lost checkout forgotten (core's
+  `applyFix`, which `brainfile fix` and the MCP `where` tool run too). The line then
   says what was done ("Untracked main's copy.", and "Push main to share
   it." when there is a remote to push to) with
   Undo for ten seconds, and the board republishes without the problem. An
