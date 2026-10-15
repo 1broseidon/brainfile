@@ -78,3 +78,6 @@ What moves, as is:
 - `brainfileMcp()`, which starts `brainfile mcp` with the real node binary and PATH and HOME passed.
 
 The desktop's agents.ts keeps its IPC handlers and calls core. It must behave exactly as before.
+
+## Log
+- 2026-10-15T17:38:18.903Z: [claude] Built on parity/task-75 (abc6df0), merged into parity/integration (decision-18). core/src/dispatch/: agents, settings + dataDir(), models, session (lazy SDK require), brief, custom, registry, startup, effort. Desktop keeps IPC/runs/asks/leads/landing via a SessionContext; the window imports effort/agentServers from core source by relative re-export. Awaiting QA.
