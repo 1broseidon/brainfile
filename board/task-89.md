@@ -36,8 +36,7 @@ subtasks:
     title: An invalid branch name is refused by patch
     completed: false
 createdAt: "2026-10-15T18:20:00.202Z"
-landsOn: qa/nowhere
-updatedAt: "2026-10-15T18:57:31.054Z"
+updatedAt: "2026-10-15T18:57:31.883Z"
 ---
 
 ## Description
