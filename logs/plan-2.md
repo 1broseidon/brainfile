@@ -2,8 +2,6 @@
 id: plan-2
 title: "Desktop headless parity: what runs only in the desktop, where its state lives, and how the desktop sees headless runs"
 type: plan
-column: backlog
-position: 21
 description: |-
   Written by task-73, from main at a3106a3. Read only; nothing was changed in the code.
 
@@ -110,7 +108,8 @@ decisions:
   - decision-15
   - decision-17
 createdAt: "2026-10-14T22:17:37.522Z"
-updatedAt: "2026-10-15T15:49:31.585Z"
+updatedAt: "2026-10-15T21:48:30.802Z"
+completedAt: "2026-10-15T21:48:30.802Z"
 ---
 
 ## Description
