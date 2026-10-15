@@ -1,7 +1,7 @@
 ---
 id: task-86
 title: "Mobile: Merge from the phone — Ready to merge on the board, Merge and Send back on the task, Waiting on you in Projects"
-column: in-progress
+column: review
 position: 4
 priority: high
 tags:
@@ -11,7 +11,7 @@ tags:
 assignee: claude
 parentId: epic-7
 createdAt: "2026-10-15T01:34:59.268Z"
-updatedAt: "2026-10-15T01:35:09.188Z"
+updatedAt: "2026-10-15T01:50:12.933Z"
 ---
 
 ## Description
