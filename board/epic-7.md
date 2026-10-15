@@ -19,3 +19,6 @@ Since epic-3 closed (2026-10-14 03:00) the desktop gained Ready to merge (task-6
 Contract first: brainfile-mobile docs/link.md gains the `merge` feature (readyToMerge, mergeReview, discardReview), offered in the hello so an older desk degrades. Send back needs nothing new: noteTask, patchTask and dispatch are on the link already.
 
 Children run in parallel, three at most: the desk's side (task A), Merge and Waiting on you on the phone (task B), sessions on the phone (task C). Not in scope: a hand-off's run view (waits on task-46 phase C), chat history sync (task-59), leads.
+
+## Log
+- 2026-10-15T01:55:50.902Z: [claude] Phone side merged on brainfile-mobile main (task-86 c8f6acd, task-87 728e750, merge f1a3004, polish after simulator QA against link:dev). task-85 waits in Review on dispatch/task-85 (509a1ae): merging it lets the real desktop offer merge to the phone.
