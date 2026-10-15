@@ -42,7 +42,13 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:11.927Z"
 assignee: claude
-updatedAt: "2026-10-15T19:04:24.749Z"
+updatedAt: "2026-10-15T19:04:26.225Z"
+dispatch:
+  agent: claude
+  model: opus
+  effort: high
+  by: person
+  at: "2026-10-15T19:04:25.963Z"
 ---
 
 ## Description
