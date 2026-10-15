@@ -1,8 +1,8 @@
 ---
 id: task-78
 title: "Board fixes from the CLI and MCP: the desktop's Fix and Undo move to core"
-column: backlog
-position: 14
+column: in-progress
+position: 7
 description: |-
   The CLI already has `where`, `adopt`, `merge-boards` and `backups`, so settling two boards is shared. The health list's Fix is not: desktop/src/host/fix.ts plans and applies untrack, adopt and prune only when nothing would be lost, backs up every copy first and allows Undo for 20 seconds.
 
@@ -47,6 +47,7 @@ contract:
       - npm run build && npm test
       - cd desktop && npm run typecheck && npm test
 createdAt: "2026-10-14T22:15:30.571Z"
+updatedAt: "2026-10-15T17:11:59.876Z"
 ---
 
 ## Description

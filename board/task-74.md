@@ -1,8 +1,8 @@
 ---
 id: task-74
 title: "Board record: a dispatch request and a runner's claim on the task, and run files under state/"
-column: backlog
-position: 10
+column: in-progress
+position: 3
 description: |-
   This builds spec-16-1 in core, and changes where the heartbeat lives.
 
@@ -57,6 +57,7 @@ contract:
     - Nothing that changes every few seconds goes in a committed file
     - core's browser entry (core/src/browser.ts) does not import run files or anything that uses fs or child_process
 createdAt: "2026-10-14T22:14:43.444Z"
+updatedAt: "2026-10-15T17:11:59.869Z"
 ---
 
 ## Description
