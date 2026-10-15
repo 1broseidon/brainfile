@@ -98,6 +98,20 @@ export function trunkOf(repoRoot: string): { name: string; ref: string } | null 
   return null;
 }
 
+/**
+ * Where to fork from: the local trunk, unless it is only behind origin's (work
+ * merged on the forge that was never pulled), when origin's is. A local trunk
+ * with commits of its own is the person's, and is kept. Landing then moves the
+ * local trunk on past origin's commits, as the branch holds them.
+ */
+export function freshest(repoRoot: string, trunk: { name: string; ref: string }): string {
+  const remote = `origin/${trunk.name}`;
+  if (trunk.ref === remote || !git(['rev-parse', '--verify', '--quiet', `refs/remotes/${remote}`], repoRoot).ok) return trunk.ref;
+  const behind = git(['merge-base', '--is-ancestor', trunk.ref, remote], repoRoot).ok;
+  const same = git(['rev-parse', trunk.ref], repoRoot).stdout === git(['rev-parse', remote], repoRoot).stdout;
+  return behind && !same ? remote : trunk.ref;
+}
+
 function recorded(repoRoot: string, branch: string, key: string): string | null {
   const r = git(['config', '--get', `branch.${branch}.${key}`], repoRoot);
   return r.ok && r.stdout ? r.stdout : null;
@@ -131,6 +145,22 @@ function existing(repoRoot: string, taskId: string): string | null {
   const ref = `refs/heads/${branchFor(taskId)}`;
   const hit = listWorktrees(repoRoot).find((w) => w.branch === ref);
   return hit && fs.existsSync(hit.path) ? hit.path : null;
+}
+
+/**
+ * Whether the task's hand-off has work on its branch that has not landed
+ * where it goes. A worker may complete its task before then, so a completed
+ * task is not yet something to build on.
+ */
+export function unlanded(projectId: string, taskId: string): boolean {
+  const repoRoot = gitToplevel(projectId);
+  if (!repoRoot || !existing(repoRoot, taskId)) return false;
+  const branch = branchFor(taskId);
+  const into = intoOf(repoRoot, branch);
+  const fork = into ? forkOf(repoRoot, branch, into) : null;
+  if (!into || !fork) return false;
+  const ahead = git(['rev-list', '--count', `${fork}..${branch}`], repoRoot);
+  return ahead.ok && Number(ahead.stdout) > 0 && !landedIn(repoRoot, branch, into);
 }
 
 /** A hand-off's read-only checkout, when there is one on disk: detached, in the task's folder. */
@@ -178,7 +208,7 @@ export function prepareWorktree(projectId: string, taskId: string, root = worktr
     if (reader) return { path: reader, branch: null, base: trunk?.name ?? null, resumed: false };
     const at = worktreePath(repoRoot, taskId, root);
     fs.mkdirSync(path.dirname(at), { recursive: true });
-    const r = git(['worktree', 'add', '--detach', at, trunk?.ref ?? 'HEAD'], repoRoot);
+    const r = git(['worktree', 'add', '--detach', at, trunk ? freshest(repoRoot, trunk) : 'HEAD'], repoRoot);
     if (!r.ok) throw new Error(`Could not make a checkout for ${taskId}: ${r.stderr || r.stdout}`);
     return { path: at, branch: null, base: trunk?.name ?? null, resumed: false };
   }
@@ -196,7 +226,7 @@ export function prepareWorktree(projectId: string, taskId: string, root = worktr
       if (!r.ok) throw new Error(`Could not check out ${branch}: ${r.stderr || r.stdout}`);
     } else {
       // A repository with no trunk to name forks from the checkout, as before decision-11.
-      const fork = git(['rev-parse', trunk?.ref ?? 'HEAD'], repoRoot).stdout;
+      const fork = git(['rev-parse', trunk ? freshest(repoRoot, trunk) : 'HEAD'], repoRoot).stdout;
       const base = trunk?.name ?? currentBranch(repoRoot) ?? fork;
       const r = git(['worktree', 'add', '-b', branch, at, fork], repoRoot);
       if (!r.ok) throw new Error(`Could not make a worktree for ${taskId}: ${r.stderr || r.stdout}`);

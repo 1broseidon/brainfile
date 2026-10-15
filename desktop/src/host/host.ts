@@ -636,6 +636,8 @@ function settleLanded(projectId: string, taskId: string): Result<{ completed: bo
     (board) => {
       const file = taskPath(board, taskId);
       const doc = readTaskFile(file);
+      // Its worker completed it before it landed: nothing is left to settle.
+      if (!doc && findV2Task(getV2Dirs(board.brainfilePath), taskId, true)?.isLog) return { completed: true, left: 0 };
       if (!doc) throw new Error(`Could not read ${taskId}`);
       const config = readBoardConfig(board.brainfilePath)?.config;
       const subtasks = doc.task.subtasks ?? [];

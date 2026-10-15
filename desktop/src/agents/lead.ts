@@ -29,6 +29,8 @@ export interface TreeDoc {
   parentId?: string;
   /** Completed: in logs/. */
   done: boolean;
+  /** Completed, but its hand-off's branch has not landed: what depends on it still waits. */
+  unlanded?: boolean;
   /** Its column's title, when open. */
   column?: string;
   /** In the board's review column. */
@@ -73,12 +75,18 @@ export function workOf(tree: Tree): TreeDoc[] {
   return tree.children.filter((c) => !c.done && !parents.has(c.id));
 }
 
-/** A dependency on this board still open; one on a related board (`alias:task-1`) is not the lead's to wait on. */
+/**
+ * A dependency on this board still open, or complete with its branch not
+ * landed yet; one on a related board (`alias:task-1`) is not the lead's to wait on.
+ */
 function openDeps(doc: TreeDoc, all: Map<string, TreeDoc>): string[] {
-  return doc.dependsOn.filter((ref) => !ref.includes(':') && all.has(ref) && !all.get(ref)!.done);
+  return doc.dependsOn.filter((ref) => {
+    const dep = all.get(ref);
+    return !ref.includes(':') && !!dep && (!dep.done || !!dep.unlanded);
+  });
 }
 
-/** Children whose dependencies are all done: the ones that can be handed off now. */
+/** Children whose dependencies are all done and landed: the ones that can be handed off now. */
 export function readyOf(tree: Tree): TreeDoc[] {
   return workOf(tree).filter((c) => openDeps(c, tree.all).length === 0);
 }
@@ -262,12 +270,12 @@ export function leadPreamble(lead: Lead, tree: Tree, limit: number, continuing =
     `You lead ${epic.id} ("${epic.title}") on this repository's Brainfile board: you orchestrate its children, and you write no code. ` +
     'Use the brainfile MCP tools for the board (never edit its files by hand), and the desk to have work done: `dispatch` hands a child to a coding agent in its own worktree (agent and model are optional: by default, you and your model), `runs` says what is running, `stop` stops one. ' +
     'You may read the code and run git commands that only read; edits and other commands are refused.\n\n' +
-    `The app holds these rules, and refuses what breaks them: a child is handed off only once its dependsOn are done; at most ${limit} hand-offs at once in this repository; a child is retried at most its contract's maxRetries; you hand off only children under ${epic.id} that have none of their own. ${until} ` +
+    `The app holds these rules, and refuses what breaks them: a child is handed off only once its dependsOn are done and their branches landed; at most ${limit} hand-offs at once in this repository; a child is retried at most its contract's maxRetries; you hand off only children under ${epic.id} that have none of their own. ${until} ` +
     'You are woken with a new turn when a child ends, lands or is sent back, or when the person resumes you: never wait, sleep or poll.\n\n' +
     (continuing
       ? `You are carrying on with ${epic.id}: the plan is in the notes on ${epic.id}. Read them and the board, then carry on from where it stands.\n\n`
-      : `First, check the plan before handing anything off. Read each child, the files it names and the code it will change. Where two children would change the same code, or one needs what another builds, make the later one wait: add to its dependsOn with task_patch. Split a child that is too large into children under it. Fix a contract whose validation would not prove the work done. The app's own reading of the plan is below. Then write the plan as a note on ${epic.id}: the order and why, so another lead can pick it up. Then hand off what is ready, up to the limit, choosing the agent and model for each.\n\n`) +
-    `On later turns: read what happened, look at the board, and act. Hand off what became ready; re-dispatch a child that failed, after a note on it saying what to do differently; and when the plan is wrong, say why in a note on ${epic.id} and hand off nothing more. Never merge, complete or move children yourself. Reply in a sentence or two: what you did, and what you are waiting for.\n\n`
+      : `First, check the plan before handing anything off. Read each child, the files it names and the code it will change. Where two children would change the same code, or one needs what another builds, make the later one wait: add to its dependsOn with task_patch. Split a child that is too large into children under it. Fix a contract whose validation would not prove the work done. Make sure the epic ends with its pieces working together: when each child builds a part, one child must wire them and test the whole against the epic's description of done; add that child, last, if none does. The app's own reading of the plan is below. Then write the plan as a note on ${epic.id}: the order and why, so another lead can pick it up. Then hand off what is ready, up to the limit, choosing the agent and model for each.\n\n`) +
+    `On later turns: read what happened, look at the board, and act. Hand off what became ready; re-dispatch a child that failed, after a note on it saying what to do differently; when a child's notes leave something for a later task, put it in that task's description with task_patch, or add a child for it; and when the plan is wrong, say why in a note on ${epic.id} and hand off nothing more. Never merge, complete or move children yourself. Reply in a sentence or two: what you did, and what you are waiting for.\n\n`
   );
 }
 
@@ -287,8 +295,10 @@ export function treeText(lead: Lead, tree: Tree, deps: Pick<LeadDeps, 'live' | '
   const byId = (a: TreeDoc, b: TreeDoc) => a.id.localeCompare(b.id, undefined, { numeric: true });
   const lines = [...tree.children].sort(byId).map((c) => {
     const parts = [`- ${c.id} "${c.title}"`];
-    if (c.done) parts.push('done');
-    else {
+    if (c.done) {
+      parts.push(c.unlanded ? 'complete, its branch not landed: what waits on it still waits' : 'done');
+      if (c.unlanded && deps.mergeable(lead.projectId, c.id)) parts.push(lead.until === 'done' ? 'ready to land' : 'ready to merge (the person merges it)');
+    } else {
       parts.push(c.column ?? 'open');
       if (parents.has(c.id)) parts.push('has children');
       const run = live.find((r) => r.taskId === c.id);
@@ -549,7 +559,7 @@ export class Leads {
       const fresh = tree.children.filter((c) => c.done && !lead.doneSeen.has(c.id));
       for (const c of fresh) {
         lead.doneSeen.add(c.id);
-        lead.queue.push(`${c.id} is done.`);
+        lead.queue.push(c.unlanded ? `${c.id} is complete, but its branch has not landed: what waits on it still waits.` : `${c.id} is done.`);
       }
       if (fresh.length) this.gather(lead);
     }

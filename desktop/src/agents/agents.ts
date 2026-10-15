@@ -27,7 +27,7 @@ import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, readTasksDir, summarizeDecision, type Task } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
-import { collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, runChecks, uncommittedIn, type Landing, type Worktree } from './worktree';
+import { collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, runChecks, uncommittedIn, unlanded, type Landing, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { customLaunch } from './custom';
 import { AgentRegistry } from './registry';
@@ -994,14 +994,15 @@ function standingDecisions(brainfilePath: string): string {
 /**
  * Where finished work goes. A board with a review column wants a person to
  * look before it is done, so the agent moves the task there and leaves
- * completing it to them; a board without one lets the agent complete it.
+ * completing it to them; a board without one lets the agent complete it,
+ * unless its work is on a branch, which completes the task when it lands.
  */
-function finish(brainfilePath: string, taskId: string): string {
+function finish(brainfilePath: string, taskId: string, lands: boolean): string {
   const columns = readBoardConfig(brainfilePath)?.config?.columns ?? [];
   const review = columns.find((c) => /review/i.test(c.id) || /review/i.test(c.title ?? ''));
-  return review
-    ? `Then move ${taskId} to ${review.title ?? review.id} (column id \`${review.id}\`) for review. Do not complete it: a person completes it after looking at the work.`
-    : `Then complete ${taskId}.`;
+  if (review) return `Then move ${taskId} to ${review.title ?? review.id} (column id \`${review.id}\`) for review. Do not complete it: a person completes it after looking at the work.`;
+  // Complete would say it is there to build on before its branch has landed.
+  return lands ? `Do not complete ${taskId}: it is completed when its branch lands on the trunk.` : `Then complete ${taskId}.`;
 }
 
 /**
@@ -1030,6 +1031,25 @@ function workplace(worktree: Worktree | null): string {
   );
 }
 
+/**
+ * What the tasks this one depends on said when they finished: their last
+ * notes, where a worker leaves what it did not wire up for the task after it.
+ */
+function leftFor(dirs: ReturnType<typeof getV2Dirs>, dependsOn: unknown): string {
+  const refs = Array.isArray(dependsOn) ? dependsOn.filter((r): r is string => typeof r === 'string' && !r.includes(':')) : [];
+  const said = refs.flatMap((ref) => {
+    const doc = findV2Task(dirs, ref, true)?.doc;
+    const log = doc?.body.split(/^## Log\s*$/m)[1]?.split(/^## /m)[0] ?? '';
+    const notes = log.split('\n').filter((l) => /^- \S+: /.test(l)).slice(-3).map((l) => {
+      const text = l.replace(/^- \S+: (\[[^\]]*\] )?/, '').trim();
+      return text.length > 1500 ? `${text.slice(0, 1500)}…` : text;
+    });
+    return notes.length ? [`${ref} ("${doc!.task.title}"):\n${notes.map((n) => `- ${n}`).join('\n')}`] : [];
+  });
+  if (!said.length) return '';
+  return `\n\nIt builds on work already landed. What those tasks said when they finished, including anything they left for the task after them:\n${said.join('\n')}\nWire your part into theirs where this task needs it. Whatever you leave unwired, say in your note on the task, so the task after you knows.`;
+}
+
 function brief(projectId: string, taskId: string, worktree: Worktree | null = null): string {
   const located = locateBoard(projectId, { materialize: false });
   if (!located.found) throw new Error(`No board in ${projectId}`);
@@ -1047,10 +1067,11 @@ function brief(projectId: string, taskId: string, worktree: Worktree | null = nu
     `You have been handed ${task.id} on this repository's Brainfile board: "${task.title}".`,
     body.trim() ? `\n${body.trim()}` : '',
     contract,
+    leftFor(getV2Dirs(located.brainfilePath), task.dependsOn),
     led,
     standingDecisions(located.brainfilePath),
     workplace(worktree),
-    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did${worktree?.branch ? ' and that it is on its branch' : ''}. ${finish(located.brainfilePath, task.id)} Do the work in ${worktree ? 'this worktree' : 'this repository'}. Finish with a reply of one or two sentences.`,
+    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did${worktree?.branch ? ' and that it is on its branch' : ''}. ${finish(located.brainfilePath, task.id, !!worktree?.branch)} Do the work in ${worktree ? 'this worktree' : 'this repository'}. Finish with a reply of one or two sentences.`,
   ].join('');
 }
 
@@ -1104,9 +1125,10 @@ function startDispatch(
   try {
     const located = locateBoard(projectId, { materialize: false });
     const task = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId)?.doc.task : undefined;
-    // Work waits on what it depends on (decision-15): a dependency still open on this board is not landed yet.
-    const waits = located.found ? (task?.dependsOn ?? []).filter((ref) => !ref.includes(':') && !!findV2Task(getV2Dirs(located.brainfilePath), ref)) : [];
-    if (waits.length) return { ok: false, error: `${taskId} waits on ${waits.join(', ')}: hand it off once ${waits.length === 1 ? 'that is' : 'they are'} done` };
+    // Work waits on what it depends on (decision-15): a dependency still open on this board, or complete with its branch not landed yet.
+    const dirs = located.found ? getV2Dirs(located.brainfilePath) : null;
+    const waits = dirs ? (task?.dependsOn ?? []).filter((ref) => !ref.includes(':') && (!!findV2Task(dirs, ref) || unlanded(projectId, ref))) : [];
+    if (waits.length) return { ok: false, error: `${taskId} waits on ${waits.join(', ')}: hand it off once ${waits.length === 1 ? 'it has' : 'they have'} landed` };
     const contract = task?.contract;
     worktree = prepareWorktree(projectId, taskId, undefined, onlyReads(contract));
     prompt = brief(projectId, taskId, worktree);
@@ -1192,7 +1214,10 @@ function readTree(projectId: string, epicId: string): Tree | null {
     ...readTasksDir(dirs.boardDir).map((d) => treeDoc(d.task, false, columns)),
     ...readTasksDir(dirs.logsDir).map((d) => treeDoc(d.task, true, columns)),
   ];
-  return treeOf(docs, epicId);
+  // Only the epic's own children are asked of git: a completed one whose branch is still to land.
+  const tree = treeOf(docs, epicId);
+  for (const c of tree?.children ?? []) if (c.done && unlanded(projectId, c.id)) c.unlanded = true;
+  return tree;
 }
 
 /** A task with open children of its own is led, not worked. */

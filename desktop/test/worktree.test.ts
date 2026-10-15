@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { locateBoard } from '@brainfile/core/repo';
-import { canBranch, collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, runChecks, whyNotMerge, releaseReader, reviewOf, trunkOf, uncommittedIn } from '../src/agents/worktree.ts';
+import { canBranch, collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, runChecks, whyNotMerge, releaseReader, reviewOf, trunkOf, uncommittedIn, unlanded } from '../src/agents/worktree.ts';
 
 function git(args: string[], cwd: string): string {
   const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -244,6 +244,16 @@ test('it lands on the trunk without the checkout: the person\'s branch and folde
   assert.ok(!branches().includes('dispatch/task-1'));
 });
 
+test('work on a branch is unlanded until it is on the trunk; no worktree, or nothing committed, is not', async () => {
+  assert.equal(unlanded(repo, 'task-1'), false);
+  const wt = prepareWorktree(repo, 'task-1', root)!;
+  assert.equal(unlanded(repo, 'task-1'), false);
+  work(wt.path, 'a.txt', 'a\n');
+  assert.equal(unlanded(repo, 'task-1'), true);
+  git(['merge', '--no-ff', '--quiet', '-m', 'Merged by hand', 'dispatch/task-1'], repo);
+  assert.equal(unlanded(repo, 'task-1'), false);
+});
+
 test('a branch made before decision-11 keeps going into the branch it was started from', async () => {
   onFeature();
   const wt = prepareWorktree(repo, 'task-1', root)!;
@@ -386,6 +396,32 @@ test('merged on the forge is merged: a squash on the trunk, or a pull request in
   assert.equal(reviewOf(repo, 'task-1')?.merged, true);
   assert.equal(reviewOf(repo, 'task-2')?.merged, true);
   assert.deepEqual(readyToMerge(repo).map((r) => r.taskId), ['task-3']);
+});
+
+test('a local trunk only behind origin\'s is forked past, and landing brings it up to date; one with its own commits is kept', async () => {
+  const origin = path.join(base, 'origin.git');
+  git(['clone', '-q', '--bare', repo, origin], base);
+  git(['remote', 'add', 'origin', origin], repo);
+  // A pull request merged on the forge, never pulled here.
+  const elsewhere = path.join(base, 'elsewhere');
+  git(['clone', '-q', origin, elsewhere], base);
+  identity(elsewhere);
+  work(elsewhere, 'merged.txt', 'merged\n');
+  git(['push', '-q', 'origin', 'HEAD:main'], elsewhere);
+  git(['fetch', '-q', 'origin'], repo);
+
+  const wt = handOff('task-1');
+  assert.ok(fs.existsSync(path.join(wt, 'merged.txt')));
+  work(wt, 'a.txt', 'a\n');
+  assert.match(await landed('task-1'), /into main/);
+  assert.equal(git(['show', 'main:merged.txt'], repo), 'merged');
+  assert.equal(git(['show', 'main:a.txt'], repo), 'a');
+
+  // The local trunk now has a commit origin lacks: it is the person's, and forked from.
+  git(['checkout', '-q', 'main'], repo);
+  work(repo, 'mine.txt', 'mine\n');
+  const kept = handOff('task-2');
+  assert.ok(fs.existsSync(path.join(kept, 'mine.txt')));
 });
 
 test('ready to merge whatever the checkout is on, and a read-only checkout is never ready', () => {

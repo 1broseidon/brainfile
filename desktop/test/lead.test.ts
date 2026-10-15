@@ -79,6 +79,19 @@ test('ready: open work whose dependencies are done; a container is not work', ()
   assert.deepEqual(readyOf(tree).map((c) => c.id), ['task-2', 'task-5']);
 });
 
+test('ready: a dependency complete on the board but not landed is still waited on', () => {
+  const tree = treeOf(
+    [
+      doc('epic-1'),
+      doc('task-1', { parentId: 'epic-1', done: true, unlanded: true }),
+      doc('task-2', { parentId: 'epic-1', dependsOn: ['task-1'] }),
+      doc('task-3', { parentId: 'epic-1' }),
+    ],
+    'epic-1'
+  )!;
+  assert.deepEqual(readyOf(tree).map((c) => c.id), ['task-3']);
+});
+
 // ── The lead, against fakes ──────────────────────────────────────────────────
 
 function fake(docs: TreeDoc[], options: { policy?: PermissionPolicy; limit?: number } = {}) {
