@@ -41,6 +41,8 @@ subtasks:
     title: "After Merge: the line is on qa/parity and not on main; worktree and branch gone; task done"
     completed: false
 createdAt: "2026-10-15T18:20:11.927Z"
+assignee: claude
+updatedAt: "2026-10-15T19:04:24.749Z"
 ---
 
 ## Description
