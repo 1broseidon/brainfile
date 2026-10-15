@@ -42,18 +42,18 @@ subtasks:
     completed: true
   - id: task-97-5
     title: A moved target is brought into the epic's branch before the next hand-off
-    completed: false
+    completed: true
   - id: task-97-6
     title: After the last child the epic alone is in Ready to merge
     completed: true
   - id: task-97-7
     title: The Merge menu has four choices; Merge into qa/parity lands both lines and lets the branch go
-    completed: false
+    completed: true
   - id: task-97-8
     title: "Optional: Keep as a branch keeps the branch and completes the epic"
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:21:50.129Z"
-updatedAt: "2026-10-15T20:57:38.745Z"
+updatedAt: "2026-10-15T20:58:33.612Z"
 ---
 
 ## Description
