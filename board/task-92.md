@@ -44,13 +44,20 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:40.775Z"
 assignee: claude
-updatedAt: "2026-10-15T19:29:18.535Z"
+updatedAt: "2026-10-15T19:45:43.027Z"
 dispatch:
   agent: claude
   model: opus
   effort: high
   by: person
   at: "2026-10-15T19:28:54.188Z"
+pullRequest:
+  number: 6
+  url: https://github.com/1broseidon/brainfile/pull/6
+  state: open
+  base: qa/parity
+  head: dispatch/task-92
+  at: "2026-10-15T19:45:42.902Z"
 ---
 
 ## Description
@@ -66,3 +73,4 @@ dispatch:
 
 ## Log
 - 2026-10-15T19:29:18.233Z: [claude] Appended "- QA hand-off 3 (task-92): landed through a pull request, 2026-10-15T19:29:09Z" to qa/parity-wave-1.md, committed on dispatch/task-92 (909947e); nothing else changed, subtasks left for QA. Note: qa/ is matched by a .gitignore rule, but the file is already tracked so the change commits normally. Nothing left unwired.
+- 2026-10-15T19:45:43.027Z: Opened pull request #6 from dispatch/task-92 into qa/parity: https://github.com/1broseidon/brainfile/pull/6
