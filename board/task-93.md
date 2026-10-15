@@ -32,6 +32,8 @@ subtasks:
     title: Discard lets the worktree and branch go, lands nothing, and leaves the task open
     completed: false
 createdAt: "2026-10-15T18:20:41.058Z"
+assignee: claude
+updatedAt: "2026-10-15T20:21:14.542Z"
 ---
 
 ## Description
