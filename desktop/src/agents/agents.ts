@@ -228,6 +228,8 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
       : undefined;
   const session = await openSession(ctx, projectId, agentId, key, model, {
     ...rest,
+    // What its board server lists (task-81): a discussion never hands off, a lead reaches only its tree.
+    ...(discuss ? { role: 'discuss' as const } : lead ? { role: 'lead' as const, leadScope: lead } : deskToken ? { role: 'chat' as const } : {}),
     rule,
     // A discussion and the board's chat (the sessions with the desk) never run in bypass, and only read when they can.
     keepsMode: discuss || deskToken ? discussMode : undefined,
@@ -504,7 +506,7 @@ function deskMcp(token: string, projectId: string): acp.McpServer {
 const ASK_PREAMBLE =
   'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
   'If those tools are not available, use the `brainfile` command line in this directory instead (`brainfile list`, `brainfile add`, `brainfile move`, `brainfile --help`); do not edit the board’s files by hand. ' +
-  'To have work done, hand it to a coding agent with the desk tools: `dispatch` starts an agent on a task in its own worktree, as Hand to… does (agent and model are optional; by default, you and your model), `runs` says what is running, `stop` stops one. ' +
+  'To have work done, hand it to a coding agent with the desk tools: the desk\u2019s `dispatch` starts an agent on a task in its own worktree, as Hand to… does (agent and model are optional; by default, you and your model), `runs` says what is running, `stop` stops one. The brainfile tools\u2019 own `dispatch` only queues a task for a runner; use the desk\u2019s. ' +
   'You manage the board; you never change code or run commands, other than the `brainfile` command line and git commands that only read: edits and other commands are refused. Read the code freely to write good tasks. ' +
   'Asked for code work, write the task, or update the one in context: what to do, the files it touches, and a contract whose validation commands prove it is done. Hand it off with dispatch when the person asked for it done; otherwise say it is ready to hand off. ' +
   'Asked to plan an epic, add the epic, then its children under it (parentId), each with dependsOn naming the children that must land first and a draft contract with deliverables and validation commands; add them in that order, so each dependency exists when it is named. Leave priority unset unless the person said how urgent it is. ' +

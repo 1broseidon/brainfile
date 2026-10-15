@@ -303,8 +303,8 @@ export function discussPreamble(ctx: DiscussContext): string {
 /** Brainfile's board tools as an agent names them: `mcp__brainfile__task_patch`, `brainfile_get_task`, `mcp.brainfile.note`. */
 const BOARD_TOOL_NAME = /^(?:mcp(?:__|\.))?brainfile(?:__|[_.])(\w+)/i;
 
-/** The board tools a discussion may use: reading anything; changing this task's description, subtasks and contract, and its log; and recording, replacing or retiring decisions. */
-const DISCUSS_TOOLS = new Set(['brief', 'get_task', 'list_tasks', 'search', 'check', 'log', 'where', 'types', 'columns', 'template', 'lint', 'task_patch', 'subtask', 'contract', 'note', 'decide', 'supersede', 'retire']);
+/** The board tools a discussion may use: reading anything (its server offers review's show and ready only); changing this task's description, subtasks and contract, and its log; and recording, replacing or retiring decisions. */
+const DISCUSS_TOOLS = new Set(['brief', 'get_task', 'list_tasks', 'search', 'check', 'log', 'where', 'types', 'columns', 'template', 'lint', 'task_patch', 'subtask', 'contract', 'note', 'decide', 'supersede', 'retire', 'dispatch_status', 'review', 'agents']);
 
 /** What the agent does to the code, or to how it runs: never in a discussion. */
 const REFUSED_KINDS = new Set(['edit', 'delete', 'move', 'execute', 'switch_mode']);
