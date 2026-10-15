@@ -1,8 +1,6 @@
 ---
 id: task-82
 title: "brainfile run: a foreground runner that works the queue in a terminal, and live runs on the TUI's rows"
-column: in-progress
-position: 18
 tags:
   - cli
   - tui
@@ -44,7 +42,7 @@ contract:
     pickedUpAt: "2026-10-15T22:56:25.823Z"
     reworkCount: 0
 createdAt: "2026-10-14T22:16:23.437Z"
-updatedAt: "2026-10-15T22:56:25.823Z"
+updatedAt: "2026-10-15T23:11:51.794Z"
 dispatch:
   agent: claude
   model: opus
@@ -52,6 +50,7 @@ dispatch:
   by: lead
   at: "2026-10-15T22:56:16.161Z"
 assignee: claude
+completedAt: "2026-10-15T23:11:51.794Z"
 ---
 
 ## Description
