@@ -1,8 +1,6 @@
 ---
 id: task-105
 title: "Test: a hand-off that asks for approval before it runs a shell command"
-column: review
-position: 8
 description: A test of the approval prompt in the dock. Change no code. In the worktree, run `git status` and `node --version` through the shell, which should ask the person for approval first, then leave a note on this task with both outputs and move it to review.
 tags:
   - test
@@ -34,7 +32,8 @@ dispatch:
   by: chat
   at: "2026-10-15T21:03:56.172Z"
 assignee: claude
-updatedAt: "2026-10-15T21:04:13.521Z"
+updatedAt: "2026-10-15T21:25:54.937Z"
+completedAt: "2026-10-15T21:25:54.937Z"
 ---
 
 ## Description
