@@ -17,6 +17,7 @@ import { replaceDescription } from './workspace';
 import { isTypeCompletable, validateColumn } from './boardValidation';
 import { resolveDocType, typesMatch, type ResolvedDocType } from './docTypes';
 import { idList } from './docGraph';
+import { isBranchName } from './landsOn';
 import { buildContract } from './contractSpec';
 import { generateNextSubtaskId } from './idGen';
 import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, serializeTaskContent } from './taskFile';
@@ -101,6 +102,10 @@ export interface TaskFilePatch {
   /** Decisions the work rests on; replaces the list like dependsOn. */
   decisions?: string[] | null;
   status?: string | null;
+  /** The branch its hand-off forks from and lands on (decision-16); null inherits again. */
+  landsOn?: string | null;
+  /** An epic with a branch of its own (decision-16); false or null turns it off. */
+  epicBranch?: boolean | null;
 }
 
 /**
@@ -650,6 +655,9 @@ export function patchTaskFile(taskPath: string, patch: TaskFilePatch): TaskOpera
   if (!doc) {
     return { success: false, error: `Failed to read task file: ${taskPath}` };
   }
+  if (typeof patch.landsOn === 'string' && patch.landsOn.trim() && !isBranchName(patch.landsOn.trim())) {
+    return { success: false, error: `landsOn: ${patch.landsOn} is not a branch name git would take` };
+  }
 
   const task: Task = { ...doc.task };
 
@@ -688,6 +696,9 @@ export function patchTaskFile(taskPath: string, patch: TaskFilePatch): TaskOpera
     applyField('decisions', decisions.length > 0 ? decisions : null);
   }
   applyField('status', patch.status);
+  if (patch.landsOn !== undefined) applyField('landsOn', patch.landsOn === null ? null : patch.landsOn.trim() || null);
+  // Off is the default: false is written as nothing.
+  if (patch.epicBranch !== undefined) applyField('epicBranch', patch.epicBranch === true ? true : null);
 
   task.updatedAt = new Date().toISOString();
 

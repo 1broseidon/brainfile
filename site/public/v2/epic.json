@@ -25,6 +25,10 @@
             ["task-1", "task-2", "task-5"]
           ]
         },
+        "epicBranch": {
+          "type": "boolean",
+          "description": "A branch of its own (decision-16): its lead makes dispatch/<epic-id> from the epic's target, and every child forks from and lands on it. The epic is then merged as one. Off by default."
+        },
         "status": {
           "type": "string",
           "description": "Current status of the epic.",

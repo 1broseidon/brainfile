@@ -417,6 +417,9 @@ export {
   checkDocumentLinks,
   lintDocGraph,
 } from './docGraph';
+
+// Where a hand-off lands: a target branch per task, inherited up the tree (decision-16)
+export { type LandsOn, epicBranchOf, targetOf, landsOnOf, isBranchName } from './landsOn';
 export {
   type BoardGraph,
   readBoardGraph,

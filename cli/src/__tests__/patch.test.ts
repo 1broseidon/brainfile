@@ -65,6 +65,19 @@ describe('patch command', () => {
     expect(() => patchCommand({ file: ws.brainfilePath, task: 'task-1', dependsOn: 'task-2', clearDependsOn: true }, logger)).toThrow(CLIError);
   });
 
+  it('sets and clears landsOn and epicBranch, and refuses a branch name git would not take', () => {
+    const result = patchCommand({ file: ws.brainfilePath, task: 'epic-1', landsOn: 'release/0.38.0', epicBranch: true }, logger);
+    expect(result.changes).toEqual(['landsOn → release/0.38.0', 'epicBranch → on (dispatch/epic-1)']);
+    expect(readV2Task(ws, 'epic-1')!.task).toMatchObject({ landsOn: 'release/0.38.0', epicBranch: true });
+
+    patchCommand({ file: ws.brainfilePath, task: 'epic-1', clearLandsOn: true, clearEpicBranch: true }, logger);
+    expect(readV2Task(ws, 'epic-1')!.task.landsOn).toBeUndefined();
+    expect(readV2Task(ws, 'epic-1')!.task.epicBranch).toBeUndefined();
+
+    expect(() => patchCommand({ file: ws.brainfilePath, task: 'epic-1', landsOn: 'two words' }, logger)).toThrow(/not a branch name/);
+    expect(() => patchCommand({ file: ws.brainfilePath, task: 'epic-1', landsOn: 'main', clearLandsOn: true }, logger)).toThrow(CLIError);
+  });
+
   it('requires a task and at least one field', () => {
     expect(() => patchCommand({ file: ws.brainfilePath }, logger)).toThrow(/--task/);
     expect(() => patchCommand({ file: ws.brainfilePath, task: 'task-1' }, logger)).toThrow(/At least one field/);
@@ -97,6 +110,20 @@ describe('MCP task_patch parentId and dependsOn', () => {
     await server.handler('task_patch')({ task: 'task-1', parentId: null, dependsOn: null });
     expect(readV2Task(ws, 'task-1')!.task.parentId).toBeUndefined();
     expect(readV2Task(ws, 'task-1')!.task.dependsOn).toBeUndefined();
+  });
+
+  it('sets and clears landsOn and epicBranch', async () => {
+    const set = await server.handler('task_patch')({ task: 'epic-1', landsOn: 'release/0.38.0', epicBranch: true });
+    expect(set.isError).toBeFalsy();
+    expect(readV2Task(ws, 'epic-1')!.task).toMatchObject({ landsOn: 'release/0.38.0', epicBranch: true });
+
+    await server.handler('task_patch')({ task: 'epic-1', landsOn: null, epicBranch: false });
+    expect(readV2Task(ws, 'epic-1')!.task.landsOn).toBeUndefined();
+    expect(readV2Task(ws, 'epic-1')!.task.epicBranch).toBeUndefined();
+
+    const bad = await server.handler('task_patch')({ task: 'epic-1', landsOn: 'a..b' });
+    expect(bad.isError).toBe(true);
+    expect(mcpText(bad)).toContain('not a branch name');
   });
 
   it('refuses self links', async () => {

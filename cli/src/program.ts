@@ -276,6 +276,10 @@ Brainfile file resolution (when you don't pass --file):
     .option('--clear-depends-on', 'Remove all dependencies')
     .option('--decisions <ids>', 'Comma-separated IDs of the decisions this work rests on (replaces the list)')
     .option('--clear-decisions', 'Remove the decisions list')
+    .option('--lands-on <branch>', 'The branch its hand-off forks from and lands on (landsOn), inherited by its children')
+    .option('--clear-lands-on', 'Remove landsOn: it inherits its parent\'s again, else the trunk')
+    .option('--epic-branch', 'On an epic: its children fork from and land on its own branch, dispatch/<id>')
+    .option('--clear-epic-branch', 'Turn the epic\'s own branch off')
     .action((options) => { patchCommand(options); });
   patchCmd.addHelpText('after', `\n${PATCH_COMMAND_HELP}`);
 

@@ -19,7 +19,7 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
     'task_patch',
     {
       title: 'Patch Task',
-      description: 'Update specific fields of a task. Set fields to null to remove them. parentId moves a document under its parent (a task under a plan, a spec under an epic); an off-pattern parent is a warning, refused on a strict board, and a loop is always refused. dependsOn replaces the list of tasks that come first; decisions replaces the list of decisions the work rests on.',
+      description: 'Update specific fields of a task. Set fields to null to remove them. parentId moves a document under its parent (a task under a plan, a spec under an epic); an off-pattern parent is a warning, refused on a strict board, and a loop is always refused. dependsOn replaces the list of tasks that come first; decisions replaces the list of decisions the work rests on. landsOn names the branch its hand-off forks from and lands on, inherited by everything under it (null inherits again); epicBranch on an epic gives it a branch of its own, dispatch/<id>, which its children fork from and land on.',
       inputSchema: z.object({
               file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
               taskId: z.union([z.string(), z.array(z.string())]).optional().describe('Task ID or array of task IDs to update'),
@@ -34,10 +34,12 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
               parentId: z.string().nullable().optional().describe('Parent task ID (null to remove)'),
               dependsOn: z.array(z.string()).nullable().optional().describe('Task IDs this task depends on, replacing the list; alias:task-id names a task on a related board (null or [] to remove)'),
               decisions: z.array(z.string()).nullable().optional().describe('IDs of the decisions this work rests on, replacing the list (null or [] to remove)'),
+              landsOn: z.string().nullable().optional().describe('The branch its hand-off forks from and lands on, e.g. release/0.38.0; its children inherit it (null to remove: it inherits its parent\'s again, else the trunk)'),
+              epicBranch: z.boolean().nullable().optional().describe('On an epic: true gives it a branch of its own, dispatch/<id>, made from its target by its lead; its children fork from and land on it (false or null to turn off)'),
             }),
       outputSchema: taskPatchOutputSchema
     },
-    withBoardCommit('task_patch', defaultFile, async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles, parentId, dependsOn, decisions }) => {
+    withBoardCommit('task_patch', defaultFile, async ({ file, taskId, task, title, description, priority, tags, assignee, dueDate, relatedFiles, parentId, dependsOn, decisions, landsOn, epicBranch }) => {
       const filePath = file || defaultFile;
       const rawTaskIds = taskId ?? task;
       if (!rawTaskIds) {
@@ -97,6 +99,8 @@ export function registerTaskPatchTool(server: McpServer, defaultFile: string): v
           parentId: nullable(parentId),
           dependsOn: nullable(dependsOn),
           decisions: nullable(decisions),
+          landsOn: nullable(landsOn),
+          epicBranch: epicBranch === undefined ? undefined : epicBranch === true,
         });
         if (!result.success) {
           results.push({ taskId: id, success: false, error: result.error || 'Task not found' });
