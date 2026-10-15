@@ -72,3 +72,6 @@ The lifecycle of a hand-off lives in the desktop's agents process today: `reserv
 Permission asks go to a callback the host gives. The desktop shows them in its band. A terminal runner asks at a prompt (task-82).
 
 The desktop's agents.ts becomes a thin adapter. Hand to…, the desk's `dispatch` and Merge all go through the Runner, and the run registry is the run files. Hand to… now writes the request record too (spec-16 said it wrote none).
+
+## Log
+- 2026-10-15T15:49:44.914Z: [claude] Rules the Runner must carry from the desktop as of 2cff04e: a dependsOn is met only when complete AND its branch has landed (unlanded() in worktree.ts; desktop dispatch's wait and the lead's readyOf both use it); the brief's finish line never tells a worker on a branch to complete its task (finish() in agents.ts), landing completes it; the brief includes each dependency's last notes (leftFor() in agents.ts). Found on Hotline's epic-6, where workers completed tasks before landing and dependents forked from a trunk without their dependencies.
