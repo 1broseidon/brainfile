@@ -60,3 +60,4 @@ Last. When every other task under epic-8 is done (or its failures have qa-bug ta
 - The dev app runs from the checkout again, with no errors.
 - Removed the eight parity worktrees and their branches (each clean and merged). Deleted qa/parity here and on origin, and dispatch/task-92 and dispatch/task-93 on origin.
 Follow-ups filed: task-103 (feed), task-104 (Antigravity sign-in), task-106 (mode selector in the chat box).
+- 2026-10-15T21:19:23.726Z: [claude] Correction: main is 36 commits ahead of origin, not 37.
