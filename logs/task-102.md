@@ -1,8 +1,6 @@
 ---
 id: task-102
 title: "QA bug: a pull request carries every local landing its base has not pushed, and once squash-merged the local base and origin's diverge"
-column: todo
-position: 14
 description: |-
   Found in task-92. task-90 and task-91 landed on qa/parity locally (Merge never pushes). task-92 then forked from local qa/parity (2dec56c) and its pull request #6 went into origin's qa/parity (still 2cff04e). So #6 carried three lines, task-90's and task-91's work as well as its own, and nobody was told. The squash merge made 880d7b8 on origin; local qa/parity still has the four landing commits. They now share only 2cff04e (4 local, 1 on origin), with the same file contents. The next hand-off forks from local (freshest keeps a local branch with commits of its own), so it misses the squash, and its pull request would carry task-90 and task-91 again.
 
@@ -35,7 +33,8 @@ subtasks:
     title: qa/parity reconciled for the rest of QA
     completed: true
 createdAt: "2026-10-15T20:02:21.568Z"
-updatedAt: "2026-10-15T20:10:16.261Z"
+updatedAt: "2026-10-15T20:10:16.823Z"
+completedAt: "2026-10-15T20:10:16.823Z"
 ---
 
 ## Description
