@@ -49,3 +49,6 @@ Not a hand-off: you do this one yourself, in a terminal at this repository.
 5. `bfq lint`: no `lands-on-missing` warning now the branch exists.
 6. A missing target is a warning: `bfq patch -t <this task> --lands-on qa/nowhere`, then `bfq lint` warns `lands-on-missing` naming this task; then `bfq patch -t <this task> --clear-lands-on` and lint is clean again.
 7. A name git would refuse is refused: `bfq patch -t <this task> --lands-on "bad name.."` fails and changes nothing.
+
+## Log
+- 2026-10-15T18:59:41.728Z: [claude] Setup run by Claude: qa/parity made from main (2cff04e) and pushed to origin; the dev app runs from ~/.brainfile-worktrees/parity/integration/desktop; lint clean; a landsOn of qa/nowhere is a lands-on-missing warning and --clear-lands-on clears it ("inherited again"); "bad name.." refused, exit 1, nothing written. QA bug found and fixed on parity/integration (73f2f33): brainfile show printed no target at all; it now says "Lands on: qa/parity" (epic-8), "Lands on: qa/parity · from epic-8" (children), an epic's own branch, Source and Pull request, and --json carries target. CLI 657 + 189 pass.
