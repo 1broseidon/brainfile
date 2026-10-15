@@ -33,3 +33,6 @@ Not a hand-off. Tests spec-18's note: landing never pushes, so the app says when
 1. `git fetch origin`, then `git rev-list --count origin/main..main`. Today main is ahead of origin (unpushed commits), so this is more than 0.
 2. The Ready to merge group's header, and the feed, say `main is N commits ahead of origin` with that N, in faint mono. There is no push key.
 3. If main is level with origin when you run this: make a throwaway commit on main (`git commit --allow-empty -m qa`), see the line say 1, then `git reset --hard HEAD~1` (only when that empty commit is the tip) and see it go.
+
+## Log
+- 2026-10-15T20:35:29.033Z: [claude] QA passed (person + Claude). The Ready to merge header said "main is 10 commits ahead of origin" (screenshot), matching `git rev-list --count origin/main..main` = 10. The feed showed one line per board that is ahead: "brainfile · main is 10 commits ahead of origin" and "runprism.ai · main is 1 commit ahead of origin". There is no push key and nothing was pushed. I did not test the line going away when level (that needs main pushed); core's unpushed() test covers it. The feed was getting crowded, filed as task-103.
