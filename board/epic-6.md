@@ -36,7 +36,8 @@ decisions:
   - decision-17
   - decision-18
 createdAt: "2026-10-14T22:14:19.304Z"
-updatedAt: "2026-10-15T21:25:55.968Z"
+updatedAt: "2026-10-15T21:40:21.214Z"
+epicBranch: true
 ---
 
 ## Description
