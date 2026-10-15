@@ -43,8 +43,8 @@ export function markLead(filePath: string, action: LeadAction): void {
   if (!changed.ok) throw new Error(changed.error);
 }
 
-/** The claim given back on the task file, kept with how its run ended; throws when it is not this runner's. */
-export function giveBackClaim(filePath: string, holder: Pick<DispatchClaim, 'host' | 'pid'>, outcome: DispatchOutcome): void {
+/** The claim given back on the task file, kept with how its run ended (cleared with no outcome, so the task is queued again); throws when it is not this runner's. */
+export function giveBackClaim(filePath: string, holder: Pick<DispatchClaim, 'host' | 'pid'>, outcome?: DispatchOutcome): void {
   const released = releaseDispatchFile(filePath, holder, { outcome });
   if (!released.ok) throw new Error(released.error);
 }

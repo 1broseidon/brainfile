@@ -917,6 +917,9 @@ export class Leads {
     for (const lead of this.running()) {
       if (lead.timer) clearTimeout(lead.timer);
       lead.timer = null;
+      // Ended here only: a turn it stops does not pause it on the board, so the runner that takes it up carries on.
+      lead.state = 'stopped';
+      lead.note = 'Let go with its runner: it waits on the board for a runner to take it up.';
       this.deps.close(lead);
     }
   }

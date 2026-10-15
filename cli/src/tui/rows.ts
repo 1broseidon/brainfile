@@ -44,6 +44,17 @@ export interface DocRow {
   column?: string;
   /** A completed child (from logs/) under an open parent: `✓ done`, read-mostly (task-20). */
   archived?: boolean;
+  /** What an agent is doing on it now, from the run files (task-82): `codex · editing`. */
+  live?: string;
+}
+
+/** Say on each row what an agent is doing on it now (useRuns). Rows with no live run keep their identity. */
+export function markLiveRuns(rows: DocRow[], live: ReadonlyMap<string, string>): DocRow[] {
+  if (live.size === 0) return rows;
+  return rows.map((row) => {
+    const text = live.get(row.task.id);
+    return text ? { ...row, live: text } : row;
+  });
 }
 
 /** Flag the rows whose document rests on a retired decision. Rows not named keep their identity. */
