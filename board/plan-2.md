@@ -108,7 +108,9 @@ decisions:
   - decision-12
   - decision-14
   - decision-15
+  - decision-17
 createdAt: "2026-10-14T22:17:37.522Z"
+updatedAt: "2026-10-15T15:49:31.585Z"
 ---
 
 ## Description
