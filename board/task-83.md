@@ -24,7 +24,7 @@ decisions:
   - decision-14
   - decision-12
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: file
       path: core/src/dispatch/lead.ts
@@ -37,12 +37,15 @@ contract:
       description: pause and resume for a lead
   validation:
     commands:
-      - npm run build && npm test
+      - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
+      - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
   constraints:
     - The rules are the Runner's, not the lead prompt's (decision-15)
     - The lead writes no code and has no worktree
+  metrics:
+    readyAt: "2026-10-15T21:40:11.314Z"
 createdAt: "2026-10-14T22:16:33.537Z"
-updatedAt: "2026-10-15T01:37:23.658Z"
+updatedAt: "2026-10-15T21:40:11.314Z"
 ---
 
 ## Description
