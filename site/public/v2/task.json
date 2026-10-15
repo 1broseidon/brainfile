@@ -101,6 +101,11 @@
       "description": "Related file paths or code locations. Single source of truth for relevant files.",
       "items": { "type": "string" }
     },
+    "source": {
+      "type": "string",
+      "description": "The web URL of the issue the task was made from, e.g. https://github.com/o/r/issues/12. One task per issue: an issue is on the board when any task, open or completed, carries its URL (a trailing slash ignored).",
+      "examples": ["https://github.com/o/r/issues/12"]
+    },
     "subtasks": {
       "type": "array",
       "description": "Subtasks for tracking granular progress",

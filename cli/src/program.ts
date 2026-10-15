@@ -19,6 +19,7 @@ import { initCommand } from './commands/init';
 import { migrateCommand } from './commands/migrate';
 import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
 import { whereCommand } from './commands/where';
+import { issuesCommand, ISSUES_COMMAND_HELP } from './commands/issues';
 import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
 import { mergeDriverCommand } from './commands/merge-driver';
 import { patchCommand, PATCH_COMMAND_HELP } from './commands/patch';
@@ -226,6 +227,7 @@ Brainfile file resolution (when you don't pass --file):
     .option('--parent <id>', 'Parent ID (parentId); must fit the type (an epic holds specs, plans and tasks)')
     .option('--depends-on <ids>', 'Comma-separated IDs of tasks that come first')
     .option('--decisions <ids>', 'Comma-separated IDs of the decisions this work rests on')
+    .option('--source <url>', 'The URL of the issue the task is made from; refused when a task already carries it')
     .option(
       '--child <title>',
       'Create a child task under the newly created parent (repeatable; children default to type: task)',
@@ -365,6 +367,16 @@ Brainfile file resolution (when you don't pass --file):
     .option('--fetch', 'Ask the remote for its copy of the board first')
     .option('--json', 'Output as JSON')
     .action((options) => { whereCommand(options); });
+
+  const issuesCmd = program
+    .command('issues')
+    .description("The open issues of the project's GitHub repository, each marked with its task when it is on the board; --import makes tasks from them")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--import <numbers...>', 'Make a task from each of these issues (one already on the board is found, not made again)')
+    .option('-c, --column <id>', 'Column the new tasks land in (default: the first that is not done)')
+    .option('--json', 'Output as JSON')
+    .action(async (options) => { await issuesCommand(options); });
+  issuesCmd.addHelpText('after', `\n${ISSUES_COMMAND_HELP}`);
 
   program
     .command('adopt')

@@ -1,7 +1,10 @@
 import {
   addTaskFile,
   parentFit,
+  readTasksDir,
   resolveDocType,
+  sourceKey,
+  sourcesOf,
   type Contract,
   type Task,
   type TypesConfig,
@@ -46,6 +49,9 @@ spec holds plan and task; plan holds task; task holds task):
   brainfile add -t "Token refresh" --type spec --parent epic-1
   brainfile add -t "OAuth flow" --parent spec-1
 
+Make a task from an issue, linked back to it (brainfile issues lists them):
+  brainfile add -t "Crash on empty board" --source https://github.com/o/r/issues/12
+
 Record a decision (no column, never completed) and work that rests on it:
   brainfile add -t "Use SQLite for the index" --type decision
   brainfile add -t "Build the index" --decisions decision-1
@@ -80,6 +86,8 @@ export interface AddOptions {
   /** Comma-separated IDs of the decisions this work rests on. */
   decisions?: string;
   child?: string | string[];
+  /** The URL of the issue the task is made from (decision-4); refused when a task already carries it. */
+  source?: string;
   withContract?: boolean;
   /** When true, created contract is status=ready instead of the default draft */
   ready?: boolean;
@@ -112,6 +120,7 @@ function createV2TaskFile(
     dependsOn?: string[];
     decisions?: string[];
     contract?: Contract;
+    source?: string;
   },
 ): Task {
   const result = addTaskFile(
@@ -130,6 +139,7 @@ function createV2TaskFile(
       dependsOn: input.dependsOn,
       decisions: input.decisions,
       contract: input.contract,
+      source: input.source,
     },
     composeBody(input.description),
     dirs.logsDir,
@@ -195,6 +205,13 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
     ...(decisions.length > 0 && { decisions }),
   }, logger);
 
+  // An issue becomes one task: the board, open or completed, is asked first (decision-4).
+  const source = options.source?.trim() ? sourceKey(options.source) : undefined;
+  if (source) {
+    const taken = sourcesOf([...readTasksDir(dirs.boardDir), ...readTasksDir(dirs.logsDir)])[source];
+    if (taken) throw new CLIError(`That issue is already ${taken}.`, undefined, `brainfile show -t ${taken}`);
+  }
+
   const childTitles = normalizeToArray(options.child).map((title) => title.trim()).filter(Boolean);
   if (childTitles.length > 0) {
     const fit = parentFit('task', typeName, board.types);
@@ -247,6 +264,7 @@ function addCommandV2(options: AddOptions, filePath: string, logger: Logger): Ad
     dependsOn,
     decisions,
     contract,
+    source,
   });
 
   const createdChildren: Task[] = [];
@@ -294,6 +312,9 @@ function logAddSuccess(
   }
   if (task.decisions?.length) {
     logger.log(chalk.gray(`  Rests on: ${task.decisions.join(', ')}`));
+  }
+  if (task.source) {
+    logger.log(chalk.gray(`  Source:   ${task.source}`));
   }
   if (options.description) {
     logger.log(chalk.gray(`  Desc:     ${options.description.substring(0, 50)}${options.description.length > 50 ? '...' : ''}`));

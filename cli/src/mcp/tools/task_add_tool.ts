@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/server";
 import { withBoardCommit } from '../helpers';
 import { z } from 'zod';
-import { addTaskFile, checkDocumentLinks, readBoardGraph, resolveDocType } from '@brainfile/core';
+import { addTaskFile, checkDocumentLinks, readBoardGraph, readTasksDir, resolveDocType, sourceKey, sourcesOf } from '@brainfile/core';
 import {
   ensureV2Dirs,
   composeBody,
@@ -39,6 +39,7 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
               parentId: z.string().optional().describe('Parent ID (parentId). Must fit the type: a spec under an epic, a plan under an epic or spec, a task under any of those or a task'),
               dependsOn: z.array(z.string()).optional().describe('IDs of tasks that come first; alias:task-id for a task on a related board'),
               decisions: z.array(z.string()).optional().describe('IDs of the decisions this work rests on'),
+              source: z.string().optional().describe('URL of the issue the task is made from, kept as source:; refused when a task already carries it (the issues tool imports one for you)'),
               // Aliases (some clients prefer camelCase)
               withContract: z.boolean().optional().describe('Alias of with_contract'),
               validationCommands: z.array(z.string()).optional().describe('Alias of validation_commands'),
@@ -61,6 +62,7 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
       parentId,
       dependsOn,
       decisions,
+      source: rawSource,
       with_contract,
       ready: contractReady,
       deliverables,
@@ -111,6 +113,13 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
           return { content: [{ type: 'text' as const, text: `Error: ${links.errors.join('\n')}` }], isError: true };
         }
 
+        // An issue becomes one task: the board, open or completed, is asked first (decision-4).
+        const source = rawSource?.trim() ? sourceKey(rawSource) : undefined;
+        if (source) {
+          const taken = sourcesOf([...readTasksDir(dirs.boardDir), ...readTasksDir(dirs.logsDir)])[source];
+          if (taken) return { content: [{ type: 'text' as const, text: `Error: That issue is already ${taken}.` }], isError: true };
+        }
+
         const wantsContract =
           Boolean(with_contract ?? withContract) ||
           Boolean(deliverables && deliverables.length > 0) ||
@@ -145,6 +154,7 @@ export function registerTaskAddTool(server: McpServer, defaultFile: string): voi
             decisions,
             status,
             contract,
+            source,
           },
           description ? composeBody(description) : '',
           dirs.logsDir,

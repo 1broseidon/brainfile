@@ -171,6 +171,31 @@ composeBrief(dirs, "claude", { lastBriefAt: null }).text;   // the session-start
 checkDecision(dirs.brainfilePath, { query: "add axios" });  // { result: { verdict: 'review', … } }
 ```
 
+### Issues and forges
+
+A task made from an issue keeps the issue's URL as `source:`; an issue is on
+the board when any task, open or completed, carries it. The pure parts are in
+the main entry and `@brainfile/core/browser`. Which forge a project's origin
+points at, and GitHub's open issues, are in the Node-only
+`@brainfile/core/forge`, with fetch and the saved token passed in;
+credentials are looked for in one order: `gh auth token`, then `GH_TOKEN` or
+`GITHUB_TOKEN`, then the saved token.
+
+```typescript
+import { addTaskFile, getV2Dirs, issueTask, linkedTask, readTasksDir, sourcesOf } from "@brainfile/core";
+import { detectForge, ghCliToken, GitHub } from "@brainfile/core/forge";
+
+const repo = await detectForge(".");                  // { forge: 'github', owner, name, url } or null
+const github = new GitHub({ fetch, ghToken: ghCliToken, env: process.env, store: { read: () => null, write: () => {} } });
+const listed = await github.listIssues(repo!);       // { ok, value: { issues, auth, rateRemaining, truncated } }
+
+const dirs = getV2Dirs(".brainfile/brainfile.md");
+const sources = sourcesOf([...readTasksDir(dirs.boardDir), ...readTasksDir(dirs.logsDir)]);
+for (const issue of listed.ok ? listed.value.issues : []) {
+  if (!linkedTask(issue, sources)) addTaskFile(dirs.boardDir, issueTask(issue, "todo"), "", dirs.logsDir);
+}
+```
+
 ### Utilities
 
 Helper functions for common tasks.

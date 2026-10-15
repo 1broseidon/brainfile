@@ -161,6 +161,14 @@ export {
   lintTaskRefs,
 } from './related';
 export type { RelatedConfig, TaskRef } from './related';
+export {
+  labelTag,
+  issueTask,
+  sourceKey,
+  sourcesOf,
+  linkedTask,
+} from './issues';
+export type { Issue, IssueTaskInput } from './issues';
 export type {
   Board,
   BoardConfig,

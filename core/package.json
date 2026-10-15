@@ -83,6 +83,12 @@
       "require": "./dist/memory/index.js",
       "default": "./dist/memory/index.js"
     },
+    "./forge": {
+      "types": "./dist/forge/index.d.ts",
+      "import": "./dist/forge/index.js",
+      "require": "./dist/forge/index.js",
+      "default": "./dist/forge/index.js"
+    },
     "./dist/*": "./dist/*",
     "./package.json": "./package.json"
   },
@@ -123,6 +129,9 @@
       ],
       "memory": [
         "dist/memory/index.d.ts"
+      ],
+      "forge": [
+        "dist/forge/index.d.ts"
       ],
       "dist/*": [
         "dist/*"

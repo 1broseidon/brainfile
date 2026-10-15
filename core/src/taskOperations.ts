@@ -74,6 +74,8 @@ export interface TaskFileInput {
    * for plan documents). Not validated by core — convention lives at the frontend level.
    */
   status?: string;
+  /** The URL of the issue the task is made from (decision-4), written after `status`. */
+  source?: string;
   /**
    * More frontmatter, written as given right after `status` (a decision's
    * `claimKey`, `kind`, `stance`, …). Undefined values are left out; it never
@@ -457,6 +459,7 @@ export function addTaskFile(
       ...(input.description && { description: input.description.trim() }),
       ...(status && { status }),
       ...extraFields(input.fields),
+      ...(input.source?.trim() && { source: input.source.trim() }),
       ...(input.priority && { priority: input.priority }),
       ...(input.tags && input.tags.length > 0 && { tags: input.tags }),
       ...(input.assignee && { assignee: input.assignee }),

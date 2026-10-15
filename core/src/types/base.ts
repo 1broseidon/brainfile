@@ -87,6 +87,11 @@ export interface Task {
   template?: 'bug' | 'feature' | 'refactor';
   /** Optional PM-to-agent contract metadata */
   contract?: Contract;
+  /**
+   * Where the work came from outside the board: the web URL of the issue it
+   * was made from (decision-4), e.g. `https://github.com/o/r/issues/12`.
+   */
+  source?: string;
   createdAt?: string;  // ISO 8601 timestamp
   updatedAt?: string;  // ISO 8601 timestamp
   /** Column this task belongs to (v2 per-task files) */
