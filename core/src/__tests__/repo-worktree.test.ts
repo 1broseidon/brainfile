@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn, spawnSync } from 'child_process';
+import { currentHost } from '../dispatchRecord';
 import {
   canBranch,
   collisions,
@@ -816,7 +817,7 @@ test('two processes landing at once: the second waits for the first, and its che
   const other = otherProcess(lockFile);
   await other.said('taken');
   assert.equal(readLandingLock(lockFile)?.pid, other.child.pid);
-  assert.equal(readLandingLock(lockFile)?.host, os.hostname());
+  assert.equal(readLandingLock(lockFile)?.host, currentHost());
 
   const before = git(['rev-parse', 'main'], repo);
   const seen: string[] = [];
@@ -893,7 +894,7 @@ test('the lock: one holder at a time, a half-written file taken over once it is 
   assert.ok(taken.ok);
 
   // Taken over meanwhile: letting go leaves the new holder's lock alone.
-  const theirs = JSON.stringify({ pid: process.pid, host: os.hostname(), at: new Date(0).toISOString() });
+  const theirs = JSON.stringify({ pid: process.pid, host: currentHost(), at: new Date(0).toISOString() });
   fs.writeFileSync(lockFile, theirs);
   if (taken.ok) taken.release();
   assert.equal(fs.readFileSync(lockFile, 'utf-8'), theirs);

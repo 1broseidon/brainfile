@@ -5,6 +5,7 @@ import {
   LintIssue,
   buildDocGraph,
   lintDocGraph,
+  lintDispatchRecords,
   lintTaskRefs,
   parseFrontmatter,
   readRelatedConfig,
@@ -112,6 +113,7 @@ export function lintBoard(filePath: string, options: { fix?: boolean } = {}): Li
   const result = BrainfileLinter.lint(content, { autoFix: options.fix });
   result.issues.push(...lintDependsOnRefs(filePath, content));
   result.issues.push(...lintGraph(filePath, content));
+  result.issues.push(...lintDispatchRecords(readTasksDir(path.join(path.dirname(filePath), 'board')).map((doc) => doc.task)));
   const location = lintBoardLocation(path.dirname(path.resolve(filePath)));
   result.issues.push(...location);
   const { errors, warnings, fixable } = BrainfileLinter.groupIssues(result);

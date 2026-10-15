@@ -12,8 +12,8 @@
  * about to move, and keeps the checks from running twice.
  */
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
+import * as os from 'os';
 
 export const LANDING_LOCK_FILE = 'landing.lock';
 
@@ -68,6 +68,12 @@ export function readLandingLock(file: string): LandingLockHolder | null {
   }
 }
 
+// Kept here, not imported from dispatchRecord, so the module loads on its own (its cross-process test runs it from source).
+/** This machine's name as dispatchRecord's currentHost gives it: without the `.local` macOS adds on some networks. */
+function currentHost(): string {
+  return os.hostname().replace(/\.local$/i, '');
+}
+
 function pidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -87,7 +93,7 @@ function gone(file: string, holder: LandingLockHolder | null): boolean {
       return false;
     }
   }
-  if (holder.host === os.hostname()) return !pidAlive(holder.pid);
+  if (holder.host === currentHost()) return !pidAlive(holder.pid);
   const at = Date.parse(holder.at);
   return !Number.isFinite(at) || Date.now() - at > OTHER_HOST_MS;
 }
@@ -125,7 +131,7 @@ export function tryLandingLock(file: string): { ok: true; release: () => void } 
   fs.mkdirSync(path.dirname(file), { recursive: true });
   let holder: LandingLockHolder | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    const mine = JSON.stringify({ pid: process.pid, host: os.hostname(), at: new Date().toISOString() } satisfies LandingLockHolder);
+    const mine = JSON.stringify({ pid: process.pid, host: currentHost(), at: new Date().toISOString() } satisfies LandingLockHolder);
     let fd: number;
     try {
       fd = fs.openSync(file, 'wx');

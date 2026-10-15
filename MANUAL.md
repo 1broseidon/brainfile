@@ -268,6 +268,7 @@ updatedAt: "2026-09-20T19:03:57.257Z"
 | `relatedFiles` | Paths an agent should read first. |
 | `subtasks` | `{ id, title, completed }` rows, managed with `subtask`. |
 | `contract` | Deliverables, validation and constraints. See [Contracts](#contracts). |
+| `dispatch` | A hand-off: the `agent`, `model` and `effort` asked for, who asked (`by`: `chat`, `cli`, `mcp`, `lead`, `phone` or `person`), `at`, `until` (`review` or `done`) and `role` (`worker` or `lead`), and the `claim` of the runner that started it (`host`, `runner`, `pid`, `at`), so two runners never start the same task. The run's heartbeat stays in `state/`, never here. |
 
 ### logs/ — what got done
 
@@ -875,7 +876,7 @@ $ brainfile lint --check   # non-zero exit for CI
 `--fix` also folds a legacy `rules:` block into `agent.instructions`. `lint`
 also checks the graph: a parent that is missing, loops or does not fit the
 type, `decisions:` that name nothing or something other than a decision, and
-a `like:` that names no type. Off-pattern links are warnings, and errors on a
+a `like:` that names no type, and a `dispatch:` record a runner cannot read. Off-pattern links are warnings, and errors on a
 strict board. It also checks where the board lives: two boards that disagree
 are an error; the board branch checked out away from `.brainfile/`, a checkout
 whose folder is gone (`--fix` forgets it), and a code branch still tracking an

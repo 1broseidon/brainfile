@@ -318,19 +318,11 @@ export interface AgentRun {
 
 /**
  * Who asked for a hand-off, written on the task as `dispatch:` in its
- * frontmatter (spec-16), beside the assignee: the person (Hand to…), the
- * board's chat, or an epic's lead. Core keeps it as an unknown key; queues
- * and runner claims are epic-6's (task-74).
+ * frontmatter (spec-16-1), beside the assignee: the person (Hand to…), the
+ * board's chat, or an epic's lead, and the claim of the runner that started
+ * it. Core's record, read and written by core (task-74).
  */
-export interface DispatchRecord {
-  agent: AgentId;
-  model?: string;
-  /** The effort asked for with the model, when one was. */
-  effort?: string;
-  by: 'person' | 'chat' | 'lead';
-  /** ISO 8601. */
-  at: string;
-}
+export type { DispatchRecord } from '@brainfile/core/browser';
 
 /**
  * An epic handed off (decision-15), written on it as `lead:`: who leads it,
