@@ -57,3 +57,6 @@ The CLI already has `where`, `adopt`, `merge-boards` and `backups`, so settling 
 - CLI: `brainfile fix [--dry-run] [--undo]`. It prints the plan in the words the desktop shows (integrity.ts) and applies it only when the plan has not changed since it was shown (`expected`).
 - MCP: `where` gains action fix | undo, or a `fix` tool. Map it in the parity test.
 - The host calls core, and the desktop's Fix and Undo are unchanged.
+
+## Log
+- 2026-10-15T17:38:19.406Z: [claude] Built on parity/task-78 (25316bb), merged into parity/integration. core/src/repo/fix.ts (undo record in state/last-fix.json, 20 s), boardProblems wording in core, brainfile fix [--dry-run] [--undo] [--expected], MCP where action fix | undo. Awaiting QA.
