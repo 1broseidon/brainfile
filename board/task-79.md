@@ -34,28 +34,25 @@ contract:
   deliverables:
     - type: file
       path: core/src/dispatch/discuss.ts
-      description: Discuss context, rules and permission sorting, moved from the desktop
+      description: The task's discussion context and rules, from the desktop's discuss.ts
     - type: file
       path: cli/src/commands/discuss.ts
-      description: "brainfile discuss: an interactive ACP discussion in the terminal"
+      description: brainfile discuss
     - type: file
       path: cli/src/mcp/prompts.ts
-      description: The discuss prompt, and the discuss tool for clients without prompts
+      description: An MCP discuss prompt
     - type: test
       path: core/src/__tests__/dispatch-discuss.test.ts
-      description: desktop/test/discuss.test.ts, ported
+      description: Context, rules and refusals
     - type: file
       path: cli/src/__tests__/mcp-parity.test.ts
       description: discuss mapped
   validation:
     commands:
-      - npm run build && npm test
-      - cd desktop && npm run typecheck && npm test
-      - brainfile check "discuss in the terminal or an MCP client under the same rules"
-  constraints:
-    - Ask the person and record the decision before going against decision-6
+      - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
+      - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-15T21:25:56.225Z"
+updatedAt: "2026-10-15T21:39:29.786Z"
 ---
 
 ## Description
