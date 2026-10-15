@@ -63,7 +63,7 @@ export interface Session {
   rule: PermissionRule | null;
   /** The mode the session keeps whatever the settings say (a discussion's, the chat's); null to follow the settings. */
   keepsMode: ((modes: AgentModes) => string) | null;
-  /** Called once the agent has gone: what was set up for the session (the desk's grant) is let go. */
+  /** Called once the agent has gone: what was set up for the session is let go. */
   release: (() => void) | null;
   /** Config options the session last reported. A probe reads each model's effort from them. */
   configOptions: acp.SessionConfigOption[] | null;
@@ -101,7 +101,7 @@ export interface OpenOptions {
   board?: boolean;
   /** Where the agent works when not the repository itself: a hand-off's worktree. */
   at?: string;
-  /** MCP servers besides the board's: the desk's, for the board's chat. */
+  /** MCP servers besides the board's. */
   mcpServers?: acp.McpServer[];
   /** What the session may do, sorted before the repository's policy (Session.rule). */
   rule?: PermissionRule;
@@ -274,14 +274,12 @@ export async function applyMode(ctx: Pick<SessionContext, 'dataDir'>, session: S
 
 /** Brainfile's own board tools: `brainfile_list_tasks`, `mcp__brainfile__task_add`, `mcp.brainfile.list_tasks`. */
 export const BOARD_TOOL = /^(mcp(__|\.))?brainfile[_.]/i;
-/** The desk's tools (spec-16): `mcp__desk__dispatch`, `desk.runs`, `mcp.desk.stop`. */
-export const DESK_TOOL = /^(mcp(__|\.))?desk(__|[_./])(dispatch|runs|stop)\b/i;
 
 let nextAsk = 1;
 
 /**
  * Answers an agent that asks before it acts: the session's own rule first,
- * then the board's tools (and the desk's) unasked, then the repository's
+ * then the board's tools unasked, then the repository's
  * policy; under `ask`, the person, through `ctx.ask`.
  */
 export async function requestPermission(
@@ -302,8 +300,7 @@ export async function requestPermission(
   }
   // The dispatcher's own board tools are not asked about: every change they
   // make is a commit on the board, and the board is what it was asked to manage.
-  // The desk's are the app's own too: a hand-off asks in its pane before it acts.
-  const boardTool = BOARD_TOOL.test(params.toolCall.title ?? '') || DESK_TOOL.test(params.toolCall.title ?? '');
+  const boardTool = BOARD_TOOL.test(params.toolCall.title ?? '');
   if ((boardTool || policyFor(ctx.dataDir, session.projectId) !== 'ask') && allowOnce) {
     return { outcome: { outcome: 'selected', optionId: allowOnce.optionId } };
   }

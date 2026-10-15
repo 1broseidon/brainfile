@@ -324,6 +324,40 @@ test('stopping its own run cancels the session and the ask it was waiting on', a
   expect(readRunFile(dotDir(), runId)!.ask).toBeUndefined();
 });
 
+test('an ask answered from another process: an answer file beside the run, which its runner applies and takes down', async () => {
+  plainBoard({ 'task-1': [] });
+  fs.writeFileSync(path.join(fakeDir, 'ask-task-1'), '');
+  const asks: PermissionAsk[] = [];
+  const cancelled: string[] = [];
+  const fromOf = jest.fn(() => 'run-chat-1');
+  const a = runner({ ask: (ask) => (asks.push(ask), new Promise(() => {})), cancelAsk: (id) => cancelled.push(id), fromOf });
+  const b = runner({ pid: OTHER_PID });
+  await a.queue(project, ['task-1'], { agent: AGENT, by: 'chat' });
+  const started = await a.start(project, 'task-1');
+  if (!started.ok) throw new Error(started.error);
+  const runId = started.value.run.id;
+  // The host named the chat turn behind a request the chat made.
+  expect(fromOf).toHaveBeenCalledWith(project, 'task-1', expect.objectContaining({ by: 'chat' }));
+  expect(started.value.run.from).toBe('run-chat-1');
+  await until('the ask', () => asks.length === 1);
+  const file = await until('the ask in its file', () => readRunFile(dotDir(), runId)?.ask);
+  expect(file.id).toBe(asks[0].id);
+  expect(b.others(project).map((f) => f.id)).toEqual([runId]);
+
+  expect(b.answerAsk(runId, 'ask-elsewhere', 'yes', project)).toEqual({ ok: false, error: `${runId} is not asking that now` });
+  expect(b.answerAsk(runId, asks[0].id, 'yes', project)).toEqual({ ok: true, value: undefined });
+  await until('the agent to have its answer', () => lines('answer-task-1').length > 0);
+  expect(JSON.parse(lines('answer-task-1')[0])).toEqual({ outcome: 'selected', optionId: 'yes' });
+  // Its own prompt was taken down, the answer file went, and the run goes on.
+  expect(cancelled).toEqual([asks[0].id]);
+  expect(fs.existsSync(path.join(dotDir(), 'state', 'runs', `${runId}.answer.json`))).toBe(false);
+  await until('the ask to leave its file', () => readRunFile(dotDir(), runId) && !readRunFile(dotDir(), runId)!.ask);
+  expect(a.get(runId)!.state).toBe('working');
+  release('task-1');
+  await until('the run to end', () => a.get(runId)?.state === 'done');
+  expect(b.answerAsk(runId, asks[0].id, 'yes', project)).toEqual({ ok: false, error: `${runId} has ended` });
+});
+
 test("a lost runner's claim is taken again", async () => {
   plainBoard({ 'task-1': [] });
   const a = runner();
