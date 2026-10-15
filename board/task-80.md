@@ -1,8 +1,8 @@
 ---
 id: task-80
 title: "Core: one shared runner that claims, starts, stops and lands hand-offs, used by the desktop first"
-column: backlog
-position: 16
+column: todo
+position: 8
 description: |-
   The lifecycle of a hand-off lives in the desktop's agents process today: `reserve`, `liveDispatch`, `startDispatch`, `dispatch`, `newRun`, `update`, `stopRun`, `live`, `checkThenMerge`, `land`, `ready`, `settle` and `sendBackLanding`, with the in-memory `runs` map and `reserved` set. Move it to `Runner` in core/src/dispatch/runner.ts, built on task-75 (sessions), task-76 (worktrees and landing) and task-74 (the record and the run files).
 
@@ -56,6 +56,7 @@ contract:
     - "No daemon: a runner lives as long as the process that made it (spec-16)"
     - Landings stay serial and by compare-and-swap (decision-12)
 createdAt: "2026-10-14T22:15:55.916Z"
+updatedAt: "2026-10-15T21:25:56.226Z"
 ---
 
 ## Description

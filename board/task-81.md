@@ -1,8 +1,8 @@
 ---
 id: task-81
 title: MCP tools and CLI commands for dispatch, status, stop, review, land and discard, with roles so a worker cannot dispatch
-column: backlog
-position: 17
+column: todo
+position: 9
 description: |-
   This builds spec-16-7, over the Runner from task-80, with spec-13's naming and parity rule.
 
@@ -75,6 +75,7 @@ contract:
       - npm run build && npm test
       - node cli/dist/cli.js dispatch --help && node cli/dist/cli.js review --help
 createdAt: "2026-10-14T22:16:11.028Z"
+updatedAt: "2026-10-15T21:25:56.228Z"
 ---
 
 ## Description

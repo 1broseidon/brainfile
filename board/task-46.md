@@ -17,7 +17,7 @@ relatedFiles:
 decisions:
   - decision-8
 createdAt: "2026-10-13T19:25:57.699Z"
-updatedAt: "2026-10-15T00:51:12.170Z"
+updatedAt: "2026-10-15T21:25:56.230Z"
 subtasks:
   - id: task-46-1
     title: "Phase A: the chat is a pane on the right; hide keeps the thread; the key reopens it"
@@ -28,8 +28,8 @@ subtasks:
   - id: task-46-3
     title: "Phase C: a hand-off's tab opens its run (steps, asks, Stop) in the chat pane, the task beside it"
     completed: false
-column: in-progress
-position: 2
+column: todo
+position: 10
 ---
 
 ## Description
