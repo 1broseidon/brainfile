@@ -1,7 +1,7 @@
 ---
 id: task-81
 title: MCP tools and CLI commands for dispatch, status, stop, review, land and discard, with roles so a worker cannot dispatch
-column: todo
+column: in-progress
 position: 9
 tags:
   - cli
@@ -25,7 +25,7 @@ decisions:
   - decision-14
   - decision-15
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: cli/src/commands/dispatch.ts
@@ -55,8 +55,10 @@ contract:
       - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
   metrics:
     readyAt: "2026-10-15T21:40:10.771Z"
+    pickedUpAt: "2026-10-15T22:09:35.154Z"
+    reworkCount: 0
 createdAt: "2026-10-14T22:16:11.028Z"
-updatedAt: "2026-10-15T22:09:25.477Z"
+updatedAt: "2026-10-15T22:09:35.154Z"
 dispatch:
   agent: claude
   model: opus
