@@ -1,8 +1,6 @@
 ---
 id: task-97
 title: "QA: the epic branch, run on epic-9 — its lead makes the branch, brings the target in, and the epic is merged once from a four-way Merge menu"
-column: todo
-position: 14
 description: |-
   Not a hand-off itself: it drives epic-9 (the drill epic, with task-95 and task-96). Tests spec-18-6, 7 and 8, and the review fixes in 18a7aa1. Do it after hand-off 1 (task-90) has merged, so qa/parity already has a line in `qa/parity-wave-1.md`.
   1. Turn the branch on: `bfq patch -t epic-9 --epic-branch`. `bfq show -t epic-9` has `epicBranch: true` and `landsOn: qa/parity`.
@@ -53,7 +51,8 @@ subtasks:
     title: "Optional: Keep as a branch keeps the branch and completes the epic"
     completed: true
 createdAt: "2026-10-15T18:21:50.129Z"
-updatedAt: "2026-10-15T20:58:33.612Z"
+updatedAt: "2026-10-15T20:58:34.129Z"
+completedAt: "2026-10-15T20:58:34.129Z"
 ---
 
 ## Description
