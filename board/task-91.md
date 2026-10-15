@@ -39,7 +39,8 @@ subtasks:
     title: "Optional: two merges back to back both land, one at a time; no landing.lock left behind"
     completed: false
 createdAt: "2026-10-15T18:20:40.478Z"
-updatedAt: "2026-10-15T19:08:31.035Z"
+updatedAt: "2026-10-15T19:10:46.600Z"
+assignee: claude
 ---
 
 ## Description
