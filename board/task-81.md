@@ -47,7 +47,7 @@ decisions:
   - decision-14
   - decision-15
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: file
       path: cli/src/commands/dispatch.ts
@@ -72,10 +72,13 @@ contract:
       description: Dispatch from the CLI and MCP
   validation:
     commands:
-      - npm run build && npm test
+      - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
       - node cli/dist/cli.js dispatch --help && node cli/dist/cli.js review --help
+      - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
+  metrics:
+    readyAt: "2026-10-15T21:40:10.771Z"
 createdAt: "2026-10-14T22:16:11.028Z"
-updatedAt: "2026-10-15T21:25:56.228Z"
+updatedAt: "2026-10-15T21:40:10.771Z"
 ---
 
 ## Description
