@@ -19,24 +19,24 @@ parentId: epic-8
 subtasks:
   - id: task-89-1
     title: qa/parity made from main and pushed to origin
-    completed: false
+    completed: true
   - id: task-89-2
     title: The dev app runs from the integration worktree
-    completed: false
+    completed: true
   - id: task-89-3
     title: "bfq show -t epic-8 shows landsOn: qa/parity"
-    completed: false
+    completed: true
   - id: task-89-4
     title: bfq lint has no lands-on warning
-    completed: false
+    completed: true
   - id: task-89-5
     title: A landsOn naming a missing branch is a lands-on-missing warning, and clearing it clears the warning
-    completed: false
+    completed: true
   - id: task-89-6
     title: An invalid branch name is refused by patch
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:20:00.202Z"
-updatedAt: "2026-10-15T18:57:31.883Z"
+updatedAt: "2026-10-15T18:59:41.989Z"
 ---
 
 ## Description
