@@ -52,14 +52,15 @@ export function standingDecisions(brainfilePath: string): string {
  * Where finished work goes. A board with a review column wants a person to
  * look before it is done, so the agent moves the task there and leaves
  * completing it to them; a board without one lets the agent complete it,
- * unless its work is on a branch, which completes the task when it lands.
+ * unless its work is on a branch, which completes the task when it lands on
+ * `lands`, its target (decision-16).
  */
-export function finish(brainfilePath: string, taskId: string, lands: boolean): string {
+export function finish(brainfilePath: string, taskId: string, lands: string | null): string {
   const columns = readBoardConfig(brainfilePath)?.config?.columns ?? [];
   const review = columns.find((c) => /review/i.test(c.id) || /review/i.test(c.title ?? ''));
   if (review) return `Then move ${taskId} to ${review.title ?? review.id} (column id \`${review.id}\`) for review. Do not complete it: a person completes it after looking at the work.`;
   // Complete would say it is there to build on before its branch has landed.
-  return lands ? `Do not complete ${taskId}: it is completed when its branch lands on the trunk.` : `Then complete ${taskId}.`;
+  return lands ? `Do not complete ${taskId}: it is completed when its branch lands on ${lands}.` : `Then complete ${taskId}.`;
 }
 
 /**
@@ -110,9 +111,18 @@ export function leftFor(dirs: ReturnType<typeof getV2Dirs>, dependsOn: unknown):
 /**
  * The brief for `taskId` on the board in `projectId`. `ledBy` is the epic
  * whose lead hands this task off (decision-15), when one does: the brief
- * then says the lead reads the board, not the conversation.
+ * then says the lead reads the board, not the conversation. `lands` is the
+ * branch its work lands on (decision-16); `first`, what it must settle before
+ * the task (an epic branch's conflict with its target).
  */
-export function brief(projectId: string, taskId: string, worktree: BriefWorktree | null = null, ledBy: string | null = null): string {
+export function brief(
+  projectId: string,
+  taskId: string,
+  worktree: BriefWorktree | null = null,
+  ledBy: string | null = null,
+  lands = 'the trunk',
+  first = ''
+): string {
   const located = locateBoard(projectId, { materialize: false });
   if (!located.found) throw new Error(`No board in ${projectId}`);
   const found = findV2Task(getV2Dirs(located.brainfilePath), taskId);
@@ -132,6 +142,7 @@ export function brief(projectId: string, taskId: string, worktree: BriefWorktree
     led,
     standingDecisions(located.brainfilePath),
     workplace(worktree),
-    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did${worktree?.branch ? ' and that it is on its branch' : ''}. ${finish(located.brainfilePath, task.id, !!worktree?.branch)} Do the work in ${worktree ? 'this worktree' : 'this repository'}. Finish with a reply of one or two sentences.`,
+    first,
+    `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did${worktree?.branch ? ' and that it is on its branch' : ''}. ${finish(located.brainfilePath, task.id, worktree?.branch ? lands : null)} Do the work in ${worktree ? 'this worktree' : 'this repository'}. Finish with a reply of one or two sentences.`,
   ].join('');
 }

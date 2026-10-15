@@ -12,6 +12,7 @@ import {
   readTasksDir,
   type TypesConfig,
 } from '@brainfile/core';
+import { lintLandsOn } from '@brainfile/core/repo';
 import chalk from 'chalk';
 import { defaultLogger, type Logger } from '../utils/logger';
 import { CLIError, fileNotFound, parseFailure } from '../utils/cli-error';
@@ -114,6 +115,7 @@ export function lintBoard(filePath: string, options: { fix?: boolean } = {}): Li
   result.issues.push(...lintDependsOnRefs(filePath, content));
   result.issues.push(...lintGraph(filePath, content));
   result.issues.push(...lintDispatchRecords(readTasksDir(path.join(path.dirname(filePath), 'board')).map((doc) => doc.task)));
+  result.issues.push(...lintTargets(filePath));
   const location = lintBoardLocation(path.dirname(path.resolve(filePath)));
   result.issues.push(...location);
   const { errors, warnings, fixable } = BrainfileLinter.groupIssues(result);
@@ -242,4 +244,21 @@ function lintGraph(filePath: string, content: string): LintIssue[] {
   ];
   const graph = buildDocGraph(tasks, { types: config.types as TypesConfig | undefined });
   return lintDocGraph(graph, { strict: config.strict === true });
+}
+
+/**
+ * decision-16: an open task's `landsOn` must name a branch of the project's
+ * repository, here or on origin, or its hand-off has nothing to fork from.
+ * Asked of the code's repository, the folder holding `.brainfile/`; nothing
+ * outside one. Never throws.
+ */
+function lintTargets(filePath: string): LintIssue[] {
+  const dotDir = path.dirname(path.resolve(filePath));
+  const project = path.basename(dotDir) === '.brainfile' ? path.dirname(dotDir) : dotDir;
+  try {
+    const tasks = readTasksDir(path.join(dotDir, 'board')).map((doc) => doc.task);
+    return tasks.some((t) => t.landsOn) ? lintLandsOn(project, tasks) : [];
+  } catch {
+    return [];
+  }
 }

@@ -1247,6 +1247,8 @@ describe('taskOperations', () => {
       ['dueDate', '2026-01-01'],
       ['parentId', 'epic-1'],
       ['status', 'active'],
+      ['landsOn', 'release/0.38.0'],
+      ['epicBranch', true],
     ] as const)('sets and clears %s', (field, value) => {
       const filePath = seedTask('task-1', 'todo');
 
@@ -1255,6 +1257,19 @@ describe('taskOperations', () => {
 
       patchTaskFile(filePath, { [field]: null } as any);
       expect(readTaskFile(filePath)!.task[field]).toBeUndefined();
+    });
+
+    it('writes epicBranch off as nothing, and refuses a landsOn git would not take as a branch', () => {
+      const filePath = seedTask('task-1', 'todo');
+      patchTaskFile(filePath, { epicBranch: true, landsOn: ' release ' });
+      expect(readTaskFile(filePath)!.task).toMatchObject({ epicBranch: true, landsOn: 'release' });
+      patchTaskFile(filePath, { epicBranch: false });
+      expect(readTaskFile(filePath)!.task.epicBranch).toBeUndefined();
+
+      const refused = patchTaskFile(filePath, { landsOn: 'two words' });
+      expect(refused.success).toBe(false);
+      expect(refused.error).toMatch(/not a branch name/);
+      expect(readTaskFile(filePath)!.task.landsOn).toBe('release');
     });
 
     it('edits a description that lives in the body, keeping one copy', () => {

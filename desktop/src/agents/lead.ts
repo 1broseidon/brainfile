@@ -13,7 +13,10 @@
  * and only the lead dispatches in it. Children it adds wait for the person,
  * unless the epic was handed off until done (a bypass repository), where the
  * app also lands each child that ends in Review. The epic is completed with
- * its last child.
+ * its last child; an epic with a branch of its own (`epicBranch`,
+ * decision-16) has the lead make that branch when it starts, and with its
+ * last child it waits in Ready to merge instead, for the person to say where
+ * its branch goes.
  *
  * The board is its memory: `lead:` on the epic says one is meant to run, the
  * plan is in notes on the epic, and a lead lost to a restart is resumed from
@@ -209,6 +212,8 @@ export interface Lead {
   timer: ReturnType<typeof setTimeout> | null;
   /** Its first turn has run: the next ones carry only what happened. */
   briefed: boolean;
+  /** The epic's own branch (decision-16), made when it started: its children fork from and land on it. */
+  branch?: string;
 }
 
 export interface LeadTurn {
@@ -240,6 +245,18 @@ export interface LeadDeps {
   mergeable(projectId: string, taskId: string): boolean;
   /** Lands a child as Merge does, checks first; what happened, in a line. */
   land(projectId: string, taskId: string): Promise<{ ok: boolean; said: string }>;
+  /**
+   * The epic's own branch (decision-16), made from its target as the lead
+   * starts: its name, or null when the epic has none. Absent: none has one.
+   */
+  branch?(projectId: string, epicId: string): Result<string | null>;
+  /**
+   * Its last child done, an epic with a branch of its own goes to Ready to
+   * merge instead of being completed (decision-16): its branch and where
+   * Merge would put it, or null when it has nothing to merge, and is completed
+   * as before. Absent: every epic is completed.
+   */
+  offer?(projectId: string, epicId: string): Promise<Result<{ branch: string; into: string } | null>>;
   emit(view: LeadView): void;
   /** Waits before a turn, so events that come together make one turn. */
   later(ms: number, fn: () => void): ReturnType<typeof setTimeout>;
@@ -270,7 +287,10 @@ export function leadPreamble(lead: Lead, tree: Tree, limit: number, continuing =
     `You lead ${epic.id} ("${epic.title}") on this repository's Brainfile board: you orchestrate its children, and you write no code. ` +
     'Use the brainfile MCP tools for the board (never edit its files by hand), and the desk to have work done: `dispatch` hands a child to a coding agent in its own worktree (agent and model are optional: by default, you and your model), `runs` says what is running, `stop` stops one. ' +
     'You may read the code and run git commands that only read; edits and other commands are refused.\n\n' +
-    `The app holds these rules, and refuses what breaks them: a child is handed off only once its dependsOn are done and their branches landed; at most ${limit} hand-offs at once in this repository; a child is retried at most its contract's maxRetries; you hand off only children under ${epic.id} that have none of their own. ${until} ` +
+    `The app holds these rules, and refuses what breaks them: a child is handed off only once its dependsOn are done and their branches landed on their own target; at most ${limit} hand-offs at once in this repository; a child is retried at most its contract's maxRetries; you hand off only children under ${epic.id} that have none of their own. ${until} ` +
+    (lead.branch
+      ? `${epic.id} has a branch of its own, ${lead.branch}: each child forks from it and lands on it, not on the trunk, and the app brings ${epic.id}'s target into it before each hand-off. When the last child is done, ${epic.id} waits in Ready to merge for the person to say where ${lead.branch} goes. `
+      : '') +
     'You are woken with a new turn when a child ends, lands or is sent back, or when the person resumes you: never wait, sleep or poll.\n\n' +
     (continuing
       ? `You are carrying on with ${epic.id}: the plan is in the notes on ${epic.id}. Read them and the board, then carry on from where it stands.\n\n`
@@ -410,6 +430,9 @@ export class Leads {
         return { ok: false, error: `${epicId} is under ${other.epicId}, whose lead runs it` };
       }
     }
+    // The epic's own branch, made before anything is handed off from it (decision-16).
+    const branch = this.deps.branch?.(projectId, epicId) ?? { ok: true as const, value: null };
+    if (!branch.ok) return { ok: false, error: `${epicId}'s branch could not be made: ${branch.error}` };
     const until = this.deps.policy(projectId) === 'bypass' ? 'done' : 'review';
     const now = Date.now();
     const lead: Lead = {
@@ -432,6 +455,7 @@ export class Leads {
       failures: 0,
       timer: null,
       briefed: false,
+      ...(branch.value ? { branch: branch.value } : {}),
     };
     const record: LeadRecord = {
       agent: agentId,
@@ -682,12 +706,21 @@ export class Leads {
     return run;
   }
 
-  /** The last child is done: the epic is completed, and the lead ends. */
+  /** The last child is done: the epic is completed, or, with a branch of its own, waits in Ready to merge; and the lead ends. */
   private async finish(lead: Lead): Promise<void> {
     if (lead.state === 'done' || lead.landing.has(lead.epicId)) return;
     // Once only, however many wakes find it finished; the record comes off while the epic is still on the board.
     lead.landing.add(lead.epicId);
     await this.deps.record(lead.projectId, lead.epicId, null);
+    const offered = this.deps.offer ? await this.deps.offer(lead.projectId, lead.epicId) : { ok: true as const, value: null };
+    if (!offered.ok) {
+      await this.end(lead, 'done', `Every child is done; ${lead.epicId}'s branch could not be put up to merge: ${offered.error}`, false);
+      return;
+    }
+    if (offered.value) {
+      await this.end(lead, 'done', `Every child is done: ${lead.epicId} is in Ready to merge, ${offered.value.branch} into ${offered.value.into}.`, false);
+      return;
+    }
     const completed = await this.deps.complete(lead.projectId, lead.epicId);
     await this.end(lead, 'done', completed.ok ? `${lead.epicId} is done: every child is.` : `Every child is done; ${lead.epicId} could not be completed: ${completed.error}`, false);
   }

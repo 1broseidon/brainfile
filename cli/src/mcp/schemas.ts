@@ -137,6 +137,9 @@ export const getTaskOutputSchema = z.looseObject({
   tags: z.array(z.string()).optional(),
   priority: z.string().optional(),
   dueDate: z.string().optional(),
+  /** The branch its hand-off lands on, as written; inherited from a parent is not shown here. */
+  landsOn: z.string().optional(),
+  epicBranch: z.boolean().optional(),
   subtasks: z.array(subtaskSchema).optional(),
   contract: z.looseObject({}).optional(),
   createdAt: z.string().optional(),

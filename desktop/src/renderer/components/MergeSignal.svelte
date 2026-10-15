@@ -10,11 +10,14 @@
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
   import Icon from './Icon.svelte';
-  import type { ReadyView } from '../../shared/api';
+  import MergeMenu from './MergeMenu.svelte';
+  import type { MergeTo, ReadyView } from '../../shared/api';
 
   let { ready, taskId }: { ready: ReadyView; taskId: string } = $props();
 
   let busy = $state(false);
+  /** An epic with a branch of its own: Merge asks where it goes (decision-16). */
+  const epicBranch = $derived(!!app.board?.tasks.some((t) => t.id === taskId && t.epicBranch));
 
   const opening = $derived(!!app.activeId && !!app.openingPullRequest[`${app.activeId}\n${taskId}`]);
 
@@ -24,11 +27,11 @@
     void app.openPullRequest(taskId);
   }
 
-  async function merge(e: MouseEvent): Promise<void> {
-    e.stopPropagation();
+  async function merge(e: MouseEvent | null, to?: MergeTo): Promise<void> {
+    e?.stopPropagation();
     if (busy) return;
     busy = true;
-    await app.settleReview(taskId, 'merge');
+    await app.settleReview(taskId, 'merge', undefined, to);
     busy = false;
   }
 </script>
@@ -42,23 +45,30 @@
     <span class="add" class:zero={!ready.added}>+{ready.added}</span>
     <span class="del" class:zero={!ready.removed}>−{ready.removed}</span>
   </span>
-  {#if app.canOpenPullRequest()}
+  {#if epicBranch}
+    <!-- The row stays a row: a click on the menu does not open the task. Its menu offers a pull request too. -->
+    <span class="merge" class:busy={busy || opening} role="presentation" onclick={(e) => e.stopPropagation()}>
+      <MergeMenu branch={`dispatch/${taskId}`} into={ready.into} busy={busy || opening} label={busy ? 'Checking…' : opening ? 'Opening…' : 'Merge'} onchoose={(to) => (to.to === 'pull-request' ? void app.openPullRequest(taskId) : merge(null, to))} />
+    </span>
+  {:else}
+    {#if app.canOpenPullRequest()}
+      <button
+        class="btn merge pull"
+        class:busy={opening}
+        disabled={busy || opening}
+        aria-label="Open pull request"
+        use:tip={`Push and open a pull request into ${ready.into}`}
+        onclick={openPullRequest}><Icon name="pull" size={13} />{opening ? 'Opening…' : 'PR'}</button
+      >
+    {/if}
     <button
-      class="btn merge pull"
-      class:busy={opening}
+      class="btn merge"
+      class:busy
       disabled={busy || opening}
-      aria-label="Open pull request"
-      use:tip={`Push and open a pull request into ${ready.into}`}
-      onclick={openPullRequest}><Icon name="pull" size={13} />{opening ? 'Opening…' : 'PR'}</button
+      use:tip={`Merge into ${ready.into}`}
+      onclick={merge}><Icon name="git" size={13} />{busy ? 'Checking…' : 'Merge'}</button
     >
   {/if}
-  <button
-    class="btn merge"
-    class:busy
-    disabled={busy || opening}
-    use:tip={`Merge into ${ready.into}`}
-    onclick={merge}><Icon name="git" size={13} />{busy ? 'Checking…' : 'Merge'}</button
-  >
 {/if}
 
 <style>

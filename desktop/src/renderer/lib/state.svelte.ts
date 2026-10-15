@@ -12,6 +12,7 @@ import type {
   AgentServer,
   Api,
   BoardSnapshot,
+  BranchesView,
   ColumnView,
   DispatchSettings,
   EditorInfo,
@@ -20,6 +21,7 @@ import type {
   IssuesView,
   IssueView,
   LinkView,
+  MergeTo,
   ModelOption,
   PairingCode,
   Result,
@@ -271,6 +273,8 @@ class AppState {
   update = $state<UpdateStatus | null>(null);
   /** Each board's hand-offs that can merge now, or would conflict, with no agent still at them (task-69). */
   mergeable = $state<Record<string, ReadyView[]>>({});
+  /** Each board's branches a hand-off could land on (decision-16), asked when a picker opens. */
+  branches = $state<Record<string, BranchesView>>({});
   /** Each board's trunk, when it has commits origin lacks: landing never pushes (spec-18). */
   unpushed = $state<Record<string, UnpushedView | null>>({});
   /** Pull requests being opened, by `projectId\ntaskId`: the push and GitHub take a moment. */
@@ -790,7 +794,10 @@ class AppState {
     const before = this.leads[key];
     this.leads[key] = lead;
     if (before?.state !== lead.state && (lead.state === 'done' || (lead.state === 'paused' && /failed/.test(lead.note ?? '')))) {
-      this.notify(lead.state === 'done' ? `${lead.epicId} is done: its lead handed off the last of it` : `${lead.epicId}'s lead paused: ${lead.note}`, lead.state === 'done' ? 'ok' : 'warn');
+      // An epic with a branch of its own is not done yet: it waits in Ready to merge (decision-16).
+      const done = /Ready to merge/.test(lead.note ?? '') ? lead.note! : `${lead.epicId} is done: its lead handed off the last of it`;
+      this.notify(lead.state === 'done' ? done : `${lead.epicId}'s lead paused: ${lead.note}`, lead.state === 'done' ? 'ok' : 'warn');
+      if (lead.state === 'done') this.refreshReady(lead.projectId, true);
     }
   }
 
@@ -887,6 +894,30 @@ class AppState {
     else this.keepSession({ projectId: this.activeId, kind: 'handoff', id: taskId });
   }
 
+  /** The branches a hand-off could land on, asked again each time a picker opens; the last answer stands meanwhile. */
+  async refreshBranches(projectId = this.activeId): Promise<void> {
+    if (!projectId) return;
+    const result = await api.branches(projectId);
+    if (result.ok) this.branches[projectId] = result.value;
+  }
+
+  /**
+   * Where a task's hand-off lands, chosen in Hand to… (decision-16): written
+   * to the task as `landsOn`, so it outlives the run. `null` is the trunk;
+   * what the task would inherit anyway is written as nothing.
+   */
+  async setLandsOn(taskId: string, branch: string | null): Promise<void> {
+    const task = this.board?.tasks.find((t) => t.id === taskId);
+    if (!task) return;
+    const parent = task.parentId ? this.board?.tasks.find((t) => t.id === task.parentId) ?? this.board?.completed.find((t) => t.id === task.parentId) : undefined;
+    // What it would land on without its own: its parent's own branch, else the parent's target, else the trunk.
+    const inherited = !parent ? null : parent.epicBranch ? `dispatch/${parent.id}` : (parent.target?.branch ?? null);
+    const trunk = this.branches[this.activeId ?? '']?.trunk ?? null;
+    const own = branch === inherited || (branch === null && inherited === null) ? null : (branch ?? trunk);
+    if ((task.landsOn ?? null) === own) return;
+    await this.patch(taskId, { landsOn: own });
+  }
+
   // ── A hand-off's review (spec-14) ────────────────────────────────────────
 
   /** The hand-off's worktree, opened in the chosen editor. */
@@ -897,9 +928,10 @@ class AppState {
   }
 
   /** Merge or discard: the review goes when its worktree does, and a merged task is done. True when it went. */
-  async settleReview(taskId: string, how: 'merge' | 'discard', projectId = this.activeId): Promise<boolean> {
+  /** `to`: where an epic's own branch goes (decision-16); left out, its target. */
+  async settleReview(taskId: string, how: 'merge' | 'discard', projectId = this.activeId, to?: MergeTo): Promise<boolean> {
     if (!projectId) return false;
-    const result = how === 'merge' ? await api.mergeReview(projectId, taskId) : await api.discardReview(projectId, taskId);
+    const result = how === 'merge' ? await api.mergeReview(projectId, taskId, to) : await api.discardReview(projectId, taskId);
     if (!result.ok) {
       // A check that failed says its first line here; the whole of it goes in the task's log, where a send-back carries it to the agent.
       const [first, ...rest] = result.error.split('\n');
@@ -911,7 +943,7 @@ class AppState {
     }
     // Merging is the person's yes: the agents process completes the task, unless subtasks are left or it is a
     // parent with open children; then it stays open, and says so.
-    if (result.ok && how === 'merge' && /stays open/.test(result.value.message)) this.notify(result.value.message, 'ok');
+    if (result.ok && how === 'merge' && /stays open|as a branch/.test(result.value.message)) this.notify(result.value.message, 'ok');
     this.refreshReady(projectId, true);
     return result.ok;
   }

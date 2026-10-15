@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { patchTaskFile, type TaskFilePatch } from '@brainfile/core';
+import { isBranchName, patchTaskFile, type TaskFilePatch } from '@brainfile/core';
 import chalk from 'chalk';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { missingRequired, operationFailed, taskNotFound, validationError } from '../utils/cli-error';
@@ -23,6 +23,10 @@ export interface PatchOptions {
   dependsOn?: string;
   /** Comma-separated decision IDs this work rests on; replaces the list. */
   decisions?: string;
+  /** The branch its hand-off forks from and lands on (decision-16). */
+  landsOn?: string;
+  /** An epic with a branch of its own (decision-16). */
+  epicBranch?: boolean;
   clearTags?: boolean;
   clearAssignee?: boolean;
   clearDueDate?: boolean;
@@ -30,6 +34,8 @@ export interface PatchOptions {
   clearParent?: boolean;
   clearDependsOn?: boolean;
   clearDecisions?: boolean;
+  clearLandsOn?: boolean;
+  clearEpicBranch?: boolean;
 }
 
 export interface PatchResult {
@@ -46,6 +52,8 @@ Examples:
   brainfile patch -t task-7 --depends-on task-5,task-6
   brainfile patch -t task-7 --decisions decision-2   # the decisions it rests on
   brainfile patch -t task-7 --clear-parent --clear-depends-on
+  brainfile patch -t epic-3 --lands-on release/0.38.0   # its hand-offs, and its children's, land there
+  brainfile patch -t epic-3 --epic-branch            # its children land on dispatch/epic-3
 
 An off-pattern parent (an epic under a task, anything under a decision) is a
 warning, and refused on a strict board. A loop is always refused.
@@ -53,8 +61,8 @@ warning, and refused on a strict board. A loop is always refused.
 
 const FIELD_HELP = [
   'At least one field to update is required.',
-  'Options: --title, --description, --priority, --tags, --assignee, --due-date, --parent, --depends-on, --decisions',
-  'Clear:   --clear-tags, --clear-assignee, --clear-due-date, --clear-priority, --clear-parent, --clear-depends-on, --clear-decisions',
+  'Options: --title, --description, --priority, --tags, --assignee, --due-date, --parent, --depends-on, --decisions, --lands-on, --epic-branch',
+  'Clear:   --clear-tags, --clear-assignee, --clear-due-date, --clear-priority, --clear-parent, --clear-depends-on, --clear-decisions, --clear-lands-on, --clear-epic-branch',
 ].join('\n');
 
 function isUnsafeTaskId(taskId: string): boolean {
@@ -87,8 +95,10 @@ export function patchCommand(options: PatchOptions, logger: Logger = defaultLogg
     options.title || options.description || options.priority ||
     options.tags || options.assignee || options.dueDate ||
     options.parent || options.dependsOn !== undefined || options.decisions !== undefined ||
+    options.landsOn || options.epicBranch ||
     options.clearTags || options.clearAssignee || options.clearDueDate || options.clearPriority ||
-    options.clearParent || options.clearDependsOn || options.clearDecisions,
+    options.clearParent || options.clearDependsOn || options.clearDecisions ||
+    options.clearLandsOn || options.clearEpicBranch,
   );
 
   if (!hasUpdates) {
@@ -103,6 +113,15 @@ export function patchCommand(options: PatchOptions, logger: Logger = defaultLogg
   }
   if (options.decisions !== undefined && options.clearDecisions) {
     throw validationError('Pass --decisions or --clear-decisions, not both.');
+  }
+  if (options.landsOn && options.clearLandsOn) {
+    throw validationError('Pass --lands-on or --clear-lands-on, not both.');
+  }
+  if (options.epicBranch && options.clearEpicBranch) {
+    throw validationError('Pass --epic-branch or --clear-epic-branch, not both.');
+  }
+  if (options.landsOn && !isBranchName(options.landsOn.trim())) {
+    throw validationError(`--lands-on: ${options.landsOn} is not a branch name git would take.`);
   }
 
   const filePath = resolveCliBrainfilePath(options.file);
@@ -197,6 +216,23 @@ export function patchCommand(options: PatchOptions, logger: Logger = defaultLogg
   if (options.clearDecisions) {
     patch.decisions = null;
     changes.push('decisions → removed');
+  }
+
+  if (options.landsOn) {
+    patch.landsOn = options.landsOn.trim();
+    changes.push(`landsOn → ${patch.landsOn}`);
+  }
+  if (options.clearLandsOn) {
+    patch.landsOn = null;
+    changes.push('landsOn → removed (inherited again)');
+  }
+  if (options.epicBranch) {
+    patch.epicBranch = true;
+    changes.push(`epicBranch → on (dispatch/${taskId})`);
+  }
+  if (options.clearEpicBranch) {
+    patch.epicBranch = null;
+    changes.push('epicBranch → off');
   }
 
   // Links are checked against the board as it stands (spec-12): loops and

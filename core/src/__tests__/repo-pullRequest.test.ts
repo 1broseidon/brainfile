@@ -22,7 +22,7 @@ import {
   type PullRequestForge,
   type PullRequestView,
 } from '../forge';
-import { prepareWorktree, readyToMerge, reviewOf, unpushed, withOpenPullRequest } from '../repo';
+import { landReview, offerEpicBranch, prepareEpicBranch, prepareTarget, prepareWorktree, readyToMerge, reviewOf, unpushed, withOpenPullRequest } from '../repo';
 import { parsePullRequest } from '../pullRequest';
 import { readTaskFile } from '../taskFile';
 
@@ -215,6 +215,25 @@ test('any branch can be opened into any other, for an epic branch', async () => 
   assert.deepEqual(opened.map((p) => [p.head, p.base]), [['dispatch/epic-1', 'release/1.0']]);
   assert.ok(onOrigin('refs/heads/dispatch/epic-1'));
   assert.deepEqual(await pushBranch(repo, 'nope'), { ok: false, error: 'There is no branch nope to push' });
+});
+
+test("an epic's own branch, its last child landed, is opened as a pull request into the epic's target, its Merge's fourth choice", async () => {
+  const board = path.dirname(taskFile);
+  fs.writeFileSync(path.join(board, 'epic-1.md'), '---\nid: epic-1\ntitle: The epic\ncolumn: review\nepicBranch: true\n---\n');
+  fs.writeFileSync(path.join(board, 'task-2.md'), '---\nid: task-2\ntitle: Two\ncolumn: review\nparentId: epic-1\n---\n');
+  assert.equal(prepareEpicBranch(repo, 'epic-1'), 'dispatch/epic-1');
+  const child = prepareWorktree(repo, 'task-2', root, false, prepareTarget(repo, 'task-2'))!;
+  work(child.path, 'b.txt', 'b\n');
+  const landed = await landReview(repo, 'task-2', { title: 'Two' });
+  assert.ok(landed.ok);
+  assert.deepEqual(offerEpicBranch(repo, 'epic-1'), { branch: 'dispatch/epic-1', into: 'main' });
+
+  const { forge, opened } = fakeForge();
+  const result = await openHandOffPullRequest(repo, 'epic-1', { github: forge, repo: REPO });
+  assert.ok(result.ok, !result.ok ? result.error : '');
+  assert.deepEqual(opened.map((p) => [p.head, p.base, p.title]), [['dispatch/epic-1', 'main', 'The epic']]);
+  assert.ok(onOrigin('refs/heads/dispatch/epic-1'));
+  assert.deepEqual(ready(), []);
 });
 
 test('followed while open, nothing changes; closed without merging, it is back in Ready to merge', async () => {

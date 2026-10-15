@@ -19,9 +19,11 @@
  * nothing else needs storing.
  *
  * A hand-off may be given another branch to fork from and land on instead
- * of the trunk (decision-16's `landsOn` will name it): it is recorded as the
- * branch's `brainfileBase`, and the review, the conflict preview, landing and
- * send-back all go into it.
+ * of the trunk (decision-16: the task's `landsOn`, see landsOnOf): it is
+ * recorded as the branch's `brainfileBase`, and the review, the conflict
+ * preview, landing and send-back all go into it. An epic with a branch of
+ * its own has one with no worktree (prepareBranch), its target brought into
+ * it before each hand-off (bringIn).
  *
  * Not an IDE: the review says what changed, opens it in the person's editor,
  * merges it or throws it away. It never edits a diff.
@@ -35,11 +37,13 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { TaskDocument } from '../types';
+import type { LintIssue } from '../linter';
+import { isBranchName } from '../landsOn';
 import { openPullRequestOf } from '../pullRequest';
 import { readTasksDir } from '../taskFile';
 import type { PullRequestRecord } from '../types';
 import { findV2Task, getV2Dirs } from '../workspace';
-import { BOARD_STATE_DIR, git, gitCommonDir, gitToplevel, listWorktrees } from './boardRepo';
+import { BOARD_STATE_DIR, boardBranch, git, gitCommonDir, gitToplevel, listWorktrees } from './boardRepo';
 import { landingLockPath, takeLandingLock, type LandingLockOptions } from './landingLock';
 import { locateBoard } from './locate';
 
@@ -161,6 +165,18 @@ export function branchRef(repoRoot: string, name: string): { name: string; ref: 
   if (branchExists(repoRoot, name)) return { name, ref: name };
   if (git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], repoRoot).ok) return { name, ref: `origin/${name}` };
   return null;
+}
+
+/**
+ * A branch to land on, here: the local branch, else made from origin's copy
+ * and following it, so the work has a branch to go into.
+ */
+function localBranch(repoRoot: string, name: string): { ok: true } | { ok: false; error: string } {
+  const found = branchRef(repoRoot, name);
+  if (!found) return { ok: false, error: `There is no branch ${name}, here or on origin` };
+  if (found.ref === found.name) return { ok: true };
+  const made = git(['branch', '--track', found.name, found.ref], repoRoot);
+  return made.ok ? { ok: true } : { ok: false, error: `Could not make ${found.name} from ${found.ref}: ${made.stderr || made.stdout}` };
 }
 
 /**
@@ -299,8 +315,8 @@ export function prepareWorktree(projectId: string, taskId: string, root = worktr
     } else {
       // A branch named only on origin is made here, following it, so there is a branch to land on.
       if (base && target && target.ref !== target.name) {
-        const made = git(['branch', '--track', target.name, target.ref], repoRoot);
-        if (!made.ok) throw new Error(`Could not make ${target.name} from ${target.ref}: ${made.stderr || made.stdout}`);
+        const made = localBranch(repoRoot, target.name);
+        if (!made.ok) throw new Error(made.error);
       }
       // A repository with no trunk to name forks from the checkout, as before decision-11.
       const fork = git(['rev-parse', target ? freshest(repoRoot, target) : 'HEAD'], repoRoot).stdout;
@@ -312,6 +328,113 @@ export function prepareWorktree(projectId: string, taskId: string, root = worktr
     }
   }
   return { path: at, branch, base: recorded(repoRoot, branch, BASE_KEY), resumed: ahead(repoRoot, branch) > 0 };
+}
+
+/**
+ * A task's branch with no worktree of its own (decision-16): an epic's, for
+ * everything under it to fork from and land on. Made from the tip of `base`
+ * (its target, a local branch or origin's, which is then made locally), else
+ * the trunk, through `freshest`, and recorded as prepareWorktree records a
+ * hand-off's; found again after, keeping what it recorded. No worktree, as
+ * landings move it with update-ref while it is not checked out. Null when
+ * the project cannot branch (see canBranch).
+ */
+export function prepareBranch(projectId: string, taskId: string, base?: string): { branch: string; base: string | null; made: boolean } | null {
+  const repoRoot = canBranch(projectId);
+  if (!repoRoot) return null;
+  const branch = branchFor(taskId);
+  if (branchExists(repoRoot, branch)) return { branch, base: recorded(repoRoot, branch, BASE_KEY), made: false };
+  const target = base ? branchRef(repoRoot, base) : trunkOf(repoRoot);
+  if (!target) throw new Error(base ? `There is no branch ${base} for ${taskId} to fork from, here or on origin` : `${taskId} has no trunk to make its branch from`);
+  if (target.ref !== target.name) {
+    const made = localBranch(repoRoot, target.name);
+    if (!made.ok) throw new Error(made.error);
+  }
+  const fork = git(['rev-parse', freshest(repoRoot, target)], repoRoot).stdout;
+  // Only where there is none yet: two made at once make one.
+  const r = git(['update-ref', `refs/heads/${branch}`, fork, ''], repoRoot);
+  if (!r.ok) {
+    if (branchExists(repoRoot, branch)) return { branch, base: recorded(repoRoot, branch, BASE_KEY), made: false };
+    throw new Error(`Could not make ${branch}: ${said(r)}`);
+  }
+  git(['config', `branch.${branch}.${BASE_KEY}`, target.name], repoRoot);
+  git(['config', `branch.${branch}.${FORK_KEY}`, fork], repoRoot);
+  return { branch, base: target.name, made: true };
+}
+
+/** What bringing a branch's target into it came to (decision-16): done, or why not, with a conflict's files for an agent to settle. */
+export type Refresh =
+  | { ok: true; moved: boolean; message: string }
+  | Refused
+  | { ok: false; kind: 'conflict'; error: string; branch: string; into: string; files: string[]; collided: Collision[] };
+
+/**
+ * Brings the target into a task's branch (decision-16), so an epic's branch
+ * does not drift from the branch it lands on: decision-12's landing the
+ * other way. The target's tip (through `freshest`) is merged into the branch
+ * in a checkout made for it and gone after, never the person's, and the
+ * branch moves to the result only from the tip that was merged, a
+ * compare-and-swap; if it moved meanwhile (a child landed) it starts again.
+ * A branch with none of its own work follows by fast-forward. The target's
+ * tip is then recorded as its fork, so its review shows only its own work. A
+ * conflict merges nothing and names the files, for an agent to settle. One
+ * at a time with landings, which move the same branch; a branch checked out
+ * somewhere is left alone.
+ */
+export function bringIn(projectId: string, taskId: string, options: { lock?: LandingLockOptions; attempts?: number } = {}): Promise<Refresh> {
+  const repoRoot = gitToplevel(projectId);
+  const branch = branchFor(taskId);
+  if (!repoRoot || !branchExists(repoRoot, branch)) return Promise.resolve({ ok: false, kind: 'refused', error: `There is no ${branch} to bring anything into` });
+  return serially(repoRoot, options.lock, async (): Promise<Refresh> => {
+    const at = existing(repoRoot, taskId);
+    if (at) return { ok: false, kind: 'refused', error: `${branch} is checked out at ${at}: nothing was brought in` };
+    const base = recorded(repoRoot, branch, BASE_KEY);
+    const target = base ? branchRef(repoRoot, base) : trunkOf(repoRoot);
+    if (!target) return { ok: false, kind: 'refused', error: `${branch} has nothing to bring in: ${base ?? 'the trunk'} is gone` };
+    const into = target.name;
+    for (let attempt = 0; attempt < (options.attempts ?? 5); attempt++) {
+      const old = git(['rev-parse', '--verify', `refs/heads/${branch}`], repoRoot).stdout;
+      const tip = git(['rev-parse', '--verify', freshest(repoRoot, target)], repoRoot).stdout;
+      if (!old || !tip) return { ok: false, kind: 'refused', error: `${!old ? branch : into} is gone: nothing was brought in` };
+      if (git(['merge-base', '--is-ancestor', tip, old], repoRoot).ok) return { ok: true, moved: false, message: `${branch} already has ${into}` };
+      let next = tip;
+      if (!git(['merge-base', '--is-ancestor', old, tip], repoRoot).ok) {
+        const merged = mergeAside(repoRoot, old, tip, `Merge ${into} into ${branch}`);
+        if (!merged.ok) {
+          if (merged.files.length) {
+            const collided = collisions(projectId, branch, tip, merged.files);
+            return { ok: false, kind: 'conflict', branch, into, files: merged.files, collided, error: `Bringing ${into} into ${branch} conflicts in ${named(merged.files)}. Nothing was brought in.` };
+          }
+          return { ok: false, kind: 'refused', error: `Nothing was brought in: ${merged.error}` };
+        }
+        next = merged.commit;
+      }
+      if (git(['update-ref', '-m', `Merge ${into} into ${branch}`, `refs/heads/${branch}`, next, old], repoRoot).ok) {
+        git(['config', `branch.${branch}.${FORK_KEY}`, tip], repoRoot);
+        return { ok: true, moved: true, message: `Brought ${into} into ${branch}` };
+      }
+      // The branch moved since it was read: again, from its new tip.
+    }
+    return { ok: false, kind: 'refused', error: `${branch} kept moving: nothing was brought in, try again` };
+  });
+}
+
+/** `theirs` merged into `ours` in a detached checkout of its own, made and removed here: the merge commit, or the files that conflicted. */
+function mergeAside(repoRoot: string, ours: string, theirs: string, message: string): { ok: true; commit: string } | { ok: false; files: string[]; error: string } {
+  const at = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-bring-in-'));
+  try {
+    const added = git(['worktree', 'add', '--detach', at, ours], repoRoot);
+    if (!added.ok) return { ok: false, files: [], error: said(added) };
+    const merged = git(['merge', '--no-ff', '--no-edit', '-m', message, theirs], at);
+    if (merged.ok) return { ok: true, commit: git(['rev-parse', 'HEAD'], at).stdout };
+    const files = git(['diff', '--name-only', '--diff-filter=U'], at).stdout.split('\n').filter(Boolean);
+    git(['merge', '--abort'], at);
+    return { ok: false, files, error: said(merged) };
+  } finally {
+    git(['worktree', 'remove', '--force', at], repoRoot);
+    fs.rmSync(at, { recursive: true, force: true });
+    git(['worktree', 'prune'], repoRoot);
+  }
 }
 
 /** The work a hand-off left on its branch, for the review in the task pane; null when it has no worktree. */
@@ -368,15 +491,15 @@ export function reviewOf(projectId: string, taskId: string): HandOffReview | nul
 
 /**
  * Whether the branch's work is already where it goes: in `into`, in what
- * `into` tracks or origin's copy of it, or in the remote's trunk, so a pull
- * request merged on the forge counts while the local branch is behind. A
- * squash merge leaves no ancestry, so a merge that would change nothing
- * counts too.
+ * `into` tracks, or in origin's copy of `into`, so a pull request merged on
+ * the forge counts while the local branch is behind. For a target other
+ * than the trunk (decision-16) that is its own copy on origin, never the
+ * trunk's: work merged into main has not landed on a release line. A squash
+ * merge leaves no ancestry, so a merge that would change nothing counts too.
  */
 function landedIn(repoRoot: string, branch: string, into: string): boolean {
   const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${into}@{upstream}`], repoRoot);
-  const trunk = trunkOf(repoRoot)?.name;
-  const places = [into, upstream.ok ? upstream.stdout : '', `origin/${into}`, trunk ? `origin/${trunk}` : ''].filter(
+  const places = [into, upstream.ok ? upstream.stdout : '', `origin/${into}`].filter(
     (ref, i, all) => ref && all.indexOf(ref) === i && git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], repoRoot).ok
   );
   return places.some((ref) => {
@@ -543,10 +666,12 @@ export interface Collision {
   taskId?: string;
 }
 
+type Refused = { ok: false; kind: 'refused'; error: string };
+
 /** What a landing came to: landed, or why not, with what task-63 needs to send a conflict back. */
 export type Landing =
   | { ok: true; message: string }
-  | { ok: false; kind: 'refused'; error: string }
+  | Refused
   | { ok: false; kind: 'conflict'; error: string; branch: string; into: string; files: string[]; collided: Collision[] }
   | { ok: false; kind: 'check'; error: string; branch: string; into: string; command: string; output: string };
 
@@ -596,7 +721,7 @@ export function landingLockOf(repoRoot: string): string {
 }
 
 /** One landing at a time per repository, across processes: `work` runs holding the lock, which goes after. */
-async function serially(repoRoot: string, options: LandingLockOptions | undefined, work: () => Promise<Landing>): Promise<Landing> {
+async function serially<T extends Landing | Refresh>(repoRoot: string, options: LandingLockOptions | undefined, work: () => Promise<T>): Promise<T | Refused> {
   const lock = await takeLandingLock(landingLockOf(repoRoot), options);
   if (!lock.ok) return { ok: false, kind: 'refused', error: lock.error };
   try {
@@ -618,7 +743,9 @@ async function serially(repoRoot: string, options: LandingLockOptions | undefine
  * trunk moved meanwhile it starts again from the new tip. One landing at a
  * time per repository, whichever process lands: another waits for the
  * landing lock (`lock` says how long). The worktree and branch go once
- * landed.
+ * landed. `into` lands it on another branch than the one it goes into (an
+ * epic's branch somewhere else, decision-16): a local branch, else origin's,
+ * made here to follow it.
  */
 export function landReview(
   projectId: string,
@@ -628,6 +755,7 @@ export function landReview(
     check?: (at: string) => Promise<{ ok: true } | { ok: false; command: string; output: string }>;
     attempts?: number;
     lock?: LandingLockOptions;
+    into?: string;
   } = {}
 ): Promise<Landing> {
   const repoRoot = gitToplevel(projectId);
@@ -636,9 +764,15 @@ export function landReview(
     const review = reviewOf(projectId, taskId);
     const refused = whyNotMerge(taskId, review);
     if (refused || !review?.branch || !review.into) return { ok: false, kind: 'refused', error: refused ?? `${taskId} has no worktree to merge` };
-    const { branch, path: at, into } = review;
+    const { branch, path: at } = review;
+    let into = review.into;
+    if (options.into && options.into !== into) {
+      const local = localBranch(repoRoot, options.into);
+      if (!local.ok) return { ok: false, kind: 'refused', error: local.error };
+      into = options.into;
+    }
     // Merged elsewhere already (the terminal, a pull request): only the worktree is left to go.
-    if (review.merged) {
+    if (into === review.into ? review.merged : landedIn(repoRoot, branch, into)) {
       cleanUp(repoRoot, at, branch, true);
       return { ok: true, message: `${branch} was already in ${into}` };
     }
@@ -731,6 +865,82 @@ export function discardReview(projectId: string, taskId: string): { message: str
   }
   cleanUp(repoRoot, at!, branchFor(taskId), true);
   return { message: `Discarded ${branchFor(taskId)}` };
+}
+
+/**
+ * Lets the hand-off's worktree go and keeps its branch (decision-16: an epic
+ * kept as a branch, for the person to take on from there). Uncommitted work
+ * in it refuses, as Merge does.
+ */
+export function keepBranch(projectId: string, taskId: string): { message: string } {
+  const repoRoot = gitToplevel(projectId);
+  const at = repoRoot ? existing(repoRoot, taskId) : null;
+  if (!repoRoot || !at) throw new Error(`${taskId} has no worktree to let go`);
+  const { count } = uncommittedIn(at);
+  if (count > 0) throw new Error(`${count} ${count === 1 ? 'file is' : 'files are'} not committed in the worktree: commit or discard ${count === 1 ? 'it' : 'them'} first`);
+  const removed = git(['worktree', 'remove', at], repoRoot);
+  if (!removed.ok) throw new Error(`Could not remove the worktree: ${said(removed)}`);
+  try {
+    fs.rmdirSync(path.dirname(at));
+  } catch {
+    /* another hand-off is still there */
+  }
+  return { message: `Kept ${branchFor(taskId)} as a branch` };
+}
+
+/** The branches a hand-off could land on, for a picker (decision-16). */
+export interface BranchList {
+  /** The trunk's name; null when the repository has none. */
+  trunk: string | null;
+  /** Local branches, the most recently committed first; not hand-offs' own nor the board's. */
+  local: string[];
+  /** Branches only on origin. */
+  remote: string[];
+  /** Branches hand-offs here were made to land on, other than the trunk. */
+  recent: string[];
+}
+
+/** The repository's branches, as Hand to… offers them: never a hand-off's own `dispatch/…` nor the board branch. */
+export function branchesOf(projectId: string): BranchList {
+  const repoRoot = gitToplevel(projectId);
+  if (!repoRoot) return { trunk: null, local: [], remote: [], recent: [] };
+  const trunk = trunkOf(repoRoot)?.name ?? null;
+  const board = boardBranch(repoRoot);
+  const offered = (name: string) => !!name && name !== board && !name.startsWith(BRANCH_PREFIX) && name !== 'HEAD';
+  const refs = (pattern: string) => {
+    const r = git(['for-each-ref', '--sort=-committerdate', '--format=%(refname)', pattern], repoRoot);
+    return r.ok ? r.stdout.split('\n').filter(Boolean) : [];
+  };
+  const local = refs('refs/heads').map((r) => r.slice('refs/heads/'.length)).filter(offered);
+  const remote = refs('refs/remotes/origin')
+    .map((r) => r.slice('refs/remotes/origin/'.length))
+    .filter((name) => offered(name) && !local.includes(name));
+  const bases = git(['config', '--get-regexp', '^branch\\..*\\.brainfilebase$'], repoRoot);
+  const recent = (bases.ok ? bases.stdout.split('\n') : [])
+    .map((line) => line.split(' ').slice(1).join(' ').trim())
+    .filter((name, i, all) => offered(name) && name !== trunk && all.indexOf(name) === i);
+  return { trunk, local, remote, recent };
+}
+
+/**
+ * Lint for targets (decision-16): a task whose `landsOn` names a branch
+ * that exists neither here nor on origin, or is not a branch name at all,
+ * cannot be handed off. Nothing when `projectId` is not in a repository.
+ */
+export function lintLandsOn(projectId: string, tasks: Pick<TaskDocument['task'], 'id' | 'landsOn'>[]): LintIssue[] {
+  const repoRoot = gitToplevel(projectId);
+  if (!repoRoot) return [];
+  const issues: LintIssue[] = [];
+  for (const task of tasks) {
+    const branch = typeof task.landsOn === 'string' ? task.landsOn.trim() : '';
+    if (!branch) continue;
+    if (!isBranchName(branch)) {
+      issues.push({ type: 'warning', code: 'lands-on-invalid', message: `${task.id}: landsOn ${branch} is not a branch name git would take` });
+    } else if (!branchRef(repoRoot, branch)) {
+      issues.push({ type: 'warning', code: 'lands-on-missing', message: `${task.id} lands on ${branch}, which is not a branch here or on origin: its hand-off cannot fork from it. Make the branch, or change landsOn.` });
+    }
+  }
+  return issues;
 }
 
 /**

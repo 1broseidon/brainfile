@@ -2,7 +2,8 @@
   import { api, app } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
   import Icon from './Icon.svelte';
-  import type { AgentId, BoardSnapshot, ReviewView } from '../../shared/api';
+  import MergeMenu from './MergeMenu.svelte';
+  import type { AgentId, BoardSnapshot, MergeTo, ReviewView } from '../../shared/api';
 
   /**
    * A hand-off's own branch, said in the task pane (spec-14): what the agent
@@ -26,6 +27,8 @@
   /** The pull request it was opened as, if any: while open it lands on the forge, and Merge gives way to it. */
   const pr = $derived([...board.tasks, ...board.completed].find((t) => t.id === taskId)?.pullRequest);
   const opening = $derived(!!app.openingPullRequest[`${board.projectId}\n${taskId}`]);
+  /** An epic with a branch of its own: Merge asks where the branch goes (decision-16). */
+  const epicBranch = $derived(board.tasks.some((t) => t.id === taskId && t.epicBranch));
   /** Back to whoever did it, else the agent this board uses. */
   const agent = $derived<AgentId | null>(app.agents.some((a) => a.id === assignee) ? (assignee as AgentId) : app.defaultAgent);
 
@@ -40,11 +43,11 @@
     });
   });
 
-  async function settle(how: 'merge' | 'discard'): Promise<void> {
+  async function settle(how: 'merge' | 'discard', to?: MergeTo): Promise<void> {
     busy = true;
     merging = how === 'merge';
     confirming = false;
-    if (await app.settleReview(taskId, how)) review = null;
+    if (await app.settleReview(taskId, how, board.projectId, to)) review = null;
     busy = false;
     merging = false;
   }
@@ -175,7 +178,10 @@
         <button class="btn danger" disabled={busy || !!run} onclick={discard}>
           <Icon name="trash" size={13} />{confirming ? 'Discard its work?' : 'Discard'}
         </button>
-        {#if review.branch}
+        {#if review.branch && epicBranch && pr?.state !== 'open' && review.into && !review.merged && !review.conflicts.length && !mergeWaits}
+          <!-- Its children landed on it: where the branch goes is the person's to say. -->
+          <MergeMenu branch={review.branch} into={review.into} busy={busy || opening || !!run} primary={inReview} label={merging ? 'Checking…' : opening ? 'Opening…' : 'Merge'} onchoose={(to) => (to.to === 'pull-request' ? app.openPullRequest(taskId, board.projectId) : settle('merge', to))} />
+        {:else if review.branch}
           <button class="btn quiet" disabled={busy || !!run} onclick={() => (sending = true)}><Icon name="hand" size={13} />Send back…</button>
           {#if pr?.state === 'open'}
             <!-- It lands on the forge now (decision-16): the one thing left here is to look at it there. -->

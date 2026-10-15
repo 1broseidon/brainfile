@@ -64,6 +64,7 @@ const api: Api = {
   readyToMerge: invoke('readyToMerge'),
   mergeReview: invoke('mergeReview'),
   discardReview: invoke('discardReview'),
+  branches: invoke('branches'),
   openPullRequest: invoke('openPullRequest'),
   unpushed: invoke('unpushed'),
   openWorktree: invoke('openWorktree'),

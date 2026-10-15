@@ -84,6 +84,12 @@
       "description": "Due date in ISO 8601 format",
       "format": "date"
     },
+    "landsOn": {
+      "type": "string",
+      "description": "The branch a hand-off of this work forks from and lands on (decision-16). Inherited by everything under it unless a nearer document sets its own; absent all the way up means the repository's trunk.",
+      "minLength": 1,
+      "examples": ["release/0.38.0"]
+    },
     "createdAt": {
       "$ref": "https://brainfile.md/v2/base.json#/definitions/timestamp",
       "description": "When the task was created"
