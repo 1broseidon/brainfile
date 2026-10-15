@@ -1,7 +1,7 @@
 ---
 id: task-84
 title: "Desktop: show runs started outside it, live, from the board and state/runs; the chat dispatches through brainfile mcp and the desk retires"
-column: in-progress
+column: review
 position: 20
 tags:
   - desktop
@@ -27,7 +27,7 @@ decisions:
   - decision-14
   - decision-10
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: desktop/src/host/host.ts
@@ -50,10 +50,10 @@ contract:
     readyAt: "2026-10-15T21:40:11.572Z"
     pickedUpAt: "2026-10-15T23:21:16.733Z"
     reworkCount: 1
-    deliveredAt: "2026-10-15T23:14:06.858Z"
-    duration: 1058
+    deliveredAt: "2026-10-15T23:25:02.565Z"
+    duration: 226
 createdAt: "2026-10-14T22:16:44.174Z"
-updatedAt: "2026-10-15T23:21:16.733Z"
+updatedAt: "2026-10-15T23:25:02.565Z"
 dispatch:
   agent: claude
   model: opus
