@@ -19,7 +19,7 @@ const THERE = '/repos/there';
 
 /** Two boards: task-1 here, task-9 only there. */
 const BOARDS: Record<string, Record<string, string>> = {
-  [HERE]: { 'task-1': 'Write a hello file', 'task-2': 'Second' },
+  [HERE]: { 'task-1': 'Write a hello file', 'task-2': 'Second', 'epic-1': 'Three files' },
   [THERE]: { 'task-9': 'Elsewhere' },
 };
 
@@ -60,6 +60,8 @@ function deps(): DeskDeps {
         startedAt: Date.now(),
       };
       runs.push(run);
+      // An epic with children gets a lead (decision-15), not a worktree.
+      if (taskId === 'epic-1') return { ok: true, value: { run: { ...run, kind: 'lead' }, branch: null, lead: true } };
       return { ok: true, value: { run, branch: `dispatch/${taskId}` } };
     },
     runs: () => runs,
@@ -360,4 +362,11 @@ test('the stdio MCP server lists the tools and passes a call through with its to
   const exited = new Promise<number | null>((resolve) => child.on('exit', resolve));
   child.stdin.end();
   assert.equal(await exited, 0);
+});
+
+test('the chat hands off an epic with children: its lead takes it, and the reply says so', async () => {
+  const token = bridge.grant(grantHere);
+  const result = await callDesk(bridge.socketPath, { token, tool: 'dispatch', args: { taskId: 'epic-1' } });
+  assert.ok(result.ok);
+  assert.match(result.value, /epic-1 \("Three files"\) has children, so claude now leads it: it checks the plan, then hands the children off in order/);
 });

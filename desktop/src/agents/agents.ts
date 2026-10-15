@@ -9,7 +9,11 @@
  * as the CLI; what it changes reaches the window as ordinary board changes.
  * A hand-off gets its own worktree and branch instead (worktree.ts, spec-14).
  * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
- * and `stop`, so a chat can hand work off the way Hand to… does. Discuss
+ * and `stop`, so a chat can hand work off the way Hand to… does. Handing off
+ * a document with children starts its lead instead (lead.ts, decision-15):
+ * an agent with the desk scoped to that tree, which checks the plan, hands
+ * the children off in order inside rules the app holds, and is woken when
+ * one ends or lands. Discuss
  * (discuss.ts, task-35) is a chat about one task that may change its spec and
  * record decisions, and nothing else. Besides the agents it knows, it starts
  * any ACP server the person names in Settings (custom.ts, task-47), the way
@@ -21,7 +25,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
-import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
+import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, readTasksDir, summarizeDecision, type Task } from '@brainfile/core';
 import { locateBoard } from '@brainfile/core/repo';
 import { collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, runChecks, uncommittedIn, type Landing, type Worktree } from './worktree';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
@@ -30,6 +34,8 @@ import { AgentRegistry } from './registry';
 import { readSettingsFile, settingsOf, writeSettings, type SettingsFile } from './settings';
 import { chatPermission, discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
+import { DEFAULT_LIMIT, Leads, treeOf, workOf as openWork, type Lead, type LeadTurn, type Tree, type TreeDoc } from './lead';
+import { isReview } from '../shared/columns';
 import { Startups, unlessAborted } from './startup';
 import { effortSelect, effortToSet } from './effort';
 import { commandName, customId, customName, isCustom } from '../shared/agentServers';
@@ -48,6 +54,7 @@ import type {
   CustomAgentId,
   DispatchRecord,
   DispatchSettings,
+  LeadRecord,
   HostReply,
   LiveAgents,
   ModelOption,
@@ -591,9 +598,14 @@ const ACTIVITY: Record<string, string> = {
   fetch: 'fetching',
 };
 
+const LIVE_STATES = new Set(['starting', 'working', 'waiting']);
+
 function update(run: AgentRun, patch: Partial<AgentRun>): void {
+  const was = run.state;
   Object.assign(run, patch);
   emit({ kind: 'run', run: { ...run } });
+  // A hand-off that ends wakes the lead over its task (decision-15).
+  if (run.kind === 'dispatch' && LIVE_STATES.has(was) && !LIVE_STATES.has(run.state)) void leads.childEnded({ ...run });
 }
 
 /** The environment every agent starts in: the real node first on PATH, so nothing an agent starts finds a shim instead. */
@@ -647,6 +659,8 @@ interface OpenOptions {
   withDesk?: boolean;
   /** The task a discussion is about: it reads, and changes only that task's spec. */
   discuss?: string;
+  /** The epic a lead runs (decision-15): its desk is scoped to that tree. */
+  lead?: string;
   /** The effort to set once the model is selected. Unset starts on medium when the model offers it. */
   effort?: string;
   /** Stops the startup: the agent is not spawned, or is killed. */
@@ -654,13 +668,13 @@ interface OpenOptions {
 }
 
 async function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
-  const { board = true, at, withDesk = false, discuss = null, effort, signal } = options;
+  const { board = true, at, withDesk = false, discuss = null, lead, effort, signal } = options;
   const agent = agentOf(agentId);
   if (!agent) throw new Error(isCustom(agentId) ? `${customName(agentId)} is no longer among your agents` : `Unknown agent ${agentId}`);
   const missing = whyNot(agent);
   if (missing) throw new Error(missing);
   const cwd = at ?? (board ? locateBoard(projectId, { materialize: false }).projectRoot : projectId);
-  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, effort, models: {}, efforts: {}, key }) : null;
+  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, effort, models: {}, efforts: {}, key, ...(lead ? { lead } : {}) }) : null;
   const launch = await unlessAborted(signal, launchOf(agent)).catch((err) => {
     if (deskToken) desk.revoke(deskToken);
     throw err;
@@ -1025,10 +1039,15 @@ function brief(projectId: string, taskId: string, worktree: Worktree | null = nu
   const contract = task.contract
     ? `\n\nIt carries a contract (status ${task.contract.status}). Pick it up with the brainfile MCP contract tool before you start, meet its deliverables and validation, and deliver it when you are done.`
     : '';
+  const over = leads.leadOver(projectId, taskId);
+  const led = over && over.epicId !== taskId
+    ? `\n\nThis task is part of ${over.epicId}, which an agent leads: it hands off the epic's children in order and reads the board, not your conversation. Put what the tasks after this one need to know in a note on ${task.id}.`
+    : '';
   return [
     `You have been handed ${task.id} on this repository's Brainfile board: "${task.title}".`,
     body.trim() ? `\n${body.trim()}` : '',
     contract,
+    led,
     standingDecisions(located.brainfilePath),
     workplace(worktree),
     `\n\nUse the brainfile MCP tools for the board (or, if they are not available, the \`brainfile\` command line here; never edit the board's files by hand): move ${task.id} to In Progress when you start, and when you finish add a short log note to it saying what you did${worktree?.branch ? ' and that it is on its branch' : ''}. ${finish(located.brainfilePath, task.id)} Do the work in ${worktree ? 'this worktree' : 'this repository'}. Finish with a reply of one or two sentences.`,
@@ -1109,7 +1128,26 @@ function startDispatch(
   return { ok: true, value: { run: { ...run }, worktree } };
 }
 
+/**
+ * The person's hand-off (Hand to…): a task with open children gets a lead
+ * (decision-15); any other, an agent in its worktree, with who asked on the
+ * task. Inside a led tree the person's hand-off is theirs to make.
+ */
 async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Promise<Result<AgentRun>> {
+  const guarded = leads.guard(projectId, taskId, 'person');
+  if (!guarded.ok) return guarded;
+  if (leadsChildren(projectId, taskId)) {
+    const started = await leads.start(projectId, taskId, agentId, { model, effort, by: 'person' });
+    if (!started.ok) return started;
+    return started.value.run ? { ok: true, value: started.value.run } : { ok: false, error: `${taskId}'s lead did not start` };
+  }
+  const handed = handOff(projectId, taskId, agentId, model, effort);
+  if (handed.ok) void callHost<Result>('recordDispatch', projectId, taskId, dispatchRecord(agentId, model, effort, 'person'));
+  return handed;
+}
+
+/** A hand-off with no record and no lead: a send-back is the same hand-off going on. */
+function handOff(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Result<AgentRun> {
   const held = reserve(projectId, taskId);
   if (!held.ok) return held;
   try {
@@ -1118,6 +1156,116 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId, mod
   } finally {
     held.value();
   }
+}
+
+function dispatchRecord(agentId: AgentId, model: string | undefined, effort: string | undefined, by: DispatchRecord['by']): DispatchRecord {
+  return { agent: agentId, ...(model ? { model } : {}), ...(effort ? { effort } : {}), by, at: new Date().toISOString() };
+}
+
+// ── Leads (decision-15) ──────────────────────────────────────────────────────
+
+/** What the lead and its rules read of a document: its place, its dependencies and the files it touches. */
+function treeDoc(task: Task, done: boolean, columns: { id: string; title: string }[]): TreeDoc {
+  const column = columns.find((c) => c.id === task.column);
+  const deliverables = (task.contract?.deliverables ?? []).filter((d) => d.type !== 'research' && d.path).map((d) => d.path);
+  const ids = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && !!v.trim()).map((v) => v.trim()) : []);
+  return {
+    id: task.id,
+    title: task.title,
+    ...(task.parentId ? { parentId: task.parentId } : {}),
+    done,
+    ...(column ? { column: column.title, inReview: isReview(column) } : {}),
+    dependsOn: ids(task.dependsOn),
+    files: [...new Set([...ids(task.relatedFiles), ...deliverables])],
+    validation: ids(task.contract?.validation?.commands),
+    ...(task.contract?.maxRetries !== undefined ? { maxRetries: task.contract.maxRetries } : {}),
+    ...(task.createdAt ? { createdAt: task.createdAt } : {}),
+  };
+}
+
+function readTree(projectId: string, epicId: string): Tree | null {
+  const located = locateBoard(projectId, { materialize: false });
+  if (!located.found) return null;
+  const dirs = getV2Dirs(located.brainfilePath);
+  const columns = readBoardConfig(located.brainfilePath)?.config?.columns ?? [];
+  const docs = [
+    ...readTasksDir(dirs.boardDir).map((d) => treeDoc(d.task, false, columns)),
+    ...readTasksDir(dirs.logsDir).map((d) => treeDoc(d.task, true, columns)),
+  ];
+  return treeOf(docs, epicId);
+}
+
+/** A task with open children of its own is led, not worked. */
+function leadsChildren(projectId: string, taskId: string): boolean {
+  const tree = readTree(projectId, taskId);
+  return !!tree && !tree.epic.done && openWork(tree).length > 0;
+}
+
+/** The most hand-offs at once in a repository: `projects[<repo>].concurrency` in dispatch.json, else 3. */
+function limitFor(projectId: string): number {
+  const set = readSettings().projects?.[projectId]?.concurrency;
+  return typeof set === 'number' && set >= 1 ? Math.floor(set) : DEFAULT_LIMIT;
+}
+
+const leadKey = (lead: Lead) => `lead:${lead.projectId}\n${lead.epicId}`;
+
+/** One turn of a lead, in its session or a new one: read-only, the board's tools and the desk scoped to its epic. */
+function leadTurn(lead: Lead, prompt: (fresh: boolean) => string): LeadTurn {
+  const run = newRun(lead.projectId, lead.agentId, 'lead', lead.epicId, { model: lead.model, effort: lead.effort });
+  const done = (async () => {
+    const key = leadKey(lead);
+    try {
+      const existing = sessions.get(key);
+      const session =
+        existing ??
+        (await startups.open(run.id, (signal) => open(lead.projectId, lead.agentId, key, lead.model, { withDesk: true, lead: lead.epicId, effort: lead.effort, signal }), close));
+      if (session) await turn(session, run, prompt(!existing));
+    } catch (err) {
+      if (!wasStopped(run)) update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
+    }
+    return { ok: run.state === 'done', stopped: run.state === 'stopped', reply: run.reply, error: run.error };
+  })();
+  return { run: { ...run }, done };
+}
+
+const leads = new Leads({
+  tree: readTree,
+  live: (projectId) => [...runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && (LIVE_STATES.has(r.state) || startups.starting(r.id))),
+  lastRun: (projectId, taskId) =>
+    [...runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId).sort((a, b) => b.startedAt - a.startedAt)[0],
+  policy: (projectId) => policyFor(projectId),
+  limit: limitFor,
+  turn: leadTurn,
+  close(lead) {
+    const live = [...runs.values()].find((r) => r.kind === 'lead' && r.projectId === lead.projectId && r.taskId === lead.epicId && LIVE_STATES.has(r.state));
+    if (live) void stopRun(live.id);
+    const session = sessions.get(leadKey(lead));
+    if (session) close(session);
+  },
+  record: (projectId, epicId, record: LeadRecord | null) => callHost<Result>('recordLead', projectId, epicId, record),
+  complete: (projectId, epicId) => callHost<Result>('completeTask', projectId, epicId),
+  mergeable(projectId, taskId) {
+    try {
+      return readyToMerge(projectId).some((r) => r.taskId === taskId && !r.conflicts);
+    } catch {
+      return false;
+    }
+  },
+  async land(projectId, taskId) {
+    const landed = await landAndSettle(projectId, taskId);
+    return { ok: landed.ok, said: landed.ok ? `${taskId} was landed: ${landed.value.message}` : `${taskId} could not land: ${landed.error}` };
+  },
+  emit: (lead) => emit({ kind: 'lead', lead }),
+  later: (ms, fn) => setTimeout(fn, ms),
+});
+
+/** A lead left on the epic by a restart, or a paused one: resumed. */
+async function resumeLead(projectId: string, epicId: string): Promise<Result> {
+  const located = locateBoard(projectId, { materialize: false });
+  const epic = located.found ? findV2Task(getV2Dirs(located.brainfilePath), epicId)?.doc.task : undefined;
+  const record = (epic as { lead?: LeadRecord } | undefined)?.lead;
+  const fromBoard = record?.agent ? { agentId: record.agent, model: record.model, effort: record.effort, by: record.by } : undefined;
+  return leads.resume(projectId, epicId, fromBoard);
 }
 
 // ── The desk: the chat's own dispatch tools (spec-16) ────────────────────────
@@ -1152,6 +1300,20 @@ const desk = new DeskBridge(
       return agent ? whyNot(agent) : `Unknown agent ${agentId}`;
     },
     async start(grant, taskId, agentId, model, effort) {
+      if (grant.lead) {
+        // A lead hands off its own children, inside the rules it cannot bend (decision-15).
+        const may = leads.mayDispatch(grant.projectId, grant.lead, taskId);
+        if (!may.ok) return may;
+      } else {
+        const guarded = leads.guard(grant.projectId, taskId, 'chat');
+        if (!guarded.ok) return guarded;
+        if (leadsChildren(grant.projectId, taskId)) {
+          const started = await leads.start(grant.projectId, taskId, agentId, { model, effort, by: 'chat' });
+          if (!started.ok) return started;
+          if (!started.value.run) return { ok: false, error: `${taskId}'s lead did not start` };
+          return { ok: true, value: { run: started.value.run, branch: null, lead: true } };
+        }
+      }
       // Who asked goes on the task first, as Hand to… sets the assignee first.
       // The task is held across that write, so nothing else starts on it meanwhile.
       const held = reserve(grant.projectId, taskId);
@@ -1159,19 +1321,13 @@ const desk = new DeskBridge(
       let written: Result;
       let started: ReturnType<typeof startDispatch>;
       try {
-        const record: DispatchRecord = {
-          agent: agentId,
-          ...(model ? { model } : {}),
-          ...(effort ? { effort } : {}),
-          by: 'chat',
-          at: new Date().toISOString(),
-        };
-        written = await callHost<Result>('recordDispatch', grant.projectId, taskId, record);
+        written = await callHost<Result>('recordDispatch', grant.projectId, taskId, dispatchRecord(agentId, model, effort, grant.lead ? 'lead' : 'chat'));
         started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id, effort);
       } finally {
         held.value();
       }
       if (!started.ok) return started;
+      if (grant.lead) leads.dispatched(grant.projectId, grant.lead, taskId);
       return {
         ok: true,
         value: { run: started.value.run, branch: started.value.worktree?.branch ?? null, reads: !!started.value.worktree && !started.value.worktree.branch, ...(written.ok ? {} : { note: `The board record was not written: ${written.error}` }) },
@@ -1215,7 +1371,8 @@ const ASK_PREAMBLE =
   'You manage the board; you never change code or run commands, other than the `brainfile` command line and git commands that only read: edits and other commands are refused. Read the code freely to write good tasks. ' +
   'Asked for code work, write the task, or update the one in context: what to do, the files it touches, and a contract whose validation commands prove it is done. Hand it off with dispatch when the person asked for it done; otherwise say it is ready to hand off. ' +
   'Asked to plan an epic, add the epic, then its children under it (parentId), each with dependsOn naming the children that must land first and a draft contract with deliverables and validation commands; add them in that order, so each dependency exists when it is named. Leave priority unset unless the person said how urgent it is. ' +
-  'Ask the person before dispatching more than three tasks at once, and never dispatch a task whose dependsOn are still open. Reply briefly, in a sentence or two, with the answer itself. Do not list or mention what you changed on the board or handed off, or that you changed nothing: the window shows the board\u2019s changes and hand-offs under your reply.\n\n';
+  'To take an epic, or any task with children, through to the end, dispatch the epic itself: the app starts a lead that checks the plan and hands its children off in order, and inside a led epic only its lead hands off. ' +
+  'Otherwise, ask the person before dispatching more than three tasks at once, and never dispatch a task whose dependsOn are still open. Reply briefly, in a sentence or two, with the answer itself. Do not list or mention what you changed on the board or handed off, or that you changed nothing: the window shows the board\u2019s changes and hand-offs under your reply.\n\n';
 
 /**
  * What the person has open as they ask, so "this" and "it" mean something:
@@ -1339,9 +1496,31 @@ function review(projectId: string, taskId: string): Result<ReviewView | null> {
  * merges nothing and says the command and its last lines.
  */
 async function checkThenMerge(projectId: string, taskId: string): Promise<Result<{ message: string }>> {
+  const release = leads.landing(projectId, taskId);
+  const landed = await landAndSettle(projectId, taskId).finally(release);
+  // The lead over it hears how it went (decision-15).
+  leads.wake(projectId, taskId, landed.ok ? `${taskId} was merged by the person: ${landed.value.message}` : `${taskId} did not merge: ${landed.error.split('\n')[0]}`);
+  return landed;
+}
+
+/**
+ * Lands a hand-off, then settles its task on the board: done, unless
+ * subtasks are left (then it goes back to work). A conflict, or a check that
+ * fails once the trunk is in, goes back to an agent first (decision-12).
+ */
+async function landAndSettle(projectId: string, taskId: string): Promise<Result<{ message: string }>> {
   const landing = await land(projectId, taskId);
-  if (landing.ok) return { ok: true, value: { message: landing.message } };
-  // A conflict, or a check that fails once the trunk is in, goes back to an agent before it stops at the person (decision-12).
+  if (landing.ok) {
+    const located = locateBoard(projectId, { materialize: false });
+    const open = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
+    if (!open) return { ok: true, value: { message: landing.message } };
+    const settled = await callHost<Result<{ completed: boolean; left: number }>>('settleLanded', projectId, taskId);
+    if (!settled.ok) return { ok: true, value: { message: `${landing.message}. ${taskId} stays open: ${settled.error}` } };
+    return {
+      ok: true,
+      value: { message: settled.value.completed ? landing.message : `${landing.message}. ${taskId} stays open: ${settled.value.left} subtask${settled.value.left === 1 ? '' : 's'} left` },
+    };
+  }
   if (landing.kind === 'conflict' || landing.kind === 'check') {
     const back = await sendBackLanding(projectId, taskId, landing);
     if (back.sent) return { ok: false, error: back.said };
@@ -1392,7 +1571,7 @@ async function sendBackLanding(
   }
   const noted = await callHost<Result>('noteTask', projectId, taskId, note);
   if (!noted.ok) return { sent: false, said: `It could not be sent back: ${noted.error}` };
-  const started = await dispatch(projectId, taskId, agentId, last?.model, last?.effort);
+  const started = handOff(projectId, taskId, agentId, last?.model, last?.effort);
   if (!started.ok) return { sent: false, said: `It could not be sent back: ${started.error}` };
   const what = landing.kind === 'conflict' ? `conflicts with ${landing.into} in ${landing.files.slice(0, 3).join(', ')}` : `failed \`${landing.command}\``;
   return { sent: true, said: `${taskId} ${what}: sent back to ${nameOf(agentId)} to settle (${round})` };
@@ -1475,6 +1654,11 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   ask,
   discuss,
   stopRun,
+  leads: () => leads.views(),
+  pauseLead: (projectId: string, epicId: string) => leads.pause(projectId, epicId),
+  resumeLead,
+  stopLead: (projectId: string, epicId: string) => leads.stop(projectId, epicId),
+  boardChanged: (projectId: string) => leads.boardChanged(projectId),
   live,
   review,
   readyToMerge: ready,

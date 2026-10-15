@@ -42,6 +42,8 @@ export interface TaskView {
   restsOnRetired?: string[];
   /** Where the work came from, as written in `source:`: an issue's URL when it was made from one (task-26). */
   source?: string;
+  /** A lead meant to run this document's children (decision-15): on the board, so it can be resumed after a restart. */
+  lead?: LeadRecord;
 }
 
 /** `proposed` is a legacy ADR's status before it was accepted. */
@@ -292,7 +294,8 @@ export interface AgentRun {
   id: string;
   projectId: string;
   agentId: AgentId;
-  kind: 'dispatch' | 'ask';
+  /** `lead`: one turn of an epic's lead (decision-15), on the epic. */
+  kind: 'dispatch' | 'ask' | 'lead';
   taskId?: string;
   /** The model asked for, when one was; unset is the agent's default. */
   model?: string;
@@ -315,17 +318,58 @@ export interface AgentRun {
 
 /**
  * Who asked for a hand-off, written on the task as `dispatch:` in its
- * frontmatter (spec-16), beside the assignee. Core keeps it as an unknown key;
- * queues and runner claims come later.
+ * frontmatter (spec-16), beside the assignee: the person (Hand to…), the
+ * board's chat, or an epic's lead. Core keeps it as an unknown key; queues
+ * and runner claims are epic-6's (task-74).
  */
 export interface DispatchRecord {
   agent: AgentId;
   model?: string;
   /** The effort asked for with the model, when one was. */
   effort?: string;
-  by: 'chat';
+  by: 'person' | 'chat' | 'lead';
   /** ISO 8601. */
   at: string;
+}
+
+/**
+ * An epic handed off (decision-15), written on it as `lead:`: who leads it,
+ * and how far its children go on their own. `done` (a bypass repository):
+ * the app lands each child that ends in Review; `review`: the person merges
+ * each. Removed when the lead stops or the epic is done; one still there with
+ * no lead running is one to resume.
+ */
+export interface LeadRecord {
+  agent: AgentId;
+  model?: string;
+  effort?: string;
+  by: 'person' | 'chat';
+  /** ISO 8601. */
+  at: string;
+  until: 'review' | 'done';
+}
+
+/** `leading`: at work or waiting for its children; `paused`: dispatches nothing, events wait; `stopped` and `done` end it. */
+export type LeadState = 'leading' | 'paused' | 'stopped' | 'done';
+
+/** An epic's lead as the window shows it (decision-15). */
+export interface LeadView {
+  projectId: string;
+  epicId: string;
+  agentId: AgentId;
+  model?: string;
+  effort?: string;
+  state: LeadState;
+  until: 'review' | 'done';
+  /** At most this many hand-offs at once in the repository. */
+  limit: number;
+  startedAt: number;
+  /** What the lead or the app last said about it: why it paused, stopped or is waiting. */
+  note?: string;
+  /** Events waiting for its next turn. */
+  queued: number;
+  /** Children it added, waiting for the person to hand them off. */
+  waitingForYou: string[];
 }
 
 /** One step of a turn: a tool the agent ran, or a line it wrote before its answer. */
@@ -346,7 +390,8 @@ export interface PermissionAsk {
 export type AgentEvent =
   | { kind: 'run'; run: AgentRun }
   | { kind: 'permission'; ask: PermissionAsk }
-  | { kind: 'permission-done'; id: string };
+  | { kind: 'permission-done'; id: string }
+  | { kind: 'lead'; lead: LeadView };
 
 /** Per repository, how the dispatcher answers an agent that asks first. Set in repo settings later. */
 export type PermissionPolicy = 'ask' | 'allow' | 'bypass';
@@ -595,6 +640,8 @@ export interface Api {
   /** Resolves to the removed file, so the window can offer Undo. */
   deleteTask(projectId: string, taskId: string): Promise<Result<RemovedTask>>;
   restoreTask(projectId: string, removed: RemovedTask): Promise<Result>;
+  /** A completed task back on the board in `column`, open again, as `brainfile restore` does. */
+  reopenTask(projectId: string, taskId: string, column: string): Promise<Result>;
   /** A line in the task's log, as the person. */
   noteTask(projectId: string, taskId: string, text: string): Promise<Result>;
   /** Record a decision as `brainfile decide` does: the claim key's current decision is superseded. */
@@ -655,6 +702,13 @@ export interface Api {
     effort?: string
   ): Promise<Result<AgentRun>>;
   stopRun(runId: string): Promise<void>;
+  /** Epics' leads (decision-15): every one since the app opened; pause, resume (also one left on the board by a restart) and stop. */
+  leads(): Promise<LeadView[]>;
+  pauseLead(projectId: string, epicId: string): Promise<Result>;
+  resumeLead(projectId: string, epicId: string): Promise<Result>;
+  stopLead(projectId: string, epicId: string): Promise<Result>;
+  /** After a merge: the task completes, unless subtasks are left; then it goes back to work. */
+  settleLanded(projectId: string, taskId: string): Promise<Result<{ completed: boolean; left: number }>>;
   /** The runs not yet ended or ended lately, and the asks not yet answered. */
   live(): Promise<LiveAgents>;
   /** The hand-off's branch and what is on it, or null when the task has no worktree. */
@@ -730,6 +784,11 @@ export const AGENT_METHODS = [
   'ask',
   'discuss',
   'stopRun',
+  'leads',
+  'pauseLead',
+  'resumeLead',
+  'stopLead',
+  'boardChanged',
   'live',
   'review',
   'readyToMerge',
@@ -742,7 +801,7 @@ export type AgentMethod = (typeof AGENT_METHODS)[number];
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
 export type HostReply = { kind: 'host-reply'; id: number; result: unknown };
 /** The board writes the agents process may ask main to pass to the host. */
-export const AGENT_HOST_METHODS = ['recordDispatch', 'noteTask'] as const;
+export const AGENT_HOST_METHODS = ['recordDispatch', 'recordLead', 'noteTask', 'settleLanded', 'completeTask'] as const;
 export type AgentHostMethod = (typeof AGENT_HOST_METHODS)[number];
 export type AgentMessage =
   | { kind: 'reply'; id: number; result: unknown }
@@ -760,8 +819,10 @@ export const HOST_METHODS = [
   'toggleSubtask',
   'addSubtask',
   'completeTask',
+  'settleLanded',
   'deleteTask',
   'restoreTask',
+  'reopenTask',
   'noteTask',
   'decide',
   'syncNow',

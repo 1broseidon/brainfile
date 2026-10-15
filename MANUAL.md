@@ -1460,6 +1460,36 @@ to update the task; before a prompt, a warning when files changed but the board
 did not; at session start, the agent's brief. `--scope project` writes them
 into the repo instead of the user's home.
 
+### Orchestration: why a board and not subagents
+
+For one task in one session, a subagent or a shell-out to another coding
+agent is simpler, and that is fine. The board earns its place when the work
+outlives a conversation:
+
+- **It survives the session.** A hand-off is board state, committed and
+  synced, so "continue epic-24" works tomorrow, from another terminal,
+  harness or machine. Subagent orchestration dies with its conversation.
+- **Across harnesses.** Each task picks its agent and model (Claude Code,
+  Codex, Cursor, Grok, Antigravity, any ACP server) through one protocol,
+  with the same brief and the same standing decisions.
+- **Isolation.** Each hand-off gets its own worktree and branch, and a
+  moment for review; subagents and shell-outs share one checkout.
+- **Done means done.** A task lands when its contract's validation passes
+  with the trunk brought in, goes back to its agent on a conflict or a
+  failed check up to `maxRetries`, then waits for a person; not "the
+  subagent said so".
+- **The orchestrator's context stays clean.** Workers report to the board
+  (notes, the ledger); the orchestrator reads status, not transcripts.
+- **A record.** Who did what, which files, how long: in the ledger and the
+  board's history.
+
+In the desktop app, handing off an epic starts its lead: an agent that
+writes no code, checks the plan (the children, the files each touches, the
+dependencies between them), then hands the children off in order and is
+woken as each ends or lands, inside rules the app holds (dependencies done
+first, at most three at once per repository, retries to `maxRetries`). The
+same from the command line and any MCP client is the work of epic-6.
+
 ### Bootstrap files
 
 Three files on this domain are written for agents rather than people:

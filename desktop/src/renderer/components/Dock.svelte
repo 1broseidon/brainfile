@@ -12,7 +12,7 @@
   import { columnProgress } from '../lib/format';
   import { handoffRun, restingWord, type Session } from '../lib/sessions';
   import { tip } from '../lib/tooltip';
-  import type { AgentRun } from '../../shared/api';
+  import type { AgentId, AgentRun } from '../../shared/api';
   import Icon from './Icon.svelte';
   import StatusIcon from './StatusIcon.svelte';
   import Working from './Working.svelte';
@@ -88,14 +88,15 @@
     if (!doc) return null;
     const run = handoffRun(runs, projectId, id);
     const ready = app.mergeable[projectId]?.find((r) => r.taskId === id);
+    const lead = app.leadFor(id, projectId);
     const assignee = [...(app.boards[projectId]?.tasks ?? []), ...(app.boards[projectId]?.completed ?? [])].find((t) => t.id === id)?.assignee;
     return {
       ...base,
       ...doc,
-      label: `Handed off: ${doc.title}`,
-      agent: run?.agentId ?? assignee ?? '',
+      label: lead ? `Leading: ${doc.title}` : `Handed off: ${doc.title}`,
+      agent: lead?.agentId ?? run?.agentId ?? assignee ?? '',
       live: isLive(run) ? run : undefined,
-      rest: restingWord(session, { run, ready }),
+      rest: restingWord(session, { run, ready, lead }),
     };
   }
 
@@ -113,6 +114,11 @@
     return list;
   });
   const hidden = $derived(items.filter((i) => !shown.includes(i)));
+
+  /** A known agent by its ID, as the strip says it (`codex`); one of the person's own by its name. */
+  function shortAgent(agent: string): string {
+    return agent.startsWith('custom:') ? app.agentName(agent as AgentId) : agent;
+  }
 
   function open(item: Item): void {
     more = false;
@@ -140,7 +146,7 @@
     <span class="sig"><Working run={i.live} rotate={false} /></span>
   {:else if i.agent}
     <span class="sig mono rest"
-      >{i.agent}{#if i.rest}<span class="sep">·</span><span class:warn={i.rest.tone === 'warn'}>{i.rest.word}</span>{/if}</span
+      >{shortAgent(i.agent)}{#if i.rest}<span class="sep">·</span><span class:warn={i.rest.tone === 'warn'}>{i.rest.word}</span>{/if}</span
     >
   {/if}
 {/snippet}

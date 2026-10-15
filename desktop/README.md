@@ -36,6 +36,15 @@ review or a link gets a read-only checkout and no branch. When the task reaches 
 you can see the diff, open it in your editor, merge it or send it back, and
 the worktree is removed on merge or discard.
 
+Hand an epic off, or any task with open children, and the agent leads it
+instead: it reads the children and the code they touch, fixes the
+dependencies where two would collide or one needs another's work, writes the
+plan on the epic, and hands the children off in order, each in its own
+worktree. The app keeps it to the rules: nothing before what it depends on is
+done, at most three at once per repository, retries to the contract's
+maxRetries. It is woken when a child ends or is merged, and the epic is done
+with its last child. Pause, Resume and Stop are in the epic's pane.
+
 Discuss, beside it, talks the task over first. The chat opens on the task
 with the project's agent, which reads the task, its parent, its decisions and
 the code, asks and pushes back, and with your agreement changes the task's

@@ -76,6 +76,8 @@ function startHost(): UtilityProcess {
     } else if (message.kind === 'board') {
       win?.webContents.send(CHANNEL.board, message.snapshot);
       link?.board(message.snapshot);
+      // An epic's lead hears a child the person completed, and ends with its last (decision-15).
+      if (agents) void callAgents('boardChanged', message.snapshot.projectId);
     }
   });
   child.on('exit', () => {

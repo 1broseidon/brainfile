@@ -362,6 +362,32 @@ test('ready to merge: commits not in the trunk, nothing uncommitted, not merged;
   assert.equal(git(['status', '--porcelain'], repo), '');
 });
 
+test('merged on the forge is merged: a squash on the trunk, or a pull request in origin while the local trunk is behind', () => {
+  const squashed = handOff('task-1');
+  work(squashed, 'a.txt', 'a\n');
+  work(squashed, 'b.txt', 'b\n');
+  git(['merge', '-q', '--squash', 'dispatch/task-1'], repo);
+  git(['commit', '-q', '-m', 'squashed (#1)'], repo);
+
+  // origin is a clone; the pull request merges there, and the local main is never pulled.
+  const origin = path.join(base, 'origin.git');
+  git(['clone', '-q', '--bare', repo, origin], base);
+  git(['remote', 'add', 'origin', origin], repo);
+  git(['fetch', '-q', 'origin'], repo);
+  git(['remote', 'set-head', 'origin', 'main'], repo);
+  const pulled = handOff('task-2');
+  work(pulled, 'c.txt', 'c\n');
+  git(['push', '-q', 'origin', 'dispatch/task-2:main'], repo);
+  git(['fetch', '-q', 'origin'], repo);
+
+  const open = handOff('task-3');
+  work(open, 'd.txt', 'd\n');
+
+  assert.equal(reviewOf(repo, 'task-1')?.merged, true);
+  assert.equal(reviewOf(repo, 'task-2')?.merged, true);
+  assert.deepEqual(readyToMerge(repo).map((r) => r.taskId), ['task-3']);
+});
+
 test('ready to merge whatever the checkout is on, and a read-only checkout is never ready', () => {
   onFeature();
   work(handOff('task-1'), 'a.txt', 'a\n');

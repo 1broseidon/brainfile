@@ -9,7 +9,10 @@
 
   const menu = $derived(app.menu);
   const board = $derived(app.board);
-  const task = $derived(menu && board ? board.tasks.find((t) => t.id === menu.taskId) : undefined);
+  const open = $derived(menu && board ? board.tasks.find((t) => t.id === menu.taskId) : undefined);
+  /** A done task has only its status to change: picking a column reopens it there. */
+  const done = $derived(menu?.kind === 'status' && board && !open ? board.completed.find((t) => t.id === menu.taskId) : undefined);
+  const task = $derived(open ?? done);
 
   const assignees = $derived.by(() => {
     const names = new Set<string>();
@@ -34,10 +37,10 @@
     <Menu
       x={menu.x}
       y={menu.y}
-      placeholder="Change status…"
-      items={board.columns.map((c) => ({ value: c.id, label: c.title }))}
-      selected={task.column}
-      onpick={(v) => app.moveTask(task.id, String(v))}
+      placeholder={done ? 'Reopen into…' : 'Change status…'}
+      items={board.columns.filter((c) => !done || !c.completionColumn).map((c) => ({ value: c.id, label: c.title }))}
+      selected={done ? null : task.column}
+      onpick={(v) => (done ? app.reopenTask(task.id, String(v)) : app.moveTask(task.id, String(v)))}
       onclose={close}
     >
       {#snippet icon(item)}

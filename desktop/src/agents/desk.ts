@@ -50,6 +50,8 @@ export interface DeskGrant {
   efforts?: Partial<Record<AgentId, string>>;
   /** The chat session's key in the agents process, to find the turn that asked. */
   key: string;
+  /** An epic's lead (decision-15): the epic whose children it hands off, inside the lead's rules. */
+  lead?: string;
 }
 
 export type DeskTool = 'dispatch' | 'runs' | 'stop';
@@ -69,7 +71,7 @@ export interface DeskDeps {
     agentId: AgentId,
     model: string | undefined,
     effort?: string
-  ): Promise<Result<{ run: AgentRun; branch: string | null; reads?: boolean; note?: string }>>;
+  ): Promise<Result<{ run: AgentRun; branch: string | null; reads?: boolean; note?: string; lead?: boolean }>>;
   /** Every run this app has started since it opened. */
   runs(): AgentRun[];
   stop(runId: string): Promise<void>;
@@ -135,6 +137,12 @@ export function deskTools(deps: DeskDeps) {
       starting.delete(slot);
     }
     if (!started.ok) return started;
+    if (started.value.lead) {
+      return {
+        ok: true,
+        value: `${taskId} ("${task.title}") has children, so ${agentId} now leads it: it checks the plan, then hands the children off in order, and its tab is in the dock.`,
+      };
+    }
     const where = started.value.reads
       ? ' in a read-only checkout of the trunk'
       : started.value.branch
