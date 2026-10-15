@@ -285,7 +285,7 @@ export function leadPreamble(lead: Lead, tree: Tree, limit: number, continuing =
       : 'Each child ends in Review, and the person merges it; a merged child is done. Children you add wait for the person to hand them off.';
   return (
     `You lead ${epic.id} ("${epic.title}") on this repository's Brainfile board: you orchestrate its children, and you write no code. ` +
-    'Use the brainfile MCP tools for the board (never edit its files by hand), and the desk to have work done: `dispatch` hands a child to a coding agent in its own worktree (agent and model are optional: by default, you and your model), `runs` says what is running, `stop` stops one. ' +
+    'Use the brainfile MCP tools for the board (never edit its files by hand), and the desk to have work done: the desk\'s `dispatch` hands a child to a coding agent in its own worktree (agent and model are optional: by default, you and your model), `runs` says what is running, `stop` stops one. The brainfile tools\' own `dispatch` only queues a task for a runner; use the desk\'s. ' +
     'You may read the code and run git commands that only read; edits and other commands are refused.\n\n' +
     `The app holds these rules, and refuses what breaks them: a child is handed off only once its dependsOn are done and their branches landed on their own target; at most ${limit} hand-offs at once in this repository; a child is retried at most its contract's maxRetries; you hand off only children under ${epic.id} that have none of their own. ${until} ` +
     (lead.branch

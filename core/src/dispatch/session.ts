@@ -16,7 +16,7 @@ import { effortSelect, effortToSet } from './effort';
 import { MODELS_TTL_MS, effortsKnown, keepingEfforts, learnEfforts, modelOption, modesOf, readModels, remember, type ModelCache, type SessionModes } from './models';
 import { getSettings, policyFor } from './settings';
 import { unlessAborted } from './startup';
-import type { AgentId, AgentModes, AgentRun, ModelOption, PermissionAsk, Result, RunStep } from './types';
+import type { AgentId, AgentModes, AgentRole, AgentRun, ModelOption, PermissionAsk, Result, RunStep } from './types';
 
 /** The ACP SDK, loaded when the first session opens: it is ESM only, and reading settings or the registry never needs it. */
 function sdk(): typeof import('@agentclientprotocol/sdk') {
@@ -113,10 +113,13 @@ export interface OpenOptions {
   effort?: string;
   /** Stops the startup: the agent is not spawned, or is killed. */
   signal?: AbortSignal;
+  /** What the agent is to the board, as its `brainfile mcp` is told (task-81); a lead's `leadScope` is its epic. */
+  role?: AgentRole;
+  leadScope?: string;
 }
 
 export async function open(ctx: SessionContext, projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
-  const { board = true, at, mcpServers: extra = [], rule = null, keepsMode = null, release = null, effort, signal } = options;
+  const { board = true, at, mcpServers: extra = [], rule = null, keepsMode = null, release = null, effort, signal, role, leadScope } = options;
   const { dataDir, sessions } = ctx;
   const agent = agentOf(dataDir, agentId);
   if (!agent) {
@@ -210,7 +213,7 @@ export async function open(ctx: SessionContext, projectId: string, agentId: Agen
     child.kill();
     throw new Error(`${agent.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
   }
-  const mcpServers = board ? [...brainfileMcp(), ...extra] : [];
+  const mcpServers = board ? [...brainfileMcp(role ? { role, ...(leadScope ? { scope: leadScope } : {}) } : undefined), ...extra] : [];
   const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
   session.sessionId = created.sessionId;
   let configOptions = created.configOptions ?? null;

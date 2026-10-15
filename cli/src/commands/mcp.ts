@@ -40,6 +40,11 @@ import { registerSyncTool } from '../mcp/tools/sync_tool';
 import { registerWhereTool } from '../mcp/tools/where_tool';
 import { registerIssuesTool } from '../mcp/tools/issues_tool';
 import { registerPullRequestTool } from '../mcp/tools/pull_request_tool';
+import { registerDispatchTools } from '../mcp/tools/dispatch_tool';
+import { registerReviewTool } from '../mcp/tools/review_tool';
+import { registerAgentsTool } from '../mcp/tools/agents_tool';
+import { agentRoleOf } from '@brainfile/core/dispatch';
+import type { Access } from './dispatch';
 import { registerSchemaResources } from '../mcp/resources';
 import { serverInstructions } from '../mcp/instructions';
 
@@ -52,11 +57,16 @@ import { serverInstructions } from '../mcp/instructions';
  * in-memory transport instead of re-listing the tools (which would drift).
  * The same factory serves both protocol eras. Tools are registered in the
  * order `TOOL_PURPOSES` lists them.
+ *
+ * `access` is what the agent it serves is to the board (task-81), from
+ * BRAINFILE_AGENT_ROLE and BRAINFILE_LEAD_SCOPE: a worker's or a
+ * discussion's server lists no dispatch, stop, land or discard; a lead's
+ * reaches only its tree. None (a person's own client) lists everything.
  */
-export function createBrainfileMcpServer(defaultFile: string): McpServer {
+export function createBrainfileMcpServer(defaultFile: string, access: Access = {}): McpServer {
   const server = new McpServer(
     { name: 'brainfile', version: cliVersion },
-    { instructions: serverInstructions() },
+    { instructions: serverInstructions(access) },
   );
 
   // Reading the board
@@ -91,6 +101,10 @@ export function createBrainfileMcpServer(defaultFile: string): McpServer {
   registerWhereTool(server, defaultFile);
   registerIssuesTool(server, defaultFile);
   registerPullRequestTool(server, defaultFile);
+  // Hand-offs (task-81)
+  registerDispatchTools(server, defaultFile, access);
+  registerReviewTool(server, defaultFile, access);
+  registerAgentsTool(server);
 
   registerSchemaResources(server);
 
@@ -171,5 +185,7 @@ export async function mcpCommand(options: McpOptions) {
 
   // The same factory serves both protocol eras: 2026-07-28 (stateless)
   // natively, and pre-2026 clients through serveStdio's legacy shim.
-  serveStdio(() => createBrainfileMcpServer(defaultFile));
+  const access = agentRoleOf(process.env);
+  if (access.role) console.error(`[brainfile-mcp] Serving a ${access.role}${access.scope ? ` of ${access.scope}` : ''}`);
+  serveStdio(() => createBrainfileMcpServer(defaultFile, access));
 }

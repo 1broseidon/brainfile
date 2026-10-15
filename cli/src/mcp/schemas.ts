@@ -793,3 +793,119 @@ export const adrPromoteOutputSchema = z.object({
   status: z.literal('promoted'),
   completedAt: z.string(),
 });
+
+// ── hand-offs (task-81) ─────────────────────────────────────────────────────
+
+const untilSchema = z.enum(['review', 'done']);
+
+/** `dispatch`: what was queued, what was skipped and why, and whether a runner here will start it. */
+export const dispatchOutputSchema = z.object({
+  queued: z.array(z.object({
+    task: z.string(),
+    agent: z.string(),
+    model: z.string().optional(),
+    effort: z.string().optional(),
+    until: untilSchema.optional(),
+    waitsOn: z.array(z.string()).optional(),
+  })),
+  skipped: z.array(z.object({ task: z.string(), why: z.string() })),
+  runnerUp: z.boolean(),
+  said: z.string(),
+});
+
+const runLineSchema = z.object({
+  id: z.string(),
+  task: z.string().optional(),
+  agent: z.string(),
+  model: z.string().optional(),
+  effort: z.string().optional(),
+  state: z.string(),
+  activity: z.string(),
+  startedAt: z.string(),
+  runner: z.string().optional(),
+  host: z.string().optional(),
+  pid: z.number().optional(),
+  branch: z.string().optional(),
+  asking: z.string().optional(),
+});
+
+/** `dispatch_status`: the runners up, the live runs, the queue and the claims. */
+export const dispatchStatusOutputSchema = z.object({
+  limit: z.number(),
+  runners: z.array(z.object({ runner: z.string(), host: z.string(), pid: z.number(), startedAt: z.string() })),
+  running: z.array(runLineSchema),
+  queued: z.array(z.object({
+    task: z.string(),
+    agent: z.string(),
+    model: z.string().optional(),
+    effort: z.string().optional(),
+    until: untilSchema.optional(),
+    by: z.string(),
+    at: z.string(),
+    waitsOn: z.array(z.string()).optional(),
+  })),
+  claims: z.array(z.object({ task: z.string(), runner: z.string(), host: z.string(), pid: z.number(), at: z.string(), lost: z.boolean() })),
+});
+
+/** `dispatch_stop`: the run, and whether it has ended yet. */
+export const dispatchStopOutputSchema = z.object({
+  run: z.string(),
+  task: z.string().optional(),
+  agent: z.string(),
+  stopped: z.boolean(),
+  said: z.string(),
+});
+
+const handOffReviewSchema = z.looseObject({
+  branch: z.string().nullable(),
+  path: z.string(),
+  base: z.string().nullable(),
+  into: z.string().nullable(),
+  checkout: z.string().nullable(),
+  ahead: z.number(),
+  commits: z.array(z.object({ sha: z.string(), subject: z.string() })),
+  files: z.array(z.object({ path: z.string(), added: z.number(), removed: z.number() })),
+  filesChanged: z.number(),
+  added: z.number(),
+  removed: z.number(),
+  uncommitted: z.number(),
+  merged: z.boolean(),
+  conflicts: z.array(z.string()),
+});
+
+/** `review`: one shape per action. */
+export const reviewOutputSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('show'),
+    task: z.string(),
+    review: handOffReviewSchema.nullable(),
+    busy: z.string().optional(),
+    blocked: z.string().optional(),
+    canLand: z.boolean(),
+  }),
+  z.object({
+    action: z.literal('ready'),
+    ready: z.array(z.object({ task: z.string(), into: z.string(), ahead: z.number(), added: z.number(), removed: z.number(), conflicts: z.boolean() })),
+  }),
+  z.object({
+    action: z.literal('land'),
+    task: z.string(),
+    landed: z.boolean(),
+    completed: z.boolean().optional(),
+    kind: z.string().optional(),
+    sentBack: z.boolean().optional(),
+    message: z.string(),
+  }),
+  z.object({ action: z.literal('discard'), task: z.string(), message: z.string() }),
+]);
+
+/** `agents`: every agent, whether it is installed here, and the models it offered. */
+export const agentsOutputSchema = z.object({
+  agents: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    available: z.boolean(),
+    note: z.string(),
+    models: z.array(z.object({ value: z.string(), name: z.string(), efforts: z.array(z.string()).optional() })),
+  })),
+});

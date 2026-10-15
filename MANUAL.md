@@ -395,6 +395,9 @@ false }` stops a plan completing when it reaches a completion column). With
 | Create a task | `add` |
 | See the repository's GitHub issues, or make a task from one | `issues` |
 | Land a hand-off by GitHub pull request instead of a merge | `pr` |
+| Hand tasks to a coding agent, see what is running, stop one | `dispatch`, `dispatch status`, `dispatch stop` |
+| See a hand-off's work, land it or throw it away | `review`, `land`, `discard` |
+| See which coding agents are installed, and their models | `agents` |
 | Advance a task to another column | `move` |
 | Add, rename, reorder or remove a column | `columns` |
 | Change a task's fields | `patch` |
@@ -433,7 +436,7 @@ false }` stops a plan completing when it reaches a completion column). With
 
 ## Commands
 
-Thirty-six commands, in four groups. `-t <id>` names the task and
+Forty-seven commands, in five groups. `-t <id>` names the task and
 `-f <path>` the board; everything else is per-command, and every flag is as
 printed by `brainfile <command> --help`. Expand a row for its flags. Commands
 that accept `--json` say so; `list` does not have one yet, so scripts and
@@ -784,6 +787,104 @@ hook runs from a lean entry that loads the brief and nothing else, about
 150ms warm; it names the agent from `BRAINFILE_AGENT`, else the tool
 (`claude`, `cline`), and moves that agent's brief checkpoint.
 `BRAINFILE_BRIEF_MAX_CHARS` changes its budget.
+
+### Hand-offs
+
+A hand-off is a task given to a coding agent (Claude Code, Codex,
+Antigravity, Cursor, Grok, or an ACP server of your own) that works on it in
+its own git worktree, on `dispatch/<task-id>`, forked from where the task
+lands (decision-11, decision-16). The work waits on the board: `dispatch`
+writes the request on the task, and a runner on this machine starts it. A
+runner is `brainfile run` in a terminal, or the Brainfile window; each claims
+a task before it starts it, so two never start one task, and each keeps its
+runs' progress in `.brainfile/state/runs/`, which every runner on the
+machine reads. These commands are also MCP tools (see [For
+agents](#for-agents)).
+
+#### dispatch — Queue tasks for a coding agent
+
+```console
+$ brainfile dispatch task-12 --agent codex
+$ brainfile dispatch task-12 task-13 --agent claude --model opus --effort high
+$ brainfile dispatch --column todo --agent claude      # every open task in To Do
+$ brainfile dispatch --parent epic-3 --agent codex     # the epic's open children
+$ brainfile dispatch task-12 --agent codex --until done
+$ brainfile dispatch task-12 --agent codex --now       # and run it here until it ends
+```
+
+Writes `dispatch:` on each task (the agent, model, effort, `until`, who asked
+and when) and makes the agent its assignee; one commit on a tracked board.
+With no `--agent`, a task goes to the agent it was last handed to, else its
+assignee when that is an agent. `--until review` (the default) stops the
+work in Review for you; `--until done` lands it on its own where the
+repository's permission policy is bypass. A task an agent is still at, or a
+runner holds, is skipped and said so; so are decisions and tasks with open
+children (their lead hands those off). A task whose `dependsOn` are open, or
+complete with their branch not landed, is queued and waits until they have
+landed. At most `dispatch.maxRunning` in the board's config (else the
+repository's setting in the app, else 3) run at once on a repository.
+
+When no runner is up on this machine it says so: `Run brainfile run or open
+Brainfile to start it.` `--now` runs the tasks here in the foreground
+instead, until each has ended (and, with `--until done`, landed or been sent
+back); the agent's questions come to this terminal, and Ctrl-C stops them,
+leaving their worktrees. `--json` prints what was queued and skipped.
+
+#### dispatch status, dispatch stop — What is running, and stopping it
+
+```console
+$ brainfile dispatch status
+$ brainfile dispatch status --json
+$ brainfile dispatch stop task-12           # or its run id, run-…
+```
+
+`status` is the runners up on this machine, every live hand-off (its task,
+agent, model, what it is doing or asking, and which runner has it), the queue
+in order with what each task waits on, and the tasks a runner holds, marked
+`lost` when its runner has gone so another may take it. It reads the board
+and every runner's run files, whichever process started them.
+
+`stop` stops a run by its id or its task's: it is marked `stop` in its run
+file, which its runner watches, and if it has not ended within 15 seconds
+its runner is sent SIGTERM. The command waits for that. The worktree and
+branch stay for review, and the claim is given back.
+
+#### review, land, discard — A hand-off's work, and what to do with it
+
+```console
+$ brainfile review task-12          # branch, commits, files, conflicts; can it land?
+$ brainfile review --ready          # every hand-off that can land now
+$ brainfile land task-12            # check, then land on its target
+$ brainfile land task-12 --into release/2.0
+$ brainfile discard task-12         # throw the worktree and branch away
+```
+
+`review` shows the task's branch and where it lands, its commits and the
+files they change, files not yet committed in the worktree, and the files
+that would conflict with its target now (git's merge-tree, nothing written).
+`--ready` lists the hand-offs that can land: commits not yet in their
+target, nothing uncommitted, no pull request open, and no agent at them.
+
+`land` lands it as the window's Merge does (decision-12): its contract's
+validation runs in its worktree with the target brought in, then it merges,
+serially, and the task completes unless subtasks are left. A conflict or a
+failed check goes back to the agent that did the work, with a note on the
+task saying what collided and how to settle it, queued for a runner, up to
+the contract's `maxRetries`; past that the task waits in Review for you, and
+`land` exits non-zero. `discard` removes the worktree, uncommitted work and
+all, and the branch. Both are refused while an agent is at the task.
+
+#### agents — The coding agents a task can go to
+
+```console
+$ brainfile agents
+$ brainfile agents --json
+```
+
+Every agent Brainfile knows and every one of your own (kept in
+`dispatch.json` in the app's data folder, shared with the desktop), whether
+it is installed on this machine, and the models each offered when it last
+started.
 
 ### Structure
 
@@ -1468,7 +1569,7 @@ server, the per-agent brief, and hooks.
 ### The MCP server
 
 Add this to `.mcp.json` at the repo root (or the equivalent for your agent) and
-restart the agent. Twenty-five tools appear, one for everything the CLI does
+restart the agent. Thirty-three tools appear, one for everything the CLI does
 to a board.
 
 ```console title=".mcp.json"
@@ -1512,6 +1613,11 @@ to a board.
 | `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent; every other copy of the board in the repository, and `conflict` when one disagrees (writes are refused until `conflict.resolve` runs). `fetch: true` asks the remote first. `fix` has the problems in the desktop's words and `plan`, what `brainfile fix` would do; `action=fix` with `expected` (the plan's `words`) runs it, `action=undo` puts back the last fix within 20 seconds. |
 | `pull_request` | A task's hand-off as a GitHub pull request, as `brainfile pr`: `action=open` (default) pushes its branch and opens one into where it lands, recorded as `pullRequest`; `action=status` asks where it stands, and merged completes the task and removes its worktree. |
 | `issues` | The open issues of the project's GitHub repository, each with `task` when one on the board carries its URL as `source`; `action=import` with `numbers` (and `column`) makes a task from each, and reports one already on the board with `made: false`. Credentials as `brainfile issues`. |
+| `dispatch` | Queue tasks for a coding agent, as `brainfile dispatch`: `task` (one or many), or `column`, or `parent`; `agent`, `model`, `effort`, `until`. Says what was queued, skipped and waits, and, when no runner is up on this machine, `Run brainfile run or open Brainfile to start it.` |
+| `dispatch_status` | The runners up, the live runs, the queue and the claims, as `brainfile dispatch status`. |
+| `dispatch_stop` | Stop a run by its run id or task id (`run`), as `brainfile dispatch stop`; says whether it has ended yet. |
+| `review` | A hand-off's work: `action=show` (default, `task`), `ready`, `land` (`task`, `into`) or `discard` (`task`), as `brainfile review`, `land` and `discard`. |
+| `agents` | The coding agents, which are installed here, and their models, as `brainfile agents`. |
 
 Every tool takes `file` to point at another board, and every one that writes
 is one board commit on a tracked board. The bundled JSON Schemas are
@@ -1521,7 +1627,40 @@ files `brainfile schema` prints.
 When a client connects, the server tells it how to work: use these tools for
 every board change, never create, edit or delete files under `.brainfile/` by
 hand, start with `brief`, leave a `note` as you go, `check` before acting on
-something a decision covers; then a line on what each tool is for.
+something a decision covers; then a line on what each tool is for. Where it
+offers `dispatch`, it also says to ask the person before dispatching more
+than three tasks at once, and never to dispatch a task whose `dependsOn` are
+open.
+
+#### Roles
+
+Whoever starts `brainfile mcp` for an agent says what the agent is to the
+board in `BRAINFILE_AGENT_ROLE`: `chat`, `lead`, `worker` or `discuss`. The
+runner does so for every agent it starts, and the desktop for its chat,
+leads and discussions.
+
+| Role | Its server |
+| --- | --- |
+| none (your own client) | Every tool. |
+| `chat` | Every tool. |
+| `lead` | Every tool, but `dispatch`, `dispatch_stop`, `review` and `dispatch_status` reach only the tasks under its epic, named in `BRAINFILE_LEAD_SCOPE`. |
+| `worker` | No `dispatch` or `dispatch_stop`, and `review` only shows: a hand-off never hands off (decision-15). |
+| `discuss` | As a worker. |
+
+```console title=".mcp.json"
+{
+  "mcpServers": {
+    "brainfile": {
+      "command": "npx",
+      "args": ["brainfile", "mcp"],
+      "env": { "BRAINFILE_AGENT_ROLE": "lead", "BRAINFILE_LEAD_SCOPE": "epic-3" }
+    }
+  }
+}
+```
+
+This is a rule for agents, not a security boundary: anyone on the machine
+can run the CLI.
 
 Some commands have no tool, on purpose: `tui` and `mcp` (they are the
 interfaces), `merge-driver` (git runs it), `hooks` (events the agent host

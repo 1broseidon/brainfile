@@ -5,6 +5,7 @@
  * to the tools actually registered.
  */
 import { BUNDLED_SCHEMAS } from '../commands/schema';
+import { mayDispatch, type Access } from '../commands/dispatch';
 import { schemaResourceUri } from './resources';
 
 /** Every tool, in the order the server registers them, and what it is for. */
@@ -37,11 +38,32 @@ export const TOOL_PURPOSES: ReadonlyArray<readonly [string, string]> = [
   ['where', 'where the board lives, how it is stored and how fresh it is; fix or undo a problem with it when nothing would be lost'],
   ['issues', 'the project\'s open GitHub issues, marked when on the board; import one as a task'],
   ['pull_request', 'open a task\'s hand-off as a GitHub pull request, or ask where it stands'],
+  ['dispatch', 'queue tasks for a coding agent in its own worktree; a runner on this machine starts them'],
+  ['dispatch_status', 'the runners up, the live runs, the queue and the claims on this machine'],
+  ['dispatch_stop', 'stop a run by its run id or task id, whichever runner has it'],
+  ['review', 'a hand-off\'s branch, commits, files and conflicts; what can land now; land or discard it'],
+  ['agents', 'the coding agents a task can go to, which are installed here, and their models'],
 ];
 
-/** The server instructions `brainfile mcp` sends in its handshake. */
-export function serverInstructions(): string {
+/** Tools a worker's or a discussion's server leaves out: a hand-off never hands off (decision-15). */
+const DISPATCHING = new Set(['dispatch', 'dispatch_stop']);
+
+/** The tools a server started with this access lists, in TOOL_PURPOSES order. */
+export function toolsFor(access: Access = {}): string[] {
+  return TOOL_PURPOSES.map(([name]) => name).filter((name) => mayDispatch(access) || !DISPATCHING.has(name));
+}
+
+/** The server instructions `brainfile mcp` sends in its handshake: one line for each tool this access lists. */
+export function serverInstructions(access: Access = {}): string {
   const schemas = BUNDLED_SCHEMAS.map((s) => schemaResourceUri(s.id)).join(' and ');
+  const listed = new Set(toolsFor(access));
+  const handOffs = listed.has('dispatch')
+    ? [
+        '',
+        'Hand-offs: ask the person before dispatching more than three tasks at once. Never dispatch a task whose dependsOn are open.' +
+          (access.role === 'lead' ? ` You lead ${access.scope ?? 'an epic'}: dispatch, stop and land reach only the tasks under it.` : ''),
+      ]
+    : [];
   return [
     'Brainfile is this project\'s board: tasks, epics, specs, plans and decisions in .brainfile/, one Markdown file each, with completed work in logs/ and the ledger.',
     '',
@@ -50,7 +72,8 @@ export function serverInstructions(): string {
     'Start a session with brief. Leave a note on the task you are working on as you go. Before acting on something a decision may cover, check it; when you settle something, decide it.',
     '',
     'Tools (each takes file to point at another board):',
-    ...TOOL_PURPOSES.map(([name, purpose]) => `- ${name}: ${purpose}`),
+    ...TOOL_PURPOSES.filter(([name]) => listed.has(name)).map(([name, purpose]) => `- ${name}: ${purpose}`),
+    ...handOffs,
     '',
     `The board's JSON Schemas are resources: ${schemas}.`,
   ].join('\n');

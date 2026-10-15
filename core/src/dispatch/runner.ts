@@ -197,6 +197,12 @@ export interface RunnerOptions {
   ledBy?(projectId: string, taskId: string): string | null;
   /** A landing completed the task. */
   landed?(projectId: string, taskId: string): void;
+  /**
+   * How a landing that failed goes back to its agent: started here (the
+   * default, for a runner that stays up), or queued for whichever runner
+   * works the queue (a CLI command or an MCP call that ends when it answers).
+   */
+  sendBack?: 'start' | 'queue';
   /** For tests: this machine and process, as the claim and files say. */
   host?: string;
   pid?: number;
@@ -633,7 +639,8 @@ export class Runner {
       try {
         const session = await this.startups.open(
           run.id,
-          (signal) => openSession(this.ctx, projectId, agentId, run.id, model, { at: worktree?.path, effort, signal }),
+          // A worker's board lists no dispatch, stop or land (decision-15): a hand-off never hands off.
+          (signal) => openSession(this.ctx, projectId, agentId, run.id, model, { at: worktree?.path, effort, signal, role: 'worker' }),
           (s) => closeSession(this.ctx, s)
         );
         if (session) await takeTurn(this.ctx, session, run, prompt);
@@ -854,9 +861,15 @@ export class Runner {
     const { note, round } = back;
     const noted = await this.board.note(projectId, taskId, note);
     if (!noted.ok) return { sent: false, said: `It could not be sent back: ${noted.error}` };
+    const what = landing.kind === 'conflict' ? `conflicts with ${landing.into} in ${landing.files.slice(0, 3).join(', ')}` : `failed \`${landing.command}\``;
+    if (this.options.sendBack === 'queue') {
+      const handOff: HandOff = { agent: agentId, model: same?.model, effort: same?.effort, until: record?.until, by: byOf(this.kind) };
+      const queued = await this.queue(projectId, [taskId], handOff);
+      if (!queued.ok) return { sent: false, said: `It could not be sent back: ${queued.error}` };
+      return { sent: true, said: `${taskId} ${what}: sent back to ${nameOf(this.dataDir, agentId)} to settle (${round}); it waits in the queue for a runner` };
+    }
     const started = await this.start(projectId, taskId, { agent: agentId, model: same?.model, effort: same?.effort });
     if (!started.ok) return { sent: false, said: `It could not be sent back: ${started.error}` };
-    const what = landing.kind === 'conflict' ? `conflicts with ${landing.into} in ${landing.files.slice(0, 3).join(', ')}` : `failed \`${landing.command}\``;
     return { sent: true, said: `${taskId} ${what}: sent back to ${nameOf(this.dataDir, agentId)} to settle (${round})` };
   }
 

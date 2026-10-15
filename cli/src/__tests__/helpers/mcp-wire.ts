@@ -16,6 +16,7 @@
 import { InMemoryTransport } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { createBrainfileMcpServer } from '../../commands/mcp';
+import type { Access } from '../../commands/dispatch';
 
 export type Era = 'legacy' | 'modern';
 
@@ -74,10 +75,10 @@ export class WireClient {
     };
   }
 
-  /** Opens a connection in the given era and completes the handshake. */
-  static async open(brainfilePath: string, era: Era): Promise<WireClient> {
+  /** Opens a connection in the given era and completes the handshake; `access` is the role the server is started with. */
+  static async open(brainfilePath: string, era: Era, access: Access = {}): Promise<WireClient> {
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-    const handle = serveStdio(() => createBrainfileMcpServer(brainfilePath), {
+    const handle = serveStdio(() => createBrainfileMcpServer(brainfilePath, access), {
       transport: serverTransport,
     });
     const client = new WireClient(clientTransport, handle, era);

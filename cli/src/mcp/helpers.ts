@@ -125,6 +125,8 @@ export function toolWrites(toolName: string, input: ToolInput): boolean {
       return input.action === 'import';
     case 'board':
       return BOARD_SETTINGS.some((key) => input[key] !== undefined);
+    case 'review':
+      return input.action === 'land' || input.action === 'discard';
     default:
       return true;
   }

@@ -19,12 +19,16 @@ const ERAS: Era[] = ['legacy', 'modern'];
 
 const EXPECTED_TOOLS = [
   'adr_promote',
+  'agents',
   'board',
   'brief',
   'check',
   'columns',
   'contract',
   'decide',
+  'dispatch',
+  'dispatch_status',
+  'dispatch_stop',
   'get_task',
   'issues',
   'lint',
@@ -33,6 +37,7 @@ const EXPECTED_TOOLS = [
   'note',
   'pull_request',
   'retire',
+  'review',
   'search',
   'subtask',
   'supersede',
@@ -107,7 +112,7 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
 
   // ── advertisement ────────────────────────────────────────────────────────
 
-  test('advertises exactly the 28 consolidated tools', async () => {
+  test('advertises exactly the 33 consolidated tools', async () => {
     const names = (await client.listTools()).map((t) => t.name).sort();
     expect(names).toEqual(EXPECTED_TOOLS);
   });
