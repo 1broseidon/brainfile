@@ -42,7 +42,7 @@ contract:
   metrics:
     readyAt: "2026-10-15T21:40:11.044Z"
 createdAt: "2026-10-14T22:16:23.437Z"
-updatedAt: "2026-10-15T22:09:24.138Z"
+updatedAt: "2026-10-15T22:31:24.865Z"
 ---
 
 ## Description
@@ -57,3 +57,5 @@ This builds spec-16-8. `brainfile run [--once] [--max N] [--until review|done]` 
 The TUI shows `codex · editing` on a row from the run files and refreshes when they change, as the desktop's rows do.
 
 From task-80: build on `Runner(dataDir, runner, board, ask, cancelAsk, onRun, ledBy, landed)` with `fileBoard()` as its board; `ask`/`cancelAsk` are where the terminal prompt goes, and `onRun` gives the change lines. fileBoard's board commits are debounced: call `flushBoardCommits` on Ctrl-C and before `--once` returns, or claims released and landings made are left uncommitted. `runner.live()` already reads every runner's run files, for the TUI's rows too.
+
+From task-81: add `run` to EXCLUDED in cli/src/__tests__/mcp-parity.test.ts (the comment with its reason is already there). Build on `openRunner(kind, {sendBack: 'start', ask, onRun})` in cli/src/commands/dispatch.ts: a long-lived runner sends a failed landing back by starting the agent, where CLI/MCP calls use 'queue'. `dispatch --now` (runNow + terminalAsk in dispatch.ts) is a minimal foreground loop that `brainfile run` should take over, so there is one loop, not two. Once task-83 lands, `brainfile run` also picks up lead requests (role:lead) through the Runner.
