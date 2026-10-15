@@ -1,8 +1,6 @@
 ---
 id: task-84
 title: "Desktop: show runs started outside it, live, from the board and state/runs; the chat dispatches through brainfile mcp and the desk retires"
-column: review
-position: 20
 tags:
   - desktop
   - dispatch
@@ -53,7 +51,7 @@ contract:
     deliveredAt: "2026-10-15T23:25:02.565Z"
     duration: 226
 createdAt: "2026-10-14T22:16:44.174Z"
-updatedAt: "2026-10-15T23:25:02.565Z"
+updatedAt: "2026-10-15T23:27:50.421Z"
 dispatch:
   agent: claude
   model: opus
@@ -61,6 +59,7 @@ dispatch:
   by: lead
   at: "2026-10-15T22:56:19.194Z"
 assignee: claude
+completedAt: "2026-10-15T23:27:50.421Z"
 ---
 
 ## Description
