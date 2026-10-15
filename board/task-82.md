@@ -1,7 +1,7 @@
 ---
 id: task-82
 title: "brainfile run: a foreground runner that works the queue in a terminal, and live runs on the TUI's rows"
-column: backlog
+column: in-progress
 position: 18
 tags:
   - cli
@@ -23,7 +23,7 @@ decisions:
   - decision-11
   - decision-12
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: cli/src/commands/run.ts
@@ -41,8 +41,10 @@ contract:
       - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
   metrics:
     readyAt: "2026-10-15T21:40:11.044Z"
+    pickedUpAt: "2026-10-15T22:56:25.823Z"
+    reworkCount: 0
 createdAt: "2026-10-14T22:16:23.437Z"
-updatedAt: "2026-10-15T22:56:16.282Z"
+updatedAt: "2026-10-15T22:56:25.823Z"
 dispatch:
   agent: claude
   model: opus
