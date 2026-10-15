@@ -5,11 +5,18 @@
  * part of dispatch to make them.
  */
 import { readBoardConfig } from '../boardFile';
-import { claimDispatchFile, releaseDispatchFile, type ClaimInput } from '../dispatchRecord';
+import { changeLeadFile, claimDispatchFile, releaseDispatchFile, type ClaimInput, type LeadAction } from '../dispatchRecord';
 import { moveTaskFileToColumn } from '../taskOperations';
 import type { ColumnConfig, DispatchClaim, DispatchOutcome, DispatchRequest } from '../types';
 import { findV2Task, getV2Dirs } from '../workspace';
 import { isClaimLost } from './runFiles';
+
+/** How a claim is taken: `takeOwn` also takes one this runner holds for a run that ended; `request` is written with it; `count` makes it one more try. */
+export interface TakeOptions {
+  takeOwn?: boolean;
+  request?: DispatchRequest;
+  count?: boolean;
+}
 
 /** A claim refused: `held` when another runner holds the task, else the write itself failed. */
 export type ClaimTaken = { ok: true } | { ok: false; held: boolean; error: string };
@@ -24,10 +31,16 @@ export function reviewColumn<C extends Pick<ColumnConfig, 'id' | 'title'>>(colum
  * `claim`: a lost claim is taken (isClaimLost), and with `takeOwn` one this
  * same runner holds for a run that has ended.
  */
-export function takeClaim(dotDir: string, filePath: string, claim: ClaimInput, options: { takeOwn?: boolean; request?: DispatchRequest } = {}): ClaimTaken {
+export function takeClaim(dotDir: string, filePath: string, claim: ClaimInput, options: TakeOptions = {}): ClaimTaken {
   const isLost = (held: DispatchClaim) => (!!options.takeOwn && held.host === claim.host && held.pid === claim.pid) || isClaimLost(dotDir, held);
-  const taken = claimDispatchFile(filePath, claim, { isLost, ...(options.request ? { request: options.request } : {}) });
+  const taken = claimDispatchFile(filePath, claim, { isLost, ...(options.request ? { request: options.request } : {}), ...(options.count ? { count: true } : {}) });
   return taken.ok ? { ok: true } : { ok: false, held: taken.reason === 'claimed' || taken.reason === 'other-host', error: taken.error };
+}
+
+/** An epic's lead paused, resumed or ended on its file (changeLeadFile); throws when it could not be written. */
+export function markLead(filePath: string, action: LeadAction): void {
+  const changed = changeLeadFile(filePath, action);
+  if (!changed.ok) throw new Error(changed.error);
 }
 
 /** The claim given back on the task file, kept with how its run ended; throws when it is not this runner's. */

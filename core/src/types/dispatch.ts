@@ -64,6 +64,14 @@ export interface DispatchRequest {
 /** `dispatch:` on a task: the request, and the claim once a runner took it. */
 export interface DispatchRecord extends DispatchRequest {
   claim?: DispatchClaim;
+  /**
+   * How many hand-offs of the task a runner has started: one for each claim
+   * taken for a worker. Kept across requests, so an epic's lead counts its
+   * tries from the board (task-83).
+   */
+  tries?: number;
+  /** On a lead's record (role lead): when the person paused it (ISO 8601). A new request drops it. */
+  paused?: string;
 
   /** Keys core does not know are kept. */
   [key: string]: unknown;
