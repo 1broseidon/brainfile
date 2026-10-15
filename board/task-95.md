@@ -1,7 +1,7 @@
 ---
 id: task-95
 title: "Drill child 1: a line on the epic's branch"
-column: in-progress
+column: review
 position: 12
 description: "Append one line to `qa/parity-wave-1.md` (make the file and the folder if they are not there): `- Drill child 1 (<task id>): on <the branch you started from>, <the time now, ISO>`. Commit it on your branch. Change nothing else."
 tags:
@@ -13,9 +13,9 @@ parentId: epic-9
 createdAt: "2026-10-15T18:20:54.384Z"
 dependsOn:
   - task-89
-updatedAt: "2026-10-15T20:56:03.071Z"
+updatedAt: "2026-10-15T20:56:14.362Z"
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: qa/parity-wave-1.md
@@ -30,6 +30,8 @@ contract:
     readyAt: "2026-10-15T20:56:01.760Z"
     pickedUpAt: "2026-10-15T20:56:03.071Z"
     reworkCount: 0
+    deliveredAt: "2026-10-15T20:56:14.362Z"
+    duration: 11
 dispatch:
   agent: claude
   model: claude-opus-5-5
