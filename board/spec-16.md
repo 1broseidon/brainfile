@@ -42,9 +42,10 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: true
-updatedAt: "2026-10-15T21:25:55.194Z"
+updatedAt: "2026-10-15T21:25:55.455Z"
 decisions:
   - decision-15
+parentId: epic-6
 ---
 
 ## Description
