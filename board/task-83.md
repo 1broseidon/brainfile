@@ -1,33 +1,20 @@
 ---
 id: task-83
-title: "An epic's lead in the shared runner: lead state on the board, woken by its children's events, inside the runner's rules"
+title: Move the desktop's epic lead into core's shared runner, so it runs the same from brainfile run and MCP
 column: backlog
 position: 19
-description: |-
-  This builds spec-16-4, -5 and -6 once, in core, so a lead runs the same from `brainfile run`, from MCP and from the desktop. None of it exists yet.
-
-  - Dispatching an epic, or any parent with children, starts a lead, not a worker. Its request has `role: lead`, and the claim on the epic means one lead per tree. It gets no worktree and runs in the chat's mode (decision-14). Its `brainfile mcp` has `BRAINFILE_AGENT_ROLE=lead` and `BRAINFILE_LEAD_SCOPE=<epic>`, so dispatch, status and stop reach only its descendants.
-  - The lead's memory is the board: its plan in notes on the epic and a request record on each child. A lead lost to a restart is replaced by one that reads them and goes on.
-  - The Runner wakes it with a new turn when a child lands, fails, conflicts, is sent back or asks. The turn is a short status read from the board, never a transcript. It never polls.
-  - The rules it cannot bend, enforced in the Runner and not in the prompt:
-    - dependsOn landed first;
-    - at most N at once per repository;
-    - retries up to maxRetries, then the child parks in Review;
-    - landings serial;
-    - only a lead dispatches;
-    - a child the lead creates waits as a draft unless the epic was dispatched `until: done` on a repository whose policy is bypass;
-    - the epic completes with its last child.
-  - Pause, resume and stop, from `brainfile dispatch stop|pause|resume <epic>`, MCP and the desktop. The lead's state (`running`, `paused`, `stopped`) lives in the epic's request record.
 tags:
   - core
   - dispatch
   - lead
 relatedFiles:
-  - core/src/dispatch/runner.ts
-  - core/src/dispatch/lead.ts
-  - core/src/dispatchRecord.ts
-  - cli/src/mcp/tools/dispatch_tool.ts
+  - desktop/src/agents/lead.ts
+  - desktop/test/lead.test.ts
   - desktop/src/agents/agents.ts
+  - core/src/dispatch/lead.ts
+  - core/src/dispatch/runner.ts
+  - cli/src/commands/dispatch.ts
+  - cli/src/mcp/tools/dispatch_tool.ts
 parentId: epic-6
 dependsOn:
   - task-80
@@ -55,20 +42,15 @@ contract:
     - The rules are the Runner's, not the lead prompt's (decision-15)
     - The lead writes no code and has no worktree
 createdAt: "2026-10-14T22:16:33.537Z"
+updatedAt: "2026-10-15T01:37:23.658Z"
 ---
 
 ## Description
-This builds spec-16-4, -5 and -6 once, in core, so a lead runs the same from `brainfile run`, from MCP and from the desktop. None of it exists yet.
+The lead now exists in the desktop (spec-16-4/5/6): desktop/src/agents/lead.ts holds it with no Electron in it (planReport, the rules in mayDispatch and guard, waking by childEnded, wake and boardChanged, pause, resume, stop, finish), driven through LeadDeps by agents.ts, and tested with fakes in desktop/test/lead.test.ts. This task moves it into core beside the shared runner (task-80), so a lead runs the same from `brainfile run`, from MCP and from the desktop.
 
-- Dispatching an epic, or any parent with children, starts a lead, not a worker. Its request has `role: lead`, and the claim on the epic means one lead per tree. It gets no worktree and runs in the chat's mode (decision-14). Its `brainfile mcp` has `BRAINFILE_AGENT_ROLE=lead` and `BRAINFILE_LEAD_SCOPE=<epic>`, so dispatch, status and stop reach only its descendants.
-- The lead's memory is the board: its plan in notes on the epic and a request record on each child. A lead lost to a restart is replaced by one that reads them and goes on.
-- The Runner wakes it with a new turn when a child lands, fails, conflicts, is sent back or asks. The turn is a short status read from the board, never a transcript. It never polls.
-- The rules it cannot bend, enforced in the Runner and not in the prompt:
-  - dependsOn landed first;
-  - at most N at once per repository;
-  - retries up to maxRetries, then the child parks in Review;
-  - landings serial;
-  - only a lead dispatches;
-  - a child the lead creates waits as a draft unless the epic was dispatched `until: done` on a repository whose policy is bypass;
-  - the epic completes with its last child.
-- Pause, resume and stop, from `brainfile dispatch stop|pause|resume <epic>`, MCP and the desktop. The lead's state (`running`, `paused`, `stopped`) lives in the epic's request record.
+- Move lead.ts to core/src/dispatch/lead.ts as it stands; LeadDeps becomes the Runner's. Its tests move with it.
+- The lead's `brainfile mcp` gets `BRAINFILE_AGENT_ROLE=lead` and `BRAINFILE_LEAD_SCOPE=<epic>` in place of the desk's grant, so dispatch, status and stop reach only its descendants (task-81's roles).
+- The `lead:` record on the epic (agent, model, effort, by, at, until) gains the claim from task-74, so one lead per tree holds across processes and machines.
+- `attempts` (handed off per child) is counted from the children's request records, not in memory, so a resumed lead keeps the count.
+- Pause, resume and stop from `brainfile dispatch pause|resume|stop <epic>` and MCP, beside the desktop's Lead block.
+- The desktop's agents.ts keeps only the wiring: the Runner calls back for turns, and the window keeps the Lead block and the dock tab.
