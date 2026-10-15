@@ -25,7 +25,7 @@ dependsOn:
 subtasks:
   - id: task-91-1
     title: Handed off before hand-off 1 landed, it waits and says why
-    completed: false
+    completed: true
   - id: task-91-2
     title: After hand-off 1 merges, it starts
     completed: false
@@ -39,6 +39,7 @@ subtasks:
     title: "Optional: two merges back to back both land, one at a time; no landing.lock left behind"
     completed: false
 createdAt: "2026-10-15T18:20:40.478Z"
+updatedAt: "2026-10-15T19:08:31.035Z"
 ---
 
 ## Description
