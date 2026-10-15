@@ -37,7 +37,7 @@ decisions:
   - decision-14
   - decision-10
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: file
       path: desktop/src/host/host.ts
@@ -53,9 +53,13 @@ contract:
       description: "Dispatch: runs started outside the window"
   validation:
     commands:
-      - cd desktop && npm run typecheck && npm test
+      - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
+      - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
       - test ! -e desktop/src/agents/desk-mcp.ts
+  metrics:
+    readyAt: "2026-10-15T21:40:11.572Z"
 createdAt: "2026-10-14T22:16:44.174Z"
+updatedAt: "2026-10-15T21:40:11.572Z"
 ---
 
 ## Description
