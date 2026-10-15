@@ -1,7 +1,7 @@
 ---
 id: task-80
 title: "Core: one shared runner that claims, starts, stops and lands hand-offs, used by the desktop first"
-column: in-progress
+column: review
 position: 8
 description: |-
   The lifecycle of a hand-off lives in the desktop's agents process today: `reserve`, `liveDispatch`, `startDispatch`, `dispatch`, `newRun`, `update`, `stopRun`, `live`, `checkThenMerge`, `land`, `ready`, `settle` and `sendBackLanding`, with the in-memory `runs` map and `reserved` set. Move it to `Runner` in core/src/dispatch/runner.ts, built on task-75 (sessions), task-76 (worktrees and landing) and task-74 (the record and the run files).
@@ -37,7 +37,7 @@ decisions:
   - decision-12
   - decision-15
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: core/src/dispatch/runner.ts
@@ -59,8 +59,10 @@ contract:
     readyAt: "2026-10-15T21:40:10.519Z"
     pickedUpAt: "2026-10-15T21:47:25.186Z"
     reworkCount: 0
+    deliveredAt: "2026-10-15T22:06:08.991Z"
+    duration: 1124
 createdAt: "2026-10-14T22:15:55.916Z"
-updatedAt: "2026-10-15T21:47:25.186Z"
+updatedAt: "2026-10-15T22:06:08.991Z"
 dispatch:
   agent: claude
   model: claude-opus-5-5
