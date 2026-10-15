@@ -63,3 +63,6 @@ dispatch:
 4. Merge is refused while it is open: Merge on the phone (or from the review) says it has pull request #N open.
 5. `bfq pr <this task> --status` says open, with the link.
 6. Merge the pull request on GitHub; a squash merge is the harder case, so use that. Keep the window open: within about a minute the task completes, and its worktree and local branch are gone (`git worktree list`, `git branch`).
+
+## Log
+- 2026-10-15T19:29:18.233Z: [claude] Appended "- QA hand-off 3 (task-92): landed through a pull request, 2026-10-15T19:29:09Z" to qa/parity-wave-1.md, committed on dispatch/task-92 (909947e); nothing else changed, subtasks left for QA. Note: qa/ is matched by a .gitignore rule, but the file is already tracked so the change commits normally. Nothing left unwired.
