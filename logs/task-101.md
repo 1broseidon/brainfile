@@ -1,8 +1,6 @@
 ---
 id: task-101
 title: "QA sign-off: land parity/integration on main, move the app back, and tidy what QA made"
-column: todo
-position: 18
 description: |-
   Last. When every other task under epic-8 is done (or its failures have qa-bug tasks you are happy to fix after landing), ask Claude to sign off. What it does:
   1. Fix any qa-bug tasks you want fixed first, on parity/integration, with the suites run again.
@@ -42,7 +40,8 @@ dependsOn:
   - task-98
   - task-99
   - task-100
-updatedAt: "2026-10-15T21:19:17.748Z"
+updatedAt: "2026-10-15T21:19:18.296Z"
+completedAt: "2026-10-15T21:19:18.296Z"
 ---
 
 ## Description
