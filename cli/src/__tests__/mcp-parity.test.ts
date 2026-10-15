@@ -65,6 +65,14 @@ const TOOL_FOR: Record<string, string> = {
   fix: 'where', // action: fix | undo, with expected
   issues: 'issues',
   pr: 'pull_request',
+  // Hand-offs (task-81): the queue, the runs on this machine, and landing.
+  dispatch: 'dispatch',
+  'dispatch status': 'dispatch_status',
+  'dispatch stop': 'dispatch_stop',
+  review: 'review', // action show (default) | ready
+  land: 'review', // action land
+  discard: 'review', // action discard
+  agents: 'agents',
 };
 
 /** CLI capability → the MCP resources that serve it. */
@@ -97,13 +105,20 @@ const EXCLUDED: Record<string, string> = {
   adopt: 'Decides which of two boards is the board: the person\'s call. Writes refuse with this command named.',
   'merge-boards': 'Decides how two boards become one: the person\'s call. Writes refuse with this command named.',
   backups: 'Local safety copies of replaced boards, and putting one back: the person\'s call.',
+  // task-82 adds `brainfile run` here: 'A foreground runner is an interface for a person at a terminal, like tui and mcp; the dispatch tools queue for it.'
 };
 
-/** Every leaf command, `parent child` for a subcommand. */
+/**
+ * Every leaf command, `parent child` for a subcommand, and a parent that does
+ * something itself besides its subcommands (`dispatch` queues; `dispatch
+ * status` and `dispatch stop` are its own).
+ */
 function capabilities(command: Command, prefix = ''): string[] {
   return command.commands.flatMap((sub) => {
     const name = prefix ? `${prefix} ${sub.name()}` : sub.name();
-    return sub.commands.length > 0 ? capabilities(sub, name) : [name];
+    if (sub.commands.length === 0) return [name];
+    const acts = !!(sub as unknown as { _actionHandler?: unknown })._actionHandler;
+    return [...(acts ? [name] : []), ...capabilities(sub, name)];
   });
 }
 
