@@ -872,7 +872,17 @@ export type AgentMethod = (typeof AGENT_METHODS)[number];
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
 export type HostReply = { kind: 'host-reply'; id: number; result: unknown };
 /** The board writes the agents process may ask main to pass to the host. */
-export const AGENT_HOST_METHODS = ['recordDispatch', 'recordLead', 'recordPullRequest', 'noteTask', 'settleLanded', 'completeTask'] as const;
+export const AGENT_HOST_METHODS = [
+  'recordDispatch',
+  'claimDispatch',
+  'releaseDispatch',
+  'parkInReview',
+  'recordLead',
+  'recordPullRequest',
+  'noteTask',
+  'settleLanded',
+  'completeTask',
+] as const;
 export type AgentHostMethod = (typeof AGENT_HOST_METHODS)[number];
 /** The forge calls the agents process may ask of main, whose GitHub client holds the person's credentials (decision-16). */
 export const AGENT_FORGE_METHODS = ['openPullRequest', 'pullRequestState'] as const;

@@ -69,6 +69,8 @@ import {
   syncMessage,
   syncStatusLabel,
 } from '@brainfile/core/repo';
+import { giveBackClaim, parkInReview as parkTask, takeClaim, type ClaimTaken } from '@brainfile/core/repo';
+import type { ClaimInput, DispatchClaim, DispatchOutcome, DispatchRequest } from '@brainfile/core';
 import { integrityView } from './integrity';
 import { workColumn } from '../shared/columns';
 import { applyFix, lastFix, planFix as planBoardFix, undoFix as undoBoardFix } from '@brainfile/core/repo';
@@ -743,6 +745,41 @@ function recordDispatch(projectId: string, taskId: string, record: DispatchRecor
   );
 }
 
+/**
+ * The agents process's runner takes the task (task-80): its claim, by
+ * compare-and-swap on the task file, refused while another runner's holds
+ * it (core's takeClaim); it commits like any change.
+ */
+function claimDispatch(projectId: string, taskId: string, claim: ClaimInput, options: { takeOwn?: boolean; request?: DispatchRequest }): Result<ClaimTaken> {
+  return mutate(
+    projectId,
+    () => `claim ${taskId}: ${claim.runner} on ${claim.host}`,
+    (board) => takeClaim(board.dotDir, taskPath(board, taskId), claim, options)
+  );
+}
+
+/** A run that ended gives its claim back, kept with how it ended; a task its worker completed is in logs/. */
+function releaseDispatch(projectId: string, taskId: string, holder: Pick<DispatchClaim, 'host' | 'pid'>, outcome: DispatchOutcome): Result {
+  return mutate(
+    projectId,
+    () => `release ${taskId}: ${outcome}`,
+    (board) => {
+      const found = findV2Task(getV2Dirs(board.brainfilePath), taskId, true);
+      if (!found) throw new Error(`Task ${taskId} not found`);
+      giveBackClaim(found.filePath, holder, outcome);
+    }
+  );
+}
+
+/** A landing that may not go back to its agent again waits in Review for the person (task-80). */
+function parkInReview(projectId: string, taskId: string): Result {
+  return mutate(
+    projectId,
+    () => `review ${taskId}`,
+    (board) => parkTask(board.brainfilePath, taskId)
+  );
+}
+
 // ── Sync ────────────────────────────────────────────────────────────────────
 
 async function runSync(board: OpenBoard, work: () => ReturnType<typeof syncBoard> | null): Promise<SyncView> {
@@ -923,6 +960,9 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   noteTask,
   decide,
   recordDispatch,
+  claimDispatch,
+  releaseDispatch,
+  parkInReview,
   recordLead,
   recordPullRequest,
   settleLanded,

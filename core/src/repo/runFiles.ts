@@ -79,6 +79,14 @@ export interface RunFile {
   /** The runner's last beat. */
   beatAt: number;
   ask?: RunFileAsk;
+  /** The repository the run is in, as its runner names it. */
+  projectId?: string;
+  /** The chat thread a chat turn belongs to. */
+  threadId?: string;
+  /** A hand-off the chat made: the chat turn that asked for it. */
+  from?: string;
+  /** Another process asks the run's runner to stop it (task-80); the runner watches for it. */
+  stop?: boolean;
 }
 
 /** `state/runners/<host>-<pid>.json`: a runner that is up. */

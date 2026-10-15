@@ -9,9 +9,12 @@
  * as the CLI; what it changes reaches the window as ordinary board changes.
  * Starting an agent and talking to it is core's (@brainfile/core/dispatch,
  * decision-18): the agents it knows, custom agents and the registry, the
- * settings, sessions, permissions and the brief. This process keeps the runs,
- * answers asks in the band, and hands off, leads, reviews and lands.
- * A hand-off gets its own worktree and branch instead (core's repo/worktree.ts, spec-14).
+ * settings, sessions, permissions and the brief. A hand-off's life is core's
+ * Runner (task-80): the request and the claim on the task, its worktree and
+ * branch (core's repo/worktree.ts, spec-14), its run file under
+ * `.brainfile/state/runs/`, stopping and landing. This process is its
+ * adapter: it answers asks in the band, writes the board through the host,
+ * and leads, reviews and opens pull requests.
  * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
  * and `stop`, so a chat can hand work off the way Hand to… does. Handing off
  * a document with children starts its lead instead (lead.ts, decision-15):
@@ -29,15 +32,13 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type * as acp from '@agentclientprotocol/sdk';
-import { findV2Task, getV2Dirs, openPullRequestOf, readBoardConfig, readTasksDir, type Task } from '@brainfile/core';
+import { findV2Task, getV2Dirs, readBoardConfig, readTasksDir, type Task } from '@brainfile/core';
 import {
   AgentRegistry,
-  Startups,
-  agentEnv,
+  Runner,
   agentOf as agentOfIn,
   allAgents as allAgentsIn,
   applyMode,
-  brief,
   close as closeSession,
   dataDir,
   getSettings,
@@ -47,7 +48,6 @@ import {
   nameOf as nameOfIn,
   open as openSession,
   policyFor,
-  readSettings,
   setSettings,
   standingDecisions,
   turn as takeTurn,
@@ -55,41 +55,31 @@ import {
   whyNot,
   type OpenOptions as SessionOptions,
   type PermissionRule,
+  type RunnerBoard,
   type Session,
-  type SessionContext,
 } from '@brainfile/core/dispatch';
 import {
   branchesOf,
   discardReview,
   handOffTarget,
   keepBranch,
-  landReview,
   locateBoard,
   offerEpicBranch,
-  onlyReads,
   prepareEpicBranch,
-  prepareTarget,
-  prepareWorktree,
   readyToMerge,
-  refreshTarget,
-  releaseReader,
   reviewOf,
-  runChecks,
-  sendBackNote,
   uncommittedIn,
   unlanded,
   unpushed,
   withOpenPullRequest,
-  type Landing,
-  type Refresh,
-  type Worktree,
+  type ClaimTaken,
 } from '@brainfile/core/repo';
 import { followHandOffPullRequest, openHandOffPullRequest, type PullRequestForge } from '@brainfile/core/forge';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { chatPermission, discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
 import { PullRequestWatch } from './pullRequests';
-import { DEFAULT_LIMIT, Leads, treeOf, workOf as openWork, type Lead, type LeadTurn, type Tree, type TreeDoc } from './lead';
+import { Leads, treeOf, workOf as openWork, type Lead, type LeadTurn, type Tree, type TreeDoc } from './lead';
 import { isReview } from '../shared/columns';
 import type {
   AgentEvent,
@@ -102,7 +92,6 @@ import type {
   AgentServer,
   BranchesView,
   ChatTurn,
-  DispatchRecord,
   DispatchSettings,
   LeadRecord,
   HostReply,
@@ -138,7 +127,7 @@ function emit(event: AgentEvent): void {
 const BUSY_FILE = process.env.BRAINFILE_DEV_BUSY;
 function markBusy(): void {
   if (!BUSY_FILE) return;
-  const working = [...runs.values()].filter((r) => r.state === 'starting' || r.state === 'working' || r.state === 'waiting').length;
+  const working = runner.list().filter((r) => LIVE_STATES.has(r.state)).length;
   try {
     fs.writeFileSync(BUSY_FILE, String(working));
   } catch {
@@ -161,34 +150,53 @@ async function changeSettings(patch: Partial<DispatchSettings>): Promise<Dispatc
   return now;
 }
 
-// ── Sessions ─────────────────────────────────────────────────────────────────
+// ── Sessions and runs (core's Runner) ────────────────────────────────────────
 
-const sessions = new Map<string, Session>();
-const runs = new Map<string, AgentRun>();
 const asks = new Map<string, { ask: PermissionAsk; resolve: (optionId: string | null) => void }>();
-/** Runs whose agent is still starting, so stop reaches them before they have a session. */
-const startups = new Startups();
-let nextId = 1;
 
-/** What core's sessions report to: the runs this process keeps, and asks answered in the band. */
-const ctx: SessionContext = {
+const LIVE_STATES = new Set(['starting', 'working', 'waiting']);
+
+/** The board writes a hand-off makes, through main and the host, so they commit like any other. */
+const hostBoard: RunnerBoard = {
+  request: (projectId, taskId, request) => callHost<Result>('recordDispatch', projectId, taskId, request),
+  async claim(projectId, taskId, claim, options) {
+    const taken = await callHost<Result<ClaimTaken>>('claimDispatch', projectId, taskId, claim, options);
+    return taken.ok ? taken.value : { ok: false, held: false, error: taken.error };
+  },
+  release: (projectId, taskId, holder, outcome) => callHost<Result>('releaseDispatch', projectId, taskId, holder, outcome),
+  note: (projectId, taskId, text) => callHost<Result>('noteTask', projectId, taskId, text),
+  settleLanded: (projectId, taskId) => callHost<Result<{ completed: boolean; left: number }>>('settleLanded', projectId, taskId),
+  park: (projectId, taskId) => callHost<Result>('parkInReview', projectId, taskId),
+};
+
+/**
+ * Every run this process makes, its sessions and its hand-offs' lives: the
+ * request and claim on the task, run files, stop, the queue and landing.
+ * Asks are answered in the band; a hand-off that ends wakes the lead over
+ * its task (decision-15).
+ */
+const runner: Runner = new Runner({
   dataDir: DATA_DIR,
-  sessions,
-  update,
+  runner: 'desktop',
+  board: hostBoard,
   ask(ask) {
     emit({ kind: 'permission', ask });
     return new Promise((resolve) => asks.set(ask.id, { ask, resolve }));
   },
-};
-
-const LIVE_STATES = new Set(['starting', 'working', 'waiting']);
+  cancelAsk: (askId) => answerPermission(askId, null),
+  onRun(run, was) {
+    emit({ kind: 'run', run });
+    if (run.kind === 'dispatch' && was && LIVE_STATES.has(was) && !LIVE_STATES.has(run.state)) void leads.childEnded(run);
+  },
+  ledBy: (projectId, taskId): string | null => leads.leadOver(projectId, taskId)?.epicId ?? null,
+  landed: (projectId, taskId) => offerIfLast(projectId, taskId),
+});
+const sessions = runner.sessions;
+const startups = runner.startups;
+const ctx = runner.ctx;
 
 function update(run: AgentRun, patch: Partial<AgentRun>): void {
-  const was = run.state;
-  Object.assign(run, patch);
-  emit({ kind: 'run', run: { ...run } });
-  // A hand-off that ends wakes the lead over its task (decision-15).
-  if (run.kind === 'dispatch' && LIVE_STATES.has(was) && !LIVE_STATES.has(run.state)) void leads.childEnded({ ...run });
+  runner.update(run, patch);
 }
 
 interface OpenOptions extends Omit<SessionOptions, 'mcpServers' | 'rule' | 'keepsMode' | 'release'> {
@@ -246,143 +254,22 @@ function turn(session: Session, run: AgentRun, prompt: string): Promise<void> {
   return takeTurn(ctx, session, run, prompt);
 }
 
-function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], taskId?: string, extra: Pick<AgentRun, 'model' | 'effort' | 'from'> = {}): AgentRun {
-  const run: AgentRun = {
-    id: `run-${nextId++}`,
-    projectId,
-    agentId,
-    kind,
-    taskId,
-    ...(extra.model ? { model: extra.model } : {}),
-    // Effort belongs to a chosen model: the agent's default model takes its own.
-    ...(extra.model && extra.effort ? { effort: extra.effort } : {}),
-    ...(extra.from ? { from: extra.from } : {}),
-    state: 'starting',
-    activity: 'starting',
-    startedAt: Date.now(),
-  };
-  runs.set(run.id, run);
-  emit({ kind: 'run', run: { ...run } });
-  return run;
+function newRun(projectId: string, agentId: AgentId, kind: AgentRun['kind'], taskId?: string, extra: Pick<AgentRun, 'model' | 'effort' | 'from' | 'threadId'> = {}): AgentRun {
+  return runner.newRun(projectId, agentId, kind, taskId, extra);
 }
 
 // ── Dispatch and ask ─────────────────────────────────────────────────────────
 
-/** The live hand-off on a task, if any. */
+/** The live hand-off on a task, if any, whichever runner on this machine has it. */
 function liveDispatch(projectId: string, taskId: string): AgentRun | undefined {
-  return [...runs.values()].find(
-    (r) =>
-      r.kind === 'dispatch' &&
-      r.projectId === projectId &&
-      r.taskId === taskId &&
-      (r.state === 'starting' || r.state === 'working' || r.state === 'waiting' || startups.starting(r.id))
-  );
-}
-
-/**
- * Tasks a hand-off is being started on, held from its busy check until its
- * run exists: the desk awaits a board write in between, and a second hand-off
- * (from the desk or Hand to…) let through then would share the task's one
- * worktree (decision-2).
- */
-const reserved = new Set<string>();
-
-/**
- * Holds the task for one hand-off: a release, to call once its run exists or
- * it has failed, or why the task cannot be had. Checked and taken in one
- * step, with no await between.
- */
-function reserve(projectId: string, taskId: string): Result<() => void> {
-  const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, error: `${nameOf(live.agentId)} is already working on ${taskId}` };
-  const slot = `${projectId}\n${taskId}`;
-  if (reserved.has(slot)) return { ok: false, error: `A hand-off is already starting on ${taskId}` };
-  reserved.add(slot);
-  return { ok: true, value: () => reserved.delete(slot) };
-}
-
-/**
- * Before a hand-off from an epic's own branch, the epic's target is brought
- * into it (decision-16), so the branch does not drift: what came of it, for
- * startDispatch. Null when its target is not an epic's branch.
- */
-async function refreshFor(projectId: string, taskId: string): Promise<Refresh | null> {
-  try {
-    return await refreshTarget(projectId, taskId);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * A conflict bringing the epic's target into its branch goes to an agent, as
- * a landing's does (decision-12): the one the task is handed to merges the
- * target into its own branch first and settles it, and lands it on the
- * epic's branch with its work. The epic's log says so. What its brief adds.
- */
-function settleFirst(projectId: string, taskId: string, behind: Refresh | null | undefined): string {
-  if (!behind || behind.ok || behind.kind !== 'conflict') return '';
-  const { branch, into, files, collided } = behind;
-  const epicId = handOffTarget(projectId, taskId).epic?.id;
-  if (epicId) void callHost<Result>('noteTask', projectId, epicId, `Bringing ${into} into ${branch} conflicts in ${files.join(', ')}: handed to ${taskId}'s agent to settle on its branch.`);
-  const met = collided.map((c) => `${c.sha} ${c.subject}${c.taskId ? ` (${c.taskId})` : ''}`).join('; ');
-  return (
-    `\n\nBefore you start: ${branch}, which your branch was made from, is behind ${into}, and bringing ${into} in conflicts in ${files.join(', ')}.` +
-    (met ? ` On ${into}: ${met}.` : '') +
-    ` So, this once, first merge ${into} into your branch (git merge ${into}), keep what both sides meant and commit the merge; then do the task. It lands on ${branch} with your work.`
-  );
-}
-
-/**
- * A hand-off: its worktree, its brief, and the agent started on it. Hand to…
- * and the chat's `dispatch` both come here; `from` is the chat turn that asked.
- * `behind` is what bringing an epic's target into its branch came to.
- */
-function startDispatch(
-  projectId: string,
-  taskId: string,
-  agentId: AgentId,
-  model?: string,
-  from?: string,
-  effort?: string,
-  behind?: Refresh | null
-): Result<{ run: AgentRun; worktree: Worktree | null }> {
-  let prompt: string;
-  let worktree: Worktree | null;
-  try {
-    const located = locateBoard(projectId, { materialize: false });
-    const task = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId)?.doc.task : undefined;
-    // Work waits on what it depends on (decision-15): a dependency still open on this board, or complete with its branch not landed yet.
-    const dirs = located.found ? getV2Dirs(located.brainfilePath) : null;
-    const waits = dirs ? (task?.dependsOn ?? []).filter((ref) => !ref.includes(':') && (!!findV2Task(dirs, ref) || unlanded(projectId, ref))) : [];
-    if (waits.length) return { ok: false, error: `${taskId} waits on ${waits.join(', ')}: hand it off once ${waits.length === 1 ? 'it has' : 'they have'} landed` };
-    const contract = task?.contract;
-    // It forks from and lands on its target (decision-16): its landsOn, inherited, an epic's own branch, else the trunk.
-    const base = prepareTarget(projectId, taskId);
-    worktree = prepareWorktree(projectId, taskId, undefined, onlyReads(contract), base);
-    prompt = brief(projectId, taskId, worktree, leads.leadOver(projectId, taskId)?.epicId ?? null, base, worktree?.branch ? settleFirst(projectId, taskId, behind) : '');
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
-  const run = newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from });
-  void (async () => {
-    try {
-      const session = await startups.open(run.id, (signal) => open(projectId, agentId, run.id, model, { at: worktree?.path, effort, signal }), close);
-      if (session) await turn(session, run, prompt);
-    } catch (err) {
-      update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
-    } finally {
-      // A read-only checkout keeps nothing: it goes with its run, unless something was left in it.
-      if (worktree && !worktree.branch) releaseReader(projectId, taskId);
-    }
-  })();
-  return { ok: true, value: { run: { ...run }, worktree } };
+  return runner.liveDispatch(projectId, taskId);
 }
 
 /**
  * The person's hand-off (Hand to…): a task with open children gets a lead
- * (decision-15); any other, an agent in its worktree, with who asked on the
- * task. Inside a led tree the person's hand-off is theirs to make.
+ * (decision-15); any other, the request on the task and an agent in its
+ * worktree, through the runner. Inside a led tree the person's hand-off is
+ * theirs to make.
  */
 async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Promise<Result<AgentRun>> {
   const guarded = leads.guard(projectId, taskId, 'person');
@@ -392,26 +279,8 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId, mod
     if (!started.ok) return started;
     return started.value.run ? { ok: true, value: started.value.run } : { ok: false, error: `${taskId}'s lead did not start` };
   }
-  const behind = await refreshFor(projectId, taskId);
-  const handed = handOff(projectId, taskId, agentId, model, effort, behind);
-  if (handed.ok) void callHost<Result>('recordDispatch', projectId, taskId, dispatchRecord(agentId, model, effort, 'person'));
-  return handed;
-}
-
-/** A hand-off with no record and no lead: a send-back is the same hand-off going on. */
-function handOff(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string, behind?: Refresh | null): Result<AgentRun> {
-  const held = reserve(projectId, taskId);
-  if (!held.ok) return held;
-  try {
-    const started = startDispatch(projectId, taskId, agentId, model, undefined, effort, behind);
-    return started.ok ? { ok: true, value: started.value.run } : started;
-  } finally {
-    held.value();
-  }
-}
-
-function dispatchRecord(agentId: AgentId, model: string | undefined, effort: string | undefined, by: DispatchRecord['by']): DispatchRecord {
-  return { agent: agentId, ...(model ? { model } : {}), ...(effort ? { effort } : {}), by, at: new Date().toISOString() };
+  const started = await runner.dispatch(projectId, taskId, { agent: agentId, model, effort, by: 'person' });
+  return started.ok ? { ok: true, value: started.value.run } : started;
 }
 
 // ── Leads (decision-15) ──────────────────────────────────────────────────────
@@ -456,12 +325,6 @@ function leadsChildren(projectId: string, taskId: string): boolean {
   return !!tree && !tree.epic.done && openWork(tree).length > 0;
 }
 
-/** The most hand-offs at once in a repository: `projects[<repo>].concurrency` in dispatch.json, else 3. */
-function limitFor(projectId: string): number {
-  const set = readSettings(DATA_DIR).projects?.[projectId]?.concurrency;
-  return typeof set === 'number' && set >= 1 ? Math.floor(set) : DEFAULT_LIMIT;
-}
-
 const leadKey = (lead: Lead) => `lead:${lead.projectId}\n${lead.epicId}`;
 
 /** One turn of a lead, in its session or a new one: read-only, the board's tools and the desk scoped to its epic. */
@@ -483,16 +346,15 @@ function leadTurn(lead: Lead, prompt: (fresh: boolean) => string): LeadTurn {
   return { run: { ...run }, done };
 }
 
-const leads = new Leads({
+const leads: Leads = new Leads({
   tree: readTree,
-  live: (projectId) => [...runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && (LIVE_STATES.has(r.state) || startups.starting(r.id))),
-  lastRun: (projectId, taskId) =>
-    [...runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId).sort((a, b) => b.startedAt - a.startedAt)[0],
+  live: (projectId) => runner.live(projectId),
+  lastRun: (projectId, taskId) => runner.lastRun(projectId, taskId),
   policy: (projectId) => policyFor(DATA_DIR, projectId),
-  limit: limitFor,
+  limit: (projectId) => runner.limit(projectId),
   turn: leadTurn,
   close(lead) {
-    const live = [...runs.values()].find((r) => r.kind === 'lead' && r.projectId === lead.projectId && r.taskId === lead.epicId && LIVE_STATES.has(r.state));
+    const live = runner.list().find((r) => r.kind === 'lead' && r.projectId === lead.projectId && r.taskId === lead.epicId && LIVE_STATES.has(r.state));
     if (live) void stopRun(live.id);
     const session = sessions.get(leadKey(lead));
     if (session) close(session);
@@ -594,28 +456,21 @@ const desk = new DeskBridge(
           return { ok: true, value: { run: started.value.run, branch: null, lead: true } };
         }
       }
-      // Before each hand-off from an epic's own branch, the epic's target is brought in (decision-16).
-      const behind = await refreshFor(grant.projectId, taskId);
-      // Who asked goes on the task first, as Hand to… sets the assignee first.
-      // The task is held across that write, so nothing else starts on it meanwhile.
-      const held = reserve(grant.projectId, taskId);
-      if (!held.ok) return held;
-      let written: Result;
-      let started: ReturnType<typeof startDispatch>;
-      try {
-        written = await callHost<Result>('recordDispatch', grant.projectId, taskId, dispatchRecord(agentId, model, effort, grant.lead ? 'lead' : 'chat'));
-        started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id, effort, behind);
-      } finally {
-        held.value();
-      }
+      // The request on the task, then the agent started, the task held across both;
+      // before a hand-off from an epic's own branch, the epic's target is brought in (decision-16).
+      const started = await runner.dispatch(grant.projectId, taskId, {
+        agent: agentId,
+        model,
+        effort,
+        by: grant.lead ? 'lead' : 'chat',
+        from: sessions.get(grant.key)?.run?.id,
+      });
       if (!started.ok) return started;
       if (grant.lead) leads.dispatched(grant.projectId, grant.lead, taskId);
-      return {
-        ok: true,
-        value: { run: started.value.run, branch: started.value.worktree?.branch ?? null, reads: !!started.value.worktree && !started.value.worktree.branch, ...(written.ok ? {} : { note: `The board record was not written: ${written.error}` }) },
-      };
+      const { run, worktree, note } = started.value;
+      return { ok: true, value: { run, branch: worktree?.branch ?? null, reads: !!worktree && !worktree.branch, ...(note ? { note } : {}) } };
     },
-    runs: () => [...runs.values()],
+    runs: () => runner.list(),
     stop: stopRun,
   })
 );
@@ -682,8 +537,7 @@ async function ask(
   efforts: Partial<Record<AgentId, string>> = {}
 ): Promise<Result<AgentRun>> {
   const key = `ask:${threadId}:${agentId}:${model ?? ''}:${effort ?? ''}`;
-  const run = newRun(projectId, agentId, 'ask', undefined, { model, effort });
-  run.threadId = threadId;
+  const run = newRun(projectId, agentId, 'ask', undefined, { model, effort, threadId });
   void (async () => {
     try {
       const existing = sessions.get(key);
@@ -740,8 +594,7 @@ async function discuss(
   effort?: string
 ): Promise<Result<AgentRun>> {
   const key = `discuss:${threadId}:${agentId}:${model ?? ''}:${effort ?? ''}`;
-  const run = newRun(projectId, agentId, 'ask', taskId, { model, effort });
-  run.threadId = threadId;
+  const run = newRun(projectId, agentId, 'ask', taskId, { model, effort, threadId });
   void (async () => {
     try {
       const existing = sessions.get(key);
@@ -794,61 +647,14 @@ async function checkThenMerge(projectId: string, taskId: string, to?: MergeTo): 
 }
 
 /**
- * Lands a hand-off, then settles its task on the board: done, unless
- * subtasks are left (then it goes back to work). A conflict, or a check that
- * fails once its target is in, goes back to an agent first (decision-12).
- * `into` lands it on another branch than its own target.
+ * Lands a hand-off, then settles its task on the board (the runner's land):
+ * done, unless subtasks are left. A conflict, or a check that fails once its
+ * target is in, goes back to an agent first (decision-12). `into` lands it
+ * on another branch than its own target.
  */
 async function landAndSettle(projectId: string, taskId: string, into?: string): Promise<Result<{ message: string }>> {
-  const landing = await land(projectId, taskId, into);
-  if (landing.ok) {
-    const located = locateBoard(projectId, { materialize: false });
-    const open = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
-    if (!open) return { ok: true, value: { message: landing.message } };
-    const settled = await callHost<Result<{ completed: boolean; left: number }>>('settleLanded', projectId, taskId);
-    if (settled.ok && settled.value.completed) offerIfLast(projectId, taskId);
-    if (!settled.ok) return { ok: true, value: { message: `${landing.message}. ${taskId} stays open: ${settled.error}` } };
-    return {
-      ok: true,
-      value: { message: settled.value.completed ? landing.message : `${landing.message}. ${taskId} stays open: ${settled.value.left} subtask${settled.value.left === 1 ? '' : 's'} left` },
-    };
-  }
-  if (landing.kind === 'conflict' || landing.kind === 'check') {
-    const back = await sendBackLanding(projectId, taskId, landing);
-    if (back.sent) return { ok: false, error: back.said };
-    return { ok: false, error: `${landing.error} ${back.said}${landing.kind === 'check' ? `\n${landing.output}` : ''}` };
-  }
-  return { ok: false, error: landing.error };
-}
-
-/**
- * Sends a landing that failed back to the agent that did the work (task-63):
- * a note in the task's log saying what collided or what failed, and how to
- * settle it (core's sendBackNote, which also says whether it may go back
- * again), then the same agent and model on the same branch.
- */
-async function sendBackLanding(
-  projectId: string,
-  taskId: string,
-  landing: Extract<Landing, { kind: 'conflict' | 'check' }>
-): Promise<{ sent: boolean; said: string }> {
-  const located = locateBoard(projectId, { materialize: false });
-  const found = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
-  if (!found) return { sent: false, said: 'Settle it in its worktree, or send it back with a note.' };
-  const { task } = found.doc;
-  const back = sendBackNote(found.doc, landing);
-  if (!back.ok) return { sent: false, said: back.said };
-  const last = [...runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId).at(-1);
-  const named = (id: string | undefined) => (id && allAgents().some((a) => a.id === id && !whyNot(a)) ? (id as AgentId) : null);
-  const agentId = named(last?.agentId) ?? named(task.assignee) ?? allAgents().find((a) => !whyNot(a))?.id ?? null;
-  if (!agentId) return { sent: false, said: 'No agent is at hand to settle it.' };
-  const { note, round } = back;
-  const noted = await callHost<Result>('noteTask', projectId, taskId, note);
-  if (!noted.ok) return { sent: false, said: `It could not be sent back: ${noted.error}` };
-  const started = handOff(projectId, taskId, agentId, last?.model, last?.effort);
-  if (!started.ok) return { sent: false, said: `It could not be sent back: ${started.error}` };
-  const what = landing.kind === 'conflict' ? `conflicts with ${landing.into} in ${landing.files.slice(0, 3).join(', ')}` : `failed \`${landing.command}\``;
-  return { sent: true, said: `${taskId} ${what}: sent back to ${nameOf(agentId)} to settle (${round})` };
+  const landed = await runner.land(projectId, taskId, into ? { into } : {});
+  return landed.ok ? { ok: true, value: { message: landed.message } } : { ok: false, error: landed.error };
 }
 
 /**
@@ -877,37 +683,13 @@ async function keepAsBranch(projectId: string, taskId: string): Promise<Result<{
 }
 
 /**
- * One landing of a task's hand-off, with its contract's checks; `into` lands it
- * elsewhere than its target. One opened as a pull request lands on the forge instead.
- */
-async function land(projectId: string, taskId: string, into?: string): Promise<Landing> {
-  const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, kind: 'refused', error: `${nameOf(live.agentId)} is still working on ${taskId}` };
-  if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, kind: 'refused', error: `A hand-off is starting on ${taskId}` };
-  let title: string | undefined;
-  let commands: string[] = [];
-  try {
-    const located = locateBoard(projectId, { materialize: false });
-    const task = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId, true)?.doc.task : undefined;
-    const pr = task ? openPullRequestOf(task) : null;
-    if (pr) return { ok: false, kind: 'refused', error: `${taskId} has pull request #${pr.number} open: it lands when that merges on GitHub` };
-    title = task?.title;
-    commands = (task?.contract?.validation?.commands ?? []).map((c) => c.trim()).filter(Boolean);
-  } catch (err) {
-    return { ok: false, kind: 'refused', error: err instanceof Error ? err.message : String(err) };
-  }
-  return landReview(projectId, taskId, { title, check: commands.length ? (at) => runChecks(at, commands, agentEnv()) : undefined, ...(into ? { into } : {}) });
-}
-
-/**
  * Opens the hand-off as a pull request (decision-16): an agent still at it
  * refuses, as Merge does; the rest is core's, which pushes the branch, asks
  * GitHub through main and writes `pullRequest:` on the task through the host.
  */
 async function openPullRequest(projectId: string, taskId: string): Promise<Result<PullRequestRecord>> {
-  const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, error: `${nameOf(live.agentId)} is still working on ${taskId}` };
-  if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, error: `A hand-off is starting on ${taskId}` };
+  const busy = runner.busy(projectId, taskId);
+  if (busy) return { ok: false, error: busy };
   const opened = await openHandOffPullRequest(projectId, taskId, { github: forge, record: (record, note) => recordPullRequest(projectId, taskId, record, note) });
   if (opened.ok) leads.wake(projectId, taskId, `${taskId} was opened as pull request #${opened.value.number} into ${opened.value.base}: it lands when that merges on GitHub`);
   return opened;
@@ -922,7 +704,7 @@ const pullRequests = new PullRequestWatch({
   open: (projectId) => [...withOpenPullRequest(projectId)],
   follow: (projectId, taskId) => followHandOffPullRequest(projectId, taskId, { github: forge, record: (record, note) => recordPullRequest(projectId, taskId, record, note) }),
   settle: (projectId, taskId) => callHost<Result>('settleLanded', projectId, taskId),
-  busy: (projectId, taskId) => !!liveDispatch(projectId, taskId) || reserved.has(`${projectId}\n${taskId}`),
+  busy: (projectId, taskId) => !!runner.busy(projectId, taskId),
   said: (projectId, taskId, text) => leads.wake(projectId, taskId, text),
 });
 
@@ -942,9 +724,8 @@ function ready(projectId: string): Result<ReadyView[]> {
 
 /** Merge and discard wait for the agent: its worktree is not taken from under it. */
 function settle(projectId: string, taskId: string, act: (title?: string) => { message: string }): Result<{ message: string }> {
-  const live = liveDispatch(projectId, taskId);
-  if (live) return { ok: false, error: `${nameOf(live.agentId)} is still working on ${taskId}` };
-  if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, error: `A hand-off is starting on ${taskId}` };
+  const busy = runner.busy(projectId, taskId);
+  if (busy) return { ok: false, error: busy };
   try {
     const located = locateBoard(projectId, { materialize: false });
     const title = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId, true)?.doc.task.title : undefined;
@@ -954,24 +735,15 @@ function settle(projectId: string, taskId: string, act: (title?: string) => { me
   }
 }
 
+/** Stops a run: one of this process's, or another runner's on this machine through its run file (task-80). */
 async function stopRun(runId: string): Promise<void> {
-  const run = runs.get(runId);
-  if (!run) return;
-  for (const [id, pending] of asks) if (pending.ask.runId === runId) answerPermission(id, null);
-  const session = [...sessions.values()].find((s) => s.run?.id === runId);
-  update(run, { state: 'stopped', endedAt: Date.now() });
-  // Still starting: there is no session yet, so the startup is what stops.
-  startups.stop(runId);
-  if (session) {
-    await session.connection.cancel({ sessionId: session.sessionId }).catch(() => {});
-    if (run.kind === 'dispatch') close(session);
-  }
+  await runner.stop(runId);
 }
 
 /** What is running and asking now, and what ended lately, for a phone that connects mid-run or comes back (task-40). */
 function live(): LiveAgents {
   return {
-    runs: liveRuns(runs.values()),
+    runs: liveRuns(runner.list()),
     asks: [...asks.values()].map((pending) => pending.ask),
   };
 }
@@ -1023,7 +795,7 @@ parentPort.on('message', async (event: { data: AgentRequest | HostReply }) => {
 });
 
 process.on('exit', () => {
-  for (const session of sessions.values()) session.child.kill();
+  runner.close();
   desk.close();
 });
 
