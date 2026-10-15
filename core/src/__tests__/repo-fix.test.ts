@@ -305,7 +305,7 @@ test('Undo from another process: the fix leaves what Undo needs in state/last-fi
   expect(surveyBoards(home).trackedTwice).toBeTruthy();
   // One go: the record is gone, and a second Undo changes nothing.
   expect(fs.existsSync(file)).toBe(false);
-  expect(() => undoFix(home)).toThrow(/Too late to undo/);
+  expect(() => undoFix(home)).toThrow(/There is no fix to undo/);
   expect(git(['rev-parse', 'main'], repo)).toBe(before);
 });
 

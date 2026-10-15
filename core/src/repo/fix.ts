@@ -516,9 +516,11 @@ function checkoutInto(root: string, common: string, ref: string, dir: string): v
  * go: refused or not, the fix cannot be undone again.
  */
 export function undoFix(dotDir: string, options: { now?: number } = {}): string {
+  // No record at all is nothing to undo; one past its time is too late.
+  const recorded = fs.existsSync(lastFixFile(dotDir));
   const kept = lastFix(dotDir, options.now);
   forgetFix(dotDir);
-  if (!kept) throw new Error('Too late to undo; brainfile backups has every copy.');
+  if (!kept) throw new Error(recorded ? 'Too late to undo; brainfile backups has every copy.' : 'There is no fix to undo.');
   return putBack(kept.record);
 }
 
