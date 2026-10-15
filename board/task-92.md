@@ -43,6 +43,14 @@ subtasks:
     title: Squash-merged on GitHub, the task completes within a minute and its worktree and branch go
     completed: false
 createdAt: "2026-10-15T18:20:40.775Z"
+assignee: claude
+updatedAt: "2026-10-15T19:28:54.323Z"
+dispatch:
+  agent: claude
+  model: opus
+  effort: high
+  by: person
+  at: "2026-10-15T19:28:54.188Z"
 ---
 
 ## Description
