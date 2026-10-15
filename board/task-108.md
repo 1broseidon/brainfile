@@ -50,6 +50,9 @@ subtasks:
     title: MANUAL and design.md
     completed: false
 createdAt: "2026-10-15T21:51:20.309Z"
+dependsOn:
+  - task-83
+updatedAt: "2026-10-15T21:51:23.549Z"
 ---
 
 ## Description
