@@ -405,7 +405,8 @@ export function leadRefusalOnBoard(projectId: string, epicId: string, taskId: st
   const tree = readTree(projectId, epicId);
   const epic = tree ? readTasksDir(getV2Dirs(located.brainfilePath).boardDir).find((d) => d.task.id === epicId)?.task : undefined;
   const record = epic ? readLeadRecord(epic as Task & { lead?: unknown }) : null;
-  if (!tree || !record) return { why: `${epicId} has no lead on the board`, then: 'never' };
+  // No lead on the board to hold to: the runner's own checks are what is left.
+  if (!tree || !record) return null;
   return leadRefusal(tree, { epicId, until: record.until ?? 'review', startedIso: record.at, paused: !!record.paused }, taskId);
 }
 

@@ -9,7 +9,12 @@
  *   the foreground until it ends.
  * - `dispatch status` is the queue, the claims and the live runs, from the
  *   board and every runner's run files.
- * - `dispatch stop <run-id|task-id>` stops a run, whichever runner has it.
+ * - `dispatch stop <run-id|task-id>` stops a run, whichever runner has it;
+ *   named by an epic, it stops the epic's lead.
+ * - `dispatch <epic>` queues a lead for it (decision-15, task-83): a runner
+ *   that takes up leads (`brainfile run`, the desktop) runs it; `--now` runs
+ *   it here. `dispatch pause|resume <epic>` pause and resume it, whichever
+ *   runner leads it, through its record on the epic.
  * - `agents` lists the agents, which are installed here, and their models.
  *
  * The MCP tools (dispatch_tool.ts, agents_tool.ts) call the same functions.
@@ -31,6 +36,7 @@ import {
   getV2Dirs,
   readBoardConfig,
   readDispatchRecord,
+  readLeadRecord,
   readTasksDir,
   type DispatchBy,
   type DispatchRunner,
@@ -43,6 +49,8 @@ import {
   allAgents,
   dataDir as dispatchDataDir,
   fileBoard,
+  leadAbove,
+  leadRefusalOnBoard,
   listAgents,
   nameOf,
   readModels,
@@ -50,6 +58,7 @@ import {
   type AgentId,
   type AgentRole,
   type AgentRun,
+  type LeadView,
   type PermissionAsk,
   type RunnerOptions,
 } from '@brainfile/core/dispatch';
@@ -69,6 +78,8 @@ Examples:
   brainfile dispatch task-12 --agent codex --now      Queue it and run it here until it ends
   brainfile dispatch status                           The queue, the claims and what is running
   brainfile dispatch stop task-12                     Stop the run on task-12 (or name its run id)
+  brainfile dispatch epic-3 --agent claude            Queue a lead for epic-3: it hands off its children in order
+  brainfile dispatch pause epic-3                     Pause epic-3's lead; resume carries on, stop ends it
 
 Queued work waits on the board for a runner: \`brainfile run\`, or Brainfile's
 window. A task whose dependsOn are open, or complete with their branch not
@@ -77,6 +88,10 @@ the board's config (else 3) run at once on a repository.
 
 With no --agent, a task goes to the agent it was last handed to, else its
 assignee when that is an agent. \`brainfile agents\` lists them.
+
+An epic, or any task with open children, gets a lead (an agent that writes no
+code): it checks the plan, then hands the children off in order, inside the
+rules the runner holds. In its tree, only the lead and you hand off.
 `.trimEnd();
 
 /** What the caller is to the board: the role its MCP server was started with. No role (a person) may do everything. */
@@ -228,7 +243,8 @@ export interface HandOffOptions {
 }
 
 export interface DispatchReport {
-  queued: { task: string; agent: string; model?: string; effort?: string; until?: DispatchUntil; waitsOn?: string[] }[];
+  /** `lead`: a lead for an epic, which hands off its children (decision-15). */
+  queued: { task: string; agent: string; model?: string; effort?: string; until?: DispatchUntil; waitsOn?: string[]; lead?: boolean }[];
   skipped: { task: string; why: string }[];
   /** Another runner is up on this machine to start it. */
   runnerUp: boolean;
@@ -243,8 +259,8 @@ function openChildren(tasks: Task[], id: string): Task[] {
   return tasks.filter((t) => t.parentId === id);
 }
 
-/** The tasks a selection names, and those it names that cannot be handed off. */
-function select(filePath: string, sel: DispatchSelect): { ids: string[]; skipped: DispatchReport['skipped'] } {
+/** The tasks a selection names, the ones named that a lead runs (they have open children), and those it names that cannot be handed off. */
+function select(filePath: string, sel: DispatchSelect): { ids: string[]; leads: string[]; skipped: DispatchReport['skipped'] } {
   const dirs = getV2Dirs(filePath);
   const config = readBoardConfig(filePath)?.config;
   const open = readTasksDir(dirs.boardDir).map((d) => d.task);
@@ -254,11 +270,13 @@ function select(filePath: string, sel: DispatchSelect): { ids: string[]; skipped
     return role !== 'decision' && role !== 'epic' && openChildren(open, t.id).length === 0;
   };
   const ids: string[] = [];
+  const leads: string[] = [];
   for (const id of sel.ids ?? []) {
     const task = open.find((t) => t.id === id);
     if (!task) skipped.push({ task: id, why: findV2Task(dirs, id, true) ? 'it is completed' : 'there is no such task on the board' });
     else if (docRole(task.type, config?.types) === 'decision') skipped.push({ task: id, why: 'a decision is not work' });
-    else if (!work(task)) skipped.push({ task: id, why: 'it has open children: hand those off, or its lead does' });
+    else if (openChildren(open, id).length) leads.push(id);
+    else if (!work(task)) skipped.push({ task: id, why: 'it has no open children to lead' });
     else ids.push(id);
   }
   if (sel.column) {
@@ -271,7 +289,7 @@ function select(filePath: string, sel: DispatchSelect): { ids: string[]; skipped
     if (!findV2Task(dirs, sel.parent, true)) throw new CLIError(`No ${sel.parent} on this board`);
     ids.push(...openChildren(open, sel.parent).filter(work).map((t) => t.id));
   }
-  return { ids: [...new Set(ids)], skipped };
+  return { ids: [...new Set(ids)], leads, skipped };
 }
 
 /** The dependsOn a task still waits on: open on this board, or complete with its branch not landed (decision-15). */
@@ -301,12 +319,33 @@ export async function dispatchReport(
   if (handOff.agent && !named) throw new CLIError(`Unknown agent ${handOff.agent}`, undefined, `Agents: ${allAgents(dir).map((a) => a.id).join(', ')}`);
   if (handOff.model && handOff.model.length > 200) throw new CLIError('That model ID is too long');
 
-  const { ids, skipped } = select(filePath, sel);
+  const { ids, leads, skipped } = select(filePath, sel);
   const dirs = getV2Dirs(filePath);
   return withRunner(kind, async (runner) => {
     const queued: DispatchReport['queued'] = [];
+    for (const id of leads) {
+      const why = leadWhyNot(place, id, access);
+      if (why) {
+        skipped.push({ task: id, why });
+        continue;
+      }
+      const task = findV2Task(dirs, id)!.doc.task;
+      const record = readLeadRecord(task as Task & { lead?: unknown });
+      const agent = named ?? (record?.agent as AgentId | undefined) ?? (task.assignee ? agentNamed(dir, task.assignee) : undefined);
+      if (!agent) {
+        skipped.push({ task: id, why: 'no agent to lead it: name one with --agent' });
+        continue;
+      }
+      const written = await runner.queue(place.projectId, [id], { agent, model: handOff.model, effort: handOff.effort, by: byOf(kind, access), role: 'lead' });
+      if (!written.ok) {
+        skipped.push({ task: id, why: written.error.replace(`${id}: `, '') });
+        continue;
+      }
+      const until = readLeadRecord(findV2Task(dirs, id)!.doc.task as Task & { lead?: unknown })?.until;
+      queued.push({ task: id, agent, ...(handOff.model ? { model: handOff.model } : {}), ...(handOff.effort ? { effort: handOff.effort } : {}), ...(until ? { until } : {}), lead: true });
+    }
     for (const id of ids) {
-      const out = outOfScope(filePath, id, access);
+      const out = outOfScope(filePath, id, access) ?? ledWhyNot(place, id, access);
       if (out) {
         skipped.push({ task: id, why: out });
         continue;
@@ -346,18 +385,55 @@ export async function dispatchReport(
   });
 }
 
+/**
+ * Why an epic cannot be given a lead now: a role that may not start one (a
+ * lead hands off only children with none of their own), or a lead already
+ * in its tree, here or above it (decision-15).
+ */
+function leadWhyNot(place: Place, epicId: string, access: Access): string | null {
+  if (access.role === 'lead') return `${epicId} has children of its own: hand those off instead`;
+  const above = leadAbove(place.projectId, epicId, { self: true });
+  if (above?.epicId === epicId) {
+    const claim = above.record.claim;
+    return claimHeld(claim) && !isClaimLost(place.dotDir, claim) ? `it already has a lead: ${above.record.agent}, in ${claim.runner} on ${claim.host} (pid ${claim.pid})` : 'it already has a lead, waiting for a runner';
+  }
+  if (above) return `${above.epicId}'s lead runs it`;
+  return null;
+}
+
+/**
+ * Why a task in a led tree may not be queued by this caller: the board's
+ * chat never hands off there (decision-15), and a lead only inside its rules
+ * (the same ones its runner checks before it starts the task).
+ */
+function ledWhyNot(place: Place, taskId: string, access: Access): string | null {
+  if (access.role === 'lead' && access.scope) {
+    const refused = leadRefusalOnBoard(place.projectId, access.scope, taskId);
+    return refused ? refused.why : null;
+  }
+  if (access.role !== 'chat') return null;
+  const above = leadAbove(place.projectId, taskId);
+  return above ? `${above.epicId}'s lead runs that tree: only the lead hands off its children. Pause or stop it first` : null;
+}
+
 function sayQueued(dir: string, queued: DispatchReport['queued'], skipped: DispatchReport['skipped'], up: boolean): string {
   const lines: string[] = [];
-  if (queued.length) {
+  for (const q of queued.filter((q) => q.lead)) {
+    lines.push(`Queued a lead for ${q.task}: ${nameOf(dir, q.agent as AgentId)}${q.model ? ` (${q.model}${q.effort ? `, ${q.effort}` : ''})` : ''} checks the plan, then hands off its children in order${q.until === 'done' ? ', landing each' : ''}.`);
+  }
+  const work = queued.filter((q) => !q.lead);
+  if (work.length) {
     const byAgent = new Map<string, string[]>();
-    for (const q of queued) {
+    for (const q of work) {
       const who = `${nameOf(dir, q.agent as AgentId)}${q.model ? ` (${q.model}${q.effort ? `, ${q.effort}` : ''})` : ''}${q.until === 'done' ? ', until done' : ''}`;
       byAgent.set(who, [...(byAgent.get(who) ?? []), q.task]);
     }
     lines.push(`Queued ${[...byAgent].map(([who, tasks]) => `${tasks.join(', ')} for ${who}`).join('; ')}.`);
+  }
+  if (queued.length) {
     const notHere = [...new Set(queued.map((q) => q.agent))].map((id) => allAgents(dir).find((a) => a.id === id)).filter((a) => a && whyNot(a));
     for (const a of notHere) lines.push(`${whyNot(a!)}: a runner on another machine can start it.`);
-    for (const q of queued.filter((q) => q.waitsOn)) lines.push(`${q.task} waits on ${q.waitsOn!.join(', ')}: it starts once ${q.waitsOn!.length === 1 ? 'that has' : 'they have'} landed.`);
+    for (const q of work.filter((q) => q.waitsOn)) lines.push(`${q.task} waits on ${q.waitsOn!.join(', ')}: it starts once ${q.waitsOn!.length === 1 ? 'that has' : 'they have'} landed.`);
   } else {
     lines.push('Nothing was queued.');
   }
@@ -394,6 +470,42 @@ export interface StatusReport {
   queued: { task: string; agent: string; model?: string; effort?: string; until?: DispatchUntil; by: string; at: string; waitsOn?: string[] }[];
   /** Tasks a runner holds. `lost`: its runner is gone, so another may take it. */
   claims: { task: string; runner: string; host: string; pid: number; at: string; lost: boolean }[];
+  /** Epics' leads (decision-15): waiting for a runner, leading or paused, and where. */
+  leads: LeadLine[];
+}
+
+export interface LeadLine {
+  epic: string;
+  agent: string;
+  model?: string;
+  /** `waiting`: no runner leads it yet (or its runner went away), and one that takes up leads will. */
+  state: 'waiting' | 'leading' | 'paused';
+  until?: DispatchUntil;
+  by: string;
+  at: string;
+  runner?: string;
+  host?: string;
+  pid?: number;
+}
+
+/** The epics with a lead on the board, as a status line each. */
+function leadLines(place: Place, open: Task[], visible: (taskId: string) => boolean): LeadLine[] {
+  return open.flatMap((task) => {
+    const record = readLeadRecord(task as Task & { lead?: unknown });
+    if (!record || !visible(task.id)) return [];
+    const claim = record.claim;
+    const held = claimHeld(claim) && !isClaimLost(place.dotDir, claim);
+    return [{
+      epic: task.id,
+      agent: record.agent,
+      ...(record.model ? { model: record.model } : {}),
+      state: record.paused ? 'paused' : held ? 'leading' : 'waiting',
+      ...(record.until ? { until: record.until } : {}),
+      by: record.by,
+      at: record.at,
+      ...(held ? { runner: claim!.runner, host: claim!.host, pid: claim!.pid } : {}),
+    } satisfies LeadLine];
+  });
 }
 
 /** The queue, the claims and the live runs, from the board and every runner's files on this machine. */
@@ -428,14 +540,17 @@ export async function statusReport(filePath: string, options: { access?: Access 
         }];
       });
     const claims = open.flatMap((task) => {
-      const claim = readDispatchRecord(task)?.claim;
-      if (!claimHeld(claim) || !visible(task.id)) return [];
+      const record = readDispatchRecord(task);
+      const claim = record?.claim;
+      if (!claimHeld(claim) || !visible(task.id) || record?.role === 'lead') return [];
       return [{ task: task.id, runner: claim.runner, host: claim.host, pid: claim.pid, at: claim.at, lost: isClaimLost(place.dotDir, claim) }];
     });
     const runners = liveRunners(place.dotDir)
       .filter((r) => !(r.host === runner.host && r.pid === runner.pid))
       .map((r) => ({ runner: r.runner, host: r.host, pid: r.pid, startedAt: new Date(r.startedAt).toISOString() }));
-    return { limit: runner.limit(place.projectId), runners, running, queued, claims };
+    // A lead sees the leads under it; its own is not among them.
+    const leads = leadLines(place, open, (id) => visible(id) && id !== access.scope);
+    return { limit: runner.limit(place.projectId), runners, running, queued, claims, leads };
   });
 }
 
@@ -479,6 +594,15 @@ export async function stopReport(filePath: string, ref: string, options: { acces
   if (!mayDispatch(access)) throw new CLIError(`A ${access.role} cannot stop a run: only a person, the board's chat or an epic's lead does (decision-15)`);
   return withRunner('cli', async (runner) => {
     const run = runner.live(place.projectId).find((r) => r.id === ref || r.taskId === ref);
+    const epic = run ? undefined : findV2Task(getV2Dirs(filePath), ref)?.doc.task;
+    if (epic && readLeadRecord(epic as Task & { lead?: unknown })) {
+      // An epic's lead: taken off the epic, which the runner leading it follows.
+      guard(filePath, ref, access, 'stop a lead');
+      const record = readLeadRecord(epic as Task & { lead?: unknown })!;
+      const stopped = await runner.stopLead(place.projectId, ref);
+      if (!stopped.ok) throw new CLIError(stopped.error);
+      return { run: ref, task: ref, agent: record.agent, stopped: true, said: `Stopped ${ref}'s lead. What it handed off goes on, and is yours now.` };
+    }
     if (!run) {
       const file = /^run-/.test(ref) ? readRunFile(place.dotDir, ref) : null;
       if (file && isRunEnded(file)) return { run: ref, ...(file.taskId ? { task: file.taskId } : {}), agent: file.agent, stopped: true, said: `${ref} has already ended (${file.state})` };
@@ -499,6 +623,45 @@ export async function stopReport(filePath: string, ref: string, options: { acces
       ? `Stopped ${who}. Its worktree and branch stay for review.`
       : `Asked ${who} to stop; its runner is sent SIGTERM if it has not stopped within ${Math.round(STOP_GRACE_MS / 1000)} s.`;
     return { run: run.id, ...(run.taskId ? { task: run.taskId } : {}), agent: run.agentId, stopped, said };
+  });
+}
+
+// ── A lead's pause and resume ───────────────────────────────────────────────
+
+export interface LeadReport {
+  epic: string;
+  /** What the lead does now, as its record says. */
+  state: LeadLine['state'];
+  said: string;
+}
+
+/**
+ * Pauses or resumes an epic's lead through its record on the epic, whichever
+ * runner leads it (decision-15): paused, it hands off nothing and its events
+ * wait; resumed, it carries on, or waits for a runner when none leads it.
+ * What is running goes on either way.
+ */
+export async function leadReport(filePath: string, epicId: string, action: 'pause' | 'resume', options: { access?: Access } = {}): Promise<LeadReport> {
+  const place = placeOf(filePath);
+  const access = options.access ?? {};
+  const epic = findV2Task(getV2Dirs(filePath), epicId)?.doc.task;
+  if (!epic) throw new CLIError(`No open ${epicId} on this board`);
+  if (!readLeadRecord(epic as Task & { lead?: unknown })) throw new CLIError(`${epicId} has no lead`, undefined, `Give it one: brainfile dispatch ${epicId} --agent <agent>`);
+  guard(filePath, epicId, access, `${action} a lead`);
+  return withRunner('cli', async (runner) => {
+    let said: string;
+    if (action === 'pause') {
+      const paused = await runner.pauseLead(place.projectId, epicId);
+      if (!paused.ok) throw new CLIError(paused.error);
+      said = `Paused ${epicId}'s lead: it hands off nothing until resumed; what is running goes on.`;
+    } else {
+      const resumed = await runner.resumeLead(place.projectId, epicId);
+      if (!resumed.ok) throw new CLIError(resumed.error);
+      said = `${resumed.value}.${/waits for a runner/.test(resumed.value) ? ` ${NO_RUNNER.replace('start it', 'take it up')}` : ''}`;
+    }
+    const now = findV2Task(getV2Dirs(filePath), epicId)?.doc.task;
+    const line = now ? leadLines(place, [now], () => true)[0] : undefined;
+    return { epic: epicId, state: line?.state ?? 'waiting', said };
   });
 }
 
@@ -530,16 +693,20 @@ export async function dispatchCommand(ids: string[], options: DispatchOptions, l
   // Run here: the "no runner" line does not apply.
   const said = options.now ? report.said.split('\n').filter((l) => l !== NO_RUNNER).join('\n') : report.said;
   logger.log(report.queued.length ? said : chalk.yellow(said));
-  if (options.now && report.queued.length) await runNow(filePath, report.queued.map((q) => q.task), logger);
+  if (options.now && report.queued.length) {
+    await runNow(filePath, report.queued.filter((q) => !q.lead).map((q) => q.task), logger, report.queued.filter((q) => q.lead).map((q) => q.task));
+  }
   return report;
 }
 
 /**
  * `--now`: the queued tasks run here in the foreground, at most the
  * repository's limit at once, until every run has ended and been settled.
- * Asks come to this terminal. Ctrl-C stops them; their worktrees stay.
+ * An epic's lead runs here too, with the children it hands off, until it
+ * ends. Asks come to this terminal. Ctrl-C stops them; their worktrees stay,
+ * and a lead's record stays for a runner to take up.
  */
-async function runNow(filePath: string, ids: string[], logger: Logger): Promise<void> {
+async function runNow(filePath: string, ids: string[], logger: Logger, leads: string[] = []): Promise<void> {
   const place = placeOf(filePath);
   let wake = () => {};
   const said = new Map<string, string>();
@@ -552,7 +719,17 @@ async function runNow(filePath: string, ids: string[], logger: Logger): Promise<
       said.set(run.id, line);
       wake();
     },
+    onLead(view) {
+      const line = leadLineText(view);
+      if (said.get(`lead ${view.epicId}`) !== line) logger.log(line);
+      said.set(`lead ${view.epicId}`, line);
+      wake();
+    },
   });
+  for (const epicId of leads) {
+    const started = await runner.lead(place.projectId, epicId);
+    if (!started.ok) logger.log(chalk.yellow(`${epicId}: ${started.error}`));
+  }
   const pending = [...ids];
   const mine = new Set<string>();
   let stopping = false;
@@ -566,6 +743,7 @@ async function runNow(filePath: string, ids: string[], logger: Logger): Promise<
   process.on('SIGINT', interrupt);
   // A run of ours is live, or a claim of ours has not been given back yet (a landing may still be going on).
   const busy = () =>
+    runner.leads.running(place.projectId).length > 0 ||
     runner.list().some((r) => LIVE.has(r.state)) ||
     [...mine].some((id) => {
       const task = findV2Task(getV2Dirs(filePath), id)?.doc.task;
@@ -591,6 +769,14 @@ async function runNow(filePath: string, ids: string[], logger: Logger): Promise<
     runner.close();
     flushBoardCommits();
   }
+}
+
+function leadLineText(view: LeadView): string {
+  const who = `${view.epicId} · lead · ${view.agentId}`;
+  const note = view.note ? `: ${view.note}` : '';
+  if (view.state === 'leading') return `${who} · leading${note}`;
+  if (view.state === 'paused') return chalk.yellow(`${who} · paused${note}`);
+  return view.state === 'done' ? chalk.green(`${who} · done${note}`) : chalk.yellow(`${who} · stopped${note}`);
 }
 
 function runLineText(dataDir: string, run: AgentRun): string {
@@ -650,6 +836,14 @@ export function statusText(report: StatusReport): string {
   for (const q of report.queued) {
     lines.push(`  ${q.task} · ${q.agent}${q.model ? ` (${q.model})` : ''}${q.until === 'done' ? ' · until done' : ''} · asked by ${q.by}${q.waitsOn ? ` · waits on ${q.waitsOn.join(', ')}` : ''}`);
   }
+  if (report.leads.length) {
+    lines.push('', `Leads (${report.leads.length}):`);
+    for (const l of report.leads) {
+      const where = l.runner ? ` · ${l.runner} on ${l.host} (pid ${l.pid})` : '';
+      const state = l.state === 'waiting' ? 'waiting for a runner' : l.state;
+      lines.push(`  ${l.epic} · ${l.agent}${l.model ? ` (${l.model})` : ''} · ${state}${l.until === 'done' ? ' · until done' : ''}${where}`);
+    }
+  }
   if (report.claims.length) {
     lines.push('', `Claimed (${report.claims.length}):`);
     for (const c of report.claims) lines.push(`  ${c.task} · ${c.runner} on ${c.host} (pid ${c.pid})${c.lost ? ' · lost: its runner is gone, another may take it' : ''}`);
@@ -661,6 +855,13 @@ export function statusText(report: StatusReport): string {
 export async function dispatchStopCommand(ref: string, options: { file?: string; json?: boolean }, logger: Logger = defaultLogger): Promise<StopReport> {
   const report = await stopReport(resolveCliBrainfilePath(options.file), ref, { waitMs: STOP_GRACE_MS + 2_000 });
   logger.log(options.json ? JSON.stringify(report, null, 2) : report.stopped ? chalk.green(report.said) : chalk.yellow(report.said));
+  return report;
+}
+
+/** `brainfile dispatch pause <epic>` and `dispatch resume <epic>`. */
+export async function dispatchLeadCommand(action: 'pause' | 'resume', epicId: string, options: { file?: string; json?: boolean }, logger: Logger = defaultLogger): Promise<LeadReport> {
+  const report = await leadReport(resolveCliBrainfilePath(options.file), epicId, action);
+  logger.log(options.json ? JSON.stringify(report, null, 2) : report.state === 'paused' ? chalk.yellow(report.said) : chalk.green(report.said));
   return report;
 }
 
