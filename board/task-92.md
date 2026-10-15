@@ -1,8 +1,8 @@
 ---
 id: task-92
 title: "QA hand-off 3: Open pull request, followed until GitHub merges it, which completes the task"
-column: todo
-position: 8
+column: in-progress
+position: 10
 description: |-
   **For the agent this is handed to:** append one line to `qa/parity-wave-1.md` (make the file and the folder if they are not there): `- QA hand-off 3 (<task id>): landed through a pull request, <the time now, ISO>`. Commit it on your branch. Change nothing else, and do not tick this task's subtasks: they are the person's checks. Then do as your brief says when you finish.
 
@@ -44,7 +44,7 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:40.775Z"
 assignee: claude
-updatedAt: "2026-10-15T19:28:54.323Z"
+updatedAt: "2026-10-15T19:29:08.017Z"
 dispatch:
   agent: claude
   model: opus
