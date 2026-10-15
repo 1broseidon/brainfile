@@ -145,6 +145,22 @@ describe('lint command', () => {
     });
   });
 
+  describe('dispatch records', () => {
+    it('warns on a malformed dispatch: and not on a good one', () => {
+      const file = stageFixture('valid-lint.md');
+      const board = path.join(path.dirname(file), 'board');
+      fs.writeFileSync(path.join(board, 'task-1.md'), '---\nid: task-1\ntitle: Good\ndispatch:\n  agent: codex\n  by: cli\n  at: "2026-10-15T10:00:00.000Z"\n---\n', 'utf-8');
+      fs.writeFileSync(path.join(board, 'task-2.md'), '---\nid: task-2\ntitle: Bad\ndispatch:\n  agent: codex\n  by: robot\n  at: "2026-10-15T10:00:00.000Z"\n---\n', 'utf-8');
+
+      const result = lintCommand({ file }, logger);
+
+      expect(result.success).toBe(true);
+      expect(result.issues.map((i) => [i.code, i.message])).toEqual([
+        ['MALFORMED_DISPATCH', 'task-2: dispatch by: must be one of chat, cli, mcp, lead, phone, person'],
+      ]);
+    });
+  });
+
   describe('file not found', () => {
     it('should handle missing files gracefully', () => {
       try {

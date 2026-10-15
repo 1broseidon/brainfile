@@ -215,6 +215,32 @@ export {
   type BriefState,
 } from './briefState';
 
+// The dispatch record on a task (spec-16-1): the request, the runner's claim by compare-and-swap, and its lint
+export {
+  currentHost,
+  pidAlive,
+  dispatchRecordProblems,
+  parseDispatchRecord,
+  readDispatchRecord,
+  claimHeld,
+  lintDispatchRecords,
+  withDispatchRequest,
+  claimDispatch,
+  releaseDispatch,
+  requestDispatchFile,
+  claimDispatchFile,
+  releaseDispatchFile,
+  type ClaimInput,
+  type ClaimOptions,
+  type ClaimRefusal,
+  type ClaimResult,
+  type ClaimHolder,
+  type ReleaseOptions,
+  type ReleaseResult,
+  type RequestOptions,
+  type RequestResult,
+} from './dispatchRecord';
+
 // Export formatters for external services
 export {
   formatTaskForGitHub,

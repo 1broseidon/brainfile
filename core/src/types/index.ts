@@ -13,6 +13,9 @@ export * from './enums';
 export * from './contract';
 export * from './ledger';
 
+// The dispatch record on a task (spec-16-1)
+export * from './dispatch';
+
 // Completed task reference (abstraction over Task and LedgerRecord)
 export * from './completed';
 

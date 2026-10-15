@@ -4,6 +4,7 @@
  */
 
 import type { Contract } from './contract';
+import type { DispatchRecord } from './dispatch';
 
 /**
  * AI agent instructions
@@ -87,6 +88,11 @@ export interface Task {
   template?: 'bug' | 'feature' | 'refactor';
   /** Optional PM-to-agent contract metadata */
   contract?: Contract;
+  /**
+   * A hand-off: who asked, with what, and the runner's claim (spec-16-1). As
+   * written; `readDispatchRecord` checks it.
+   */
+  dispatch?: DispatchRecord;
   createdAt?: string;  // ISO 8601 timestamp
   updatedAt?: string;  // ISO 8601 timestamp
   /** Column this task belongs to (v2 per-task files) */
