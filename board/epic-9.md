@@ -16,6 +16,8 @@ decisions:
   - decision-16
   - decision-15
 createdAt: "2026-10-15T18:20:49.911Z"
+landsOn: qa/parity
+updatedAt: "2026-10-15T18:21:00.999Z"
 ---
 
 ## Description
