@@ -64,3 +64,6 @@ The desktop's issues view (task-26) needs main/forge.ts, main/github.ts and shar
 - CLI: `brainfile add --source <url>`, and `brainfile issues [--import <n>…] [--column <id>]`, which lists open issues and marks those already on the board.
 - MCP: `task_add` takes `source`, and a new `issues` tool (action list | import) is added to the parity map.
 - The desktop calls core for all of this, and its view is unchanged.
+
+## Log
+- 2026-10-15T17:38:19.150Z: [claude] Built on parity/task-77 (289f4f1), merged into parity/integration. Task.source typed; core/src/issues.ts; @brainfile/core/forge (remote + GitHub client with public request()); brainfile add --source, brainfile issues [--import], MCP issues tool and task_add source. getGitHubToken now uses the shared order (gh, GH_TOKEN, GITHUB_TOKEN, saved). Awaiting QA.
