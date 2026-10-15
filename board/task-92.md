@@ -1,8 +1,8 @@
 ---
 id: task-92
 title: "QA hand-off 3: Open pull request, followed until GitHub merges it, which completes the task"
-column: review
-position: 5
+column: in-progress
+position: 10
 description: |-
   **For the agent this is handed to:** append one line to `qa/parity-wave-1.md` (make the file and the folder if they are not there): `- QA hand-off 3 (<task id>): landed through a pull request, <the time now, ISO>`. Commit it on your branch. Change nothing else, and do not tick this task's subtasks: they are the person's checks. Then do as your brief says when you finish.
 
@@ -44,7 +44,7 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:40.775Z"
 assignee: claude
-updatedAt: "2026-10-15T19:46:19.883Z"
+updatedAt: "2026-10-15T20:00:26.524Z"
 dispatch:
   agent: claude
   model: opus
@@ -54,7 +54,7 @@ dispatch:
 pullRequest:
   number: 6
   url: https://github.com/1broseidon/brainfile/pull/6
-  state: open
+  state: merged
   base: qa/parity
   head: dispatch/task-92
   at: "2026-10-15T19:45:42.902Z"
@@ -74,3 +74,5 @@ pullRequest:
 ## Log
 - 2026-10-15T19:29:18.233Z: [claude] Appended "- QA hand-off 3 (task-92): landed through a pull request, 2026-10-15T19:29:09Z" to qa/parity-wave-1.md, committed on dispatch/task-92 (909947e); nothing else changed, subtasks left for QA. Note: qa/ is matched by a .gitignore rule, but the file is already tracked so the change commits normally. Nothing left unwired.
 - 2026-10-15T19:45:43.027Z: Opened pull request #6 from dispatch/task-92 into qa/parity: https://github.com/1broseidon/brainfile/pull/6
+- 2026-10-15T20:00:26.224Z: Pull request #6 was merged into qa/parity
+- 2026-10-15T20:00:26.524Z: Merged; 3 of 6 subtasks left, so it stays open
