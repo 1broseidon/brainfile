@@ -7,7 +7,7 @@
  * gets the repository as its working directory and Brainfile's own MCP server
  * (`brainfile mcp`), so it reads and changes the board through the same tools
  * as the CLI; what it changes reaches the window as ordinary board changes.
- * A hand-off gets its own worktree and branch instead (worktree.ts, spec-14).
+ * A hand-off gets its own worktree and branch instead (core's repo/worktree.ts, spec-14).
  * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
  * and `stop`, so a chat can hand work off the way Hand to… does. Handing off
  * a document with children starts its lead instead (lead.ts, decision-15):
@@ -26,8 +26,22 @@ import * as path from 'path';
 import { Readable, Writable } from 'stream';
 import * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs, readBoardConfig, readDecisionDocs, readTasksDir, summarizeDecision, type Task } from '@brainfile/core';
-import { locateBoard } from '@brainfile/core/repo';
-import { collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, runChecks, uncommittedIn, unlanded, type Landing, type Worktree } from './worktree';
+import {
+  discardReview,
+  landReview,
+  locateBoard,
+  onlyReads,
+  prepareWorktree,
+  readyToMerge,
+  releaseReader,
+  reviewOf,
+  runChecks,
+  sendBackNote,
+  uncommittedIn,
+  unlanded,
+  type Landing,
+  type Worktree,
+} from '@brainfile/core/repo';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { customLaunch } from './custom';
 import { AgentRegistry } from './registry';
@@ -1554,15 +1568,11 @@ async function landAndSettle(projectId: string, taskId: string): Promise<Result<
   return { ok: false, error: landing.error };
 }
 
-/** A log entry is one line: a check's output runs on, its lines marked, its end kept. */
-const oneLine = (text: string, keep = 600) => text.split('\n').map((l) => l.trim()).filter(Boolean).join(' ⏎ ').slice(-keep);
-
 /**
  * Sends a landing that failed back to the agent that did the work (task-63):
- * a note in the task's log saying what collided (the conflicting files, the
- * trunk's commits and the tasks that brought them) or what failed, and how
- * to settle it, then the same agent and model on the same branch. Up to the
- * contract's maxRetries, else once; after that it stays with the person.
+ * a note in the task's log saying what collided or what failed, and how to
+ * settle it (core's sendBackNote, which also says whether it may go back
+ * again), then the same agent and model on the same branch.
  */
 async function sendBackLanding(
   projectId: string,
@@ -1572,28 +1582,14 @@ async function sendBackLanding(
   const located = locateBoard(projectId, { materialize: false });
   const found = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
   if (!found) return { sent: false, said: 'Settle it in its worktree, or send it back with a note.' };
-  const { task, body } = found.doc;
-  const allowed = Math.max(0, task.contract?.maxRetries ?? 1);
-  const before = (body.match(/Landing sent back/g) ?? []).length;
-  if (before >= allowed) return { sent: false, said: `It was sent back ${before === 1 ? 'once' : `${before} times`} already: settle it, or send it back with a note.` };
+  const { task } = found.doc;
+  const back = sendBackNote(found.doc, landing);
+  if (!back.ok) return { sent: false, said: back.said };
   const last = [...runs.values()].filter((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId).at(-1);
   const named = (id: string | undefined) => (id && allAgents().some((a) => a.id === id && !whyNot(a)) ? (id as AgentId) : null);
   const agentId = named(last?.agentId) ?? named(task.assignee) ?? allAgents().find((a) => !whyNot(a))?.id ?? null;
   if (!agentId) return { sent: false, said: 'No agent is at hand to settle it.' };
-  const commands = (task.contract?.validation?.commands ?? []).join(' && ');
-  const round = `${before + 1} of ${allowed}`;
-  let note: string;
-  if (landing.kind === 'conflict') {
-    const met = collisions(projectId, landing.branch, landing.into, landing.files)
-      .map((c) => `${c.sha} ${c.subject}${c.taskId ? ` (${c.taskId})` : ''}`)
-      .join('; ');
-    note =
-      `Landing sent back (${round}): ${landing.branch} conflicts with ${landing.into} in ${landing.files.join(', ')}.` +
-      (met ? ` On ${landing.into} since this branch started: ${met}.` : '') +
-      ` Merge ${landing.into} into this branch (git merge ${landing.into}), keep what both sides meant, commit the merge, and run the checks${commands ? `: ${commands}` : ''}.`;
-  } else {
-    note = `Landing sent back (${round}): with ${landing.into} brought in, \`${landing.command}\` failed: ${oneLine(landing.output)}. Fix it on this branch, commit, and run the checks again.`;
-  }
+  const { note, round } = back;
   const noted = await callHost<Result>('noteTask', projectId, taskId, note);
   if (!noted.ok) return { sent: false, said: `It could not be sent back: ${noted.error}` };
   const started = handOff(projectId, taskId, agentId, last?.model, last?.effort);

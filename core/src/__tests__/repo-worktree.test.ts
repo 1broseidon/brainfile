@@ -1,16 +1,54 @@
 /**
  * A worktree per hand-off (spec-14): made, found again, reviewed, merged and
  * discarded, on scratch git repositories whose board lives on the board
- * branch. Each repository carries its own git identity.
+ * branch. Each repository carries its own git identity. Moved from the
+ * desktop with the code (task-76), with the landing lock across processes.
  */
-import { test, beforeEach, afterEach } from 'node:test';
-import assert from 'node:assert/strict';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { locateBoard } from '@brainfile/core/repo';
-import { canBranch, collisions, discardReview, landReview, onlyReads, prepareWorktree, readyToMerge, runChecks, whyNotMerge, releaseReader, reviewOf, trunkOf, uncommittedIn, unlanded } from '../src/agents/worktree.ts';
+import assert from 'assert/strict';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { spawn, spawnSync } from 'child_process';
+import {
+  canBranch,
+  collisions,
+  discardReview,
+  landingLockOf,
+  landReview,
+  onlyReads,
+  prepareWorktree,
+  readLandingLock,
+  readyToMerge,
+  releaseReader,
+  reviewOf,
+  runChecks,
+  sendBackNote,
+  takeLandingLock,
+  trunkOf,
+  tryLandingLock,
+  uncommittedIn,
+  unlanded,
+  whyNotMerge,
+  locateBoard,
+  type Landing,
+} from '../repo';
+
+jest.setTimeout(30_000);
+
+const ENV_KEYS = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'];
+const saved: Record<string, string | undefined> = {};
+
+beforeAll(() => {
+  for (const key of ENV_KEYS) saved[key] = process.env[key];
+  Object.assign(process.env, { GIT_CONFIG_GLOBAL: os.devNull, GIT_CONFIG_NOSYSTEM: '1' });
+});
+
+afterAll(() => {
+  for (const [key, value] of Object.entries(saved)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+});
 
 function git(args: string[], cwd: string): string {
   const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
@@ -569,4 +607,303 @@ test('a conflict names the trunk commits it collided with and the tasks that lan
     ['by hand', null],
     ['edit README.md', 'task-2'],
   ]);
+});
+
+test('a conflict carries what it collided with, for the note that sends it back', async () => {
+  const mine = handOff('task-1');
+  work(mine, 'README.md', 'task-1 says\n');
+  const theirs = handOff('task-2');
+  work(theirs, 'README.md', 'task-2 says\n');
+  await landed('task-2', { title: 'Two' });
+  const result = await refused('task-1');
+  assert.equal(result.kind, 'conflict');
+  if (result.kind !== 'conflict') return;
+  assert.deepEqual(result.collided.map((c) => [c.subject, c.taskId]), [['edit README.md', 'task-2']]);
+});
+
+// ── The send-back note (task-63, task-76) ───────────────────────────────────
+
+const conflict: Extract<Landing, { kind: 'conflict' }> = {
+  ok: false,
+  kind: 'conflict',
+  error: 'dispatch/task-1 conflicts with main in README.md. Nothing was merged.',
+  branch: 'dispatch/task-1',
+  into: 'main',
+  files: ['README.md', 'src/a.ts'],
+  collided: [{ sha: 'abc1234', subject: 'edit README.md', taskId: 'task-2' }, { sha: 'def5678', subject: 'by hand' }],
+};
+
+const failedCheck: Extract<Landing, { kind: 'check' }> = {
+  ok: false,
+  kind: 'check',
+  error: 'Nothing was merged: `npm test` failed.',
+  branch: 'dispatch/task-1',
+  into: 'main',
+  command: 'npm test',
+  output: '  1 failing\n\n  expected 2\n',
+};
+
+test('a conflict goes back with the files, the commits it met and the tasks that brought them, and the checks', () => {
+  const back = sendBackNote({ task: { id: 'task-1', title: 'One', contract: { status: 'ready', validation: { commands: ['npm test', 'npm run lint'] } } } as never, body: '' }, conflict);
+  assert.ok(back.ok);
+  if (!back.ok) return;
+  assert.equal(back.round, '1 of 1');
+  assert.equal(
+    back.note,
+    'Landing sent back (1 of 1): dispatch/task-1 conflicts with main in README.md, src/a.ts. On main since this branch started: abc1234 edit README.md (task-2); def5678 by hand.' +
+      ' Merge main into this branch (git merge main), keep what both sides meant, commit the merge, and run the checks: npm test && npm run lint.'
+  );
+});
+
+test('a failed check goes back with its command and the end of what it said, on one line', () => {
+  const back = sendBackNote({ task: { id: 'task-1', title: 'One' }, body: '' }, failedCheck);
+  assert.ok(back.ok);
+  if (back.ok) {
+    assert.equal(back.note, 'Landing sent back (1 of 1): with main brought in, `npm test` failed: 1 failing ⏎ expected 2. Fix it on this branch, commit, and run the checks again.');
+  }
+});
+
+test('send-backs are counted from the task\'s log, up to the contract\'s maxRetries, else once', () => {
+  const once = '## Log\n- 2026-10-15T10:00:00.000Z: Landing sent back (1 of 1): dispatch/task-1 conflicts with main in README.md.\n';
+  assert.deepEqual(sendBackNote({ task: { id: 'task-1', title: 'One' }, body: once }, conflict), {
+    ok: false,
+    said: 'It was sent back once already: settle it, or send it back with a note.',
+  });
+  const task = { id: 'task-1', title: 'One', contract: { status: 'ready', maxRetries: 3 } } as never;
+  const again = sendBackNote({ task, body: once }, failedCheck);
+  assert.ok(again.ok && again.round === '2 of 3');
+  const thrice = sendBackNote({ task, body: once.repeat(3) }, failedCheck);
+  assert.deepEqual(thrice, { ok: false, said: 'It was sent back 3 times already: settle it, or send it back with a note.' });
+  assert.equal(sendBackNote({ task: { id: 'task-1', title: 'One', contract: { status: 'ready', maxRetries: 0 } } as never, body: '' }, conflict).ok, false);
+});
+
+// ── Another branch to fork from and land on (decision-16) ───────────────────
+
+test('a hand-off given a branch forks from it, records it, and is reviewed and landed against it', async () => {
+  git(['branch', 'release'], repo);
+  // main moves on; the release line does not have it.
+  work(repo, 'main-only.txt', 'main\n');
+  const releaseTip = git(['rev-parse', 'release'], repo);
+  const mainTip = git(['rev-parse', 'main'], repo);
+
+  const wt = prepareWorktree(repo, 'task-1', root, false, 'release')!;
+  assert.equal(wt.base, 'release');
+  assert.equal(git(['rev-parse', 'HEAD'], wt.path), releaseTip);
+  assert.equal(git(['config', '--get', 'branch.dispatch/task-1.brainfileBase'], repo), 'release');
+  assert.ok(!fs.existsSync(path.join(wt.path, 'main-only.txt')));
+
+  work(wt.path, 'fix.txt', 'fix\n');
+  assert.equal(reviewOf(repo, 'task-1')!.into, 'release');
+  assert.equal(unlanded(repo, 'task-1'), true);
+  assert.deepEqual(readyToMerge(repo).map((r) => [r.taskId, r.into]), [['task-1', 'release']]);
+  // Found again, it keeps the branch it recorded.
+  assert.equal(prepareWorktree(repo, 'task-1', root)!.base, 'release');
+
+  assert.match(await landed('task-1', { title: 'One' }), /into release/);
+  assert.equal(git(['show', 'release:fix.txt'], repo), 'fix');
+  assert.equal(git(['rev-parse', 'release^1'], repo), releaseTip);
+  assert.equal(git(['rev-parse', 'main'], repo), mainTip);
+});
+
+test('a conflict with the given branch is found against it, not against the trunk', async () => {
+  git(['branch', 'release'], repo);
+  const wt = prepareWorktree(repo, 'task-1', root, false, 'release')!;
+  work(wt.path, 'README.md', 'theirs\n');
+  // The release line changes the same file; main never does.
+  git(['checkout', '-q', 'release'], repo);
+  work(repo, 'README.md', 'release says\n');
+  git(['checkout', '-q', 'main'], repo);
+  assert.deepEqual(reviewOf(repo, 'task-1')!.conflicts, ['README.md']);
+  const result = await refused('task-1');
+  assert.equal(result.kind, 'conflict');
+  if (result.kind === 'conflict') {
+    assert.equal(result.into, 'release');
+    assert.deepEqual(result.collided.map((c) => c.subject), ['edit README.md']);
+  }
+});
+
+test('a branch only on origin is made here, following origin\'s, so the hand-off has somewhere to land', async () => {
+  const origin = path.join(base, 'origin.git');
+  git(['clone', '-q', '--bare', repo, origin], base);
+  git(['remote', 'add', 'origin', origin], repo);
+  git(['push', '-q', 'origin', 'main:release/1.0'], repo);
+  git(['fetch', '-q', 'origin'], repo);
+  assert.ok(!branches().includes('release/1.0'));
+
+  const wt = prepareWorktree(repo, 'task-1', root, false, 'release/1.0')!;
+  assert.equal(wt.base, 'release/1.0');
+  assert.ok(branches().includes('release/1.0'));
+  assert.equal(git(['rev-parse', '--abbrev-ref', 'release/1.0@{upstream}'], repo), 'origin/release/1.0');
+  work(wt.path, 'a.txt', 'a\n');
+  assert.match(await landed('task-1'), /into release\/1\.0/);
+  assert.equal(git(['show', 'release/1.0:a.txt'], repo), 'a');
+});
+
+test('a branch that is nowhere cannot be forked from; one that only reads forks from the branch too', () => {
+  assert.throws(() => prepareWorktree(repo, 'task-1', root, false, 'nowhere'), /no branch nowhere/);
+  assert.ok(!branches().some((b) => b.startsWith('dispatch/')));
+  git(['branch', 'release'], repo);
+  work(repo, 'main-only.txt', 'main\n');
+  const reader = prepareWorktree(repo, 'task-2', root, true, 'release')!;
+  assert.equal(reader.branch, null);
+  assert.equal(reader.base, 'release');
+  assert.equal(git(['rev-parse', 'HEAD'], reader.path), git(['rev-parse', 'release'], repo));
+});
+
+// ── The landing lock, across processes (task-76) ────────────────────────────
+
+/**
+ * A node process that takes the landing lock with core's own module, says
+ * `taken`, and, told `go` on stdin, lands a commit of its own on main (made
+ * with commit-tree and moved with update-ref, as a landing does), lets the
+ * lock go and says `released <sha>`. With `die`, it ends holding the lock.
+ */
+function otherProcess(lockFile: string, mode: 'land' | 'die' = 'land') {
+  const typescript = (process.features as { typescript?: string }).typescript;
+  const lockModule = typescript
+    ? path.resolve(__dirname, '../repo/landingLock.ts')
+    : path.resolve(__dirname, '../../dist/repo/landingLock.js');
+  const script = path.join(base, 'other.mjs');
+  fs.writeFileSync(
+    script,
+    `import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+const [lockModule, lockFile, repo, mode] = process.argv.slice(2);
+const { takeLandingLock } = await import(pathToFileURL(lockModule).href);
+const lock = await takeLandingLock(lockFile, { timeoutMs: 10000 });
+if (!lock.ok) { console.log('busy'); process.exit(1); }
+console.log('taken');
+if (mode === 'die') process.exit(0);
+const git = (args) => spawnSync('git', args, { cwd: repo, encoding: 'utf-8' }).stdout.trim();
+process.stdin.once('data', () => {
+  const old = git(['rev-parse', 'main']);
+  const made = git(['commit-tree', old + '^{tree}', '-p', old, '-m', 'Merge task-9: landed elsewhere']);
+  git(['update-ref', 'refs/heads/main', made, old]);
+  lock.release();
+  console.log('released ' + made);
+  process.exit(0);
+});
+`
+  );
+  const child = spawn(process.execPath, ['--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', script, lockModule, lockFile, repo, mode], {
+    stdio: ['pipe', 'pipe', 'inherit'],
+  });
+  let out = '';
+  const said = (word: string) =>
+    new Promise<string>((resolve, reject) => {
+      const look = () => {
+        const line = out.split('\n').find((l) => l.startsWith(word));
+        if (line) resolve(line);
+      };
+      child.stdout.on('data', (chunk: Buffer) => {
+        out += chunk.toString();
+        look();
+      });
+      child.on('exit', () => (look(), reject(new Error(`the other process ended saying ${JSON.stringify(out)}`))));
+      look();
+    });
+  const ended = new Promise<void>((resolve) => child.on('exit', () => resolve()));
+  return { child, said, ended };
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+test('two processes landing at once: the second waits for the first, and its checks run once, on the first\'s result', async () => {
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  const lockFile = landingLockOf(repo);
+  assert.equal(lockFile, path.join(repo, '.brainfile', 'state', 'landing.lock'));
+  const other = otherProcess(lockFile);
+  await other.said('taken');
+  assert.equal(readLandingLock(lockFile)?.pid, other.child.pid);
+  assert.equal(readLandingLock(lockFile)?.host, os.hostname());
+
+  const before = git(['rev-parse', 'main'], repo);
+  const seen: string[] = [];
+  const landing = landReview(repo, 'task-1', {
+    title: 'One',
+    lock: { pollMs: 20, maxPollMs: 50 },
+    check: async () => {
+      seen.push(git(['rev-parse', 'main'], repo) === before ? 'main as it was' : 'main moved');
+      return { ok: true };
+    },
+  });
+  await sleep(400);
+  assert.deepEqual(seen, [], 'the checks ran while the other process held the lock');
+  const released = other.said('released');
+  other.child.stdin!.write('go\n');
+  const theirs = (await released).split(' ')[1];
+  const result = await landing;
+  await other.ended;
+  assert.ok(result.ok, result.ok ? '' : result.error);
+  assert.deepEqual(seen, ['main moved']);
+  assert.equal(git(['rev-parse', 'main^1'], repo), theirs);
+  assert.equal(git(['show', 'main:a.txt'], repo), 'a');
+  assert.ok(!fs.existsSync(lockFile));
+});
+
+test('a lock whose process is gone is taken over', async () => {
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  const lockFile = landingLockOf(repo);
+  const other = otherProcess(lockFile, 'die');
+  await other.said('taken');
+  await other.ended;
+  assert.equal(readLandingLock(lockFile)?.pid, other.child.pid);
+  assert.match(await landed('task-1', { lock: { timeoutMs: 2000 } }), /into main/);
+  assert.ok(!fs.existsSync(lockFile));
+});
+
+test('a landing that waits too long for another says who holds the lock, and lands nothing', async () => {
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  const lockFile = landingLockOf(repo);
+  const other = otherProcess(lockFile);
+  await other.said('taken');
+  try {
+    const before = git(['rev-parse', 'main'], repo);
+    let ran = false;
+    const result = await refused('task-1', { lock: { timeoutMs: 150, pollMs: 20 }, check: async () => ((ran = true), { ok: true }) });
+    assert.match(result.error, new RegExp(`Another landing in this repository is still going \\(pid ${other.child.pid} on `));
+    assert.equal(ran, false);
+    assert.equal(git(['rev-parse', 'main'], repo), before);
+    assert.ok(fs.existsSync(wt));
+  } finally {
+    other.child.kill();
+    await other.ended;
+  }
+});
+
+test('the lock: one holder at a time, a half-written file taken over once it is old, and only its own let go', async () => {
+  const lockFile = path.join(base, 'state', 'landing.lock');
+  const first = tryLandingLock(lockFile);
+  assert.ok(first.ok);
+  const second = tryLandingLock(lockFile);
+  assert.ok(!second.ok);
+  if (!second.ok) assert.equal(second.holder?.pid, process.pid);
+  if (first.ok) first.release();
+  assert.ok(!fs.existsSync(lockFile));
+
+  // A taker that died between making the file and writing it.
+  fs.writeFileSync(lockFile, '');
+  assert.ok(!tryLandingLock(lockFile).ok);
+  const old = new Date(Date.now() - 60_000);
+  fs.utimesSync(lockFile, old, old);
+  const taken = tryLandingLock(lockFile);
+  assert.ok(taken.ok);
+
+  // Taken over meanwhile: letting go leaves the new holder's lock alone.
+  const theirs = JSON.stringify({ pid: process.pid, host: os.hostname(), at: new Date(0).toISOString() });
+  fs.writeFileSync(lockFile, theirs);
+  if (taken.ok) taken.release();
+  assert.equal(fs.readFileSync(lockFile, 'utf-8'), theirs);
+  fs.rmSync(lockFile);
+
+  // Another machine's lock is waited for, not judged by a pid that means nothing here.
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: 999_999_999, host: 'elsewhere', at: new Date().toISOString() }));
+  const waited = await takeLandingLock(lockFile, { timeoutMs: 60, pollMs: 10 });
+  assert.ok(!waited.ok);
+  if (!waited.ok) assert.match(waited.error, /pid 999999999 on elsewhere/);
+  fs.writeFileSync(lockFile, JSON.stringify({ pid: 999_999_999, host: 'elsewhere', at: new Date(Date.now() - 7 * 60 * 60_000).toISOString() }));
+  assert.ok((await takeLandingLock(lockFile, { timeoutMs: 60 })).ok);
 });
