@@ -17,19 +17,19 @@ parentId: epic-8
 subtasks:
   - id: task-101-1
     title: Every QA task done, or its failures filed as qa-bug
-    completed: false
+    completed: true
   - id: task-101-2
     title: parity/integration merged into main (not pushed)
-    completed: false
+    completed: true
   - id: task-101-3
     title: task-74 to task-78 and spec-18 completed
-    completed: false
+    completed: true
   - id: task-101-4
     title: The dev app runs from the checkout again
-    completed: false
+    completed: true
   - id: task-101-5
     title: qa/parity, leftover dispatch branches, the parity worktrees and epic-9 tidied
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:21:51.258Z"
 dependsOn:
   - task-89
@@ -42,7 +42,7 @@ dependsOn:
   - task-98
   - task-99
   - task-100
-updatedAt: "2026-10-15T18:21:59.457Z"
+updatedAt: "2026-10-15T21:19:17.748Z"
 ---
 
 ## Description
