@@ -28,18 +28,18 @@ subtasks:
     completed: true
   - id: task-91-2
     title: After hand-off 1 merges, it starts
-    completed: false
+    completed: true
   - id: task-91-3
     title: Its first prompt carries hand-off 1's last notes
-    completed: false
+    completed: true
   - id: task-91-4
     title: Its line on qa/parity quotes hand-off 1
-    completed: false
+    completed: true
   - id: task-91-5
     title: "Optional: two merges back to back both land, one at a time; no landing.lock left behind"
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:20:40.478Z"
-updatedAt: "2026-10-15T19:11:28.606Z"
+updatedAt: "2026-10-15T19:27:05.717Z"
 assignee: claude
 dispatch:
   agent: claude
