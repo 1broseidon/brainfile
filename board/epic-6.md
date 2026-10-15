@@ -57,3 +57,8 @@ Not in scope: a daemon or background server, remote runners, scheduling by time 
 ## Log
 - 2026-10-15T21:25:56.994Z: [claude] Board cleanup (2026-10-15): the first wave is on main (task-74 to task-78, plus spec-18). spec-16 now sits under this epic. Next wave, in To Do: task-79 (Discuss in core), task-80 (the shared runner), task-81 (MCP/CLI dispatch surface). Then task-82, task-83, task-84 and task-88. The notes on task-80 and task-83 list today's rules that must move into core with them.
 - 2026-10-15T21:27:52.732Z: [claude] Correction: spec-16 is not under this epic after all. It is completed; its last two items are task-81 and task-82 here.
+- 2026-10-15T21:43:03.316Z: [claude] Set up for its lead (2026-10-15). epicBranch is on: the children fork from and land on dispatch/epic-6, made from main, and main is touched only by the epic's one Merge at the end, after Claude reviews the branch.
+- Contracts for task-79 to task-84 and task-88 are active (ready), with the same checks on each. First: `npm install --prefer-offline --no-audit --no-fund && npm run build && npm test`. Second: `cd desktop && npm install … && npm run typecheck && npm test && node scripts/build-electron.mjs`. Plus each task's own: `dispatch --help`/`review --help`, `run --help`, `test ! -e desktop/src/agents/desk-mcp.ts`.
+- Both shared checks pass on a fresh worktree from main in about 2.5 minutes.
+- task-84 now waits on task-83 too: both rework the agents process and the desk.
+- Order: task-79 and task-80 together → task-81 → task-82 and task-83 → task-84 → task-88.
