@@ -50,8 +50,6 @@ export interface DeskGrant {
   efforts?: Partial<Record<AgentId, string>>;
   /** The chat session's key in the agents process, to find the turn that asked. */
   key: string;
-  /** An epic's lead (decision-15): the epic whose children it hands off, inside the lead's rules. */
-  lead?: string;
 }
 
 export type DeskTool = 'dispatch' | 'runs' | 'stop';

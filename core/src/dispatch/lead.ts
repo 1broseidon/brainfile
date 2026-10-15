@@ -1,29 +1,83 @@
 /**
- * An epic's lead (decision-15, spec-16 phase 2). Handing off a document that
- * has children starts a lead: an agent with no worktree that writes no code,
- * the board chat's kind (decision-14), with the desk scoped to its tree. It
- * checks the plan first (its children, the files each touches, whether the
- * dependencies are right), then hands the children off in order, and is
- * woken with a new turn when one ends, lands or is sent back; it never polls.
+ * An epic's lead (decision-15, spec-16 phase 2), in core beside the shared
+ * runner (task-83), so a lead runs the same from the desktop, `brainfile run`
+ * and `brainfile dispatch --now`. Handing off a document that has children
+ * starts a lead: an agent with no worktree that writes no code, whose
+ * `brainfile mcp` is told it is the lead of that epic (BRAINFILE_AGENT_ROLE,
+ * BRAINFILE_LEAD_SCOPE), so its dispatch, status and stop reach only its
+ * tree. It checks the plan first (its children, the files each touches,
+ * whether the dependencies are right), then hands the children off in order,
+ * and is woken with a new turn when one ends, lands or is sent back; it never
+ * polls.
  *
- * The app holds the rules the lead cannot bend, here: a child goes only once
- * its dependsOn are done (startDispatch's own check), at most `limit`
- * hand-offs at once in the repository, retries to the contract's maxRetries,
- * only children under its epic with none of their own, one lead per tree,
- * and only the lead dispatches in it. Children it adds wait for the person,
- * unless the epic was handed off until done (a bypass repository), where the
- * app also lands each child that ends in Review. The epic is completed with
- * its last child; an epic with a branch of its own (`epicBranch`,
- * decision-16) has the lead make that branch when it starts, and with its
- * last child it waits in Ready to merge instead, for the person to say where
- * its branch goes.
+ * The runner holds the rules the lead cannot bend: a child goes only once its
+ * dependsOn are done and landed (the runner's own start check), at most
+ * `limit` hand-offs at once in the repository, tries to the contract's
+ * maxRetries (then it waits in Review for the person), only children under
+ * its epic with none of their own, one lead per tree, and in a led tree only
+ * the lead and the person hand off. Children it adds, and children whose
+ * contract is still a draft, wait for the person, unless the epic was handed
+ * off until done (a bypass repository), where the app also lands each child
+ * that ends in Review. The epic is completed with its last child; an epic
+ * with a branch of its own (`epicBranch`, decision-16) has the lead make that
+ * branch when it starts, and with its last child it waits in Ready to merge
+ * instead, for the person to say where its branch goes.
  *
- * The board is its memory: `lead:` on the epic says one is meant to run, the
- * plan is in notes on the epic, and a lead lost to a restart is resumed from
- * there. Nothing here touches Electron, an agent or the board: the agents
- * process gives it those as `LeadDeps`, and `npm test` drives it with fakes.
+ * The board is its memory: `dispatch:` with role lead on the epic is its
+ * request and, once a runner leads it, that runner's claim (task-74), so one
+ * lead per tree holds across processes and machines; `paused` on it pauses
+ * it from anywhere; each child's `tries` counts its hand-offs; the plan is in
+ * notes on the epic. A lead whose runner went away is resumed from there.
+ * `Leads` touches no agent and no file itself: the runner gives it those as
+ * `LeadDeps`, and the tests drive it with fakes.
  */
-import type { AgentId, AgentRun, LeadRecord, LeadState, LeadView, PermissionPolicy, Result } from '../shared/api';
+import { readBoardConfig } from '../boardFile';
+import { claimHeld, readDispatchRecord, readLeadRecord, type LeadAction } from '../dispatchRecord';
+import { readTasksDir } from '../taskFile';
+import type { DispatchBy, DispatchClaim, DispatchRequest, Task } from '../types';
+import { getV2Dirs } from '../workspace';
+import { reviewColumn } from '../repo/claims';
+import { locateBoard } from '../repo/locate';
+import { isClaimLost } from '../repo/runFiles';
+import { unlanded } from '../repo/worktree';
+import type { AgentId, AgentRun, PermissionPolicy, Result } from './types';
+
+// ── What the board says ─────────────────────────────────────────────────────
+
+/** `leading`: at work or waiting for its children; `paused`: dispatches nothing, events wait; `stopped` and `done` end it. */
+export type LeadState = 'leading' | 'paused' | 'stopped' | 'done';
+
+/** An epic's lead as a window shows it (decision-15). */
+export interface LeadView {
+  projectId: string;
+  epicId: string;
+  agentId: AgentId;
+  model?: string;
+  effort?: string;
+  state: LeadState;
+  until: 'review' | 'done';
+  /** At most this many hand-offs at once in the repository. */
+  limit: number;
+  startedAt: number;
+  /** What the lead or the app last said about it: why it paused, stopped or is waiting. */
+  note?: string;
+  /** Events waiting for its next turn. */
+  queued: number;
+  /** Children waiting for the person to hand them off: added after it started, or with a draft contract. */
+  waitingForYou: string[];
+}
+
+/** The lead record on a document, as the lead's rules read it. */
+export interface LeadMark {
+  agent: string;
+  /** A runner holds its claim and is up. */
+  held: boolean;
+  /** That runner is the one reading the tree. */
+  mine: boolean;
+  paused: boolean;
+  /** Where it runs, when held: `desktop on mac (pid 412)`. */
+  where?: string;
+}
 
 /** A document under an epic, as the lead and its rules read it. */
 export interface TreeDoc {
@@ -44,6 +98,12 @@ export interface TreeDoc {
   validation: string[];
   maxRetries?: number;
   createdAt?: string;
+  /** Hand-offs started on it, from its request record (`tries`). */
+  tries?: number;
+  /** Its contract is still a draft. */
+  draft?: boolean;
+  /** A lead on it (an epic, or a child with children of its own). */
+  lead?: LeadMark;
 }
 
 /** The epic and everything under it, at any depth. */
@@ -68,6 +128,20 @@ export function treeOf(docs: TreeDoc[], epicId: string): Tree | null {
     at = next.map((d) => d.id);
   }
   return { epic, children, all };
+}
+
+/** The epic's parents, nearest first. */
+function ancestorsOf(tree: Tree): TreeDoc[] {
+  const above: TreeDoc[] = [];
+  const seen = new Set([tree.epic.id]);
+  for (let id = tree.epic.parentId; id && !seen.has(id); ) {
+    seen.add(id);
+    const doc = tree.all.get(id);
+    if (!doc) break;
+    above.push(doc);
+    id = doc.parentId;
+  }
+  return above;
 }
 
 const parentsIn = (tree: Tree) => new Set(tree.children.map((c) => c.parentId).filter((p): p is string => !!p));
@@ -181,28 +255,183 @@ export function planReport(tree: Tree): PlanReport {
   return { problems, waves };
 }
 
-/** One lead, as the manager keeps it. */
+// ── The rules ───────────────────────────────────────────────────────────────
+
+/** A lead as its rules read it: the board's record, or the one a runner keeps. */
+export interface LeadTerms {
+  epicId: string;
+  until: 'review' | 'done';
+  /** When it was asked for (ISO): a child made after it waits for the person. */
+  startedIso: string;
+  paused: boolean;
+}
+
+/**
+ * Why the lead may not hand off `taskId`, and what becomes of the request:
+ * `wait` (it may go later: the person resumes the lead, or makes the child
+ * ready), `review` (its tries are spent: it waits in Review for the person),
+ * `never` (not the lead's to hand off). Null when it may. The limit and
+ * dependsOn are the runner's start checks, not these.
+ */
+export interface Refusal {
+  why: string;
+  then: 'wait' | 'review' | 'never';
+}
+
+export function leadRefusal(tree: Tree, lead: LeadTerms, taskId: string): Refusal | null {
+  const { epicId } = lead;
+  if (lead.paused) return { why: 'The person paused you: hand nothing off until you are resumed', then: 'wait' };
+  const child = tree.children.find((c) => c.id === taskId);
+  if (!child) return { why: `${taskId} is not under ${epicId}: you hand off its children only`, then: 'never' };
+  if (child.done) return { why: `${taskId} is done`, then: 'never' };
+  if (parentsIn(tree).has(taskId)) return { why: `${taskId} has children of its own: hand those off instead`, then: 'never' };
+  if (lead.until === 'review' && addedAfter(lead.startedIso, child)) {
+    return { why: `${taskId} was added after you started: it waits for the person to hand it off. Say so in your reply.`, then: 'wait' };
+  }
+  if (lead.until === 'review' && child.draft) {
+    return { why: `${taskId}'s contract is a draft: it waits for the person to make it ready. Say so in your reply.`, then: 'wait' };
+  }
+  const allowed = Math.max(0, child.maxRetries ?? 1);
+  const tries = child.tries ?? 0;
+  if (tries > allowed) {
+    return {
+      why: `${taskId} has been handed off ${tries} times, and its contract allows ${allowed} ${allowed === 1 ? 'retry' : 'retries'}: it waits in Review for the person; leave a note on it saying what went wrong`,
+      then: 'review',
+    };
+  }
+  return null;
+}
+
+function addedAfter(startedIso: string, doc: TreeDoc): boolean {
+  return !!doc.createdAt && doc.createdAt > startedIso;
+}
+
+/** Children waiting for the person: added after the lead started, or with a draft contract (until review). */
+function waitingFor(lead: Pick<LeadTerms, 'until' | 'startedIso'>, tree: Tree, handedOff: (taskId: string) => boolean): string[] {
+  if (lead.until !== 'review') return [];
+  return workOf(tree)
+    .filter((c) => (addedAfter(lead.startedIso, c) || c.draft) && !handedOff(c.id))
+    .map((c) => c.id);
+}
+
+// ── Reading the tree from the board ─────────────────────────────────────────
+
+const ids = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && !!v.trim()).map((v) => v.trim()) : []);
+
+/** Whether a claim is this runner's. */
+export type Holder = Pick<DispatchClaim, 'host' | 'pid'>;
+
+/** The lead on a document, as the rules read it; undefined when it has none, or its lead ended. */
+export function leadMarkOf(task: Task, dotDir: string | null, holder?: Holder): LeadMark | undefined {
+  const record = readLeadRecord(task as Task & { lead?: unknown });
+  if (!record) return undefined;
+  const claim = record.claim;
+  const held = claimHeld(claim) && !(dotDir && isClaimLost(dotDir, claim));
+  return {
+    agent: record.agent,
+    held,
+    mine: held && !!holder && claim!.host === holder.host && claim!.pid === holder.pid,
+    paused: !!record.paused,
+    ...(held ? { where: `${claim!.runner} on ${claim!.host} (pid ${claim!.pid})` } : {}),
+  };
+}
+
+/** What the lead and its rules read of a document: its place, its dependencies, the files it touches, its tries and its lead. */
+export function treeDoc(task: Task, done: boolean, columns: { id: string; title: string }[], dotDir: string | null = null, holder?: Holder): TreeDoc {
+  const column = columns.find((c) => c.id === task.column);
+  const deliverables = (task.contract?.deliverables ?? []).filter((d) => d.type !== 'research' && d.path).map((d) => d.path);
+  const tries = readDispatchRecord(task)?.tries;
+  const lead = leadMarkOf(task, dotDir, holder);
+  return {
+    id: task.id,
+    title: task.title,
+    ...(task.parentId ? { parentId: task.parentId } : {}),
+    done,
+    ...(column ? { column: column.title, inReview: reviewColumn(columns)?.id === column.id } : {}),
+    dependsOn: ids(task.dependsOn),
+    files: [...new Set([...ids(task.relatedFiles), ...deliverables])],
+    validation: ids(task.contract?.validation?.commands),
+    ...(task.contract?.maxRetries !== undefined ? { maxRetries: task.contract.maxRetries } : {}),
+    ...(task.createdAt ? { createdAt: task.createdAt } : {}),
+    ...(tries ? { tries } : {}),
+    ...(task.contract?.status === 'draft' ? { draft: true } : {}),
+    ...(lead ? { lead } : {}),
+  };
+}
+
+/** The epic's tree as the board has it now, its completed children asked of git whether they landed; null when the epic is not there. */
+export function readTree(projectId: string, epicId: string, holder?: Holder): Tree | null {
+  const located = locateBoard(projectId, { materialize: false });
+  if (!located.found) return null;
+  const dirs = getV2Dirs(located.brainfilePath);
+  const columns = readBoardConfig(located.brainfilePath)?.config?.columns ?? [];
+  const docs = [
+    ...readTasksDir(dirs.boardDir).map((d) => treeDoc(d.task, false, columns, located.dotDir, holder)),
+    ...readTasksDir(dirs.logsDir).map((d) => treeDoc(d.task, true, columns, null)),
+  ];
+  // Only the epic's own children are asked of git: a completed one whose branch is still to land.
+  const tree = treeOf(docs, epicId);
+  for (const c of tree?.children ?? []) if (c.done && unlanded(projectId, c.id)) c.unlanded = true;
+  return tree;
+}
+
+/** The nearest document above `taskId` (or it) with a lead on the board, open or held; null when none. */
+export function leadAbove(projectId: string, taskId: string, options: { self?: boolean } = {}): { epicId: string; record: NonNullable<ReturnType<typeof readLeadRecord>> } | null {
+  const located = locateBoard(projectId, { materialize: false });
+  if (!located.found) return null;
+  const open = new Map(readTasksDir(getV2Dirs(located.brainfilePath).boardDir).map((d) => [d.task.id, d.task]));
+  const seen = new Set<string>();
+  let id: string | undefined = options.self ? taskId : open.get(taskId)?.parentId;
+  while (id && !seen.has(id)) {
+    seen.add(id);
+    const doc = open.get(id);
+    if (!doc) return null;
+    const record = readLeadRecord(doc as Task & { lead?: unknown });
+    if (record) return { epicId: id, record };
+    id = doc.parentId;
+  }
+  return null;
+}
+
+/**
+ * Whether the lead over `epicId` may hand off `taskId` now, by the board
+ * alone: what a lead's `brainfile mcp` asks before it queues a request, so
+ * the lead hears at once. The runner that leads the epic asks again before
+ * it starts it, with the limit (decision-15).
+ */
+export function leadRefusalOnBoard(projectId: string, epicId: string, taskId: string): Refusal | null {
+  const located = locateBoard(projectId, { materialize: false });
+  if (!located.found) return null;
+  const tree = readTree(projectId, epicId);
+  const epic = tree ? readTasksDir(getV2Dirs(located.brainfilePath).boardDir).find((d) => d.task.id === epicId)?.task : undefined;
+  const record = epic ? readLeadRecord(epic as Task & { lead?: unknown }) : null;
+  // No lead on the board to hold to: the runner's own checks are what is left.
+  if (!tree || !record) return null;
+  return leadRefusal(tree, { epicId, until: record.until ?? 'review', startedIso: record.at, paused: !!record.paused }, taskId);
+}
+
+// ── The lead ────────────────────────────────────────────────────────────────
+
+/** One lead, as the runner leading it keeps it. */
 export interface Lead {
   projectId: string;
   epicId: string;
   agentId: AgentId;
   model?: string;
   effort?: string;
-  by: 'person' | 'chat';
+  by: DispatchBy;
   state: LeadState;
   until: 'review' | 'done';
   startedAt: number;
   /** ISO, for comparing with a child's createdAt: one added after it waits for the person. */
   startedIso: string;
   note?: string;
-  /** Taken over from the board after a restart: its first turn reads its notes first. */
+  /** Taken over from the board (a runner that went away, a restart): its first turn reads its notes first. */
   resumed: boolean;
   /** What happened since its last turn, one line each. */
   queue: string[];
   /** A turn is running. */
   busy: boolean;
-  /** Hand-offs it made, per child. */
-  attempts: Map<string, number>;
   /** Children seen done, so one completed by the person wakes it once. */
   doneSeen: Set<string>;
   /** Children the app is landing: their completion is said by the landing, not by the board's change. */
@@ -214,6 +443,8 @@ export interface Lead {
   briefed: boolean;
   /** The epic's own branch (decision-16), made when it started: its children fork from and land on it. */
   branch?: string;
+  /** Writes of its record under way: until they land, the board is not read back into it. */
+  marking: number;
 }
 
 export interface LeadTurn {
@@ -222,9 +453,9 @@ export interface LeadTurn {
   done: Promise<{ ok: boolean; stopped?: boolean; reply?: string; error?: string }>;
 }
 
-/** What the lead needs from the agents process. */
+/** What the lead needs from the runner leading it. */
 export interface LeadDeps {
-  /** The epic's tree as the board has it now; null when the epic is gone. */
+  /** The epic's tree as the board has it now, with this runner's claims marked `mine`; null when the epic is gone. */
   tree(projectId: string, epicId: string): Tree | null;
   /** Hand-offs live in the repository now. */
   live(projectId: string): AgentRun[];
@@ -239,7 +470,14 @@ export interface LeadDeps {
   turn(lead: Lead, prompt: (fresh: boolean) => string): LeadTurn;
   /** Stops a turn under way and lets the lead's session go. */
   close(lead: Lead): void;
-  record(projectId: string, epicId: string, record: LeadRecord | null): Promise<Result>;
+  /**
+   * The lead's claim on the epic, by compare-and-swap (task-74): refused while
+   * another runner holds it. `request` is written with it; without one, the
+   * request already on the epic is claimed.
+   */
+  claim(projectId: string, epicId: string, request?: DispatchRequest): Promise<Result>;
+  /** The lead's record on the epic paused, resumed or taken off. */
+  mark(projectId: string, epicId: string, action: LeadAction): Promise<Result>;
   complete(projectId: string, epicId: string): Promise<Result>;
   /** The child's branch can merge now, with no conflict. */
   mergeable(projectId: string, taskId: string): boolean;
@@ -262,8 +500,6 @@ export interface LeadDeps {
   later(ms: number, fn: () => void): ReturnType<typeof setTimeout>;
 }
 
-/** The default most hand-offs at once in a repository. */
-export const DEFAULT_LIMIT = 3;
 /** Events within this long of each other make one turn. */
 export const GATHER_MS = 1500;
 /** Turns that fail in a row before the lead pauses itself. */
@@ -273,21 +509,22 @@ const ended = (run: AgentRun) => run.state === 'done' || run.state === 'failed' 
 
 /**
  * What a lead is told when its session is new: who it is, the rules, and how
- * it works. `continuing`: it has led this epic before (a restart, or a
- * session let go while it waited), so it reads its notes rather than
- * checking the plan again.
+ * it works. `continuing`: it has led this epic before (a runner that went
+ * away, or a session let go while it waited), so it reads its notes rather
+ * than checking the plan again.
  */
 export function leadPreamble(lead: Lead, tree: Tree, limit: number, continuing = lead.resumed): string {
   const { epic } = tree;
   const until =
     lead.until === 'done'
       ? 'This repository runs in bypass: each child that ends in Review is checked and landed by the app, and a landed child is done. Children you add may be handed off.'
-      : 'Each child ends in Review, and the person merges it; a merged child is done. Children you add wait for the person to hand them off.';
+      : 'Each child ends in Review, and the person merges it; a merged child is done. Children you add, and children whose contract is still a draft, wait for the person to hand them off.';
+  const you = `${lead.agentId}${lead.model ? `, model ${lead.model}` : ''}`;
   return (
     `You lead ${epic.id} ("${epic.title}") on this repository's Brainfile board: you orchestrate its children, and you write no code. ` +
-    'Use the brainfile MCP tools for the board (never edit its files by hand), and the desk to have work done: the desk\'s `dispatch` hands a child to a coding agent in its own worktree (agent and model are optional: by default, you and your model), `runs` says what is running, `stop` stops one. The brainfile tools\' own `dispatch` only queues a task for a runner; use the desk\'s. ' +
+    `Use the brainfile MCP tools for the board (never edit its files by hand) and to have work done: \`dispatch\` hands a child to a coding agent (name the agent and model for each; you are ${you}), and the app starts it in its own worktree as soon as the rules below allow; \`dispatch_status\` says what is running and what waits; \`dispatch_stop\` stops one. They reach only the tasks under ${epic.id}. ` +
     'You may read the code and run git commands that only read; edits and other commands are refused.\n\n' +
-    `The app holds these rules, and refuses what breaks them: a child is handed off only once its dependsOn are done and their branches landed on their own target; at most ${limit} hand-offs at once in this repository; a child is retried at most its contract's maxRetries; you hand off only children under ${epic.id} that have none of their own. ${until} ` +
+    `The app holds these rules, and refuses what breaks them: a child is handed off only once its dependsOn are done and their branches landed on their own target; at most ${limit} hand-offs at once in this repository (more wait their turn); a child is tried at most its contract's maxRetries again, then waits in Review for the person; you hand off only children under ${epic.id} that have none of their own. ${until} ` +
     (lead.branch
       ? `${epic.id} has a branch of its own, ${lead.branch}: each child forks from it and lands on it, not on the trunk, and the app brings ${epic.id}'s target into it before each hand-off. When the last child is done, ${epic.id} waits in Ready to merge for the person to say where ${lead.branch} goes. `
       : '') +
@@ -331,17 +568,30 @@ export function treeText(lead: Lead, tree: Tree, deps: Pick<LeadDeps, 'live' | '
         if (waits.length) parts.push(`waits on ${waits.join(', ')}`);
         else if (!parents.has(c.id) && !c.inReview && !deps.mergeable(lead.projectId, c.id)) parts.push('ready');
       }
-      const tries = lead.attempts.get(c.id);
-      if (tries) parts.push(`handed off ${tries}×`);
-      if (addedByLead(lead, c) && lead.until === 'review') parts.push('added after you started: waits for the person');
+      if (c.tries) parts.push(`handed off ${c.tries}×`);
+      if (lead.until === 'review' && addedAfter(lead.startedIso, c)) parts.push('added after you started: waits for the person');
+      else if (lead.until === 'review' && c.draft) parts.push('its contract is a draft: waits for the person');
     }
     return parts.join(' · ');
   });
   return `${tree.epic.id} now (${live.length} of ${limit} hand-offs running in this repository):\n${lines.join('\n')}\n\n`;
 }
 
-function addedByLead(lead: Lead, doc: TreeDoc): boolean {
-  return !!doc.createdAt && doc.createdAt > lead.startedIso;
+export interface LeadStart {
+  model?: string;
+  effort?: string;
+  by?: DispatchBy;
+  /** Taken over from the board: its first turn reads its notes. */
+  resumed?: boolean;
+  /** When it was first asked for (ISO), from its record; now when new. */
+  at?: string;
+  /** Its record says it is paused: it takes the claim and waits for the person. */
+  paused?: boolean;
+  /**
+   * Claim the request already on the epic instead of writing a new one (a
+   * lead taken up from the queue or the board).
+   */
+  fromBoard?: boolean;
 }
 
 export class Leads {
@@ -364,6 +614,11 @@ export class Leads {
     return !!lead && (lead.state === 'leading' || lead.state === 'paused');
   }
 
+  /** The leads at work or paused here, on a project or all. */
+  running(projectId?: string): Lead[] {
+    return [...this.leads.values()].filter((l) => this.active(l) && (!projectId || l.projectId === projectId));
+  }
+
   /** The running lead whose tree holds `taskId` (or that leads it), if any. */
   leadOver(projectId: string, taskId: string): Lead | undefined {
     for (const lead of this.leads.values()) {
@@ -377,12 +632,7 @@ export class Leads {
 
   view(lead: Lead): LeadView {
     const tree = this.deps.tree(lead.projectId, lead.epicId);
-    const waiting =
-      tree && lead.until === 'review'
-        ? workOf(tree)
-            .filter((c) => addedByLead(lead, c) && !this.deps.lastRun(lead.projectId, c.id))
-            .map((c) => c.id)
-        : [];
+    const waiting = tree ? waitingFor(lead, tree, (id) => !!this.deps.lastRun(lead.projectId, id) || !!tree.all.get(id)?.tries) : [];
     return {
       projectId: lead.projectId,
       epicId: lead.epicId,
@@ -409,14 +659,10 @@ export class Leads {
 
   /**
    * Starts a lead on an epic with children: refused when the epic has no open
-   * work, or when its tree already has one (above it or under it).
+   * work, or when its tree already has one (above it or under it), here or in
+   * another runner, by its claim on the board.
    */
-  async start(
-    projectId: string,
-    epicId: string,
-    agentId: AgentId,
-    options: { model?: string; effort?: string; by?: 'person' | 'chat'; resumed?: boolean } = {}
-  ): Promise<Result<{ lead: LeadView; run: AgentRun | null }>> {
+  async start(projectId: string, epicId: string, agentId: AgentId, options: LeadStart = {}): Promise<Result<{ lead: LeadView; run: AgentRun | null }>> {
     const tree = this.deps.tree(projectId, epicId);
     if (!tree) return { ok: false, error: `${epicId} is not on this board` };
     if (tree.epic.done) return { ok: false, error: `${epicId} is done` };
@@ -430,74 +676,76 @@ export class Leads {
         return { ok: false, error: `${epicId} is under ${other.epicId}, whose lead runs it` };
       }
     }
+    // One lead per tree across processes and machines: another runner's claim on the board.
+    const elsewhere = (d: TreeDoc) => !!d.lead?.held && !d.lead.mine;
+    if (elsewhere(tree.epic)) return { ok: false, error: `${epicId} already has a lead: ${tree.epic.lead!.agent}, in ${tree.epic.lead!.where}` };
+    const below = tree.children.find((c) => !c.done && elsewhere(c));
+    if (below) return { ok: false, error: `${below.id}, under ${epicId}, has a lead already, in ${below.lead!.where}: stop it first` };
+    const above = ancestorsOf(tree).find(elsewhere);
+    if (above) return { ok: false, error: `${epicId} is under ${above.id}, whose lead runs it, in ${above.lead!.where}` };
+
     // The epic's own branch, made before anything is handed off from it (decision-16).
     const branch = this.deps.branch?.(projectId, epicId) ?? { ok: true as const, value: null };
     if (!branch.ok) return { ok: false, error: `${epicId}'s branch could not be made: ${branch.error}` };
     const until = this.deps.policy(projectId) === 'bypass' ? 'done' : 'review';
     const now = Date.now();
+    const at = options.at ?? new Date(now).toISOString();
+    const by = options.by ?? 'person';
+    const request: DispatchRequest = {
+      agent: agentId,
+      ...(options.model ? { model: options.model } : {}),
+      ...(options.effort ? { effort: options.effort } : {}),
+      by,
+      at,
+      until,
+      role: 'lead',
+    };
+    const claimed = await this.deps.claim(projectId, epicId, options.fromBoard ? undefined : request);
+    if (!claimed.ok) return { ok: false, error: claimed.error };
     const lead: Lead = {
       projectId,
       epicId,
       agentId,
       model: options.model,
       effort: options.effort,
-      by: options.by ?? 'person',
-      state: 'leading',
+      by,
+      state: options.paused ? 'paused' : 'leading',
       until,
       startedAt: now,
-      startedIso: new Date(now).toISOString(),
+      startedIso: at,
+      ...(options.paused ? { note: 'Paused: it hands off nothing until resumed; what is running goes on.' } : {}),
       resumed: !!options.resumed,
       queue: [options.resumed ? 'The person resumed you.' : `The person handed you ${epicId}.`],
       busy: false,
-      attempts: new Map(),
       doneSeen: new Set(tree.children.filter((c) => c.done).map((c) => c.id)),
       landing: new Set(),
       failures: 0,
       timer: null,
       briefed: false,
       ...(branch.value ? { branch: branch.value } : {}),
-    };
-    const record: LeadRecord = {
-      agent: agentId,
-      ...(options.model ? { model: options.model } : {}),
-      ...(options.effort ? { effort: options.effort } : {}),
-      by: lead.by,
-      at: lead.startedIso,
-      until,
+      marking: 0,
     };
     this.leads.set(this.key(projectId, epicId), lead);
-    const written = await this.deps.record(projectId, epicId, record);
-    if (!written.ok) lead.note = `The lead is not on the board: ${written.error}`;
     const run = this.kick(lead);
     this.emit(lead);
     return { ok: true, value: { lead: this.view(lead), run } };
   }
 
   /**
-   * Whether the lead may hand off `taskId` now: the rules it cannot bend,
-   * besides dependsOn (the hand-off checks those itself). `dispatched` counts
-   * the try once the hand-off has started.
+   * Whether the lead may hand off `taskId` now: the rules it cannot bend
+   * (leadRefusal) and the repository's limit, besides dependsOn (the
+   * runner's start checks those itself).
    */
-  mayDispatch(projectId: string, epicId: string, taskId: string): Result {
+  mayDispatch(projectId: string, epicId: string, taskId: string): Result & { then?: Refusal['then'] } {
     const lead = this.get(projectId, epicId);
-    if (!lead || !this.active(lead)) return { ok: false, error: `You no longer lead ${epicId}` };
-    if (lead.state === 'paused') return { ok: false, error: `The person paused you: hand nothing off until you are resumed` };
+    if (!lead || !this.active(lead)) return { ok: false, error: `You no longer lead ${epicId}`, then: 'never' };
     const tree = this.deps.tree(projectId, epicId);
-    const child = tree?.children.find((c) => c.id === taskId);
-    if (!tree || !child) return { ok: false, error: `${taskId} is not under ${epicId}: you hand off its children only` };
-    if (child.done) return { ok: false, error: `${taskId} is done` };
-    if (parentsIn(tree).has(taskId)) return { ok: false, error: `${taskId} has children of its own: hand those off instead` };
-    if (addedByLead(lead, child) && lead.until === 'review') {
-      return { ok: false, error: `${taskId} was added after you started: it waits for the person to hand it off. Say so in your reply.` };
-    }
-    const allowed = Math.max(0, child.maxRetries ?? 1);
-    const tries = lead.attempts.get(taskId) ?? 0;
-    if (tries > allowed) {
-      return { ok: false, error: `${taskId} has been handed off ${tries} times, and its contract allows ${allowed} ${allowed === 1 ? 'retry' : 'retries'}: leave it for the person, with a note on it saying what went wrong` };
-    }
+    if (!tree) return { ok: false, error: `${epicId} is not on this board`, then: 'never' };
+    const refused = leadRefusal(tree, { epicId, until: lead.until, startedIso: lead.startedIso, paused: lead.state === 'paused' }, taskId);
+    if (refused) return { ok: false, error: refused.why, then: refused.then };
     const live = this.deps.live(projectId);
     const limit = this.deps.limit(projectId);
-    if (live.length >= limit) return { ok: false, error: `${live.length} hand-offs are running in this repository, the most at once (${limit}): you are woken when one ends` };
+    if (live.length >= limit) return { ok: false, error: `${live.length} hand-offs are running in this repository, the most at once (${limit}): you are woken when one ends`, then: 'wait' };
     return { ok: true, value: undefined };
   }
 
@@ -517,14 +765,8 @@ export class Leads {
     };
   }
 
-  /** The lead's hand-off of `taskId` started: one more try. */
-  dispatched(projectId: string, epicId: string, taskId: string): void {
-    const lead = this.get(projectId, epicId);
-    if (lead) lead.attempts.set(taskId, (lead.attempts.get(taskId) ?? 0) + 1);
-  }
-
   /** A hand-off asked by someone else (`chat`) inside a led tree is refused; the person's own is theirs to make, and takes it off the waiting list. */
-  guard(projectId: string, taskId: string, by: 'person' | 'chat'): Result {
+  guard(projectId: string, taskId: string, by: DispatchBy): Result {
     const lead = this.leadOver(projectId, taskId);
     if (!lead) return { ok: true, value: undefined };
     if (by === 'chat') return { ok: false, error: `${lead.epicId}'s lead runs ${taskId === lead.epicId ? 'it' : 'that tree'}: only the lead hands off its children. Pause or stop it first.` };
@@ -567,17 +809,19 @@ export class Leads {
   }
 
   /**
-   * The board changed: a child the person completed wakes the lead, and an
-   * epic whose children are all done is completed and its lead ends.
+   * The board changed: the lead's record is read back (paused, resumed or
+   * stopped from anywhere), a child the person completed wakes the lead, and
+   * an epic whose children are all done is completed and its lead ends.
    */
   boardChanged(projectId: string): void {
     for (const lead of this.leads.values()) {
       if (lead.projectId !== projectId || !this.active(lead)) continue;
       const tree = this.deps.tree(projectId, lead.epicId);
       if (!tree) {
-        void this.end(lead, 'stopped', `${lead.epicId} is no longer on the board`);
+        void this.end(lead, 'stopped', `${lead.epicId} is no longer on the board`, false);
         continue;
       }
+      if (!lead.marking && !this.follow(lead, tree)) continue;
       // One the app is landing is said by the landing.
       for (const c of tree.children) if (c.done && lead.landing.has(c.id)) lead.doneSeen.add(c.id);
       const fresh = tree.children.filter((c) => c.done && !lead.doneSeen.has(c.id));
@@ -589,30 +833,71 @@ export class Leads {
     }
   }
 
-  pause(projectId: string, epicId: string): Result {
+  /** The lead follows its record on the board: taken off or taken over, it ends; paused or resumed there, so is it. False once it has ended. */
+  private follow(lead: Lead, tree: Tree): boolean {
+    const mark = tree.epic.lead;
+    if (!mark || !mark.mine) {
+      const why = mark?.held ? `${lead.epicId}'s lead was taken over, in ${mark.where}` : `Stopped: ${lead.epicId}'s lead was taken off the board. What it handed off goes on, and is yours now.`;
+      void this.end(lead, 'stopped', why, false);
+      return false;
+    }
+    if (mark.paused && lead.state === 'leading') {
+      lead.state = 'paused';
+      lead.note = 'Paused: it hands off nothing until resumed; what is running goes on.';
+      this.emit(lead);
+    } else if (!mark.paused && lead.state === 'paused') {
+      this.carryOn(lead);
+    }
+    return true;
+  }
+
+  private carryOn(lead: Lead): void {
+    lead.state = 'leading';
+    lead.failures = 0;
+    lead.note = undefined;
+    lead.queue.push('The person resumed you.');
+    this.kick(lead);
+    this.emit(lead);
+  }
+
+  /** Its record written; the board is not read back into it meanwhile. */
+  private async mark(lead: Lead, action: LeadAction): Promise<Result> {
+    lead.marking += 1;
+    try {
+      return await this.deps.mark(lead.projectId, lead.epicId, action);
+    } finally {
+      lead.marking -= 1;
+    }
+  }
+
+  /** Pauses the lead here and on the board: it hands off nothing, and its events wait. */
+  async pause(projectId: string, epicId: string): Promise<Result> {
     const lead = this.get(projectId, epicId);
     if (!lead || lead.state !== 'leading') return { ok: false, error: `${epicId} has no lead at work` };
-    lead.state = 'paused';
-    lead.note = 'Paused: it hands off nothing until resumed; what is running goes on.';
-    this.emit(lead);
+    this.pauseFor(lead, 'Paused: it hands off nothing until resumed; what is running goes on.');
     return { ok: true, value: undefined };
   }
 
-  /** Resumes a paused lead; one on the board with none running (a restart) starts again from the board. */
-  async resume(projectId: string, epicId: string, fromBoard?: { agentId: AgentId; model?: string; effort?: string; by?: 'person' | 'chat' }): Promise<Result> {
+  private pauseFor(lead: Lead, note: string): void {
+    lead.state = 'paused';
+    lead.note = note;
+    this.emit(lead);
+    void this.mark(lead, 'pause');
+  }
+
+  /** Resumes a paused lead; one on the board with none running here starts again from the board. */
+  async resume(projectId: string, epicId: string, fromBoard?: { agentId: AgentId } & LeadStart): Promise<Result> {
     const lead = this.get(projectId, epicId);
     if (lead?.state === 'paused') {
-      lead.state = 'leading';
-      lead.failures = 0;
-      lead.note = undefined;
-      lead.queue.push('The person resumed you.');
-      this.kick(lead);
-      this.emit(lead);
+      const marked = await this.mark(lead, 'resume');
+      if (!marked.ok) return marked;
+      this.carryOn(lead);
       return { ok: true, value: undefined };
     }
     if (lead?.state === 'leading') return { ok: true, value: undefined };
     if (!fromBoard) return { ok: false, error: `${epicId} has no lead to resume` };
-    const started = await this.start(projectId, epicId, fromBoard.agentId, { ...fromBoard, resumed: true });
+    const { agentId, ...rest } = fromBoard;
+    const started = await this.start(projectId, epicId, agentId, { ...rest, resumed: true });
     return started.ok ? { ok: true, value: undefined } : started;
   }
 
@@ -620,12 +905,20 @@ export class Leads {
   async stop(projectId: string, epicId: string): Promise<Result> {
     const lead = this.get(projectId, epicId);
     if (!lead || !this.active(lead)) {
-      // A lead left on the board by a restart is taken off.
-      const cleared = await this.deps.record(projectId, epicId, null);
-      return cleared.ok ? { ok: true, value: undefined } : cleared;
+      // A lead on the board with none running here is taken off.
+      return this.deps.mark(projectId, epicId, 'end');
     }
     await this.end(lead, 'stopped', 'Stopped by the person: what it handed off goes on, and is yours now.');
     return { ok: true, value: undefined };
+  }
+
+  /** Every lead here ends with its runner, its record left for another to take up. */
+  closeAll(): void {
+    for (const lead of this.running()) {
+      if (lead.timer) clearTimeout(lead.timer);
+      lead.timer = null;
+      this.deps.close(lead);
+    }
   }
 
   private async end(lead: Lead, state: 'stopped' | 'done', note: string, record = true): Promise<void> {
@@ -636,7 +929,7 @@ export class Leads {
     lead.queue = [];
     this.deps.close(lead);
     this.emit(lead);
-    if (record) await this.deps.record(lead.projectId, lead.epicId, null);
+    if (record) await this.mark(lead, 'end');
   }
 
   /** Events that come together make one turn. */
@@ -656,7 +949,7 @@ export class Leads {
     if (lead.state !== 'leading' || lead.busy || !lead.queue.length) return null;
     const tree = this.deps.tree(lead.projectId, lead.epicId);
     if (!tree) {
-      void this.end(lead, 'stopped', `${lead.epicId} is no longer on the board`);
+      void this.end(lead, 'stopped', `${lead.epicId} is no longer on the board`, false);
       return null;
     }
     if (tree.children.length && tree.children.every((c) => c.done && !c.unlanded)) {
@@ -681,9 +974,8 @@ export class Leads {
       lead.busy = false;
       if (outcome.stopped && lead.state === 'leading') {
         // The person stopped its turn: it waits for them.
-        lead.state = 'paused';
-        lead.note = 'Paused: its turn was stopped. Resume it to carry on.';
         lead.queue.unshift(...events);
+        this.pauseFor(lead, 'Paused: its turn was stopped. Resume it to carry on.');
       } else if (outcome.ok) {
         lead.briefed = true;
         lead.failures = 0;
@@ -693,10 +985,8 @@ export class Leads {
         lead.note = `Its turn failed: ${outcome.error ?? 'no reason given'}`;
         // A new session next time, with the whole brief: the old one may be what failed.
         lead.briefed = false;
-        if (lead.failures >= FAILURES) {
-          lead.state = 'paused';
-          lead.note = `Paused after ${FAILURES} failed turns: ${outcome.error ?? 'no reason given'}`;
-        } else lead.queue.unshift(...events);
+        if (lead.failures >= FAILURES) this.pauseFor(lead, `Paused after ${FAILURES} failed turns: ${outcome.error ?? 'no reason given'}`);
+        else lead.queue.unshift(...events);
       }
       this.emit(lead);
       const after = this.deps.tree(lead.projectId, lead.epicId);
@@ -711,7 +1001,7 @@ export class Leads {
     if (lead.state === 'done' || lead.landing.has(lead.epicId)) return;
     // Once only, however many wakes find it finished; the record comes off while the epic is still on the board.
     lead.landing.add(lead.epicId);
-    await this.deps.record(lead.projectId, lead.epicId, null);
+    await this.mark(lead, 'end');
     const offered = this.deps.offer ? await this.deps.offer(lead.projectId, lead.epicId) : { ok: true as const, value: null };
     if (!offered.ok) {
       await this.end(lead, 'done', `Every child is done; ${lead.epicId}'s branch could not be put up to merge: ${offered.error}`, false);

@@ -14,7 +14,7 @@ for (const file of fs.readdirSync(toolsDir)) {
 const allToolSource = Object.values(toolSources).join('\n');
 
 describe('mcp consolidated tools contract', () => {
-  test('registers the 33 consolidated tools, one per CLI capability (spec-13)', () => {
+  test('registers the 34 consolidated tools, one per CLI capability (spec-13)', () => {
     const names = [...allToolSource.matchAll(/server\.registerTool\(\s*'([^']+)'/g)].map(match => match[1]);
 
     expect(names.sort()).toEqual([
@@ -27,6 +27,7 @@ describe('mcp consolidated tools contract', () => {
       'contract',
       'decide',
       'dispatch',
+      'dispatch_lead',
       'dispatch_status',
       'dispatch_stop',
       'get_task',
@@ -132,9 +133,9 @@ describe('mcp consolidated tools contract', () => {
    * same way this file already locks the tool count and consolidation shape;
    * the behavioural checks live in mcp-structured-output.test.ts.
    */
-  test('all 33 tools, in 31 files, declare an outputSchema and return structuredContent', () => {
+  test('all 34 tools, in 31 files, declare an outputSchema and return structuredContent', () => {
     const toolFiles = Object.keys(toolSources).filter(f => f.endsWith('_tool.ts'));
-    // dispatch_tool.ts registers dispatch, dispatch_status and dispatch_stop.
+    // dispatch_tool.ts registers dispatch, dispatch_status, dispatch_stop and dispatch_lead.
     expect(toolFiles).toHaveLength(31);
 
     for (const file of toolFiles) {

@@ -19,19 +19,28 @@
  *   conflict or a failed check goes back to the same agent and model up to
  *   the contract's maxRetries, then it parks in Review.
  *
+ * - An epic handed off gets a lead (lead.ts, decision-15, task-83): its
+ *   request is `dispatch:` with role lead on the epic, which a runner made
+ *   with `leads` takes up from the queue (or `lead` starts at once). The
+ *   lead's turns run here; the children it dispatches through its
+ *   `brainfile mcp` are queued, and this runner starts them inside the
+ *   lead's rules (`workLed`).
+ *
  * What it writes on the board goes through `RunnerBoard`, so the desktop's
  * writes keep going through its host and commit there; `fileBoard()` writes
  * the files and commits as the CLI does. Asks go to the host's `ask`.
  */
+import * as fs from 'fs';
+import * as path from 'path';
 import { readBoardConfig } from '../boardFile';
-import { claimHeld, currentHost, readDispatchRecord, requestDispatchFile, type ClaimInput } from '../dispatchRecord';
+import { claimHeld, currentHost, readDispatchRecord, readLeadRecord, requestDispatchFile, type ClaimInput, type LeadAction } from '../dispatchRecord';
 import { readTasksDir } from '../taskFile';
 import { appendLog, completeTaskFile, moveTaskFileToColumn } from '../taskOperations';
 import { findV2Task, getV2Dirs } from '../workspace';
-import type { ColumnConfig, DispatchBy, DispatchClaim, DispatchOutcome, DispatchRecord, DispatchRequest, DispatchRunner, DispatchUntil, Task } from '../types';
+import type { ColumnConfig, DispatchBy, DispatchClaim, DispatchOutcome, DispatchRecord, DispatchRequest, DispatchRole, DispatchRunner, DispatchUntil, Task } from '../types';
 import { openPullRequestOf } from '../pullRequest';
 import { scheduleBoardCommit } from '../repo/boardRepo';
-import { giveBackClaim, parkInReview, reviewColumn, takeClaim, type ClaimTaken } from '../repo/claims';
+import { giveBackClaim, markLead, parkInReview, reviewColumn, takeClaim, type ClaimTaken, type TakeOptions } from '../repo/claims';
 import { locateBoard } from '../repo/locate';
 import {
   BEAT_MS,
@@ -47,10 +56,12 @@ import {
   type RunFile,
   type RunFileAsk,
 } from '../repo/runFiles';
-import { handOffTarget, prepareTarget, refreshTarget } from '../repo/target';
-import { landReview, onlyReads, prepareWorktree, releaseReader, runChecks, sendBackNote, unlanded, type Landing, type Refresh, type Worktree } from '../repo/worktree';
+import { handOffTarget, offerEpicBranch, prepareEpicBranch, prepareTarget, refreshTarget } from '../repo/target';
+import { landReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, runChecks, sendBackNote, unlanded, type Landing, type Refresh, type Worktree } from '../repo/worktree';
 import { agentEnv, allAgents, nameOf, whyNot } from './agents';
 import { brief } from './brief';
+import { leadAbove, Leads, readTree, type Lead, type LeadTurn, type LeadView } from './lead';
+import { leadPermission, readOnlyMode } from './readOnly';
 import { policyFor, readSettings } from './settings';
 import { close as closeSession, open as openSession, turn as takeTurn, wasStopped, type Session, type SessionContext } from './session';
 import { Startups } from './startup';
@@ -62,6 +73,8 @@ export const DEFAULT_MAX_RUNNING = 3;
 export const STOP_WATCH_MS = 1_000;
 /** How long a stop written in another runner's run file has before that runner is sent SIGTERM. */
 export const STOP_GRACE_MS = 15_000;
+/** How often a runner with leads looks at its boards for what changed: a pause, a child done or queued. */
+export const LEAD_WATCH_MS = 2_000;
 
 const LIVE: ReadonlySet<RunState> = new Set(['starting', 'working', 'waiting']);
 
@@ -81,7 +94,7 @@ export interface RunnerBoard {
    * holds for a run that has ended. `request` is written in the same swap
    * when the task has none.
    */
-  claim(projectId: string, taskId: string, claim: ClaimInput, options: { takeOwn?: boolean; request?: DispatchRequest }): Promise<ClaimTaken>;
+  claim(projectId: string, taskId: string, claim: ClaimInput, options: TakeOptions): Promise<ClaimTaken>;
   /** The claim given back when its run ends, kept with how it ended. */
   release(projectId: string, taskId: string, holder: Pick<DispatchClaim, 'host' | 'pid'>, outcome: DispatchOutcome): Promise<Result>;
   /** A line in the task's log. */
@@ -90,6 +103,10 @@ export interface RunnerBoard {
   settleLanded(projectId: string, taskId: string): Promise<Result<{ completed: boolean; left: number }>>;
   /** Into the board's review column, for the person: a landing that may not go back again. */
   park(projectId: string, taskId: string): Promise<Result>;
+  /** An epic's lead paused, resumed or taken off its record (changeLeadFile). */
+  lead(projectId: string, epicId: string, action: LeadAction): Promise<Result>;
+  /** An epic completed with its last child (the lead's finish). */
+  complete(projectId: string, taskId: string): Promise<Result>;
 }
 
 /** Where unfinished work goes back to: in progress by name, else the first open column. */
@@ -175,6 +192,14 @@ export function fileBoard(): RunnerBoard {
         return { completed: true, left: 0 };
       }),
     park: (projectId, taskId) => committed(projectId, `review ${taskId}`, () => parkInReview(boardOf(projectId).brainfilePath, taskId)),
+    lead: (projectId, epicId, action) => committed(projectId, `lead ${epicId}: ${action === 'end' ? 'ended' : action === 'pause' ? 'paused' : 'resumed'}`, () => markLead(taskFileOf(projectId, epicId), action)),
+    complete: (projectId, taskId) =>
+      committed(projectId, `complete ${taskId}`, () => {
+        const { brainfilePath } = boardOf(projectId);
+        const found = findV2Task(getV2Dirs(brainfilePath), taskId);
+        if (!found) throw new Error(`Task ${taskId} not found`);
+        unwrap(completeTaskFile(found.filePath, getV2Dirs(brainfilePath).logsDir, { types: readBoardConfig(brainfilePath)?.config?.types }));
+      }),
   };
 }
 
@@ -193,8 +218,15 @@ export interface RunnerOptions {
   cancelAsk?(askId: string): void;
   /** Every change to a run this runner keeps, a copy, with the state it was in before (null for a new run). */
   onRun?(run: AgentRun, was: RunState | null): void;
-  /** The epic whose lead hands this task off (decision-15), for the brief. */
+  /** The epic whose lead hands this task off (decision-15), for the brief; by default the lead above it on the board. */
   ledBy?(projectId: string, taskId: string): string | null;
+  /**
+   * Take up leads queued on the board (`dispatch:` with role lead) when it
+   * works the queue: a runner that stays up (the desktop, `brainfile run`).
+   */
+  leads?: boolean;
+  /** Every change to a lead this runner runs. */
+  onLead?(view: LeadView): void;
   /** A landing completed the task. */
   landed?(projectId: string, taskId: string): void;
   /**
@@ -220,6 +252,8 @@ export interface HandOff {
   effort?: string;
   until?: DispatchUntil;
   by: DispatchBy;
+  /** `lead` for an epic, which a lead runs (decision-15). */
+  role?: DispatchRole;
 }
 
 export interface StartOptions {
@@ -293,6 +327,8 @@ export class Runner {
   readonly ctx: SessionContext;
   /** Runs whose agent is still starting, so stop reaches them before they have a session. */
   readonly startups = new Startups();
+  /** The epics' leads this runner runs (decision-15). */
+  readonly leads: Leads;
 
   private readonly options: RunnerOptions;
   private readonly runs = new Map<string, AgentRun>();
@@ -312,6 +348,9 @@ export class Runner {
   private readonly idBase = this.startedAt.toString(36);
   private ticker: NodeJS.Timeout | null = null;
   private lastBeat = 0;
+  private lastLook = 0;
+  /** What each board's folders looked like when its leads last looked. */
+  private readonly stamps = new Map<string, string>();
 
   /** This runner as a claim names it. */
   private get holder(): Pick<DispatchClaim, 'host' | 'pid'> {
@@ -331,6 +370,39 @@ export class Runner {
       update: (run, patch) => this.update(run, patch),
       ask: (ask) => this.ask(ask),
     };
+    this.leads = new Leads({
+      tree: (projectId, epicId) => readTree(projectId, epicId, this.holder),
+      live: (projectId) => this.live(projectId),
+      lastRun: (projectId, taskId) => this.lastRun(projectId, taskId),
+      policy: (projectId) => policyFor(this.dataDir, projectId),
+      limit: (projectId) => this.limit(projectId),
+      turn: (lead, prompt) => this.leadTurn(lead, prompt),
+      close: (lead) => this.closeLead(lead),
+      claim: async (projectId, epicId, request) => {
+        const taken = await this.board.claim(projectId, epicId, { host: this.host, runner: this.kind, pid: this.pid }, { takeOwn: true, ...(request ? { request } : {}) });
+        return taken.ok ? { ok: true, value: undefined } : { ok: false, error: taken.held ? `${epicId} has a lead already: ${taken.error}` : taken.error };
+      },
+      mark: (projectId, epicId, action) => this.board.lead(projectId, epicId, action),
+      complete: (projectId, epicId) => this.board.complete(projectId, epicId),
+      mergeable(projectId, taskId) {
+        try {
+          return readyToMerge(projectId).some((r) => r.taskId === taskId && !r.conflicts);
+        } catch {
+          return false;
+        }
+      },
+      land: async (projectId, taskId) => {
+        const landed = await this.land(projectId, taskId);
+        return { ok: landed.ok, said: landed.ok ? `${taskId} was landed: ${landed.message}` : `${taskId} could not land: ${landed.error}` };
+      },
+      branch: (projectId, epicId) => attempt(() => prepareEpicBranch(projectId, epicId)),
+      offer: async (projectId, epicId) => attempt(() => offerEpicBranch(projectId, epicId)),
+      emit: (view) => {
+        this.options.onLead?.(view);
+        if (view.state === 'leading' || view.state === 'paused') this.watch();
+      },
+      later: (ms, fn) => setTimeout(fn, ms),
+    });
   }
 
   // ── Runs and their files ──────────────────────────────────────────────────
@@ -415,6 +487,10 @@ export class Runner {
       const dotDir = this.meta.get(run.id)?.dotDir;
       const file = dotDir ? readRunFile(dotDir, run.id) : null;
       if (file?.stop) void this.stop(run.id);
+    }
+    if (now - this.lastLook >= LEAD_WATCH_MS) {
+      this.lastLook = now;
+      this.lookForLeads();
     }
     if (now - this.lastBeat < (this.options.beatMs ?? BEAT_MS)) return;
     this.lastBeat = now;
@@ -550,7 +626,8 @@ export class Runner {
 
   /** The request each task is handed off with: `dispatch:` on it, the agent its assignee. */
   async queue(projectId: string, taskIds: string[], handOff: HandOff): Promise<Result<string[]>> {
-    const request = requestOf(handOff);
+    // A lead goes as far as the repository lets the app land (decision-15).
+    const request = requestOf(handOff.role === 'lead' ? { ...handOff, until: policyFor(this.dataDir, projectId) === 'bypass' ? 'done' : 'review' } : handOff);
     const failed: string[] = [];
     for (const taskId of taskIds) {
       const written = await this.board.request(projectId, taskId, request);
@@ -620,7 +697,8 @@ export class Runner {
     // The claim, by compare-and-swap on the task file: of two runners, one starts it.
     const claim: ClaimInput = { host: this.host, runner: this.kind, pid: this.pid };
     const request = record ? undefined : (options.request ?? requestOf({ agent: agentId, model, effort, by: byOf(this.kind) }));
-    const claimed = await this.board.claim(projectId, taskId, claim, { takeOwn: true, ...(request ? { request } : {}) });
+    // Each hand-off started is one more try on the task's record, which its lead counts (task-83).
+    const claimed = await this.board.claim(projectId, taskId, claim, { takeOwn: true, count: true, ...(request ? { request } : {}) });
     if (!claimed.ok && claimed.held) return { ok: false, error: claimed.error };
 
     let prompt: string;
@@ -629,7 +707,7 @@ export class Runner {
       const base = prepareTarget(projectId, taskId);
       worktree = prepareWorktree(projectId, taskId, undefined, onlyReads(task.contract), base);
       const first = worktree?.branch ? await this.settleFirst(projectId, taskId, behind) : '';
-      prompt = brief(projectId, taskId, worktree, this.options.ledBy?.(projectId, taskId) ?? null, base, first);
+      prompt = brief(projectId, taskId, worktree, this.ledBy(projectId, taskId), base, first);
     } catch (err) {
       if (claimed.ok) await this.board.release(projectId, taskId, claim, 'failed');
       return { ok: false, error: message(err) };
@@ -732,20 +810,72 @@ export class Runner {
     return next;
   }
 
-  private async pass(projectId: string): Promise<Started[]> {
+  private async pass(projectId: string, onlyLed = false): Promise<Started[]> {
     const started: Started[] = [];
+    if (this.options.leads && !onlyLed) await this.takeLeads(projectId);
     const limit = this.limit(projectId);
     for (const taskId of this.queued(projectId)) {
       if (this.live(projectId).length + this.reservedOn(projectId) >= limit) break;
       if (this.busy(projectId, taskId)) continue;
+      const lead = this.leads.leadOver(projectId, taskId);
+      if (onlyLed && !lead) continue;
+      if (!(await this.mayStart(projectId, taskId, lead))) continue;
       const begun = await this.start(projectId, taskId, { refresh: true });
       if (begun.ok) started.push(begun.value);
     }
     return started;
   }
 
+  /**
+   * A queued task in a led tree (decision-15): one its lead asked for goes
+   * only inside the lead's rules, from the runner that leads it; one whose
+   * tries are spent waits in Review for the person, and its lead hears so.
+   * The person's own request is theirs to make.
+   */
+  private async mayStart(projectId: string, taskId: string, lead: Lead | undefined): Promise<boolean> {
+    let record: DispatchRecord | null = null;
+    try {
+      const located = locateBoard(projectId, { materialize: false });
+      const task = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId)?.doc.task : undefined;
+      record = task ? readDispatchRecord(task) : null;
+    } catch {
+      return false;
+    }
+    if (record?.by !== 'lead') return true;
+    if (!lead) {
+      // Its lead runs elsewhere, or waits for a runner to take it up: that runner starts it.
+      return !leadAbove(projectId, taskId);
+    }
+    const may = this.leads.mayDispatch(projectId, lead.epicId, taskId);
+    if (may.ok) return true;
+    if (may.then === 'review' || may.then === 'never') await this.answer(projectId, taskId, may.error, may.then === 'review');
+    return false;
+  }
+
+  /** A request that will not be started: answered, so it leaves the queue; into Review for the person when `review`; its lead hears why. */
+  private async answer(projectId: string, taskId: string, why: string, review: boolean): Promise<void> {
+    const claim: ClaimInput = { host: this.host, runner: this.kind, pid: this.pid };
+    const taken = await this.board.claim(projectId, taskId, claim, { takeOwn: true });
+    if (taken.ok) await this.board.release(projectId, taskId, claim, review ? 'review' : 'failed');
+    if (review) await this.board.park(projectId, taskId);
+    await this.board.note(projectId, taskId, `Not handed off: ${why}`);
+    this.leads.wake(projectId, taskId, `${taskId} was not handed off: ${why}`);
+  }
+
   private reservedOn(projectId: string): number {
     return [...this.reserved].filter((slot) => slot.startsWith(`${projectId}\n`)).length;
+  }
+
+  /**
+   * Starts what the leads this runner runs have queued in their trees, inside
+   * their rules: for a runner that does not work the whole queue (the
+   * desktop's, until task-84). Passes run one after another, as work's do.
+   */
+  workLed(projectId: string): Promise<Started[]> {
+    if (!this.leads.running(projectId).length) return Promise.resolve([]);
+    const next = (this.passes.get(projectId) ?? Promise.resolve([])).catch(() => []).then(() => this.pass(projectId, true));
+    this.passes.set(projectId, next);
+    return next;
   }
 
   /** Stops taking from a project's queue as runs end. */
@@ -765,7 +895,9 @@ export class Runner {
     const { projectId, taskId } = run;
     if (!taskId) return;
     const outcome: DispatchOutcome = run.state === 'done' ? 'review' : run.state === 'stopped' ? 'stopped' : 'failed';
-    const through = run.state === 'done' && meta?.until === 'done' && !!meta.worktree?.branch && policyFor(this.dataDir, projectId) === 'bypass';
+    // A child of a lead this runner runs is landed by its lead, which hears how it went.
+    const led = this.leads.leadOver(projectId, taskId);
+    const through = !led && run.state === 'done' && meta?.until === 'done' && !!meta.worktree?.branch && policyFor(this.dataDir, projectId) === 'bypass';
     try {
       if (!through) {
         if (meta?.claimed) await this.board.release(projectId, taskId, this.holder, outcome);
@@ -783,7 +915,9 @@ export class Runner {
     } catch {
       /* the board refused: the claim is lost with the runner, and taken again */
     } finally {
+      if (led) await this.leads.childEnded(run).catch(() => {});
       if (this.working.has(projectId)) void this.work(projectId);
+      else void this.workLed(projectId);
     }
   }
 
@@ -873,6 +1007,220 @@ export class Runner {
     return { sent: true, said: `${taskId} ${what}: sent back to ${nameOf(this.dataDir, agentId)} to settle (${round})` };
   }
 
+  // ── Leads (decision-15) ───────────────────────────────────────────────────
+
+  /** The epic whose lead hands this task off: a lead this runner runs, else the lead above it on the board. */
+  ledBy(projectId: string, taskId: string): string | null {
+    if (this.options.ledBy) return this.options.ledBy(projectId, taskId);
+    const here = this.leads.leadOver(projectId, taskId);
+    if (here) return here.epicId === taskId ? null : here.epicId;
+    try {
+      return leadAbove(projectId, taskId)?.epicId ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Whether `by` may hand off `taskId` here (decision-15): in a led tree, a
+   * lead here or another runner's on the board, the chat is refused and only
+   * the lead hands off; the person's own is theirs to make.
+   */
+  guard(projectId: string, taskId: string, by: DispatchBy): Result {
+    const here = this.leads.guard(projectId, taskId, by);
+    if (!here.ok || this.leads.leadOver(projectId, taskId) || by !== 'chat') return here;
+    let above: ReturnType<typeof leadAbove> = null;
+    try {
+      above = leadAbove(projectId, taskId, { self: true });
+    } catch {
+      above = null;
+    }
+    if (!above) return { ok: true, value: undefined };
+    return { ok: false, error: `${above.epicId}'s lead runs ${above.epicId === taskId ? 'it' : 'that tree'}: only the lead hands off its children. Pause or stop it first.` };
+  }
+
+  /**
+   * The epics whose lead waits for a runner, oldest request first: a lead
+   * record nobody holds, or whose runner is lost (the `lead:` the desktop
+   * wrote before is one too).
+   */
+  queuedLeads(projectId: string): string[] {
+    const dotDir = this.dotDirOf(projectId);
+    const located = locateBoard(projectId, { materialize: false });
+    if (!located.found || !dotDir) return [];
+    return readTasksDir(getV2Dirs(located.brainfilePath).boardDir)
+      .map((d) => ({ id: d.task.id, record: readLeadRecord(d.task as Task & { lead?: unknown }) }))
+      .filter((t): t is { id: string; record: DispatchRecord } => !!t.record)
+      .filter(({ record }) => !claimHeld(record.claim) || isClaimLost(dotDir, record.claim))
+      .sort((a, b) => a.record.at.localeCompare(b.record.at))
+      .map((t) => t.id);
+  }
+
+  /** Takes up the leads waiting on the board, each from its record. */
+  private async takeLeads(projectId: string): Promise<void> {
+    for (const epicId of this.queuedLeads(projectId)) {
+      if (this.leads.get(projectId, epicId)?.state === 'leading' || this.leads.get(projectId, epicId)?.state === 'paused') continue;
+      await this.lead(projectId, epicId);
+    }
+  }
+
+  /**
+   * Starts a lead on an epic here (decision-15): with `handOff`, a new
+   * request (Hand to…, the chat); without, the one on the board, taken up
+   * where it was left (resumed when a runner led it before, paused when it
+   * was paused). Refused while another runner holds the tree's lead.
+   */
+  async lead(projectId: string, epicId: string, handOff?: Omit<HandOff, 'role' | 'until'>): Promise<Result<{ lead: LeadView; run: AgentRun | null }>> {
+    if (handOff) {
+      return this.leads.start(projectId, epicId, handOff.agent, { model: handOff.model, effort: handOff.effort, by: handOff.by });
+    }
+    let record: DispatchRecord | null = null;
+    let legacy = false;
+    try {
+      const located = locateBoard(projectId, { materialize: false });
+      const epic = located.found ? findV2Task(getV2Dirs(located.brainfilePath), epicId)?.doc.task : undefined;
+      if (!epic) return { ok: false, error: `${epicId} is not on this board` };
+      record = readLeadRecord(epic as Task & { lead?: unknown });
+      legacy = !!record && readDispatchRecord(epic)?.role !== 'lead';
+    } catch (err) {
+      return { ok: false, error: message(err) };
+    }
+    if (!record) return { ok: false, error: `${epicId} has no lead to take up: hand it off with an agent` };
+    return this.leads.start(projectId, epicId, record.agent as AgentId, {
+      model: record.model,
+      effort: record.effort,
+      by: record.by,
+      at: record.at,
+      // A runner led it before (its claim is there, lost or ended), or the desktop did (`lead:`): it carries on from its notes.
+      resumed: legacy || !!record.claim,
+      paused: !!record.paused,
+      fromBoard: !legacy,
+    });
+  }
+
+  /** Pauses an epic's lead: here, or on the board for the runner that leads it. */
+  async pauseLead(projectId: string, epicId: string): Promise<Result> {
+    if (this.leads.get(projectId, epicId)?.state === 'leading') return this.leads.pause(projectId, epicId);
+    return this.board.lead(projectId, epicId, 'pause');
+  }
+
+  /**
+   * Resumes an epic's lead: one paused here carries on; one another runner
+   * leads hears it from the board; one no runner leads is taken up here when
+   * `here` (the desktop's Resume), else left on the board for a runner.
+   * What happened, in a line.
+   */
+  async resumeLead(projectId: string, epicId: string, options: { here?: boolean } = {}): Promise<Result<string>> {
+    const mine = this.leads.get(projectId, epicId);
+    if (mine?.state === 'paused' || mine?.state === 'leading') {
+      const resumed = await this.leads.resume(projectId, epicId);
+      return resumed.ok ? { ok: true, value: `${epicId}'s lead carries on` } : resumed;
+    }
+    const marked = await this.board.lead(projectId, epicId, 'resume');
+    if (!marked.ok) return marked;
+    const held = this.leadHeldElsewhere(projectId, epicId);
+    if (held) return { ok: true, value: `${epicId}'s lead carries on, in ${held}` };
+    if (!options.here) return { ok: true, value: `${epicId}'s lead waits for a runner to take it up` };
+    const started = await this.lead(projectId, epicId);
+    return started.ok ? { ok: true, value: `${epicId}'s lead carries on here` } : started;
+  }
+
+  /** Stops an epic's lead: here, or taken off the board, which the runner leading it follows. What it handed off goes on. */
+  async stopLead(projectId: string, epicId: string): Promise<Result> {
+    return this.leads.stop(projectId, epicId);
+  }
+
+  /** Where another runner leads the epic, when one is up; null when none. */
+  private leadHeldElsewhere(projectId: string, epicId: string): string | null {
+    const dotDir = this.dotDirOf(projectId);
+    const located = locateBoard(projectId, { materialize: false });
+    const epic = located.found ? findV2Task(getV2Dirs(located.brainfilePath), epicId)?.doc.task : undefined;
+    const claim = epic ? readLeadRecord(epic as Task & { lead?: unknown })?.claim : undefined;
+    if (!claimHeld(claim) || (dotDir && isClaimLost(dotDir, claim)) || (claim.host === this.host && claim.pid === this.pid)) return null;
+    return `${claim.runner} on ${claim.host} (pid ${claim.pid})`;
+  }
+
+  /**
+   * The board changed: the leads here read it back (a pause, a child done,
+   * the last one landed) and what they queued is started. The desktop calls
+   * this on every change; any runner with leads also looks every
+   * LEAD_WATCH_MS while it has them.
+   */
+  boardChanged(projectId: string): void {
+    this.leads.boardChanged(projectId);
+    void this.workLed(projectId);
+  }
+
+  /** Each board with a lead here, looked at when its folders changed. */
+  private lookForLeads(): void {
+    for (const projectId of new Set(this.leads.running().map((l) => l.projectId))) {
+      const stamp = this.stampOf(projectId);
+      if (stamp === this.stamps.get(projectId)) continue;
+      this.stamps.set(projectId, stamp);
+      this.boardChanged(projectId);
+    }
+  }
+
+  /** The board's task files and their times: what changes when anything on it does. */
+  private stampOf(projectId: string): string {
+    try {
+      const located = locateBoard(projectId, { materialize: false });
+      if (!located.found) return '';
+      const dirs = getV2Dirs(located.brainfilePath);
+      return [dirs.boardDir, dirs.logsDir]
+        .flatMap((dir) => (fs.existsSync(dir) ? fs.readdirSync(dir).map((name) => `${name}:${fs.statSync(path.join(dir, name)).mtimeMs}`) : []))
+        .join('|');
+    } catch {
+      return '';
+    }
+  }
+
+  /**
+   * One turn of a lead, in its session or a new one: no worktree, the board's
+   * tools only for its tree (role lead, its epic as scope, task-81), read-only
+   * (leadPermission), in a mode that only reads. Once the turn ends, what it
+   * queued is started.
+   */
+  private leadTurn(lead: Lead, prompt: (fresh: boolean) => string): LeadTurn {
+    const run = this.newRun(lead.projectId, lead.agentId, 'lead', lead.epicId, { model: lead.model, effort: lead.effort });
+    const key = leadKey(lead);
+    const done = (async () => {
+      try {
+        const existing = this.sessions.get(key);
+        const session =
+          existing ??
+          (await this.startups.open(
+            run.id,
+            (signal) =>
+              openSession(this.ctx, lead.projectId, lead.agentId, key, lead.model, {
+                effort: lead.effort,
+                signal,
+                role: 'lead',
+                leadScope: lead.epicId,
+                rule: (call) => leadPermission(call.title ?? '', call.kind, call.rawInput),
+                keepsMode: readOnlyMode,
+              }),
+            (s) => closeSession(this.ctx, s)
+          ));
+        if (session) await takeTurn(this.ctx, session, run, prompt(!existing));
+      } catch (err) {
+        if (!wasStopped(run)) this.update(run, { state: 'failed', error: message(err), endedAt: Date.now() });
+      } finally {
+        void this.workLed(lead.projectId);
+      }
+      return { ok: run.state === 'done', stopped: run.state === 'stopped', reply: run.reply, error: run.error };
+    })();
+    return { run: { ...run }, done };
+  }
+
+  /** A lead's turn under way is stopped and its session let go. */
+  private closeLead(lead: Lead): void {
+    const live = [...this.runs.values()].find((r) => r.kind === 'lead' && r.projectId === lead.projectId && r.taskId === lead.epicId && LIVE.has(r.state));
+    if (live) void this.stop(live.id);
+    const session = this.sessions.get(leadKey(lead));
+    if (session) closeSession(this.ctx, session);
+  }
+
   // ── Stopping ──────────────────────────────────────────────────────────────
 
   /**
@@ -922,8 +1270,9 @@ export class Runner {
     }
   }
 
-  /** The runner goes down: its agents are let go, its timers stop and its runner files go. */
+  /** The runner goes down: its leads and agents are let go, its timers stop and its runner files go. Its leads' records stay, for another runner to take up. */
   close(): void {
+    this.leads.closeAll();
     if (this.ticker) clearInterval(this.ticker);
     this.ticker = null;
     for (const session of [...this.sessions.values()]) {
@@ -944,6 +1293,8 @@ export class Runner {
   }
 }
 
+const leadKey = (lead: Lead) => `lead:${lead.projectId}\n${lead.epicId}`;
+
 /** Who asks, by what is running: the desktop's person, the CLI, an MCP client. */
 function byOf(runner: DispatchRunner): DispatchBy {
   return runner === 'desktop' ? 'person' : runner;
@@ -957,5 +1308,6 @@ function requestOf(handOff: HandOff): DispatchRequest {
     by: handOff.by,
     at: new Date().toISOString(),
     ...(handOff.until ? { until: handOff.until } : {}),
+    ...(handOff.role ? { role: handOff.role } : {}),
   };
 }

@@ -21,7 +21,7 @@ import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
 import { whereCommand } from './commands/where';
 import { issuesCommand, ISSUES_COMMAND_HELP } from './commands/issues';
 import { prCommand, PR_COMMAND_HELP } from './commands/pr';
-import { agentsCommand, dispatchCommand, dispatchStatusCommand, dispatchStopCommand, DISPATCH_COMMAND_HELP } from './commands/dispatch';
+import { agentsCommand, dispatchCommand, dispatchLeadCommand, dispatchStatusCommand, dispatchStopCommand, DISPATCH_COMMAND_HELP } from './commands/dispatch';
 import { discardCommand, landCommand, reviewCommand, REVIEW_COMMAND_HELP } from './commands/review';
 import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
 import { fixCommand } from './commands/fix';
@@ -424,10 +424,25 @@ Brainfile file resolution (when you don't pass --file):
 
   dispatchCmd
     .command('stop <ref>')
-    .description('Stop a run by its run id or its task id, whichever runner on this machine has it; its worktree stays')
+    .description("Stop a run by its run id or its task id, whichever runner on this machine has it; its worktree stays. An epic's id stops its lead")
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
     .option('--json', 'Output as JSON')
     .action(async (ref: string, _options, cmd: Command) => { await dispatchStopCommand(ref, cmd.optsWithGlobals()); });
+
+  // An epic's lead (task-83): through its record on the epic, whichever runner leads it.
+  dispatchCmd
+    .command('pause <epic>')
+    .description("Pause an epic's lead: it hands off nothing until resumed; what is running goes on")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--json', 'Output as JSON')
+    .action(async (epic: string, _options, cmd: Command) => { await dispatchLeadCommand('pause', epic, cmd.optsWithGlobals()); });
+
+  dispatchCmd
+    .command('resume <epic>')
+    .description("Resume an epic's lead: it carries on, or waits for a runner to take it up")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--json', 'Output as JSON')
+    .action(async (epic: string, _options, cmd: Command) => { await dispatchLeadCommand('resume', epic, cmd.optsWithGlobals()); });
 
   const reviewCmd = program
     .command('review [task]')

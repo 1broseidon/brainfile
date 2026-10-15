@@ -8,6 +8,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import {
+  changeLead,
+  changeLeadFile,
   claimDispatch,
   claimDispatchFile,
   dispatchRecordProblems,
@@ -15,6 +17,7 @@ import {
   parseDispatchRecord,
   pidAlive,
   readDispatchRecord,
+  readLeadRecord,
   releaseDispatchFile,
   requestDispatchFile,
   withDispatchRequest,
@@ -213,4 +216,47 @@ describe('claims', () => {
     expect(results.filter((r) => r.ok)).toHaveLength(1);
     expect(results.filter((r) => !r.ok).map((r) => r.reason)).toEqual(['claimed', 'claimed', 'claimed']);
   }, 20_000);
+});
+
+describe('tries and leads (task-83)', () => {
+  const LEAD: DispatchRequest = { agent: 'claude', by: 'person', at: '2026-10-15T10:00:00.000Z', until: 'review', role: 'lead' };
+
+  it('counts a claim taken for a worker as one more try, kept across requests', () => {
+    requestDispatchFile(file, REQUEST);
+    expect(claimDispatchFile(file, HERE, { count: true }).ok).toBe(true);
+    expect(releaseDispatchFile(file, HERE, { outcome: 'review' }).ok).toBe(true);
+    requestDispatchFile(file, { ...REQUEST, at: '2026-10-15T11:00:00.000Z' });
+    expect(readDispatchRecord(onDisk())!.tries).toBe(1);
+    expect(claimDispatchFile(file, HERE, { count: true }).ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.tries).toBe(2);
+    expect(dispatchRecordProblems({ ...REQUEST, tries: -1, paused: 'soon' })).toEqual(['tries: must be a whole number', 'paused: must be an ISO 8601 time']);
+  });
+
+  it("reads a lead from dispatch: with role lead, or from the desktop's lead:, which a lead's claim replaces", () => {
+    const old = { id: 'epic-1', title: 'E', lead: { agent: 'codex', model: 'gpt-5', by: 'chat', at: '2026-10-14T10:00:00.000Z', until: 'done' } } as Task;
+    expect(readLeadRecord(old)).toEqual({ agent: 'codex', model: 'gpt-5', by: 'chat', at: '2026-10-14T10:00:00.000Z', until: 'done', role: 'lead' });
+    expect(readLeadRecord({ dispatch: REQUEST })).toBeNull();
+    expect(readLeadRecord({ lead: { by: 'person' } })).toBeNull();
+    const claimed = claimDispatch(old, HERE, { request: LEAD });
+    expect(claimed.ok && (claimed.task as Task & { lead?: unknown }).lead).toBeUndefined();
+    // A worker's claim never takes an epic's lead: off.
+    const worker = claimDispatch({ ...old, dispatch: { ...REQUEST } }, HERE);
+    expect(worker.ok && (worker.task as Task & { lead?: unknown }).lead).toBeTruthy();
+  });
+
+  it('pauses, resumes and ends a lead from anywhere; resume puts a lead whose claim ended back in the queue', () => {
+    requestDispatchFile(file, LEAD);
+    expect(claimDispatchFile(file, HERE).ok).toBe(true);
+    expect(changeLeadFile(file, 'pause', '2026-10-15T12:00:00.000Z')).toMatchObject({ ok: true, changed: true });
+    expect(readDispatchRecord(onDisk())).toMatchObject({ role: 'lead', paused: '2026-10-15T12:00:00.000Z', claim: { pid: process.pid } });
+    expect(changeLeadFile(file, 'resume').ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.paused).toBeUndefined();
+    expect(releaseDispatchFile(file, HERE, { outcome: 'stopped' }).ok).toBe(true);
+    expect(changeLeadFile(file, 'resume').ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.claim).toBeUndefined();
+    expect(changeLeadFile(file, 'end')).toMatchObject({ ok: true, changed: true });
+    expect(onDisk().dispatch).toBeUndefined();
+    expect(changeLeadFile(file, 'end')).toMatchObject({ ok: true, changed: false });
+    expect(changeLead(onDisk(), 'pause')).toMatchObject({ ok: false, reason: 'no-lead' });
+  });
 });

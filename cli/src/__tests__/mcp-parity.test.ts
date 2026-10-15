@@ -68,7 +68,9 @@ const TOOL_FOR: Record<string, string> = {
   // Hand-offs (task-81): the queue, the runs on this machine, and landing.
   dispatch: 'dispatch',
   'dispatch status': 'dispatch_status',
-  'dispatch stop': 'dispatch_stop',
+  'dispatch stop': 'dispatch_stop', // a run, or an epic's lead
+  'dispatch pause': 'dispatch_lead', // action pause
+  'dispatch resume': 'dispatch_lead', // action resume
   review: 'review', // action show (default) | ready
   land: 'review', // action land
   discard: 'review', // action discard

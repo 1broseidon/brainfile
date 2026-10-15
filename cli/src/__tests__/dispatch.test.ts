@@ -11,10 +11,10 @@ import * as os from 'os';
 import * as path from 'path';
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { pathToFileURL } from 'url';
-import { claimDispatchFile, currentHost, findV2Task, getV2Dirs, readDispatchRecord } from '@brainfile/core';
+import { claimDispatchFile, currentHost, findV2Task, getV2Dirs, readDispatchRecord, readLeadRecord } from '@brainfile/core';
 import { readRunFile, writeRunFile, writeRunnerFile, type RunFile } from '@brainfile/core/repo';
 import { agentRoleOf } from '@brainfile/core/dispatch';
-import { NO_RUNNER, dispatchCommand, dispatchReport, statusReport, stopReport } from '../commands/dispatch';
+import { NO_RUNNER, dispatchCommand, dispatchReport, leadReport, statusReport, statusText, stopReport } from '../commands/dispatch';
 import { discardReport, landReport, readyReport, reviewReport } from '../commands/review';
 import { MemoryLogger } from '../utils/logger';
 import { WireClient } from './helpers/mcp-wire';
@@ -230,9 +230,9 @@ describe('dispatch: the queue', () => {
     expect(byColumn.queued.map((q) => q.task)).toEqual(['task-3']);
 
     const named = await dispatchReport(filePath, { ids: ['epic-1', 'decision-1', 'task-9'] }, { agent: AGENT });
-    expect(named.queued).toEqual([]);
+    // An epic named gets a lead (task-83).
+    expect(named.queued).toEqual([{ task: 'epic-1', agent: AGENT, until: 'review', lead: true }]);
     expect(named.skipped).toEqual([
-      { task: 'epic-1', why: 'it has open children: hand those off, or its lead does' },
       { task: 'decision-1', why: 'a decision is not work' },
       { task: 'task-9', why: 'there is no such task on the board' },
     ]);
@@ -446,5 +446,79 @@ describe('roles: what an agent\'s server lists', () => {
     const status = await client.callTool('dispatch_status', {});
     expect((status.structuredContent as { queued: { task: string }[] }).queued.map((q) => q.task)).toEqual(['task-2']);
     expect(String(client.opening.instructions)).toContain('You lead epic-1: dispatch, stop and land reach only the tasks under it.');
+  });
+});
+
+describe('leads (task-83): an epic handed off from the CLI and MCP', () => {
+  const leadOf = (id: string) => readLeadRecord(found(id)!.doc.task as never);
+
+  test('dispatch queues a lead on the epic; status, pause, resume and stop reach it through its record', async () => {
+    gitBoard({ 'epic-1': ['type: epic'], 'task-1': ['parentId: epic-1'], 'task-2': ['parentId: epic-1'] });
+    const report = await dispatchReport(filePath, { ids: ['epic-1'] }, { agent: AGENT, model: 'm1' });
+    expect(report.said).toBe(`Queued a lead for epic-1: Fake (m1) checks the plan, then hands off its children in order.\n${NO_RUNNER}`);
+    expect(leadOf('epic-1')).toMatchObject({ agent: AGENT, model: 'm1', role: 'lead', by: 'cli', until: 'review' });
+    const again = await dispatchReport(filePath, { ids: ['epic-1'] }, { agent: AGENT });
+    expect(again.skipped).toEqual([{ task: 'epic-1', why: 'it already has a lead, waiting for a runner' }]);
+
+    const status = await statusReport(filePath);
+    expect(status.leads).toEqual([{ epic: 'epic-1', agent: AGENT, model: 'm1', state: 'waiting', until: 'review', by: 'cli', at: expect.any(String) }]);
+    // A worker's queue never shows a lead's request.
+    expect(status.queued).toEqual([]);
+    expect(statusText(status)).toContain(`epic-1 · ${AGENT} (m1) · waiting for a runner`);
+
+    const paused = await leadReport(filePath, 'epic-1', 'pause');
+    expect(paused).toEqual({ epic: 'epic-1', state: 'paused', said: "Paused epic-1's lead: it hands off nothing until resumed; what is running goes on." });
+    expect((await statusReport(filePath)).leads[0].state).toBe('paused');
+    const resumed = await leadReport(filePath, 'epic-1', 'resume');
+    expect(resumed).toMatchObject({ state: 'waiting', said: expect.stringMatching(/^epic-1's lead waits for a runner to take it up\. Run `brainfile run` or open Brainfile to take it up\.$/) });
+    await expect(leadReport(filePath, 'task-1', 'pause')).rejects.toThrow('task-1 has no lead');
+
+    const stopped = await stopReport(filePath, 'epic-1');
+    expect(stopped).toMatchObject({ run: 'epic-1', stopped: true, said: "Stopped epic-1's lead. What it handed off goes on, and is yours now." });
+    expect(leadOf('epic-1')).toBeNull();
+    expect(found('epic-1')!.doc.task.dispatch).toBeUndefined();
+  });
+
+  test("in a led tree the chat is refused, a lead holds to its rules, and a lead never leads; the person's own goes", async () => {
+    gitBoard({
+      'epic-1': ['type: epic'],
+      'task-1': ['parentId: epic-1'],
+      'task-2': ['parentId: epic-1', 'contract:\n  status: draft\n  deliverables: []'],
+      'epic-2': ['type: epic', 'parentId: epic-1'],
+      'task-3': ['parentId: epic-2'],
+    });
+    await dispatchReport(filePath, { ids: ['epic-1'] }, { agent: AGENT });
+    const chat = await dispatchReport(filePath, { ids: ['task-1'] }, { agent: AGENT }, { access: { role: 'chat' } });
+    expect(chat.skipped).toEqual([{ task: 'task-1', why: "epic-1's lead runs that tree: only the lead hands off its children. Pause or stop it first" }]);
+    const nested = await dispatchReport(filePath, { ids: ['epic-2'] }, { agent: AGENT });
+    expect(nested.skipped).toEqual([{ task: 'epic-2', why: "epic-1's lead runs it" }]);
+
+    const lead = await dispatchReport(filePath, { ids: ['task-1', 'task-2', 'epic-2'] }, { agent: AGENT }, { kind: 'mcp', access: { role: 'lead', scope: 'epic-1' } });
+    expect(lead.queued).toEqual([{ task: 'task-1', agent: AGENT }]);
+    expect(lead.skipped).toEqual([
+      { task: 'epic-2', why: 'epic-2 has children of its own: hand those off instead' },
+      { task: 'task-2', why: "task-2's contract is a draft: it waits for the person to make it ready. Say so in your reply." },
+    ]);
+    expect(recordOf('task-1')).toMatchObject({ by: 'lead' });
+
+    const person = await dispatchReport(filePath, { ids: ['task-2'] }, { agent: AGENT });
+    expect(person.queued).toEqual([{ task: 'task-2', agent: AGENT }]);
+  });
+
+  test("MCP: dispatch_lead pauses and resumes; a worker's server has none", async () => {
+    gitBoard({ 'epic-1': ['type: epic'], 'task-1': ['parentId: epic-1'] });
+    await dispatchReport(filePath, { ids: ['epic-1'] }, { agent: AGENT });
+    const client = await WireClient.open(filePath, 'modern', {});
+    clients.push(client);
+    const paused = await client.callTool('dispatch_lead', { epic: 'epic-1', action: 'pause' });
+    expect(paused.isError).toBeFalsy();
+    expect(paused.structuredContent).toMatchObject({ epic: 'epic-1', state: 'paused' });
+    expect(leadOf('epic-1')?.paused).toBeTruthy();
+    const stopped = await client.callTool('dispatch_stop', { run: 'epic-1' });
+    expect(stopped.structuredContent).toMatchObject({ run: 'epic-1', stopped: true });
+
+    const worker = await WireClient.open(filePath, 'modern', { role: 'worker' });
+    clients.push(worker);
+    expect((await worker.listTools()).map((t) => t.name)).not.toContain('dispatch_lead');
   });
 });

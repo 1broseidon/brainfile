@@ -17,10 +17,12 @@
  * and leads, reviews and opens pull requests.
  * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
  * and `stop`, so a chat can hand work off the way Hand to… does. Handing off
- * a document with children starts its lead instead (lead.ts, decision-15):
- * an agent with the desk scoped to that tree, which checks the plan, hands
- * the children off in order inside rules the app holds, and is woken when
- * one ends or lands. Discuss
+ * a document with children starts its lead instead (core's lead.ts,
+ * decision-15, task-83): the Runner runs it, an agent whose brainfile mcp
+ * reaches only that tree, which checks the plan, hands the children off in
+ * order inside rules the Runner holds, and is woken when one ends or lands;
+ * this process shows it (the Lead block, its dock tab) and passes on the
+ * board's changes and the person's pause, resume and stop. Discuss
  * (discuss.ts, task-35) is a chat about one task that may change its spec and
  * record decisions, and nothing else. Beside Merge, a hand-off may be opened
  * as a pull request (decision-16): its branch is pushed here, GitHub is asked
@@ -32,7 +34,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type * as acp from '@agentclientprotocol/sdk';
-import { findV2Task, getV2Dirs, readBoardConfig, readTasksDir, type Task } from '@brainfile/core';
+import { findV2Task, getV2Dirs } from '@brainfile/core';
 import {
   AgentRegistry,
   Runner,
@@ -47,12 +49,12 @@ import {
   listModes,
   nameOf as nameOfIn,
   open as openSession,
-  policyFor,
+  readTree,
   setSettings,
   standingDecisions,
   turn as takeTurn,
-  wasStopped,
   whyNot,
+  workOf as openWork,
   type OpenOptions as SessionOptions,
   type PermissionRule,
   type RunnerBoard,
@@ -69,7 +71,6 @@ import {
   readyToMerge,
   reviewOf,
   uncommittedIn,
-  unlanded,
   unpushed,
   withOpenPullRequest,
   type ClaimTaken,
@@ -79,8 +80,6 @@ import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { chatPermission, discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
 import { PullRequestWatch } from './pullRequests';
-import { Leads, treeOf, workOf as openWork, type Lead, type LeadTurn, type Tree, type TreeDoc } from './lead';
-import { isReview } from '../shared/columns';
 import type {
   AgentEvent,
   AgentForgeMethod,
@@ -93,7 +92,6 @@ import type {
   BranchesView,
   ChatTurn,
   DispatchSettings,
-  LeadRecord,
   HostReply,
   LiveAgents,
   MergeTo,
@@ -167,13 +165,16 @@ const hostBoard: RunnerBoard = {
   note: (projectId, taskId, text) => callHost<Result>('noteTask', projectId, taskId, text),
   settleLanded: (projectId, taskId) => callHost<Result<{ completed: boolean; left: number }>>('settleLanded', projectId, taskId),
   park: (projectId, taskId) => callHost<Result>('parkInReview', projectId, taskId),
+  lead: (projectId, epicId, action) => callHost<Result>('markLead', projectId, epicId, action),
+  complete: (projectId, taskId) => callHost<Result>('completeTask', projectId, taskId),
 };
 
 /**
  * Every run this process makes, its sessions and its hand-offs' lives: the
  * request and claim on the task, run files, stop, the queue and landing.
- * Asks are answered in the band; a hand-off that ends wakes the lead over
- * its task (decision-15).
+ * Asks are answered in the band; its epics' leads (decision-15) run in it,
+ * each change shown in the window. It does not work the whole queue yet
+ * (task-84): it starts what its leads queue, and leads asked for here.
  */
 const runner: Runner = new Runner({
   dataDir: DATA_DIR,
@@ -184,13 +185,11 @@ const runner: Runner = new Runner({
     return new Promise((resolve) => asks.set(ask.id, { ask, resolve }));
   },
   cancelAsk: (askId) => answerPermission(askId, null),
-  onRun(run, was) {
-    emit({ kind: 'run', run });
-    if (run.kind === 'dispatch' && was && LIVE_STATES.has(was) && !LIVE_STATES.has(run.state)) void leads.childEnded(run);
-  },
-  ledBy: (projectId, taskId): string | null => leads.leadOver(projectId, taskId)?.epicId ?? null,
+  onRun: (run) => emit({ kind: 'run', run }),
+  onLead: (lead) => emit({ kind: 'lead', lead }),
   landed: (projectId, taskId) => offerIfLast(projectId, taskId),
 });
+const leads = runner.leads;
 const sessions = runner.sessions;
 const startups = runner.startups;
 const ctx = runner.ctx;
@@ -204,8 +203,6 @@ interface OpenOptions extends Omit<SessionOptions, 'mcpServers' | 'rule' | 'keep
   withDesk?: boolean;
   /** The task a discussion is about: it reads, and changes only that task's spec. */
   discuss?: string;
-  /** The epic a lead runs (decision-15): its desk is scoped to that tree. */
-  lead?: string;
 }
 
 /** A chat session's right to the desk; a hand-off, a probe or a discussion has none. */
@@ -216,9 +213,9 @@ const deskTokens = new WeakMap<Session, string>();
  * chat, and the rule and mode a discussion and the chat keep.
  */
 async function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
-  const { withDesk = false, discuss, lead, ...rest } = options;
+  const { withDesk = false, discuss, ...rest } = options;
   const board = rest.board ?? true;
-  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, effort: rest.effort, models: {}, efforts: {}, key, ...(lead ? { lead } : {}) }) : null;
+  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, effort: rest.effort, models: {}, efforts: {}, key }) : null;
   // A discussion changes the task's spec and nothing else; the board's chat manages the board and hands
   // code to hand-offs (decision-14): what their rule refuses is refused before anyone is asked.
   const rule: PermissionRule | undefined = discuss
@@ -228,8 +225,8 @@ async function open(projectId: string, agentId: AgentId, key: string, model?: st
       : undefined;
   const session = await openSession(ctx, projectId, agentId, key, model, {
     ...rest,
-    // What its board server lists (task-81): a discussion never hands off, a lead reaches only its tree.
-    ...(discuss ? { role: 'discuss' as const } : lead ? { role: 'lead' as const, leadScope: lead } : deskToken ? { role: 'chat' as const } : {}),
+    // What its board server lists (task-81): a discussion never hands off. A lead's session is core's (the Runner's).
+    ...(discuss ? { role: 'discuss' as const } : deskToken ? { role: 'chat' as const } : {}),
     rule,
     // A discussion and the board's chat (the sessions with the desk) never run in bypass, and only read when they can.
     keepsMode: discuss || deskToken ? discussMode : undefined,
@@ -274,10 +271,10 @@ function liveDispatch(projectId: string, taskId: string): AgentRun | undefined {
  * theirs to make.
  */
 async function dispatch(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Promise<Result<AgentRun>> {
-  const guarded = leads.guard(projectId, taskId, 'person');
+  const guarded = runner.guard(projectId, taskId, 'person');
   if (!guarded.ok) return guarded;
   if (leadsChildren(projectId, taskId)) {
-    const started = await leads.start(projectId, taskId, agentId, { model, effort, by: 'person' });
+    const started = await runner.lead(projectId, taskId, { agent: agentId, model, effort, by: 'person' });
     if (!started.ok) return started;
     return started.value.run ? { ok: true, value: started.value.run } : { ok: false, error: `${taskId}'s lead did not start` };
   }
@@ -287,98 +284,11 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId, mod
 
 // ── Leads (decision-15) ──────────────────────────────────────────────────────
 
-/** What the lead and its rules read of a document: its place, its dependencies and the files it touches. */
-function treeDoc(task: Task, done: boolean, columns: { id: string; title: string }[]): TreeDoc {
-  const column = columns.find((c) => c.id === task.column);
-  const deliverables = (task.contract?.deliverables ?? []).filter((d) => d.type !== 'research' && d.path).map((d) => d.path);
-  const ids = (value: unknown) => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string' && !!v.trim()).map((v) => v.trim()) : []);
-  return {
-    id: task.id,
-    title: task.title,
-    ...(task.parentId ? { parentId: task.parentId } : {}),
-    done,
-    ...(column ? { column: column.title, inReview: isReview(column) } : {}),
-    dependsOn: ids(task.dependsOn),
-    files: [...new Set([...ids(task.relatedFiles), ...deliverables])],
-    validation: ids(task.contract?.validation?.commands),
-    ...(task.contract?.maxRetries !== undefined ? { maxRetries: task.contract.maxRetries } : {}),
-    ...(task.createdAt ? { createdAt: task.createdAt } : {}),
-  };
-}
-
-function readTree(projectId: string, epicId: string): Tree | null {
-  const located = locateBoard(projectId, { materialize: false });
-  if (!located.found) return null;
-  const dirs = getV2Dirs(located.brainfilePath);
-  const columns = readBoardConfig(located.brainfilePath)?.config?.columns ?? [];
-  const docs = [
-    ...readTasksDir(dirs.boardDir).map((d) => treeDoc(d.task, false, columns)),
-    ...readTasksDir(dirs.logsDir).map((d) => treeDoc(d.task, true, columns)),
-  ];
-  // Only the epic's own children are asked of git: a completed one whose branch is still to land.
-  const tree = treeOf(docs, epicId);
-  for (const c of tree?.children ?? []) if (c.done && unlanded(projectId, c.id)) c.unlanded = true;
-  return tree;
-}
-
 /** A task with open children of its own is led, not worked. */
 function leadsChildren(projectId: string, taskId: string): boolean {
   const tree = readTree(projectId, taskId);
   return !!tree && !tree.epic.done && openWork(tree).length > 0;
 }
-
-const leadKey = (lead: Lead) => `lead:${lead.projectId}\n${lead.epicId}`;
-
-/** One turn of a lead, in its session or a new one: read-only, the board's tools and the desk scoped to its epic. */
-function leadTurn(lead: Lead, prompt: (fresh: boolean) => string): LeadTurn {
-  const run = newRun(lead.projectId, lead.agentId, 'lead', lead.epicId, { model: lead.model, effort: lead.effort });
-  const done = (async () => {
-    const key = leadKey(lead);
-    try {
-      const existing = sessions.get(key);
-      const session =
-        existing ??
-        (await startups.open(run.id, (signal) => open(lead.projectId, lead.agentId, key, lead.model, { withDesk: true, lead: lead.epicId, effort: lead.effort, signal }), close));
-      if (session) await turn(session, run, prompt(!existing));
-    } catch (err) {
-      if (!wasStopped(run)) update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
-    }
-    return { ok: run.state === 'done', stopped: run.state === 'stopped', reply: run.reply, error: run.error };
-  })();
-  return { run: { ...run }, done };
-}
-
-const leads: Leads = new Leads({
-  tree: readTree,
-  live: (projectId) => runner.live(projectId),
-  lastRun: (projectId, taskId) => runner.lastRun(projectId, taskId),
-  policy: (projectId) => policyFor(DATA_DIR, projectId),
-  limit: (projectId) => runner.limit(projectId),
-  turn: leadTurn,
-  close(lead) {
-    const live = runner.list().find((r) => r.kind === 'lead' && r.projectId === lead.projectId && r.taskId === lead.epicId && LIVE_STATES.has(r.state));
-    if (live) void stopRun(live.id);
-    const session = sessions.get(leadKey(lead));
-    if (session) close(session);
-  },
-  record: (projectId, epicId, record: LeadRecord | null) => callHost<Result>('recordLead', projectId, epicId, record),
-  complete: (projectId, epicId) => callHost<Result>('completeTask', projectId, epicId),
-  mergeable(projectId, taskId) {
-    try {
-      return readyToMerge(projectId).some((r) => r.taskId === taskId && !r.conflicts);
-    } catch {
-      return false;
-    }
-  },
-  async land(projectId, taskId) {
-    const landed = await landAndSettle(projectId, taskId);
-    return { ok: landed.ok, said: landed.ok ? `${taskId} was landed: ${landed.value.message}` : `${taskId} could not land: ${landed.error}` };
-  },
-  branch: (projectId, epicId) => attempt(() => prepareEpicBranch(projectId, epicId)),
-  offer: async (projectId, epicId) => attempt(() => offerEpicBranch(projectId, epicId)),
-  emit: (lead) => emit({ kind: 'lead', lead }),
-  later: (ms, fn) => setTimeout(fn, ms),
-});
 
 /** What a git step came to, as a Result: what it threw is the error. */
 function attempt<T>(work: () => T): Result<T> {
@@ -389,13 +299,10 @@ function attempt<T>(work: () => T): Result<T> {
   }
 }
 
-/** A lead left on the epic by a restart, or a paused one: resumed. */
+/** A lead paused here, or one another runner leads, or one on the board no runner leads: resumed, here when none leads it. */
 async function resumeLead(projectId: string, epicId: string): Promise<Result> {
-  const located = locateBoard(projectId, { materialize: false });
-  const epic = located.found ? findV2Task(getV2Dirs(located.brainfilePath), epicId)?.doc.task : undefined;
-  const record = (epic as { lead?: LeadRecord } | undefined)?.lead;
-  const fromBoard = record?.agent ? { agentId: record.agent, model: record.model, effort: record.effort, by: record.by } : undefined;
-  return leads.resume(projectId, epicId, fromBoard);
+  const resumed = await runner.resumeLead(projectId, epicId, { here: true });
+  return resumed.ok ? { ok: true, value: undefined } : resumed;
 }
 
 // ── The desk: the chat's own dispatch tools (spec-16) ────────────────────────
@@ -444,19 +351,14 @@ const desk = new DeskBridge(
       return agent ? whyNot(agent) : `Unknown agent ${agentId}`;
     },
     async start(grant, taskId, agentId, model, effort) {
-      if (grant.lead) {
-        // A lead hands off its own children, inside the rules it cannot bend (decision-15).
-        const may = leads.mayDispatch(grant.projectId, grant.lead, taskId);
-        if (!may.ok) return may;
-      } else {
-        const guarded = leads.guard(grant.projectId, taskId, 'chat');
-        if (!guarded.ok) return guarded;
-        if (leadsChildren(grant.projectId, taskId)) {
-          const started = await leads.start(grant.projectId, taskId, agentId, { model, effort, by: 'chat' });
-          if (!started.ok) return started;
-          if (!started.value.run) return { ok: false, error: `${taskId}'s lead did not start` };
-          return { ok: true, value: { run: started.value.run, branch: null, lead: true } };
-        }
+      // In a led tree only its lead hands off (decision-15); the lead does so through its brainfile mcp, not the desk.
+      const guarded = runner.guard(grant.projectId, taskId, 'chat');
+      if (!guarded.ok) return guarded;
+      if (leadsChildren(grant.projectId, taskId)) {
+        const started = await runner.lead(grant.projectId, taskId, { agent: agentId, model, effort, by: 'chat' });
+        if (!started.ok) return started;
+        if (!started.value.run) return { ok: false, error: `${taskId}'s lead did not start` };
+        return { ok: true, value: { run: started.value.run, branch: null, lead: true } };
       }
       // The request on the task, then the agent started, the task held across both;
       // before a hand-off from an epic's own branch, the epic's target is brought in (decision-16).
@@ -464,11 +366,10 @@ const desk = new DeskBridge(
         agent: agentId,
         model,
         effort,
-        by: grant.lead ? 'lead' : 'chat',
+        by: 'chat',
         from: sessions.get(grant.key)?.run?.id,
       });
       if (!started.ok) return started;
-      if (grant.lead) leads.dispatched(grant.projectId, grant.lead, taskId);
       const { run, worktree, note } = started.value;
       return { ok: true, value: { run, branch: worktree?.branch ?? null, reads: !!worktree && !worktree.branch, ...(note ? { note } : {}) } };
     },
@@ -765,10 +666,10 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   discuss,
   stopRun,
   leads: () => leads.views(),
-  pauseLead: (projectId: string, epicId: string) => leads.pause(projectId, epicId),
+  pauseLead: (projectId: string, epicId: string) => runner.pauseLead(projectId, epicId),
   resumeLead,
-  stopLead: (projectId: string, epicId: string) => leads.stop(projectId, epicId),
-  boardChanged: (projectId: string) => leads.boardChanged(projectId),
+  stopLead: (projectId: string, epicId: string) => runner.stopLead(projectId, epicId),
+  boardChanged: (projectId: string) => runner.boardChanged(projectId),
   live,
   review,
   readyToMerge: ready,

@@ -38,15 +38,16 @@ export const TOOL_PURPOSES: ReadonlyArray<readonly [string, string]> = [
   ['where', 'where the board lives, how it is stored and how fresh it is; fix or undo a problem with it when nothing would be lost'],
   ['issues', 'the project\'s open GitHub issues, marked when on the board; import one as a task'],
   ['pull_request', 'open a task\'s hand-off as a GitHub pull request, or ask where it stands'],
-  ['dispatch', 'queue tasks for a coding agent in its own worktree; a runner on this machine starts them'],
+  ['dispatch', 'queue tasks for a coding agent in its own worktree; a runner on this machine starts them; an epic gets a lead'],
   ['dispatch_status', 'the runners up, the live runs, the queue and the claims on this machine'],
-  ['dispatch_stop', 'stop a run by its run id or task id, whichever runner has it'],
+  ['dispatch_stop', 'stop a run by its run id or task id, whichever runner has it; an epic\'s id stops its lead'],
+  ['dispatch_lead', 'pause or resume an epic\'s lead, whichever runner leads it'],
   ['review', 'a hand-off\'s branch, commits, files and conflicts; what can land now; land or discard it'],
   ['agents', 'the coding agents a task can go to, which are installed here, and their models'],
 ];
 
 /** Tools a worker's or a discussion's server leaves out: a hand-off never hands off (decision-15). */
-const DISPATCHING = new Set(['dispatch', 'dispatch_stop']);
+const DISPATCHING = new Set(['dispatch', 'dispatch_stop', 'dispatch_lead']);
 
 /** The tools a server started with this access lists, in TOOL_PURPOSES order. */
 export function toolsFor(access: Access = {}): string[] {

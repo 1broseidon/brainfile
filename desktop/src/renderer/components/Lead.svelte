@@ -4,7 +4,8 @@
    * stands, what it last said, and what waits on the person. Pause holds its
    * hand-offs (what runs goes on), Resume carries on, also after a restart
    * from its notes on the board, and Stop ends it, leaving what it handed off
-   * to the person.
+   * to the person. A lead another runner runs (`brainfile run`, task-83) is
+   * said from its record on the epic, and paused, resumed and stopped there.
    */
   import { app, isLive } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
@@ -15,8 +16,10 @@
 
   const lead = $derived(app.leadFor(epicId, board.projectId));
   const active = $derived(!!lead && (lead.state === 'leading' || lead.state === 'paused'));
-  /** On the epic, but not running here: the app closed under it. */
+  /** On the epic, but not running here: another runner leads it, or none does. */
   const orphan = $derived(!active && !!record);
+  /** Another runner leads it: where. */
+  const elsewhere = $derived(orphan ? record?.where : undefined);
 
   /** Everything under the epic, at any depth. */
   const under = $derived.by(() => {
@@ -55,8 +58,10 @@
     </h3>
     <div class="group">
       <div class="sum mono">
-        {#if orphan}
-          <span class="warn">not running</span>
+        {#if elsewhere}
+          <span class:warn={record?.paused}>{record?.paused ? 'paused' : 'leading'}</span>
+        {:else if orphan}
+          <span class="warn">{record?.paused ? 'paused, not running' : 'not running'}</span>
         {:else if lead}
           <span class:warn={lead.state === 'paused'}>{lead.state}</span>
         {/if}
@@ -64,8 +69,10 @@
         {#if active}<span>{running} running · at most {lead?.limit} at once</span>{/if}
         {#if until}<span class="dim far">{until === 'done' ? 'lands each child itself' : 'you merge each child'}</span>{/if}
       </div>
-      {#if orphan}
-        <div class="line">Its lead stopped when the app closed. Resume picks up from its notes on {epicId}.</div>
+      {#if elsewhere}
+        <div class="line">It runs in {elsewhere}, outside this window.</div>
+      {:else if orphan}
+        <div class="line">No runner is leading it. Resume runs it here, from its notes on {epicId}.</div>
       {:else if lead?.note}
         <div class="line said">{lead.note}</div>
       {/if}
@@ -82,7 +89,7 @@
         <button class="btn quiet" disabled={busy} use:tip={'It hands off nothing more; what runs goes on, and is yours'} onclick={() => act(() => app.stopLead(epicId))}>
           <Icon name="stop" size={13} />{orphan ? 'Take off' : 'Stop'}
         </button>
-        {#if lead?.state === 'leading'}
+        {#if elsewhere ? !record?.paused : lead?.state === 'leading'}
           <button class="btn quiet" disabled={busy} use:tip={'It hands off nothing until resumed; what runs goes on'} onclick={() => act(() => app.pauseLead(epicId))}>
             <Icon name="pause" size={13} />Pause
           </button>

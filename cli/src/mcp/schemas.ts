@@ -807,6 +807,7 @@ export const dispatchOutputSchema = z.object({
     effort: z.string().optional(),
     until: untilSchema.optional(),
     waitsOn: z.array(z.string()).optional(),
+    lead: z.boolean().optional(),
   })),
   skipped: z.array(z.object({ task: z.string(), why: z.string() })),
   runnerUp: z.boolean(),
@@ -845,6 +846,25 @@ export const dispatchStatusOutputSchema = z.object({
     waitsOn: z.array(z.string()).optional(),
   })),
   claims: z.array(z.object({ task: z.string(), runner: z.string(), host: z.string(), pid: z.number(), at: z.string(), lost: z.boolean() })),
+  leads: z.array(z.object({
+    epic: z.string(),
+    agent: z.string(),
+    model: z.string().optional(),
+    state: z.enum(['waiting', 'leading', 'paused']),
+    until: untilSchema.optional(),
+    by: z.string(),
+    at: z.string(),
+    runner: z.string().optional(),
+    host: z.string().optional(),
+    pid: z.number().optional(),
+  })),
+});
+
+/** `dispatch_lead`: the epic's lead, paused or resumed. */
+export const dispatchLeadOutputSchema = z.object({
+  epic: z.string(),
+  state: z.enum(['waiting', 'leading', 'paused']),
+  said: z.string(),
 });
 
 /** `dispatch_stop`: the run, and whether it has ended yet. */
