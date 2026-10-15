@@ -105,6 +105,7 @@ interface OpenBoard {
   brainfilePath: string;
   watcher: fs.FSWatcher | null;
   reloadTimer: NodeJS.Timeout | null;
+  runsTimer: NodeJS.Timeout | null;
   pushTimer: NodeJS.Timeout | null;
   syncing: boolean;
   lastWarning?: string;
@@ -116,6 +117,8 @@ interface OpenBoard {
 
 const COMPLETED_LIMIT = 50;
 const RELOAD_DEBOUNCE_MS = 120;
+/** Run and runner files change on every step of a run and every beat: read again at most this often. */
+const RUNS_DEBOUNCE_MS = 250;
 /** Commits made by the app land this soon after the last edit in a burst. */
 const COMMIT_DEBOUNCE_MS = 1200;
 const FULL_SYNC_INTERVAL_MS = 60_000;
@@ -382,10 +385,28 @@ function scheduleReload(board: OpenBoard, cascade = true): void {
   }, RELOAD_DEBOUNCE_MS);
 }
 
+/**
+ * The board's runs changed (task-84): every runner on this machine writes
+ * its runs and itself under `state/runs/` and `state/runners/`, so a run a
+ * terminal started shows here as the window's own do. The agents process
+ * reads them, through core's runner; this only says when, debounced.
+ */
+function scheduleRuns(board: OpenBoard): void {
+  if (board.runsTimer) return;
+  board.runsTimer = setTimeout(() => {
+    board.runsTimer = null;
+    send({ kind: 'runs', projectId: board.projectId });
+  }, RUNS_DEBOUNCE_MS);
+}
+
+/** `state/runs/…` or `state/runners/…`, as fs.watch names a file under the board's folder. */
+const RUN_FILES = new RegExp(`^state\\${path.sep}(runs|runners)(\\${path.sep}|$)`);
+
 function watch(board: OpenBoard): fs.FSWatcher | null {
   try {
     return fs.watch(board.dotDir, { recursive: true }, (_event, file) => {
       const name = file ? file.toString() : '';
+      if (RUN_FILES.test(name)) return scheduleRuns(board);
       if (name.startsWith('state') || name.startsWith('.git')) return;
       scheduleReload(board);
     });
@@ -407,6 +428,7 @@ function openBoard(projectId: string): Result<BoardSnapshot> {
     brainfilePath: path.join(state.dotDir, 'brainfile.md'),
     watcher: null,
     reloadTimer: null,
+    runsTimer: null,
     pushTimer: null,
     syncing: false,
     relatedFolders: [],
@@ -431,6 +453,7 @@ function closeBoard(projectId: string): void {
   if (!board) return;
   board.watcher?.close();
   if (board.reloadTimer) clearTimeout(board.reloadTimer);
+  if (board.runsTimer) clearTimeout(board.runsTimer);
   if (board.pushTimer) clearTimeout(board.pushTimer);
   boards.delete(projectId);
 }

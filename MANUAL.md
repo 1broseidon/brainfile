@@ -800,8 +800,11 @@ writes the request on the task, and a runner on this machine starts it. A
 runner is `brainfile run` in a terminal, or the Brainfile window; each claims
 a task before it starts it, so two never start one task, and each keeps its
 runs' progress in `.brainfile/state/runs/`, which every runner on the
-machine reads. These commands are also MCP tools (see [For
-agents](#for-agents)).
+machine reads. The Brainfile window shows every run there, whoever started
+it, and an ask from a run in a terminal can be answered in the window too:
+the answer goes in `.brainfile/state/runs/<run-id>.answer.json`, which that
+runner applies within a second, taking its prompt down. These commands are
+also MCP tools (see [For agents](#for-agents)).
 
 #### dispatch — Queue tasks for a coding agent
 

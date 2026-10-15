@@ -4,7 +4,7 @@
  * again, can read the code and the board, asks and pushes back, and with the
  * person's agreement changes the task's description, subtasks or contract and
  * records the decisions they settle (task-44). It writes no code and starts
- * no work: its session never runs in a bypass mode, it has no desk, and what
+ * no work: its session never runs in a bypass mode, its board lists no dispatch, and what
  * it asks to do is sorted here before anyone is asked.
  */
 import { extractDescription, extractLog, findV2Task, getV2Dirs, parseNotes, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
@@ -317,22 +317,18 @@ export function discussPermission(title: string, kind?: string | null): 'allow' 
   return kind && REFUSED_KINDS.has(kind) ? 'refuse' : 'usual';
 }
 
-/** The desk's tools as an agent names them: `mcp__desk__dispatch`, `desk.runs`. */
-const DESK_TOOL_NAME = /^(?:mcp(?:__|\.))?desk(?:__|[_./])(?:dispatch|runs|stop)\b/i;
-
 /**
  * How the board's chat answers an agent that asks before it acts
- * (decision-14): it manages the board and hands code to hand-offs. Board and
- * desk tools, the brainfile command line and git that only reads are
+ * (decision-14): it manages the board and hands code to hand-offs, through
+ * its brainfile mcp's dispatch tools. Board tools, the brainfile command
+ * line and git that only reads are
  * allowed; an edit, a delete, a move, a change of mode or any other command
  * is refused before anyone is asked; reading and searching are asked as
  * usual.
  */
 export function chatPermission(title: string, kind?: string | null, rawInput?: unknown): 'allow' | 'refuse' | 'usual' {
-  const named = title.trim();
-  if (DESK_TOOL_NAME.test(named)) return 'allow';
-  // The rest is a lead's rule (core's): the board, the brainfile command line and git that only reads.
-  return leadPermission(named, kind, rawInput);
+  // A lead's rule (core's): the board, the brainfile command line and git that only reads.
+  return leadPermission(title.trim(), kind, rawInput);
 }
 
 /**

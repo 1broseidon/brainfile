@@ -20,11 +20,15 @@ import {
   listRunners,
   liveRunners,
   pruneRunFiles,
+  readRunAnswer,
   readRunFile,
+  removeRunAnswer,
+  runAnswerPath,
   removeRunFile,
   removeRunnerFile,
   runFilePath,
   runnerFilePath,
+  writeRunAnswer,
   writeRunFile,
   writeRunnerFile,
   type RunFile,
@@ -148,6 +152,18 @@ describe('run files', () => {
   });
 });
 
+describe('answers', () => {
+  it('sit beside the run, read back whole, and go', () => {
+    expect(runAnswerPath(dotDir, 'run-1')).toBe(path.join(dotDir, 'state', 'runs', 'run-1.answer.json'));
+    expect(readRunAnswer(dotDir, 'run-1')).toBeNull();
+    writeRunAnswer(dotDir, 'run-1', { askId: 'ask-3', optionId: null, at: NOW });
+    expect(readRunAnswer(dotDir, 'run-1')).toEqual({ askId: 'ask-3', optionId: null, at: NOW });
+    removeRunAnswer(dotDir, 'run-1');
+    expect(readRunAnswer(dotDir, 'run-1')).toBeNull();
+    expect(() => writeRunAnswer(dotDir, '../x', { askId: 'a', optionId: 'b' })).toThrow('Not a run id');
+  });
+});
+
 describe('lost', () => {
   it('a run whose process is gone, or whose beat is older than 30 s, on this machine', () => {
     expect(isRunLost(run('a'), here)).toBe(false);
@@ -215,6 +231,17 @@ describe('pruning', () => {
     const removed = pruneRunFiles(dotDir, here).map((file) => path.basename(file)).sort();
     expect(removed).toEqual(['.run-1.json.tmp-9-9', 'mac-101.json']);
     expect(listRunners(dotDir).map((r) => r.pid)).toEqual([100]);
+  });
+
+  it('removes an answer whose run has ended, is lost or is gone, and keeps one a live run waits on', () => {
+    writeRunFile(dotDir, run('asking', { ask: { id: 'ask-1', title: 'Run make', options: [] } }));
+    writeRunFile(dotDir, run('ended', { state: 'done', endedAt: NOW - 1_000 }));
+    writeRunFile(dotDir, run('lost', { pid: 101 }));
+    for (const id of ['asking', 'ended', 'lost', 'gone']) writeRunAnswer(dotDir, id, { askId: 'ask-1', optionId: 'yes', at: NOW });
+    const removed = pruneRunFiles(dotDir, here).map((file) => path.basename(file)).sort();
+    expect(removed).toEqual(['ended.answer.json', 'gone.answer.json', 'lost.answer.json']);
+    // An answer file is never read as a run.
+    expect(listRunFiles(dotDir).map((r) => r.id).sort()).toEqual(['asking', 'ended', 'lost']);
   });
 
   it('does nothing on a board with no state yet', () => {

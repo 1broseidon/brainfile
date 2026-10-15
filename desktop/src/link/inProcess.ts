@@ -10,17 +10,22 @@ import type { BoardSnapshot, HostMessage, HostRequest } from '../shared/api';
 export interface InProcessHost {
   call<T>(method: HostRequest['method'], ...args: unknown[]): Promise<T>;
   onBoard(listener: (snapshot: BoardSnapshot) => void): void;
+  /** The board's run or runner files changed (task-84). */
+  onRuns(listener: (projectId: string) => void): void;
 }
 
 /** `load` brings the host in (a `require` of it), once the port it talks through is in place. */
 export function inProcessHost(load: () => unknown): InProcessHost {
   const pending = new Map<number, (result: unknown) => void>();
   const listeners: ((snapshot: BoardSnapshot) => void)[] = [];
+  const runs: ((projectId: string) => void)[] = [];
   const port = Object.assign(new EventEmitter(), {
     postMessage(message: HostMessage) {
       if (message.kind === 'reply') {
         pending.get(message.id)?.(message.result);
         pending.delete(message.id);
+      } else if (message.kind === 'runs') {
+        for (const listener of runs) listener(message.projectId);
       } else {
         for (const listener of listeners) listener(message.snapshot);
       }
@@ -38,5 +43,6 @@ export function inProcessHost(load: () => unknown): InProcessHost {
       });
     },
     onBoard: (listener) => void listeners.push(listener),
+    onRuns: (listener) => void runs.push(listener),
   };
 }

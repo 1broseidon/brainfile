@@ -13,6 +13,8 @@
  *   runner on the machine reads them: a task another runner works is busy
  *   here too, and `stop` reaches a run another process started by writing
  *   `stop: true` in its file, which that runner watches, then by SIGTERM.
+ *   An ask another process answers (the desktop's band for a terminal's
+ *   run, task-84) is `<run-id>.answer.json` beside it, watched the same way.
  * - A hand-off forks from and lands on its target (decision-16), waits on
  *   its dependsOn (decision-15: open, or complete with its branch not
  *   landed), and lands serially by compare-and-swap (decision-12). A
@@ -49,8 +51,11 @@ import {
   isRunLost,
   listRunFiles,
   pruneRunFiles,
+  readRunAnswer,
   readRunFile,
+  removeRunAnswer,
   removeRunnerFile,
+  writeRunAnswer,
   writeRunFile,
   writeRunnerFile,
   type RunFile,
@@ -214,10 +219,16 @@ export interface RunnerOptions {
   board?: RunnerBoard;
   /** An agent asks before it acts: the option the person picked, or null to cancel. The desktop's band, a terminal's prompt. */
   ask(ask: PermissionAsk): Promise<string | null>;
-  /** An ask the runner gave up on (its run stopped): the host takes it down. */
-  cancelAsk?(askId: string): void;
+  /** An ask no longer open here, answered from another process or given up on (its run stopped): the host takes it down. */
+  cancelAsk?(askId: string, why?: 'answered' | 'stopped'): void;
   /** Every change to a run this runner keeps, a copy, with the state it was in before (null for a new run). */
   onRun?(run: AgentRun, was: RunState | null): void;
+  /**
+   * The chat turn behind a hand-off started from the queue, when it has no
+   * `from` of its own: the desktop names its chat's live turn for a request
+   * `by: chat`, so the reply says what it handed off (task-84).
+   */
+  fromOf?(projectId: string, taskId: string, request: DispatchRecord | null): string | undefined;
   /** The epic whose lead hands this task off (decision-15), for the brief; by default the lead above it on the board. */
   ledBy?(projectId: string, taskId: string): string | null;
   /**
@@ -496,9 +507,11 @@ export class Runner {
     const now = Date.now();
     const live = [...this.runs.values()].filter((r) => LIVE.has(r.state));
     for (const run of live) {
-      const dotDir = this.meta.get(run.id)?.dotDir;
+      const meta = this.meta.get(run.id);
+      const dotDir = meta?.dotDir;
       const file = dotDir ? readRunFile(dotDir, run.id) : null;
       if (file?.stop) void this.stop(run.id);
+      else if (dotDir && meta?.ask) this.takeAnswer(dotDir, run.id);
     }
     if (now - this.lastLook >= LEAD_WATCH_MS) {
       this.lastLook = now;
@@ -565,14 +578,22 @@ export class Runner {
     return this.runs.get(runId);
   }
 
-  /** Other runners' runs on this project's board that have not ended and are not lost. */
-  private othersLive(projectId: string): AgentRun[] {
+  /**
+   * Other runners' run files on this project's board, oldest first: ended
+   * and lost ones too, as the desktop shows them (task-84). `isRunEnded` and
+   * `isRunLost` tell them apart.
+   */
+  others(projectId: string): RunFile[] {
     const dotDir = this.dotDirOf(projectId);
     if (!dotDir) return [];
-    return listRunFiles(dotDir)
-      .filter((f) => !(f.host === this.host && f.pid === this.pid) && !isRunEnded(f) && !isRunLost(f))
-      .map((f) => runOf(f, projectId))
-      .filter((r) => r.projectId === projectId);
+    return listRunFiles(dotDir).filter((f) => !(f.host === this.host && f.pid === this.pid) && (f.projectId ?? projectId) === projectId);
+  }
+
+  /** Other runners' runs on this project's board that have not ended and are not lost. */
+  private othersLive(projectId: string): AgentRun[] {
+    return this.others(projectId)
+      .filter((f) => !isRunEnded(f) && !isRunLost(f))
+      .map((f) => runOf(f, projectId));
   }
 
   private liveHere(run: AgentRun): boolean {
@@ -630,6 +651,56 @@ export class Runner {
     }
   }
 
+  /**
+   * Answers an ask a run is waiting on: one of this runner's at once (its
+   * host's prompt is taken down), another runner's on this machine through
+   * `<run-id>.answer.json`, which that runner applies within a second.
+   */
+  answerAsk(runId: string, askId: string, optionId: string | null, projectId?: string): Result {
+    if (this.runs.has(runId)) {
+      return this.settleAsk(runId, askId, optionId) ? { ok: true, value: undefined } : { ok: false, error: `${runId} is not asking that now` };
+    }
+    for (const dotDir of this.dirsFor(projectId)) {
+      const file = readRunFile(dotDir, runId);
+      if (!file) continue;
+      if (isRunEnded(file) || isRunLost(file)) return { ok: false, error: `${runId} has ended` };
+      if (file.ask?.id !== askId) return { ok: false, error: `${runId} is not asking that now` };
+      try {
+        writeRunAnswer(dotDir, runId, { askId, optionId });
+      } catch (err) {
+        return { ok: false, error: message(err) };
+      }
+      return { ok: true, value: undefined };
+    }
+    return { ok: false, error: `No run ${runId} on this machine` };
+  }
+
+  /** An answer another process left for one of this runner's asks: applied, and its file removed. */
+  private takeAnswer(dotDir: string, runId: string): void {
+    const answer = readRunAnswer(dotDir, runId);
+    if (!answer) return;
+    try {
+      removeRunAnswer(dotDir, runId);
+    } catch {
+      return;
+    }
+    this.settleAsk(runId, answer.askId, answer.optionId);
+  }
+
+  /** The ask answered with `optionId`, and taken down where it was asked (the terminal's prompt, the band). */
+  private settleAsk(runId: string, askId: string, optionId: string | null): boolean {
+    const resolve = this.asking.get(runId)?.get(askId);
+    if (!resolve) return false;
+    resolve(optionId);
+    this.options.cancelAsk?.(askId, 'answered');
+    return true;
+  }
+
+  /** The boards to look for a run on: the project's, then every one this runner has used. */
+  private dirsFor(projectId?: string): Set<string> {
+    return new Set<string>([...(projectId ? [this.dotDirOf(projectId)] : []), ...this.dirs.values()].filter((d): d is string => !!d));
+  }
+
   // ── Queue, claim and start ────────────────────────────────────────────────
 
   /**
@@ -659,7 +730,7 @@ export class Runner {
   }
 
   /**
-   * Asked for and started at once (Hand to…, the desk's dispatch): the
+   * Asked for and started at once (Hand to…): the
    * request written, then started, the task held across both.
    */
   async dispatch(projectId: string, taskId: string, handOff: HandOff & { from?: string }): Promise<Result<Started>> {
@@ -736,7 +807,8 @@ export class Runner {
       if (claimed.ok) await this.board.release(projectId, taskId, claim, 'failed');
       return { ok: false, error: message(err) };
     }
-    const run = this.newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from: options.from }, { worktree, claimed: claimed.ok, until: record?.until ?? options.request?.until ?? this.options.until });
+    const from = options.from ?? this.options.fromOf?.(projectId, taskId, record);
+    const run = this.newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from }, { worktree, claimed: claimed.ok, until: record?.until ?? options.request?.until ?? this.options.until });
     void (async () => {
       try {
         const session = await this.startups.open(
@@ -806,15 +878,18 @@ export class Runner {
   /**
    * The tasks asked for and not claimed, oldest request first: a request
    * nobody claimed, or whose claim's runner is lost. One that ended has been
-   * answered.
+   * answered, and so has one the desktop wrote before runners claimed
+   * (`answeredBefore`).
    */
   queued(projectId: string): string[] {
     const dotDir = this.dotDirOf(projectId);
     const located = locateBoard(projectId, { materialize: false });
     if (!located.found || !dotDir) return [];
+    const columns = readBoardConfig(located.brainfilePath)?.config?.columns ?? [];
     return readTasksDir(getV2Dirs(located.brainfilePath).boardDir)
-      .map((d) => ({ id: d.task.id, record: readDispatchRecord(d.task) }))
-      .filter((t): t is { id: string; record: DispatchRecord } => !!t.record && t.record.role !== 'lead')
+      .map((d) => ({ id: d.task.id, column: d.task.column, record: readDispatchRecord(d.task) }))
+      .filter((t): t is { id: string; column: string | undefined; record: DispatchRecord } => !!t.record && t.record.role !== 'lead')
+      .filter(({ column, record }) => !answeredBefore(record, column, columns))
       .filter(({ record }) => !record.claim || (claimHeld(record.claim) && isClaimLost(dotDir, record.claim)))
       .sort((a, b) => a.record.at.localeCompare(b.record.at))
       .map((t) => t.id);
@@ -912,8 +987,8 @@ export class Runner {
 
   /**
    * Starts what the leads this runner runs have queued in their trees, inside
-   * their rules: for a runner that does not work the whole queue (the
-   * desktop's, until task-84). Passes run one after another, as work's do.
+   * their rules: for a runner that does not work the whole queue. Passes run
+   * one after another, as work's do.
    */
   workLed(projectId: string): Promise<Started[]> {
     if (!this.leads.running(projectId).length || this.goingDown) return Promise.resolve([]);
@@ -1298,7 +1373,7 @@ export class Runner {
     const run = this.runs.get(runId);
     if (run) {
       for (const [askId, resolve] of this.asking.get(runId) ?? []) {
-        this.options.cancelAsk?.(askId);
+        this.options.cancelAsk?.(askId, 'stopped');
         resolve(null);
       }
       const session = [...this.sessions.values()].find((s) => s.run?.id === runId);
@@ -1311,8 +1386,7 @@ export class Runner {
       }
       return { ok: true, value: undefined };
     }
-    const dirs = new Set<string>([...(projectId ? [this.dotDirOf(projectId)] : []), ...this.dirs.values()].filter((d): d is string => !!d));
-    for (const dotDir of dirs) {
+    for (const dotDir of this.dirsFor(projectId)) {
       const file = readRunFile(dotDir, runId);
       if (!file) continue;
       if (isRunEnded(file)) return { ok: true, value: undefined };
@@ -1382,6 +1456,19 @@ export class Runner {
 }
 
 const leadKey = (lead: Lead) => `lead:${lead.projectId}\n${lead.epicId}`;
+
+/**
+ * A request the desktop wrote before runners claimed (task-74's record:
+ * Hand to…, its chat or its lead started the agent at once): no claim and no
+ * `tries`, which every start under a runner counts, on a task already in
+ * Review or done. Its hand-off has run; working the queue must not run it
+ * again (task-84). One a send-back queued carries its `tries`.
+ */
+export function answeredBefore(record: DispatchRecord, column: string | undefined, columns: ColumnConfig[]): boolean {
+  if (record.claim || record.tries !== undefined || !['person', 'chat', 'lead'].includes(record.by)) return false;
+  const at = columns.find((c) => c.id === column);
+  return !!at && (at === reviewColumn(columns) || !!at.completionColumn);
+}
 
 /** Who asks, by what is running: the desktop's person, the CLI, an MCP client. */
 function byOf(runner: DispatchRunner): DispatchBy {

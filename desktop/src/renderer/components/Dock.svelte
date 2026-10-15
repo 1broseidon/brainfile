@@ -93,7 +93,8 @@
     return {
       ...base,
       ...doc,
-      label: lead ? `Leading: ${doc.title}` : `Handed off: ${doc.title}`,
+      // One another runner works says where (task-84): `Handed off: … (in a terminal)`.
+      label: `${lead ? `Leading: ${doc.title}` : `Handed off: ${doc.title}`}${run?.where ? ` (${run.where})` : ''}`,
       agent: lead?.agentId ?? run?.agentId ?? assignee ?? '',
       live: isLive(run) ? run : undefined,
       rest: restingWord(session, { run, ready, lead }),

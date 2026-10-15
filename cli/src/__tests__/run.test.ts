@@ -367,14 +367,21 @@ describe('asks at the terminal', () => {
     expect(await second).toBe('deny');
   });
 
-  test('an ask withdrawn (its run stopped) is taken down; with no terminal nothing is allowed', async () => {
+  test('an ask withdrawn (its run stopped) or answered elsewhere is taken down; with no terminal nothing is allowed', async () => {
     const input = tty();
     const output = new PassThrough();
-    const asker = terminalAsk(new MemoryLogger(), () => undefined, { input, output });
+    const shown = new MemoryLogger();
+    const asker = terminalAsk(shown, () => undefined, { input, output });
     const pending = asker.ask(ask('a'));
     await new Promise((r) => setTimeout(r, 50));
     asker.cancel('a');
     expect(await pending).toBeNull();
+    expect(said(shown)).toContain('That ask was withdrawn: its run stopped.');
+    const answered = asker.ask(ask('c'));
+    await new Promise((r) => setTimeout(r, 50));
+    asker.cancel('c', 'answered');
+    expect(await answered).toBeNull();
+    expect(said(shown)).toContain('That ask was answered outside this terminal.');
 
     const logger = new MemoryLogger();
     const plain = terminalAsk(logger, () => undefined, { input: new PassThrough(), output: new PassThrough() });

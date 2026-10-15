@@ -14,7 +14,6 @@ import { execFileSync, spawnSync } from 'child_process';
 import {
   AgentRegistry,
   BOARD_TOOL,
-  DESK_TOOL,
   Startups,
   agentOf,
   allAgents,
@@ -544,9 +543,9 @@ describe('permissions', () => {
     };
   }
 
-  it('names the board’s and the desk’s tools as an agent does', () => {
+  it('names the board’s tools as an agent does', () => {
     for (const title of ['brainfile_list_tasks', 'mcp__brainfile__task_add', 'mcp.brainfile.list_tasks']) expect(BOARD_TOOL.test(title)).toBe(true);
-    for (const title of ['mcp__desk__dispatch', 'desk.runs', 'mcp.desk.stop']) expect(DESK_TOOL.test(title)).toBe(true);
+    expect(BOARD_TOOL.test('mcp__desk__dispatch')).toBe(false);
     expect(BOARD_TOOL.test('Edit file')).toBe(false);
   });
 

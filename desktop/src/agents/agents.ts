@@ -14,15 +14,20 @@
  * branch (core's repo/worktree.ts, spec-14), its run file under
  * `.brainfile/state/runs/`, stopping and landing. This process is its
  * adapter: it answers asks in the band, writes the board through the host,
- * and leads, reviews and opens pull requests.
- * The chat's agents also get the desk (desk.ts, spec-16): `dispatch`, `runs`
- * and `stop`, so a chat can hand work off the way Hand to… does. Handing off
- * a document with children starts its lead instead (core's lead.ts,
- * decision-15, task-83): the Runner runs it, an agent whose brainfile mcp
- * reaches only that tree, which checks the plan, hands the children off in
- * order inside rules the Runner holds, and is woken when one ends or lands;
- * this process shows it (the Lead block, its dock tab) and passes on the
- * board's changes and the person's pause, resume and stop. Discuss
+ * and leads, reviews and opens pull requests. Its Runner works each open
+ * board's queue (task-84), leads included, so a hand-off asked for anywhere
+ * on this machine (the chat, `brainfile dispatch`, an MCP client) starts
+ * here while the window is open, unless a terminal's `brainfile run` takes
+ * it first; and the runs another runner works show here too (external.ts),
+ * with their asks in the band.
+ * The chat hands work off through its brainfile mcp (role chat, task-81):
+ * `dispatch` queues, this Runner starts it, and the reply says so from the
+ * run's `from`. Handing off a document with children starts its lead instead
+ * (core's lead.ts, decision-15, task-83): the Runner runs it, an agent whose
+ * brainfile mcp reaches only that tree, which checks the plan, hands the
+ * children off in order inside rules the Runner holds, and is woken when one
+ * ends or lands; this process shows it (the Lead block, its dock tab) and
+ * passes on the board's changes and the person's pause, resume and stop. Discuss
  * (discuss.ts, task-35) is a chat about one task that may change its spec and
  * record decisions, and nothing else. Beside Merge, a hand-off may be opened
  * as a pull request (decision-16): its branch is pushed here, GitHub is asked
@@ -32,8 +37,6 @@
  * the way Zed's agent_servers do.
  */
 import * as fs from 'fs';
-import * as path from 'path';
-import type * as acp from '@agentclientprotocol/sdk';
 import { findV2Task, getV2Dirs } from '@brainfile/core';
 import {
   AgentRegistry,
@@ -76,7 +79,7 @@ import {
   type ClaimTaken,
 } from '@brainfile/core/repo';
 import { followHandOffPullRequest, openHandOffPullRequest, type PullRequestForge } from '@brainfile/core/forge';
-import { DESK_ENV, DeskBridge, deskTools } from './desk';
+import { ExternalRuns } from './external';
 import { chatPermission, discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
 import { PullRequestWatch } from './pullRequests';
@@ -169,17 +172,23 @@ const hostBoard: RunnerBoard = {
   complete: (projectId, taskId) => callHost<Result>('completeTask', projectId, taskId),
 };
 
+/** How long a chat turn that has ended still owns a hand-off it asked for that starts now. */
+const TURN_ENDED_MS = 60_000;
+
 /**
  * Every run this process makes, its sessions and its hand-offs' lives: the
  * request and claim on the task, run files, stop, the queue and landing.
  * Asks are answered in the band; its epics' leads (decision-15) run in it,
- * each change shown in the window. It does not work the whole queue yet
- * (task-84): it starts what its leads queue, and leads asked for here.
+ * each change shown in the window. It works each open board's queue
+ * (task-84), leads queued anywhere included, and sends a landing that fails
+ * back by starting its agent here.
  */
 const runner: Runner = new Runner({
   dataDir: DATA_DIR,
   runner: 'desktop',
   board: hostBoard,
+  leads: true,
+  sendBack: 'start',
   ask(ask) {
     emit({ kind: 'permission', ask });
     return new Promise((resolve) => asks.set(ask.id, { ask, resolve }));
@@ -188,7 +197,34 @@ const runner: Runner = new Runner({
   onRun: (run) => emit({ kind: 'run', run }),
   onLead: (lead) => emit({ kind: 'lead', lead }),
   landed: (projectId, taskId) => offerIfLast(projectId, taskId),
+  fromOf: (projectId, _taskId, request) => (request?.by === 'chat' ? chatTurnAt(projectId, Date.parse(request.at)) : undefined),
 });
+
+/**
+ * The board's chat turn that was under way when a request was written: the
+ * turn a hand-off the chat queued through its brainfile mcp comes from, so
+ * its reply says `task-N handed to codex` (task-84).
+ */
+function chatTurnAt(projectId: string, at: number): string | undefined {
+  if (!Number.isFinite(at)) return undefined;
+  return runner
+    .list()
+    .filter((r) => r.kind === 'ask' && !r.taskId && r.projectId === projectId && r.startedAt <= at && (r.endedAt === undefined || (at <= r.endedAt && Date.now() - r.endedAt < TURN_ENDED_MS)))
+    .sort((a, b) => b.startedAt - a.startedAt)[0]?.id;
+}
+
+/** Runs another runner on this machine works, read through this Runner (task-84). */
+const external = new ExternalRuns({
+  others: (projectId) => runner.others(projectId),
+  answer: (runId, askId, optionId, projectId) => runner.answerAsk(runId, askId, optionId, projectId),
+  emit,
+});
+
+/** How often boards with a run from elsewhere still going are read again, so one whose runner went away without a word is said. */
+const EXTERNAL_LOOK_MS = 5_000;
+setInterval(() => {
+  for (const projectId of external.going()) external.look(projectId);
+}, EXTERNAL_LOOK_MS).unref();
 const leads = runner.leads;
 const sessions = runner.sessions;
 const startups = runner.startups;
@@ -198,42 +234,44 @@ function update(run: AgentRun, patch: Partial<AgentRun>): void {
   runner.update(run, patch);
 }
 
-interface OpenOptions extends Omit<SessionOptions, 'mcpServers' | 'rule' | 'keepsMode' | 'release'> {
-  /** Gives a chat session the desk's tools besides the board's. */
-  withDesk?: boolean;
+interface OpenOptions extends Omit<SessionOptions, 'mcpServers' | 'rule' | 'keepsMode' | 'release' | 'role' | 'leadScope'> {
+  /** The board's chat: its brainfile mcp hands work off (role chat, task-81). */
+  chat?: boolean;
   /** The task a discussion is about: it reads, and changes only that task's spec. */
   discuss?: string;
 }
 
-/** A chat session's right to the desk; a hand-off, a probe or a discussion has none. */
-const deskTokens = new WeakMap<Session, string>();
-
 /**
- * Opens a session (core's open) with what this app adds: the desk for a
- * chat, and the rule and mode a discussion and the chat keep.
+ * Opens a session (core's open) with what this app adds: the role its
+ * brainfile mcp is told, and the rule and mode a discussion and the chat keep.
  */
-async function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
-  const { withDesk = false, discuss, ...rest } = options;
-  const board = rest.board ?? true;
-  const deskToken = board && withDesk ? await grantDesk({ projectId, agentId, model, effort: rest.effort, models: {}, efforts: {}, key }) : null;
+function open(projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
+  const { chat = false, discuss, ...rest } = options;
   // A discussion changes the task's spec and nothing else; the board's chat manages the board and hands
   // code to hand-offs (decision-14): what their rule refuses is refused before anyone is asked.
   const rule: PermissionRule | undefined = discuss
     ? (call) => discussPermission(call.title ?? '', call.kind)
-    : deskToken
+    : chat
       ? (call) => chatPermission(call.title ?? '', call.kind, call.rawInput)
       : undefined;
-  const session = await openSession(ctx, projectId, agentId, key, model, {
+  return openSession(ctx, projectId, agentId, key, model, {
     ...rest,
-    // What its board server lists (task-81): a discussion never hands off. A lead's session is core's (the Runner's).
-    ...(discuss ? { role: 'discuss' as const } : deskToken ? { role: 'chat' as const } : {}),
+    // What its board server lists (task-81): the chat dispatches, a discussion never does. A lead's session is core's (the Runner's).
+    ...(discuss ? { role: 'discuss' as const } : chat ? { role: 'chat' as const } : {}),
     rule,
-    // A discussion and the board's chat (the sessions with the desk) never run in bypass, and only read when they can.
-    keepsMode: discuss || deskToken ? discussMode : undefined,
-    ...(deskToken ? { mcpServers: [deskMcp(deskToken, projectId)], release: () => desk.revoke(deskToken) } : {}),
+    // A discussion and the board's chat never run in bypass, and only read when they can.
+    keepsMode: discuss || chat ? discussMode : undefined,
   });
-  if (deskToken) deskTokens.set(session, deskToken);
-  return session;
+}
+
+/**
+ * The person's answer in the band (or on a phone): to one of this window's
+ * asks, or through its runner's answer file to another's (task-84). One
+ * that cannot be written stays up, to answer where it is waiting.
+ */
+function answer(askId: string, optionId: string | null): void {
+  if (external.has(askId)) void external.answer(askId, optionId);
+  else answerPermission(askId, optionId);
 }
 
 function answerPermission(askId: string, optionId: string | null): void {
@@ -305,11 +343,7 @@ async function resumeLead(projectId: string, epicId: string): Promise<Result> {
   return resumed.ok ? { ok: true, value: undefined } : resumed;
 }
 
-// ── The desk: the chat's own dispatch tools (spec-16) ────────────────────────
-
-/** The app's own binary, run as node: no node needed on the Mac, and it reads app.asar. */
-const ELECTRON_BIN = process.env.BRAINFILE_ELECTRON_BIN ?? process.execPath;
-const DESK_SCRIPT = path.join(__dirname, 'desk-mcp.js');
+// ── Main: the host's board writes and the forge ──────────────────────────────
 
 const hostPending = new Map<number, (result: unknown) => void>();
 let nextHostId = 1;
@@ -337,82 +371,28 @@ const forge: PullRequestForge = {
   pullRequestState: (repo, number, force) => callForge('pullRequestState', repo, number, force),
 };
 
-const desk = new DeskBridge(
-  deskTools({
-    findTask(projectId, taskId) {
-      const located = locateBoard(projectId, { materialize: false });
-      if (!located.found) return null;
-      const found = findV2Task(getV2Dirs(located.brainfilePath), taskId);
-      return found ? { title: found.doc.task.title } : null;
-    },
-    agents: () => allAgents().map(({ id, name }) => ({ id, name })),
-    unavailable(agentId) {
-      const agent = agentOf(agentId);
-      return agent ? whyNot(agent) : `Unknown agent ${agentId}`;
-    },
-    async start(grant, taskId, agentId, model, effort) {
-      // In a led tree only its lead hands off (decision-15); the lead does so through its brainfile mcp, not the desk.
-      const guarded = runner.guard(grant.projectId, taskId, 'chat');
-      if (!guarded.ok) return guarded;
-      if (leadsChildren(grant.projectId, taskId)) {
-        const started = await runner.lead(grant.projectId, taskId, { agent: agentId, model, effort, by: 'chat' });
-        if (!started.ok) return started;
-        if (!started.value.run) return { ok: false, error: `${taskId}'s lead did not start` };
-        return { ok: true, value: { run: started.value.run, branch: null, lead: true } };
-      }
-      // The request on the task, then the agent started, the task held across both;
-      // before a hand-off from an epic's own branch, the epic's target is brought in (decision-16).
-      const started = await runner.dispatch(grant.projectId, taskId, {
-        agent: agentId,
-        model,
-        effort,
-        by: 'chat',
-        from: sessions.get(grant.key)?.run?.id,
-      });
-      if (!started.ok) return started;
-      const { run, worktree, note } = started.value;
-      return { ok: true, value: { run, branch: worktree?.branch ?? null, reads: !!worktree && !worktree.branch, ...(note ? { note } : {}) } };
-    },
-    runs: () => runner.list(),
-    stop: stopRun,
-  })
-);
-
-/** A chat session's token for the desk; null when the desk cannot listen, and the chat goes on without it. */
-async function grantDesk(grant: Parameters<DeskBridge['grant']>[0]): Promise<string | null> {
-  try {
-    await desk.listen();
-    return desk.grant(grant);
-  } catch {
-    return null;
-  }
-}
-
-/** The desk's MCP server for one chat session: the app's binary as node, the socket, the session's token and its board. */
-function deskMcp(token: string, projectId: string): acp.McpServer {
-  return {
-    name: 'desk',
-    command: ELECTRON_BIN,
-    args: [DESK_SCRIPT],
-    env: [
-      { name: 'ELECTRON_RUN_AS_NODE', value: '1' },
-      { name: DESK_ENV.socket, value: desk.socketPath },
-      { name: DESK_ENV.token, value: token },
-      { name: DESK_ENV.project, value: projectId },
-      { name: DESK_ENV.agents, value: JSON.stringify(allAgents().map((a) => a.id)) },
-    ],
-  };
-}
-
 const ASK_PREAMBLE =
   'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
   'If those tools are not available, use the `brainfile` command line in this directory instead (`brainfile list`, `brainfile add`, `brainfile move`, `brainfile --help`); do not edit the board’s files by hand. ' +
-  'To have work done, hand it to a coding agent with the desk tools: the desk\u2019s `dispatch` starts an agent on a task in its own worktree, as Hand to… does (agent and model are optional; by default, you and your model), `runs` says what is running, `stop` stops one. The brainfile tools\u2019 own `dispatch` only queues a task for a runner; use the desk\u2019s. ' +
+  'To have work done, hand it to a coding agent with the brainfile tools: `dispatch` hands a task off, and this app starts it at once in its own worktree, as Hand to… does (name the agent, model and effort as the line ahead of the person\u2019s message says); `dispatch_status` says what is running and queued, `dispatch_stop` stops a run, and `dispatch_lead` pauses or resumes an epic\u2019s lead. ' +
   'You manage the board; you never change code or run commands, other than the `brainfile` command line and git commands that only read: edits and other commands are refused. Read the code freely to write good tasks. ' +
   'Asked for code work, write the task, or update the one in context: what to do, the files it touches, and a contract whose validation commands prove it is done. Hand it off with dispatch when the person asked for it done; otherwise say it is ready to hand off. ' +
   'Asked to plan an epic, add the epic, then its children under it (parentId), each with dependsOn naming the children that must land first and a draft contract with deliverables and validation commands; add them in that order, so each dependency exists when it is named. Leave priority unset unless the person said how urgent it is. ' +
-  'To take an epic, or any task with children, through to the end, dispatch the epic itself: the app starts a lead that checks the plan and hands its children off in order, and inside a led epic only its lead hands off. ' +
+  'To take an epic, or any task with children, through to the end, dispatch the epic itself: a lead checks the plan and hands its children off in order, and inside a led epic only its lead hands off. ' +
   'Otherwise, ask the person before dispatching more than three tasks at once, and never dispatch a task whose dependsOn are still open. Reply briefly, in a sentence or two, with the answer itself. Do not list or mention what you changed on the board or handed off, or that you changed nothing: the window shows the board\u2019s changes and hand-offs under your reply.\n\n';
+
+/**
+ * Who a hand-off from the chat goes to, each turn, as Hand to… would choose:
+ * the chat's own agent and model unless the person names another, then the
+ * person's model and effort for that agent on this board.
+ */
+function handOffsTo(agentId: AgentId, model: string | undefined, effort: string | undefined, models: Partial<Record<AgentId, string>>, efforts: Partial<Record<AgentId, string>>): string {
+  const said = (id: AgentId, m?: string, e?: string) => `agent "${id}"${m ? `, model "${m}"` : ''}${m && e ? `, effort "${e}"` : ''}`;
+  const others = allAgents()
+    .filter((a) => a.id !== agentId && !whyNot(a) && models[a.id])
+    .map((a) => said(a.id, models[a.id], efforts[a.id]));
+  return `[Hand-offs: unless the person names another agent, ${said(agentId, model, effort)}.${others.length ? ` For another agent, the person's choice: ${others.join('; ')}.` : ''}]\n\n`;
+}
 
 /**
  * What the person has open as they ask, so "this" and "it" mean something:
@@ -444,10 +424,8 @@ async function ask(
   void (async () => {
     try {
       const existing = sessions.get(key);
-      const session = existing ?? (await startups.open(run.id, (signal) => open(projectId, agentId, key, model, { withDesk: true, effort, signal }), close));
+      const session = existing ?? (await startups.open(run.id, (signal) => open(projectId, agentId, key, model, { chat: true, effort, signal }), close));
       if (!session) return;
-      const deskToken = deskTokens.get(session);
-      if (deskToken) desk.update(deskToken, { models, efforts, model, effort });
       // A thread picked up again after its session was let go carries its own past.
       const past = existing || earlier.length === 0
         ? ''
@@ -455,7 +433,7 @@ async function ask(
       const located = locateBoard(projectId, { materialize: false });
       const decisions = !existing && located.found ? `${standingDecisions(located.brainfilePath).trim()}\n\n` : '';
       const looking = located.found ? lookingAt(located.brainfilePath, context) : '';
-      await turn(session, run, (existing ? '' : ASK_PREAMBLE + (decisions.trim() ? decisions : '') + past) + looking + text);
+      await turn(session, run, (existing ? '' : ASK_PREAMBLE + (decisions.trim() ? decisions : '') + past) + handOffsTo(agentId, model, effort, models, efforts) + looking + text);
     } catch (err) {
       update(run, { state: 'failed', error: err instanceof Error ? err.message : String(err), endedAt: Date.now() });
     }
@@ -483,7 +461,7 @@ function workOf(projectId: string, taskId: string): DiscussWork {
  * One turn in a discussion of a task (task-35): a chat thread about that one
  * task, at any stage of its life, whose agent reads freely and changes only
  * the task's spec and the board's decisions, with the person's agreement. It
- * has no desk: the person hands the task off. The first turn carries the task
+ * hands nothing off: the person hands the task off. The first turn carries the task
  * as a block the person does not see, ahead of what they said.
  */
 async function discuss(
@@ -640,15 +618,30 @@ function settle(projectId: string, taskId: string, act: (title?: string) => { me
 
 /** Stops a run: one of this process's, or another runner's on this machine through its run file (task-80). */
 async function stopRun(runId: string): Promise<void> {
-  await runner.stop(runId);
+  await runner.stop(runId, external.projectOf(runId));
 }
 
-/** What is running and asking now, and what ended lately, for a phone that connects mid-run or comes back (task-40). */
+/**
+ * What is running and asking now, and what ended lately, whichever runner on
+ * this machine runs it (task-84): for the window when it opens, and a phone
+ * that connects mid-run or comes back (task-40).
+ */
 function live(): LiveAgents {
   return {
-    runs: liveRuns(runner.list()),
-    asks: [...asks.values()].map((pending) => pending.ask),
+    runs: liveRuns([...runner.list(), ...external.list()]),
+    asks: [...[...asks.values()].map((pending) => pending.ask), ...external.asks()],
   };
+}
+
+/**
+ * A board changed: its queue is worked again (a request the chat, a terminal
+ * or an MCP client wrote), its leads hear it, and its runs from elsewhere
+ * are read.
+ */
+function boardChanged(projectId: string): void {
+  runner.boardChanged(projectId);
+  void runner.work(projectId);
+  external.look(projectId);
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────────────────
@@ -669,7 +662,8 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   pauseLead: (projectId: string, epicId: string) => runner.pauseLead(projectId, epicId),
   resumeLead,
   stopLead: (projectId: string, epicId: string) => runner.stopLead(projectId, epicId),
-  boardChanged: (projectId: string) => runner.boardChanged(projectId),
+  boardChanged,
+  runsChanged: (projectId: string) => external.look(projectId),
   live,
   review,
   readyToMerge: ready,
@@ -678,7 +672,7 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   branches: (projectId: string): Result<BranchesView> => attempt(() => branchesOf(projectId)),
   openPullRequest,
   unpushed: (projectId: string): Result<ReturnType<typeof unpushed>> => attempt(() => unpushed(projectId)),
-  answerPermission,
+  answerPermission: answer,
 };
 
 parentPort.on('message', async (event: { data: AgentRequest | HostReply }) => {
@@ -699,7 +693,6 @@ parentPort.on('message', async (event: { data: AgentRequest | HostReply }) => {
 
 process.on('exit', () => {
   runner.close();
-  desk.close();
 });
 
 // Let go of the agents when main lets go of this process (a reload, a quit),

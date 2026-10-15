@@ -16,6 +16,7 @@ import {
   HOST_METHODS,
   type AgentMessage,
   type AgentRequest,
+  type BoardSnapshot,
   type HostReply,
   type HostMessage,
   type HostRequest,
@@ -61,7 +62,12 @@ let link: LinkServer | null = null;
 let updater: Updater;
 /** The boards the window and each phone hold open: the host closes one only when nobody does. */
 const holds = new BoardHolds({
-  open: (projectId) => callHost('openBoard', projectId),
+  // A board opened is one the agents process works the queue of (task-84), and whose runs from elsewhere it shows.
+  open: (projectId) =>
+    callHost<Result<BoardSnapshot>>('openBoard', projectId).then((opened) => {
+      if (opened.ok) void callAgents('boardChanged', projectId);
+      return opened;
+    }),
   close: (projectId) => callHost('closeBoard', projectId),
 });
 
@@ -76,8 +82,11 @@ function startHost(): UtilityProcess {
     } else if (message.kind === 'board') {
       win?.webContents.send(CHANNEL.board, message.snapshot);
       link?.board(message.snapshot);
-      // An epic's lead hears a child the person completed, and ends with its last (decision-15).
-      if (agents) void callAgents('boardChanged', message.snapshot.projectId);
+      // The queue is worked again (task-84), and an epic's lead hears a child the person completed, and ends with its last (decision-15).
+      void callAgents('boardChanged', message.snapshot.projectId);
+    } else if (message.kind === 'runs') {
+      // A run or runner file changed: one a terminal or an MCP client runs shows as the window's own do (task-84).
+      void callAgents('runsChanged', message.projectId);
     }
   });
   child.on('exit', () => {
@@ -102,8 +111,7 @@ function callHost<T>(method: HostRequest['method'], ...args: unknown[]): Promise
 function startAgents(): UtilityProcess {
   const child = utilityProcess.fork(path.join(__dirname, 'agents.js'), [], {
     serviceName: 'Brainfile Agents',
-    // The app's own binary runs the desk's MCP server as node (desk-mcp.ts).
-    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData'), BRAINFILE_ELECTRON_BIN: process.execPath },
+    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData') },
   });
   child.on('message', (message: AgentMessage) => {
     if (message.kind === 'reply') {
@@ -325,7 +333,8 @@ function startLink(): LinkServer {
 async function agentsWorking(): Promise<number> {
   if (!agents) return 0;
   const live = await callAgents<LiveAgents>('live');
-  return live.runs.filter((r) => r.state === 'starting' || r.state === 'working' || r.state === 'waiting').length;
+  // A run another runner works (`where`) goes on without this app.
+  return live.runs.filter((r) => !r.where && (r.state === 'starting' || r.state === 'working' || r.state === 'waiting')).length;
 }
 
 function startUpdater(): Updater {

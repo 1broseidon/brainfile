@@ -256,15 +256,15 @@ export function leadLineText(view: LeadView): string {
 
 /**
  * Asks at this terminal, one at a time, naming the run: the agent's own
- * options (Allow once · Always · Deny), picked by number. An ask the runner
- * gives up on (its run stopped) is taken down. With no terminal, nothing is
- * allowed.
+ * options (Allow once · Always · Deny), picked by number. An ask answered
+ * from another process (the desktop's band) or given up on (its run stopped)
+ * is taken down, saying which. With no terminal, nothing is allowed.
  */
 export function terminalAsk(
   logger: Logger,
   runOf: (runId: string) => AgentRun | undefined,
   io: { input?: NodeJS.ReadableStream & { isTTY?: boolean }; output?: NodeJS.WritableStream } = {},
-): { ask: (ask: PermissionAsk) => Promise<string | null>; cancel: (askId: string) => void } {
+): { ask: (ask: PermissionAsk) => Promise<string | null>; cancel: (askId: string, why?: 'answered' | 'stopped') => void } {
   const input = io.input ?? process.stdin;
   const output = io.output ?? process.stdout;
   let turn: Promise<unknown> = Promise.resolve();
@@ -297,10 +297,10 @@ export function terminalAsk(
     turn = answer.catch(() => null);
     return answer;
   };
-  const cancel = (askId: string) => {
+  const cancel = (askId: string, why: 'answered' | 'stopped' = 'stopped') => {
     const close = open.get(askId);
     if (close) {
-      logger.log(chalk.gray('That ask was withdrawn: its run stopped.'));
+      logger.log(chalk.gray(why === 'answered' ? 'That ask was answered outside this terminal.' : 'That ask was withdrawn: its run stopped.'));
       close();
     } else cancelled.add(askId);
   };
