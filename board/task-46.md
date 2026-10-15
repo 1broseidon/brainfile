@@ -17,14 +17,14 @@ relatedFiles:
 decisions:
   - decision-8
 createdAt: "2026-10-13T19:25:57.699Z"
-updatedAt: "2026-10-15T00:51:06.480Z"
+updatedAt: "2026-10-15T00:51:12.170Z"
 subtasks:
   - id: task-46-1
     title: "Phase A: the chat is a pane on the right; hide keeps the thread; the key reopens it"
     completed: true
   - id: task-46-2
     title: "Phase B: dock tabs are sessions (chats, discussions, hand-offs); recent documents in the palette"
-    completed: false
+    completed: true
   - id: task-46-3
     title: "Phase C: a hand-off's tab opens its run (steps, asks, Stop) in the chat pane, the task beside it"
     completed: false
