@@ -9,6 +9,7 @@ import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  AGENT_FORGE_METHODS,
   AGENT_HOST_METHODS,
   AGENT_METHODS,
   CHANNEL,
@@ -113,6 +114,9 @@ function startAgents(): UtilityProcess {
       const allowed = (AGENT_HOST_METHODS as readonly string[]).includes(message.method);
       const result = allowed ? callHost(message.method, ...message.args) : Promise.resolve({ ok: false, error: `Not allowed: ${message.method}` });
       void result.then((value) => child.postMessage({ kind: 'host-reply', id: message.id, result: value } satisfies HostReply));
+    } else if (message.kind === 'forge') {
+      // A pull request opened or followed (decision-16): GitHub is asked here, where the person's credentials are.
+      void forgeCall(message.method, message.args).then((value) => child.postMessage({ kind: 'host-reply', id: message.id, result: value } satisfies HostReply));
     } else {
       win?.webContents.send(CHANNEL.agent, message.event);
       link?.agent(message.event);
@@ -231,6 +235,17 @@ async function listIssues(projectId: string, force?: boolean): Promise<Result<Is
   const repo = await detectForge(projectId);
   if (!repo) return { ok: false, error: `${path.basename(projectId)}'s origin is not on GitHub.` };
   return github.listIssues(repo, force);
+}
+
+/** One of the forge calls the agents process may make, on the window's GitHub client. */
+async function forgeCall(method: string, args: unknown[]): Promise<unknown> {
+  if (!(AGENT_FORGE_METHODS as readonly string[]).includes(method)) return { ok: false, error: `Not allowed: ${method}` };
+  try {
+    if (method === 'openPullRequest') return await github.openPullRequest(...(args as Parameters<GitHub['openPullRequest']>));
+    return await github.pullRequestState(...(args as Parameters<GitHub['pullRequestState']>));
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
 }
 
 function startGitHub(): GitHub {

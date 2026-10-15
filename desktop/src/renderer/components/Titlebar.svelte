@@ -91,6 +91,13 @@
     merging = null;
   }
 
+  /** Pushes the hand-off and opens its pull request (decision-16): it leaves what waits on you for what waits on the forge. */
+  async function openPullRequest(projectId: string, taskId: string): Promise<void> {
+    merging = projectId + taskId;
+    await app.openPullRequest(taskId, projectId);
+    merging = null;
+  }
+
   function goTo(projectId: string, taskId: string): void {
     opened = null;
     void app.goTo(projectId, taskId);
@@ -243,6 +250,14 @@
                 onclick={() => merge(w.projectId, w.ready.taskId)}>Send back</button
               >
             {:else}
+              {#if app.canOpenPullRequest(w.projectId)}
+                <button
+                  class="key"
+                  disabled={merging === w.projectId + w.ready.taskId}
+                  use:tip={`Push and open a pull request into ${w.ready.into}`}
+                  onclick={() => openPullRequest(w.projectId, w.ready.taskId)}>Pull request</button
+                >
+              {/if}
               <button
                 class="key sure"
                 disabled={merging === w.projectId + w.ready.taskId}
@@ -252,8 +267,27 @@
             {/if}
           </div>
         {/each}
-        {#if app.feed.length}<div class="section">Changes</div>{/if}
       {/if}
+      {#if app.pullRequests.length}
+        <!-- Waiting on the forge, not on you (decision-16): each goes when its pull request merges or closes. -->
+        <div class="section">Open pull requests</div>
+        {#each app.pullRequests as p (p.projectId + p.taskId)}
+          <div class="wait">
+            <button class="item two" onclick={() => goTo(p.projectId, p.taskId)}>
+              <span class="label">{p.title}</span>
+              <span class="mono meta">{projectName(p.projectId)} · {p.taskId} · #{p.pr.number} into {p.pr.base}</span>
+            </button>
+            <a class="key" href={p.pr.url} target="_blank" rel="noreferrer" use:tip={p.pr.url}>#{p.pr.number}</a>
+          </div>
+        {/each}
+      {/if}
+      {#if app.unpushedLines.length}
+        <!-- Landing never pushes: said quietly, and nothing more (spec-18). -->
+        {#each app.unpushedLines as u (u.projectId)}
+          <p class="aside mono">{projectName(u.projectId)} · {u.text}</p>
+        {/each}
+      {/if}
+      {#if (app.waiting.length || app.pullRequests.length || app.unpushedLines.length) && app.feed.length}<div class="section">Changes</div>{/if}
       {#each app.feed as item (item.key)}
         <button
           class="item two"
@@ -266,7 +300,7 @@
           <span class="mono meta">{projectName(item.projectId)} · {item.taskId} {item.what} · {relativeTime(new Date(item.at).toISOString())}</span>
         </button>
       {:else}
-        {#if !app.waiting.length}<p class="empty">Nothing yet. Changes that agents, the CLI or your other machines make to any board arrive here, and work ready to merge waits at the top.</p>{/if}
+        {#if !app.waiting.length && !app.pullRequests.length}<p class="empty">Nothing yet. Changes that agents, the CLI or your other machines make to any board arrive here, and work ready to merge waits at the top.</p>{/if}
       {/each}
     {/if}
   </div>
@@ -577,6 +611,18 @@
     white-space: nowrap;
     text-overflow: ellipsis;
     max-width: 100%;
+  }
+
+  a.key {
+    text-decoration: none;
+  }
+
+  /* A fact about a board, not something to do: the trunk ahead of origin. */
+  .aside {
+    margin: 0;
+    padding: var(--s1) var(--s2);
+    font-size: var(--t-xs);
+    color: var(--ink-3);
   }
 
   .empty {

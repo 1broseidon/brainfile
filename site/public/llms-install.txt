@@ -95,6 +95,7 @@ lint            — check the board; fix: true fixes what it can
 sync            — fetch, merge and push a shared board now (pull? push?)
 where           — where the board lives, how it is stored, how fresh it is; action= fix | undo (expected: fix.plan.words) when nothing would be lost
 issues          — the project's open GitHub issues, marked when on the board; action=import (numbers, column?)
+pull_request    — a task's hand-off as a GitHub pull request: action= open | status (task)
 ```
 
 The bundled JSON Schemas are resources: `brainfile://schema/board` and `brainfile://schema/base`.

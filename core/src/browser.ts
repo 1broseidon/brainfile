@@ -171,6 +171,7 @@ export {
   linkedTask,
 } from './issues';
 export type { Issue, IssueTaskInput } from './issues';
+export { PULL_REQUEST_STATES, parsePullRequest, openPullRequestOf, withPullRequest, pullRequestText } from './pullRequest';
 export type {
   Board,
   BoardConfig,
@@ -179,4 +180,6 @@ export type {
   Task,
   TaskDocument,
   Subtask,
+  PullRequestRecord,
+  PullRequestState,
 } from './types';

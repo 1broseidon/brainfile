@@ -622,6 +622,9 @@ test('link:dev: task-7 can merge, task-5 would conflict; Merge lands one and sen
     ],
   });
   assert.deepEqual(reviews.ready(THERE), { ok: true, value: [] }, 'only on the one project');
+  // Opened as a pull request (decision-16): there, but not mergeable, and Merge refuses it.
+  assert.equal(reviews.review(HERE, 'task-8').ok && reviews.review(HERE, 'task-8').value?.branch, 'dispatch/task-8');
+  assert.deepEqual(await reviews.merge(HERE, 'task-8'), { ok: false, error: 'task-8 has pull request #31 open: it lands when that merges on GitHub' });
 
   // review agrees with readyToMerge.
   const clean = reviews.review(HERE, 'task-7');

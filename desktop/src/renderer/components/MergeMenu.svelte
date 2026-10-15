@@ -1,10 +1,10 @@
 <script lang="ts">
   /**
    * Merge for an epic with a branch of its own (decision-16): it asks where
-   * the branch goes. Its target, the default; another branch; or kept as a
-   * branch, which completes the epic and leaves the branch. The choices come
-   * from MERGE_CHOICES, in its order: a pull request (spec-18-4) is added
-   * there and given its line here.
+   * the branch goes. Its target, the default; another branch; a pull request
+   * into its target (spec-18-4), offered when origin is on GitHub; or kept as
+   * a branch, which completes the epic and leaves the branch. The choices
+   * come from MERGE_CHOICES, in its order.
    */
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
@@ -36,6 +36,7 @@
   const LINES: Record<MergeChoice, { title: string; note: string }> = $derived({
     target: { title: `Merge into ${into}`, note: 'its target' },
     branch: { title: 'Merge into another branch…', note: '' },
+    'pull-request': { title: 'Open a pull request', note: `into ${into}` },
     keep: { title: 'Keep as a branch', note: `done, ${branch} stays` },
   });
 
@@ -56,7 +57,7 @@
       return;
     }
     open = false;
-    onchoose(choice === 'keep' ? { to: 'keep' } : { to: 'target' });
+    onchoose(choice === 'keep' ? { to: 'keep' } : choice === 'pull-request' ? { to: 'pull-request' } : { to: 'target' });
   }
 
   function toBranch(other: string): void {
@@ -95,7 +96,7 @@
         </div>
       {:else}
         <div class="head mono">{branch}</div>
-        {#each MERGE_CHOICES as choice (choice)}
+        {#each MERGE_CHOICES.filter((c) => c !== 'pull-request' || app.canOpenPullRequest()) as choice (choice)}
           <button class="item" role="option" aria-selected={choice === 'target'} onclick={() => choose(choice)}>
             <span class="name">{LINES[choice].title}</span>
             {#if LINES[choice].note}<span class="note mono">{LINES[choice].note}</span>{/if}

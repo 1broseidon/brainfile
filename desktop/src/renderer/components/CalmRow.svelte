@@ -7,6 +7,7 @@
   import PriorityIcon from './PriorityIcon.svelte';
   import Working from './Working.svelte';
   import MergeSignal from './MergeSignal.svelte';
+  import PullRequestSignal from './PullRequestSignal.svelte';
 
   let {
     task,
@@ -86,6 +87,9 @@
   </span>
   {#if ready}
     <MergeSignal {ready} taskId={task.id} />
+  {:else if !run && task.pullRequest?.state === 'open'}
+    <!-- It waits on the forge now: the pull request, louder than any resting signal. -->
+    <PullRequestSignal pr={task.pullRequest} />
   {:else if signal}
     <span class="signal">
       {#if signal.kind === 'run'}

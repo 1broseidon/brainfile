@@ -50,6 +50,28 @@ export interface TaskView {
   epicBranch?: boolean;
   /** Where its hand-off lands, its own or inherited (core's targetOf); absent means the trunk. */
   target?: TargetView;
+  /** The pull request its hand-off was opened as (decision-16): while open, it lands on the forge, not by Merge. */
+  pullRequest?: PullRequestRecord;
+}
+
+/** `pullRequest:` on a task, as core reads it: where its hand-off's pull request stands. */
+export interface PullRequestRecord {
+  number: number;
+  /** Its page on the forge. */
+  url: string;
+  state: 'open' | 'merged' | 'closed';
+  /** The branch it goes into. */
+  base: string;
+  /** The branch it carries: `dispatch/<task-id>`. */
+  head: string;
+  /** ISO 8601, when it was opened. */
+  at: string;
+}
+
+/** The trunk's commits origin lacks (spec-18): landing never pushes. */
+export interface UnpushedView {
+  branch: string;
+  ahead: number;
 }
 
 /** A task's target branch (decision-16): the branch, and the document that sets it. */
@@ -512,14 +534,14 @@ export interface BranchesView {
 /**
  * Where an epic with a branch of its own goes when it is merged (decision-16,
  * spec-18-8), in the order Merge offers them: its target (the default),
- * another branch, or kept as a branch, which completes the epic and leaves
- * the branch. Opening a pull request is the fourth (spec-18-4): it is added
- * here, and to MergeTo, and the menus offer it.
+ * another branch, a pull request into its target (spec-18-4: pushed and
+ * opened, it lands when that merges on the forge), or kept as a branch,
+ * which completes the epic and leaves the branch.
  */
-export const MERGE_CHOICES = ['target', 'branch', 'keep'] as const;
+export const MERGE_CHOICES = ['target', 'branch', 'pull-request', 'keep'] as const;
 export type MergeChoice = (typeof MERGE_CHOICES)[number];
-/** What mergeReview is asked to do: land on the target (the default), on `branch`, or keep the branch. */
-export type MergeTo = { to: 'target' } | { to: 'branch'; branch: string } | { to: 'keep' };
+/** What mergeReview is asked to do: land on the target (the default), on `branch`, open a pull request, or keep the branch. */
+export type MergeTo = { to: 'target' } | { to: 'branch'; branch: string } | { to: 'pull-request' } | { to: 'keep' };
 
 /** Where an update stands (task-71). */
 export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'installing' | 'waiting' | 'restarting';
@@ -765,6 +787,10 @@ export interface Api {
   branches(projectId: string): Promise<Result<BranchesView>>;
   /** Throw the hand-off's work away: its worktree and its branch. */
   discardReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
+  /** Push the hand-off's branch and open a pull request into where it lands (decision-16); recorded on the task. */
+  openPullRequest(projectId: string, taskId: string): Promise<Result<PullRequestRecord>>;
+  /** How far the trunk is ahead of origin, as last fetched; null when there is no origin's copy to compare. */
+  unpushed(projectId: string): Promise<Result<UnpushedView | null>>;
   /** A phone merged or discarded a hand-off on this board: what can merge is asked again. */
   onReadyChanged(listener: (projectId: string) => void): () => void;
   /** Opens the hand-off's worktree in the editor named, else the first found. */
@@ -837,6 +863,8 @@ export const AGENT_METHODS = [
   'mergeReview',
   'discardReview',
   'branches',
+  'openPullRequest',
+  'unpushed',
   'answerPermission',
 ] as const;
 export type AgentMethod = (typeof AGENT_METHODS)[number];
@@ -844,12 +872,16 @@ export type AgentMethod = (typeof AGENT_METHODS)[number];
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
 export type HostReply = { kind: 'host-reply'; id: number; result: unknown };
 /** The board writes the agents process may ask main to pass to the host. */
-export const AGENT_HOST_METHODS = ['recordDispatch', 'recordLead', 'noteTask', 'settleLanded', 'completeTask'] as const;
+export const AGENT_HOST_METHODS = ['recordDispatch', 'recordLead', 'recordPullRequest', 'noteTask', 'settleLanded', 'completeTask'] as const;
 export type AgentHostMethod = (typeof AGENT_HOST_METHODS)[number];
+/** The forge calls the agents process may ask of main, whose GitHub client holds the person's credentials (decision-16). */
+export const AGENT_FORGE_METHODS = ['openPullRequest', 'pullRequestState'] as const;
+export type AgentForgeMethod = (typeof AGENT_FORGE_METHODS)[number];
 export type AgentMessage =
   | { kind: 'reply'; id: number; result: unknown }
   | { kind: 'event'; event: AgentEvent }
-  | { kind: 'host'; id: number; method: AgentHostMethod; args: unknown[] };
+  | { kind: 'host'; id: number; method: AgentHostMethod; args: unknown[] }
+  | { kind: 'forge'; id: number; method: AgentForgeMethod; args: unknown[] };
 
 /** Methods main forwards to the board host rather than answering itself. */
 export const HOST_METHODS = [

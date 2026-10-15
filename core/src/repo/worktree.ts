@@ -39,6 +39,10 @@ import * as path from 'path';
 import type { TaskDocument } from '../types';
 import type { LintIssue } from '../linter';
 import { isBranchName } from '../landsOn';
+import { openPullRequestOf } from '../pullRequest';
+import { readTasksDir } from '../taskFile';
+import type { PullRequestRecord } from '../types';
+import { findV2Task, getV2Dirs } from '../workspace';
 import { BOARD_STATE_DIR, boardBranch, git, gitCommonDir, gitToplevel, listWorktrees } from './boardRepo';
 import { landingLockPath, takeLandingLock, type LandingLockOptions } from './landingLock';
 import { locateBoard } from './locate';
@@ -538,10 +542,38 @@ export function uncommittedIn(at: string): { files: string[]; count: number } {
   return { files: lines.slice(0, SHOWN).map((l) => l.replace(/^\s?\S{1,2}\s+/, '')), count: lines.length };
 }
 
+/** The task's pull request while it is open on the forge (decision-16), from the project's board, open or completed. */
+export function openPullRequestOn(projectId: string, taskId: string): PullRequestRecord | null {
+  const located = locateBoard(projectId, { materialize: false });
+  const found = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId, true) : null;
+  return found ? openPullRequestOf(found.doc.task) : null;
+}
+
+/**
+ * The tasks whose pull request is open on the forge: every open task's, and a
+ * completed one's while its hand-off still has a worktree (its worker
+ * completed it before it landed). The completed archive is not read whole.
+ */
+export function withOpenPullRequest(projectId: string): Set<string> {
+  const located = locateBoard(projectId, { materialize: false });
+  const repoRoot = gitToplevel(projectId);
+  if (!located.found) return new Set();
+  const dirs = getV2Dirs(located.brainfilePath);
+  const open = new Set(readTasksDir(dirs.boardDir).filter((d) => openPullRequestOf(d.task)).map((d) => d.task.id));
+  const heads = `refs/heads/${BRANCH_PREFIX}`;
+  for (const w of repoRoot ? listWorktrees(repoRoot) : []) {
+    const taskId = w.branch?.startsWith(heads) ? w.branch.slice(heads.length) : null;
+    const found = taskId && !open.has(taskId) ? findV2Task(dirs, taskId, true) : null;
+    if (taskId && found?.isLog && openPullRequestOf(found.doc.task)) open.add(taskId);
+  }
+  return open;
+}
+
 /**
  * Every hand-off in the repository that can merge now (task-69): commits
  * not yet in the branch it goes into, nothing uncommitted, not merged
- * already. `conflicts` says git's merge-tree, which writes nothing, found
+ * already, and no pull request open for it (decision-16: that lands on the
+ * forge). `conflicts` says git's merge-tree, which writes nothing, found
  * the merge would conflict. Whether an agent is still at it is the caller's
  * to know.
  */
@@ -555,6 +587,7 @@ export function readyToMerge(projectId: string): ReadyHandOff[] {
     const taskId = w.branch.slice(heads.length);
     const review = reviewOf(projectId, taskId);
     if (!review?.branch || !review.into || review.ahead === 0 || review.merged || review.uncommitted > 0) continue;
+    if (openPullRequestOn(projectId, taskId)) continue;
     ready.push({
       taskId,
       into: review.into,

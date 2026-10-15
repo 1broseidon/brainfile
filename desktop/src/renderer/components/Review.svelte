@@ -7,8 +7,9 @@
 
   /**
    * A hand-off's own branch, said in the task pane (spec-14): what the agent
-   * committed, open it in your editor, merge it, send it back with a note, or
-   * throw it away. Not an IDE: the diff is a summary, never edited here.
+   * committed, open it in your editor, merge it, open it as a pull request
+   * (decision-16), send it back with a note, or throw it away. Not an IDE: the
+   * diff is a summary, never edited here.
    */
   let { board, taskId, inReview, assignee }: { board: BoardSnapshot; taskId: string; inReview: boolean; assignee?: string } = $props();
 
@@ -23,6 +24,9 @@
   let confirmTimer: ReturnType<typeof setTimeout> | null = null;
 
   const run = $derived(app.runFor(taskId));
+  /** The pull request it was opened as, if any: while open it lands on the forge, and Merge gives way to it. */
+  const pr = $derived([...board.tasks, ...board.completed].find((t) => t.id === taskId)?.pullRequest);
+  const opening = $derived(!!app.openingPullRequest[`${board.projectId}\n${taskId}`]);
   /** An epic with a branch of its own: Merge asks where the branch goes (decision-16). */
   const epicBranch = $derived(board.tasks.some((t) => t.id === taskId && t.epicBranch));
   /** Back to whoever did it, else the agent this board uses. */
@@ -112,6 +116,15 @@
       {#if review.merged}
         <div class="line dim">Already in {review.into}: merging only lets the worktree go.</div>
       {/if}
+      {#if pr?.state === 'open'}
+        <div class="line">
+          <a class="pr mono" href={pr.url} target="_blank" rel="noreferrer" use:tip={pr.url}>Pull request #{pr.number}</a> is open into {pr.base}: it lands when that merges.
+        </div>
+      {:else if pr?.state === 'closed'}
+        <div class="line dim">Pull request #{pr.number} was closed without merging.</div>
+      {:else if pr?.state === 'merged'}
+        <div class="line dim">Pull request #{pr.number} merged; what came after it is still here.</div>
+      {/if}
       {#if review.conflicts.length}
         <!-- Said before Merge is pressed (decision-12): git's merge-tree, nothing written. -->
         <div class="line warn">
@@ -165,11 +178,23 @@
         <button class="btn danger" disabled={busy || !!run} onclick={discard}>
           <Icon name="trash" size={13} />{confirming ? 'Discard its work?' : 'Discard'}
         </button>
-        {#if review.branch && epicBranch && review.into && !review.merged && !review.conflicts.length && !mergeWaits}
+        {#if review.branch && epicBranch && pr?.state !== 'open' && review.into && !review.merged && !review.conflicts.length && !mergeWaits}
           <!-- Its children landed on it: where the branch goes is the person's to say. -->
-          <MergeMenu branch={review.branch} into={review.into} busy={busy || !!run} primary={inReview} label={merging ? 'Checking…' : 'Merge'} onchoose={(to) => settle('merge', to)} />
+          <MergeMenu branch={review.branch} into={review.into} busy={busy || opening || !!run} primary={inReview} label={merging ? 'Checking…' : opening ? 'Opening…' : 'Merge'} onchoose={(to) => (to.to === 'pull-request' ? app.openPullRequest(taskId, board.projectId) : settle('merge', to))} />
         {:else if review.branch}
           <button class="btn quiet" disabled={busy || !!run} onclick={() => (sending = true)}><Icon name="hand" size={13} />Send back…</button>
+          {#if pr?.state === 'open'}
+            <!-- It lands on the forge now (decision-16): the one thing left here is to look at it there. -->
+            <a class="btn" class:primary={inReview} href={pr.url} target="_blank" rel="noreferrer"><Icon name="pull" size={13} />Pull request #{pr.number}</a>
+          {:else}
+          {#if app.canOpenPullRequest(board.projectId)}
+            <button
+              class="btn quiet"
+              disabled={busy || opening || !!run || !review.into || (!!mergeWaits && !review.conflicts.length)}
+              use:tip={mergeWaits && !review.conflicts.length ? mergeWaits : `Push ${review.branch} and open a pull request into ${review.into}`}
+              onclick={() => app.openPullRequest(taskId, board.projectId)}><Icon name="pull" size={13} />{opening ? 'Opening…' : 'Open pull request'}</button
+            >
+          {/if}
           <button
             class="btn"
             class:primary={inReview}
@@ -181,6 +206,7 @@
             <!-- A conflict goes back to the agent that did the work (task-63): the key says that is what it does. -->
             <Icon name="git" size={13} />{merging ? 'Checking…' : review.merged ? 'Merged · remove worktree' : review.conflicts.length ? 'Send back to settle' : `Merge into ${review.into ?? '…'}`}
           </button>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -231,6 +257,17 @@
 
   .warn {
     color: var(--warn);
+  }
+
+  a.btn {
+    text-decoration: none;
+  }
+
+  .pr {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: 3px;
   }
 
   .row {

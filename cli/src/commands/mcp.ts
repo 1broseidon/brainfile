@@ -39,6 +39,7 @@ import { registerLintTool } from '../mcp/tools/lint_tool';
 import { registerSyncTool } from '../mcp/tools/sync_tool';
 import { registerWhereTool } from '../mcp/tools/where_tool';
 import { registerIssuesTool } from '../mcp/tools/issues_tool';
+import { registerPullRequestTool } from '../mcp/tools/pull_request_tool';
 import { registerSchemaResources } from '../mcp/resources';
 import { serverInstructions } from '../mcp/instructions';
 
@@ -89,6 +90,7 @@ export function createBrainfileMcpServer(defaultFile: string): McpServer {
   registerSyncTool(server, defaultFile);
   registerWhereTool(server, defaultFile);
   registerIssuesTool(server, defaultFile);
+  registerPullRequestTool(server, defaultFile);
 
   registerSchemaResources(server);
 

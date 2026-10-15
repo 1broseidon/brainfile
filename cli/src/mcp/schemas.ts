@@ -762,6 +762,25 @@ export const issuesOutputSchema = z.object({
   imported: z.array(z.object({ number: z.number(), task: z.string(), made: z.boolean() })),
 });
 
+/** `pull_request`: the task's pull request as recorded, and when it merged what was done (decision-16). */
+export const pullRequestOutputSchema = z.object({
+  task: z.string(),
+  action: z.enum(['opened', 'followed']),
+  pullRequest: z.object({
+    number: z.number(),
+    url: z.string(),
+    state: z.enum(['open', 'merged', 'closed']),
+    base: z.string(),
+    head: z.string(),
+    at: z.string(),
+  }),
+  /** Merged: whether the worktree and local branch went. */
+  released: z.boolean().optional(),
+  said: z.string().optional(),
+  /** Merged: whether the task completed. */
+  completed: z.boolean().optional(),
+});
+
 /** `retire`: the decision, now in logs/ with its status. */
 export const retireOutputSchema = z.object({
   decision: decisionSummarySchema.extend({ path: z.string() }),

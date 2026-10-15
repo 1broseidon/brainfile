@@ -11,12 +11,16 @@
  * Issues are asked for at most once a minute per repository unless the person
  * asks; the first page carries its ETag, and an unchanged answer (304) costs
  * no rate limit. Everything outside (fetch, gh, the saved token) is passed in,
- * so tests run this against a fake GitHub. Every call goes through `request`,
- * so another endpoint (pull requests) is one more method beside the issues.
+ * so tests run this against a fake GitHub. Every call goes through `request`.
+ *
+ * Pull requests (decision-16, spec-18): one opened from a branch into
+ * another, and where one stands, asked at most once a minute each in the
+ * same way, so following an open one costs nothing until it changes.
  */
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import type { Issue } from '../issues';
+import type { PullRequestState } from '../types/base';
 import type { ForgeRepo } from './remote';
 
 const API = 'https://api.github.com';
@@ -24,6 +28,8 @@ const API = 'https://api.github.com';
 const MAX_PAGES = 3;
 /** A repository's issues are asked for again no sooner than this, unless the person asks. */
 export const ISSUES_TTL_MS = 60_000;
+/** A pull request's state is asked for again no sooner than this, unless asked to. */
+export const PULL_REQUEST_TTL_MS = 60_000;
 /** gh's answer is kept this long; a refusal from GitHub asks it again. */
 const GH_TTL_MS = 5 * 60_000;
 
@@ -78,6 +84,32 @@ export interface GitHubAuth {
   saved: boolean;
   /** Why the credentials found do not work. */
   error?: string;
+}
+
+/** A pull request, as GitHub says it stands. */
+export interface PullRequestView {
+  number: number;
+  /** Its page: `https://github.com/o/r/pull/12`. */
+  url: string;
+  state: PullRequestState;
+  /** The branch it goes into. */
+  base: string;
+  /** The branch it carries. */
+  head: string;
+  /** The commit its head was at, as GitHub last saw it: what a merge took. */
+  headSha: string;
+  title: string;
+  /** When GitHub was last asked (ms). */
+  fetchedAt: number;
+}
+
+/** A pull request to open: from `head` into `base`, both branches on the repository. */
+export interface NewPullRequest {
+  head: string;
+  base: string;
+  title: string;
+  body: string;
+  draft?: boolean;
 }
 
 /** One request to GitHub's API: a path under it or a full URL, with the token and ETag to send. */
@@ -144,6 +176,33 @@ export function toIssue(item: any): Issue | null {
   };
 }
 
+/** A pull request from GitHub's API as a board reads it; null when it is not one. A merged pull request is closed with `merged`. */
+export function toPullRequest(item: any, fetchedAt = Date.now()): PullRequestView | null {
+  if (!item || typeof item !== 'object' || !Number.isInteger(item.number)) return null;
+  const state: PullRequestState = item.merged === true || !!item.merged_at ? 'merged' : item.state === 'open' ? 'open' : 'closed';
+  return {
+    number: item.number,
+    url: String(item.html_url ?? ''),
+    state,
+    base: String(item.base?.ref ?? ''),
+    head: String(item.head?.ref ?? ''),
+    headSha: String(item.head?.sha ?? ''),
+    title: String(item.title ?? ''),
+    fetchedAt,
+  };
+}
+
+/** What GitHub said was wrong with a request, in its own words: the message and each error's. */
+async function refusal(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { message?: string; errors?: { message?: string; field?: string; code?: string }[] };
+    const errors = (body.errors ?? []).map((e) => e.message ?? (e.field ? `${e.field} ${e.code ?? 'invalid'}` : '')).filter(Boolean);
+    return [body.message, ...errors].filter(Boolean).join(': ');
+  } catch {
+    return '';
+  }
+}
+
 interface Cached {
   view: IssueList;
   etag: string | null;
@@ -155,6 +214,7 @@ export class GitHub {
   #deps: GitHubDeps;
   #gh: { at: number; token: string | null } | null = null;
   #issues = new Map<string, Cached>();
+  #pulls = new Map<string, { view: PullRequestView; etag: string | null; token: string | null }>();
 
   constructor(deps: GitHubDeps) {
     this.#deps = deps;
@@ -218,6 +278,7 @@ export class GitHub {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
     this.#issues.clear();
+    this.#pulls.clear();
     return { ok: true, value: await this.auth() };
   }
 
@@ -279,7 +340,98 @@ export class GitHub {
     this.#issues.set(key, { view, etag: res.headers.get('etag'), token: creds.token });
     return { ok: true, value: view };
   }
+
+  /**
+   * Opens a pull request from `head` into `base`; both must be on GitHub
+   * already. Signing in is needed. One already open from `head` is found
+   * and given back instead of a second.
+   */
+  async openPullRequest(repo: ForgeRepo, pr: NewPullRequest): Promise<ForgeResult<PullRequestView>> {
+    const creds = await this.credentials();
+    const signIn = this.#deps.signIn ?? 'Sign in with `gh auth login`, or save a token.';
+    if (!creds.token) return { ok: false, error: `Opening a pull request needs GitHub credentials. ${signIn}` };
+    let res: Response;
+    try {
+      res = await this.request(`/repos/${repo.owner}/${repo.name}/pulls`, {
+        token: creds.token,
+        method: 'POST',
+        body: { title: pr.title, head: pr.head, base: pr.base, body: pr.body, ...(pr.draft ? { draft: true } : {}) },
+      });
+    } catch {
+      return { ok: false, error: 'Could not reach GitHub.' };
+    }
+    if (res.ok) {
+      const view = toPullRequest(await res.json());
+      if (!view) return { ok: false, error: 'GitHub opened the pull request but did not say which.' };
+      this.#pulls.set(pullKey(repo, view.number), { view, etag: null, token: creds.token });
+      return { ok: true, value: view };
+    }
+    if (res.status === 401 && creds.source === 'gh') this.#gh = null;
+    if (res.status === 422) {
+      const said = await refusal(res);
+      if (/already exists/i.test(said)) {
+        const found = await this.pullRequestFor(repo, pr.head);
+        if (found.ok && found.value) return { ok: true, value: found.value };
+      }
+      if (/no commits between/i.test(said)) return { ok: false, error: `${pr.head} has nothing ${pr.base} lacks on GitHub: there is nothing to open.` };
+      if (/\bbase\b/i.test(said)) return { ok: false, error: `${pr.base} is not on GitHub: push it first.` };
+      return { ok: false, error: `GitHub would not open it${said ? `: ${said}` : '.'}` };
+    }
+    if (res.status === 403 && res.headers.get('x-ratelimit-remaining') !== '0') {
+      return { ok: false, error: `GitHub refused: these credentials may not open pull requests on ${repo.owner}/${repo.name}.` };
+    }
+    return { ok: false, error: problem(res, repo, creds.source, this.#deps.signIn) };
+  }
+
+  /** The pull request open from `head`, or null when there is none. */
+  async pullRequestFor(repo: ForgeRepo, head: string): Promise<ForgeResult<PullRequestView | null>> {
+    const creds = await this.credentials();
+    let res: Response;
+    try {
+      const query = `head=${encodeURIComponent(`${repo.owner}:${head}`)}&state=open&per_page=1`;
+      res = await this.request(`/repos/${repo.owner}/${repo.name}/pulls?${query}`, { token: creds.token });
+    } catch {
+      return { ok: false, error: 'Could not reach GitHub.' };
+    }
+    if (!res.ok) return { ok: false, error: problem(res, repo, creds.source, this.#deps.signIn) };
+    const list = (await res.json()) as unknown[];
+    return { ok: true, value: (Array.isArray(list) ? list : []).map((item) => toPullRequest(item)).find((v) => !!v) ?? null };
+  }
+
+  /**
+   * Where a pull request stands: open, merged or closed. Asked of GitHub at
+   * most once a minute per pull request unless `force`; after that, with its
+   * ETag, so an unchanged answer (304) costs no rate limit.
+   */
+  async pullRequestState(repo: ForgeRepo, number: number, force = false): Promise<ForgeResult<PullRequestView>> {
+    const key = pullKey(repo, number);
+    const creds = await this.credentials();
+    const cached = this.#pulls.get(key);
+    const usable = cached && cached.token === creds.token ? cached : undefined;
+    if (usable && !force && Date.now() - usable.view.fetchedAt < PULL_REQUEST_TTL_MS) return { ok: true, value: usable.view };
+    let res: Response;
+    try {
+      res = await this.request(`/repos/${repo.owner}/${repo.name}/pulls/${number}`, { token: creds.token, etag: usable?.etag });
+    } catch {
+      return { ok: false, error: 'Could not reach GitHub.' };
+    }
+    if (res.status === 304 && usable) {
+      usable.view = { ...usable.view, fetchedAt: Date.now() };
+      return { ok: true, value: usable.view };
+    }
+    if (!res.ok) {
+      if (res.status === 401 && creds.source === 'gh') this.#gh = null;
+      if (res.status === 404) return { ok: false, error: `GitHub has no pull request #${number} on ${repo.owner}/${repo.name} these credentials can see.` };
+      return { ok: false, error: problem(res, repo, creds.source, this.#deps.signIn) };
+    }
+    const view = toPullRequest(await res.json());
+    if (!view) return { ok: false, error: `GitHub's answer for #${number} was not a pull request.` };
+    this.#pulls.set(key, { view, etag: res.headers.get('etag'), token: creds.token });
+    return { ok: true, value: view };
+  }
 }
+
+const pullKey = (repo: ForgeRepo, number: number) => `${repo.owner}/${repo.name}#${number}`.toLowerCase();
 
 /** A refusal from GitHub, in a sentence that says what to do about it. */
 function problem(res: Response, repo: ForgeRepo, source: GitHubAuthSource, signIn = 'Sign in with `gh auth login`, or save a token.'): string {

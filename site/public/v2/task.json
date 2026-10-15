@@ -112,6 +112,20 @@
       "description": "The web URL of the issue the task was made from, e.g. https://github.com/o/r/issues/12. One task per issue: an issue is on the board when any task, open or completed, carries its URL (a trailing slash ignored).",
       "examples": ["https://github.com/o/r/issues/12"]
     },
+    "pullRequest": {
+      "type": "object",
+      "description": "The pull request the task's hand-off was opened as instead of merged (decision-16). While state is open the hand-off is not ready to merge; merged completes the task, closed puts it back.",
+      "required": ["number", "url", "state", "base", "head", "at"],
+      "properties": {
+        "number": { "type": "integer", "minimum": 1 },
+        "url": { "type": "string", "description": "The pull request's page." },
+        "state": { "type": "string", "enum": ["open", "merged", "closed"] },
+        "base": { "type": "string", "description": "The branch it goes into." },
+        "head": { "type": "string", "description": "The branch it carries, dispatch/<task-id>." },
+        "at": { "$ref": "https://brainfile.md/v2/base.json#/definitions/timestamp", "description": "When it was opened." }
+      },
+      "additionalProperties": true
+    },
     "subtasks": {
       "type": "array",
       "description": "Subtasks for tracking granular progress",

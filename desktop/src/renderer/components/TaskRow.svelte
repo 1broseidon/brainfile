@@ -8,6 +8,7 @@
   import Avatar from './Avatar.svelte';
   import Working from './Working.svelte';
   import MergeSignal from './MergeSignal.svelte';
+  import PullRequestSignal from './PullRequestSignal.svelte';
 
   let {
     task,
@@ -100,6 +101,8 @@
     <span class="run"><Working run={app.runFor(task.id)} rotate={false} /></span>
   {:else if app.readyFor(task.id)}
     <MergeSignal ready={app.readyFor(task.id)!} taskId={task.id} />
+  {:else if task.pullRequest?.state === 'open'}
+    <PullRequestSignal pr={task.pullRequest} />
   {/if}
   <span class="chips">
     {#if task.contractStatus}

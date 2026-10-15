@@ -213,4 +213,4 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-This registers an MCP tool for everything the CLI does to a board: list, read, search, create, update, move, complete and delete tasks; notes and logs; subtasks and contracts; decisions; columns, the board's settings, types and templates; lint, sync and where; and the project's GitHub issues, imported as tasks. The server tells the agent to use them for every board change and never to edit `.brainfile/` by hand.
+This registers an MCP tool for everything the CLI does to a board: list, read, search, create, update, move, complete and delete tasks; notes and logs; subtasks and contracts; decisions; columns, the board's settings, types and templates; lint, sync and where; the project's GitHub issues, imported as tasks; and a hand-off opened as a GitHub pull request. The server tells the agent to use them for every board change and never to edit `.brainfile/` by hand.

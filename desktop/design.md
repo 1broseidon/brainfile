@@ -587,8 +587,38 @@ board changes (and in the feed).
   row and the pane, is a menu: `Merge into <target>` (the default), `Merge
   into another branch…` (the trunk, branches, origin's), and `Keep as a
   branch`, which lets the worktree go, keeps the branch and completes the
-  epic. The choices are one list in shared/api.ts, where Open pull request
-  joins them.
+  epic, and `Open a pull request` (when origin is on GitHub), the epic's
+  branch into its target as below. The choices are one list in
+  shared/api.ts (`MERGE_CHOICES`).
+- **A pull request is a way to land** (decision-16, spec-18-4): beside
+  Merge, in Review (`Open pull request`), on a Ready to merge row under the
+  pointer (`PR`) and on the feed's item (`Pull request`), when the project's
+  origin is on GitHub. It pushes `dispatch/<task-id>` to origin, only that
+  branch, and opens a pull request into the task's target, titled with the
+  task's title, its body the task's ID, the first lines of its description
+  and the hand-off's last notes. It is refused as Merge is (uncommitted work,
+  nothing to land, an agent still at it); checks are the forge's. The task
+  records it as `pullRequest:` (number, link, state, base, head, when), so it
+  outlives the app and the phone and MCP see it. While it is open the item
+  leaves Ready to merge, for the phone too, and Merge refuses it: the row's
+  signal is `#12` in the faint mono, a link to it; Review says `Pull request
+  #12 is open into main` and its key is the link; the feed lists it under
+  `Open pull requests`, below what waits on you, since it waits on the
+  forge. The agents process follows each open one at most once a minute
+  (whenever Ready to merge is asked, and a board with one open asks every
+  minute), through main's GitHub client with its ETag, so an unchanged one
+  costs nothing. Merged, origin's target is fetched, the worktree and local
+  branch go and the task completes as after a Merge (subtasks left keep it
+  open); a squash or rebase git cannot see is trusted when the branch's tip
+  is in what the pull request carried, and work committed after it was
+  pushed, or left uncommitted, keeps the worktree, and says so. Closed
+  without merging, the record says closed and the item is back in Ready to
+  merge.
+- **Landing never pushes**, so the app says when it matters: when the
+  trunk has commits origin (as last fetched) lacks, the Ready to merge
+  group's header ends with `main is 3 commits ahead of origin` in the faint
+  mono, and the feed says it per board. Nothing more: no push key, nothing
+  pushed for you.
 - **What can merge is at the top of the list** (task-69), in both
   readings: a group above every column, `Ready to merge`, holds exactly the
   hand-offs whose branch can merge now: commits not yet in the branch it

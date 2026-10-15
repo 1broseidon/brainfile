@@ -27,8 +27,10 @@ import type {
   Result,
   PermissionAsk,
   Project,
+  PullRequestRecord,
   ReadyView,
   RunStep,
+  UnpushedView,
   UpdateStatus,
   SettleChoice,
 } from '../../shared/api';
@@ -38,6 +40,13 @@ import { problemBrief } from './brief';
 
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
 const SETTLE_MS = 900;
+/** A board with a pull request open asks Ready to merge again this often, so a merge on the forge is seen. */
+const PULL_REQUEST_POLL_MS = 60_000;
+
+/** `main is 3 commits ahead of origin`. */
+export function aheadOfOrigin(ahead: UnpushedView): string {
+  return `${ahead.branch} is ${ahead.ahead} commit${ahead.ahead === 1 ? '' : 's'} ahead of origin`;
+}
 import { calmOrder, decisionGroups, glance, GLANCE, outline, restsFolded, rootsHeld, visibleRows, workColumn, type OutlineRow } from './format';
 import { intakeColumn, issueTask } from '../../shared/issues';
 import { customId } from '../../shared/agentServers';
@@ -266,6 +275,10 @@ class AppState {
   mergeable = $state<Record<string, ReadyView[]>>({});
   /** Each board's branches a hand-off could land on (decision-16), asked when a picker opens. */
   branches = $state<Record<string, BranchesView>>({});
+  /** Each board's trunk, when it has commits origin lacks: landing never pushes (spec-18). */
+  unpushed = $state<Record<string, UnpushedView | null>>({});
+  /** Pull requests being opened, by `projectId\ntaskId`: the push and GitHub take a moment. */
+  openingPullRequest = $state<Record<string, boolean>>({});
   /** Epics' leads (decision-15), by `projectId\nepicId`: every one since the app opened. */
   leads = $state<Record<string, LeadView>>({});
   asks = $state<PermissionAsk[]>([]);
@@ -561,6 +574,11 @@ class AppState {
     api.onBoardChanged((snapshot) => this.receive(snapshot));
     // A phone's merge or discard: the board may not change (a discard never does), so Ready to merge is asked again here.
     api.onReadyChanged((projectId) => this.refreshReady(projectId, true));
+    // A pull request merges or closes on the forge, not here: a board with one open asks again every minute,
+    // which is when the agents process follows them (decision-16).
+    setInterval(() => {
+      for (const p of this.pullRequests) this.refreshReady(p.projectId, true);
+    }, PULL_REQUEST_POLL_MS);
     api.onLinkChanged((view) => (this.link = view));
     api.onUpdate((status) => (this.update = status));
     void api.updateStatus().then((status) => (this.update = status));
@@ -692,8 +710,9 @@ class AppState {
   refreshReady(projectId: string, now = false): void {
     clearTimeout(this.#readyTimers[projectId]);
     const ask = async () => {
-      const result = await api.readyToMerge(projectId);
+      const [result, ahead] = await Promise.all([api.readyToMerge(projectId), api.unpushed(projectId)]);
       if (result.ok) this.mergeable[projectId] = result.value;
+      if (ahead.ok) this.unpushed[projectId] = ahead.value && ahead.value.ahead > 0 ? ahead.value : null;
     };
     if (now) void ask();
     else this.#readyTimers[projectId] = setTimeout(() => void ask(), 400);
@@ -716,6 +735,54 @@ class AppState {
   );
   /** How many can merge now: the number the feed's key says, in the accent. */
   readyCount = $derived(this.waiting.filter((w) => !w.ready.conflicts).length);
+
+  /**
+   * Hand-offs opened as pull requests and still open on the forge, across
+   * every board (decision-16): they wait on the forge, not on you, so they
+   * are said under what waits on you, and leave when they merge or close.
+   */
+  pullRequests = $derived.by(() =>
+    this.projects.flatMap((project) => {
+      const board = this.boards[project.id];
+      if (!board) return [];
+      return [...board.tasks, ...board.completed].flatMap((task) =>
+        task.pullRequest?.state === 'open' ? [{ projectId: project.id, taskId: task.id, title: task.title, pr: task.pullRequest }] : []
+      );
+    })
+  );
+
+  /** The trunks with commits origin lacks, across every board, as `main is 3 commits ahead of origin`. */
+  unpushedLines = $derived(
+    this.projects.flatMap((project) => {
+      const ahead = this.unpushed[project.id];
+      return ahead ? [{ projectId: project.id, text: aheadOfOrigin(ahead) }] : [];
+    })
+  );
+
+  /** Whether a hand-off on this board could be opened as a pull request: its origin is on GitHub. */
+  canOpenPullRequest(projectId = this.activeId): boolean {
+    return !!projectId && this.forges[projectId]?.forge === 'github';
+  }
+
+  /** Pushes the hand-off's branch and opens its pull request; the task records it, and it leaves Ready to merge. */
+  async openPullRequest(taskId: string, projectId = this.activeId): Promise<PullRequestRecord | null> {
+    if (!projectId) return null;
+    const key = `${projectId}\n${taskId}`;
+    if (this.openingPullRequest[key]) return null;
+    this.openingPullRequest[key] = true;
+    try {
+      const result = await api.openPullRequest(projectId, taskId);
+      if (!result.ok) {
+        this.notify(result.error, 'warn');
+        return null;
+      }
+      this.notify(`Opened pull request #${result.value.number} into ${result.value.base}`, 'ok');
+      return result.value;
+    } finally {
+      delete this.openingPullRequest[key];
+      this.refreshReady(projectId, true);
+    }
+  }
 
   /** The hand-off on a task of the board in front that can merge, or would conflict. */
   readyFor(taskId: string): ReadyView | undefined {

@@ -393,6 +393,17 @@ export {
   lintTaskRefs,
 } from './related';
 
+// A pull request on the board (decision-16): `pullRequest:` on a task whose
+// hand-off was opened as one, and what one says. Opening and following one on
+// the forge needs the network and lives in `@brainfile/core/forge`.
+export {
+  PULL_REQUEST_STATES,
+  parsePullRequest,
+  openPullRequestOf,
+  withPullRequest,
+  pullRequestText,
+} from './pullRequest';
+
 // Export issues on the board: the task an issue becomes and the tasks that
 // carry an issue's URL as `source:` (decision-4). Reading a forge's issues
 // needs the network and lives in `@brainfile/core/forge`.

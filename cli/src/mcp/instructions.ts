@@ -36,6 +36,7 @@ export const TOOL_PURPOSES: ReadonlyArray<readonly [string, string]> = [
   ['sync', 'fetch, merge and push a shared board now'],
   ['where', 'where the board lives, how it is stored and how fresh it is; fix or undo a problem with it when nothing would be lost'],
   ['issues', 'the project\'s open GitHub issues, marked when on the board; import one as a task'],
+  ['pull_request', 'open a task\'s hand-off as a GitHub pull request, or ask where it stands'],
 ];
 
 /** The server instructions `brainfile mcp` sends in its handshake. */
