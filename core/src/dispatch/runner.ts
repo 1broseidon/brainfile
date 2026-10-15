@@ -24,13 +24,14 @@
  * the files and commits as the CLI does. Asks go to the host's `ask`.
  */
 import { readBoardConfig } from '../boardFile';
-import { claimHeld, currentHost, readDispatchRecord, claimDispatchFile, releaseDispatchFile, requestDispatchFile, type ClaimInput } from '../dispatchRecord';
+import { claimHeld, currentHost, readDispatchRecord, requestDispatchFile, type ClaimInput } from '../dispatchRecord';
 import { readTasksDir } from '../taskFile';
 import { appendLog, completeTaskFile, moveTaskFileToColumn } from '../taskOperations';
 import { findV2Task, getV2Dirs } from '../workspace';
 import type { ColumnConfig, DispatchBy, DispatchClaim, DispatchOutcome, DispatchRecord, DispatchRequest, DispatchRunner, DispatchUntil, Task } from '../types';
 import { openPullRequestOf } from '../pullRequest';
 import { scheduleBoardCommit } from '../repo/boardRepo';
+import { giveBackClaim, parkInReview, reviewColumn, takeClaim, type ClaimTaken } from '../repo/claims';
 import { locateBoard } from '../repo/locate';
 import {
   BEAT_MS,
@@ -66,9 +67,6 @@ const LIVE: ReadonlySet<RunState> = new Set(['starting', 'working', 'waiting']);
 
 // ── The board's writes ──────────────────────────────────────────────────────
 
-/** A claim refused: `held` when another runner holds the task, else the write itself failed. */
-export type ClaimTaken = { ok: true } | { ok: false; held: boolean; error: string };
-
 /**
  * The writes a runner makes on the board. Each commits like any other board
  * change: the desktop's go through its host, `fileBoard()`'s straight to the
@@ -92,11 +90,6 @@ export interface RunnerBoard {
   settleLanded(projectId: string, taskId: string): Promise<Result<{ completed: boolean; left: number }>>;
   /** Into the board's review column, for the person: a landing that may not go back again. */
   park(projectId: string, taskId: string): Promise<Result>;
-}
-
-/** The board's review column: by id or title, as the brief's finish line finds it. */
-export function reviewColumn<C extends Pick<ColumnConfig, 'id' | 'title'>>(columns: C[]): C | undefined {
-  return columns.find((c) => /review/i.test(c.id) || /review/i.test(c.title ?? ''));
 }
 
 /** Where unfinished work goes back to: in progress by name, else the first open column. */
@@ -149,23 +142,17 @@ export function fileBoard(): RunnerBoard {
         if (!written.ok) throw new Error(written.error);
       }),
     claim(projectId, taskId, claim, options) {
-      const { dotDir } = boardOf(projectId);
-      const isLost = (held: DispatchClaim) => (!!options.takeOwn && held.host === claim.host && held.pid === claim.pid) || isClaimLost(dotDir, held);
-      let taken: ReturnType<typeof claimDispatchFile>;
+      let taken: ClaimTaken;
       try {
-        taken = claimDispatchFile(taskFileOf(projectId, taskId), claim, { isLost, ...(options.request ? { request: options.request } : {}) });
+        taken = takeClaim(boardOf(projectId).dotDir, taskFileOf(projectId, taskId), claim, options);
       } catch (err) {
-        return Promise.resolve({ ok: false, held: false, error: err instanceof Error ? err.message : String(err) });
+        taken = { ok: false, held: false, error: err instanceof Error ? err.message : String(err) };
       }
-      if (!taken.ok) return Promise.resolve({ ok: false, held: taken.reason === 'claimed' || taken.reason === 'other-host', error: taken.error });
-      scheduleBoardCommit(boardOf(projectId).brainfilePath, `claim ${taskId}: ${claim.runner} on ${claim.host}`);
-      return Promise.resolve({ ok: true });
+      if (taken.ok) scheduleBoardCommit(boardOf(projectId).brainfilePath, `claim ${taskId}: ${claim.runner} on ${claim.host}`);
+      return Promise.resolve(taken);
     },
     release: (projectId, taskId, holder, outcome) =>
-      committed(projectId, `release ${taskId}: ${outcome}`, () => {
-        const released = releaseDispatchFile(taskFileOf(projectId, taskId), holder, { outcome });
-        if (!released.ok) throw new Error(released.error);
-      }),
+      committed(projectId, `release ${taskId}: ${outcome}`, () => giveBackClaim(taskFileOf(projectId, taskId), holder, outcome)),
     note: (projectId, taskId, text) => committed(projectId, `note ${taskId}`, () => void unwrap(appendLog(taskFileOf(projectId, taskId), text.replace(/\s+/g, ' ').trim()))),
     settleLanded: (projectId, taskId) =>
       committed(projectId, `land ${taskId}`, () => {
@@ -187,16 +174,7 @@ export function fileBoard(): RunnerBoard {
         unwrap(completeTaskFile(found.filePath, dirs.logsDir, { types: config?.types }));
         return { completed: true, left: 0 };
       }),
-    park: (projectId, taskId) =>
-      committed(projectId, `review ${taskId}`, () => {
-        const { brainfilePath } = boardOf(projectId);
-        const config = readBoardConfig(brainfilePath)?.config;
-        const review = reviewColumn(config?.columns ?? []);
-        const found = findV2Task(getV2Dirs(brainfilePath), taskId);
-        if (config && review && found && found.doc.task.column !== review.id) {
-          unwrap(moveTaskFileToColumn(getV2Dirs(brainfilePath), config, taskId, review.id, { skipAutoComplete: true }));
-        }
-      }),
+    park: (projectId, taskId) => committed(projectId, `review ${taskId}`, () => parkInReview(boardOf(projectId).brainfilePath, taskId)),
   };
 }
 
@@ -321,6 +299,8 @@ export class Runner {
   private readonly asking = new Map<string, Map<string, (optionId: string | null) => void>>();
   /** Projects whose queue `work` keeps taking from as runs end. */
   private readonly working = new Set<string>();
+  /** The last pass of `work` on each project, which the next waits for. */
+  private readonly passes = new Map<string, Promise<Started[]>>();
   private nextId = 1;
   private readonly startedAt = Date.now();
   private readonly idBase = this.startedAt.toString(36);
@@ -735,10 +715,17 @@ export class Runner {
    * Takes queued requests in order while fewer than `limit` run on this
    * repository, whichever runner runs them; one that waits on its
    * dependencies stays queued. From then on, each hand-off that ends here
-   * takes the next. What it started.
+   * takes the next. What it started. Passes on a project run one after
+   * another, so two runs ending at once never start past the limit.
    */
-  async work(projectId: string): Promise<Started[]> {
+  work(projectId: string): Promise<Started[]> {
     this.working.add(projectId);
+    const next = (this.passes.get(projectId) ?? Promise.resolve([])).catch(() => []).then(() => this.pass(projectId));
+    this.passes.set(projectId, next);
+    return next;
+  }
+
+  private async pass(projectId: string): Promise<Started[]> {
     const started: Started[] = [];
     const limit = this.limit(projectId);
     for (const taskId of this.queued(projectId)) {
