@@ -3,9 +3,9 @@
  * phone), without git: on the `brainfile` project, task-7 can merge (+42 −7,
  * three commits, into main) and task-5 would conflict in src/a.ts. They
  * answer review, readyToMerge, mergeReview and discardReview as the agents
- * process does, in its words (agents.ts, worktree.ts): a clean landing takes
- * a moment for its checks, then goes; a conflict goes back to the agent that
- * did the work, which settles it, and then it can merge too.
+ * process does, in its words (agents.ts, core's repo/worktree.ts): a clean
+ * landing takes a moment for its checks, then goes; a conflict goes back to
+ * the agent that did the work, which settles it, and then it can merge too.
  */
 import * as path from 'path';
 import type { ReadyView, Result, ReviewView } from '../shared/api';

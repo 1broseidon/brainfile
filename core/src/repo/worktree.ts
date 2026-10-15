@@ -18,16 +18,71 @@
  * config (`branch.dispatch/<id>.brainfileBase`, `.brainfileFork`), so
  * nothing else needs storing.
  *
+ * A hand-off may be given another branch to fork from and land on instead
+ * of the trunk (decision-16's `landsOn` will name it): it is recorded as the
+ * branch's `brainfileBase`, and the review, the conflict preview, landing and
+ * send-back all go into it.
+ *
  * Not an IDE: the review says what changed, opens it in the person's editor,
  * merges it or throws it away. It never edits a diff.
+ *
+ * Moved from the desktop (task-76), so the CLI and headless runners hand off
+ * and land the same way. `projectId` is the project's folder throughout.
  */
 import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { git, gitToplevel, listWorktrees, locateBoard } from '@brainfile/core/repo';
-import type { ReadyView, ReviewView } from '../shared/api';
+import type { TaskDocument } from '../types';
+import { BOARD_STATE_DIR, git, gitCommonDir, gitToplevel, listWorktrees } from './boardRepo';
+import { landingLockPath, takeLandingLock, type LandingLockOptions } from './landingLock';
+import { locateBoard } from './locate';
+
+/**
+ * A hand-off's own branch and worktree, as its review shows them (spec-14):
+ * what the agent committed, and where Merge would put it.
+ */
+export interface HandOffReview {
+  /** `dispatch/task-15`; null for a hand-off that only read, in a detached checkout of the trunk. */
+  branch: string | null;
+  /** The worktree's folder. */
+  path: string;
+  /** The branch it was started from (a commit, when that was detached). */
+  base: string | null;
+  /** Where Merge lands: the branch it was started from while that exists, else the trunk (decision-11). */
+  into: string | null;
+  /** The branch the project's checkout is on now: when it is `into`, it follows a landing by fast-forward. Null when detached. */
+  checkout: string | null;
+  /** Commits on the branch since it started. */
+  ahead: number;
+  /** The newest first, the first few. */
+  commits: { sha: string; subject: string }[];
+  /** The first few files changed, with lines added and removed. */
+  files: { path: string; added: number; removed: number }[];
+  filesChanged: number;
+  added: number;
+  removed: number;
+  /** Files changed in the worktree and not committed: Merge waits for them. */
+  uncommitted: number;
+  /** Its commits are already in `into`; Merge only lets the worktree go. */
+  merged: boolean;
+  /** The files that would conflict if it merged into `into` now (git merge-tree, nothing written). */
+  conflicts: string[];
+}
+
+/** A hand-off that can merge now, for a Ready to merge list (task-69). */
+export interface ReadyHandOff {
+  taskId: string;
+  /** The branch it merges into. */
+  into: string;
+  /** Commits on its branch. */
+  ahead: number;
+  added: number;
+  removed: number;
+  /** git's merge-tree found the merge would conflict: it waits in its column instead. */
+  conflicts: boolean;
+}
 
 export const BRANCH_PREFIX = 'dispatch/';
 const BASE_KEY = 'brainfileBase';
@@ -91,10 +146,16 @@ export function trunkOf(repoRoot: string): { name: string; ref: string } | null 
   const origin = git(['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], repoRoot);
   const fromOrigin = origin.ok && origin.stdout.startsWith('origin/') ? origin.stdout.slice('origin/'.length) : '';
   for (const name of [named.ok ? named.stdout : '', fromOrigin, 'main', 'master']) {
-    if (!name) continue;
-    if (branchExists(repoRoot, name)) return { name, ref: name };
-    if (git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], repoRoot).ok) return { name, ref: `origin/${name}` };
+    const found = name ? branchRef(repoRoot, name) : null;
+    if (found) return found;
   }
+  return null;
+}
+
+/** A branch by name, as a hand-off forks from it: the local branch, else origin's copy of it; null when neither exists. */
+export function branchRef(repoRoot: string, name: string): { name: string; ref: string } | null {
+  if (branchExists(repoRoot, name)) return { name, ref: name };
+  if (git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${name}`], repoRoot).ok) return { name, ref: `origin/${name}` };
   return null;
 }
 
@@ -102,7 +163,8 @@ export function trunkOf(repoRoot: string): { name: string; ref: string } | null 
  * Where to fork from: the local trunk, unless it is only behind origin's (work
  * merged on the forge that was never pulled), when origin's is. A local trunk
  * with commits of its own is the person's, and is kept. Landing then moves the
- * local trunk on past origin's commits, as the branch holds them.
+ * local trunk on past origin's commits, as the branch holds them. Any other
+ * branch a hand-off forks from is chosen the same way.
  */
 export function freshest(repoRoot: string, trunk: { name: string; ref: string }): string {
   const remote = `origin/${trunk.name}`;
@@ -191,26 +253,32 @@ export function canBranch(projectId: string): string | null {
 }
 
 /**
- * The task's worktree, made on first use from the trunk's tip, and found
- * again after (a send-back, a second hand-off). One that only `reads` gets a
- * detached checkout and no branch, unless the task already has a branch:
- * the work on it is kept. Null when the project cannot branch (see canBranch).
+ * The task's worktree, made on first use from the tip of the branch it goes
+ * into, and found again after (a send-back, a second hand-off). That is
+ * `base` when given (decision-16: the task's target, a local branch or
+ * origin's, which is then made locally so the work can land there), else the
+ * trunk; either through `freshest`. It is recorded as the branch's
+ * `brainfileBase`, which review and landing go by; a branch made before keeps
+ * the one it recorded. One that only `reads` gets a detached checkout and no
+ * branch, unless the task already has a branch: the work on it is kept. Null
+ * when the project cannot branch (see canBranch).
  */
-export function prepareWorktree(projectId: string, taskId: string, root = worktreesRoot(), reads = false): Worktree | null {
+export function prepareWorktree(projectId: string, taskId: string, root = worktreesRoot(), reads = false, base?: string): Worktree | null {
   const repoRoot = canBranch(projectId);
   if (!repoRoot) return null;
   const branch = branchFor(taskId);
-  const trunk = trunkOf(repoRoot);
+  const target = base ? branchRef(repoRoot, base) : trunkOf(repoRoot);
+  if (base && !target) throw new Error(`There is no branch ${base} for ${taskId} to fork from, here or on origin`);
   // A checkout whose folder was deleted still holds its branch until pruned.
   git(['worktree', 'prune'], repoRoot);
   const reader = existingReader(repoRoot, taskId);
   if (reads && !branchExists(repoRoot, branch)) {
-    if (reader) return { path: reader, branch: null, base: trunk?.name ?? null, resumed: false };
+    if (reader) return { path: reader, branch: null, base: target?.name ?? null, resumed: false };
     const at = worktreePath(repoRoot, taskId, root);
     fs.mkdirSync(path.dirname(at), { recursive: true });
-    const r = git(['worktree', 'add', '--detach', at, trunk ? freshest(repoRoot, trunk) : 'HEAD'], repoRoot);
+    const r = git(['worktree', 'add', '--detach', at, target ? freshest(repoRoot, target) : 'HEAD'], repoRoot);
     if (!r.ok) throw new Error(`Could not make a checkout for ${taskId}: ${r.stderr || r.stdout}`);
-    return { path: at, branch: null, base: trunk?.name ?? null, resumed: false };
+    return { path: at, branch: null, base: target?.name ?? null, resumed: false };
   }
   // It read before and writes now: the read-only checkout gives way, unless it holds changes.
   if (reader) {
@@ -225,12 +293,17 @@ export function prepareWorktree(projectId: string, taskId: string, root = worktr
       const r = git(['worktree', 'add', at, branch], repoRoot);
       if (!r.ok) throw new Error(`Could not check out ${branch}: ${r.stderr || r.stdout}`);
     } else {
+      // A branch named only on origin is made here, following it, so there is a branch to land on.
+      if (base && target && target.ref !== target.name) {
+        const made = git(['branch', '--track', target.name, target.ref], repoRoot);
+        if (!made.ok) throw new Error(`Could not make ${target.name} from ${target.ref}: ${made.stderr || made.stdout}`);
+      }
       // A repository with no trunk to name forks from the checkout, as before decision-11.
-      const fork = git(['rev-parse', trunk ? freshest(repoRoot, trunk) : 'HEAD'], repoRoot).stdout;
-      const base = trunk?.name ?? currentBranch(repoRoot) ?? fork;
+      const fork = git(['rev-parse', target ? freshest(repoRoot, target) : 'HEAD'], repoRoot).stdout;
+      const into = target?.name ?? currentBranch(repoRoot) ?? fork;
       const r = git(['worktree', 'add', '-b', branch, at, fork], repoRoot);
       if (!r.ok) throw new Error(`Could not make a worktree for ${taskId}: ${r.stderr || r.stdout}`);
-      git(['config', `branch.${branch}.${BASE_KEY}`, base], repoRoot);
+      git(['config', `branch.${branch}.${BASE_KEY}`, into], repoRoot);
       git(['config', `branch.${branch}.${FORK_KEY}`, fork], repoRoot);
     }
   }
@@ -238,7 +311,7 @@ export function prepareWorktree(projectId: string, taskId: string, root = worktr
 }
 
 /** The work a hand-off left on its branch, for the review in the task pane; null when it has no worktree. */
-export function reviewOf(projectId: string, taskId: string): ReviewView | null {
+export function reviewOf(projectId: string, taskId: string): HandOffReview | null {
   const repoRoot = gitToplevel(projectId);
   if (!repoRoot) return null;
   const at = existing(repoRoot, taskId);
@@ -336,11 +409,11 @@ export function uncommittedIn(at: string): { files: string[]; count: number } {
  * the merge would conflict. Whether an agent is still at it is the caller's
  * to know.
  */
-export function readyToMerge(projectId: string): ReadyView[] {
+export function readyToMerge(projectId: string): ReadyHandOff[] {
   const repoRoot = gitToplevel(projectId);
   if (!repoRoot) return [];
   const heads = `refs/heads/${BRANCH_PREFIX}`;
-  const ready: ReadyView[] = [];
+  const ready: ReadyHandOff[] = [];
   for (const w of listWorktrees(repoRoot)) {
     if (!w.branch?.startsWith(heads) || !fs.existsSync(w.path)) continue;
     const taskId = w.branch.slice(heads.length);
@@ -380,7 +453,7 @@ function cleanUp(repoRoot: string, at: string, branch: string | null, force: boo
 }
 
 /** Why Merge would refuse this review, before anything runs; null when it would go ahead. */
-export function whyNotMerge(taskId: string, review: ReviewView | null): string | null {
+export function whyNotMerge(taskId: string, review: HandOffReview | null): string | null {
   if (!review) return `${taskId} has no worktree to merge`;
   const { branch, into } = review;
   if (!branch) return `${taskId} only read: there is nothing to merge`;
@@ -429,11 +502,18 @@ export function runChecks(at: string, commands: string[], env: NodeJS.ProcessEnv
   })();
 }
 
+/** A commit a conflict collided with, and the task whose landing brought it, when one did. */
+export interface Collision {
+  sha: string;
+  subject: string;
+  taskId?: string;
+}
+
 /** What a landing came to: landed, or why not, with what task-63 needs to send a conflict back. */
 export type Landing =
   | { ok: true; message: string }
   | { ok: false; kind: 'refused'; error: string }
-  | { ok: false; kind: 'conflict'; error: string; branch: string; into: string; files: string[] }
+  | { ok: false; kind: 'conflict'; error: string; branch: string; into: string; files: string[]; collided: Collision[] }
   | { ok: false; kind: 'check'; error: string; branch: string; into: string; command: string; output: string };
 
 /** The files a list names: the first three, and how many more. */
@@ -446,7 +526,7 @@ function named(files: string[]): string {
  * branch started that touch the conflicting files, newest first, each with
  * the task whose landing brought it (`Merge task-N: title`), when one did.
  */
-export function collisions(projectId: string, branch: string, into: string, files: string[]): { sha: string; subject: string; taskId?: string }[] {
+export function collisions(projectId: string, branch: string, into: string, files: string[]): Collision[] {
   const repoRoot = gitToplevel(projectId);
   if (!repoRoot || !files.length) return [];
   const base = git(['merge-base', into, branch], repoRoot).stdout;
@@ -470,16 +550,26 @@ export function collisions(projectId: string, branch: string, into: string, file
   });
 }
 
-/** Landings in flight, one chain per repository: one lands at a time. */
-const landings = new Map<string, Promise<unknown>>();
+/**
+ * The repository's landing lock (landingLock.ts): in the board's `state/`,
+ * which every worktree, the CLI's and the desktop's alike, finds as one;
+ * in git's own folder when there is no board to find.
+ */
+export function landingLockOf(repoRoot: string): string {
+  const located = locateBoard(repoRoot, { materialize: false });
+  const dir = located.found ? path.join(located.dotDir, BOARD_STATE_DIR) : path.join(gitCommonDir(repoRoot) ?? path.join(repoRoot, '.git'), 'brainfile');
+  return landingLockPath(dir);
+}
 
-function serially<T>(key: string, work: () => Promise<T>): Promise<T> {
-  const next = (landings.get(key) ?? Promise.resolve()).then(work, work);
-  landings.set(
-    key,
-    next.catch(() => {})
-  );
-  return next;
+/** One landing at a time per repository, across processes: `work` runs holding the lock, which goes after. */
+async function serially(repoRoot: string, options: LandingLockOptions | undefined, work: () => Promise<Landing>): Promise<Landing> {
+  const lock = await takeLandingLock(landingLockOf(repoRoot), options);
+  if (!lock.ok) return { ok: false, kind: 'refused', error: lock.error };
+  try {
+    return await work();
+  } finally {
+    lock.release();
+  }
 }
 
 /**
@@ -492,16 +582,23 @@ function serially<T>(key: string, work: () => Promise<T>): Promise<T> {
  * their uncommitted changes, and waits, naming the file, when the landing
  * would overwrite one), else by compare-and-swap with update-ref. If the
  * trunk moved meanwhile it starts again from the new tip. One landing at a
- * time per repository; the worktree and branch go once landed.
+ * time per repository, whichever process lands: another waits for the
+ * landing lock (`lock` says how long). The worktree and branch go once
+ * landed.
  */
 export function landReview(
   projectId: string,
   taskId: string,
-  options: { title?: string; check?: (at: string) => Promise<{ ok: true } | { ok: false; command: string; output: string }>; attempts?: number } = {}
+  options: {
+    title?: string;
+    check?: (at: string) => Promise<{ ok: true } | { ok: false; command: string; output: string }>;
+    attempts?: number;
+    lock?: LandingLockOptions;
+  } = {}
 ): Promise<Landing> {
   const repoRoot = gitToplevel(projectId);
   if (!repoRoot) return Promise.resolve({ ok: false, kind: 'refused', error: `${taskId} has no worktree to merge` });
-  return serially(repoRoot, async (): Promise<Landing> => {
+  return serially(repoRoot, options.lock, async (): Promise<Landing> => {
     const review = reviewOf(projectId, taskId);
     const refused = whyNotMerge(taskId, review);
     if (refused || !review?.branch || !review.into) return { ok: false, kind: 'refused', error: refused ?? `${taskId} has no worktree to merge` };
@@ -521,7 +618,10 @@ export function landReview(
         if (!brought.ok) {
           const files = git(['diff', '--name-only', '--diff-filter=U'], at).stdout.split('\n').filter(Boolean);
           git(['merge', '--abort'], at);
-          if (files.length) return { ok: false, kind: 'conflict', branch, into, files, error: `${branch} conflicts with ${into} in ${named(files)}. Nothing was merged.` };
+          if (files.length) {
+            const collided = collisions(projectId, branch, into, files);
+            return { ok: false, kind: 'conflict', branch, into, files, collided, error: `${branch} conflicts with ${into} in ${named(files)}. Nothing was merged.` };
+          }
           return { ok: false, kind: 'refused', error: `Nothing was merged: ${said(brought)}` };
         }
       }
@@ -550,6 +650,39 @@ export function landReview(
     cleanUp(repoRoot, at, branch, true);
     return { ok: true, message: `Merged ${branch} into ${into}` };
   });
+}
+
+/** A log entry is one line: a check's output runs on, its lines marked, its end kept. */
+const logLine = (text: string, keep = 600) => text.split('\n').map((l) => l.trim()).filter(Boolean).join(' ⏎ ').slice(-keep);
+
+/** A failed landing goes back with this note (`round` is `n of m`), or stays with the person, who is told why. */
+export type SendBack = { ok: true; note: string; round: string } | { ok: false; said: string };
+
+/**
+ * What sends a landing that failed back to the agent that did the work
+ * (task-63): the note for the task's log, saying what collided (the
+ * conflicting files, the commits on `into` and the tasks that brought them)
+ * or what failed, and how to settle it. Up to the contract's maxRetries,
+ * else once, counted from the send-backs already in the task's log; after
+ * that it stays with the person. Who it goes back to, and starting them
+ * again, is the caller's.
+ */
+export function sendBackNote(doc: Pick<TaskDocument, 'task' | 'body'>, landing: Extract<Landing, { kind: 'conflict' | 'check' }>): SendBack {
+  const { task, body } = doc;
+  const allowed = Math.max(0, task.contract?.maxRetries ?? 1);
+  const before = (body.match(/Landing sent back/g) ?? []).length;
+  if (before >= allowed) return { ok: false, said: `It was sent back ${before === 1 ? 'once' : `${before} times`} already: settle it, or send it back with a note.` };
+  const commands = (task.contract?.validation?.commands ?? []).join(' && ');
+  const round = `${before + 1} of ${allowed}`;
+  if (landing.kind === 'check') {
+    return { ok: true, round, note: `Landing sent back (${round}): with ${landing.into} brought in, \`${landing.command}\` failed: ${logLine(landing.output)}. Fix it on this branch, commit, and run the checks again.` };
+  }
+  const met = landing.collided.map((c) => `${c.sha} ${c.subject}${c.taskId ? ` (${c.taskId})` : ''}`).join('; ');
+  const note =
+    `Landing sent back (${round}): ${landing.branch} conflicts with ${landing.into} in ${landing.files.join(', ')}.` +
+    (met ? ` On ${landing.into} since this branch started: ${met}.` : '') +
+    ` Merge ${landing.into} into this branch (git merge ${landing.into}), keep what both sides meant, commit the merge, and run the checks${commands ? `: ${commands}` : ''}.`;
+  return { ok: true, round, note };
 }
 
 /** Throws the hand-off's work away: its worktree, uncommitted changes and all, and its branch. */
