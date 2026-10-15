@@ -32,19 +32,19 @@ subtasks:
     completed: true
   - id: task-92-3
     title: "The item leaves Ready to merge; the row shows #N; the feed lists it; the task records pullRequest: open"
-    completed: false
+    completed: true
   - id: task-92-4
     title: Merge is refused while the PR is open
-    completed: false
+    completed: true
   - id: task-92-5
     title: bfq pr --status says open with the link
     completed: true
   - id: task-92-6
     title: Squash-merged on GitHub, the task completes within a minute and its worktree and branch go
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:20:40.775Z"
 assignee: claude
-updatedAt: "2026-10-15T20:00:26.524Z"
+updatedAt: "2026-10-15T20:02:21.286Z"
 dispatch:
   agent: claude
   model: opus
