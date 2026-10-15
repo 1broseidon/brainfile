@@ -83,6 +83,7 @@ const CALLS = {
   syncNow: { args: [id], project: true },
   listAgents: { args: [] },
   listModels: { args: [id] },
+  // Every run on this Mac, whichever runner works it (task-84): the agents process merges in those of `brainfile run` and MCP clients.
   live: { args: [] },
   // Effort (the fifth; ask's ninth and tenth) is what the hello's `effort` feature offers (link.md, Calls).
   dispatch: { args: [id, id, id, optional(id), optional(id)], project: true },
