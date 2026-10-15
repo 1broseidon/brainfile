@@ -30,10 +30,10 @@ subtasks:
     completed: true
   - id: task-93-3
     title: Discard lets the worktree and branch go, lands nothing, and leaves the task open
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:20:41.058Z"
 assignee: claude
-updatedAt: "2026-10-15T20:25:52.182Z"
+updatedAt: "2026-10-15T20:26:37.098Z"
 dispatch:
   agent: claude
   model: opus
