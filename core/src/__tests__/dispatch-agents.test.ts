@@ -712,9 +712,15 @@ describe('the brief', () => {
     expect(text).toContain('change no files and make no commits');
   });
 
+  it('a branch\'s work is completed when it lands on its target, and work on no branch is completed by its agent', () => {
+    const file = path.join(board({}), '.brainfile', 'brainfile.md');
+    expect(finish(file, 'task-1', 'release/2.0')).toBe('Do not complete task-1: it is completed when its branch lands on release/2.0.');
+    expect(finish(file, 'task-1', null)).toBe('Then complete task-1.');
+  });
+
   it('a board with a review column has the work moved there for a person', () => {
     const project = board({}, '  - id: todo\n    title: To Do\n  - id: review\n    title: Review\n');
-    expect(finish(path.join(project, '.brainfile', 'brainfile.md'), 'task-1', true)).toBe(
+    expect(finish(path.join(project, '.brainfile', 'brainfile.md'), 'task-1', 'main')).toBe(
       'Then move task-1 to Review (column id `review`) for review. Do not complete it: a person completes it after looking at the work.'
     );
   });
