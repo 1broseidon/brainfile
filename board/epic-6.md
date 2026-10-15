@@ -36,8 +36,16 @@ decisions:
   - decision-17
   - decision-18
 createdAt: "2026-10-14T22:14:19.304Z"
-updatedAt: "2026-10-15T21:40:21.214Z"
+updatedAt: "2026-10-15T21:45:52.105Z"
 epicBranch: true
+assignee: claude
+lead:
+  agent: claude
+  model: opus
+  effort: high
+  by: person
+  at: "2026-10-15T21:45:51.979Z"
+  until: done
 ---
 
 ## Description
