@@ -38,9 +38,9 @@ function atWork() {
 }
 
 /** What each bundle was last time, to tell which ones a rebuild changed. */
-const BUNDLES = ['main', 'preload', 'host', 'agents', 'desk-mcp'];
-/** Bundles that take effect without restarting Electron: main lets the agents process go; each chat session starts the desk's server afresh. */
-const NO_RESTART = new Set(['agents', 'desk-mcp']);
+const BUNDLES = ['main', 'preload', 'host', 'agents'];
+/** Bundles that take effect without restarting Electron: main lets the agents process go. */
+const NO_RESTART = new Set(['agents']);
 let last = {};
 function changedBundles() {
   const now = {};
@@ -91,7 +91,6 @@ const ctx = await context({
     preload: 'src/preload/preload.ts',
     host: 'src/host/host.ts',
     agents: 'src/agents/agents.ts',
-    'desk-mcp': 'src/agents/desk-mcp.ts',
   },
   outdir: 'dist-electron',
   bundle: true,

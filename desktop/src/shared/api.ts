@@ -354,6 +354,8 @@ export interface AgentRun {
   endedAt?: number;
   /** What the agent did on the way to its reply, in order: tools it ran and what it said between them. */
   steps?: RunStep[];
+  /** A run another runner on this machine works (task-84): where, as the window says it, `in a terminal`. Unset for this window's own. */
+  where?: string;
 }
 
 /**
@@ -424,6 +426,8 @@ export interface PermissionAsk {
   /** The tool's kind as the agent reports it: execute, edit, read, fetch, other. */
   kind?: string;
   options: { optionId: string; name: string; kind: string }[];
+  /** An ask from another runner's run (task-84): where it is waiting, `in a terminal`. */
+  where?: string;
 }
 
 export type AgentEvent =
@@ -864,6 +868,7 @@ export const AGENT_METHODS = [
   'resumeLead',
   'stopLead',
   'boardChanged',
+  'runsChanged',
   'live',
   'review',
   'readyToMerge',
@@ -930,4 +935,6 @@ export type HostMethod = (typeof HOST_METHODS)[number];
 export type HostRequest = { id: number; method: HostMethod | AgentHostMethod | 'locate' | 'sharing'; args: unknown[] };
 export type HostMessage =
   | { kind: 'reply'; id: number; result: unknown }
-  | { kind: 'board'; snapshot: BoardSnapshot };
+  | { kind: 'board'; snapshot: BoardSnapshot }
+  /** The board's run or runner files changed (`state/runs`, `state/runners`): the agents process reads them again (task-84). */
+  | { kind: 'runs'; projectId: string };

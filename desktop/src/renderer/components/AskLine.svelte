@@ -24,7 +24,7 @@
 
 <span class="ask" class:stacked>
   <span class="what"
-    ><b>{app.agentName(ask.agentId)}</b> wants to {#if ask.kind && VERB[ask.kind]}{VERB[ask.kind]} <code>{bare}</code>{:else if what}{what}{:else}use <code>{ask.title}</code>{/if}</span
+    ><b>{app.agentName(ask.agentId)}</b> wants to {#if ask.kind && VERB[ask.kind]}{VERB[ask.kind]} <code>{bare}</code>{:else if what}{what}{:else}use <code>{ask.title}</code>{/if}{#if ask.where}<span class="where">, waiting {ask.where}</span>{/if}</span
   >
   {#each shown as option (option.optionId)}
     <button class="btn quiet" onclick={() => api.answerPermission(ask.id, option.optionId)}>{label(option.kind, option.name)}</button>
@@ -64,6 +64,10 @@
     font-size: var(--t-xs);
     letter-spacing: 0.04em;
     color: var(--ink);
+  }
+
+  .where {
+    color: var(--ink-3);
   }
 
   .what b {

@@ -301,10 +301,12 @@ test('a discussion runs read-only when the agent can, else in its own default, n
 
 // ── The board's chat (decision-14) ──────────────────────────────────────────
 
-test('the chat manages the board: its tools, the desk and the brainfile command line are allowed', () => {
+test('the chat manages the board: its tools, its dispatch among them, and the brainfile command line are allowed', () => {
   assert.equal(chatPermission('mcp__brainfile__task_add', 'other'), 'allow');
   assert.equal(chatPermission('brainfile_task_delete'), 'allow');
-  assert.equal(chatPermission('mcp__desk__dispatch'), 'allow');
+  assert.equal(chatPermission('mcp__brainfile__dispatch', 'other'), 'allow');
+  // The desk is gone (task-84): a tool by its old name is nothing the chat has.
+  assert.notEqual(chatPermission('mcp__desk__dispatch', 'execute'), 'allow');
   assert.equal(chatPermission('`brainfile list`', 'execute'), 'allow');
   assert.equal(chatPermission('Run brainfile add -t "x"', 'execute'), 'allow');
   assert.equal(chatPermission('Bash', 'execute', { command: 'npx brainfile show task-1' }), 'allow');
