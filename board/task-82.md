@@ -32,7 +32,7 @@ decisions:
   - decision-11
   - decision-12
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: file
       path: cli/src/commands/run.ts
@@ -45,9 +45,13 @@ contract:
       description: "A fake agent: works the queue, --once returns, Ctrl-C ends runs and releases claims, two runners share a queue"
   validation:
     commands:
-      - npm run build && npm test
+      - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
       - node cli/dist/cli.js run --help
+      - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
+  metrics:
+    readyAt: "2026-10-15T21:40:11.044Z"
 createdAt: "2026-10-14T22:16:23.437Z"
+updatedAt: "2026-10-15T21:40:11.044Z"
 ---
 
 ## Description
