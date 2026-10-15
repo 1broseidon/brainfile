@@ -1,8 +1,8 @@
 ---
 id: task-90
 title: "QA hand-off 1: Lands on, inherited from the epic, and Merge onto qa/parity with main untouched"
-column: in-progress
-position: 10
+column: review
+position: 5
 description: |-
   **For the agent this is handed to:** append one line to `qa/parity-wave-1.md` (make the file and the folder if they are not there): `- QA hand-off 1 (<task id>): landed through Merge, <the time now, ISO>`. Commit it on your branch. Change nothing else, and do not tick this task's subtasks: they are the person's checks. Then do as your brief says when you finish.
 
@@ -42,7 +42,7 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:11.927Z"
 assignee: claude
-updatedAt: "2026-10-15T19:04:47.241Z"
+updatedAt: "2026-10-15T19:05:13.081Z"
 dispatch:
   agent: claude
   model: opus
