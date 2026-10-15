@@ -2,8 +2,6 @@
 id: spec-18
 title: "Where a hand-off lands: a target branch per task, pull requests as a landing, and an opt-in epic branch"
 type: spec
-column: in-progress
-position: 8
 description: |-
   Carries out decision-16. Today every hand-off forks from the trunk and lands on it (decision-11, decision-12); the branch it goes into is already recorded per branch (`branch.dispatch/<id>.brainfileBase`) and `intoOf` honours it, but nothing sets it: `prepareWorktree` always forks from `trunkOf`.
 
@@ -67,7 +65,8 @@ subtasks:
 createdAt: "2026-10-15T04:26:27.402Z"
 dependsOn:
   - task-76
-updatedAt: "2026-10-15T18:11:58.719Z"
+updatedAt: "2026-10-15T21:18:24.770Z"
+completedAt: "2026-10-15T21:18:24.770Z"
 ---
 
 ## Description
