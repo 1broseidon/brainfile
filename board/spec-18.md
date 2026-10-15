@@ -65,6 +65,9 @@ subtasks:
     title: "Docs: MANUAL, desktop README and design.md; a changelog fragment"
     completed: false
 createdAt: "2026-10-15T04:26:27.402Z"
+dependsOn:
+  - task-76
+updatedAt: "2026-10-15T15:49:57.775Z"
 ---
 
 ## Description
