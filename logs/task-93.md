@@ -1,8 +1,6 @@
 ---
 id: task-93
 title: "QA hand-off 4: a pull request closed without merging puts the work back in Ready to merge, where Discard lets it go"
-column: review
-position: 5
 description: |-
   **For the agent this is handed to:** append one line to `qa/parity-wave-1.md` (make the file and the folder if they are not there): `- QA hand-off 4 (<task id>): its pull request was closed unmerged, <the time now, ISO>`. Commit it on your branch. Change nothing else, and do not tick this task's subtasks: they are the person's checks. Then do as your brief says when you finish.
 
@@ -33,7 +31,7 @@ subtasks:
     completed: true
 createdAt: "2026-10-15T18:20:41.058Z"
 assignee: claude
-updatedAt: "2026-10-15T20:26:37.098Z"
+updatedAt: "2026-10-15T20:26:37.626Z"
 dispatch:
   agent: claude
   model: opus
@@ -47,6 +45,7 @@ pullRequest:
   base: qa/parity
   head: dispatch/task-93
   at: "2026-10-15T20:22:36.320Z"
+completedAt: "2026-10-15T20:26:37.626Z"
 ---
 
 ## Description
