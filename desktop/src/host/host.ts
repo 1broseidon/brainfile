@@ -17,6 +17,7 @@ import {
   buildDocGraph,
   completeTaskFile,
   reopenTaskFile,
+  requestDispatchFile,
   decideFile,
   decisionStatus,
   idList,
@@ -710,26 +711,18 @@ function decide(projectId: string, input: NewDecisionInput): Result<DecisionView
 }
 
 /**
- * A hand-off the chat asked for (spec-16): the agent becomes the assignee, as
- * Hand to… makes it, and `dispatch:` says who asked, with what and when. Core
- * keeps the key as it keeps any it does not know; it commits like any change.
+ * A hand-off asked for (spec-16): the agent becomes the assignee, as Hand to…
+ * makes it, and `dispatch:` says who asked, with what and when. Core writes
+ * the record (task-74), by compare-and-swap on the task file, keeping what it
+ * does not know and a claim that still holds; it commits like any change.
  */
 function recordDispatch(projectId: string, taskId: string, record: DispatchRecord): Result {
   return mutate(
     projectId,
     () => `dispatch ${taskId}: ${record.agent} (asked by ${record.by})`,
     (board) => {
-      const file = taskPath(board, taskId);
-      const doc = readTaskFile(file);
-      if (!doc) throw new Error(`Could not read ${taskId}`);
-      const dispatch: DispatchRecord = {
-        agent: record.agent,
-        ...(record.model ? { model: record.model } : {}),
-        ...(record.effort ? { effort: record.effort } : {}),
-        by: record.by,
-        at: record.at,
-      };
-      writeTaskFile(file, { ...doc.task, assignee: record.agent, dispatch, updatedAt: new Date().toISOString() }, doc.body);
+      const written = requestDispatchFile(taskPath(board, taskId), record, { assignee: true });
+      if (!written.ok) throw new Error(written.reason === 'missing' ? `Could not read ${taskId}` : written.error);
     }
   );
 }
