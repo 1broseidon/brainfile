@@ -2,8 +2,8 @@
 id: epic-6
 title: "Headless parity: everything the desktop runs also works over MCP and the CLI, and the desktop shows it live"
 type: epic
-column: backlog
-position: 9
+column: in-progress
+position: 3
 tags:
   - desktop
   - mcp
@@ -36,7 +36,7 @@ decisions:
   - decision-17
   - decision-18
 createdAt: "2026-10-14T22:14:19.304Z"
-updatedAt: "2026-10-15T17:11:59.603Z"
+updatedAt: "2026-10-15T21:25:55.968Z"
 ---
 
 ## Description
