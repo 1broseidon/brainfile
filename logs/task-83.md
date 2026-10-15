@@ -1,8 +1,6 @@
 ---
 id: task-83
 title: Move the desktop's epic lead into core's shared runner, so it runs the same from brainfile run and MCP
-column: in-progress
-position: 19
 tags:
   - core
   - dispatch
@@ -47,7 +45,7 @@ contract:
     pickedUpAt: "2026-10-15T22:31:36.284Z"
     reworkCount: 0
 createdAt: "2026-10-14T22:16:33.537Z"
-updatedAt: "2026-10-15T22:31:36.284Z"
+updatedAt: "2026-10-15T22:55:17.768Z"
 dispatch:
   agent: claude
   model: opus
@@ -55,6 +53,7 @@ dispatch:
   by: lead
   at: "2026-10-15T22:31:26.384Z"
 assignee: claude
+completedAt: "2026-10-15T22:55:17.768Z"
 ---
 
 ## Description
