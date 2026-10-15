@@ -24,17 +24,18 @@ parentId: epic-8
 subtasks:
   - id: task-102-1
     title: Opening refuses when the base has unpushed local commits, naming them
-    completed: false
+    completed: true
   - id: task-102-2
     title: Settling a merged PR brings the local base to origin's when nothing would be lost
-    completed: false
+    completed: true
   - id: task-102-3
     title: Tests against a bare origin
-    completed: false
+    completed: true
   - id: task-102-4
     title: qa/parity reconciled for the rest of QA
-    completed: false
+    completed: true
 createdAt: "2026-10-15T20:02:21.568Z"
+updatedAt: "2026-10-15T20:10:16.261Z"
 ---
 
 ## Description
