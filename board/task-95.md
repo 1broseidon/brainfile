@@ -13,7 +13,7 @@ parentId: epic-9
 createdAt: "2026-10-15T18:20:54.384Z"
 dependsOn:
   - task-89
-updatedAt: "2026-10-15T20:55:46.171Z"
+updatedAt: "2026-10-15T20:55:51.896Z"
 contract:
   status: ready
   deliverables:
@@ -28,6 +28,12 @@ contract:
     - Change nothing but qa/parity-wave-1.md; keep its existing lines
   metrics:
     readyAt: "2026-10-15T20:55:46.170Z"
+dispatch:
+  agent: claude
+  model: claude-opus-5-5
+  by: lead
+  at: "2026-10-15T20:55:51.778Z"
+assignee: claude
 ---
 
 ## Description
