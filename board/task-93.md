@@ -33,7 +33,11 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:41.058Z"
 assignee: claude
-updatedAt: "2026-10-15T20:21:14.542Z"
+updatedAt: "2026-10-15T20:21:16.020Z"
+dispatch:
+  agent: claude
+  by: person
+  at: "2026-10-15T20:21:15.784Z"
 ---
 
 ## Description
