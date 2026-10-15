@@ -365,20 +365,27 @@ export interface AgentRun {
 export type { DispatchRecord } from '@brainfile/core/browser';
 
 /**
- * An epic handed off (decision-15), written on it as `lead:`: who leads it,
- * and how far its children go on their own. `done` (a bypass repository):
- * the app lands each child that ends in Review; `review`: the person merges
- * each. Removed when the lead stops or the epic is done; one still there with
- * no lead running is one to resume.
+ * An epic handed off (decision-15), on it as `dispatch:` with role lead
+ * (core's, task-83): who leads it, and how far its children go on their own.
+ * `done` (a bypass repository): the app lands each child that ends in Review;
+ * `review`: the person merges each. Removed when the lead stops or the epic
+ * is done; one still there with no lead running is one to resume.
  */
 export interface LeadRecord {
   agent: AgentId;
   model?: string;
   effort?: string;
-  by: 'person' | 'chat';
+  /** Who asked: the person, the chat, the CLI or an MCP client. */
+  by: string;
   /** ISO 8601. */
   at: string;
   until: 'review' | 'done';
+  /** Paused from anywhere: it hands off nothing until resumed. */
+  paused?: boolean;
+  /** The runner leading it, when one holds it and is up: `cli on mac (pid 412)`. */
+  where?: string;
+  /** That runner's process, to tell this app's own from another's. */
+  pid?: number;
 }
 
 /** `leading`: at work or waiting for its children; `paused`: dispatches nothing, events wait; `stopped` and `done` end it. */
@@ -877,7 +884,7 @@ export const AGENT_HOST_METHODS = [
   'claimDispatch',
   'releaseDispatch',
   'parkInReview',
-  'recordLead',
+  'markLead',
   'recordPullRequest',
   'noteTask',
   'settleLanded',

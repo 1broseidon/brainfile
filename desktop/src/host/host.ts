@@ -69,8 +69,8 @@ import {
   syncMessage,
   syncStatusLabel,
 } from '@brainfile/core/repo';
-import { giveBackClaim, parkInReview as parkTask, takeClaim, type ClaimTaken } from '@brainfile/core/repo';
-import type { ClaimInput, DispatchClaim, DispatchOutcome, DispatchRequest } from '@brainfile/core';
+import { giveBackClaim, markLead as markLeadFile, parkInReview as parkTask, takeClaim, type ClaimTaken, type TakeOptions } from '@brainfile/core/repo';
+import { claimHeld, currentHost, pidAlive, readLeadRecord, type ClaimInput, type DispatchClaim, type DispatchOutcome, type LeadAction } from '@brainfile/core';
 import { integrityView } from './integrity';
 import { workColumn } from '../shared/columns';
 import { applyFix, lastFix, planFix as planBoardFix, undoFix as undoBoardFix } from '@brainfile/core/repo';
@@ -206,17 +206,25 @@ function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph
   };
 }
 
-/** The `lead:` an epic carries, when it is whole enough to resume from. */
+/**
+ * The lead an epic carries (core's readLeadRecord: `dispatch:` with role
+ * lead, or the `lead:` written before task-83), with where it runs when a
+ * runner holds it whose process is up.
+ */
 function leadOf(task: Task): LeadRecord | undefined {
-  const lead = (task as { lead?: unknown }).lead as Partial<LeadRecord> | undefined;
-  if (!lead || typeof lead !== 'object' || typeof lead.agent !== 'string' || !lead.agent) return undefined;
+  const lead = readLeadRecord(task as Task & { lead?: unknown });
+  if (!lead) return undefined;
+  const claim = lead.claim;
+  const up = claimHeld(claim) && (claim.host !== currentHost() || pidAlive(claim.pid));
   return {
     agent: lead.agent as AgentId,
-    ...(typeof lead.model === 'string' && lead.model ? { model: lead.model } : {}),
-    ...(typeof lead.effort === 'string' && lead.effort ? { effort: lead.effort } : {}),
-    by: lead.by === 'chat' ? 'chat' : 'person',
-    at: typeof lead.at === 'string' ? lead.at : '',
+    ...(lead.model ? { model: lead.model } : {}),
+    ...(lead.effort ? { effort: lead.effort } : {}),
+    by: lead.by,
+    at: lead.at,
     until: lead.until === 'done' ? 'done' : 'review',
+    ...(lead.paused ? { paused: true } : {}),
+    ...(up ? { where: `${claim.runner} on ${claim.host} (pid ${claim.pid})`, pid: claim.pid } : {}),
   };
 }
 
@@ -656,19 +664,12 @@ function settleLanded(projectId: string, taskId: string): Result<{ completed: bo
   );
 }
 
-/** An epic's lead, on the epic (decision-15); null takes it off. */
-function recordLead(projectId: string, epicId: string, record: LeadRecord | null): Result {
+/** An epic's lead paused, resumed or taken off its record (decision-15, core's changeLeadFile); its claim is claimDispatch's. */
+function markLead(projectId: string, epicId: string, action: LeadAction): Result {
   return mutate(
     projectId,
-    () => (record ? `lead ${epicId}: ${record.agent} (until ${record.until})` : `lead ${epicId}: ended`),
-    (board) => {
-      const file = taskPath(board, epicId);
-      const doc = readTaskFile(file);
-      if (!doc) throw new Error(`Could not read ${epicId}`);
-      const { lead: _old, ...rest } = doc.task as Task & { lead?: unknown };
-      const next = record ? { ...rest, lead: { ...record } } : rest;
-      writeTaskFile(file, { ...next, updatedAt: new Date().toISOString() } as Task, doc.body);
-    }
+    () => `lead ${epicId}: ${action === 'end' ? 'ended' : action === 'pause' ? 'paused' : 'resumed'}`,
+    (board) => markLeadFile(taskPath(board, epicId), action)
   );
 }
 
@@ -750,7 +751,7 @@ function recordDispatch(projectId: string, taskId: string, record: DispatchRecor
  * compare-and-swap on the task file, refused while another runner's holds
  * it (core's takeClaim); it commits like any change.
  */
-function claimDispatch(projectId: string, taskId: string, claim: ClaimInput, options: { takeOwn?: boolean; request?: DispatchRequest }): Result<ClaimTaken> {
+function claimDispatch(projectId: string, taskId: string, claim: ClaimInput, options: TakeOptions): Result<ClaimTaken> {
   return mutate(
     projectId,
     () => `claim ${taskId}: ${claim.runner} on ${claim.host}`,
@@ -963,7 +964,7 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   claimDispatch,
   releaseDispatch,
   parkInReview,
-  recordLead,
+  markLead,
   recordPullRequest,
   settleLanded,
   syncNow,

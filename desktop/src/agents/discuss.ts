@@ -8,7 +8,9 @@
  * it asks to do is sorted here before anyone is asked.
  */
 import { extractDescription, extractLog, findV2Task, getV2Dirs, parseNotes, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
+import { BOARD_TOOL_NAME, REFUSED_KINDS, leadPermission, readOnlyMode } from '@brainfile/core/dispatch';
 import type { AgentModes, ReviewView } from '../shared/api';
+export { commandOf } from '@brainfile/core/dispatch';
 
 /** A decision the task rests on, in full: the agent works within it. */
 export interface DiscussDecision {
@@ -300,14 +302,8 @@ export function discussPreamble(ctx: DiscussContext): string {
   return `${taskInformation(ctx)}\n\n${discussRules(ctx)}\n\n`;
 }
 
-/** Brainfile's board tools as an agent names them: `mcp__brainfile__task_patch`, `brainfile_get_task`, `mcp.brainfile.note`. */
-const BOARD_TOOL_NAME = /^(?:mcp(?:__|\.))?brainfile(?:__|[_.])(\w+)/i;
-
 /** The board tools a discussion may use: reading anything (its server offers review's show and ready only); changing this task's description, subtasks and contract, and its log; and recording, replacing or retiring decisions. */
 const DISCUSS_TOOLS = new Set(['brief', 'get_task', 'list_tasks', 'search', 'check', 'log', 'where', 'types', 'columns', 'template', 'lint', 'task_patch', 'subtask', 'contract', 'note', 'decide', 'supersede', 'retire', 'dispatch_status', 'review', 'agents']);
-
-/** What the agent does to the code, or to how it runs: never in a discussion. */
-const REFUSED_KINDS = new Set(['edit', 'delete', 'move', 'execute', 'switch_mode']);
 
 /**
  * How a discussion answers an agent that asks before it acts: a board tool it
@@ -324,20 +320,6 @@ export function discussPermission(title: string, kind?: string | null): 'allow' 
 /** The desk's tools as an agent names them: `mcp__desk__dispatch`, `desk.runs`. */
 const DESK_TOOL_NAME = /^(?:mcp(?:__|\.))?desk(?:__|[_./])(?:dispatch|runs|stop)\b/i;
 
-/** The words of a command an agent asks to run: its raw input's `command` (a string, or argv), else the title without its backticks or `Run`. */
-export function commandOf(title: string, rawInput?: unknown): string {
-  const raw = rawInput && typeof rawInput === 'object' ? (rawInput as { command?: unknown }).command : undefined;
-  const words = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.map(String).join(' ') : title;
-  return words.trim().replace(/^`+|`+$/g, '').replace(/^run\s+/i, '').trim();
-}
-
-/** One command, nothing chained, piped, redirected or substituted after it. */
-const PLAIN = /^[^;&|<>`$\n]*$/;
-/** The board's own command line, its fallback when the MCP tools are missing. */
-const BOARD_COMMAND = /^(?:npx\s+)?brainfile(?:\s|$)/;
-/** git that only reads: what the chat may look at to write a task or answer the health line's Ask agent. */
-const READING_GIT = /^git\s+(?:status|log|diff|show|rev-parse|merge-base|ls-files|blame|shortlog|describe|worktree\s+list|branch\s+(?:--list|-a|-r|-v|-vv|--show-current|--contains|--merged))(?:\s|$)/;
-
 /**
  * How the board's chat answers an agent that asks before it acts
  * (decision-14): it manages the board and hands code to hand-offs. Board and
@@ -348,28 +330,15 @@ const READING_GIT = /^git\s+(?:status|log|diff|show|rev-parse|merge-base|ls-file
  */
 export function chatPermission(title: string, kind?: string | null, rawInput?: unknown): 'allow' | 'refuse' | 'usual' {
   const named = title.trim();
-  if (BOARD_TOOL_NAME.test(named) || DESK_TOOL_NAME.test(named)) return 'allow';
-  if (kind === 'execute') {
-    const command = commandOf(named, rawInput);
-    const reads = READING_GIT.test(command) && !/\s--output\b/.test(command);
-    return PLAIN.test(command) && (BOARD_COMMAND.test(command) || reads) ? 'allow' : 'refuse';
-  }
-  return kind && REFUSED_KINDS.has(kind) ? 'refuse' : 'usual';
+  if (DESK_TOOL_NAME.test(named)) return 'allow';
+  // The rest is a lead's rule (core's): the board, the brainfile command line and git that only reads.
+  return leadPermission(named, kind, rawInput);
 }
-
-/** A mode that only reads: Codex's Read Only. */
-const READ_ONLY = /read.?only/i;
 
 /**
  * The mode a discussion runs in: one that only reads when the agent has one;
  * else the one it starts in, its own default, which asks before an edit or a
- * command. Never the mode chosen for hand-offs, which may accept edits
- * unasked, and never the bypass mode, where nothing would be asked and so
- * nothing refused.
+ * command; never the hand-offs' mode or bypass (core's readOnlyMode, which a
+ * lead keeps too).
  */
-export function discussMode(modes: AgentModes): string {
-  const readOnly = modes.options.find((m) => READ_ONLY.test(m.id) || READ_ONLY.test(m.name));
-  if (readOnly) return readOnly.id;
-  if (modes.initial !== modes.bypass) return modes.initial;
-  return modes.options.find((m) => m.id !== modes.bypass)?.id ?? modes.initial;
-}
+export const discussMode: (modes: AgentModes) => string = readOnlyMode;
