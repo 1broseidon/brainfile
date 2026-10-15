@@ -1,8 +1,6 @@
 ---
 id: task-94
 title: "QA: the trunk said when it is ahead of origin, in Ready to merge and the feed"
-column: todo
-position: 10
 description: |-
   Not a hand-off. Tests spec-18's note: landing never pushes, so the app says when the trunk has commits origin lacks.
   1. `git fetch origin`, then `git rev-list --count origin/main..main`. Today main is ahead of origin (unpushed commits), so this is more than 0.
@@ -25,7 +23,8 @@ subtasks:
     title: The line goes when main is level with origin
     completed: true
 createdAt: "2026-10-15T18:20:41.345Z"
-updatedAt: "2026-10-15T20:35:28.765Z"
+updatedAt: "2026-10-15T20:35:29.299Z"
+completedAt: "2026-10-15T20:35:29.299Z"
 ---
 
 ## Description
