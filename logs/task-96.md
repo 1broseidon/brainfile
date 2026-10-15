@@ -1,8 +1,6 @@
 ---
 id: task-96
 title: "Drill child 2: a line on the epic's branch, after the target was brought in"
-column: review
-position: 13
 description: "Append one line to `qa/parity-wave-1.md`: `- Drill child 2 (<task id>): on <the branch you started from>, after task-95, <the time now, ISO>`. If your brief says to merge a branch into yours first because bringing it in conflicted, do that first and keep both sides' lines. Commit on your branch. Change nothing else."
 tags:
   - qa
@@ -32,13 +30,14 @@ contract:
     reworkCount: 0
     deliveredAt: "2026-10-15T20:56:43.613Z"
     duration: 7
-updatedAt: "2026-10-15T20:56:43.613Z"
+updatedAt: "2026-10-15T20:56:47.576Z"
 dispatch:
   agent: claude
   model: claude-opus-5-5
   by: lead
   at: "2026-10-15T20:56:26.261Z"
 assignee: claude
+completedAt: "2026-10-15T20:56:47.576Z"
 ---
 
 ## Description
