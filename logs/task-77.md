@@ -1,8 +1,6 @@
 ---
 id: task-77
 title: "Issues from the CLI and MCP: source on a task, list a repository's issues, make a task from one"
-column: in-progress
-position: 6
 description: |-
   The desktop's issues view (task-26) needs main/forge.ts, main/github.ts and shared/issues.ts, and a task made from an issue carries `source:` (decision-4). Core keeps `source` only as an unknown key, and neither `brainfile add` nor `task_add` can set it.
 
@@ -53,7 +51,8 @@ contract:
       - npm run build && npm test
       - cd desktop && npm run typecheck && npm test
 createdAt: "2026-10-14T22:15:23.116Z"
-updatedAt: "2026-10-15T17:11:59.875Z"
+updatedAt: "2026-10-15T21:18:24.130Z"
+completedAt: "2026-10-15T21:18:24.130Z"
 ---
 
 ## Description
