@@ -3,16 +3,6 @@ id: task-82
 title: "brainfile run: a foreground runner that works the queue in a terminal, and live runs on the TUI's rows"
 column: backlog
 position: 18
-description: |-
-  This builds spec-16-8. `brainfile run [--once] [--max N] [--until review|done]` is a foreground runner left open in a terminal split. It is not a daemon.
-
-  - It writes its presence file (state/runners/), works the queue through the Runner from task-80, and prints one plain line per change (`task-74 · codex · editing`, `task-74 in Review`).
-  - It asks permission at a prompt (Allow once · Always · Deny), one ask at a time, naming the run.
-  - It lets go of its claims on Ctrl-C: stops its sessions, ends its run files and leaves the queue on the board.
-  - `--once` returns when the queue is empty.
-  - The runner the desktop has open (task-84) and this one take turns through claims. Two runners on one machine never start one task.
-
-  The TUI shows `codex · editing` on a row from the run files and refreshes when they change, as the desktop's rows do.
 tags:
   - cli
   - tui
@@ -52,7 +42,7 @@ contract:
   metrics:
     readyAt: "2026-10-15T21:40:11.044Z"
 createdAt: "2026-10-14T22:16:23.437Z"
-updatedAt: "2026-10-15T21:47:11.235Z"
+updatedAt: "2026-10-15T22:09:24.138Z"
 ---
 
 ## Description
@@ -65,3 +55,5 @@ This builds spec-16-8. `brainfile run [--once] [--max N] [--until review|done]` 
 - The runner the desktop has open (task-84) and this one take turns through claims. Two runners on one machine never start one task.
 
 The TUI shows `codex · editing` on a row from the run files and refreshes when they change, as the desktop's rows do.
+
+From task-80: build on `Runner(dataDir, runner, board, ask, cancelAsk, onRun, ledBy, landed)` with `fileBoard()` as its board; `ask`/`cancelAsk` are where the terminal prompt goes, and `onRun` gives the change lines. fileBoard's board commits are debounced: call `flushBoardCommits` on Ctrl-C and before `--once` returns, or claims released and landings made are left uncommitted. `runner.live()` already reads every runner's run files, for the TUI's rows too.
