@@ -24,16 +24,16 @@ dependsOn:
 subtasks:
   - id: task-93-1
     title: A PR opened from Ready to merge
-    completed: false
+    completed: true
   - id: task-93-2
     title: Closed unmerged on GitHub, it is back in Ready to merge within a minute, recorded as closed
-    completed: false
+    completed: true
   - id: task-93-3
     title: Discard lets the worktree and branch go, lands nothing, and leaves the task open
     completed: false
 createdAt: "2026-10-15T18:20:41.058Z"
 assignee: claude
-updatedAt: "2026-10-15T20:25:46.360Z"
+updatedAt: "2026-10-15T20:25:52.182Z"
 dispatch:
   agent: claude
   model: opus
