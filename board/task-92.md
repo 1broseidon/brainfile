@@ -26,10 +26,10 @@ dependsOn:
 subtasks:
   - id: task-92-1
     title: Ready to merge row and Review offer Open pull request
-    completed: false
+    completed: true
   - id: task-92-2
     title: GitHub has the branch and a PR into qa/parity with the task's title and body
-    completed: false
+    completed: true
   - id: task-92-3
     title: "The item leaves Ready to merge; the row shows #N; the feed lists it; the task records pullRequest: open"
     completed: false
@@ -38,13 +38,13 @@ subtasks:
     completed: false
   - id: task-92-5
     title: bfq pr --status says open with the link
-    completed: false
+    completed: true
   - id: task-92-6
     title: Squash-merged on GitHub, the task completes within a minute and its worktree and branch go
     completed: false
 createdAt: "2026-10-15T18:20:40.775Z"
 assignee: claude
-updatedAt: "2026-10-15T19:45:43.027Z"
+updatedAt: "2026-10-15T19:46:19.883Z"
 dispatch:
   agent: claude
   model: opus
