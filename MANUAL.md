@@ -396,6 +396,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | See the repository's GitHub issues, or make a task from one | `issues` |
 | Land a hand-off by GitHub pull request instead of a merge | `pr` |
 | Hand tasks to a coding agent, see what is running, stop one | `dispatch`, `dispatch status`, `dispatch stop` |
+| Work the queue here, in a terminal, asking you as it goes | `run` |
 | Have an epic run by a lead; pause, resume or stop it | `dispatch <epic>`, `dispatch pause`, `dispatch resume`, `dispatch stop` |
 | See a hand-off's work, land it or throw it away | `review`, `land`, `discard` |
 | See which coding agents are installed, and their models | `agents` |
@@ -829,9 +830,59 @@ repository's setting in the app, else 3) run at once on a repository.
 
 When no runner is up on this machine it says so: `Run brainfile run or open
 Brainfile to start it.` `--now` runs the tasks here in the foreground
-instead, until each has ended (and, with `--until done`, landed or been sent
-back); the agent's questions come to this terminal, and Ctrl-C stops them,
-leaving their worktrees. `--json` prints what was queued and skipped.
+instead, through `brainfile run`'s loop given only these tasks, until each
+has ended (and, with `--until done`, landed or been sent back); the agent's
+questions come to this terminal, and Ctrl-C lets go of them as `run` does.
+`--json` prints what was queued and skipped.
+
+#### run — Work the queue in a terminal
+
+```console
+$ brainfile run                 # until Ctrl-C
+$ brainfile run --once          # until nothing more can start
+$ brainfile run --max 1         # one hand-off at a time from here
+$ brainfile run --until done    # a request that names nothing lands on its own
+```
+
+A runner in the foreground, to leave open in a terminal split; not a
+daemon. While it is up its file in `.brainfile/state/runners/` says so (so
+`dispatch` stops saying no runner is up), and it looks at the queue every
+second: it claims each queued task, oldest request first, starts its agent
+in its worktree, and takes up an epic's lead the same way, then starts the
+children the lead hands off inside the lead's rules. At most
+`dispatch.maxRunning` run at once on the repository, whichever runner runs
+them; `--max N` keeps this one to N of them. The Brainfile window and
+another `brainfile run` work the same queue: each task is claimed by one
+runner, by compare-and-swap on its file, so two never start one task.
+
+It prints one plain line per change:
+
+```text
+task-74 · codex · editing
+task-74 · codex · running
+task-74 in Review
+epic-6 · lead · claude · leading
+task-75 · codex · done, landing it
+task-75 landed
+```
+
+When an agent asks before it acts, the question comes to this prompt, one
+at a time, naming the run (`task-74 · codex asks: Run npm test`), with the
+agent's own choices by number (Allow once, Always, Deny). An ask whose run
+stops is taken down. With no terminal to answer in, it is refused.
+
+Ctrl-C lets go: the agents stop and their run files end, each task it held
+goes back to the queue on the board (its request stays, its claim is
+cleared) for the next runner, and a lead it ran waits for a runner to take
+it up from its notes. Worktrees stay as they are. What it wrote on the
+board is committed before it exits. A second Ctrl-C leaves at once; its
+claims are then taken again once its process is gone.
+
+`--once` returns when nothing it started is still going and nothing queued
+can start, and says what is still queued and what each waits on. A lead it
+ran that waits on you (children in Review, or waiting to be handed off) is
+let go as on Ctrl-C. `--until review|done` is how far a hand-off goes when
+its request names neither.
 
 #### dispatch status, dispatch stop — What is running, and stopping it
 
@@ -1582,6 +1633,12 @@ point the MCP tools at its board with `file`. Nothing here writes to it.
 for the selected document, and a filter line. It edits the same files the CLI
 does, so changes made elsewhere show up on `r`.
 
+A task an agent is working on says so on its row, `● codex · editing` (or
+`asking` while it waits on an answer, `leading` on an epic whose lead is in
+a turn), from the run files every runner on this machine writes
+(`brainfile run`, the Brainfile window, `dispatch --now`). The row changes
+as the run does, and the words go when it ends.
+
 | Keys | Action |
 | --- | --- |
 | `j` `k` `↑` `↓` | Move within a column. `g` and `G` jump to the ends, `ctrl-d` and `ctrl-u` page. |
@@ -1716,8 +1773,8 @@ leads and discussions.
 This is a rule for agents, not a security boundary: anyone on the machine
 can run the CLI.
 
-Some commands have no tool, on purpose: `tui` and `mcp` (they are the
-interfaces), `merge-driver` (git runs it), `hooks` (events the agent host
+Some commands have no tool, on purpose: `tui`, `run` and `mcp` (they are the
+interfaces; `run` works what the dispatch tools queue), `merge-driver` (git runs it), `hooks` (events the agent host
 fires, and your agent's settings), `auth` and `config` (your credentials and
 user config), `init` and `migrate` (one-off, and your call) and `index` (a
 cache that `search`, `brief` and `check` refresh). Choosing the remote a
