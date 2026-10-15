@@ -75,3 +75,15 @@ Not a hand-off. task-75 moved the ACP agents, sessions, settings, models and the
 9. **Fix and Undo (task-78).** If the health strip shows a fixable problem, Fix it and Undo within 20 s. If none, `bfq fix --dry-run` saying "Nothing to fix" is enough here; the cross-process undo is covered by tests.
 10. **The phone (link).** If you use the phone link: Ready to merge on the phone matches the desk, an item with an open pull request is not mergeable there, and a merge from the phone lands as before.
 11. **Restart.** Quit and start the dev app again: nothing it knew is lost (asks, settings, models).
+
+## Log
+- 2026-10-15T21:15:18.039Z: [claude] Closed at the person's call ("keep going"), with what QA showed:
+- Agents, availability and modes as before (Settings screenshot, and Hand to… used throughout).
+- Settings read from the same dispatch.json; Manual was written to it and applied to new sessions.
+- A permission ask: core probe asked before `touch` and refused it. task-105's read-only commands needed no approval in Manual (task-106 makes the mode visible).
+- The board chat answered and made a hand-off (task-105).
+- Briefs carried decisions, the worktree paragraph and the finishing rule.
+- dispatch: written on every hand-off.
+- Nothing to fix (CLI).
+- The app restarted mid-QA and carried on.
+Not checked: Discuss (5), the Issues tab (8), the phone (10). The CLI and MCP issues paths were checked in task-98 and task-99.
