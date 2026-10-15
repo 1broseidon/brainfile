@@ -39,35 +39,35 @@ decisions:
 subtasks:
   - id: spec-18-1
     title: landsOn on a task, inherited from its parent; core read/write, task_patch and brainfile edit, lint for a missing branch
-    completed: false
+    completed: true
   - id: spec-18-2
     title: "Fork from and land on the task's target: prepareWorktree, the conflict preview, landReview and send-back"
-    completed: false
+    completed: true
   - id: spec-18-3
     title: Hand to… shows Lands on <branch> with a picker, written to the task
-    completed: false
+    completed: true
   - id: spec-18-4
     title: "Open pull request beside Merge: push, open against the target, leave Ready to merge, show the PR on the task, feed and phone"
-    completed: false
+    completed: true
   - id: spec-18-5
     title: A pull request merged on the forge completes the task and removes its worktree; closed unmerged returns it to Ready to merge
-    completed: false
+    completed: true
   - id: spec-18-6
     title: "epicBranch on an epic: the lead makes dispatch/<epic-id> from the epic's target; children land on it and their worktrees go"
-    completed: false
+    completed: true
   - id: spec-18-7
     title: The lead brings the epic's target into the epic branch before each hand-off; a conflict goes back to an agent
-    completed: false
+    completed: true
   - id: spec-18-8
     title: "The epic in Ready to merge when its last child is done; Merge asks: target, another branch, pull request, or keep"
-    completed: false
+    completed: true
   - id: spec-18-9
     title: "Docs: MANUAL, desktop README and design.md; a changelog fragment"
-    completed: false
+    completed: true
 createdAt: "2026-10-15T04:26:27.402Z"
 dependsOn:
   - task-76
-updatedAt: "2026-10-15T17:11:59.878Z"
+updatedAt: "2026-10-15T18:11:58.719Z"
 ---
 
 ## Description
