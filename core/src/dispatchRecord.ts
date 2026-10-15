@@ -283,15 +283,45 @@ function sleep(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
-function lockIsStale(lock: string): boolean {
+/** What a stale lock says, to take it over by; null when it is held, or gone. */
+function staleLock(lock: string): string | null {
   try {
     const stat = fs.statSync(lock);
-    if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) return true;
-    const pid = Number.parseInt(fs.readFileSync(lock, 'utf-8'), 10);
-    return Number.isInteger(pid) && pid > 0 && !pidAlive(pid);
+    const seen = fs.readFileSync(lock, 'utf-8');
+    if (Date.now() - stat.mtimeMs > LOCK_STALE_MS) return seen;
+    const pid = Number.parseInt(seen, 10);
+    return Number.isInteger(pid) && pid > 0 && !pidAlive(pid) ? seen : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/**
+ * Lets a stale lock go: moved aside first, which only one taker can do, and
+ * put back if what was moved is not the lock judged stale (another took it
+ * meanwhile), as the landing lock does.
+ */
+function takeOver(lock: string, seen: string): void {
+  const aside = `${lock}.${process.pid}.${Date.now()}.gone`;
+  try {
+    fs.renameSync(lock, aside);
+  } catch {
+    return; // Another taker moved it first.
+  }
+  let moved = '';
+  try {
+    moved = fs.readFileSync(aside, 'utf-8');
+  } catch {
+    /* gone already */
+  }
+  if (moved !== seen) {
+    try {
+      fs.linkSync(aside, lock);
+    } catch {
+      /* someone holds it anew */
+    }
+  }
+  fs.rmSync(aside, { force: true });
 }
 
 /** Take the file's lock, waiting a moment for another writer; the release, or null when it stayed busy. */
@@ -301,17 +331,26 @@ function takeLock(lock: string): (() => void) | null {
   for (;;) {
     try {
       const fd = fs.openSync(lock, 'wx');
+      const mine = `${process.pid} ${Math.random().toString(36).slice(2)}`;
       try {
-        fs.writeSync(fd, String(process.pid));
+        fs.writeSync(fd, mine);
       } finally {
         fs.closeSync(fd);
       }
-      return () => fs.rmSync(lock, { force: true });
+      // Only its own: a lock taken over meanwhile is another's now.
+      return () => {
+        try {
+          if (fs.readFileSync(lock, 'utf-8') === mine) fs.rmSync(lock, { force: true });
+        } catch {
+          /* gone already */
+        }
+      };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
     }
-    if (lockIsStale(lock)) {
-      fs.rmSync(lock, { force: true });
+    const stale = staleLock(lock);
+    if (stale !== null) {
+      takeOver(lock, stale);
       continue;
     }
     if (Date.now() > deadline) return null;

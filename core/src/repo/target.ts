@@ -14,7 +14,7 @@ import { getV2Dirs } from '../workspace';
 import type { Task } from '../types';
 import { git } from './boardRepo';
 import { locateBoard } from './locate';
-import { bringIn, discardReview, prepareBranch, prepareWorktree, reviewOf, type Refresh } from './worktree';
+import { EPIC_KEY, bringIn, discardReview, prepareBranch, prepareWorktree, reviewOf, type Refresh } from './worktree';
 
 /** Where a task's hand-off forks from and lands on. */
 export interface HandOffTarget {
@@ -80,20 +80,28 @@ export function refreshTarget(projectId: string, taskId: string, lockMs = 10_000
  * Its last child done, an epic with a branch of its own is checked out to be
  * merged (decision-16): one item in Ready to merge, its branch into the
  * epic's target. Null when it has no branch of its own, or nothing landed on
- * it, which then goes and leaves the epic to be completed as before.
+ * it, which then goes and leaves the epic to be completed as before. The
+ * branch decides, not the flag: an epic whose `epicBranch` was turned off
+ * after children landed on its branch still has their work to merge.
  */
 export function offerEpicBranch(projectId: string, epicId: string): { branch: string; into: string } | null {
   const docs = boardDocs(projectId);
-  if (docs.get(epicId)?.epicBranch !== true) return null;
+  const branch = epicBranchOf(epicId);
   // Never made (no child was handed off): nothing to merge.
-  if (!git(['show-ref', '--verify', '--quiet', `refs/heads/${epicBranchOf(epicId)}`], projectId).ok) return null;
+  if (!git(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`], projectId).ok) return null;
+  // A dispatch/<epic> not made as an epic's branch (the epic handed off as a task) is not this one's to offer.
+  if (docs.get(epicId)?.epicBranch !== true && !git(['config', '--get', `branch.${branch}.${EPIC_KEY}`], projectId).ok) return null;
   const made = prepareWorktree(projectId, epicId);
   if (!made?.branch) return null;
   const review = reviewOf(projectId, epicId);
   if (!review?.branch || !review.into) return null;
   if (review.ahead === 0) {
-    discardReview(projectId, epicId);
-    return null;
+    // Only when nothing on it is missing from its target: a fork that could not be found also counts 0.
+    const missing = git(['rev-list', '--count', `${review.into}..${review.branch}`], projectId);
+    if (missing.ok && Number(missing.stdout) === 0) {
+      discardReview(projectId, epicId);
+      return null;
+    }
   }
   return { branch: review.branch, into: review.into };
 }

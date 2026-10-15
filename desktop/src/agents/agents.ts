@@ -833,7 +833,7 @@ function offerIfLast(projectId: string, taskId: string): void {
   try {
     const epic = handOffTarget(projectId, taskId).epic;
     const tree = epic ? readTree(projectId, epic.id) : null;
-    if (epic && tree && !tree.epic.done && tree.children.length && tree.children.every((c) => c.done)) offerEpicBranch(projectId, epic.id);
+    if (epic && tree && !tree.epic.done && tree.children.length && tree.children.every((c) => c.done && !c.unlanded)) offerEpicBranch(projectId, epic.id);
   } catch {
     /* git refused: the epic stays as it is, for the person */
   }

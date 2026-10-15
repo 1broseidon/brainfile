@@ -990,6 +990,27 @@ test('before a hand-off from an epic\'s branch its target is brought in; its las
   assert.equal(offerEpicBranch(repo, 'task-2'), null);
 });
 
+test('a child does not land on an epic\'s branch while it is checked out to be merged; the epic is offered by its branch, not the flag', async () => {
+  onBoard('epic-1', ['epicBranch: true']);
+  onBoard('task-2', ['parentId: epic-1']);
+  onBoard('task-3', ['parentId: epic-1']);
+  prepareEpicBranch(repo, 'epic-1');
+  const first = prepareWorktree(repo, 'task-2', root, false, prepareTarget(repo, 'task-2'))!;
+  work(first.path, 'b.txt', 'b\n');
+  await landed('task-2');
+  const late = prepareWorktree(repo, 'task-3', root, false, prepareTarget(repo, 'task-3'))!;
+  work(late.path, 'c.txt', 'c\n');
+
+  // The flag turned off after a child landed on the branch: its work is still offered, not left behind.
+  onBoard('epic-1', []);
+  assert.deepEqual(offerEpicBranch(repo, 'epic-1'), { branch: 'dispatch/epic-1', into: 'main' });
+  const tip = git(['rev-parse', 'dispatch/epic-1'], repo);
+  const why = (await refused('task-3')).error;
+  assert.match(why, /dispatch\/epic-1 is checked out at .*: merge or discard that first/);
+  assert.equal(git(['rev-parse', 'dispatch/epic-1'], repo), tip);
+  assert.equal(git(['status', '--porcelain'], reviewOf(repo, 'epic-1')!.path), '');
+});
+
 // ── The landing lock, across processes (task-76) ────────────────────────────
 
 /**

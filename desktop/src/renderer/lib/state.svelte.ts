@@ -845,7 +845,10 @@ class AppState {
     const parent = task.parentId ? this.board?.tasks.find((t) => t.id === task.parentId) ?? this.board?.completed.find((t) => t.id === task.parentId) : undefined;
     // What it would land on without its own: its parent's own branch, else the parent's target, else the trunk.
     const inherited = !parent ? null : parent.epicBranch ? `dispatch/${parent.id}` : (parent.target?.branch ?? null);
+    // The trunk under a parent that lands elsewhere is written by name, so it must be known first.
+    if (branch === null && inherited !== null && !this.branches[this.activeId ?? '']) await this.refreshBranches();
     const trunk = this.branches[this.activeId ?? '']?.trunk ?? null;
+    if (branch === null && inherited !== null && !trunk) return this.notify('The trunk is not known yet: try again in a moment', 'warn');
     const own = branch === inherited || (branch === null && inherited === null) ? null : (branch ?? trunk);
     if ((task.landsOn ?? null) === own) return;
     await this.patch(taskId, { landsOn: own });

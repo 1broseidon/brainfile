@@ -659,7 +659,7 @@ export class Leads {
       void this.end(lead, 'stopped', `${lead.epicId} is no longer on the board`);
       return null;
     }
-    if (tree.children.length && tree.children.every((c) => c.done)) {
+    if (tree.children.length && tree.children.every((c) => c.done && !c.unlanded)) {
       void this.finish(lead);
       return null;
     }
@@ -700,7 +700,7 @@ export class Leads {
       }
       this.emit(lead);
       const after = this.deps.tree(lead.projectId, lead.epicId);
-      if (lead.state === 'leading' && after && after.children.length && after.children.every((c) => c.done)) void this.finish(lead);
+      if (lead.state === 'leading' && after && after.children.length && after.children.every((c) => c.done && !c.unlanded)) void this.finish(lead);
       else if (lead.queue.length) this.gather(lead);
     });
     return run;

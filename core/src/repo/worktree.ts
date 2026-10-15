@@ -91,6 +91,8 @@ export interface ReadyHandOff {
 export const BRANCH_PREFIX = 'dispatch/';
 const BASE_KEY = 'brainfileBase';
 const FORK_KEY = 'brainfileFork';
+/** Set on a branch made with no worktree of its own, as an epic's branch (decision-16). */
+export const EPIC_KEY = 'brainfileEpic';
 const TRUNK_KEY = 'brainfile.trunk';
 /** Deliverables that write nothing into the code: a contract made only of these only reads. */
 const READING = new Set(['research', 'review', 'link']);
@@ -219,6 +221,15 @@ function intoOf(repoRoot: string, branch: string): string | null {
 }
 
 /** The hand-off's checkout, when there is one on disk. */
+/** Whether two paths are one folder, however they were reached (symlinks, /private on macOS). */
+function samePath(a: string, b: string): boolean {
+  try {
+    return fs.realpathSync(a) === fs.realpathSync(b);
+  } catch {
+    return path.resolve(a) === path.resolve(b);
+  }
+}
+
 function existing(repoRoot: string, taskId: string): string | null {
   const ref = `refs/heads/${branchFor(taskId)}`;
   const hit = listWorktrees(repoRoot).find((w) => w.branch === ref);
@@ -355,6 +366,7 @@ export function prepareBranch(projectId: string, taskId: string, base?: string):
   }
   git(['config', `branch.${branch}.${BASE_KEY}`, target.name], repoRoot);
   git(['config', `branch.${branch}.${FORK_KEY}`, fork], repoRoot);
+  git(['config', `branch.${branch}.${EPIC_KEY}`, 'true'], repoRoot);
   return { branch, base: target.name, made: true };
 }
 
@@ -738,6 +750,9 @@ export function landReview(
       if (!local.ok) return { ok: false, kind: 'refused', error: local.error };
       into = options.into;
     }
+    // A branch checked out elsewhere (an epic's branch up for review) would be moved under that checkout, its files left behind.
+    const elsewhere = listWorktrees(repoRoot).find((w) => w.branch === `refs/heads/${into}` && fs.existsSync(w.path) && !samePath(w.path, repoRoot));
+    if (elsewhere) return { ok: false, kind: 'refused', error: `${into} is checked out at ${elsewhere.path}: merge or discard that first, then Merge again. Nothing was merged.` };
     // Merged elsewhere already (the terminal, a pull request): only the worktree is left to go.
     if (into === review.into ? review.merged : landedIn(repoRoot, branch, into)) {
       cleanUp(repoRoot, at, branch, true);
