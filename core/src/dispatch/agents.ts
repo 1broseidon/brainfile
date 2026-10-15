@@ -1,0 +1,294 @@
+/**
+ * The agents Brainfile starts, and how: the ones it knows (Claude Code,
+ * Codex, Antigravity, Cursor, Grok), each its own way, and any ACP server the
+ * person names in dispatch.json (custom.ts, task-47), the way Zed's
+ * agent_servers do. Servers it installs live in the data folder's agents/.
+ */
+import { spawn, spawnSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import type * as acp from '@agentclientprotocol/sdk';
+import { commandName, customId, customName, isCustom } from './agentServers';
+import { customLaunch } from './custom';
+import { getSettings } from './settings';
+import type { AgentId, AgentInfo, AgentServer, CustomAgentId } from './types';
+
+export function which(command: string): string | null {
+  const r = spawnSync('/usr/bin/which', [command], { encoding: 'utf-8' });
+  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : null;
+}
+
+/** Where installed agent servers live in the data folder. */
+const agentsDir = (dataDir: string) => path.join(dataDir, 'agents');
+
+// ── Which agents, started how ────────────────────────────────────────────────
+
+export interface Launch {
+  command: string;
+  args: string[];
+  /** The whole environment, when the agent brings its own (a custom agent's `env`); else the one every agent gets. */
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface Known {
+  id: AgentId;
+  name: string;
+  /** The CLI that carries the person's login; without it the agent cannot run a turn. */
+  client: string;
+  launch(dataDir: string): Promise<Launch>;
+}
+
+/** The ACP registry's Antigravity server, downloaded once into the app's folder. */
+export const ANTIGRAVITY = {
+  version: '1.3.0',
+  archive: (arch: string) =>
+    `https://dl.google.com/agy-extensions/releases/macos/agy-acp-server-1.3.0-darwin-${arch === 'arm64' ? 'arm64' : 'x86_64'}.zip`,
+  cmd: 'agy_acp_server.par',
+};
+
+async function antigravityServer(dataDir: string): Promise<string> {
+  const dir = path.join(agentsDir(dataDir), 'antigravity', ANTIGRAVITY.version);
+  const bin = path.join(dir, ANTIGRAVITY.cmd);
+  if (fs.existsSync(bin)) return bin;
+  fs.mkdirSync(dir, { recursive: true });
+  const response = await fetch(ANTIGRAVITY.archive(process.arch));
+  if (!response.ok) throw new Error(`Could not download Antigravity's ACP server (${response.status})`);
+  const zip = path.join(dir, 'server.zip');
+  fs.writeFileSync(zip, Buffer.from(await response.arrayBuffer()));
+  const unzip = spawnSync('/usr/bin/ditto', ['-x', '-k', zip, dir]);
+  fs.rmSync(zip, { force: true });
+  if (unzip.status !== 0 || !fs.existsSync(bin)) throw new Error('Could not unpack Antigravity’s ACP server');
+  fs.chmodSync(bin, 0o755);
+  return bin;
+}
+
+/**
+ * An agent server published on npm. It is installed once into the app's own
+ * folder and run with the real node binary, never through `npx` or a
+ * version-manager shim: from Finder a shim like mise's can hang or fail, and
+ * `npx` asks the registry and shares a cache other runs may be writing.
+ */
+export interface NpmServer {
+  pkg: string;
+  version: string;
+}
+
+export const CLAUDE_ACP: NpmServer = { pkg: '@agentclientprotocol/claude-agent-acp', version: '0.89.1' };
+export const CODEX_ACP: NpmServer = { pkg: '@agentclientprotocol/codex-acp', version: '2.2.2' };
+
+const npmServerDir = (dataDir: string, server: NpmServer) => path.join(agentsDir(dataDir), server.pkg.replace('/', '__'), server.version);
+
+/** The installed server's command file, from its own package.json `bin`; null when it is not installed. */
+export function npmServerEntry(dataDir: string, server: NpmServer): string | null {
+  const pkgDir = path.join(npmServerDir(dataDir, server), 'node_modules', ...server.pkg.split('/'));
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(pkgDir, 'package.json'), 'utf-8')) as { bin?: string | Record<string, string> };
+    const bin = typeof manifest.bin === 'string' ? manifest.bin : Object.values(manifest.bin ?? {})[0];
+    const entry = bin ? path.join(pkgDir, bin) : null;
+    return entry && fs.existsSync(entry) ? entry : null;
+  } catch {
+    return null;
+  }
+}
+
+const installing = new Map<string, Promise<string>>();
+
+async function installNpmServer(dataDir: string, server: NpmServer, node: string): Promise<string> {
+  const npmCli = path.join(path.dirname(node), '..', 'lib', 'node_modules', 'npm', 'bin', 'npm-cli.js');
+  if (!fs.existsSync(npmCli)) throw new Error(`No npm beside ${node}`);
+  const dir = npmServerDir(dataDir, server);
+  fs.mkdirSync(dir, { recursive: true });
+  if (!fs.existsSync(path.join(dir, 'package.json'))) fs.writeFileSync(path.join(dir, 'package.json'), '{ "private": true }\n');
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(
+      node,
+      [npmCli, 'install', '--prefix', dir, `${server.pkg}@${server.version}`, '--no-audit', '--no-fund', '--omit=dev', '--no-package-lock'],
+      { env: { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` }, stdio: ['ignore', 'ignore', 'pipe'] }
+    );
+    let err = '';
+    child.stderr?.on('data', (d) => (err = (err + d).slice(-2000)));
+    child.on('error', reject);
+    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`Could not install ${server.pkg}: ${lastLine(err) || `npm exited ${code}`}`))));
+  });
+  const entry = npmServerEntry(dataDir, server);
+  if (!entry) throw new Error(`${server.pkg} installed without a command`);
+  return entry;
+}
+
+/** How to start an npm agent server: the real node and its installed file; npx only when there is no real node. */
+async function npmServer(dataDir: string, server: NpmServer): Promise<Launch> {
+  const node = realNode();
+  if (!node) return { command: 'npx', args: ['-y', `${server.pkg}@${server.version}`] };
+  let entry = npmServerEntry(dataDir, server);
+  if (!entry) {
+    const key = `${server.pkg}@${server.version}`;
+    if (!installing.has(key)) installing.set(key, installNpmServer(dataDir, server, node).finally(() => installing.delete(key)));
+    entry = await installing.get(key)!;
+  }
+  return { command: node, args: [entry] };
+}
+
+/** The last line of an agent's error output worth showing. */
+export function lastLine(text: string): string {
+  return (
+    text
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !/^at /.test(l))
+      .pop() ?? ''
+  ).slice(0, 240);
+}
+
+/** In the order the picker shows them. */
+export const KNOWN: Known[] = [
+  {
+    id: 'claude',
+    name: 'Claude Code',
+    client: 'claude',
+    launch: (dataDir) => npmServer(dataDir, CLAUDE_ACP),
+  },
+  {
+    id: 'codex',
+    name: 'Codex',
+    client: 'codex',
+    launch: (dataDir) => npmServer(dataDir, CODEX_ACP),
+  },
+  {
+    id: 'antigravity',
+    name: 'Antigravity',
+    client: 'agy',
+    launch: async (dataDir) => ({ command: await antigravityServer(dataDir), args: [] }),
+  },
+  {
+    id: 'cursor',
+    name: 'Cursor',
+    client: 'cursor-agent',
+    launch: async () => ({ command: 'cursor-agent', args: ['acp'] }),
+  },
+  {
+    // Grok Build speaks ACP over stdio itself. It offers no permission
+    // modes, so working without asking is answered here, ask by ask.
+    id: 'grok',
+    name: 'Grok Build',
+    client: 'grok',
+    launch: async () => ({ command: 'grok', args: ['agent', '--no-leader', 'stdio'] }),
+  },
+];
+
+/**
+ * An agent the person named in Settings (task-47): their own ACP server,
+ * kept in dispatch.json's agentServers and run as given.
+ */
+export interface Custom {
+  id: CustomAgentId;
+  name: string;
+  server: AgentServer;
+}
+
+export type Agent = Known | Custom;
+
+/** The person's own agents, in the order they were added. */
+export function customAgents(dataDir: string): Custom[] {
+  return Object.entries(getSettings(dataDir).agentServers).map(([name, server]) => ({ id: customId(name), name, server }));
+}
+
+/** Every agent there is to start: the known ones, then the person's own. */
+export function allAgents(dataDir: string): Agent[] {
+  return [...KNOWN, ...customAgents(dataDir)];
+}
+
+export function agentOf(dataDir: string, agentId: AgentId): Agent | undefined {
+  return isCustom(agentId) ? customAgents(dataDir).find((a) => a.id === agentId) : KNOWN.find((k) => k.id === agentId);
+}
+
+/** An agent's name in a sentence, even once a custom one has been removed. */
+export function nameOf(dataDir: string, agentId: AgentId): string {
+  return agentOf(dataDir, agentId)?.name ?? (isCustom(agentId) ? customName(agentId) : agentId);
+}
+
+/** Why the agent cannot start on this Mac, or null when it can. */
+export function whyNot(agent: Agent, env?: NodeJS.ProcessEnv): string | null {
+  if ('client' in agent) return which(agent.client) ? null : `${agent.name} is not installed on this Mac`;
+  return customLaunch(agent.server, env ?? agentEnv()) ? null : `${agent.name} cannot start: ${agent.server.command} is not found on this Mac`;
+}
+
+/** How to start the agent: a known one its own way, a custom one as the person wrote it. */
+export async function launchOf(dataDir: string, agent: Agent): Promise<Launch> {
+  if ('client' in agent) return agent.launch(dataDir);
+  const launch = customLaunch(agent.server, agentEnv());
+  if (!launch) throw new Error(whyNot(agent) ?? `${agent.name} cannot start`);
+  return launch;
+}
+
+export function listAgents(dataDir: string): AgentInfo[] {
+  const known = KNOWN.map((agent) => {
+    const installed = which(agent.client) !== null;
+    const downloaded =
+      agent.id === 'antigravity'
+        ? fs.existsSync(path.join(agentsDir(dataDir), 'antigravity', ANTIGRAVITY.version, ANTIGRAVITY.cmd))
+        : agent.id === 'claude'
+          ? !!npmServerEntry(dataDir, CLAUDE_ACP)
+          : agent.id === 'codex'
+            ? !!npmServerEntry(dataDir, CODEX_ACP)
+            : true;
+    return {
+      id: agent.id,
+      name: agent.name,
+      available: installed,
+      note: !installed ? 'not installed' : downloaded ? 'your login' : 'downloads once',
+    };
+  });
+  // A custom agent is offered when its command is found, and says so when it is not.
+  const env = agentEnv();
+  const custom = customAgents(dataDir).map((agent) => {
+    const found = whyNot(agent, env) === null;
+    const command = commandName(agent.server.command);
+    return { id: agent.id, name: agent.name, available: found, note: found ? command : `${command} not found` };
+  });
+  return [...known, ...custom];
+}
+
+// ── The environment an agent gets ────────────────────────────────────────────
+
+/** The environment every agent starts in: the real node first on PATH, so nothing an agent starts finds a shim instead. */
+export function agentEnv(): NodeJS.ProcessEnv {
+  const node = realNode();
+  return node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
+}
+
+/** The first `node` on PATH that is a real binary, not a version-manager shim script. */
+export function realNode(): string | null {
+  const r = spawnSync('/usr/bin/which', ['-a', 'node'], { encoding: 'utf-8' });
+  for (const candidate of (r.stdout ?? '').split('\n').map((l) => l.trim()).filter(Boolean)) {
+    try {
+      const fd = fs.openSync(candidate, 'r');
+      const head = Buffer.alloc(2);
+      fs.readSync(fd, head, 0, 2, 0);
+      fs.closeSync(fd);
+      if (head.toString() !== '#!') return fs.realpathSync(candidate);
+    } catch {
+      /* try the next */
+    }
+  }
+  return null;
+}
+
+/**
+ * Brainfile's MCP server, spelled out in full. Some agents (Codex) start MCP
+ * servers with a stripped environment, where a `#!/usr/bin/env node` script
+ * finds a version-manager shim that never answers; so the command is the
+ * real node binary and the CLI's own file, with PATH and HOME passed for the
+ * git calls the board makes.
+ */
+export function brainfileMcp(): acp.McpServer[] {
+  const bin = which('brainfile');
+  if (!bin) return [];
+  const cli = fs.realpathSync(bin);
+  const node = realNode();
+  const env = [
+    { name: 'PATH', value: process.env.PATH ?? '' },
+    { name: 'HOME', value: os.homedir() },
+  ];
+  return node ? [{ name: 'brainfile', command: node, args: [cli, 'mcp'], env }] : [{ name: 'brainfile', command: bin, args: ['mcp'], env }];
+}

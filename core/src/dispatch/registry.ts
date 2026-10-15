@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { AgentServer, RegistryAgent, RegistryView, Result } from '../shared/api';
+import type { AgentServer, RegistryAgent, RegistryView, Result } from './types';
 
 export const REGISTRY_URL = 'https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json';
 const TTL = 24 * 60 * 60_000;

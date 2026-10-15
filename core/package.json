@@ -83,6 +83,12 @@
       "require": "./dist/memory/index.js",
       "default": "./dist/memory/index.js"
     },
+    "./dispatch": {
+      "types": "./dist/dispatch/index.d.ts",
+      "import": "./dist/dispatch/index.js",
+      "require": "./dist/dispatch/index.js",
+      "default": "./dist/dispatch/index.js"
+    },
     "./dist/*": "./dist/*",
     "./package.json": "./package.json"
   },
@@ -123,6 +129,9 @@
       ],
       "memory": [
         "dist/memory/index.d.ts"
+      ],
+      "dispatch": [
+        "dist/dispatch/index.d.ts"
       ],
       "dist/*": [
         "dist/*"
@@ -170,6 +179,7 @@
     "typescript": "^5.3.3"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^1.8.0",
     "js-yaml": "^4.1.0"
   },
   "engines": {
