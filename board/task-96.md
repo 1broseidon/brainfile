@@ -28,7 +28,13 @@ contract:
     - Change nothing but qa/parity-wave-1.md; keep every existing line
   metrics:
     readyAt: "2026-10-15T20:56:02.019Z"
-updatedAt: "2026-10-15T20:56:02.019Z"
+updatedAt: "2026-10-15T20:56:26.372Z"
+dispatch:
+  agent: claude
+  model: claude-opus-5-5
+  by: lead
+  at: "2026-10-15T20:56:26.261Z"
+assignee: claude
 ---
 
 ## Description
