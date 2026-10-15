@@ -17,7 +17,7 @@ createdAt: "2026-10-12T23:16:17.527Z"
 subtasks:
   - id: spec-16-1
     title: "Board record: dispatch request and runner claim in frontmatter (agent, model, by, at, until, claimedBy + heartbeat); core read/write + lint"
-    completed: false
+    completed: true
   - id: spec-16-2
     title: "Phase 1: desktop MCP server for its own chat agents: dispatch, runs, stop; through Hand to… (worktree, dock tab, asks, Review)"
     completed: true
@@ -42,7 +42,7 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: true
-updatedAt: "2026-10-15T01:37:10.575Z"
+updatedAt: "2026-10-15T21:25:55.194Z"
 decisions:
   - decision-15
 ---
