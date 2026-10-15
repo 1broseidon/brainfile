@@ -37,7 +37,7 @@ decisions:
   - decision-12
   - decision-15
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: file
       path: core/src/dispatch/runner.ts
@@ -50,13 +50,15 @@ contract:
       description: A thin adapter over the Runner; IPC and behaviour unchanged
   validation:
     commands:
-      - npm run build -w core && npm run test:ci -w core
-      - cd desktop && npm run typecheck && npm test
+      - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
+      - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
   constraints:
     - "No daemon: a runner lives as long as the process that made it (spec-16)"
     - Landings stay serial and by compare-and-swap (decision-12)
+  metrics:
+    readyAt: "2026-10-15T21:40:10.519Z"
 createdAt: "2026-10-14T22:15:55.916Z"
-updatedAt: "2026-10-15T21:25:56.226Z"
+updatedAt: "2026-10-15T21:40:10.519Z"
 ---
 
 ## Description
