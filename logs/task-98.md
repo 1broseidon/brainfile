@@ -1,8 +1,6 @@
 ---
 id: task-98
 title: "QA: the CLI without the desktop — fix, issues, add --source, pr, patch --lands-on and lint"
-column: todo
-position: 15
 description: |-
   Not a hand-off. In a terminal at this repository, with `bfq` from the setup task. Tests task-77, task-78 and the CLI half of spec-18 (decision-17: everything the desktop runs is reachable without it).
   1. `bfq --help` lists `fix`, `issues` and `pr`.
@@ -39,7 +37,8 @@ subtasks:
     title: lint is clean apart from deliberate warnings
     completed: true
 createdAt: "2026-10-15T18:21:50.418Z"
-updatedAt: "2026-10-15T20:30:42.464Z"
+updatedAt: "2026-10-15T20:30:43.003Z"
+completedAt: "2026-10-15T20:30:43.003Z"
 ---
 
 ## Description
