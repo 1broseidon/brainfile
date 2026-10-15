@@ -27,8 +27,9 @@ export const LINK_PROTOCOL = 1;
  * hello so a phone sends them only to a desk that takes them; a phone that
  * does not know a feature ignores it (link.md, Hello). `effort`: dispatch and
  * ask take an effort level with the model, and a run says the one it has.
+ * `merge`: readyToMerge, mergeReview and discardReview, the window's own.
  */
-export const LINK_FEATURES = ['effort'];
+export const LINK_FEATURES = ['effort', 'merge'];
 
 /** The close codes the phone words (link.md, Connection). */
 export const CLOSE = {

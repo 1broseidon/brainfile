@@ -22,6 +22,7 @@ type Link = typeof import('../src/link/server.ts') &
 
 const L = bundled<Link>('src/link/server.ts', 'src/link/noise.ts', 'src/link/store.ts', 'src/link/bridge.ts', 'src/link/addresses.ts');
 const { LinkServer, LinkStore, BoardHolds, linkDesk, Initiator, keyPair, sealFrame, FrameReader, fromBase64Url, toBase64Url, MAX_CHUNK, MAX_MESSAGE, checkCall, orderAddresses } = L;
+const { DevReviews } = bundled<typeof import('../src/link/devReviews.ts')>('src/link/devReviews.ts');
 
 const HERE = '/repos/here';
 const THERE = '/repos/there';
@@ -252,7 +253,7 @@ test('a phone with the open code is let in, kept as linked, and told who the des
     name: 'George’s MacBook Pro',
     addresses: [`127.0.0.1:${port()}`, `Desk.local:${port()}`],
     protocol: 1,
-    features: ['effort'],
+    features: ['effort', 'merge'],
   });
   const linked = store.phone(toBase64Url(phone.key.public));
   assert.equal(linked?.name, 'iPhone 16 Pro');
@@ -396,7 +397,7 @@ test('a WebSocket message over 65,535 bytes closes the socket', async () => {
 
 test('a call off the list is Not allowed; bad arguments and unknown projects are said so', async () => {
   const phone = await paired();
-  for (const call of ['deleteTask', 'removeProject', 'settleBoards', 'mergeReview', 'setSettings', 'discuss', 'constructor', '__proto__', 42]) {
+  for (const call of ['deleteTask', 'removeProject', 'settleBoards', 'openWorktree', 'setSettings', 'discuss', 'constructor', '__proto__', 42]) {
     assert.deepEqual(await phone.call(call as string, HERE, 'task-1'), { id: (phone as any).nextId - 1, error: 'Not allowed' });
   }
   assert.equal((await phone.call('getTask', HERE)).error, 'Bad arguments', 'one argument short');
@@ -482,6 +483,193 @@ test('a null in every call is an optional argument left out, never one that is n
   ] as const) {
     assert.equal(checkCall(call, [...given]).ok, false, `${call} needs it`);
   }
+});
+
+// ── Merge from the phone (the `merge` feature) ─────────────────────────────
+
+test('merge: readyToMerge, mergeReview and discardReview pass the check with good arguments, and only those', () => {
+  assert.deepEqual(checkCall('readyToMerge', [HERE]), { ok: true, call: 'readyToMerge', args: [HERE], projectId: HERE });
+  assert.deepEqual(checkCall('mergeReview', [HERE, 'task-5']), { ok: true, call: 'mergeReview', args: [HERE, 'task-5'], projectId: HERE });
+  assert.deepEqual(checkCall('discardReview', [HERE, 'task-5']), { ok: true, call: 'discardReview', args: [HERE, 'task-5'], projectId: HERE });
+  for (const [call, given] of [
+    ['readyToMerge', []],
+    ['readyToMerge', [null]],
+    ['readyToMerge', [7]],
+    ['readyToMerge', [HERE, 'task-5']],
+    ['mergeReview', [HERE]],
+    ['mergeReview', [HERE, null]],
+    ['mergeReview', [HERE, '']],
+    ['mergeReview', [HERE, 5]],
+    ['mergeReview', [HERE, 'task-5', 'now']],
+    ['discardReview', [HERE]],
+    ['discardReview', [null, 'task-5']],
+    ['discardReview', [HERE, { id: 'task-5' }]],
+    ['discardReview', [HERE, 'task-5', true]],
+  ] as const) {
+    assert.deepEqual(checkCall(call, [...given]), { ok: false, error: 'Bad arguments' }, `${call}(${JSON.stringify(given)})`);
+  }
+});
+
+test('merge: a phone asks what can merge, merges and discards, and each goes to the agents process as the window\'s does', async () => {
+  const phone = await paired();
+  assert.equal((await phone.call('mergeReview', HERE)).error, 'Bad arguments');
+  assert.equal((await phone.call('discardReview', HERE, 'task-5', 'x')).error, 'Bad arguments');
+  assert.equal((await phone.call('readyToMerge', '/etc')).error, 'Unknown project');
+  assert.equal((await phone.call('mergeReview', '/etc', 'task-5')).error, 'Unknown project');
+  assert.deepEqual(calls, [], 'none of it reached the desk');
+  await phone.call('readyToMerge', HERE);
+  await phone.call('discardReview', HERE, 'task-5');
+  await phone.call('mergeReview', THERE, 'task-7');
+  assert.deepEqual(
+    calls.filter((c) => c.to === 'agents'),
+    [
+      { to: 'agents', method: 'readyToMerge', args: [HERE] },
+      { to: 'agents', method: 'discardReview', args: [HERE, 'task-5'] },
+      { to: 'agents', method: 'mergeReview', args: [THERE, 'task-7'] },
+    ]
+  );
+});
+
+test('merge: a merge from the phone completes a task still on the board, as the window\'s Merge; the window hears either way', async () => {
+  const log: string[] = [];
+  const settled: string[] = [];
+  let task: Record<string, unknown> = { ok: true, value: { id: 'task-7', archived: false } };
+  let completed: Record<string, unknown> = { ok: true };
+  let merged: Record<string, unknown> = { ok: true, value: { message: 'Merged dispatch/task-7 into main' } };
+  const desk = linkDesk({
+    host: async (method, ...args) => {
+      log.push(`host ${method} ${args.join(' ')}`);
+      return method === 'getTask' ? task : completed;
+    },
+    agents: async (method, ...args) => {
+      log.push(`agents ${method} ${args.join(' ')}`);
+      return method === 'discardReview' ? { ok: true, value: { message: 'Discarded dispatch/task-7' } } : merged;
+    },
+    holds,
+    projects: async () => PROJECTS as never,
+    knows: () => true,
+    settled: (projectId) => settled.push(projectId),
+  });
+
+  assert.deepEqual(await desk.call('phone:1', 'mergeReview', [HERE, 'task-7']), merged);
+  assert.deepEqual(log.splice(0), ['agents mergeReview /repos/here task-7', 'host getTask /repos/here task-7', 'host completeTask /repos/here task-7']);
+  assert.deepEqual(settled.splice(0), [HERE]);
+
+  // A parent with open children stays open, and the answer says so.
+  completed = { ok: false, error: 'task-7 has open children' };
+  assert.deepEqual(await desk.call('phone:1', 'mergeReview', [HERE, 'task-7']), { ok: true, value: { message: 'Merged. task-7 stays open: task-7 has open children' } });
+  log.length = 0;
+
+  // Done already: it is left as it is.
+  task = { ok: true, value: { id: 'task-7', archived: true } };
+  await desk.call('phone:1', 'mergeReview', [HERE, 'task-7']);
+  assert.deepEqual(log.splice(0), ['agents mergeReview /repos/here task-7', 'host getTask /repos/here task-7']);
+
+  // Nothing merged (sent back, a check failed): the board is not touched, and the answer is the desk's.
+  merged = { ok: false, error: 'task-5 conflicts with main in src/a.ts: sent back to Codex to settle (1 of 1)' };
+  assert.deepEqual(await desk.call('phone:1', 'mergeReview', [HERE, 'task-5']), merged);
+  assert.deepEqual(log.splice(0), ['agents mergeReview /repos/here task-5']);
+
+  // A discard never changes the board, so the window is told.
+  assert.deepEqual(await desk.call('phone:1', 'discardReview', [THERE, 'task-7']), { ok: true, value: { message: 'Discarded dispatch/task-7' } });
+  assert.deepEqual(log.splice(0), ['agents discardReview /repos/there task-7']);
+  assert.deepEqual(settled, [HERE, HERE, HERE, THERE]);
+});
+
+test('merge: a merge that takes minutes stalls nothing else on the socket, and is answered when it lands', async () => {
+  let land!: (value: unknown) => void;
+  server = new LinkServer({
+    ...(server as any).options,
+    desk: linkDesk({
+      host: async (method) => (method === 'getTask' ? { ok: true, value: { id: 'task-7', title: 'A task', archived: true } } : { ok: true }),
+      agents: (method) => (method === 'mergeReview' ? new Promise((resolve) => (land = resolve)) : Promise.resolve({ ok: true, value: [] })),
+      holds,
+      projects: async () => projects,
+      knows: () => true,
+    }),
+  });
+  const phone = await paired();
+  const merging = phone.call('mergeReview', HERE, 'task-7');
+  assert.deepEqual((await phone.call('getTask', HERE, 'task-7')).value, { ok: true, value: { id: 'task-7', title: 'A task', archived: true } });
+  assert.deepEqual((await phone.call('readyToMerge', HERE)).value, { ok: true, value: [] });
+  await sleep(50);
+  land({ ok: true, value: { message: 'Merged dispatch/task-7 into main' } });
+  assert.deepEqual((await merging).value, { ok: true, value: { message: 'Merged dispatch/task-7 into main' } });
+});
+
+test('link:dev: task-7 can merge, task-5 would conflict; Merge lands one and sends the other back; Discard drops it', async () => {
+  const live = new Set<string>();
+  const sent: { taskId: string; agentId: string; note: string }[] = [];
+  const dev = () =>
+    new DevReviews({
+      projectId: HERE,
+      worktrees: '/tmp/worktrees',
+      mergeMs: 40,
+      working: (_projectId, taskId) => (live.has(taskId) ? 'Codex' : null),
+      sendBack: async (_projectId, taskId, agentId, note) => {
+        sent.push({ taskId, agentId, note });
+        live.add(taskId);
+        return { ok: true };
+      },
+      nameOf: (agentId) => ({ claude: 'Claude Code', codex: 'Codex' })[agentId] ?? agentId,
+    });
+  const reviews = dev();
+  assert.deepEqual(reviews.ready(HERE), {
+    ok: true,
+    value: [
+      { taskId: 'task-7', into: 'main', ahead: 3, added: 42, removed: 7, conflicts: false },
+      { taskId: 'task-5', into: 'main', ahead: 2, added: 54, removed: 4, conflicts: true },
+    ],
+  });
+  assert.deepEqual(reviews.ready(THERE), { ok: true, value: [] }, 'only on the one project');
+
+  // review agrees with readyToMerge.
+  const clean = reviews.review(HERE, 'task-7');
+  assert.ok(clean.ok && clean.value);
+  assert.equal(clean.value.branch, 'dispatch/task-7');
+  assert.equal(clean.value.into, 'main');
+  assert.equal(clean.value.ahead, 3);
+  assert.equal(clean.value.commits.length, 3);
+  assert.equal(clean.value.added, 42);
+  assert.equal(clean.value.removed, 7);
+  assert.equal(clean.value.files.reduce((sum, f) => sum + f.added, 0), 42);
+  assert.deepEqual(clean.value.conflicts, []);
+  const conflicting = reviews.review(HERE, 'task-5');
+  assert.ok(conflicting.ok && conflicting.value);
+  assert.deepEqual(conflicting.value.conflicts, ['src/a.ts']);
+  assert.ok(conflicting.value.files.some((f) => f.path === 'src/a.ts'));
+  assert.deepEqual(reviews.review(HERE, 'task-1'), { ok: true, value: null });
+
+  // The clean one checks for a moment, lands, and is gone; a second Merge finds nothing.
+  const started = Date.now();
+  const [first, second] = await Promise.all([reviews.merge(HERE, 'task-7'), reviews.merge(HERE, 'task-7')]);
+  assert.ok(Date.now() - started >= 40);
+  assert.deepEqual(first, { ok: true, value: { message: 'Merged dispatch/task-7 into main' } });
+  assert.deepEqual(second, { ok: false, error: 'task-7 has no worktree to merge' });
+  assert.deepEqual(reviews.ready(HERE).ok && reviews.ready(HERE).value.map((r) => r.taskId), ['task-5']);
+  assert.deepEqual(reviews.review(HERE, 'task-7'), { ok: true, value: null });
+
+  // The conflicting one goes back to Codex, in the desk's words, and is not ready while Codex is at it.
+  assert.deepEqual(await reviews.merge(HERE, 'task-5'), { ok: false, error: 'task-5 conflicts with main in src/a.ts: sent back to Codex to settle (1 of 1)' });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].agentId, 'codex');
+  assert.match(sent[0].note, /^Landing sent back \(1 of 1\): dispatch\/task-5 conflicts with main in src\/a\.ts\. Merge main into this branch/);
+  assert.deepEqual(reviews.ready(HERE), { ok: true, value: [] });
+  assert.deepEqual(await reviews.merge(HERE, 'task-5'), { ok: false, error: 'Codex is still working on task-5' });
+  assert.deepEqual(reviews.discard(HERE, 'task-5'), { ok: false, error: 'Codex is still working on task-5' });
+  // Once its run ends the conflict is settled, and it can merge.
+  live.delete('task-5');
+  assert.deepEqual(reviews.ready(HERE), { ok: true, value: [{ taskId: 'task-5', into: 'main', ahead: 3, added: 54, removed: 4, conflicts: false }] });
+
+  // Discard drops it; there is nothing left to discard.
+  assert.deepEqual(reviews.discard(HERE, 'task-5'), { ok: true, value: { message: 'Discarded dispatch/task-5' } });
+  assert.deepEqual(reviews.ready(HERE), { ok: true, value: [] });
+  assert.deepEqual(reviews.discard(HERE, 'task-5'), { ok: false, error: 'task-5 has no worktree to discard' });
+
+  // A fresh desk discards the clean one too.
+  const again = dev();
+  assert.deepEqual(again.discard(HERE, 'task-7'), { ok: true, value: { message: 'Discarded dispatch/task-7' } });
+  assert.deepEqual(again.ready(HERE).ok && again.ready(HERE).value.map((r) => r.taskId), ['task-5']);
 });
 
 test('live: the runs not ended, and those that ended in the last 30 minutes, the latest 50', () => {

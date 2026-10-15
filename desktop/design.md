@@ -747,6 +747,14 @@ drawn like the others:
   `seen 5h ago` in mono. **Forget** waits for the hand, danger ink with no
   fill, and asks once, in place (`Forget phone?`); a phone forgotten while
   connected is told and let go.
+- **What a phone can do** is the contract's list: read and change boards,
+  hand off and chat, answer permission asks, read a hand-off's review, and
+  Merge or Discard it (the `merge` feature). Merge from the phone is the
+  window's Merge, by the same rules: one landing at a time, the checks
+  run, a conflict goes back to the agent, and the task is completed with
+  it. The window's Ready to merge follows. Settings, adding or removing
+  projects, deleting tasks, board fixes, editors, GitHub tokens, discuss and
+  leads stay on the desk.
 - The phone's own words for what the desk says (`Code expired`, `Not linked
   · scan again`, `Forgotten on desktop`) are the contract's, not this file's.
 

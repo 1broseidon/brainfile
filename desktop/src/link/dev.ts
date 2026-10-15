@@ -11,6 +11,10 @@
  *   run that goes from starting to editing, asks permission (Allow once,
  *   Always, Reject), then finishes with a short reply, as AgentEvents over a
  *   few seconds. A dispatch also moves its task as an agent would.
+ * - Two hand-offs on `brainfile` (devReviews.ts): task-7 can merge (+42 −7,
+ *   three commits, into main; Merge checks for two seconds, then it lands
+ *   and the task is completed), task-5 would conflict in src/a.ts (Merge
+ *   sends it back to Codex, whose run settles it). Discard drops either.
  * - The link store lives in the same temporary folder and is kept between
  *   runs, so a phone linked once stays linked (`--fresh` starts over).
  *
@@ -28,6 +32,7 @@ import { LinkStore } from './store';
 import { deskAddresses, deskName } from './addresses';
 import { inProcessHost } from './inProcess';
 import { liveRuns } from '../agents/live';
+import { DevReviews } from './devReviews';
 import type { AgentEvent, AgentId, AgentInfo, AgentMethod, AgentRun, LinkProject, LinkView, PermissionAsk, ProjectState, Result } from '../shared/api';
 
 const DEV_PORT = 47211;
@@ -82,6 +87,8 @@ const AGENTS: AgentInfo[] = [
   { id: 'codex', name: 'Codex', available: true, note: 'your login' },
 ];
 
+const nameOf = (agentId: string) => AGENTS.find((agent) => agent.id === agentId)?.name ?? agentId;
+
 const LEVELS = (...names: string[]) => names.map((name) => ({ value: name.toLowerCase(), name }));
 
 /** As a real agent lists them once their effort has been asked (task-50): Sonnet offers none, to show a model without levels. */
@@ -97,6 +104,20 @@ class FakeAgents {
   private readonly runs = new Map<string, AgentRun>();
   private readonly asks = new Map<string, { ask: PermissionAsk; resolve: (optionId: string | null) => void }>();
   private next = 1;
+  private readonly reviews = new DevReviews({
+    projectId: folders.find((folder) => path.basename(folder) === 'brainfile')!,
+    worktrees: path.join(base, 'worktrees'),
+    working: (projectId, taskId) => {
+      const run = [...this.runs.values()].find((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId && r.endedAt === undefined);
+      return run ? nameOf(run.agentId) : null;
+    },
+    // As the desk sends a landing back: the note in the task's log, then the same agent on it.
+    sendBack: async (projectId, taskId, agentId, note) => {
+      const noted = await host.call<Result<unknown>>('noteTask', projectId, taskId, note);
+      return noted.ok ? this.start({ projectId, taskId, agentId: agentId as AgentId, kind: 'dispatch' }) : noted;
+    },
+    nameOf,
+  });
 
   constructor(private readonly emit: (event: AgentEvent) => void) {}
 
@@ -118,7 +139,13 @@ class FakeAgents {
       case 'answerPermission':
         return this.answer(a, (args[1] as string | null) ?? null);
       case 'review':
-        return { ok: true, value: null };
+        return this.reviews.review(a, b);
+      case 'readyToMerge':
+        return this.reviews.ready(a);
+      case 'mergeReview':
+        return this.reviews.merge(a, b);
+      case 'discardReview':
+        return this.reviews.discard(a, b);
       default:
         return { ok: false, error: `link:dev has no ${method}` };
     }
@@ -331,6 +358,7 @@ async function main(): Promise<void> {
   say(`  data       ${base}`);
   for (const p of list) say(`  project    ${p.name.padEnd(10)} ${p.repo ? `${p.repo.owner}/${p.repo.name}, ref ${p.ref}` : 'local only'} · ${p.path}`);
   say(`  agents     ${AGENTS.map((a) => a.id).join(', ')} (fake: starting, editing, an ask, done)`);
+  say(`  hand-offs  brainfile task-7 can merge, task-5 would conflict (fake: no git)`);
   say(`  phones     ${store.phones().map((p) => p.name).join(', ') || 'none linked yet'}`);
   if (linkFile) say(`  link file  ${linkFile}`);
   await showCode();
