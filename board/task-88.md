@@ -33,7 +33,7 @@ contract:
   metrics:
     readyAt: "2026-10-15T21:40:11.828Z"
 createdAt: "2026-10-15T15:49:57.479Z"
-updatedAt: "2026-10-15T23:12:21.699Z"
+updatedAt: "2026-10-15T23:14:26.274Z"
 ---
 
 ## Description
@@ -48,3 +48,5 @@ On a demo repository with a remote (a bare clone), an epic of three children whe
 Write it as a scripted test (like the desktop's offscreen e2e harness, but headless: a fake ACP agent that commits and moves its task) that CI can run, plus one live run with a real agent, noted here. Whatever does not work headless is a bug on the child that owns it, not a skip.
 
 From task-82 (landed): `brainfile run`'s terminalAsk (cli/src/commands/run.ts) honours cancelAsk and takes the prompt down, but it always prints "That ask was withdrawn: its run stopped." When the ask was answered from the desktop (task-84's state/runs/<id>.answer.json), say so instead, e.g. "Answered in Brainfile: <option>", and cover it in step 3: an ask from the terminal runner answered from the desktop's band, the terminal prompt gone, the run going on.
+
+From task-84: its by-hand check was never done, because `brainfile run` was not on its branch and the GUI was not driven. Do it in the live run: with the window open, `brainfile dispatch task-N --agent codex` and `brainfile run --once` in a terminal, then see the row and the dock tab marked "in a terminal", an ask answered from the band, and Review. desktop/test/external-runs.test.ts covers that path with a core Runner standing in for the terminal. The desktop's Runner now works the queue with leads: true. Opening the window takes up any lead whose record has no live claim and starts its queued children. Check that a desktop and a `brainfile run` open together never both take one lead or one child, and that a request answered before claims existed (answeredBefore) is not run again.
