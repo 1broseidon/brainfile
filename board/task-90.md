@@ -24,16 +24,16 @@ dependsOn:
 subtasks:
   - id: task-90-1
     title: Hand to… says Lands on qa/parity · from epic-8
-    completed: false
+    completed: true
   - id: task-90-2
     title: The picker lists the trunk, branches and recent targets, no dispatch/* or brainfile
-    completed: false
+    completed: true
   - id: task-90-3
     title: Choosing what it inherits writes no landsOn
-    completed: false
+    completed: true
   - id: task-90-4
     title: The worktree is on dispatch/<task>, with brainfileBase qa/parity
-    completed: false
+    completed: true
   - id: task-90-5
     title: Review says from qa/parity and Merge into qa/parity
     completed: false
@@ -42,7 +42,7 @@ subtasks:
     completed: false
 createdAt: "2026-10-15T18:20:11.927Z"
 assignee: claude
-updatedAt: "2026-10-15T19:05:13.081Z"
+updatedAt: "2026-10-15T19:05:24.573Z"
 dispatch:
   agent: claude
   model: opus
