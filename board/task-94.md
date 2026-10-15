@@ -17,14 +17,15 @@ dependsOn:
 subtasks:
   - id: task-94-1
     title: The header and the feed say main is N commits ahead of origin, with N matching git
-    completed: false
+    completed: true
   - id: task-94-2
     title: No push key; nothing is pushed
-    completed: false
+    completed: true
   - id: task-94-3
     title: The line goes when main is level with origin
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:20:41.345Z"
+updatedAt: "2026-10-15T20:35:28.765Z"
 ---
 
 ## Description
