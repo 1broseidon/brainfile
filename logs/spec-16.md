@@ -2,8 +2,6 @@
 id: spec-16
 title: Dispatch from the chat, queues, and a shared dispatch surface
 type: spec
-column: todo
-position: 0
 priority: high
 tags:
   - desktop
@@ -42,9 +40,10 @@ subtasks:
   - id: spec-16-9
     title: "Docs: the why-not-subagents case in MANUAL and the desktop design"
     completed: true
-updatedAt: "2026-10-15T21:27:49.174Z"
+updatedAt: "2026-10-15T21:27:49.696Z"
 decisions:
   - decision-15
+completedAt: "2026-10-15T21:27:49.696Z"
 ---
 
 ## Description
@@ -76,3 +75,9 @@ A lighter mode stays open: an agent that prefers its own subagents can still use
 - 2026-10-15T01:37:23.916Z: [claude] Phase 2 built in the desktop (subtasks 4, 5, 6) and the docs (9). Hand to… or the chat's dispatch on anything with open children starts a lead (desktop/src/agents/lead.ts): read-only, the desk scoped to its tree. Its first turn checks the plan with the app's own reading (shared files with neither waiting, missing/circular/outside dependencies, no files, no validation, the order), fixes dependsOn and contracts, notes the plan on the epic, then hands off what is ready. The app holds the rules: dependsOn done, at most projects[<repo>].concurrency (3) at once, 1 + maxRetries hand-offs, own childless children only, one lead per tree, only the lead dispatches in it, children it adds wait for the person unless bypass. Woken by a child's run ending, a merge or send-back, the person completing one or resuming; bypass lands each child itself. Epic completes with its last child. `lead:` record on the epic; Pause, Resume (also after a restart) and Stop in the epic's Lead block; dock tab. Every hand-off now writes `dispatch: {by: person|chat|lead}`. Proven end to end offscreen: a scripted lead and workers (bypass and person-merges), and Claude Code as the lead, which serialised two children sharing src/greet.js, made the README task wait on both, replaced marker-file checks with real ones, and stopped with notes when the worker failed. Left: spec-16-1's claim, heartbeat and lint (task-74), 7 and 8 (task-81, task-82); task-83 now moves this lead into core.
 - 2026-10-15T21:25:55.709Z: [claude] Board cleanup (2026-10-15): spec-16 is now under epic-6, which builds the rest of it in core. The board record is done (task-74). The two Phase 3 items left are task-81 (dispatch / dispatch status on the CLI and MCP) and task-82 (brainfile run and live runs in the TUI). Tick them as those land.
 - 2026-10-15T21:27:49.432Z: [claude] Completed in board cleanup (2026-10-15), taken back out of epic-6: under it, its finished children (task-37 to task-39) cluttered the epic's tree. Phases 1 and 2 shipped; the board record shipped as task-74. The two Phase 3 items are now epic-6's work: brainfile dispatch / dispatch status on the CLI and MCP is task-81; brainfile run and live runs in the TUI is task-82. They are left unticked here on purpose.
+
+## Child Tasks
+Summary: 3/3 children completed.
+- task-37: Light code review: spec-16 phase 1 (dispatch from the desktop chat) (completed)
+- task-38: Prevent concurrent dispatches from sharing a task worktree (completed)
+- task-39: Make stop cancel a dispatch that is still starting (completed)
