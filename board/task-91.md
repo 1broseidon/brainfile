@@ -1,8 +1,8 @@
 ---
 id: task-91
 title: "QA hand-off 2: it waits until hand-off 1 has landed, its brief carries what hand-off 1 left, and two landings at once go one at a time"
-column: in-progress
-position: 10
+column: review
+position: 5
 description: |-
   **For the agent this is handed to:** in your brief, find what the task you depend on said when it finished, and append one line to `qa/parity-wave-1.md`: `- QA hand-off 2 (<task id>): built on <that task's id>, which said "<the first few words of its last note>", <the time now, ISO>`. Commit it on your branch. Change nothing else, and do not tick this task's subtasks: they are the person's checks. Then do as your brief says when you finish.
 
@@ -39,7 +39,7 @@ subtasks:
     title: "Optional: two merges back to back both land, one at a time; no landing.lock left behind"
     completed: false
 createdAt: "2026-10-15T18:20:40.478Z"
-updatedAt: "2026-10-15T19:11:04.109Z"
+updatedAt: "2026-10-15T19:11:28.606Z"
 assignee: claude
 dispatch:
   agent: claude
