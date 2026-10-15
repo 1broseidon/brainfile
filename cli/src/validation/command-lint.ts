@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import { workspaceRootFromBrainfilePath } from '../utils/workspace-format';
 
@@ -9,9 +10,18 @@ export interface ValidationCommandLintWarning {
   message: string;
 }
 
+/** The path with its symlinks resolved, as process.cwd() reports it (/var is /private/var on macOS). */
+function real(p: string): string {
+  try {
+    return fs.realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
 export function getWorkspaceRelativePath(brainfilePath: string): string {
   const workspaceRoot = workspaceRootFromBrainfilePath(brainfilePath);
-  const relativePath = path.relative(process.cwd(), workspaceRoot);
+  const relativePath = path.relative(real(process.cwd()), real(workspaceRoot));
 
   if (!relativePath || relativePath === '.') {
     return '.';

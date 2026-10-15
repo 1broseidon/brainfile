@@ -17,7 +17,7 @@ describe('hook-settings', () => {
 
   beforeEach(() => {
     // Create a temporary directory for each test
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-settings-test-'));
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'hook-settings-test-')));
     originalCwd = process.cwd();
     originalHome = process.env.HOME;
 
