@@ -357,6 +357,7 @@ export const contractOutputSchema = z.discriminatedUnion('action', [
     action: z.literal('validate'),
     ok: z.boolean(),
     status: z.string(),
+    checkedIn: z.string().optional().describe('The worktree the work was checked in, when not the board\'s checkout; the task stays open until its branch lands'),
     deliverables: z.array(z.looseObject({
       deliverable: deliverableSchema,
       ok: z.boolean(),

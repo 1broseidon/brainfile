@@ -475,6 +475,9 @@ export function contractValidateCommand(options: ContractOptions, logger: Logger
   }
 
   logger.log(`Contract validation ${ok ? 'passed' : 'failed'}: ${options.task}`);
+  if (result.checkedIn) {
+    logger.log(`Checked in ${result.checkedIn}: ${options.task} stays open until its branch lands.`);
+  }
 
   if (!deliverablesOk) {
     logger.log('');

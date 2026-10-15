@@ -135,6 +135,7 @@ export function registerContractTool(server: McpServer, defaultFile: string): vo
           deliverables: result.deliverableChecks,
           commands: result.commandResults,
           warnings: result.warnings,
+          ...(result.checkedIn ? { checkedIn: result.checkedIn } : {}),
         };
         // Failed validation is a successful tool result (`ok: false`), not a
         // tool error. `isError: true` would skip outputSchema checks and hide

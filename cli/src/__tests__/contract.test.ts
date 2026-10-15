@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import { readTaskFile, taskFileName, writeTaskFile, type Task } from '@brainfile/core';
 import { MemoryLogger } from '../utils/logger';
 import { contractPickupCommand, contractDeliverCommand, contractValidateCommand, contractAttachCommand, contractActivateCommand } from '../commands/contract';
@@ -115,6 +116,45 @@ columns:
     expect(fs.existsSync(path.join(workspace.logsDir, 'ledger.jsonl'))).toBe(true);
     expect(fs.readFileSync(ledgerPath, 'utf-8')).toContain('"contractStatus":"done"');
     expect(fs.existsSync(path.join(workspace.logsDir, 'task-1.md'))).toBe(true);
+  });
+
+  it('validate run from another worktree of the repository checks the work there and leaves the task open', () => {
+    const git = (args: string[], cwd: string) => {
+      const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
+      if (r.status !== 0) throw new Error(r.stderr);
+    };
+    git(['init', '-q', '-b', 'main'], workspace.tempDir);
+    git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-q', '--allow-empty', '-m', 'start'], workspace.tempDir);
+    const wt = path.join(workspace.tempDir, 'wt');
+    git(['worktree', 'add', '-q', '-b', 'dispatch/task-1', wt], workspace.tempDir);
+    // Only the worktree has the deliverable, and the check writes where it runs.
+    fs.writeFileSync(path.join(wt, 'exists.txt'), 'ok', 'utf-8');
+    writeTask({
+      id: 'task-1',
+      title: 'Task With Contract',
+      column: 'in-progress',
+      position: 0,
+      contract: {
+        status: 'delivered',
+        deliverables: [{ type: 'file', path: 'exists.txt' } as any],
+        validation: { commands: ['node -e "require(\'fs\').writeFileSync(\'ran\',\'\')"'] },
+      },
+    } as Task);
+
+    const cwd = process.cwd();
+    process.chdir(wt);
+    try {
+      const result = contractValidateCommand({ file: workspace.brainfilePath, task: 'task-1' }, logger);
+      expect(result.success).toBe(true);
+    } finally {
+      process.chdir(cwd);
+    }
+    expect(fs.existsSync(path.join(wt, 'ran'))).toBe(true);
+    expect(fs.existsSync(path.join(workspace.tempDir, 'ran'))).toBe(false);
+    const taskDoc = readTask();
+    expect(taskDoc?.task.contract?.status).toBe('done');
+    expect(taskDoc?.task.column).toBe('in-progress');
+    expect(fs.existsSync(path.join(workspace.logsDir, 'task-1.md'))).toBe(false);
   });
 
   it('validate should stop on first failing command and set status to failed', () => {

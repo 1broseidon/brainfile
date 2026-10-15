@@ -1325,6 +1325,8 @@ export interface ContractTransitionWithFeedbackOptions extends ContractTransitio
 export interface CompleteContractOptions extends CompleteTaskFileOptions {
   /** Override target column, or `false` to skip column sync (task is archived regardless). */
   column?: string | false;
+  /** `false` marks the contract done and leaves the task on the board, for work not yet where it lands. */
+  archive?: boolean;
 }
 
 function resolveColumn(
@@ -1489,8 +1491,10 @@ export function completeTaskContract(
     return { success: false, error: `Failed to update contract status: ${err}` };
   }
 
+  if (options.archive === false) return { success: true };
+
   // Now archive via the standard completion flow (ledger + unlink)
-  const { column: _col, ...completeOpts } = options;
+  const { column: _col, archive: _archive, ...completeOpts } = options;
   return completeTaskFile(taskPath, logsDir, completeOpts);
 }
 

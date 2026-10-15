@@ -65,6 +65,8 @@ export interface ContractValidateResult {
   commandResults: ValidationCommandResult[];
   warnings: ValidationWarning[];
   ok: boolean;
+  /** The worktree the work was checked in, when not the board's own checkout: the task was left open. */
+  checkedIn?: string;
 }
 
 /**
@@ -283,6 +285,26 @@ function deliverContractV2(ctx: ContractRunContext, resolvedFilePath: string): C
   return { action: 'deliver', board };
 }
 
+function gitPath(args: string[], cwd: string): string | null {
+  const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
+  return r.status === 0 && r.stdout.trim() ? path.resolve(cwd, r.stdout.trim()) : null;
+}
+
+/**
+ * Where the work is checked. A board on its own branch is shared by every
+ * worktree of the repository, so an agent in a hand-off's worktree reads the
+ * same board as the main checkout; its files and checks are in the worktree
+ * it runs in, not in the checkout the board was found from.
+ */
+function workDir(projectDir: string, boardDir: string, cwd = process.cwd()): string {
+  const real = (p: string) => (fs.existsSync(p) ? fs.realpathSync(p) : p);
+  const top = gitPath(['rev-parse', '--show-toplevel'], cwd);
+  if (!top || real(top) === real(projectDir) || real(top) === real(boardDir)) return projectDir;
+  const common = gitPath(['rev-parse', '--git-common-dir'], cwd);
+  const projectCommon = gitPath(['rev-parse', '--git-common-dir'], projectDir);
+  return common && projectCommon && real(common) === real(projectCommon) ? top : projectDir;
+}
+
 function validateContractV2(ctx: ContractRunContext, resolvedFilePath: string): ContractValidateResult | { error: string } {
   const dirs = getV2Dirs(resolvedFilePath);
   const found = findV2Task(dirs, ctx.taskId, false);
@@ -297,9 +319,10 @@ function validateContractV2(ctx: ContractRunContext, resolvedFilePath: string): 
   const contract = taskDoc.task.contract;
   const brainfileAbs = path.resolve(resolvedFilePath);
   const brainfileDir = path.dirname(brainfileAbs);
-  const baseDir = path.basename(brainfileDir) === '.brainfile'
-    ? path.dirname(brainfileDir)
-    : brainfileDir;
+  const projectDir = path.basename(brainfileDir) === '.brainfile' ? path.dirname(brainfileDir) : brainfileDir;
+  const baseDir = workDir(projectDir, brainfileDir);
+  // Checked in another worktree, the work is on its branch and not yet where it lands: the task stays open.
+  const onBranch = baseDir !== projectDir;
 
   const deliverables = contract.deliverables ?? [];
   const deliverableChecks: ContractValidateResult['deliverableChecks'] = [];
@@ -376,7 +399,7 @@ function validateContractV2(ctx: ContractRunContext, resolvedFilePath: string): 
     : commandResults.at(-1)?.stderr || commandResults.at(-1)?.stdout || 'Validation failed';
 
   const op = ok
-    ? completeTaskContract(taskPath, dirs.logsDir)
+    ? completeTaskContract(taskPath, dirs.logsDir, { archive: !onBranch })
     : failTaskContract(taskPath, failureFeedback);
   if (!op.success) return { error: op.error || 'Failed to update contract status' };
 
@@ -389,5 +412,6 @@ function validateContractV2(ctx: ContractRunContext, resolvedFilePath: string): 
     commandResults,
     warnings,
     ok,
+    ...(onBranch ? { checkedIn: baseDir } : {}),
   };
 }

@@ -1086,6 +1086,12 @@ $ brainfile contract deliver -t task-7     # → delivered
 $ brainfile contract validate -t task-7    # → done, or failed with the reason
 ```
 
+A passing `validate` completes the task. Run from another git worktree of the
+same repository (a hand-off's, with the board shared on its branch), it checks
+the files and runs the commands in that worktree, where the work is, and
+leaves the task open with its contract `done`: the work is on its branch, not
+yet where it lands, so the task is completed when the branch lands.
+
 Each transition is recorded under `contract.metrics`: `readyAt`,
 `pickedUpAt`, `deliveredAt`, `duration` and `reworkCount` sit on the task file
 and go into the ledger when the task completes.
