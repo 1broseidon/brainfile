@@ -64,6 +64,8 @@ const api: Api = {
   readyToMerge: invoke('readyToMerge'),
   mergeReview: invoke('mergeReview'),
   discardReview: invoke('discardReview'),
+  openPullRequest: invoke('openPullRequest'),
+  unpushed: invoke('unpushed'),
   openWorktree: invoke('openWorktree'),
   answerPermission: invoke('answerPermission'),
   listEditors: invoke('listEditors'),

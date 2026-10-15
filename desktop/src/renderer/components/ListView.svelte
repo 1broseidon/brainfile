@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { tip } from '../lib/tooltip';
-  import { app, MORE, READY_GROUP } from '../lib/state.svelte';
+  import { aheadOfOrigin, app, MORE, READY_GROUP } from '../lib/state.svelte';
   import { columnProgress, type OutlineRow } from '../lib/format';
   import type { BoardSnapshot } from '../../shared/api';
   import StatusIcon from './StatusIcon.svelte';
@@ -77,6 +77,10 @@
           {/if}
           <span class="name">{group.title}</span>
           <span class="count mono tabular">{group.count}</span>
+          {#if group.key === READY_GROUP && app.activeId && app.unpushed[app.activeId]}
+            <!-- Landing never pushes (spec-18): the group says so, quietly, and offers nothing more. -->
+            <span class="aside mono">{aheadOfOrigin(app.unpushed[app.activeId]!)}</span>
+          {/if}
           <span class="chev" class:open={!group.folded}><Icon name="chevron" size={12} stroke={1.8} /></span>
         </button>
         {#if column}
@@ -148,6 +152,12 @@
   }
 
   .count {
+    color: var(--ink-4);
+  }
+
+  .aside {
+    margin-left: var(--s2);
+    font-size: var(--t-xs);
     color: var(--ink-4);
   }
 

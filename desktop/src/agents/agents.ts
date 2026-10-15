@@ -19,14 +19,17 @@
  * the children off in order inside rules the app holds, and is woken when
  * one ends or lands. Discuss
  * (discuss.ts, task-35) is a chat about one task that may change its spec and
- * record decisions, and nothing else. Besides the agents it knows, it starts
+ * record decisions, and nothing else. Beside Merge, a hand-off may be opened
+ * as a pull request (decision-16): its branch is pushed here, GitHub is asked
+ * through main (which holds the person's credentials), and the pull request
+ * is followed until it merges (pullRequests.ts). Besides the agents it knows, it starts
  * any ACP server the person names in Settings (custom.ts in core, task-47),
  * the way Zed's agent_servers do.
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import type * as acp from '@agentclientprotocol/sdk';
-import { findV2Task, getV2Dirs, readBoardConfig, readTasksDir, type Task } from '@brainfile/core';
+import { findV2Task, getV2Dirs, openPullRequestOf, readBoardConfig, readTasksDir, type Task } from '@brainfile/core';
 import {
   AgentRegistry,
   Startups,
@@ -68,16 +71,21 @@ import {
   sendBackNote,
   uncommittedIn,
   unlanded,
+  unpushed,
+  withOpenPullRequest,
   type Landing,
   type Worktree,
 } from '@brainfile/core/repo';
+import { followHandOffPullRequest, openHandOffPullRequest, type PullRequestForge } from '@brainfile/core/forge';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
 import { chatPermission, discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
+import { PullRequestWatch } from './pullRequests';
 import { DEFAULT_LIMIT, Leads, treeOf, workOf as openWork, type Lead, type LeadTurn, type Tree, type TreeDoc } from './lead';
 import { isReview } from '../shared/columns';
 import type {
   AgentEvent,
+  AgentForgeMethod,
   AgentHostMethod,
   AgentId,
   AgentMessage,
@@ -90,6 +98,7 @@ import type {
   HostReply,
   LiveAgents,
   PermissionAsk,
+  PullRequestRecord,
   Result,
   ReadyView,
   ReviewView,
@@ -483,6 +492,20 @@ function callHost<T>(method: AgentHostMethod, ...args: unknown[]): Promise<T> {
   });
 }
 
+/** A call on main's GitHub client: the person's credentials stay there (decision-16). */
+function callForge<T>(method: AgentForgeMethod, ...args: unknown[]): Promise<T> {
+  const id = nextHostId++;
+  return new Promise((resolve) => {
+    hostPending.set(id, resolve as (result: unknown) => void);
+    send({ kind: 'forge', id, method, args });
+  });
+}
+
+const forge: PullRequestForge = {
+  openPullRequest: (repo, pr) => callForge('openPullRequest', repo, pr),
+  pullRequestState: (repo, number, force) => callForge('pullRequestState', repo, number, force),
+};
+
 const desk = new DeskBridge(
   deskTools({
     findTask(projectId, taskId) {
@@ -757,7 +780,7 @@ async function sendBackLanding(
   return { sent: true, said: `${taskId} ${what}: sent back to ${nameOf(agentId)} to settle (${round})` };
 }
 
-/** One landing of a task's hand-off, with its contract's checks. */
+/** One landing of a task's hand-off, with its contract's checks. One opened as a pull request lands on the forge instead. */
 async function land(projectId: string, taskId: string): Promise<Landing> {
   const live = liveDispatch(projectId, taskId);
   if (live) return { ok: false, kind: 'refused', error: `${nameOf(live.agentId)} is still working on ${taskId}` };
@@ -767,6 +790,8 @@ async function land(projectId: string, taskId: string): Promise<Landing> {
   try {
     const located = locateBoard(projectId, { materialize: false });
     const task = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId, true)?.doc.task : undefined;
+    const pr = task ? openPullRequestOf(task) : null;
+    if (pr) return { ok: false, kind: 'refused', error: `${taskId} has pull request #${pr.number} open: it lands when that merges on GitHub` };
     title = task?.title;
     commands = (task?.contract?.validation?.commands ?? []).map((c) => c.trim()).filter(Boolean);
   } catch (err) {
@@ -775,8 +800,40 @@ async function land(projectId: string, taskId: string): Promise<Landing> {
   return landReview(projectId, taskId, { title, check: commands.length ? (at) => runChecks(at, commands, agentEnv()) : undefined });
 }
 
-/** The board's hand-offs that can merge now; one an agent is still at is not ready yet. */
+/**
+ * Opens the hand-off as a pull request (decision-16): an agent still at it
+ * refuses, as Merge does; the rest is core's, which pushes the branch, asks
+ * GitHub through main and writes `pullRequest:` on the task through the host.
+ */
+async function openPullRequest(projectId: string, taskId: string): Promise<Result<PullRequestRecord>> {
+  const live = liveDispatch(projectId, taskId);
+  if (live) return { ok: false, error: `${nameOf(live.agentId)} is still working on ${taskId}` };
+  if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, error: `A hand-off is starting on ${taskId}` };
+  const opened = await openHandOffPullRequest(projectId, taskId, { github: forge, record: (record, note) => recordPullRequest(projectId, taskId, record, note) });
+  if (opened.ok) leads.wake(projectId, taskId, `${taskId} was opened as pull request #${opened.value.number} into ${opened.value.base}: it lands when that merges on GitHub`);
+  return opened;
+}
+
+async function recordPullRequest(projectId: string, taskId: string, record: PullRequestRecord, note: string): Promise<void> {
+  const written = await callHost<Result>('recordPullRequest', projectId, taskId, record, note);
+  if (!written.ok) throw new Error(written.error);
+}
+
+const pullRequests = new PullRequestWatch({
+  open: (projectId) => [...withOpenPullRequest(projectId)],
+  follow: (projectId, taskId) => followHandOffPullRequest(projectId, taskId, { github: forge, record: (record, note) => recordPullRequest(projectId, taskId, record, note) }),
+  settle: (projectId, taskId) => callHost<Result>('settleLanded', projectId, taskId),
+  busy: (projectId, taskId) => !!liveDispatch(projectId, taskId) || reserved.has(`${projectId}\n${taskId}`),
+  said: (projectId, taskId, text) => leads.wake(projectId, taskId, text),
+});
+
+/**
+ * The board's hand-offs that can merge now; one an agent is still at is not
+ * ready yet, and one opened as a pull request waits on the forge. Asking is
+ * also when those pull requests are followed (at most once a minute each).
+ */
 function ready(projectId: string): Result<ReadyView[]> {
+  void pullRequests.check(projectId);
   try {
     return { ok: true, value: readyToMerge(projectId).filter((r) => !liveDispatch(projectId, r.taskId)) };
   } catch (err) {
@@ -844,6 +901,14 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   readyToMerge: ready,
   mergeReview: checkThenMerge,
   discardReview: (projectId: string, taskId: string) => settle(projectId, taskId, () => discardReview(projectId, taskId)),
+  openPullRequest,
+  unpushed: (projectId: string): Result<ReturnType<typeof unpushed>> => {
+    try {
+      return { ok: true, value: unpushed(projectId) };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  },
   answerPermission,
 };
 

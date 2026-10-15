@@ -51,6 +51,27 @@ export interface Subtask {
   completed: boolean;
 }
 
+/** Where a pull request stands on the forge: open, merged, or closed without merging. */
+export type PullRequestState = 'open' | 'merged' | 'closed';
+
+/**
+ * `pullRequest:` on a task (decision-16): a hand-off landed by a pull
+ * request instead of Merge. While it is `open` the task is out of Ready to
+ * merge; `merged` completes it, `closed` puts it back.
+ */
+export interface PullRequestRecord {
+  number: number;
+  /** The pull request's page, e.g. `https://github.com/o/r/pull/12`. */
+  url: string;
+  state: PullRequestState;
+  /** The branch it goes into: the task's target, the trunk unless set. */
+  base: string;
+  /** The branch it carries: `dispatch/<task-id>`. */
+  head: string;
+  /** ISO 8601, when it was opened. */
+  at: string;
+}
+
 /**
  * Task definition - used by board type and per-task files (v2)
  *
@@ -98,6 +119,12 @@ export interface Task {
    * was made from (decision-4), e.g. `https://github.com/o/r/issues/12`.
    */
   source?: string;
+  /**
+   * The pull request the task's hand-off was opened as (decision-16): it
+   * lands when that merges on the forge. As written; `parsePullRequest`
+   * checks it.
+   */
+  pullRequest?: PullRequestRecord;
   createdAt?: string;  // ISO 8601 timestamp
   updatedAt?: string;  // ISO 8601 timestamp
   /** Column this task belongs to (v2 per-task files) */

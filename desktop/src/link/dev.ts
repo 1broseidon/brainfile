@@ -14,7 +14,9 @@
  * - Two hand-offs on `brainfile` (devReviews.ts): task-7 can merge (+42 −7,
  *   three commits, into main; Merge checks for two seconds, then it lands
  *   and the task is completed), task-5 would conflict in src/a.ts (Merge
- *   sends it back to Codex, whose run settles it). Discard drops either.
+ *   sends it back to Codex, whose run settles it). task-8 was opened as
+ *   pull request #31: not ready to merge, and Merge refuses it. Discard
+ *   drops any of them.
  * - The link store lives in the same temporary folder and is kept between
  *   runs, so a phone linked once stays linked (`--fresh` starts over).
  *
@@ -358,7 +360,7 @@ async function main(): Promise<void> {
   say(`  data       ${base}`);
   for (const p of list) say(`  project    ${p.name.padEnd(10)} ${p.repo ? `${p.repo.owner}/${p.repo.name}, ref ${p.ref}` : 'local only'} · ${p.path}`);
   say(`  agents     ${AGENTS.map((a) => a.id).join(', ')} (fake: starting, editing, an ask, done)`);
-  say(`  hand-offs  brainfile task-7 can merge, task-5 would conflict (fake: no git)`);
+  say(`  hand-offs  brainfile task-7 can merge, task-5 would conflict, task-8 is pull request #31 (fake: no git)`);
   say(`  phones     ${store.phones().map((p) => p.name).join(', ') || 'none linked yet'}`);
   if (linkFile) say(`  link file  ${linkFile}`);
   await showCode();

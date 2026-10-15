@@ -27,6 +27,7 @@ import {
   findV2Task,
   getV2Dirs,
   moveTaskFileToColumn,
+  parsePullRequest,
   patchTaskFile,
   readBoardConfig,
   readTaskFile,
@@ -35,6 +36,7 @@ import {
   sourceKey,
   sourcesOf,
   toggleSubtasksInFile,
+  withPullRequest,
   writeTaskFile,
   type DocGraph,
   type Task,
@@ -84,6 +86,7 @@ import type {
   NewDecisionInput,
   NewTaskInput,
   ProjectState,
+  PullRequestRecord,
   RemovedTask,
   Result,
   SettleChoice,
@@ -191,6 +194,7 @@ function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph
     completedAt: task.completedAt,
     ...(text(task.source) ? { source: text(task.source) } : {}),
     ...(leadOf(task) ? { lead: leadOf(task) } : {}),
+    ...(parsePullRequest(task.pullRequest) ? { pullRequest: parsePullRequest(task.pullRequest)! } : {}),
   };
 }
 
@@ -660,6 +664,25 @@ function recordLead(projectId: string, epicId: string, record: LeadRecord | null
   );
 }
 
+/**
+ * The pull request a task's hand-off was opened as (decision-16), with a line
+ * in its log saying what happened; null takes it off. A task its worker
+ * completed before it landed is in logs/, and is written there.
+ */
+function recordPullRequest(projectId: string, taskId: string, record: PullRequestRecord | null, note?: string): Result {
+  return mutate(
+    projectId,
+    () => (record ? `pull request ${taskId}: #${record.number} ${record.state}` : `pull request ${taskId}: off`),
+    (board) => {
+      const found = findV2Task(getV2Dirs(board.brainfilePath), taskId, true);
+      const doc = found ? readTaskFile(found.filePath) : null;
+      if (!found || !doc) throw new Error(`Could not read ${taskId}`);
+      writeTaskFile(found.filePath, { ...withPullRequest(doc.task, record), updatedAt: new Date().toISOString() }, doc.body);
+      if (note?.trim()) unwrap(appendLog(found.filePath, note.replace(/\s+/g, ' ').trim()));
+    }
+  );
+}
+
 function noteTask(projectId: string, taskId: string, text: string): Result {
   return mutate(
     projectId,
@@ -895,6 +918,7 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   decide,
   recordDispatch,
   recordLead,
+  recordPullRequest,
   settleLanded,
   syncNow,
   settleBoards,

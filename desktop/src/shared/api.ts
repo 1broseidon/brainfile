@@ -44,6 +44,28 @@ export interface TaskView {
   source?: string;
   /** A lead meant to run this document's children (decision-15): on the board, so it can be resumed after a restart. */
   lead?: LeadRecord;
+  /** The pull request its hand-off was opened as (decision-16): while open, it lands on the forge, not by Merge. */
+  pullRequest?: PullRequestRecord;
+}
+
+/** `pullRequest:` on a task, as core reads it: where its hand-off's pull request stands. */
+export interface PullRequestRecord {
+  number: number;
+  /** Its page on the forge. */
+  url: string;
+  state: 'open' | 'merged' | 'closed';
+  /** The branch it goes into. */
+  base: string;
+  /** The branch it carries: `dispatch/<task-id>`. */
+  head: string;
+  /** ISO 8601, when it was opened. */
+  at: string;
+}
+
+/** The trunk's commits origin lacks (spec-18): landing never pushes. */
+export interface UnpushedView {
+  branch: string;
+  ahead: number;
 }
 
 /** `proposed` is a legacy ADR's status before it was accepted. */
@@ -718,6 +740,10 @@ export interface Api {
   mergeReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
   /** Throw the hand-off's work away: its worktree and its branch. */
   discardReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
+  /** Push the hand-off's branch and open a pull request into where it lands (decision-16); recorded on the task. */
+  openPullRequest(projectId: string, taskId: string): Promise<Result<PullRequestRecord>>;
+  /** How far the trunk is ahead of origin, as last fetched; null when there is no origin's copy to compare. */
+  unpushed(projectId: string): Promise<Result<UnpushedView | null>>;
   /** A phone merged or discarded a hand-off on this board: what can merge is asked again. */
   onReadyChanged(listener: (projectId: string) => void): () => void;
   /** Opens the hand-off's worktree in the editor named, else the first found. */
@@ -789,6 +815,8 @@ export const AGENT_METHODS = [
   'readyToMerge',
   'mergeReview',
   'discardReview',
+  'openPullRequest',
+  'unpushed',
   'answerPermission',
 ] as const;
 export type AgentMethod = (typeof AGENT_METHODS)[number];
@@ -796,12 +824,16 @@ export type AgentMethod = (typeof AGENT_METHODS)[number];
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
 export type HostReply = { kind: 'host-reply'; id: number; result: unknown };
 /** The board writes the agents process may ask main to pass to the host. */
-export const AGENT_HOST_METHODS = ['recordDispatch', 'recordLead', 'noteTask', 'settleLanded', 'completeTask'] as const;
+export const AGENT_HOST_METHODS = ['recordDispatch', 'recordLead', 'recordPullRequest', 'noteTask', 'settleLanded', 'completeTask'] as const;
 export type AgentHostMethod = (typeof AGENT_HOST_METHODS)[number];
+/** The forge calls the agents process may ask of main, whose GitHub client holds the person's credentials (decision-16). */
+export const AGENT_FORGE_METHODS = ['openPullRequest', 'pullRequestState'] as const;
+export type AgentForgeMethod = (typeof AGENT_FORGE_METHODS)[number];
 export type AgentMessage =
   | { kind: 'reply'; id: number; result: unknown }
   | { kind: 'event'; event: AgentEvent }
-  | { kind: 'host'; id: number; method: AgentHostMethod; args: unknown[] };
+  | { kind: 'host'; id: number; method: AgentHostMethod; args: unknown[] }
+  | { kind: 'forge'; id: number; method: AgentForgeMethod; args: unknown[] };
 
 /** Methods main forwards to the board host rather than answering itself. */
 export const HOST_METHODS = [

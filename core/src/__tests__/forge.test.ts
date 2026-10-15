@@ -9,7 +9,9 @@ import {
   GitHub,
   nextLink,
   parseRemoteUrl,
+  PULL_REQUEST_TTL_MS,
   toIssue,
+  toPullRequest,
   type ForgeRepo,
   type GitHubDeps,
 } from '../forge';
@@ -246,6 +248,106 @@ describe('the GitHub client', () => {
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer t' },
       body: '{"title":"T"}',
     });
+  });
+
+  function pull(number: number, over: Record<string, unknown> = {}) {
+    return {
+      number,
+      title: `PR ${number}`,
+      state: 'open',
+      merged: false,
+      merged_at: null,
+      html_url: `https://github.com/o/r/pull/${number}`,
+      base: { ref: 'main' },
+      head: { ref: 'dispatch/task-1', sha: 'abc123' },
+      ...over,
+    };
+  }
+
+  it('a pull request is read as open, merged or closed', () => {
+    expect(toPullRequest(pull(4), 5)).toEqual({
+      number: 4,
+      url: 'https://github.com/o/r/pull/4',
+      state: 'open',
+      base: 'main',
+      head: 'dispatch/task-1',
+      headSha: 'abc123',
+      title: 'PR 4',
+      fetchedAt: 5,
+    });
+    expect(toPullRequest(pull(4, { state: 'closed', merged: true }))?.state).toBe('merged');
+    // The list endpoint says merged_at, not merged.
+    expect(toPullRequest(pull(4, { state: 'closed', merged: undefined, merged_at: '2026-10-15T00:00:00Z' }))?.state).toBe('merged');
+    expect(toPullRequest(pull(4, { state: 'closed' }))?.state).toBe('closed');
+    expect(toPullRequest({ title: 'no number' })).toBeNull();
+  });
+
+  it('a pull request is opened with the credentials, from head into base', async () => {
+    const { github, calls } = fake(() => json(pull(12), {}, 201), { env: { GH_TOKEN: 't' } });
+    const opened = await github.openPullRequest(repo, { head: 'dispatch/task-1', base: 'main', title: 'One', body: 'Body' });
+    expect(opened).toEqual({ ok: true, value: expect.objectContaining({ number: 12, state: 'open', url: 'https://github.com/o/r/pull/12' }) });
+    expect(calls[0]).toMatchObject({ url: 'https://api.github.com/repos/o/r/pulls', method: 'POST', headers: { Authorization: 'Bearer t' } });
+    expect(JSON.parse(calls[0].body!)).toEqual({ title: 'One', head: 'dispatch/task-1', base: 'main', body: 'Body' });
+  });
+
+  it('opening one needs credentials, and says why GitHub would not', async () => {
+    const anonymous = fake(() => json(pull(1), {}, 201));
+    const none = await anonymous.github.openPullRequest(repo, { head: 'h', base: 'main', title: 'T', body: '' });
+    expect(none).toEqual({ ok: false, error: expect.stringMatching(/needs GitHub credentials\. Sign in with `gh auth login`/) });
+    expect(anonymous.calls).toHaveLength(0);
+
+    const env = { env: { GH_TOKEN: 't' } };
+    const said = (body: unknown, status = 422) => fake(() => json(body, {}, status), env).github.openPullRequest(repo, { head: 'dispatch/task-1', base: 'release', title: 'T', body: '' });
+    expect(await said({ message: 'Validation Failed', errors: [{ resource: 'PullRequest', code: 'custom', message: 'No commits between release and dispatch/task-1' }] })).toEqual({
+      ok: false,
+      error: 'dispatch/task-1 has nothing release lacks on GitHub: there is nothing to open.',
+    });
+    expect(await said({ message: 'Validation Failed', errors: [{ resource: 'PullRequest', field: 'base', code: 'invalid' }] })).toEqual({ ok: false, error: 'release is not on GitHub: push it first.' });
+    expect(await said({ message: 'Validation Failed', errors: [{ message: 'Something else' }] })).toEqual({ ok: false, error: 'GitHub would not open it: Validation Failed: Something else' });
+    expect(await said({ message: 'Resource not accessible by personal access token' }, 403)).toEqual({ ok: false, error: expect.stringMatching(/may not open pull requests on o\/r/) });
+  });
+
+  it('one already open from the branch is found, not opened twice', async () => {
+    const { github, calls } = fake(
+      (call) =>
+        call.method === 'POST'
+          ? json({ message: 'Validation Failed', errors: [{ message: 'A pull request already exists for o:dispatch/task-1.' }] }, {}, 422)
+          : json([pull(9)]),
+      { env: { GH_TOKEN: 't' } }
+    );
+    const opened = await github.openPullRequest(repo, { head: 'dispatch/task-1', base: 'main', title: 'T', body: '' });
+    expect(opened).toEqual({ ok: true, value: expect.objectContaining({ number: 9 }) });
+    expect(calls[1].url).toBe('https://api.github.com/repos/o/r/pulls?head=o%3Adispatch%2Ftask-1&state=open&per_page=1');
+  });
+
+  it("a pull request's state is asked at most once a minute, then with its ETag, so an unchanged one is a free 304", async () => {
+    let state = 'open';
+    const { github, calls } = fake((call) => {
+      if (call.headers['If-None-Match'] === 'W/"pr"' && state === 'open') return new Response(null, { status: 304 });
+      return json(pull(3, { state, merged: state === 'merged' }), { etag: 'W/"pr"' });
+    });
+    const first = await github.pullRequestState(repo, 3);
+    const again = await github.pullRequestState(repo, 3);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('https://api.github.com/repos/o/r/pulls/3');
+    expect(first.ok && again.ok && again.value.state).toBe('open');
+
+    const realNow = Date.now;
+    try {
+      Date.now = () => realNow() + PULL_REQUEST_TTL_MS + 1;
+      const unchanged = await github.pullRequestState(repo, 3);
+      expect(calls).toHaveLength(2);
+      expect(calls[1].headers['If-None-Match']).toBe('W/"pr"');
+      expect(unchanged.ok && unchanged.value.state).toBe('open');
+    } finally {
+      Date.now = realNow;
+    }
+    state = 'merged';
+    const forced = await github.pullRequestState(repo, 3, true);
+    expect(forced.ok && forced.value.state).toBe('merged');
+
+    const missing = await fake(() => json({}, {}, 404)).github.pullRequestState(repo, 99);
+    expect(missing).toEqual({ ok: false, error: 'GitHub has no pull request #99 on o/r these credentials can see.' });
   });
 
   it('a saved token is sealed in its file and opened again', () => {

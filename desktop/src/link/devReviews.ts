@@ -1,7 +1,9 @@
 /**
  * The hand-offs `npm run link:dev` shows a phone (link.md, Merge from the
  * phone), without git: on the `brainfile` project, task-7 can merge (+42 −7,
- * three commits, into main) and task-5 would conflict in src/a.ts. They
+ * three commits, into main) and task-5 would conflict in src/a.ts; task-8 was
+ * opened as pull request #31 (decision-16), so it is not ready to merge and
+ * Merge refuses it, as the desk's does while the pull request is open. They
  * answer review, readyToMerge, mergeReview and discardReview as the agents
  * process does, in its words (agents.ts, core's repo/worktree.ts): a clean
  * landing takes a moment for its checks, then goes; a conflict goes back to
@@ -30,9 +32,11 @@ interface HandOff {
   agentId: string;
   /** Sent back to settle its conflict: settled once that run has ended. */
   settling: boolean;
+  /** Opened as this pull request, still open: it lands on the forge, not by Merge. */
+  pullRequest?: number;
 }
 
-/** The two hand-offs, fresh: task-7 clean, task-5 conflicting. */
+/** The hand-offs, fresh: task-7 clean, task-5 conflicting, task-8 opened as a pull request. */
 export function devHandOffs(worktrees: string): Map<string, Omit<HandOff, 'settling'>> {
   const view = (taskId: string, rest: Pick<ReviewView, 'commits' | 'files' | 'conflicts'>): ReviewView => ({
     branch: `dispatch/${taskId}`,
@@ -85,6 +89,18 @@ export function devHandOffs(worktrees: string): Map<string, Omit<HandOff, 'settl
         }),
       },
     ],
+    [
+      'task-8',
+      {
+        agentId: 'claude',
+        pullRequest: 31,
+        review: view('task-8', {
+          commits: [{ sha: '9c4e1a7', subject: 'Four modules of quiet zone around the code' }],
+          files: [{ path: 'src/renderer/components/Qr.svelte', added: 6, removed: 2 }],
+          conflicts: [],
+        }),
+      },
+    ],
   ]);
 }
 
@@ -108,7 +124,7 @@ export class DevReviews {
     const ready: ReadyView[] = [];
     for (const taskId of this.handOffs.keys()) {
       const handOff = this.find(projectId, taskId);
-      if (!handOff || this.options.working(projectId, taskId)) continue;
+      if (!handOff || handOff.pullRequest || this.options.working(projectId, taskId)) continue;
       const { into, ahead, added, removed, conflicts } = handOff.review;
       ready.push({ taskId, into: into!, ahead, added, removed, conflicts: conflicts.length > 0 });
     }
@@ -135,6 +151,7 @@ export class DevReviews {
     if (working) return { ok: false, error: `${working} is still working on ${taskId}` };
     const handOff = this.find(projectId, taskId);
     if (!handOff) return { ok: false, error: `${taskId} has no worktree to merge` };
+    if (handOff.pullRequest) return { ok: false, error: `${taskId} has pull request #${handOff.pullRequest} open: it lands when that merges on GitHub` };
     const { branch, into, conflicts } = handOff.review;
     if (conflicts.length) {
       // git finds the conflict before any check runs: quickly.

@@ -3,8 +3,9 @@
    * A hand-off's branch, said on its row (task-69): in the Ready to merge
    * group, the lines it adds and removes, and Merge under the pointer, the
    * task pane's own Merge; in its column, `conflicts` when git's merge-tree
-   * found the merge would. The row stays a row: clicking it still opens the
-   * task.
+   * found the merge would. Beside Merge, Open pull request (decision-16), when
+   * the project's origin is on GitHub. The row stays a row: clicking it still
+   * opens the task.
    */
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
@@ -14,6 +15,14 @@
   let { ready, taskId }: { ready: ReadyView; taskId: string } = $props();
 
   let busy = $state(false);
+
+  const opening = $derived(!!app.activeId && !!app.openingPullRequest[`${app.activeId}\n${taskId}`]);
+
+  function openPullRequest(e: MouseEvent): void {
+    e.stopPropagation();
+    if (busy || opening) return;
+    void app.openPullRequest(taskId);
+  }
 
   async function merge(e: MouseEvent): Promise<void> {
     e.stopPropagation();
@@ -33,10 +42,20 @@
     <span class="add" class:zero={!ready.added}>+{ready.added}</span>
     <span class="del" class:zero={!ready.removed}>−{ready.removed}</span>
   </span>
+  {#if app.canOpenPullRequest()}
+    <button
+      class="btn merge pull"
+      class:busy={opening}
+      disabled={busy || opening}
+      aria-label="Open pull request"
+      use:tip={`Push and open a pull request into ${ready.into}`}
+      onclick={openPullRequest}><Icon name="pull" size={13} />{opening ? 'Opening…' : 'PR'}</button
+    >
+  {/if}
   <button
     class="btn merge"
     class:busy
-    disabled={busy}
+    disabled={busy || opening}
     use:tip={`Merge into ${ready.into}`}
     onclick={merge}><Icon name="git" size={13} />{busy ? 'Checking…' : 'Merge'}</button
   >
@@ -77,6 +96,10 @@
     transition:
       opacity var(--d-press) var(--ease),
       background var(--d-press) var(--ease);
+  }
+
+  .pull + .merge {
+    margin-left: var(--s2);
   }
 
   :global(.row:hover) .merge,
