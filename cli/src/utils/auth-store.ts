@@ -148,6 +148,26 @@ export class AuthStore {
   }
 
   /**
+   * The token the person saved with `brainfile auth`: the keychain's, else
+   * the config file's. Not the environment's or gh's, which come first in the
+   * order core's GitHub client looks for credentials.
+   */
+  async saved(provider: AuthProvider): Promise<string | null> {
+    const kt = getKeytar();
+    if (kt) {
+      try {
+        const keychainToken = await kt.getPassword(SERVICE_NAME, provider);
+        if (keychainToken) {
+          return keychainToken;
+        }
+      } catch {
+        // Keychain access failed, fall back to the config file
+      }
+    }
+    return this.getFromFile(provider);
+  }
+
+  /**
    * Get stored token info (includes metadata like username)
    */
   async getTokenInfo(provider: AuthProvider): Promise<StoredToken | null> {

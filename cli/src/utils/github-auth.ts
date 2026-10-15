@@ -10,6 +10,7 @@
  */
 
 import chalk from 'chalk';
+import { ghCliToken, GitHub } from '@brainfile/core/forge';
 import { authStore, getGitHubCLIToken, isGitHubCLIAvailable } from './auth-store';
 
 // ============================================================================
@@ -62,10 +63,30 @@ export async function isGitHubAuthenticated(): Promise<boolean> {
 }
 
 /**
- * Get the current GitHub token (from any source)
+ * The GitHub client the CLI and its MCP server read issues with. Credentials
+ * come in the desktop's order: gh's login, then GH_TOKEN or GITHUB_TOKEN,
+ * then the token `brainfile auth github` saved.
+ */
+export function gitHubClient(fetchImpl: typeof fetch = (...args) => fetch(...args)): GitHub {
+  return new GitHub({
+    fetch: fetchImpl,
+    ghToken: ghCliToken,
+    env: process.env,
+    store: {
+      read: () => authStore.saved('github'),
+      write: (token) => (token ? authStore.set('github', token) : authStore.clear('github')),
+    },
+    userAgent: 'brainfile-cli',
+    signIn: 'Sign in with `gh auth login`, or run `brainfile auth github`.',
+  });
+}
+
+/**
+ * Get the current GitHub token (from any source, in the order gitHubClient
+ * looks)
  */
 export async function getGitHubToken(): Promise<string | null> {
-  return await authStore.get('github');
+  return (await gitHubClient().credentials()).token;
 }
 
 /**

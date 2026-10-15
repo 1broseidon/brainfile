@@ -73,7 +73,7 @@ get_task        — one document by ID, in full, with its place in the graph
 search          — search board, history and the project's docs (lane, path, line range on every hit), list recent completions, or view one entry
 brief           — the agent's brief as text (maxChars) and sections (agent=, peek?)
 check           — use | review | use_replacement | no_decision for an action, a decision ID, claimKey or claimKeyPrefix
-task_add        — create a document (type, parentId, decisions, status, contract parts via with_contract)
+task_add        — create a document (type, parentId, decisions, status, source, contract parts via with_contract)
 task_patch      — update fields on one task or many (null removes a field)
 task_move       — move one task or many to a column
 task_complete   — complete to the ledger, or export to GitHub/Linear
@@ -94,6 +94,7 @@ template        — action= list | use (template, title, column?)
 lint            — check the board; fix: true fixes what it can
 sync            — fetch, merge and push a shared board now (pull? push?)
 where           — where the board lives, how it is stored, how fresh it is; action= fix | undo (expected: fix.plan.words) when nothing would be lost
+issues          — the project's open GitHub issues, marked when on the board; action=import (numbers, column?)
 ```
 
 The bundled JSON Schemas are resources: `brainfile://schema/board` and `brainfile://schema/base`.

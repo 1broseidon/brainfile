@@ -266,6 +266,7 @@ updatedAt: "2026-09-20T19:03:57.257Z"
 | `dependsOn` | Tasks that come first. `mobile:task-12` names a task on a related board. See [Related boards](#related-boards). |
 | `decisions` | The decisions this work rests on, e.g. `[decision-3]`. The reverse is worked out, never written on the decision. |
 | `relatedFiles` | Paths an agent should read first. |
+| `source` | The page of the issue the task was made from, e.g. `https://github.com/o/r/issues/12`. Written by `add --source` and `issues --import`; one task per issue. |
 | `subtasks` | `{ id, title, completed }` rows, managed with `subtask`. |
 | `contract` | Deliverables, validation and constraints. See [Contracts](#contracts). |
 | `dispatch` | A hand-off: the `agent`, `model` and `effort` asked for, who asked (`by`: `chat`, `cli`, `mcp`, `lead`, `phone` or `person`), `at`, `until` (`review` or `done`) and `role` (`worker` or `lead`), and the `claim` of the runner that started it (`host`, `runner`, `pid`, `at`), so two runners never start the same task. The run's heartbeat stays in `state/`, never here. |
@@ -389,6 +390,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | Start a board in this repo | `init` |
 | See the board and work it by keyboard | `tui` |
 | Create a task | `add` |
+| See the repository's GitHub issues, or make a task from one | `issues` |
 | Advance a task to another column | `move` |
 | Add, rename, reorder or remove a column | `columns` |
 | Change a task's fields | `patch` |
@@ -517,6 +519,7 @@ $ brainfile add -t "Auth epic" --type epic --child "OAuth flow" --child "Session
 $ brainfile add -t "Token refresh" --type spec --parent epic-1
 $ brainfile add -t "Use SQLite for the index" --type decision
 $ brainfile add -t "Build the index" --parent spec-1 --decisions decision-1
+$ brainfile add -t "Crash on empty board" --source https://github.com/o/r/issues/12
 ```
 
 | Flag | Meaning |
@@ -530,8 +533,30 @@ $ brainfile add -t "Build the index" --parent spec-1 --decisions decision-1
 | `--type` | `epic`, `spec`, `plan`, `task`, `decision` or a type of yours; `issue` and `adr` are aliases. Sets the ID prefix. A decision gets no column. |
 | `--parent` | Parent ID; it must fit the type (see [Document types](#document-types)). `--child <title>` creates children under the new document, repeatable. |
 | `--depends-on`, `--decisions` | Comma-separated IDs: tasks that come first, decisions the work rests on. |
+| `--source` | The URL of the issue the task is made from, kept as `source:`. Refused when a task, open or completed, already carries it. |
 | `--with-contract` | Attach a draft contract. Add `--ready` to make it dispatchable at once. |
 | `--deliverable`, `--validation`, `--constraint` | Contract parts, each repeatable. See [Contracts](#contracts). |
+
+#### issues — The repository's GitHub issues, and tasks made from them
+
+```console
+$ brainfile issues                        # open issues; those on the board show their task
+$ brainfile issues --import 12 15         # make a task from each
+$ brainfile issues --import 12 -c todo
+$ brainfile issues --json
+```
+
+Lists the open issues of the GitHub repository the project's `origin` points
+at, pull requests left out, most recently updated first, and marks each one a
+task on the board (open or completed) already carries as `source:`.
+`--import` makes a task from each number: the issue's title, its body as the
+description, its labels as tags (`good first issue` becomes
+`good-first-issue`), and its page as `source:`, in `-c, --column` or else the
+first column that is not done. An issue already on the board is found, not
+made again. GitHub is asked with the gh CLI's login (`gh auth token`), then
+`GH_TOKEN` or `GITHUB_TOKEN`, then the token `brainfile auth github` saved;
+with none, public repositories still answer, on GitHub's smaller rate limit.
+The desktop app looks in the same order.
 
 #### move — Change a task's column
 
@@ -1428,7 +1453,7 @@ to a board.
 | `search` | Search the board, its history and the project's docs (current first, history in its own lane, each hit with `path` and line range), list recent completions, or view one log entry. Takes `type`, `limit`, `history`. |
 | `brief` | The agent's brief: `text` (budgeted by `maxChars`) and its `sections`, plus the checkpoint `lanes`. Takes `agent=`, `peek`. |
 | `check` | `use`, `review`, `use_replacement` or `no_decision` for an action (`query`), a decision, a `claimKey` or a `claimKeyPrefix`, with `exitCode` as the CLI's. |
-| `task_add` | Create a document. Takes `type` (aliases work), `parentId`, `dependsOn`, `decisions`, `status`, and contract parts for `with_contract`. |
+| `task_add` | Create a document. Takes `type` (aliases work), `parentId`, `dependsOn`, `decisions`, `status`, `source` (an issue's URL, refused when a task already carries it), and contract parts for `with_contract`. |
 | `task_patch` | Update fields on one task or many, `parentId`, `dependsOn` and `decisions` included; `null` removes a field. |
 | `task_move` | Move one task or many to a column. |
 | `task_complete` | Complete to the ledger, or export to GitHub or Linear. A parent with open children and a decision refuse. |
@@ -1449,6 +1474,7 @@ to a board.
 | `lint` | Check the board, the graph included; `fix: true` fixes what it can. Issues come back as data, with `valid` false only for errors. |
 | `sync` | Fetch, merge and push a shared board now; `pull` or `push` for one direction. A plain or unshared board says so in `skipped`. |
 | `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent; every other copy of the board in the repository, and `conflict` when one disagrees (writes are refused until `conflict.resolve` runs). `fetch: true` asks the remote first. `fix` has the problems in the desktop's words and `plan`, what `brainfile fix` would do; `action=fix` with `expected` (the plan's `words`) runs it, `action=undo` puts back the last fix within 20 seconds. |
+| `issues` | The open issues of the project's GitHub repository, each with `task` when one on the board carries its URL as `source`; `action=import` with `numbers` (and `column`) makes a task from each, and reports one already on the board with `made: false`. Credentials as `brainfile issues`. |
 
 Every tool takes `file` to point at another board, and every one that writes
 is one board commit on a tracked board. The bundled JSON Schemas are

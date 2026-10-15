@@ -738,6 +738,27 @@ export const whereOutputSchema = z.object({
   }),
 });
 
+/** `issues`: the project's open issues, each with its task when on the board, and what an import made (task-77). */
+export const issuesOutputSchema = z.object({
+  repo: z.object({ forge: z.string(), host: z.string(), owner: z.string(), name: z.string(), url: z.string() }),
+  auth: z.enum(['gh', 'env', 'token', 'none']),
+  truncated: z.boolean(),
+  issues: z.array(z.object({
+    number: z.number(),
+    title: z.string(),
+    body: z.string(),
+    labels: z.array(z.string()),
+    url: z.string(),
+    author: z.string().optional(),
+    comments: z.number(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+    /** The task already made from the issue. */
+    task: z.string().optional(),
+  })),
+  imported: z.array(z.object({ number: z.number(), task: z.string(), made: z.boolean() })),
+});
+
 /** `retire`: the decision, now in logs/ with its status. */
 export const retireOutputSchema = z.object({
   decision: decisionSummarySchema.extend({ path: z.string() }),

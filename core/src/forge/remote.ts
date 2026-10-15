@@ -1,11 +1,23 @@
 /**
  * Which forge a project's code lives on, read from its origin remote (task-26),
- * so the window can show that forge's issues beside the board. Only GitHub is
- * known for now; another forge (GitLab, Gitea, …) is one more entry in FORGES.
- * The parsing is pure, so plain `node --test` runs it.
+ * so a board can show that forge's issues beside it. Only GitHub is known for
+ * now; another forge (GitLab, Gitea, …) is one more entry in FORGES.
  */
 import { execFile } from 'child_process';
-import type { ForgeRepo } from '../shared/api';
+
+/** A code host whose issues can be read. Only GitHub, for now. */
+export type ForgeId = 'github';
+
+/** The repository a project's origin remote points at, on a forge that is known. */
+export interface ForgeRepo {
+  forge: ForgeId;
+  /** `github.com`. */
+  host: string;
+  owner: string;
+  name: string;
+  /** `https://github.com/owner/name`. */
+  url: string;
+}
 
 interface Forge {
   /** The repository at `path` on `host`, when this forge hosts it. */
@@ -55,7 +67,7 @@ export function parseRemoteUrl(remote: string): { host: string; path: string } |
   return host && path ? { host, path } : null;
 }
 
-/** The forge repository a remote URL points at, or null when it is none the window knows. */
+/** The forge repository a remote URL points at, or null when it is none that is known. */
 export function forgeFromRemote(remote: string): ForgeRepo | null {
   const parsed = parseRemoteUrl(remote);
   if (!parsed) return null;

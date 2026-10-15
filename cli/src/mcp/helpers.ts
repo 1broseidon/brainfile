@@ -121,6 +121,8 @@ export function toolWrites(toolName: string, input: ToolInput): boolean {
       return input.action !== undefined && input.action !== 'list';
     case 'lint':
       return input.fix === true;
+    case 'issues':
+      return input.action === 'import';
     case 'board':
       return BOARD_SETTINGS.some((key) => input[key] !== undefined);
     default:

@@ -393,6 +393,19 @@ export {
   lintTaskRefs,
 } from './related';
 
+// Export issues on the board: the task an issue becomes and the tasks that
+// carry an issue's URL as `source:` (decision-4). Reading a forge's issues
+// needs the network and lives in `@brainfile/core/forge`.
+export {
+  type Issue,
+  type IssueTaskInput,
+  labelTag,
+  issueTask,
+  sourceKey,
+  sourcesOf,
+  linkedTask,
+} from './issues';
+
 // Export the built-in document types and their place in the graph (spec-12)
 export {
   type DocRole,

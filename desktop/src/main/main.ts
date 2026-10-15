@@ -29,8 +29,7 @@ import {
 import { loginShellPath } from './shellPath';
 import { ProjectStore } from './projects';
 import { existingFiles, listEditors, openFolder, openInEditor } from './editors';
-import { detectForge, forgeFromRemote } from './forge';
-import { fileTokenStore, ghCliToken, GitHub } from './github';
+import { detectForge, fileTokenStore, forgeFromRemote, ghCliToken, GitHub } from '@brainfile/core/forge';
 import { readPlacement, resolvePlacement, writePlacement, type WindowPlacement } from './windowState';
 import { BoardHolds, linkDesk } from '../link/bridge';
 import { LinkServer } from '../link/server';
@@ -243,7 +242,14 @@ function startGitHub(): GitHub {
     },
     (sealed) => safeStorage.decryptString(sealed)
   );
-  return new GitHub({ fetch: (...args) => fetch(...args), ghToken: ghCliToken, env: process.env, store });
+  return new GitHub({
+    fetch: (...args) => fetch(...args),
+    ghToken: ghCliToken,
+    env: process.env,
+    store,
+    userAgent: 'Brainfile-Desktop',
+    signIn: 'Sign in with `gh auth login`, or save a token in Settings.',
+  });
 }
 
 // ── Phone link (task-40) ────────────────────────────────────────────────────

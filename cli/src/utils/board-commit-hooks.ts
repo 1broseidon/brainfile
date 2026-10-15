@@ -60,6 +60,8 @@ export function commandWrites(command: CommandLike): boolean {
       return typeof opts.use === 'string';
     case 'lint':
       return opts.fix === true;
+    case 'issues':
+      return Array.isArray(opts.import) && opts.import.length > 0;
     default:
       return true;
   }
