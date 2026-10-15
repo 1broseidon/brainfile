@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { Brainfile, findColumnById, findColumnByName } from '@brainfile/core';
+import { Brainfile, findColumnById, findColumnByName, isV2, readBoardConfig, reopenTaskFile, type Task } from '@brainfile/core';
 import chalk from 'chalk';
 import {
   fileNotFoundError,
@@ -17,11 +17,33 @@ import {
   getArchivePath,
 } from '../utils/archive';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
+import { getV2Dirs } from '../utils/v2-detect';
+import { resolveActor } from '../utils/actor';
+import { operationFailed } from '../utils/cli-error';
 
 interface RestoreOptions {
   file: string;
   task: string;
   column: string;
+  reason?: string;
+}
+
+/**
+ * A completed task back on a v2 board: from logs/ to `column`, open again,
+ * out of the ledger, with a note in its log. Throws CLIError on failure.
+ */
+export function reopenTask(
+  filePath: string,
+  taskId: string,
+  column: string,
+  options: { agent?: string; reason?: string } = {}
+): { task: Task; column: string } {
+  const board = readBoardConfig(filePath)?.config;
+  if (!board) throw operationFailed(`Could not read the board: ${filePath}`);
+  const agent = options.agent?.trim() || resolveActor(path.dirname(filePath))?.name;
+  const result = reopenTaskFile(getV2Dirs(filePath), board, taskId, column, { agent, reason: options.reason });
+  if (!result.success || !result.task) throw operationFailed(result.error ?? `Failed to reopen ${taskId}`);
+  return { task: result.task, column: board.columns.find((c) => c.id === result.task!.column)?.title ?? column };
 }
 
 export function restoreCommand(options: RestoreOptions) {
@@ -41,6 +63,17 @@ export function restoreCommand(options: RestoreOptions) {
     // Check if file exists
     if (!fs.existsSync(filePath)) {
       fileNotFoundError(filePath);
+    }
+
+    // A v2 board keeps completed work in logs/: restoring reopens it.
+    if (isV2(filePath)) {
+      const { task, column } = reopenTask(filePath, options.task, options.column, { reason: options.reason });
+      console.log(chalk.green('Task reopened!'));
+      console.log('');
+      console.log(chalk.gray(`  Task:   ${task.id} - ${task.title}`));
+      console.log(chalk.gray(`  From:   logs/`));
+      console.log(chalk.gray(`  To:     ${column}`));
+      return;
     }
 
     // Read and parse the main brainfile (to validate column)

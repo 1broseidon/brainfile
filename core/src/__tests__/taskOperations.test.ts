@@ -5,6 +5,7 @@ import {
   addTaskFile,
   moveTaskFile,
   completeTaskFile,
+  reopenTaskFile,
   deleteTaskFile,
   appendLog,
   listTasks,
@@ -607,6 +608,20 @@ describe('taskOperations', () => {
       expect(doc!.body).toContain('## Log');
       expect(doc!.body).toContain('First entry');
       expect(doc!.body).toContain('Second entry');
+    });
+
+    it('appends oldest first, at the end of the section, before a section after it', () => {
+      const filePath = seedTask('task-1', 'todo', {}, '## Description\nWhat.\n\n## Log\n- 2025-01-01: First entry\n\n## Child Tasks\nNone.\n');
+
+      appendLog(filePath, 'Second entry');
+      appendLog(filePath, 'Third entry');
+
+      const body = readTaskFile(filePath)!.body;
+      const at = (text: string) => body.indexOf(text);
+      expect(at('First entry')).toBeLessThan(at('Second entry'));
+      expect(at('Second entry')).toBeLessThan(at('Third entry'));
+      expect(at('Third entry')).toBeLessThan(at('## Child Tasks'));
+      expect(body).toMatch(/Third entry\n\n## Child Tasks\nNone\./);
     });
 
     it('includes agent attribution when provided', () => {
@@ -1450,6 +1465,74 @@ describe('taskOperations', () => {
   // ==========================================================================
   // completeTaskFile epic gate
   // ==========================================================================
+
+  describe('reopenTaskFile', () => {
+    const board: BoardConfig = {
+      title: 'Test',
+      columns: [
+        { id: 'todo', title: 'To Do' },
+        { id: 'in-progress', title: 'In Progress' },
+      ],
+    } as BoardConfig;
+    const dirs = () => ({ boardDir: tasksDir, logsDir }) as Parameters<typeof reopenTaskFile>[0];
+
+    it('brings a completed task back to its column, open, and out of the ledger', () => {
+      seedTask('task-2', 'in-progress');
+      const other = completeTaskFile(seedTask('task-9', 'todo'), logsDir);
+      expect(other.success).toBe(true);
+      const filePath = seedTask('task-1', 'todo', {
+        subtasks: [
+          { id: 'task-1-1', title: 'A', completed: true },
+          { id: 'task-1-2', title: 'B', completed: false },
+        ],
+      }, '## Description\nTwo phases.\n');
+      expect(completeTaskFile(filePath, logsDir).success).toBe(true);
+
+      const result = reopenTaskFile(dirs(), board, 'task-1', 'In Progress', { agent: 'george', reason: 'phase B is left' });
+
+      expect(result.success).toBe(true);
+      expect(result.filePath).toBe(filePath);
+      expect(fs.existsSync(path.join(logsDir, 'task-1.md'))).toBe(false);
+      const back = readTaskFile(filePath)!;
+      expect(back.task.column).toBe('in-progress');
+      expect(back.task.position).toBe(1);
+      expect(back.task.completedAt).toBeUndefined();
+      expect(back.task.subtasks?.map((s) => s.completed)).toEqual([true, false]);
+      expect(back.body).toContain('Two phases.');
+      expect(back.body).toMatch(/Z: \[george\] Reopened into In Progress: phase B is left/);
+      // The other completion stays, line for line.
+      const ledger = fs.readFileSync(path.join(logsDir, 'ledger.jsonl'), 'utf-8').trim().split('\n');
+      expect(ledger.map((l) => JSON.parse(l).id)).toEqual(['task-9']);
+    });
+
+    it('drops the child summary completion wrote, and keeps what follows it', () => {
+      const done = completeTaskFile(seedTask('task-10', 'todo', { parentId: 'epic-1' }), logsDir);
+      expect(done.success).toBe(true);
+      const epicPath = seedTask('epic-1', 'todo', { type: 'epic' }, '## Description\nThe whole.\n');
+      expect(completeTaskFile(epicPath, logsDir).success).toBe(true);
+      expect(readTaskFile(path.join(logsDir, 'epic-1.md'))!.body).toContain('## Child Tasks');
+      appendLog(path.join(logsDir, 'epic-1.md'), 'a note after completion');
+
+      expect(reopenTaskFile(dirs(), board, 'epic-1', 'todo').success).toBe(true);
+      const body = readTaskFile(epicPath)!.body;
+      expect(body).not.toContain('## Child Tasks');
+      expect(body).toContain('The whole.');
+      expect(body).toContain('a note after completion');
+      expect(body).toContain('Reopened into To Do');
+    });
+
+    it('refuses what it cannot reopen, and changes nothing', () => {
+      seedTask('task-1', 'todo');
+      expect(reopenTaskFile(dirs(), board, 'task-1', 'todo').error).toBe('task-1 is not completed');
+      expect(reopenTaskFile(dirs(), board, 'task-7', 'todo').error).toBe('Task not found in logs: task-7');
+      expect(completeTaskFile(seedTask('task-3', 'todo'), logsDir).success).toBe(true);
+      expect(reopenTaskFile(dirs(), board, 'task-3', 'nowhere').error).toBe('Column not found: nowhere');
+      writeTaskFile(path.join(logsDir, 'decision-1.md'), { id: 'decision-1', title: 'D', type: 'decision' } as Task, '');
+      expect(reopenTaskFile(dirs(), board, 'decision-1', 'todo').error).toMatch(/is a decision/);
+      expect(fs.existsSync(path.join(logsDir, 'task-3.md'))).toBe(true);
+      expect(fs.readFileSync(path.join(logsDir, 'ledger.jsonl'), 'utf-8')).toContain('"id":"task-3"');
+    });
+  });
 
   describe('completeTaskFile epic gate', () => {
     it('blocks on an active parentId-linked child', () => {

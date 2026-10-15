@@ -299,10 +299,11 @@ Brainfile file resolution (when you don't pass --file):
 
   program
     .command('restore')
-    .description('Restore a task from the archive')
+    .description('Reopen a completed task: from logs/ back to a column, out of the ledger (a v1 board: from its archive)')
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
     .option('-t, --task <id>', 'Task ID to restore (required)')
     .option('-c, --column <name>', 'Target column name or ID (required)')
+    .option('-r, --reason <why>', 'Why it is open again, for its log')
     .action(restoreCommand);
 
   program

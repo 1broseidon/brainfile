@@ -22,6 +22,7 @@ import { registerTaskDeleteTool } from '../mcp/tools/task_delete_tool';
 import { registerSubtaskTool } from '../mcp/tools/subtask_tool';
 import { registerContractTool } from '../mcp/tools/contract_tool';
 import { registerTaskCompleteTool } from '../mcp/tools/task_complete_tool';
+import { registerTaskRestoreTool } from '../mcp/tools/task_restore_tool';
 import { registerBriefTool } from '../mcp/tools/brief_tool';
 import { registerDecideTool } from '../mcp/tools/decide_tool';
 import { registerSupersedeTool } from '../mcp/tools/supersede_tool';
@@ -67,6 +68,7 @@ export function createBrainfileMcpServer(defaultFile: string): McpServer {
   registerTaskPatchTool(server, defaultFile);
   registerTaskMoveTool(server, defaultFile);
   registerTaskCompleteTool(server, defaultFile);
+  registerTaskRestoreTool(server, defaultFile);
   registerTaskDeleteTool(server, defaultFile);
   registerSubtaskTool(server, defaultFile);
   registerContractTool(server, defaultFile);

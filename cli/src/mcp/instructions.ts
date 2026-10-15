@@ -18,6 +18,7 @@ export const TOOL_PURPOSES: ReadonlyArray<readonly [string, string]> = [
   ['task_patch', 'change fields on one task or many, parentId, dependsOn and decisions included'],
   ['task_move', 'move one task or many to another column'],
   ['task_complete', 'finish a task (it moves to logs/ and the ledger), or export it to GitHub or Linear'],
+  ['task_restore', 'reopen a completed task: back from logs/ to a column, out of the ledger'],
   ['task_delete', 'remove a task for good'],
   ['subtask', 'add, toggle, update or delete a task\'s subtasks'],
   ['contract', 'attach, pick up, deliver, validate, graph or activate a task\'s contract'],

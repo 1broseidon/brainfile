@@ -140,6 +140,30 @@ describe('spec-13 MCP tools', () => {
     });
   });
 
+  describe('task_restore', () => {
+    test('reopens a completed task into a column, out of the ledger, and says so in its log', async () => {
+      await client.callTool('task_complete', { task: 'task-2' });
+      expect(fs.readFileSync(path.join(board.logsDir, 'ledger.jsonl'), 'utf-8')).toContain('"id":"task-2"');
+
+      const result = await client.callTool('task_restore', { task: 'task-2', column: 'In Progress', reason: 'phase C is left', agent: 'codex' });
+      expect(result.isError).toBeFalsy();
+      expect(data(result)).toEqual({ id: 'task-2', column: 'in-progress' });
+      expect(fs.existsSync(path.join(board.logsDir, 'task-2.md'))).toBe(false);
+      const doc = readTaskFile(path.join(board.boardDir, 'task-2.md'))!;
+      expect(doc.task.column).toBe('in-progress');
+      expect(doc.task.completedAt).toBeUndefined();
+      expect(doc.body).toContain(': [codex] Reopened into In Progress: phase C is left');
+      expect(fs.readFileSync(path.join(board.logsDir, 'ledger.jsonl'), 'utf-8')).not.toContain('"id":"task-2"');
+    });
+
+    test('refuses an open task, an unknown one, or an unknown column', async () => {
+      expect(text(await client.callTool('task_restore', { task: 'task-1', column: 'todo' }))).toContain('task-1 is not completed');
+      expect(text(await client.callTool('task_restore', { task: 'nope', column: 'todo' }))).toContain('Task not found in logs: nope');
+      expect(text(await client.callTool('task_restore', { task: 'task-9', column: 'later' }))).toContain('Column not found: later');
+      expect(fs.existsSync(path.join(board.logsDir, 'task-9.md'))).toBe(true);
+    });
+  });
+
   describe('columns', () => {
     test('lists, adds, renames, reorders and removes', async () => {
       const listed = await client.callTool('columns', {});
