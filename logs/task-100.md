@@ -1,8 +1,6 @@
 ---
 id: task-100
 title: "QA: the desktop behaves as before where nothing new is set — agents, models and effort, settings, permissions, Discuss, the chat, issues, Fix and the phone"
-column: todo
-position: 17
 description: |-
   Not a hand-off. task-75 moved the ACP agents, sessions, settings, models and the brief into core, task-77 the issues client, task-78 Fix and Undo, task-74 the dispatch record. The desktop must behave exactly as before. Use the dev app from the integration worktree.
   1. **Agents (task-75).** Hand to… lists the same agents as before (Claude Code, Codex, Cursor, Grok, Antigravity and any custom ones), with the same availability notes. Each one's models and effort choices load as before; a choice is remembered.
@@ -59,7 +57,8 @@ subtasks:
     title: A restart keeps settings and models
     completed: true
 createdAt: "2026-10-15T18:21:50.981Z"
-updatedAt: "2026-10-15T21:15:17.778Z"
+updatedAt: "2026-10-15T21:15:18.307Z"
+completedAt: "2026-10-15T21:15:18.307Z"
 ---
 
 ## Description
