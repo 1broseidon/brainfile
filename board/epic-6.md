@@ -34,8 +34,9 @@ decisions:
   - decision-6
   - decision-4
   - decision-17
+  - decision-18
 createdAt: "2026-10-14T22:14:19.304Z"
-updatedAt: "2026-10-15T15:49:31.585Z"
+updatedAt: "2026-10-15T17:11:59.603Z"
 ---
 
 ## Description

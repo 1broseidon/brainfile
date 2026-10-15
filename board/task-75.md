@@ -34,6 +34,7 @@ relatedFiles:
 parentId: epic-6
 decisions:
   - decision-14
+  - decision-18
 contract:
   status: draft
   deliverables:
@@ -60,6 +61,7 @@ contract:
     - No behaviour change in the desktop
     - Record the package choice with decide before writing code
 createdAt: "2026-10-14T22:14:58.639Z"
+updatedAt: "2026-10-15T17:11:59.602Z"
 ---
 
 ## Description
