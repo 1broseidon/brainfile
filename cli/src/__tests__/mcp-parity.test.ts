@@ -64,6 +64,7 @@ const TOOL_FOR: Record<string, string> = {
   where: 'where',
   fix: 'where', // action: fix | undo, with expected
   issues: 'issues',
+  pr: 'pull_request',
 };
 
 /** CLI capability → the MCP resources that serve it. */

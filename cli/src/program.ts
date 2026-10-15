@@ -20,6 +20,7 @@ import { migrateCommand } from './commands/migrate';
 import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
 import { whereCommand } from './commands/where';
 import { issuesCommand, ISSUES_COMMAND_HELP } from './commands/issues';
+import { prCommand, PR_COMMAND_HELP } from './commands/pr';
 import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
 import { fixCommand } from './commands/fix';
 import { mergeDriverCommand } from './commands/merge-driver';
@@ -382,6 +383,16 @@ Brainfile file resolution (when you don't pass --file):
     .option('--json', 'Output as JSON')
     .action(async (options) => { await issuesCommand(options); });
   issuesCmd.addHelpText('after', `\n${ISSUES_COMMAND_HELP}`);
+
+  const prCmd = program
+    .command('pr')
+    .description("Open a task's hand-off as a GitHub pull request into where it lands; --status asks where it stands, and merged completes the task")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--status', 'Ask GitHub where the pull request stands: merged completes the task and removes its worktree')
+    .option('--json', 'Output as JSON')
+    .argument('<task>', 'The task whose hand-off it is, e.g. task-12')
+    .action(async (task, options) => { await prCommand(task, options); });
+  prCmd.addHelpText('after', `\n${PR_COMMAND_HELP}`);
 
   program
     .command('adopt')
