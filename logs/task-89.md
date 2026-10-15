@@ -1,8 +1,6 @@
 ---
 id: task-89
 title: "QA setup: the qa/parity branch, the app and CLI under test, and landsOn on the board (lint, patch)"
-column: todo
-position: 5
 description: |-
   Not a hand-off: you do this one yourself, in a terminal at this repository.
 
@@ -36,7 +34,8 @@ subtasks:
     title: An invalid branch name is refused by patch
     completed: true
 createdAt: "2026-10-15T18:20:00.202Z"
-updatedAt: "2026-10-15T18:59:41.989Z"
+updatedAt: "2026-10-15T18:59:46.538Z"
+completedAt: "2026-10-15T18:59:46.538Z"
 ---
 
 ## Description
