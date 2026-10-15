@@ -17,8 +17,16 @@ decisions:
   - decision-15
 createdAt: "2026-10-15T18:20:49.911Z"
 landsOn: qa/parity
-updatedAt: "2026-10-15T20:33:16.789Z"
+updatedAt: "2026-10-15T20:55:21.914Z"
 epicBranch: true
+assignee: claude
+lead:
+  agent: claude
+  model: opus
+  effort: high
+  by: person
+  at: "2026-10-15T20:55:21.799Z"
+  until: done
 ---
 
 ## Description
