@@ -92,6 +92,8 @@ export interface BoardConfig extends BrainfileBase {
   /** Optional per-type configuration used by strict type validation. */
   types?: TypesConfig;
   statsConfig?: StatsConfig;
+  /** Hand-offs on this repository (spec-16-5): at most `maxRunning` at once, whichever runner runs them (default 3). */
+  dispatch?: { maxRunning?: number; [key: string]: unknown };
 
   /** Extension fields (x-otto, x-cursor, etc.) are preserved for round-tripping. */
   [key: string]: unknown;
