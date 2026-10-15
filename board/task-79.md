@@ -1,7 +1,7 @@
 ---
 id: task-79
 title: "Discuss without the desktop: the task's context and rules in core, brainfile discuss, and an MCP discuss prompt"
-column: todo
+column: in-progress
 position: 7
 description: |-
   discuss.ts is pure and depends only on core: `discussContext`, `taskInformation`, `workInformation`, `discussRules`, `discussPreamble`, `discussPermission`, `chatPermission` and `discussMode`. Move it to `@brainfile/core/dispatch`. `workOf`, which needs the review from task-76 and whether a run is live, reads the run files from task-74 once they exist.
@@ -32,7 +32,7 @@ decisions:
   - decision-6
   - decision-14
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: core/src/dispatch/discuss.ts
@@ -57,8 +57,10 @@ contract:
     - Ask the person and record the decision before going against decision-6
   metrics:
     readyAt: "2026-10-15T21:40:10.253Z"
+    pickedUpAt: "2026-10-15T23:28:24.991Z"
+    reworkCount: 0
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-15T23:28:08.205Z"
+updatedAt: "2026-10-15T23:28:24.991Z"
 dispatch:
   agent: claude
   model: opus
