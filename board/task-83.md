@@ -54,3 +54,6 @@ The lead now exists in the desktop (spec-16-4/5/6): desktop/src/agents/lead.ts h
 - `attempts` (handed off per child) is counted from the children's request records, not in memory, so a resumed lead keeps the count.
 - Pause, resume and stop from `brainfile dispatch pause|resume|stop <epic>` and MCP, beside the desktop's Lead block.
 - The desktop's agents.ts keeps only the wiring: the Runner calls back for turns, and the window keeps the Lead block and the dock tab.
+
+## Log
+- 2026-10-15T15:49:45.181Z: [claude] The lead's prompt changed in 2cff04e: its plan check makes sure one child wires the parts together and tests the whole (Hotline's epic-6 had none, and every child deferred its wiring), and on later turns it moves what a child left for later into the task that will do it. Its rules line says dependsOn done and landed. TreeDoc has `unlanded`; boardChanged says a complete-but-unlanded child is not yet built on.
