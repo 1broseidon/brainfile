@@ -27,7 +27,6 @@
  * runner file goes, and its board writes, which the runner's board debounces,
  * are committed before it returns (flushBoardCommits).
  */
-import * as readline from 'readline';
 import chalk from 'chalk';
 import {
   claimHeld,
@@ -58,8 +57,6 @@ import {
   type AgentId,
   type AgentRole,
   type AgentRun,
-  type LeadView,
-  type PermissionAsk,
   type RunnerOptions,
 } from '@brainfile/core/dispatch';
 import { flushBoardCommits, isClaimLost, isRunEnded, isRunLost, liveRunners, projectOfBoard, readRunFile, unlanded } from '@brainfile/core/repo';
@@ -68,6 +65,7 @@ import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
+import { runLoop } from './run';
 
 export const DISPATCH_COMMAND_HELP = `
 Examples:
@@ -112,9 +110,6 @@ export function byOf(kind: DispatchRunner, access: Access = {}): DispatchBy {
   if (access.role === 'chat') return 'chat';
   return kind === 'desktop' ? 'person' : kind;
 }
-
-/** Live run states. */
-const LIVE = new Set(['starting', 'working', 'waiting']);
 
 // ── The board and its runner ────────────────────────────────────────────────
 
@@ -694,121 +689,10 @@ export async function dispatchCommand(ids: string[], options: DispatchOptions, l
   const said = options.now ? report.said.split('\n').filter((l) => l !== NO_RUNNER).join('\n') : report.said;
   logger.log(report.queued.length ? said : chalk.yellow(said));
   if (options.now && report.queued.length) {
-    await runNow(filePath, report.queued.filter((q) => !q.lead).map((q) => q.task), logger, report.queued.filter((q) => q.lead).map((q) => q.task));
+    // `brainfile run`'s loop, given what was just queued: it returns once they have ended and been settled.
+    await runLoop(filePath, { only: { tasks: report.queued.filter((q) => !q.lead).map((q) => q.task), leads: report.queued.filter((q) => q.lead).map((q) => q.task) } }, logger);
   }
   return report;
-}
-
-/**
- * `--now`: the queued tasks run here in the foreground, at most the
- * repository's limit at once, until every run has ended and been settled.
- * An epic's lead runs here too, with the children it hands off, until it
- * ends. Asks come to this terminal. Ctrl-C stops them; their worktrees stay,
- * and a lead's record stays for a runner to take up.
- */
-async function runNow(filePath: string, ids: string[], logger: Logger, leads: string[] = []): Promise<void> {
-  const place = placeOf(filePath);
-  let wake = () => {};
-  const said = new Map<string, string>();
-  const runner = openRunner('cli', {
-    sendBack: 'start',
-    ask: terminalAsk(logger, (runId) => runner.get(runId)),
-    onRun(run) {
-      const line = runLineText(runner.dataDir, run);
-      if (said.get(run.id) !== line) logger.log(line);
-      said.set(run.id, line);
-      wake();
-    },
-    onLead(view) {
-      const line = leadLineText(view);
-      if (said.get(`lead ${view.epicId}`) !== line) logger.log(line);
-      said.set(`lead ${view.epicId}`, line);
-      wake();
-    },
-  });
-  for (const epicId of leads) {
-    const started = await runner.lead(place.projectId, epicId);
-    if (!started.ok) logger.log(chalk.yellow(`${epicId}: ${started.error}`));
-  }
-  const pending = [...ids];
-  const mine = new Set<string>();
-  let stopping = false;
-  const interrupt = () => {
-    if (stopping) process.exit(130);
-    stopping = true;
-    pending.length = 0;
-    logger.log(chalk.gray('Stopping; Ctrl-C again to leave at once.'));
-    for (const run of runner.list().filter((r) => LIVE.has(r.state))) void runner.stop(run.id);
-  };
-  process.on('SIGINT', interrupt);
-  // A run of ours is live, or a claim of ours has not been given back yet (a landing may still be going on).
-  const busy = () =>
-    runner.leads.running(place.projectId).length > 0 ||
-    runner.list().some((r) => LIVE.has(r.state)) ||
-    [...mine].some((id) => {
-      const task = findV2Task(getV2Dirs(filePath), id)?.doc.task;
-      const claim = task ? readDispatchRecord(task)?.claim : undefined;
-      return claimHeld(claim) && claim.host === runner.host && claim.pid === runner.pid;
-    });
-  try {
-    for (;;) {
-      while (pending.length && runner.live(place.projectId).length < runner.limit(place.projectId)) {
-        const id = pending.shift()!;
-        const started = await runner.start(place.projectId, id, { refresh: true });
-        if (started.ok) mine.add(id);
-        else logger.log(chalk.yellow(`${id}: ${started.error}`));
-      }
-      if (!pending.length && !busy()) break;
-      await new Promise<void>((resolve) => {
-        wake = resolve;
-        setTimeout(resolve, 500);
-      });
-    }
-  } finally {
-    process.off('SIGINT', interrupt);
-    runner.close();
-    flushBoardCommits();
-  }
-}
-
-function leadLineText(view: LeadView): string {
-  const who = `${view.epicId} · lead · ${view.agentId}`;
-  const note = view.note ? `: ${view.note}` : '';
-  if (view.state === 'leading') return `${who} · leading${note}`;
-  if (view.state === 'paused') return chalk.yellow(`${who} · paused${note}`);
-  return view.state === 'done' ? chalk.green(`${who} · done${note}`) : chalk.yellow(`${who} · stopped${note}`);
-}
-
-function runLineText(dataDir: string, run: AgentRun): string {
-  const who = `${run.taskId ?? run.id} · ${nameOf(dataDir, run.agentId)}`;
-  if (LIVE.has(run.state)) return `${who} · ${run.activity}`;
-  if (run.state === 'done') return chalk.green(`${who} · done`);
-  return run.state === 'stopped' ? chalk.yellow(`${who} · stopped`) : chalk.red(`${who} · failed${run.error ? `: ${run.error}` : ''}`);
-}
-
-/** Asks at this terminal, one at a time, naming the run; with no terminal, nothing is allowed. */
-function terminalAsk(logger: Logger, runOf: (runId: string) => AgentRun | undefined): (ask: PermissionAsk) => Promise<string | null> {
-  let turn: Promise<unknown> = Promise.resolve();
-  return (ask) => {
-    const answer = turn.then(async () => {
-      const run = runOf(ask.runId);
-      const who = `${run?.taskId ?? ask.runId} · ${ask.agentId}`;
-      if (!process.stdin.isTTY) {
-        logger.log(chalk.yellow(`${who} asks: ${ask.title}. Refused: no terminal to answer in.`));
-        return null;
-      }
-      const options = ask.options.map((o, i) => `${i + 1}) ${o.name}`).join('  ');
-      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      try {
-        const reply = await new Promise<string>((resolve) => rl.question(`${who} asks: ${ask.title}\n  ${options}  > `, resolve));
-        return ask.options[Number(reply.trim()) - 1]?.optionId ?? null;
-      } finally {
-        rl.close();
-      }
-    });
-    turn = answer.catch(() => null);
-    return answer;
-  };
 }
 
 /** `brainfile dispatch status`. */

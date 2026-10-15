@@ -30,7 +30,7 @@ import { PALETTE } from './theme.js';
 import { CHROME, EMPTY } from './copy.js';
 import type { AppState, TUIProps, LayoutMode, BoardColumn } from './types.js';
 import { HEADER_ROWS, FOOTER_ROWS, LAYOUT } from './types.js';
-import { buildOutline, buildFlatRows, collapseRows, markDecisionChanges, type DocRow } from './rows.js';
+import { buildOutline, buildFlatRows, collapseRows, markDecisionChanges, markLiveRuns, type DocRow } from './rows.js';
 import {
   NO_RELATIONS,
   boardTypes,
@@ -44,6 +44,7 @@ import {
 } from './decisions.js';
 import { useBrainfileLoader } from './hooks/useBrainfileLoader.js';
 import { useSyncStatus } from './hooks/useSyncStatus.js';
+import { useRuns } from './hooks/useRuns.js';
 import { useKeyboardNavigation } from './hooks/useKeyboardNavigation.js';
 import { getTaskActivity } from './actions.js';
 import { readTuiState } from './tuiState.js';
@@ -154,6 +155,8 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
 
   const { loadBrainfile } = useBrainfileLoader(filePath, state, setState);
   const syncStatus = useSyncStatus(filePath, state.lastUpdated);
+  /** What agents are doing on tasks now, from every runner's run files (task-82). */
+  const liveRuns = useRuns(filePath);
 
   const orderedColumns = useMemo(() => {
     if (!state.board) return [];
@@ -315,18 +318,22 @@ export function BrainfileTUI({ filePath, width, height }: TUIProps) {
   // list off `logs/`. Otherwise: under a type filter render flat (§A2) — no
   // pull-up-under-parent, no collapse (there is rarely a visible parent to
   // collapse into) — else the column's outline with collapse applied (§A1).
-  // Rows resting on a retired decision are flagged for `decision changed`.
+  // Rows resting on a retired decision are flagged for `decision changed`,
+  // and a row an agent is at work on says what it is doing (task-82).
   const rows = useMemo<DocRow[]>(() => {
     if (decisionsView) return decisionModel.selectable.map((task) => ({ task, depth: 0 }));
     if (doneView) return buildFlatRows(filteredLogs);
     const tasks = currentColumn?.tasks ?? [];
-    return markDecisionChanges(
-      outline && currentColumn
-        ? collapseRows(outline.get(currentColumn.id) ?? [], state.collapsedIds)
-        : buildFlatRows(tasks),
-      decisionChanged,
+    return markLiveRuns(
+      markDecisionChanges(
+        outline && currentColumn
+          ? collapseRows(outline.get(currentColumn.id) ?? [], state.collapsedIds)
+          : buildFlatRows(tasks),
+        decisionChanged,
+      ),
+      liveRuns,
     );
-  }, [currentColumn, doneView, filteredLogs, outline, state.collapsedIds, decisionsView, decisionModel, decisionChanged]);
+  }, [currentColumn, doneView, filteredLogs, outline, state.collapsedIds, decisionsView, decisionModel, decisionChanged, liveRuns]);
   const maxRowIndex = Math.max(0, rows.length - 1);
   const selectedIndex = Math.min(state.selectedTaskIndex, maxRowIndex);
   const selectedTask: Task | undefined = rows[selectedIndex]?.task;

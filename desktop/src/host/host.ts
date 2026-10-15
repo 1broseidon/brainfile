@@ -759,11 +759,11 @@ function claimDispatch(projectId: string, taskId: string, claim: ClaimInput, opt
   );
 }
 
-/** A run that ended gives its claim back, kept with how it ended; a task its worker completed is in logs/. */
-function releaseDispatch(projectId: string, taskId: string, holder: Pick<DispatchClaim, 'host' | 'pid'>, outcome: DispatchOutcome): Result {
+/** A run that ended gives its claim back, kept with how it ended (cleared with none: queued again); a task its worker completed is in logs/. */
+function releaseDispatch(projectId: string, taskId: string, holder: Pick<DispatchClaim, 'host' | 'pid'>, outcome?: DispatchOutcome): Result {
   return mutate(
     projectId,
-    () => `release ${taskId}: ${outcome}`,
+    () => `release ${taskId}: ${outcome ?? 'queued again'}`,
     (board) => {
       const found = findV2Task(getV2Dirs(board.brainfilePath), taskId, true);
       if (!found) throw new Error(`Task ${taskId} not found`);

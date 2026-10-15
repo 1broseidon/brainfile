@@ -23,6 +23,7 @@ import { issuesCommand, ISSUES_COMMAND_HELP } from './commands/issues';
 import { prCommand, PR_COMMAND_HELP } from './commands/pr';
 import { agentsCommand, dispatchCommand, dispatchLeadCommand, dispatchStatusCommand, dispatchStopCommand, DISPATCH_COMMAND_HELP } from './commands/dispatch';
 import { discardCommand, landCommand, reviewCommand, REVIEW_COMMAND_HELP } from './commands/review';
+import { runCommand, RUN_COMMAND_HELP } from './commands/run';
 import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
 import { fixCommand } from './commands/fix';
 import { mergeDriverCommand } from './commands/merge-driver';
@@ -443,6 +444,17 @@ Brainfile file resolution (when you don't pass --file):
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
     .option('--json', 'Output as JSON')
     .action(async (epic: string, _options, cmd: Command) => { await dispatchLeadCommand('resume', epic, cmd.optsWithGlobals()); });
+
+  // The foreground runner (task-82, spec-16-8): works the queue in a terminal until Ctrl-C.
+  const runCmd = program
+    .command('run')
+    .description("Work the board's queue here in the foreground: start each hand-off and lead, ask at this prompt; Ctrl-C lets go")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--once', 'Return once nothing it started is still going and nothing queued can start')
+    .option('--max <n>', 'At most this many hand-offs at once from here (the repository\'s limit still holds)')
+    .addOption(new Option('--until <until>', 'For a hand-off whose request names none: review stops it in Review (default); done lands it where the repository allows').choices(['review', 'done']))
+    .action(async (options) => { await runCommand(options); });
+  runCmd.addHelpText('after', `\n${RUN_COMMAND_HELP}`);
 
   const reviewCmd = program
     .command('review [task]')

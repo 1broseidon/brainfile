@@ -15,9 +15,10 @@
  *  - children indent two spaces;
  *  - IDs are dim and padded to a shared width so titles line up within a depth;
  *  - the priority marker (`⚠ high`) is the single priority mechanism;
- *  - up to three right-aligned signal chips in fixed precedence: `decision
- *    changed` (it rests on a decision since replaced) → contract state →
- *    subtask progress → first tag;
+ *  - up to three right-aligned signal chips in fixed precedence: what an
+ *    agent is doing on it now (`● codex · editing`, from the run files,
+ *    task-82) → `decision changed` (it rests on a decision since replaced) →
+ *    contract state → subtask progress → first tag;
  *  - the title truncates with `…` before a chip is ever dropped or wrapped;
  *  - a child under a parent in another column says its own column at the
  *    right edge (`review`), and a completed one says `✓ done` with its title
@@ -49,6 +50,11 @@ export function buildChips(row: DocRow): Chip[] {
   // Collapsed parent: `N hidden` leads, ahead of the usual precedence (§A1).
   if (row.collapsed && row.childCount) {
     chips.push({ text: `${row.childCount} hidden`, color: PALETTE.textMuted });
+  }
+
+  // An agent at work on it now: the most current thing a row can say.
+  if (row.live) {
+    chips.push({ text: `${GLYPHS.live} ${row.live}`, color: PALETTE.info });
   }
 
   // Work resting on a decision that no longer stands needs a look before it
