@@ -31,17 +31,19 @@ decisions:
   - decision-12
   - decision-15
 contract:
-  status: draft
+  status: ready
   deliverables:
     - type: test
       path: cli/src/__tests__/headless-epic.e2e.test.ts
       description: "Scripted headless epic run: lead, hand-offs, landing, conflict send-back, MCP dispatch"
   validation:
     commands:
-      - cd core && npm test
-      - cd cli && npm test
-      - cd desktop && npm test && npm run typecheck
+      - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
+      - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
+  metrics:
+    readyAt: "2026-10-15T21:40:11.828Z"
 createdAt: "2026-10-15T15:49:57.479Z"
+updatedAt: "2026-10-15T21:40:11.829Z"
 ---
 
 ## Description
