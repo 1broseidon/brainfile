@@ -53,7 +53,11 @@ subtasks:
   - id: task-103-4
     title: design.md and the phone's view updated
     completed: false
+  - id: task-103-5
+    title: "Hand to… / Lead with on an epic with its own branch: under \"Lands on <target>\", a second line \"children land on dispatch/<epic-id>\""
+    completed: false
 createdAt: "2026-10-15T20:35:23.327Z"
+updatedAt: "2026-10-15T21:51:20.020Z"
 ---
 
 ## Description
