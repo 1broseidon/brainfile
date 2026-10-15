@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tip } from '../lib/tooltip';
   import { api, app } from '../lib/state.svelte';
-  import { childrenOf, columnProgress, priorityLabel, relativeTime, shortDate } from '../lib/format';
+  import { childrenOf, columnProgress, priorityLabel, relativeTime, shortDate, workColumn } from '../lib/format';
   import { renderMarkdown } from '../lib/markdown';
   import { sourceLabel } from '../../shared/issues';
   import type { BoardSnapshot, TaskDetail } from '../../shared/api';
@@ -12,6 +12,8 @@
   import HandTo from './HandTo.svelte';
   import AskLine from './AskLine.svelte';
   import Review from './Review.svelte';
+  import Lead from './Lead.svelte';
+  import Working from './Working.svelte';
 
   /** `full`: the task takes the list's place beside the chat, with a way back to the list. */
   let { board, taskId, full = false }: { board: BoardSnapshot; taskId: string; full?: boolean } = $props();
@@ -45,6 +47,12 @@
   const parent = $derived(detail?.parentId ? board.tasks.find((t) => t.id === detail!.parentId) : undefined);
   /** Open and completed alike, as the list draws them under it (task-20). */
   const children = $derived(childrenOf(taskId, board.columns, board.tasks, board.completed));
+  /** With open children, Hand to… starts a lead that runs them (decision-15). */
+  const leads = $derived(children.some((c) => !c.done));
+  const lead = $derived(app.leadFor(taskId, board.projectId));
+  /** A lead runs this epic, or one is on it waiting to be resumed: it is the lead's, not Hand to…'s. */
+  const led = $derived((!!lead && (lead.state === 'leading' || lead.state === 'paused')) || (!!detail?.lead && lead?.state !== 'stopped' && lead?.state !== 'done'));
+  const leadRun = $derived(app.leadRunFor(taskId));
   const decision = $derived(detail?.decision);
   const decisionProps = $derived(
     !!decision &&
@@ -154,9 +162,17 @@
           ><Icon name="ask" size={13} />Discuss</button
         >
       {/if}
-      <HandTo taskId={detail.id} waitsOn={detail.dependencies.filter((d) => !d.done && !d.ref.includes(':')).map((d) => d.ref)} />
+      {#if led}
+        {#if leadRun}<span class="running"><Working run={leadRun} /></span>{/if}
+      {:else}
+        <HandTo taskId={detail.id} {leads} waitsOn={detail.dependencies.filter((d) => !d.done && !d.ref.includes(':')).map((d) => d.ref)} />
+      {/if}
       <button class="btn quiet" onclick={complete}><StatusIcon progress={1} size={13} />Complete</button>
       <button class="icon-btn destroy" use:tip={'Delete'} onclick={remove}><Icon name="trash" size={15} /></button>
+    {:else if detail?.archived && !decision}
+      <button class="btn quiet" use:tip={`Back to ${workColumn(board.columns)?.title ?? 'the board'}, open again`} onclick={() => detail && app.reopenTask(detail.id)}
+        ><StatusIcon progress={0} size={13} />Reopen</button
+      >
     {/if}
     {#if !full}
       <button class="icon-btn" use:tip={'Close  Esc'} onclick={close}><Icon name="close" size={14} /></button>
@@ -191,6 +207,7 @@
       {/each}
 
       {#if !detail.archived && !decision}
+        <Lead {board} epicId={detail.id} record={detail.lead} />
         <Review {board} taskId={detail.id} {inReview} assignee={detail.assignee} />
       {/if}
 
@@ -501,6 +518,12 @@
 
   .id {
     color: var(--ink-3);
+  }
+
+  /* The lead's turn at work, where Hand to… would be. */
+  .running {
+    color: var(--ink-3);
+    margin-right: var(--s1);
   }
 
   .state {

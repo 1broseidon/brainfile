@@ -547,7 +547,12 @@ board changes (and in the feed).
   nothing, says its first line, and puts the end of its output in the
   task's log, where Send back… carries it to the agent. Merging is the
   person's yes: the task is completed with it (a parent with open children
-  stays open, and says so). Merging or discarding
+  stays open, and says so), unless subtasks are left unticked: then it
+  goes back to In Progress (else the first open column past the backlog),
+  its log saying how many are left. A task completed too soon comes back
+  with Reopen in its pane, or from its tick in the list (`Reopen into…`,
+  the columns): out of logs/ and the ledger, its log saying so, as
+  `brainfile restore` does. Merging or discarding
   removes the worktree and its branch. When the branch was merged elsewhere (the terminal, a
   pull request) and the worktree is still there, the same key reads
   `Merged · remove worktree`, its tip `Already in <branch>`, and does only
@@ -556,7 +561,10 @@ board changes (and in the feed).
   readings: a group above every column, `Ready to merge`, holds exactly the
   hand-offs whose branch can merge now: commits not yet in the branch it
   goes into, nothing uncommitted, no agent still at it, not merged
-  already, and git's merge-tree (which writes nothing) finds no conflict.
+  already (into that branch, what it tracks, or origin's trunk, so a pull
+  request merged on the forge counts while the local branch is behind; a
+  merge that would change nothing counts, for a squash), and git's
+  merge-tree (which writes nothing) finds no conflict.
   The task is drawn there instead of in its column, a completed one with an
   unmerged branch included, and every one shows: it is the person's queue,
   not a glance. Its row says the lines added and removed, and under the
@@ -654,14 +662,56 @@ board changes (and in the feed).
   `dispatch` is Hand to…'s own path: the worktree, a tab in the dock, asks
   in the task pane, Review. With no agent named it is the chat's own agent
   and model; another agent named takes the model and effort chosen for it on this
-  board, as Hand to… would. The task records who asked
-  (`dispatch: { agent, model, by: chat, at }` beside the assignee, plus `effort`
-  when one was set), committed like any change. Under the reply a hand-off reads like a board change
+  board, as Hand to… would. Every hand-off records who asked
+  (`dispatch: { agent, model, by, at }` beside the assignee, plus `effort`
+  when one was set; `by` is `person` for Hand to…, `chat` or `lead`),
+  committed like any change. Under the reply a hand-off reads like a board change
   (`task-35 added`, `task-35 handed to codex`), and the call shows in the
   steps as `desk · dispatch`. The agent is told to create follow-ups with the
-  board tools, hand them off with dispatch, and ask before dispatching more
-  than three at once. A chat's desk reaches its own board only, and a
-  hand-off gets no desk, so it never hands off again.
+  board tools, hand them off with dispatch, to hand off an epic itself to
+  have it run (its lead does the rest), and otherwise to ask before
+  dispatching more than three at once. A chat's desk reaches its own board
+  only, and a hand-off gets no desk, so it never hands off again.
+- **An epic is run by its lead** (decision-15, spec-16 phase 2; lead.ts).
+  Handing off anything with open children, from Hand to… (its menu reads
+  `Lead with`) or the chat's `dispatch`, starts a lead instead of a
+  hand-off: the agent picked, read-only as the chat is (decision-14), with
+  the board's tools and the desk scoped to that tree, and no worktree. Its
+  first turn checks the plan before anything goes: it reads each child, the
+  files it names and the code, makes a child wait where two would change
+  the same code or one needs another's work (`task_patch` dependsOn),
+  splits one too large, fixes a contract whose validation proves nothing,
+  and writes the plan as a note on the epic. The app reads the plan too and
+  gives the lead what it finds: children that touch the same files with
+  neither waiting on the other, dependencies missing, circular, or outside
+  the epic and open, children with no files or no validation, and the order
+  dependsOn gives. Then it hands off what is ready. The app holds the rules
+  it cannot bend, refusing the desk call that breaks one: a child only once
+  its dependsOn are done; at most three hand-offs at once in the repository
+  (`projects[<repo>].concurrency` in dispatch.json); a child handed off at
+  most once plus its contract's maxRetries; only children under the epic
+  with none of their own; one lead to a tree, above or below; and inside a
+  led tree only the lead dispatches (the chat is refused; the person's
+  Hand to… on a child is theirs to make). A child it adds waits for the
+  person, listed in the pane, unless the repository runs in bypass. It is
+  woken with a turn, never polls: when a child's hand-off ends, when one is
+  merged or sent back, when the person completes one or resumes it; events
+  within a second and a half make one turn. Each turn it hears what
+  happened and the tree as it stands (each child's column, who is at it,
+  whether it can merge, what it waits on, how often it was handed off). In
+  a bypass repository the app lands each child that ends in Review, checks
+  first, and the lead hears how it went; otherwise the person merges. The
+  epic is completed with its last child, and the lead ends. The board is
+  its memory: `lead: { agent, model, by, at, until }` on the epic while one
+  is meant to run, the plan in notes on it, and its children told in their
+  brief that a lead reads their notes. The epic's pane has a Lead block
+  (who, where it stands, done of all, running of the most, what it last
+  said, what waits for you) with Pause (it hands off nothing; what runs
+  goes on), Resume and Stop (what it handed off is yours); one left on the
+  epic by a restart reads `not running`, and Resume carries on from its
+  notes. Its tab in the dock says `Leading`, `Needs you`, `Paused` or
+  `Done`, and opens the epic. Three failed turns in a row, or a turn the
+  person stops, pause it.
 - **When an agent asks first**, it is said where you are looking: inside the
   chat for a chat turn, in the task pane for a dispatched task, and in the
   board's band either way, with Allow once · Always · Deny in that order

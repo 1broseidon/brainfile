@@ -21,7 +21,7 @@ import { buildContract } from './contractSpec';
 import { generateNextSubtaskId } from './idGen';
 import { readTaskFile, writeTaskFile, readTasksDir, taskFileName, serializeTaskContent } from './taskFile';
 import { readLedger } from './ledger';
-import { appendLedgerRecord, buildLedgerRecord } from './ledger';
+import { appendLedgerRecord, buildLedgerRecord, removeLedgerRecords } from './ledger';
 
 /**
  * Result of a file-based task operation
@@ -1023,6 +1023,82 @@ export function completeTaskFile(
   }
 }
 
+/** Options for reopening a completed task. */
+export interface ReopenTaskFileOptions {
+  /** Who reopened it, for the note in its log. */
+  agent?: string;
+  /** Why, for the note in its log. */
+  reason?: string;
+}
+
+/**
+ * Reopen a completed task: the reverse of {@link completeTaskFile}. Its
+ * markdown comes back from `logs/` to `board/` in `columnRef` (an ID or a
+ * title), at the column's end, without `completedAt` and without the child
+ * summary completion appended; its ledger records go, since it is no longer
+ * done (completing it again writes a new one); its log says it was reopened.
+ * A decision is never reopened: one in logs/ was superseded or retired.
+ */
+export function reopenTaskFile(
+  dirs: V2Dirs,
+  board: BoardConfig,
+  taskId: string,
+  columnRef: string,
+  options: ReopenTaskFileOptions = {},
+): TaskOperationResult {
+  const column =
+    board.columns.find((c) => c.id === columnRef) ??
+    board.columns.find((c) => c.title.toLowerCase() === columnRef.toLowerCase());
+  if (!column) return { success: false, error: `Column not found: ${columnRef}` };
+
+  const done = findTask(dirs.logsDir, taskId);
+  if (!done) {
+    return findTask(dirs.boardDir, taskId)
+      ? { success: false, error: `${taskId} is not completed` }
+      : { success: false, error: `Task not found in logs: ${taskId}` };
+  }
+  const logPath = done.filePath ?? path.join(dirs.logsDir, taskFileName(taskId));
+  if (resolveDocType(done.task.type, board.types).role === 'decision') {
+    return { success: false, error: `${taskId} is a decision; one in logs/ was superseded or retired, and is not reopened` };
+  }
+  const boardPath = path.join(dirs.boardDir, path.basename(logPath));
+  if (fs.existsSync(boardPath) || findTask(dirs.boardDir, taskId)) {
+    return { success: false, error: `${taskId} is already on the board` };
+  }
+
+  const now = new Date().toISOString();
+  const { completedAt: _completedAt, ...rest } = done.task;
+  const task: Task = {
+    ...rest,
+    column: column.id,
+    position: readTasksDir(dirs.boardDir).filter((d) => d.task.column === column.id).length,
+    updatedAt: now,
+  };
+  // Completion's summary of the children was true then; the list shows them live.
+  const body = done.body.replace(/\n*^## Child Tasks\n[\s\S]*?(?=^## |(?![\s\S]))/m, '\n').replace(/\n+$/, '\n');
+
+  try {
+    writeTaskFileExclusive(boardPath, task, body);
+  } catch (err) {
+    return { success: false, error: `Failed to reopen ${taskId}: ${err}` };
+  }
+
+  let ledger: string | null = null;
+  try {
+    ledger = removeLedgerRecords(dirs.logsDir, taskId);
+    fs.unlinkSync(logPath);
+  } catch (err) {
+    if (ledger !== null) fs.writeFileSync(path.join(dirs.logsDir, 'ledger.jsonl'), ledger, 'utf-8');
+    fs.rmSync(boardPath, { force: true });
+    return { success: false, error: `Failed to reopen ${taskId}: ${err}` };
+  }
+
+  const said = `Reopened into ${column.title}${options.reason ? `: ${options.reason.replace(/\s+/g, ' ').trim()}` : ''}`;
+  // Written as `brainfile note` writes: `- <at>: [agent] text`.
+  const noted = appendLog(boardPath, options.agent ? `[${options.agent}] ${said}` : said);
+  return { success: true, task: noted.task ?? task, filePath: boardPath };
+}
+
 /**
  * Delete a task file from disk.
  *
@@ -1074,9 +1150,14 @@ export function appendLog(
   const match = logSectionRegex.exec(body);
 
   if (match) {
-    // Insert the log entry after the ## Log header
-    const insertPos = match.index + match[0].length;
-    body = body.slice(0, insertPos) + '\n' + logLine + body.slice(insertPos);
+    // Oldest first, as `brainfile note` writes: the entry goes at the end of
+    // the section, before the next heading if one follows.
+    const start = match.index + match[0].length;
+    const next = /^## /m.exec(body.slice(start));
+    const end = next ? start + next.index : body.length;
+    const section = body.slice(start, end).replace(/\s+$/, '');
+    const rest = body.slice(end);
+    body = `${body.slice(0, start)}${section}\n${logLine}\n${rest ? `\n${rest}` : ''}`;
   } else {
     // Create the section at the end
     if (body.length > 0 && !body.endsWith('\n')) {

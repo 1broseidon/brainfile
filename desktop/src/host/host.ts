@@ -16,6 +16,7 @@ import {
   buildBoardFromV2,
   buildDocGraph,
   completeTaskFile,
+  reopenTaskFile,
   decideFile,
   decisionStatus,
   idList,
@@ -63,12 +64,15 @@ import {
   syncStatusLabel,
 } from '@brainfile/core/repo';
 import { integrityView } from './integrity';
+import { workColumn } from '../shared/columns';
 import { applyFix, planFix as planBoardFix, undoFix as undoBoardFix, type UndoRecord } from './fix';
 import type {
   BoardSnapshot,
   DecisionView,
   DependencyView,
   DispatchRecord,
+  AgentId,
+  LeadRecord,
   FixPlan,
   FixResult,
   HostMessage,
@@ -183,6 +187,21 @@ function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph
     updatedAt: task.updatedAt,
     completedAt: task.completedAt,
     ...(text(task.source) ? { source: text(task.source) } : {}),
+    ...(leadOf(task) ? { lead: leadOf(task) } : {}),
+  };
+}
+
+/** The `lead:` an epic carries, when it is whole enough to resume from. */
+function leadOf(task: Task): LeadRecord | undefined {
+  const lead = (task as { lead?: unknown }).lead as Partial<LeadRecord> | undefined;
+  if (!lead || typeof lead !== 'object' || typeof lead.agent !== 'string' || !lead.agent) return undefined;
+  return {
+    agent: lead.agent as AgentId,
+    ...(typeof lead.model === 'string' && lead.model ? { model: lead.model } : {}),
+    ...(typeof lead.effort === 'string' && lead.effort ? { effort: lead.effort } : {}),
+    by: lead.by === 'chat' ? 'chat' : 'person',
+    at: typeof lead.at === 'string' ? lead.at : '',
+    until: lead.until === 'done' ? 'done' : 'review',
   };
 }
 
@@ -592,6 +611,65 @@ function restoreTask(projectId: string, removed: RemovedTask): Result {
   );
 }
 
+/** A completed task back from logs/ to `column`: open again, out of the ledger, its log saying so. */
+function reopenTask(projectId: string, taskId: string, column: string): Result {
+  return mutate(
+    projectId,
+    () => `reopen ${taskId}`,
+    (board) => {
+      const config = readBoardConfig(board.brainfilePath)?.config;
+      if (!config) throw new Error('Could not read the board');
+      unwrap(reopenTaskFile(getV2Dirs(board.brainfilePath), config, taskId, column));
+    }
+  );
+}
+
+/**
+ * After a merge (decision-12): the task is done, unless subtasks are left;
+ * then it goes back to where unfinished work goes, its log saying how many.
+ * A parent with open children refuses to complete, and says so.
+ */
+function settleLanded(projectId: string, taskId: string): Result<{ completed: boolean; left: number }> {
+  return mutate(
+    projectId,
+    () => `land ${taskId}`,
+    (board) => {
+      const file = taskPath(board, taskId);
+      const doc = readTaskFile(file);
+      if (!doc) throw new Error(`Could not read ${taskId}`);
+      const config = readBoardConfig(board.brainfilePath)?.config;
+      const subtasks = doc.task.subtasks ?? [];
+      const left = subtasks.filter((s) => !s.completed).length;
+      if (left > 0) {
+        const work = workColumn(config?.columns ?? []);
+        if (work && work.id !== doc.task.column) {
+          unwrap(moveTaskFileToColumn(getV2Dirs(board.brainfilePath), config!, taskId, work.id, { skipAutoComplete: true }));
+        }
+        unwrap(appendLog(file, `Merged; ${left} of ${subtasks.length} subtasks left, so it stays open`));
+        return { completed: false, left };
+      }
+      unwrap(completeTaskFile(file, getV2Dirs(board.brainfilePath).logsDir, { types: config?.types }));
+      return { completed: true, left: 0 };
+    }
+  );
+}
+
+/** An epic's lead, on the epic (decision-15); null takes it off. */
+function recordLead(projectId: string, epicId: string, record: LeadRecord | null): Result {
+  return mutate(
+    projectId,
+    () => (record ? `lead ${epicId}: ${record.agent} (until ${record.until})` : `lead ${epicId}: ended`),
+    (board) => {
+      const file = taskPath(board, epicId);
+      const doc = readTaskFile(file);
+      if (!doc) throw new Error(`Could not read ${epicId}`);
+      const { lead: _old, ...rest } = doc.task as Task & { lead?: unknown };
+      const next = record ? { ...rest, lead: { ...record } } : rest;
+      writeTaskFile(file, { ...next, updatedAt: new Date().toISOString() } as Task, doc.body);
+    }
+  );
+}
+
 function noteTask(projectId: string, taskId: string, text: string): Result {
   return mutate(
     projectId,
@@ -836,9 +914,12 @@ const handlers: Record<HostRequest['method'], (...args: any[]) => unknown> = {
   completeTask,
   deleteTask,
   restoreTask,
+  reopenTask,
   noteTask,
   decide,
   recordDispatch,
+  recordLead,
+  settleLanded,
   syncNow,
   settleBoards,
   planFix,

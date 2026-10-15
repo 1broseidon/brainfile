@@ -77,6 +77,7 @@ task_add        — create a document (type, parentId, decisions, status, contra
 task_patch      — update fields on one task or many (null removes a field)
 task_move       — move one task or many to a column
 task_complete   — complete to the ledger, or export to GitHub/Linear
+task_restore    — reopen a completed task into a column (reason?)
 task_delete     — remove a task
 subtask         — action= add | toggle | delete | update
 contract        — action= attach | pickup | deliver | validate | graph | activate

@@ -1,4 +1,6 @@
 import type { ColumnView, DecisionView, Priority, TaskView } from '../../shared/api';
+// With its extension, so `npm test` loads it straight from source.
+import { isBacklog } from '../../shared/columns.ts';
 
 export const PRIORITIES: { id: Priority | null; label: string }[] = [
   { id: null, label: 'No priority' },
@@ -12,11 +14,7 @@ export function priorityLabel(priority?: Priority | null): string {
   return PRIORITIES.find((p) => p.id === (priority ?? null))?.label ?? 'No priority';
 }
 
-const BACKLOG = /backlog|icebox|someday/i;
-
-export function isBacklog(column: ColumnView): boolean {
-  return BACKLOG.test(column.id) || BACKLOG.test(column.title);
-}
+export { isBacklog, isReview, workColumn } from '../../shared/columns.ts';
 
 /**
  * Where a column sits on the way to done, for its checkbox: -1 for a

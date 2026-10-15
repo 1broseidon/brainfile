@@ -56,10 +56,10 @@
 >
   <button
     class="box"
-    use:tip={done ? where : `${where}  S`}
+    use:tip={done ? 'Done · reopen' : `${where}  S`}
     onclick={(e) => {
       e.stopPropagation();
-      if (!done) app.openMenu('status', task.id, e.currentTarget as Element);
+      app.openMenu('status', task.id, e.currentTarget as Element);
     }}
   >
     <StatusIcon {progress} />

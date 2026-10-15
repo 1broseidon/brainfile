@@ -5,7 +5,7 @@
  * shows the sessions of the board in front; documents you open are only
  * remembered, for the palette. Pure functions; `npm test` in desktop/.
  */
-import type { AgentRun, ReadyView } from '../../shared/api';
+import type { AgentRun, LeadView, ReadyView } from '../../shared/api';
 
 /** A chat thread, by its ID, or a hand-off, by its task's. */
 export interface Session {
@@ -46,9 +46,9 @@ export function keepRecent(list: Doc[], doc: Doc, kept = RECENT_KEPT): Doc[] {
   return [doc, ...list.filter((d) => !(d.projectId === doc.projectId && d.id === doc.id))].slice(0, kept);
 }
 
-/** The run a hand-off's tab speaks for: the live one, else the latest. */
+/** The run a hand-off's tab speaks for: the live one, else the latest. An epic's tab speaks for its lead's turns. */
 export function handoffRun(runs: AgentRun[], projectId: string, taskId: string): AgentRun | undefined {
-  const mine = runs.filter((r) => r.kind === 'dispatch' && r.projectId === projectId && r.taskId === taskId);
+  const mine = runs.filter((r) => (r.kind === 'dispatch' || r.kind === 'lead') && r.projectId === projectId && r.taskId === taskId);
   return mine.find((r) => r.state === 'starting' || r.state === 'working' || r.state === 'waiting') ?? mine.sort((a, b) => b.startedAt - a.startedAt)[0];
 }
 
@@ -59,9 +59,16 @@ export function handoffRun(runs: AgentRun[], projectId: string, taskId: string):
  */
 export function restingWord(
   session: Session,
-  { unread, run, ready }: { unread?: string; run?: AgentRun; ready?: ReadyView }
+  { unread, run, ready, lead }: { unread?: string; run?: AgentRun; ready?: ReadyView; lead?: LeadView }
 ): { word: string; tone?: 'warn' } | null {
   if (session.kind === 'chat') return unread === session.id ? { word: 'Reply waiting' } : null;
+  // An epic's lead says where it stands, not how its last turn ended (decision-15).
+  if (lead) {
+    if (lead.state === 'paused') return { word: 'Paused', tone: 'warn' };
+    if (lead.state === 'done') return { word: 'Done' };
+    if (lead.state === 'stopped') return { word: 'Stopped' };
+    return { word: lead.waitingForYou.length ? 'Needs you' : 'Leading' };
+  }
   if (ready) return ready.conflicts ? { word: 'Conflicts', tone: 'warn' } : { word: 'Ready to merge' };
   if (!run) return null;
   if (run.state === 'done') return { word: 'Done' };

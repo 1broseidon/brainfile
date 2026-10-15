@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { childMap, childrenOf, outline, visibleRows, type OutlineRow } from '../src/renderer/lib/format.ts';
+import { childMap, childrenOf, outline, visibleRows, workColumn, type OutlineRow } from '../src/renderer/lib/format.ts';
 import type { ColumnView, TaskView } from '../src/shared/api.ts';
 
 const columns: ColumnView[] = [
@@ -80,4 +80,13 @@ test('a parent’s children and the task pane’s list run in the outline’s or
   // An open child of a completed parent hangs under nothing in the outline, but its pane still lists it.
   assert.equal(childMap(columns, [doc('task-1', 'todo', 'epic-9')], [doc('epic-9', 'todo')]).get('epic-9'), undefined);
   assert.equal(childrenOf('epic-9', columns, [doc('task-1', 'todo', 'epic-9')], [doc('epic-9', 'todo')]).length, 1);
+});
+
+test('unfinished work goes back to In Progress, else the first open column past the backlog, never Review or Done', () => {
+  const col = (id: string, title: string, completionColumn = false): ColumnView => ({ id, title, completionColumn }) as ColumnView;
+  const board = [col('backlog', 'Backlog'), col('todo', 'To Do'), col('in-progress', 'In Progress'), col('review', 'Review'), col('done', 'Done', true)];
+  assert.equal(workColumn(board)?.id, 'in-progress');
+  assert.equal(workColumn([col('backlog', 'Backlog'), col('todo', 'To Do'), col('review', 'Review')])?.id, 'todo');
+  assert.equal(workColumn([col('doing', 'Doing'), col('done', 'Done', true)])?.id, 'doing');
+  assert.equal(workColumn([col('review', 'Review')])?.id, 'review');
 });

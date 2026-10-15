@@ -10,7 +10,8 @@ import { cleanServers } from '../shared/agentServers';
 import type { DispatchSettings, PermissionPolicy } from '../shared/api';
 
 export interface SettingsFile extends Partial<DispatchSettings> {
-  projects?: Record<string, { permissions?: PermissionPolicy }>;
+  /** Per repository: how asks are answered, and the most hand-offs at once (an epic's lead keeps to it; 3 when unset). */
+  projects?: Record<string, { permissions?: PermissionPolicy; concurrency?: number }>;
 }
 
 export function readSettingsFile(file: string): SettingsFile {

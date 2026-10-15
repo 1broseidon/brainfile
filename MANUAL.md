@@ -408,7 +408,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | Read what was done on a task | `log` |
 | Record a plan | `plan` |
 | See every type and where it fits | `types` |
-| Export finished work to GitHub or Linear, or bring it back | `archive`, `restore` |
+| Export finished work to GitHub or Linear, or reopen it | `archive`, `restore` |
 | Share the board with another machine or person | `sync` |
 | See where the board lives and who has it | `where` |
 | Upgrade a v1 board, or move a board onto its own branch | `migrate` |
@@ -992,14 +992,20 @@ and pushes it to `refs/brainfile/<name>` on the remote. Runs entirely inside the
 never touched. `--set-remote` in a repository that has no board yet checks the
 board out from that remote. Details in [Sharing a board](#sharing-a-board).
 
-#### archive, restore — Export completed work, or bring it back
+#### archive, restore — Export completed work, or reopen it
 
 ```console
 $ brainfile archive -t task-1                    # same as complete
 $ brainfile archive -t task-1 --to github
 $ brainfile archive --all --to linear --dry-run
-$ brainfile restore -t task-1 -c todo
+$ brainfile restore -t task-1 -c in-progress -r "phase C is left"
 ```
+
+`restore` reopens work completed too soon: the task comes back from `logs/`
+to the column you name, its ledger record goes (completing it again writes a
+new one), and its log says it was reopened, with `--reason` if you gave one.
+A decision is not reopened: supersede it, or decide again. On a v1 board it
+brings a task back from `brainfile-archive.md`.
 
 Exports create an issue in the configured GitHub repo or Linear team; set the
 destination with `config set archive.github.owner`, `archive.github.repo` or
@@ -1387,6 +1393,7 @@ to a board.
 | `task_patch` | Update fields on one task or many, `parentId`, `dependsOn` and `decisions` included; `null` removes a field. |
 | `task_move` | Move one task or many to a column. |
 | `task_complete` | Complete to the ledger, or export to GitHub or Linear. A parent with open children and a decision refuse. |
+| `task_restore` | Reopen a completed task into a `column`, out of the ledger, with `reason` in its log. |
 | `task_delete` | Remove a task. |
 | `subtask` | `action=` add, toggle, delete or update, on one subtask, several, or all. |
 | `contract` | `action=` attach, pickup, deliver, validate, graph or activate. |
@@ -1417,8 +1424,7 @@ something a decision covers; then a line on what each tool is for.
 Some commands have no tool, on purpose: `tui` and `mcp` (they are the
 interfaces), `merge-driver` (git runs it), `hooks` (events the agent host
 fires, and your agent's settings), `auth` and `config` (your credentials and
-user config), `init` and `migrate` (one-off, and your call), `restore` (the
-v1 archive file; a v2 board keeps completed work in `logs/`) and `index` (a
+user config), `init` and `migrate` (one-off, and your call) and `index` (a
 cache that `search`, `brief` and `check` refresh). Choosing the remote a
 board is shared through, and its autosync mode, also stays with you
 (`brainfile sync --set-remote`, `--autosync`). A test holds the CLI and the
@@ -1453,6 +1459,36 @@ Installs three hooks into the agent's settings: after a file edit, a reminder
 to update the task; before a prompt, a warning when files changed but the board
 did not; at session start, the agent's brief. `--scope project` writes them
 into the repo instead of the user's home.
+
+### Orchestration: why a board and not subagents
+
+For one task in one session, a subagent or a shell-out to another coding
+agent is simpler, and that is fine. The board earns its place when the work
+outlives a conversation:
+
+- **It survives the session.** A hand-off is board state, committed and
+  synced, so "continue epic-24" works tomorrow, from another terminal,
+  harness or machine. Subagent orchestration dies with its conversation.
+- **Across harnesses.** Each task picks its agent and model (Claude Code,
+  Codex, Cursor, Grok, Antigravity, any ACP server) through one protocol,
+  with the same brief and the same standing decisions.
+- **Isolation.** Each hand-off gets its own worktree and branch, and a
+  moment for review; subagents and shell-outs share one checkout.
+- **Done means done.** A task lands when its contract's validation passes
+  with the trunk brought in, goes back to its agent on a conflict or a
+  failed check up to `maxRetries`, then waits for a person; not "the
+  subagent said so".
+- **The orchestrator's context stays clean.** Workers report to the board
+  (notes, the ledger); the orchestrator reads status, not transcripts.
+- **A record.** Who did what, which files, how long: in the ledger and the
+  board's history.
+
+In the desktop app, handing off an epic starts its lead: an agent that
+writes no code, checks the plan (the children, the files each touches, the
+dependencies between them), then hands the children off in order and is
+woken as each ends or lands, inside rules the app holds (dependencies done
+first, at most three at once per repository, retries to `maxRetries`). The
+same from the command line and any MCP client is the work of epic-6.
 
 ### Bootstrap files
 

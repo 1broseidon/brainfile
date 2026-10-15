@@ -238,7 +238,7 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
   });
 
   const uncommitted = uncommittedIn(at).count;
-  const merged = !!into && commits.length > 0 && git(['merge-base', '--is-ancestor', branch, into], repoRoot).ok;
+  const merged = !!into && commits.length > 0 && landedIn(repoRoot, branch, into);
   const conflicts = into && commits.length > 0 && !merged ? conflictsWith(repoRoot, into, branch) : [];
 
   return {
@@ -257,6 +257,26 @@ export function reviewOf(projectId: string, taskId: string): ReviewView | null {
     merged,
     conflicts,
   };
+}
+
+/**
+ * Whether the branch's work is already where it goes: in `into`, in what
+ * `into` tracks, or in the remote's trunk, so a pull request merged on the
+ * forge counts while the local branch is behind. A squash merge leaves no
+ * ancestry, so a merge that would change nothing counts too.
+ */
+function landedIn(repoRoot: string, branch: string, into: string): boolean {
+  const upstream = git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', `${into}@{upstream}`], repoRoot);
+  const trunk = trunkOf(repoRoot)?.name;
+  const places = [into, upstream.ok ? upstream.stdout : '', trunk ? `origin/${trunk}` : ''].filter(
+    (ref, i, all) => ref && all.indexOf(ref) === i && git(['rev-parse', '--verify', '--quiet', `${ref}^{commit}`], repoRoot).ok
+  );
+  return places.some((ref) => {
+    if (git(['merge-base', '--is-ancestor', branch, ref], repoRoot).ok) return true;
+    const tree = git(['merge-tree', '--write-tree', ref, branch], repoRoot);
+    const own = git(['rev-parse', `${ref}^{tree}`], repoRoot);
+    return tree.ok && own.ok && tree.stdout.split('\n')[0] === own.stdout;
+  });
 }
 
 /**

@@ -9,7 +9,7 @@ describe('brainfile-finder', () => {
 
   beforeEach(() => {
     // Create a temporary directory for each test
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-test-'));
+    tempDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'brainfile-test-')));
     process.chdir(tempDir);
   });
 

@@ -281,6 +281,11 @@ export const taskDeleteOutputSchema = z.object({
   deleted: z.literal(true),
 });
 
+export const taskRestoreOutputSchema = z.object({
+  id: z.string(),
+  column: z.string(),
+});
+
 // ── subtask ────────────────────────────────────────────────────────────────
 
 /**

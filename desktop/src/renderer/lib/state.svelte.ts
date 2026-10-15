@@ -8,6 +8,7 @@ import type {
   AgentInfo,
   AgentModes,
   AgentRun,
+  LeadView,
   AgentServer,
   Api,
   BoardSnapshot,
@@ -35,7 +36,7 @@ import { problemBrief } from './brief';
 
 /** How long after a turn ends its last board change is waited for: the commit, the watcher, the snapshot. */
 const SETTLE_MS = 900;
-import { calmOrder, decisionGroups, glance, GLANCE, outline, restsFolded, rootsHeld, visibleRows, type OutlineRow } from './format';
+import { calmOrder, decisionGroups, glance, GLANCE, outline, restsFolded, rootsHeld, visibleRows, workColumn, type OutlineRow } from './format';
 import { intakeColumn, issueTask } from '../../shared/issues';
 import { customId } from '../../shared/agentServers';
 import { effortToSet } from '../../agents/effort';
@@ -48,7 +49,7 @@ declare global {
 
 /** Changes this window makes are not news; remember when each board was last written from here. */
 const lastLocalWrite: Record<string, number> = {};
-const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask', 'noteTask', 'settleBoards', 'fixBoard', 'undoFix'] as const;
+const MUTATIONS = ['addTask', 'moveTask', 'patchTask', 'toggleSubtask', 'addSubtask', 'completeTask', 'deleteTask', 'restoreTask', 'reopenTask', 'noteTask', 'settleBoards', 'fixBoard', 'undoFix'] as const;
 const LOCAL_WINDOW_MS = 4000;
 
 // The bridge's object is frozen, so a Proxy over it breaks the proxy
@@ -261,6 +262,8 @@ class AppState {
   update = $state<UpdateStatus | null>(null);
   /** Each board's hand-offs that can merge now, or would conflict, with no agent still at them (task-69). */
   mergeable = $state<Record<string, ReadyView[]>>({});
+  /** Epics' leads (decision-15), by `projectId\nepicId`: every one since the app opened. */
+  leads = $state<Record<string, LeadView>>({});
   asks = $state<PermissionAsk[]>([]);
   /** Chat threads per board, newest first, kept on this machine. */
   threads = $state<Record<string, Thread[]>>(load(THREADS_KEY, {}));
@@ -559,8 +562,12 @@ class AppState {
     void api.updateStatus().then((status) => (this.update = status));
     api.onAgentEvent((event) => {
       if (event.kind === 'run') this.onRun(event.run);
+      else if (event.kind === 'lead') this.onLead(event.lead);
       else if (event.kind === 'permission') this.asks = [...this.asks, event.ask];
       else this.asks = this.asks.filter((a) => a.id !== event.id);
+    });
+    void api.leads().then((leads) => {
+      for (const lead of leads) this.leads[`${lead.projectId}\n${lead.epicId}`] = lead;
     });
     setInterval(() => (this.now = Date.now()), 15_000);
     void this.refreshAgents();
@@ -711,6 +718,45 @@ class AppState {
     return this.activeId ? this.mergeable[this.activeId]?.find((r) => r.taskId === taskId) : undefined;
   }
 
+  private onLead(lead: LeadView): void {
+    const key = `${lead.projectId}\n${lead.epicId}`;
+    const before = this.leads[key];
+    this.leads[key] = lead;
+    if (before?.state !== lead.state && (lead.state === 'done' || (lead.state === 'paused' && /failed/.test(lead.note ?? '')))) {
+      this.notify(lead.state === 'done' ? `${lead.epicId} is done: its lead handed off the last of it` : `${lead.epicId}'s lead paused: ${lead.note}`, lead.state === 'done' ? 'ok' : 'warn');
+    }
+  }
+
+  /** The lead of an epic on the board in front, while it runs or after it ended this session. */
+  leadFor(epicId: string, projectId = this.activeId): LeadView | undefined {
+    return projectId ? this.leads[`${projectId}\n${epicId}`] : undefined;
+  }
+
+  /** The lead's turn at work on an epic, if any. */
+  leadRunFor(epicId: string): AgentRun | undefined {
+    return Object.values(this.runs).find((r) => r.kind === 'lead' && r.taskId === epicId && r.projectId === this.activeId && isLive(r));
+  }
+
+  async pauseLead(epicId: string): Promise<void> {
+    if (!this.activeId) return;
+    const result = await api.pauseLead(this.activeId, epicId);
+    if (!result.ok) this.notify(result.error, 'warn');
+  }
+
+  /** Resumes a paused lead, or one left on the epic by a restart. */
+  async resumeLead(epicId: string): Promise<void> {
+    if (!this.activeId) return;
+    const result = await api.resumeLead(this.activeId, epicId);
+    if (!result.ok) this.notify(result.error, 'warn');
+    else this.keepSession({ projectId: this.activeId, kind: 'handoff', id: epicId });
+  }
+
+  async stopLead(epicId: string): Promise<void> {
+    if (!this.activeId) return;
+    const result = await api.stopLead(this.activeId, epicId);
+    if (!result.ok) this.notify(result.error, 'warn');
+  }
+
   /** The live dispatch on a task of the board in front, if any. */
   runFor(taskId: string): AgentRun | undefined {
     return Object.values(this.runs).find((r) => r.kind === 'dispatch' && r.taskId === taskId && r.projectId === this.activeId && isLive(r));
@@ -796,11 +842,9 @@ class AppState {
       const said = rest.map((l) => l.trim()).filter(Boolean).join(' ⏎ ').slice(-800);
       if (said) await api.noteTask(projectId, taskId, `Checks failed before merge: ${first.replace(/^Nothing was merged: /, '')} ${said}`);
     }
-    // Merging is the person's yes: the task is done, unless the board will not have it so (a parent with open children).
-    if (result.ok && how === 'merge' && this.boards[projectId]?.tasks.some((t) => t.id === taskId)) {
-      const done = await api.completeTask(projectId, taskId);
-      if (!done.ok) this.notify(`Merged. ${taskId} stays open: ${done.error}`, 'warn');
-    }
+    // Merging is the person's yes: the agents process completes the task, unless subtasks are left or it is a
+    // parent with open children; then it stays open, and says so.
+    if (result.ok && how === 'merge' && /stays open/.test(result.value.message)) this.notify(result.value.message, 'ok');
     this.refreshReady(projectId, true);
     return result.ok;
   }
@@ -1073,10 +1117,10 @@ class AppState {
   private onRun(run: AgentRun): void {
     const before = this.runs[run.id];
     this.runs[run.id] = run;
-    // A hand-off is a session in its board's dock from the moment it starts.
-    if (!before && run.kind === 'dispatch' && run.taskId) this.keepSession({ projectId: run.projectId, kind: 'handoff', id: run.taskId });
-    // One the chat made is said under the turn's reply, like a board change.
-    if (!before && run.kind === 'dispatch' && run.taskId && run.from) {
+    // A hand-off, or an epic's lead, is a session in its board's dock from the moment it starts.
+    if (!before && (run.kind === 'dispatch' || run.kind === 'lead') && run.taskId) this.keepSession({ projectId: run.projectId, kind: 'handoff', id: run.taskId });
+    // One the chat made is said under the turn's reply, like a board change; a lead's are said by its tab.
+    if (!before && run.kind === 'dispatch' && run.taskId && run.from && this.runs[run.from]?.kind === 'ask') {
       this.#handoffs.set(run.from, [...(this.#handoffs.get(run.from) ?? []), { id: run.taskId, what: `handed to ${run.agentId}` }]);
     }
     const ended = !isLive(run) && (!before || isLive(before));
@@ -1171,6 +1215,17 @@ class AppState {
   }
 
   /** Show a move at once; the host's snapshot replaces it moments later. */
+  /** A done task back on the board, open again: in `column`, else where unfinished work goes. */
+  async reopenTask(taskId: string, column?: string): Promise<void> {
+    const board = this.board;
+    if (!board || !this.activeId) return;
+    const into = column ? board.columns.find((c) => c.id === column) : workColumn(board.columns);
+    if (!into) return;
+    const result = await api.reopenTask(this.activeId, taskId, into.id);
+    if (result.ok) this.notify(`${taskId} is open again, in ${into.title}`, 'ok');
+    else this.notify(result.error, 'warn');
+  }
+
   async moveTask(taskId: string, column: string): Promise<void> {
     const board = this.board;
     if (!board || !this.activeId) return;

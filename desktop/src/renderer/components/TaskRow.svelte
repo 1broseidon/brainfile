@@ -38,7 +38,8 @@
 
   function pick(kind: 'status' | 'priority' | 'assignee', e: MouseEvent): void {
     e.stopPropagation();
-    if (!done) app.openMenu(kind, task.id, e.currentTarget as Element);
+    // A done task's tick reopens it; nothing else about it changes from the list.
+    if (!done || kind === 'status') app.openMenu(kind, task.id, e.currentTarget as Element);
   }
 </script>
 
@@ -65,7 +66,7 @@
   onclick={() => (app.openTaskId = task.id)}
   onkeydown={() => {}}
 >
-  <button class="cell" use:tip={done ? where : `${where}  S`} onclick={(e) => pick('status', e)}>
+  <button class="cell" use:tip={done ? 'Done · reopen' : `${where}  S`} onclick={(e) => pick('status', e)}>
     <StatusIcon {progress} />
   </button>
   {#if children > 0}

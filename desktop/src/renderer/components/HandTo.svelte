@@ -9,7 +9,8 @@
   /** Dispatch, the muted way: one key on a task, a short list of the person's own agents. */
   /** `waitsOn`: its dependencies still open on this board; it is handed off once they are done (decision-15). */
   /** `small`: the key under a chat reply, a step quieter than the task pane's. */
-  let { taskId, waitsOn = [], small = false }: { taskId: string; waitsOn?: string[]; small?: boolean } = $props();
+  /** `leads`: the task has open children, so the agent picked leads them (decision-15) instead of working it. */
+  let { taskId, waitsOn = [], small = false, leads = false }: { taskId: string; waitsOn?: string[]; small?: boolean; leads?: boolean } = $props();
 
   let open = $state(false);
   let key = $state<HTMLButtonElement>();
@@ -71,13 +72,13 @@
       class:on={open}
       bind:this={key}
       disabled={waitsOn.length > 0}
-      use:tip={waitsOn.length ? `Waits on ${waitsOn.join(', ')}` : ''}
+      use:tip={waitsOn.length ? `Waits on ${waitsOn.join(', ')}` : leads ? 'An agent leads it: checks the plan, then hands the children off in order' : ''}
       onclick={toggle}><Icon name="hand" size={13} />Hand to…</button
     >
     {#if open}
       <div class="catch" role="presentation" use:portal onmousedown={() => (open = false)}></div>
       <div class="menu" role="listbox" use:portal style:top="{place.top}px" style:left="{place.left}px" style:width="{MENU_W}px">
-        <div class="head mono">Hand to</div>
+        <div class="head mono">{leads ? 'Lead with' : 'Hand to'}</div>
         {#each offered as agent, i (agent.id)}
           <button
             class="item"

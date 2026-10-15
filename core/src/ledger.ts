@@ -430,6 +430,28 @@ export function appendLedgerRecord(logsDir: string, record: LedgerRecord): strin
 }
 
 /**
+ * Remove a task's records from the ledger, for a task that is open again:
+ * every line whose `id` is `taskId` goes, every other line stays byte for
+ * byte. Returns the ledger as it was, to put back if what follows fails, or
+ * null when there was no ledger.
+ */
+export function removeLedgerRecords(logsDir: string, taskId: string): string | null {
+  const ledgerPath = getLedgerPath(logsDir);
+  if (!fs.existsSync(ledgerPath)) return null;
+  const before = fs.readFileSync(ledgerPath, 'utf-8');
+  const kept = before.split('\n').filter((line) => {
+    if (!line.trim()) return false;
+    try {
+      return (JSON.parse(line) as { id?: unknown }).id !== taskId;
+    } catch {
+      return true;
+    }
+  });
+  fs.writeFileSync(ledgerPath, kept.length ? `${kept.join('\n')}\n` : '', 'utf-8');
+  return before;
+}
+
+/**
  * Read all ledger records.
  *
  * Backward compatibility: if `ledger.jsonl` is missing but legacy markdown logs
