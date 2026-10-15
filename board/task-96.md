@@ -41,3 +41,6 @@ assignee: claude
 
 ## Description
 Append one line to `qa/parity-wave-1.md`: `- Drill child 2 (<task id>): on <the branch you started from>, after task-95, <the time now, ISO>`. If your brief says to merge a branch into yours first because bringing it in conflicted, do that first and keep both sides' lines. Commit on your branch. Change nothing else.
+
+## Log
+- 2026-10-15T20:56:43.134Z: [claude] Appended "- Drill child 2 (task-96): on dispatch/epic-9, after task-95, 2026-10-15T20:56:40Z" to qa/parity-wave-1.md after child 1's line, all existing lines kept; committed as 9b82cab on dispatch/task-96 (one file, one line). All three validation greps pass. No merge was needed: the brief asked for none and dispatch/epic-9 already had task-95's line. For the next child: qa/ is gitignored but the file is tracked, so stage it with `git add -f` or `git commit -a`. Nothing left unwired.
