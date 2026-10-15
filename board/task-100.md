@@ -27,39 +27,39 @@ dependsOn:
 subtasks:
   - id: task-100-1
     title: Agents, availability, models and effort as before
-    completed: false
+    completed: true
   - id: task-100-2
     title: Settings read from the same dispatch.json; a change sticks
-    completed: false
+    completed: true
   - id: task-100-3
     title: A permission ask appears in the band and works
-    completed: false
+    completed: true
   - id: task-100-4
     title: The board chat answers and edits the board
-    completed: false
+    completed: true
   - id: task-100-5
     title: Discuss answers about the task
     completed: false
   - id: task-100-6
     title: A hand-off's brief has the decisions, worktree paragraph and finishing rule
-    completed: false
+    completed: true
   - id: task-100-7
     title: "dispatch: is written on the task as before"
-    completed: false
+    completed: true
   - id: task-100-8
     title: The issues view lists and imports as before
     completed: false
   - id: task-100-9
     title: Fix and Undo (or nothing to fix)
-    completed: false
+    completed: true
   - id: task-100-10
     title: "Phone: Ready to merge matches; an open PR is not mergeable"
     completed: false
   - id: task-100-11
     title: A restart keeps settings and models
-    completed: false
+    completed: true
 createdAt: "2026-10-15T18:21:50.981Z"
-updatedAt: "2026-10-15T20:31:12.882Z"
+updatedAt: "2026-10-15T21:15:17.778Z"
 ---
 
 ## Description
