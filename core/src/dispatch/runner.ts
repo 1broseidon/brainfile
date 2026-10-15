@@ -1022,6 +1022,24 @@ export class Runner {
   }
 
   /**
+   * Whether `by` may hand off `taskId` here (decision-15): in a led tree, a
+   * lead here or another runner's on the board, the chat is refused and only
+   * the lead hands off; the person's own is theirs to make.
+   */
+  guard(projectId: string, taskId: string, by: DispatchBy): Result {
+    const here = this.leads.guard(projectId, taskId, by);
+    if (!here.ok || this.leads.leadOver(projectId, taskId) || by !== 'chat') return here;
+    let above: ReturnType<typeof leadAbove> = null;
+    try {
+      above = leadAbove(projectId, taskId, { self: true });
+    } catch {
+      above = null;
+    }
+    if (!above) return { ok: true, value: undefined };
+    return { ok: false, error: `${above.epicId}'s lead runs ${above.epicId === taskId ? 'it' : 'that tree'}: only the lead hands off its children. Pause or stop it first.` };
+  }
+
+  /**
    * The epics whose lead waits for a runner, oldest request first: a lead
    * record nobody holds, or whose runner is lost (the `lead:` the desktop
    * wrote before is one too).

@@ -396,6 +396,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | See the repository's GitHub issues, or make a task from one | `issues` |
 | Land a hand-off by GitHub pull request instead of a merge | `pr` |
 | Hand tasks to a coding agent, see what is running, stop one | `dispatch`, `dispatch status`, `dispatch stop` |
+| Have an epic run by a lead; pause, resume or stop it | `dispatch <epic>`, `dispatch pause`, `dispatch resume`, `dispatch stop` |
 | See a hand-off's work, land it or throw it away | `review`, `land`, `discard` |
 | See which coding agents are installed, and their models | `agents` |
 | Advance a task to another column | `move` |
@@ -810,6 +811,7 @@ $ brainfile dispatch --column todo --agent claude      # every open task in To D
 $ brainfile dispatch --parent epic-3 --agent codex     # the epic's open children
 $ brainfile dispatch task-12 --agent codex --until done
 $ brainfile dispatch task-12 --agent codex --now       # and run it here until it ends
+$ brainfile dispatch epic-3 --agent claude             # a lead for the epic
 ```
 
 Writes `dispatch:` on each task (the agent, model, effort, `until`, who asked
@@ -818,8 +820,9 @@ With no `--agent`, a task goes to the agent it was last handed to, else its
 assignee when that is an agent. `--until review` (the default) stops the
 work in Review for you; `--until done` lands it on its own where the
 repository's permission policy is bypass. A task an agent is still at, or a
-runner holds, is skipped and said so; so are decisions and tasks with open
-children (their lead hands those off). A task whose `dependsOn` are open, or
+runner holds, is skipped and said so; so are decisions. A task named that
+has open children (an epic) gets a lead instead: see [Leads](#leads). A task
+whose `dependsOn` are open, or
 complete with their branch not landed, is queued and waits until they have
 landed. At most `dispatch.maxRunning` in the board's config (else the
 repository's setting in the app, else 3) run at once on a repository.
@@ -848,6 +851,56 @@ and every runner's run files, whichever process started them.
 file, which its runner watches, and if it has not ended within 15 seconds
 its runner is sent SIGTERM. The command waits for that. The worktree and
 branch stay for review, and the claim is given back.
+
+#### Leads
+
+```console
+$ brainfile dispatch epic-3 --agent claude --model opus
+$ brainfile dispatch epic-3 --agent claude --now   # lead it here until it ends
+$ brainfile dispatch pause epic-3
+$ brainfile dispatch resume epic-3
+$ brainfile dispatch stop epic-3
+```
+
+An epic, or any task with open children, is run by a lead (decision-15): an
+agent that writes no code. It checks the plan first (which children touch
+the same code, whether the dependencies are right, whether one child wires
+the parts together), writes the plan as a note on the epic, then hands the
+children off in order, and is woken with a new turn when one ends, lands or
+is sent back. Its `brainfile mcp` is started as the lead of that epic, so its
+`dispatch`, `dispatch_status` and `dispatch_stop` reach only the tasks under
+it; it may read the code and run git commands that only read.
+
+`dispatch <epic>` writes the lead's request on the epic: `dispatch:` with
+`role: lead`. A runner that takes up leads (`brainfile run`, the Brainfile
+window when you press Resume, or `--now` here) claims it, as it claims a
+task, so one lead runs a tree, whichever process or machine; a tree that
+already has one, above or under the epic, is refused. The runner holds the
+rules the lead cannot bend, and checks them again before it starts what the
+lead asks for:
+
+- a child goes only once its `dependsOn` are done and their branches landed;
+- at most `dispatch.maxRunning` hand-offs at once on the repository;
+- a child is tried at most its contract's `maxRetries` again (once by
+  default), counted in `tries` on its record; then it waits in Review for you,
+  with a note saying so;
+- only children under the epic with none of their own;
+- in its tree only the lead and you hand off: the board's chat is refused;
+- children it adds after it started, and children whose contract is still a
+  draft, wait for you to hand them off, unless the repository's permission
+  policy is bypass, where the lead also lands each child that ends in Review.
+
+When the last child is done the epic is completed, or, with a branch of its
+own (`epicBranch: true`), waits in Ready to merge. The lead's record comes
+off and the lead ends.
+
+`pause` marks the record `paused`: the lead hands off nothing and what
+happens waits for its next turn; what is running goes on. `resume` takes that
+off and the lead carries on; a lead no runner holds (its runner went away)
+waits for one, and takes up from its notes on the epic. `stop` takes the
+record off: the lead ends, and what it handed off goes on and is yours. Each
+works whichever runner leads it, which follows the epic's record. `dispatch
+status` lists the leads: waiting for a runner, leading or paused, and where.
 
 #### review, land, discard — A hand-off's work, and what to do with it
 
@@ -1613,9 +1666,10 @@ to a board.
 | `where` | Where the board lives, how it is stored, the remote it is shared through, when it last synced and how many changes wait to be sent; every other copy of the board in the repository, and `conflict` when one disagrees (writes are refused until `conflict.resolve` runs). `fetch: true` asks the remote first. `fix` has the problems in the desktop's words and `plan`, what `brainfile fix` would do; `action=fix` with `expected` (the plan's `words`) runs it, `action=undo` puts back the last fix within 20 seconds. |
 | `pull_request` | A task's hand-off as a GitHub pull request, as `brainfile pr`: `action=open` (default) pushes its branch and opens one into where it lands, recorded as `pullRequest`; `action=status` asks where it stands, and merged completes the task and removes its worktree. |
 | `issues` | The open issues of the project's GitHub repository, each with `task` when one on the board carries its URL as `source`; `action=import` with `numbers` (and `column`) makes a task from each, and reports one already on the board with `made: false`. Credentials as `brainfile issues`. |
-| `dispatch` | Queue tasks for a coding agent, as `brainfile dispatch`: `task` (one or many), or `column`, or `parent`; `agent`, `model`, `effort`, `until`. Says what was queued, skipped and waits, and, when no runner is up on this machine, `Run brainfile run or open Brainfile to start it.` |
-| `dispatch_status` | The runners up, the live runs, the queue and the claims, as `brainfile dispatch status`. |
-| `dispatch_stop` | Stop a run by its run id or task id (`run`), as `brainfile dispatch stop`; says whether it has ended yet. |
+| `dispatch` | Queue tasks for a coding agent, as `brainfile dispatch`: `task` (one or many), or `column`, or `parent`; `agent`, `model`, `effort`, `until`. An epic named gets a lead. Says what was queued, skipped and waits, and, when no runner is up on this machine, `Run brainfile run or open Brainfile to start it.` |
+| `dispatch_status` | The runners up, the live runs, the queue, the claims and the leads, as `brainfile dispatch status`. |
+| `dispatch_stop` | Stop a run by its run id or task id (`run`), as `brainfile dispatch stop`; says whether it has ended yet. An epic's id stops its lead. |
+| `dispatch_lead` | Pause or resume an epic's lead (`epic`, `action`), as `brainfile dispatch pause` and `resume`, whichever runner leads it. |
 | `review` | A hand-off's work: `action=show` (default, `task`), `ready`, `land` (`task`, `into`) or `discard` (`task`), as `brainfile review`, `land` and `discard`. |
 | `agents` | The coding agents, which are installed here, and their models, as `brainfile agents`. |
 
@@ -1643,8 +1697,8 @@ leads and discussions.
 | --- | --- |
 | none (your own client) | Every tool. |
 | `chat` | Every tool. |
-| `lead` | Every tool, but `dispatch`, `dispatch_stop`, `review` and `dispatch_status` reach only the tasks under its epic, named in `BRAINFILE_LEAD_SCOPE`. |
-| `worker` | No `dispatch` or `dispatch_stop`, and `review` only shows: a hand-off never hands off (decision-15). |
+| `lead` | Every tool, but `dispatch`, `dispatch_stop`, `dispatch_lead`, `review` and `dispatch_status` reach only the tasks under its epic, named in `BRAINFILE_LEAD_SCOPE`; its `dispatch` refuses what the lead's rules refuse ([Leads](#leads)). |
+| `worker` | No `dispatch`, `dispatch_stop` or `dispatch_lead`, and `review` only shows: a hand-off never hands off (decision-15). |
 | `discuss` | As a worker. |
 
 ```console title=".mcp.json"
