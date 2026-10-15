@@ -9,17 +9,20 @@
   import { app } from '../lib/state.svelte';
   import { tip } from '../lib/tooltip';
   import Icon from './Icon.svelte';
-  import type { ReadyView } from '../../shared/api';
+  import MergeMenu from './MergeMenu.svelte';
+  import type { MergeTo, ReadyView } from '../../shared/api';
 
   let { ready, taskId }: { ready: ReadyView; taskId: string } = $props();
 
   let busy = $state(false);
+  /** An epic with a branch of its own: Merge asks where it goes (decision-16). */
+  const epicBranch = $derived(!!app.board?.tasks.some((t) => t.id === taskId && t.epicBranch));
 
-  async function merge(e: MouseEvent): Promise<void> {
-    e.stopPropagation();
+  async function merge(e: MouseEvent | null, to?: MergeTo): Promise<void> {
+    e?.stopPropagation();
     if (busy) return;
     busy = true;
-    await app.settleReview(taskId, 'merge');
+    await app.settleReview(taskId, 'merge', undefined, to);
     busy = false;
   }
 </script>
@@ -33,13 +36,20 @@
     <span class="add" class:zero={!ready.added}>+{ready.added}</span>
     <span class="del" class:zero={!ready.removed}>−{ready.removed}</span>
   </span>
-  <button
-    class="btn merge"
-    class:busy
-    disabled={busy}
-    use:tip={`Merge into ${ready.into}`}
-    onclick={merge}><Icon name="git" size={13} />{busy ? 'Checking…' : 'Merge'}</button
-  >
+  {#if epicBranch}
+    <!-- The row stays a row: a click on the menu does not open the task. -->
+    <span class="merge" class:busy role="presentation" onclick={(e) => e.stopPropagation()}>
+      <MergeMenu branch={`dispatch/${taskId}`} into={ready.into} {busy} label={busy ? 'Checking…' : 'Merge'} onchoose={(to) => merge(null, to)} />
+    </span>
+  {:else}
+    <button
+      class="btn merge"
+      class:busy
+      disabled={busy}
+      use:tip={`Merge into ${ready.into}`}
+      onclick={merge}><Icon name="git" size={13} />{busy ? 'Checking…' : 'Merge'}</button
+    >
+  {/if}
 {/if}
 
 <style>

@@ -557,11 +557,42 @@ board changes (and in the feed).
   pull request) and the worktree is still there, the same key reads
   `Merged · remove worktree`, its tip `Already in <branch>`, and does only
   that. No diff authoring, no terminals.
+- **A hand-off lands on its task's target** (decision-16): `landsOn` on the
+  task, else on its parent, up the tree, else the trunk. The hand-off forks
+  `dispatch/<task-id>` from it (the local branch, else origin's, which is
+  then made here, following it) and records it as the branch's base, so the
+  review, the conflict preview, Merge (`Merge into release/0.38.0`) and
+  send-back all go into it, and a dependency waits until it has landed on
+  its own target. Work merged into origin's copy of the target counts as
+  landed; work merged into origin's trunk does not, for another target.
+  Hand to… shows where, under the agents: `Lands on main`, with where it
+  comes from in the faint mono (`the trunk`, `from epic-3`, `epic-3's
+  branch`), and its picker lists the trunk, the epic's branch when under
+  one, the targets used lately, local branches and origin's. A choice is
+  written to the task as `landsOn` (the trunk as its name when the parent
+  says otherwise; what it would inherit anyway as nothing), so it outlives
+  the run. An epic with `epicBranch: true` is a branch of its own:
+  its lead makes `dispatch/<epic-id>` from the epic's target as it starts
+  (a child handed off by the person first makes it too), with no worktree,
+  as landings move it by compare-and-swap. Its children fork from it and
+  land on it, each worktree going as it lands. Before each hand-off the
+  epic's target is brought into it, in a checkout made for that and removed
+  after, never the person's, the branch moving only from the tip that was
+  merged; a conflict there goes to the agent the child is handed to, whose
+  brief says to merge the target into its branch first and settle it, and a
+  note on the epic says so. With the last child done the lead puts the
+  epic in Ready to merge instead of completing it (nothing landed on the
+  branch: it goes, and the epic completes as before), and its Merge, in the
+  row and the pane, is a menu: `Merge into <target>` (the default), `Merge
+  into another branch…` (the trunk, branches, origin's), and `Keep as a
+  branch`, which lets the worktree go, keeps the branch and completes the
+  epic. The choices are one list in shared/api.ts, where Open pull request
+  joins them.
 - **What can merge is at the top of the list** (task-69), in both
   readings: a group above every column, `Ready to merge`, holds exactly the
   hand-offs whose branch can merge now: commits not yet in the branch it
   goes into, nothing uncommitted, no agent still at it, not merged
-  already (into that branch, what it tracks, or origin's trunk, so a pull
+  already (into that branch, what it tracks, or origin's copy of it, so a pull
   request merged on the forge counts while the local branch is behind; a
   merge that would change nothing counts, for a squash), and git's
   merge-tree (which writes nothing) finds no conflict.

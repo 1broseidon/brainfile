@@ -44,6 +44,21 @@ export interface TaskView {
   source?: string;
   /** A lead meant to run this document's children (decision-15): on the board, so it can be resumed after a restart. */
   lead?: LeadRecord;
+  /** The branch its hand-off lands on, as written on it (decision-16). */
+  landsOn?: string;
+  /** An epic with a branch of its own, `dispatch/<id>`, for its children (decision-16). */
+  epicBranch?: boolean;
+  /** Where its hand-off lands, its own or inherited (core's targetOf); absent means the trunk. */
+  target?: TargetView;
+}
+
+/** A task's target branch (decision-16): the branch, and the document that sets it. */
+export interface TargetView {
+  branch: string;
+  /** The task itself, or the ancestor it inherits from. */
+  from: string;
+  /** It is `from`'s own branch: an epic with epicBranch. */
+  epicBranch: boolean;
 }
 
 /** `proposed` is a legacy ADR's status before it was accepted. */
@@ -235,6 +250,9 @@ export interface TaskPatch {
   tags?: string[] | null;
   dueDate?: string | null;
   parentId?: string | null;
+  /** The branch its hand-off lands on (decision-16); null inherits again. */
+  landsOn?: string | null;
+  epicBranch?: boolean | null;
 }
 
 export interface RemovedTask {
@@ -487,6 +505,30 @@ export interface ReadyView {
   conflicts: boolean;
 }
 
+/** The branches Hand to… offers to land on (decision-16), as core's branchesOf finds them. */
+export interface BranchesView {
+  /** The trunk's name; null when the repository has none. */
+  trunk: string | null;
+  /** Local branches, the most recently committed first. */
+  local: string[];
+  /** Branches only on origin. */
+  remote: string[];
+  /** Branches hand-offs here were made to land on. */
+  recent: string[];
+}
+
+/**
+ * Where an epic with a branch of its own goes when it is merged (decision-16,
+ * spec-18-8), in the order Merge offers them: its target (the default),
+ * another branch, or kept as a branch, which completes the epic and leaves
+ * the branch. Opening a pull request is the fourth (spec-18-4): it is added
+ * here, and to MergeTo, and the menus offer it.
+ */
+export const MERGE_CHOICES = ['target', 'branch', 'keep'] as const;
+export type MergeChoice = (typeof MERGE_CHOICES)[number];
+/** What mergeReview is asked to do: land on the target (the default), on `branch`, or keep the branch. */
+export type MergeTo = { to: 'target' } | { to: 'branch'; branch: string } | { to: 'keep' };
+
 /** Where an update stands (task-71). */
 export type UpdatePhase = 'idle' | 'checking' | 'downloading' | 'installing' | 'waiting' | 'restarting';
 
@@ -722,8 +764,13 @@ export interface Api {
   onUpdate(listener: (status: UpdateStatus) => void): () => void;
   /** Every hand-off on the board that can merge now, or would conflict, with no agent still at it. */
   readyToMerge(projectId: string): Promise<Result<ReadyView[]>>;
-  /** Merge the hand-off's branch into the checkout's branch, then let its worktree and branch go. */
-  mergeReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
+  /**
+   * Land the hand-off's branch on its target, then let its worktree and branch go. `to` (an epic's
+   * own branch, decision-16) lands it on another branch, or keeps the branch and completes the epic.
+   */
+  mergeReview(projectId: string, taskId: string, to?: MergeTo): Promise<Result<{ message: string }>>;
+  /** The branches a hand-off could land on, for Hand to…'s Lands on picker (decision-16). */
+  branches(projectId: string): Promise<Result<BranchesView>>;
   /** Throw the hand-off's work away: its worktree and its branch. */
   discardReview(projectId: string, taskId: string): Promise<Result<{ message: string }>>;
   /** A phone merged or discarded a hand-off on this board: what can merge is asked again. */
@@ -797,6 +844,7 @@ export const AGENT_METHODS = [
   'readyToMerge',
   'mergeReview',
   'discardReview',
+  'branches',
   'answerPermission',
 ] as const;
 export type AgentMethod = (typeof AGENT_METHODS)[number];
