@@ -106,6 +106,18 @@ export interface Task {
   position?: number;
   /** ISO 8601 timestamp when task was completed (v2 per-task files, set when moved to logs/) */
   completedAt?: string;
+  /**
+   * The branch a hand-off of this task forks from and lands on (decision-16).
+   * Inherited by everything under it unless a nearer document sets its own;
+   * absent all the way up means the repository's trunk. See `landsOnOf`.
+   */
+  landsOn?: string;
+  /**
+   * On an epic (or any document with children): its lead makes the epic its
+   * own branch, `dispatch/<id>`, from the epic's target, and everything under
+   * it forks from and lands on that branch (decision-16). Off by default.
+   */
+  epicBranch?: boolean;
 
   /** Extension fields (x-otto, x-cursor, etc.) are preserved for round-tripping. */
   [key: string]: unknown;

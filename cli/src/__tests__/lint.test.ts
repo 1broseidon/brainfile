@@ -1,7 +1,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { lintCommand } from '../commands/lint';
+import { spawnSync } from 'child_process';
+import { lintBoard, lintCommand } from '../commands/lint';
 import { MemoryLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 
@@ -158,6 +159,27 @@ describe('lint command', () => {
       expect(result.issues.map((i) => [i.code, i.message])).toEqual([
         ['MALFORMED_DISPATCH', 'task-2: dispatch by: must be one of chat, cli, mcp, lead, phone, person'],
       ]);
+    });
+  });
+
+  describe('targets (decision-16)', () => {
+    it('warns when a task lands on a branch that is not in the repository, here or on origin', () => {
+      const brainfilePath = stageFixture('valid-lint.md');
+      const project = path.dirname(path.dirname(brainfilePath));
+      const git = (...args: string[]) => {
+        const r = spawnSync('git', args, { cwd: project, encoding: 'utf-8', env: { ...process.env, GIT_CONFIG_GLOBAL: os.devNull, GIT_CONFIG_NOSYSTEM: '1' } });
+        if (r.status !== 0) throw new Error(r.stderr);
+      };
+      git('init', '-q', '-b', 'main');
+      git('-c', 'user.name=T', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'init');
+      git('branch', 'release');
+      const board = path.join(path.dirname(brainfilePath), 'board');
+      fs.writeFileSync(path.join(board, 'task-1.md'), '---\nid: task-1\ntitle: One\ncolumn: todo\nlandsOn: release\n---\n');
+      fs.writeFileSync(path.join(board, 'task-2.md'), '---\nid: task-2\ntitle: Two\ncolumn: todo\nlandsOn: release/2.0\n---\n');
+
+      const report = lintBoard(brainfilePath);
+      const targets = report.issues.filter((i) => i.code?.startsWith('lands-on'));
+      expect(targets).toEqual([expect.objectContaining({ type: 'warning', code: 'lands-on-missing', message: expect.stringContaining('task-2 lands on release/2.0') })]);
     });
   });
 

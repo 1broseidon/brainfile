@@ -15,6 +15,7 @@ export * from './related';
 export * from './boards';
 export * from './consolidate';
 export * from './worktree';
+export * from './target';
 export * from './landingLock';
 export * from './fix';
 export * from './runFiles';

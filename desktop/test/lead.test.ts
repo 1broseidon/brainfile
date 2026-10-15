@@ -94,7 +94,7 @@ test('ready: a dependency complete on the board but not landed is still waited o
 
 // ── The lead, against fakes ──────────────────────────────────────────────────
 
-function fake(docs: TreeDoc[], options: { policy?: PermissionPolicy; limit?: number } = {}) {
+function fake(docs: TreeDoc[], options: { policy?: PermissionPolicy; limit?: number; extra?: Partial<LeadDeps> } = {}) {
   let leads: Leads;
   const prompts: string[] = [];
   const views: LeadView[] = [];
@@ -143,6 +143,7 @@ function fake(docs: TreeDoc[], options: { policy?: PermissionPolicy; limit?: num
       pending.push(fn);
       return 0 as unknown as ReturnType<typeof setTimeout>;
     },
+    ...options.extra,
   };
   leads = new Leads(deps);
   return {
@@ -355,4 +356,66 @@ test('a session let go while it waited is briefed again, as carrying on; three f
   await g.endTurns();
   assert.equal(g.views.at(-1)?.state, 'paused');
   assert.match(g.views.at(-1)?.note ?? '', /its turn was stopped/);
+});
+
+// ── An epic with a branch of its own (decision-16) ──────────────────────────
+
+test('an epic with a branch of its own: the lead makes it as it starts and says so; one that cannot be made starts nothing', async () => {
+  const made: string[] = [];
+  const f = fake(board(), {
+    extra: {
+      branch: (_p, epicId) => {
+        made.push(epicId);
+        return { ok: true, value: `dispatch/${epicId}` };
+      },
+    },
+  });
+  assert.ok((await f.leads.start('/repo', 'epic-1', 'claude')).ok);
+  assert.deepEqual(made, ['epic-1']);
+  assert.match(f.prompts[0], /epic-1 has a branch of its own, dispatch\/epic-1: each child forks from it and lands on it/);
+  assert.match(f.prompts[0], /landed on their own target/);
+
+  const g = fake(board(), { extra: { branch: () => ({ ok: false, error: 'There is no branch release' }) } });
+  const refused = await g.leads.start('/repo', 'epic-1', 'claude');
+  assert.equal((refused as { error: string }).error, "epic-1's branch could not be made: There is no branch release");
+  assert.equal(g.prompts.length, 0);
+  assert.equal(g.records.length, 0);
+
+  const plain = fake(board(), { extra: { branch: () => ({ ok: true, value: null }) } });
+  await plain.leads.start('/repo', 'epic-1', 'claude');
+  assert.doesNotMatch(plain.prompts[0], /a branch of its own/);
+});
+
+test('its last child done, an epic with a branch of its own waits in Ready to merge instead of being completed', async () => {
+  const docs = board();
+  const offered: string[] = [];
+  const f = fake(docs, {
+    extra: {
+      branch: (_p, epicId) => ({ ok: true, value: `dispatch/${epicId}` }),
+      offer: async (_p, epicId) => {
+        offered.push(epicId);
+        return { ok: true, value: { branch: `dispatch/${epicId}`, into: 'release' } };
+      },
+    },
+  });
+  await f.leads.start('/repo', 'epic-1', 'claude');
+  await f.endTurns();
+  for (const d of docs) if (d.id !== 'epic-1') d.done = true;
+  f.leads.boardChanged('/repo');
+  await f.flush();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(offered, ['epic-1']);
+  assert.deepEqual(f.completed, []);
+  assert.equal(f.views.at(-1)?.state, 'done');
+  assert.equal(f.views.at(-1)?.note, 'Every child is done: epic-1 is in Ready to merge, dispatch/epic-1 into release.');
+
+  // Nothing on its branch to merge: completed, as before.
+  const g = fake(board(), { extra: { offer: async () => ({ ok: true, value: null }) } });
+  await g.leads.start('/repo', 'epic-1', 'claude');
+  await g.endTurns();
+  for (const d of g.docs) if (d.id !== 'epic-1') d.done = true;
+  g.leads.boardChanged('/repo');
+  await g.flush();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(g.completed, ['epic-1']);
 });

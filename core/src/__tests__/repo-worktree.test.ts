@@ -11,15 +11,25 @@ import * as path from 'path';
 import { spawn, spawnSync } from 'child_process';
 import { currentHost } from '../dispatchRecord';
 import {
+  bringIn,
+  branchesOf,
   canBranch,
   collisions,
   discardReview,
+  handOffTarget,
+  keepBranch,
   landingLockOf,
   landReview,
+  lintLandsOn,
+  offerEpicBranch,
   onlyReads,
+  prepareBranch,
+  prepareEpicBranch,
+  prepareTarget,
   prepareWorktree,
   readLandingLock,
   readyToMerge,
+  refreshTarget,
   releaseReader,
   reviewOf,
   runChecks,
@@ -749,6 +759,235 @@ test('a branch that is nowhere cannot be forked from; one that only reads forks 
   assert.equal(reader.branch, null);
   assert.equal(reader.base, 'release');
   assert.equal(git(['rev-parse', 'HEAD'], reader.path), git(['rev-parse', 'release'], repo));
+});
+
+test('work merged into origin\'s copy of its target has landed; work merged into origin\'s trunk has not, for another target', () => {
+  git(['branch', 'release'], repo);
+  const origin = path.join(base, 'origin.git');
+  git(['clone', '-q', '--bare', repo, origin], base);
+  git(['remote', 'add', 'origin', origin], repo);
+  git(['fetch', '-q', 'origin'], repo);
+  git(['remote', 'set-head', 'origin', 'main'], repo);
+
+  const onRelease = prepareWorktree(repo, 'task-1', root, false, 'release')!;
+  work(onRelease.path, 'a.txt', 'a\n');
+  const onMain = prepareWorktree(repo, 'task-2', root, false, 'release')!;
+  work(onMain.path, 'b.txt', 'b\n');
+  // One pull request merged into release on the forge, the other into main.
+  git(['push', '-q', 'origin', 'dispatch/task-1:release'], repo);
+  git(['push', '-q', 'origin', 'dispatch/task-2:main'], repo);
+  git(['fetch', '-q', 'origin'], repo);
+
+  assert.equal(reviewOf(repo, 'task-1')!.merged, true);
+  assert.equal(unlanded(repo, 'task-1'), false);
+  assert.equal(reviewOf(repo, 'task-2')!.merged, false);
+  assert.equal(unlanded(repo, 'task-2'), true);
+});
+
+test('Merge can land on another branch than the one it goes into, made from origin\'s when only there', async () => {
+  git(['branch', 'release'], repo);
+  const wt = prepareWorktree(repo, 'task-1', root, false, 'release')!;
+  work(wt.path, 'a.txt', 'a\n');
+  const origin = path.join(base, 'origin.git');
+  git(['clone', '-q', '--bare', repo, origin], base);
+  git(['remote', 'add', 'origin', origin], repo);
+  git(['push', '-q', 'origin', 'main:hotfix'], repo);
+  git(['fetch', '-q', 'origin'], repo);
+  const releaseTip = git(['rev-parse', 'release'], repo);
+
+  assert.match((await refused('task-1', { into: 'nowhere' })).error, /no branch nowhere/);
+  assert.match(await landed('task-1', { into: 'hotfix' }), /into hotfix/);
+  assert.equal(git(['show', 'hotfix:a.txt'], repo), 'a');
+  assert.equal(git(['rev-parse', 'release'], repo), releaseTip);
+  assert.equal(git(['rev-parse', '--abbrev-ref', 'hotfix@{upstream}'], repo), 'origin/hotfix');
+});
+
+// ── An epic's own branch (decision-16) ──────────────────────────────────────
+
+test('an epic\'s branch is made from its target with no worktree; its children fork from it, land on it and go', async () => {
+  git(['branch', 'release'], repo);
+  work(repo, 'main-only.txt', 'main\n');
+  const releaseTip = git(['rev-parse', 'release'], repo);
+
+  const made = prepareBranch(repo, 'epic-1', 'release')!;
+  assert.deepEqual(made, { branch: 'dispatch/epic-1', base: 'release', made: true });
+  assert.equal(git(['rev-parse', 'dispatch/epic-1'], repo), releaseTip);
+  assert.equal(git(['config', '--get', 'branch.dispatch/epic-1.brainfileBase'], repo), 'release');
+  assert.equal(reviewOf(repo, 'epic-1'), null);
+  // Found again, as it was.
+  assert.deepEqual(prepareBranch(repo, 'epic-1', 'main'), { branch: 'dispatch/epic-1', base: 'release', made: false });
+
+  const child = prepareWorktree(repo, 'task-1', root, false, 'dispatch/epic-1')!;
+  assert.equal(child.base, 'dispatch/epic-1');
+  work(child.path, 'a.txt', 'a\n');
+  assert.equal(unlanded(repo, 'task-1'), true);
+  assert.deepEqual(readyToMerge(repo).map((r) => [r.taskId, r.into]), [['task-1', 'dispatch/epic-1']]);
+  assert.match(await landed('task-1', { title: 'One' }), /into dispatch\/epic-1/);
+  assert.equal(git(['show', 'dispatch/epic-1:a.txt'], repo), 'a');
+  assert.equal(git(['rev-parse', 'release'], repo), releaseTip);
+  // The child's worktree and branch went as it landed; what waits on it may go.
+  assert.ok(!branches().includes('dispatch/task-1'));
+  assert.equal(unlanded(repo, 'task-1'), false);
+
+  // Its last child done, the epic is checked out to be merged: one item in Ready to merge, into its target.
+  prepareWorktree(repo, 'epic-1', root);
+  const review = reviewOf(repo, 'epic-1')!;
+  assert.equal(review.into, 'release');
+  assert.equal(review.ahead, 2);
+  assert.deepEqual(readyToMerge(repo).map((r) => [r.taskId, r.into]), [['epic-1', 'release']]);
+  assert.match(await landed('epic-1', { title: 'The epic' }), /into release/);
+  assert.equal(git(['show', 'release:a.txt'], repo), 'a');
+  assert.ok(!branches().includes('dispatch/epic-1'));
+});
+
+test('an epic kept as a branch lets its worktree go and keeps the branch', () => {
+  prepareBranch(repo, 'epic-1');
+  const wt = prepareWorktree(repo, 'epic-1', root)!;
+  work(wt.path, 'a.txt', 'a\n', false);
+  assert.throws(() => keepBranch(repo, 'epic-1'), /not committed/);
+  work(wt.path, 'a.txt', 'a\n');
+  assert.deepEqual(keepBranch(repo, 'epic-1'), { message: 'Kept dispatch/epic-1 as a branch' });
+  assert.ok(!fs.existsSync(wt.path));
+  assert.ok(branches().includes('dispatch/epic-1'));
+  assert.equal(git(['show', 'dispatch/epic-1:a.txt'], repo), 'a');
+  assert.throws(() => keepBranch(repo, 'epic-1'), /no worktree/);
+});
+
+test('the target is brought into an epic\'s branch: a fast-forward with nothing of its own, else a merge, aside', async () => {
+  prepareBranch(repo, 'epic-1');
+  work(repo, 'one.txt', 'one\n');
+  const ff = await bringIn(repo, 'epic-1');
+  assert.deepEqual(ff, { ok: true, moved: true, message: 'Brought main into dispatch/epic-1' });
+  assert.equal(git(['rev-parse', 'dispatch/epic-1'], repo), git(['rev-parse', 'main'], repo));
+  assert.deepEqual(await bringIn(repo, 'epic-1'), { ok: true, moved: false, message: 'dispatch/epic-1 already has main' });
+
+  // A child lands on the epic's branch; main moves on.
+  const child = prepareWorktree(repo, 'task-1', root, false, 'dispatch/epic-1')!;
+  work(child.path, 'a.txt', 'a\n');
+  await landed('task-1');
+  work(repo, 'two.txt', 'two\n');
+  const mainTip = git(['rev-parse', 'main'], repo);
+  const before = git(['worktree', 'list', '--porcelain'], repo);
+  const merged = await bringIn(repo, 'epic-1');
+  assert.ok(merged.ok && merged.moved);
+  assert.equal(git(['log', '-1', '--format=%s', 'dispatch/epic-1'], repo), 'Merge main into dispatch/epic-1');
+  assert.equal(git(['rev-parse', 'dispatch/epic-1^2'], repo), mainTip);
+  assert.equal(git(['show', 'dispatch/epic-1:a.txt'], repo), 'a');
+  // Nothing left behind, and the person's checkout untouched.
+  assert.equal(git(['worktree', 'list', '--porcelain'], repo), before);
+  assert.equal(git(['status', '--porcelain'], repo), '');
+  // Its review shows its own work, not what main brought.
+  prepareWorktree(repo, 'epic-1', root);
+  const review = reviewOf(repo, 'epic-1')!;
+  assert.deepEqual(review.files.map((f) => f.path), ['a.txt']);
+  // Checked out, it is left alone.
+  assert.match((await bringIn(repo, 'epic-1')).ok ? '' : 'refused', /refused/);
+});
+
+test('a conflict bringing the target in names the files and what it met, and changes nothing', async () => {
+  prepareBranch(repo, 'epic-1');
+  const child = prepareWorktree(repo, 'task-1', root, false, 'dispatch/epic-1')!;
+  work(child.path, 'README.md', 'the epic says\n');
+  await landed('task-1');
+  work(repo, 'README.md', 'main says\n');
+  const tip = git(['rev-parse', 'dispatch/epic-1'], repo);
+  const result = await bringIn(repo, 'epic-1');
+  assert.equal(result.ok, false);
+  assert.ok(!result.ok && result.kind === 'conflict');
+  if (!result.ok && result.kind === 'conflict') {
+    assert.deepEqual(result.files, ['README.md']);
+    assert.equal(result.into, 'main');
+    assert.equal(result.branch, 'dispatch/epic-1');
+    assert.deepEqual(result.collided.map((c) => c.subject), ['edit README.md']);
+  }
+  assert.equal(git(['rev-parse', 'dispatch/epic-1'], repo), tip);
+  assert.equal(git(['worktree', 'list', '--porcelain'], repo).split('\n').filter((l) => l.startsWith('worktree ')).length, 2);
+  assert.match((await bringIn(repo, 'epic-404')).ok ? '' : 'refused', /refused/);
+});
+
+test('the branches a hand-off could land on: local first, origin\'s, and the targets used here, never a hand-off\'s or the board\'s', () => {
+  git(['branch', 'release/1.0'], repo);
+  const origin = path.join(base, 'origin.git');
+  git(['clone', '-q', '--bare', repo, origin], base);
+  git(['remote', 'add', 'origin', origin], repo);
+  git(['push', '-q', 'origin', 'main:hotfix'], repo);
+  git(['fetch', '-q', 'origin'], repo);
+  prepareWorktree(repo, 'task-1', root, false, 'release/1.0');
+  prepareBranch(repo, 'epic-1');
+  const list = branchesOf(repo);
+  assert.equal(list.trunk, 'main');
+  assert.deepEqual([...list.local].sort(), ['main', 'release/1.0']);
+  assert.deepEqual(list.remote, ['hotfix']);
+  assert.deepEqual(list.recent, ['release/1.0']);
+  assert.deepEqual(branchesOf(base), { trunk: null, local: [], remote: [], recent: [] });
+});
+
+test('lint: a target that is no branch here or on origin, or no branch name at all, is a warning', () => {
+  git(['branch', 'release'], repo);
+  const issues = lintLandsOn(repo, [
+    { id: 'task-1', landsOn: 'release' },
+    { id: 'task-2', landsOn: 'release/2.0' },
+    { id: 'task-3', landsOn: 'two words' },
+    { id: 'task-4' },
+  ]);
+  assert.deepEqual(issues.map((i) => [i.code, i.message.split(' ')[0]]), [
+    ['lands-on-missing', 'task-2'],
+    ['lands-on-invalid', 'task-3:'],
+  ]);
+  assert.deepEqual(lintLandsOn(base, [{ id: 'task-2', landsOn: 'release/2.0' }]), []);
+});
+
+// ── The target, read from the board (decision-16) ────────────────────────────
+
+/** A document on the board, as its frontmatter lines. */
+function onBoard(id: string, lines: string[] = []): void {
+  fs.writeFileSync(path.join(repo, '.brainfile', 'board', `${id}.md`), ['---', `id: ${id}`, `title: ${id}`, 'column: todo', ...lines, '---', ''].join('\n'));
+}
+
+test('the board says where a hand-off forks from and lands: its own landsOn, its parent\'s, an epic\'s branch, else the trunk', () => {
+  git(['branch', 'release'], repo);
+  onBoard('epic-1', ['landsOn: release', 'epicBranch: true']);
+  onBoard('task-2', ['parentId: epic-1']);
+  onBoard('epic-2', ['landsOn: release']);
+  onBoard('task-3', ['parentId: epic-2']);
+  assert.deepEqual(handOffTarget(repo, 'task-1'), {});
+  assert.deepEqual(handOffTarget(repo, 'task-3'), { base: 'release' });
+  assert.deepEqual(handOffTarget(repo, 'epic-1'), { base: 'release' });
+  assert.deepEqual(handOffTarget(repo, 'task-2'), { base: 'dispatch/epic-1', epic: { id: 'epic-1', branch: 'dispatch/epic-1', target: 'release' } });
+
+  // A child handed off before any lead ran: the epic's branch is made from the epic's target first.
+  assert.equal(prepareTarget(repo, 'task-1'), undefined);
+  assert.equal(prepareTarget(repo, 'task-2'), 'dispatch/epic-1');
+  assert.equal(git(['config', '--get', 'branch.dispatch/epic-1.brainfileBase'], repo), 'release');
+  assert.equal(prepareWorktree(repo, 'task-2', root, false, prepareTarget(repo, 'task-2'))!.base, 'dispatch/epic-1');
+  // Only an epic with epicBranch has one.
+  assert.equal(prepareEpicBranch(repo, 'epic-2'), null);
+  assert.equal(prepareEpicBranch(repo, 'epic-1'), 'dispatch/epic-1');
+});
+
+test('before a hand-off from an epic\'s branch its target is brought in; its last child landed, it is put up to merge', async () => {
+  onBoard('epic-1', ['epicBranch: true']);
+  onBoard('task-2', ['parentId: epic-1']);
+  assert.equal(await refreshTarget(repo, 'task-1'), null);
+  assert.equal(offerEpicBranch(repo, 'epic-1'), null);
+  assert.equal(prepareEpicBranch(repo, 'epic-1'), 'dispatch/epic-1');
+  // Nothing on it yet: nothing to merge, and the branch goes.
+  assert.equal(offerEpicBranch(repo, 'epic-1'), null);
+  assert.ok(!branches().includes('dispatch/epic-1'));
+
+  prepareEpicBranch(repo, 'epic-1');
+  work(repo, 'main.txt', 'main\n');
+  const refreshed = await refreshTarget(repo, 'task-2');
+  assert.ok(refreshed?.ok && refreshed.moved);
+  const child = prepareWorktree(repo, 'task-2', root, false, prepareTarget(repo, 'task-2'))!;
+  assert.ok(fs.existsSync(path.join(child.path, 'main.txt')));
+  work(child.path, 'b.txt', 'b\n');
+  await landed('task-2');
+  assert.deepEqual(offerEpicBranch(repo, 'epic-1'), { branch: 'dispatch/epic-1', into: 'main' });
+  assert.deepEqual(readyToMerge(repo).map((r) => [r.taskId, r.into]), [['epic-1', 'main']]);
+  // Offered again, it is the same item.
+  assert.deepEqual(offerEpicBranch(repo, 'epic-1'), { branch: 'dispatch/epic-1', into: 'main' });
+  assert.equal(offerEpicBranch(repo, 'task-2'), null);
 });
 
 // ── The landing lock, across processes (task-76) ────────────────────────────

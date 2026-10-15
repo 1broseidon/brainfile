@@ -99,6 +99,8 @@ export type {
   LintDocGraphOptions,
   DocPlace,
 } from './docGraph';
+export { epicBranchOf, targetOf, landsOnOf, isBranchName } from './landsOn';
+export type { LandsOn } from './landsOn';
 export {
   DECISION_KINDS,
   DECISION_STANCES,

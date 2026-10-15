@@ -56,12 +56,19 @@ import {
   type SessionContext,
 } from '@brainfile/core/dispatch';
 import {
+  branchesOf,
   discardReview,
+  handOffTarget,
+  keepBranch,
   landReview,
   locateBoard,
+  offerEpicBranch,
   onlyReads,
+  prepareEpicBranch,
+  prepareTarget,
   prepareWorktree,
   readyToMerge,
+  refreshTarget,
   releaseReader,
   reviewOf,
   runChecks,
@@ -69,6 +76,7 @@ import {
   uncommittedIn,
   unlanded,
   type Landing,
+  type Refresh,
   type Worktree,
 } from '@brainfile/core/repo';
 import { DESK_ENV, DeskBridge, deskTools } from './desk';
@@ -83,12 +91,16 @@ import type {
   AgentMessage,
   AgentRequest,
   AgentRun,
+  AgentServer,
+  BranchesView,
   ChatTurn,
   DispatchRecord,
   DispatchSettings,
   LeadRecord,
   HostReply,
   LiveAgents,
+  MergeTo,
+  ModelOption,
   PermissionAsk,
   Result,
   ReadyView,
@@ -281,8 +293,41 @@ function reserve(projectId: string, taskId: string): Result<() => void> {
 }
 
 /**
+ * Before a hand-off from an epic's own branch, the epic's target is brought
+ * into it (decision-16), so the branch does not drift: what came of it, for
+ * startDispatch. Null when its target is not an epic's branch.
+ */
+async function refreshFor(projectId: string, taskId: string): Promise<Refresh | null> {
+  try {
+    return await refreshTarget(projectId, taskId);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A conflict bringing the epic's target into its branch goes to an agent, as
+ * a landing's does (decision-12): the one the task is handed to merges the
+ * target into its own branch first and settles it, and lands it on the
+ * epic's branch with its work. The epic's log says so. What its brief adds.
+ */
+function settleFirst(projectId: string, taskId: string, behind: Refresh | null | undefined): string {
+  if (!behind || behind.ok || behind.kind !== 'conflict') return '';
+  const { branch, into, files, collided } = behind;
+  const epicId = handOffTarget(projectId, taskId).epic?.id;
+  if (epicId) void callHost<Result>('noteTask', projectId, epicId, `Bringing ${into} into ${branch} conflicts in ${files.join(', ')}: handed to ${taskId}'s agent to settle on its branch.`);
+  const met = collided.map((c) => `${c.sha} ${c.subject}${c.taskId ? ` (${c.taskId})` : ''}`).join('; ');
+  return (
+    `\n\nBefore you start: ${branch}, which your branch was made from, is behind ${into}, and bringing ${into} in conflicts in ${files.join(', ')}.` +
+    (met ? ` On ${into}: ${met}.` : '') +
+    ` So, this once, first merge ${into} into your branch (git merge ${into}), keep what both sides meant and commit the merge; then do the task. It lands on ${branch} with your work.`
+  );
+}
+
+/**
  * A hand-off: its worktree, its brief, and the agent started on it. Hand to…
  * and the chat's `dispatch` both come here; `from` is the chat turn that asked.
+ * `behind` is what bringing an epic's target into its branch came to.
  */
 function startDispatch(
   projectId: string,
@@ -290,7 +335,8 @@ function startDispatch(
   agentId: AgentId,
   model?: string,
   from?: string,
-  effort?: string
+  effort?: string,
+  behind?: Refresh | null
 ): Result<{ run: AgentRun; worktree: Worktree | null }> {
   let prompt: string;
   let worktree: Worktree | null;
@@ -302,8 +348,10 @@ function startDispatch(
     const waits = dirs ? (task?.dependsOn ?? []).filter((ref) => !ref.includes(':') && (!!findV2Task(dirs, ref) || unlanded(projectId, ref))) : [];
     if (waits.length) return { ok: false, error: `${taskId} waits on ${waits.join(', ')}: hand it off once ${waits.length === 1 ? 'it has' : 'they have'} landed` };
     const contract = task?.contract;
-    worktree = prepareWorktree(projectId, taskId, undefined, onlyReads(contract));
-    prompt = brief(projectId, taskId, worktree, leads.leadOver(projectId, taskId)?.epicId ?? null);
+    // It forks from and lands on its target (decision-16): its landsOn, inherited, an epic's own branch, else the trunk.
+    const base = prepareTarget(projectId, taskId);
+    worktree = prepareWorktree(projectId, taskId, undefined, onlyReads(contract), base);
+    prompt = brief(projectId, taskId, worktree, leads.leadOver(projectId, taskId)?.epicId ?? null, base, worktree?.branch ? settleFirst(projectId, taskId, behind) : '');
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -335,17 +383,18 @@ async function dispatch(projectId: string, taskId: string, agentId: AgentId, mod
     if (!started.ok) return started;
     return started.value.run ? { ok: true, value: started.value.run } : { ok: false, error: `${taskId}'s lead did not start` };
   }
-  const handed = handOff(projectId, taskId, agentId, model, effort);
+  const behind = await refreshFor(projectId, taskId);
+  const handed = handOff(projectId, taskId, agentId, model, effort, behind);
   if (handed.ok) void callHost<Result>('recordDispatch', projectId, taskId, dispatchRecord(agentId, model, effort, 'person'));
   return handed;
 }
 
 /** A hand-off with no record and no lead: a send-back is the same hand-off going on. */
-function handOff(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string): Result<AgentRun> {
+function handOff(projectId: string, taskId: string, agentId: AgentId, model?: string, effort?: string, behind?: Refresh | null): Result<AgentRun> {
   const held = reserve(projectId, taskId);
   if (!held.ok) return held;
   try {
-    const started = startDispatch(projectId, taskId, agentId, model, undefined, effort);
+    const started = startDispatch(projectId, taskId, agentId, model, undefined, effort, behind);
     return started.ok ? { ok: true, value: started.value.run } : started;
   } finally {
     held.value();
@@ -452,9 +501,20 @@ const leads = new Leads({
     const landed = await landAndSettle(projectId, taskId);
     return { ok: landed.ok, said: landed.ok ? `${taskId} was landed: ${landed.value.message}` : `${taskId} could not land: ${landed.error}` };
   },
+  branch: (projectId, epicId) => attempt(() => prepareEpicBranch(projectId, epicId)),
+  offer: async (projectId, epicId) => attempt(() => offerEpicBranch(projectId, epicId)),
   emit: (lead) => emit({ kind: 'lead', lead }),
   later: (ms, fn) => setTimeout(fn, ms),
 });
+
+/** What a git step came to, as a Result: what it threw is the error. */
+function attempt<T>(work: () => T): Result<T> {
+  try {
+    return { ok: true, value: work() };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
 
 /** A lead left on the epic by a restart, or a paused one: resumed. */
 async function resumeLead(projectId: string, epicId: string): Promise<Result> {
@@ -511,6 +571,8 @@ const desk = new DeskBridge(
           return { ok: true, value: { run: started.value.run, branch: null, lead: true } };
         }
       }
+      // Before each hand-off from an epic's own branch, the epic's target is brought in (decision-16).
+      const behind = await refreshFor(grant.projectId, taskId);
       // Who asked goes on the task first, as Hand to… sets the assignee first.
       // The task is held across that write, so nothing else starts on it meanwhile.
       const held = reserve(grant.projectId, taskId);
@@ -519,7 +581,7 @@ const desk = new DeskBridge(
       let started: ReturnType<typeof startDispatch>;
       try {
         written = await callHost<Result>('recordDispatch', grant.projectId, taskId, dispatchRecord(agentId, model, effort, grant.lead ? 'lead' : 'chat'));
-        started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id, effort);
+        started = startDispatch(grant.projectId, taskId, agentId, model, sessions.get(grant.key)?.run?.id, effort, behind);
       } finally {
         held.value();
       }
@@ -691,11 +753,13 @@ function review(projectId: string, taskId: string): Result<ReviewView | null> {
  * Merge lands the hand-off (decision-12): an agent still at it refuses, and
  * so does a hand-off starting on it; the rest is landReview's, in the task's
  * worktree, with the contract's validation as its check. A check that fails
- * merges nothing and says the command and its last lines.
+ * merges nothing and says the command and its last lines. `to` is where an
+ * epic's own branch goes (decision-16): its target, another branch, or kept.
  */
-async function checkThenMerge(projectId: string, taskId: string): Promise<Result<{ message: string }>> {
+async function checkThenMerge(projectId: string, taskId: string, to?: MergeTo): Promise<Result<{ message: string }>> {
+  if (to?.to === 'keep') return keepAsBranch(projectId, taskId);
   const release = leads.landing(projectId, taskId);
-  const landed = await landAndSettle(projectId, taskId).finally(release);
+  const landed = await landAndSettle(projectId, taskId, to?.to === 'branch' ? to.branch : undefined).finally(release);
   // The lead over it hears how it went (decision-15).
   leads.wake(projectId, taskId, landed.ok ? `${taskId} was merged by the person: ${landed.value.message}` : `${taskId} did not merge: ${landed.error.split('\n')[0]}`);
   return landed;
@@ -704,15 +768,17 @@ async function checkThenMerge(projectId: string, taskId: string): Promise<Result
 /**
  * Lands a hand-off, then settles its task on the board: done, unless
  * subtasks are left (then it goes back to work). A conflict, or a check that
- * fails once the trunk is in, goes back to an agent first (decision-12).
+ * fails once its target is in, goes back to an agent first (decision-12).
+ * `into` lands it on another branch than its own target.
  */
-async function landAndSettle(projectId: string, taskId: string): Promise<Result<{ message: string }>> {
-  const landing = await land(projectId, taskId);
+async function landAndSettle(projectId: string, taskId: string, into?: string): Promise<Result<{ message: string }>> {
+  const landing = await land(projectId, taskId, into);
   if (landing.ok) {
     const located = locateBoard(projectId, { materialize: false });
     const open = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
     if (!open) return { ok: true, value: { message: landing.message } };
     const settled = await callHost<Result<{ completed: boolean; left: number }>>('settleLanded', projectId, taskId);
+    if (settled.ok && settled.value.completed) offerIfLast(projectId, taskId);
     if (!settled.ok) return { ok: true, value: { message: `${landing.message}. ${taskId} stays open: ${settled.error}` } };
     return {
       ok: true,
@@ -757,8 +823,33 @@ async function sendBackLanding(
   return { sent: true, said: `${taskId} ${what}: sent back to ${nameOf(agentId)} to settle (${round})` };
 }
 
-/** One landing of a task's hand-off, with its contract's checks. */
-async function land(projectId: string, taskId: string): Promise<Landing> {
+/**
+ * The last child of an epic with a branch of its own landed on it, with no
+ * lead over it: the epic is put up to merge (decision-16). A lead does this
+ * itself when it finishes.
+ */
+function offerIfLast(projectId: string, taskId: string): void {
+  if (leads.leadOver(projectId, taskId)) return;
+  try {
+    const epic = handOffTarget(projectId, taskId).epic;
+    const tree = epic ? readTree(projectId, epic.id) : null;
+    if (epic && tree && !tree.epic.done && tree.children.length && tree.children.every((c) => c.done)) offerEpicBranch(projectId, epic.id);
+  } catch {
+    /* git refused: the epic stays as it is, for the person */
+  }
+}
+
+/** An epic's own branch kept as a branch (decision-16): its worktree goes, the branch stays, and the epic is done. */
+async function keepAsBranch(projectId: string, taskId: string): Promise<Result<{ message: string }>> {
+  const kept = settle(projectId, taskId, () => keepBranch(projectId, taskId));
+  if (!kept.ok) return kept;
+  const done = await callHost<Result>('completeTask', projectId, taskId);
+  leads.wake(projectId, taskId, `${taskId} was kept as a branch by the person: ${kept.value.message}`);
+  return done.ok ? { ok: true, value: { message: `${kept.value.message}; ${taskId} is done` } } : { ok: true, value: { message: `${kept.value.message}. ${taskId} stays open: ${done.error}` } };
+}
+
+/** One landing of a task's hand-off, with its contract's checks; `into` lands it elsewhere than its target. */
+async function land(projectId: string, taskId: string, into?: string): Promise<Landing> {
   const live = liveDispatch(projectId, taskId);
   if (live) return { ok: false, kind: 'refused', error: `${nameOf(live.agentId)} is still working on ${taskId}` };
   if (reserved.has(`${projectId}\n${taskId}`)) return { ok: false, kind: 'refused', error: `A hand-off is starting on ${taskId}` };
@@ -772,7 +863,7 @@ async function land(projectId: string, taskId: string): Promise<Landing> {
   } catch (err) {
     return { ok: false, kind: 'refused', error: err instanceof Error ? err.message : String(err) };
   }
-  return landReview(projectId, taskId, { title, check: commands.length ? (at) => runChecks(at, commands, agentEnv()) : undefined });
+  return landReview(projectId, taskId, { title, check: commands.length ? (at) => runChecks(at, commands, agentEnv()) : undefined, ...(into ? { into } : {}) });
 }
 
 /** The board's hand-offs that can merge now; one an agent is still at is not ready yet. */
@@ -844,6 +935,7 @@ const handlers: Record<AgentRequest['method'], (...args: any[]) => unknown> = {
   readyToMerge: ready,
   mergeReview: checkThenMerge,
   discardReview: (projectId: string, taskId: string) => settle(projectId, taskId, () => discardReview(projectId, taskId)),
+  branches: (projectId: string): Result<BranchesView> => attempt(() => branchesOf(projectId)),
   answerPermission,
 };
 

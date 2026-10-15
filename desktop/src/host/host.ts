@@ -34,6 +34,7 @@ import {
   resolveDocType,
   sourceKey,
   sourcesOf,
+  targetOf,
   toggleSubtasksInFile,
   writeTaskFile,
   type DocGraph,
@@ -163,11 +164,13 @@ function sharing(folder: string): { url: string | null; ref: string | null } {
 
 // ── Reading ─────────────────────────────────────────────────────────────────
 
-function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph): TaskView {
+function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph, all?: Map<string, Task>): TaskView {
   const description = task.description ?? (body ? extractDescription(body) : undefined);
   const kind = resolveDocType(task.type, types);
   const decisions = idList(task.decisions);
   const retired = graph ? graph.decisionsOf(task.id).filter((d) => d.isDecision && d.status && d.status !== 'current' && d.status !== 'proposed') : [];
+  // Where its hand-off lands, inherited up the tree (decision-16); none is the trunk.
+  const target = all ? targetOf(all, task.id) : null;
   return {
     id: task.id,
     title: task.title,
@@ -191,6 +194,9 @@ function toView(task: Task, body?: string, types?: TypesConfig, graph?: DocGraph
     completedAt: task.completedAt,
     ...(text(task.source) ? { source: text(task.source) } : {}),
     ...(leadOf(task) ? { lead: leadOf(task) } : {}),
+    ...(text(task.landsOn) ? { landsOn: text(task.landsOn)!.trim() } : {}),
+    ...(task.epicBranch === true ? { epicBranch: true } : {}),
+    ...(target ? { target } : {}),
   };
 }
 
@@ -277,6 +283,7 @@ function snapshot(board: OpenBoard): BoardSnapshot {
   const open = readTasksDir(boardDir);
   const archived = readTasksDir(logsDir);
   const graph = buildDocGraph([...open, ...archived].map((d) => d.task), { types });
+  const all = new Map([...archived, ...open].map((d) => [d.task.id, d.task]));
   const isDecision = (task: Task) => resolveDocType(task.type, types).role === 'decision';
   const related = relatedBoards(board.brainfilePath);
   const sisters = related.boards();
@@ -287,14 +294,14 @@ function snapshot(board: OpenBoard): BoardSnapshot {
   // A decision has no column: it is not work, and has its own view.
   const tasks = built.columns.flatMap((column) =>
     column.tasks.filter((task) => !isDecision(task)).map((task) => {
-      const view = toView({ ...task, column: column.id }, undefined, types, graph);
+      const view = toView({ ...task, column: column.id }, undefined, types, graph, all);
       const blocked = blockedOn(task);
       return blocked.length ? { ...view, blockedOn: blocked } : view;
     })
   );
   const done = archived
     .filter((doc) => !isDecision(doc.task))
-    .map((doc) => toView(doc.task, doc.body, types))
+    .map((doc) => toView(doc.task, doc.body, types, undefined, all))
     .sort((a, b) => (b.completedAt ?? '').localeCompare(a.completedAt ?? ''));
   // The latest completions, and everything completed under a document that
   // is shown, however old: a child stays under its open parent until the
@@ -424,11 +431,10 @@ function getTask(projectId: string, taskId: string): Result<TaskDetail> {
     .map((line) => line.replace(/^\s*[-*]\s+/, '').trim())
     .filter(Boolean);
   const types = readBoardConfig(board.brainfilePath)?.config?.types;
-  const graph = buildDocGraph(
-    [...readTasksDir(getV2Dirs(board.brainfilePath).boardDir), ...readTasksDir(getV2Dirs(board.brainfilePath).logsDir)].map((d) => d.task),
-    { types }
-  );
-  const view = toView(task, body, types, graph);
+  const docs = [...readTasksDir(getV2Dirs(board.brainfilePath).boardDir), ...readTasksDir(getV2Dirs(board.brainfilePath).logsDir)].map((d) => d.task);
+  const graph = buildDocGraph(docs, { types });
+  // An open document wins over a completed one of the same ID.
+  const view = toView(task, body, types, graph, new Map([...docs].reverse().map((d) => [d.id, d])));
   return ok({
     ...view,
     ...(view.role === 'decision' ? { decision: toDecision(task, body, graph) } : {}),

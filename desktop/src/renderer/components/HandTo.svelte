@@ -21,15 +21,55 @@
   const offered = $derived(app.agents);
   const run = $derived(app.runFor(taskId));
 
+  /**
+   * Where the hand-off lands (decision-16): the task's own landsOn, else what
+   * it inherits, else the trunk. Picking another writes it to the task, so it
+   * outlives the run.
+   */
+  let picking = $state(false);
+  const task = $derived(app.board?.tasks.find((t) => t.id === taskId));
+  const known = $derived(app.activeId ? app.branches[app.activeId] : undefined);
+  const lands = $derived(task?.target?.branch ?? null);
+  const landsName = $derived(lands ?? known?.trunk ?? 'the trunk');
+  /** Why it lands there, when it is not its own choice. */
+  const landsWhy = $derived(
+    !task?.target ? 'the trunk' : task.target.epicBranch ? `${task.target.from}'s branch` : task.target.from !== taskId ? `from ${task.target.from}` : ''
+  );
+  /** The trunk, the branch it would land on now, recent targets, local branches, then origin's. */
+  const choices = $derived.by(() => {
+    const out: { branch: string | null; name: string; note: string }[] = [];
+    const seen = new Set<string>();
+    const add = (branch: string | null, note: string) => {
+      const name = branch ?? known?.trunk ?? 'the trunk';
+      if (seen.has(name)) return;
+      seen.add(name);
+      out.push({ branch, name, note });
+    };
+    add(null, 'the trunk');
+    if (task?.target?.epicBranch) add(task.target.branch, `${task.target.from}'s branch`);
+    const onBoard = (app.board?.tasks ?? []).map((t) => t.landsOn).filter((b): b is string => !!b);
+    for (const b of [...(known?.recent ?? []), ...onBoard]) add(b, 'recent');
+    for (const b of known?.local ?? []) add(b, '');
+    for (const b of known?.remote ?? []) add(b, 'on origin');
+    return out;
+  });
+
+  function pickBranch(branch: string | null): void {
+    picking = false;
+    void app.setLandsOn(taskId, branch);
+  }
+
   function toggle(): void {
     open = !open;
     if (open && key) {
       const r = key.getBoundingClientRect();
       place = { top: r.bottom + 4, left: Math.min(Math.max(8, r.right - MENU_W), window.innerWidth - MENU_W - 8) };
     }
+    picking = false;
     if (open) {
       active = Math.max(0, offered.findIndex((a) => a.id === app.defaultAgent));
       void app.refreshAgents();
+      void app.refreshBranches();
     }
   }
 
@@ -40,6 +80,13 @@
 
   function onkeydown(e: KeyboardEvent): void {
     if (!open) return;
+    if (picking) {
+      if (e.key !== 'Escape') return;
+      picking = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const step = (d: number) => {
       let i = active;
       for (let n = 0; n < offered.length; n++) {
@@ -78,21 +125,40 @@
     {#if open}
       <div class="catch" role="presentation" use:portal onmousedown={() => (open = false)}></div>
       <div class="menu" role="listbox" use:portal style:top="{place.top}px" style:left="{place.left}px" style:width="{MENU_W}px">
-        <div class="head mono">{leads ? 'Lead with' : 'Hand to'}</div>
-        {#each offered as agent, i (agent.id)}
-          <button
-            class="item"
-            class:active={i === active}
-            disabled={!agent.available}
-            role="option"
-            aria-selected={i === active}
-            onmouseenter={() => agent.available && (active = i)}
-            onclick={() => pick(agent.id)}
-          >
-            <span class="name">{agent.name}</span>
-            <span class="note mono">{agent.available && app.modelFor(agent.id) ? app.modelNote(agent.id) : agent.note}</span>
+        {#if picking}
+          <button class="head mono back" onclick={() => (picking = false)}><Icon name="back" size={12} />Lands on</button>
+          <div class="branches">
+            {#each choices as c (c.name)}
+              <button class="item" role="option" aria-selected={c.name === landsName} onclick={() => pickBranch(c.branch)}>
+                <span class="name mono clip">{c.name}</span>
+                {#if c.name === landsName}<Icon name="check" size={13} />{:else}<span class="note mono">{c.note}</span>{/if}
+              </button>
+            {/each}
+          </div>
+        {:else}
+          <div class="head mono">{leads ? 'Lead with' : 'Hand to'}</div>
+          {#each offered as agent, i (agent.id)}
+            <button
+              class="item"
+              class:active={i === active}
+              disabled={!agent.available}
+              role="option"
+              aria-selected={i === active}
+              onmouseenter={() => agent.available && (active = i)}
+              onclick={() => pick(agent.id)}
+            >
+              <span class="name">{agent.name}</span>
+              <span class="note mono">{agent.available && app.modelFor(agent.id) ? app.modelNote(agent.id) : agent.note}</span>
+            </button>
+          {/each}
+          <!-- Where its work lands (decision-16): the trunk unless the task, or what it is under, names a branch. -->
+          <button class="item lands" use:tip={'Where the hand-off forks from and merges into; kept on the task'} onclick={() => (picking = true)}>
+            <span class="label">Lands on</span>
+            <span class="name mono clip">{landsName}</span>
+            {#if landsWhy}<span class="note mono">{landsWhy}</span>{/if}
+            <Icon name="chevron" size={12} />
           </button>
-        {/each}
+        {/if}
       </div>
     {/if}
   </span>
@@ -184,5 +250,54 @@
 
   .note {
     color: var(--ink-4);
+  }
+
+  .lands {
+    margin-top: var(--s1);
+    box-shadow: inset 0 var(--hairline) 0 var(--line);
+    border-radius: 0 0 var(--r-control) var(--r-control);
+    color: var(--ink-2);
+  }
+
+  .lands:hover,
+  .branches .item:hover {
+    background: var(--fill-hover);
+  }
+
+  .label {
+    flex: none;
+    color: var(--ink-3);
+  }
+
+  .lands .name {
+    font-weight: 400;
+  }
+
+  .branches {
+    max-height: 280px;
+    overflow-y: auto;
+  }
+
+  .branches .name {
+    font-weight: 400;
+  }
+
+  .back {
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+    width: 100%;
+    text-align: left;
+  }
+
+  .back:hover {
+    color: var(--ink);
+  }
+
+  .clip {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 </style>

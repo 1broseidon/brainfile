@@ -36,6 +36,18 @@ review or a link gets a read-only checkout and no branch. When the task reaches 
 you can see the diff, open it in your editor, merge it or send it back, and
 the worktree is removed on merge or discard.
 
+A task can land somewhere other than the trunk: `landsOn: release/0.38.0` on
+it, or on anything above it, and its hand-off forks from that branch (yours,
+else origin's) and merges back into it. Hand to… says where under the
+agents, `Lands on main`, and its picker (the trunk, your branches, the ones
+used lately) writes the choice to the task, so it holds for the next
+hand-off too. Set `epicBranch: true` on an epic and its lead first makes
+`dispatch/<epic-id>` from the epic's target; every child forks from and
+merges into that branch, which the app brings the target into before each
+hand-off. When the last child is done the epic is one item in Ready to
+merge, and its Merge asks where the branch goes: its target, another
+branch, or kept as a branch.
+
 Hand an epic off, or any task with open children, and the agent leads it
 instead: it reads the children and the code they touch, fixes the
 dependencies where two would collide or one needs another's work, writes the
