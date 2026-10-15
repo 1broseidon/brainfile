@@ -3,17 +3,6 @@ id: task-84
 title: "Desktop: show runs started outside it, live, from the board and state/runs; the chat dispatches through brainfile mcp and the desk retires"
 column: backlog
 position: 20
-description: |-
-  With the Runner shared (task-80) and its runs in files, the desktop shows every run on this machine the same way, whoever started it.
-
-  - **Watching:** the host's `fs.watch` on the board folder ignores `state/` today (host.ts `watch`). It should let `state/runs/` and `state/runners/` through, read them debounced, and pass them to the agents process. The agents process merges them with its own runs, so `live()` and the AgentEvent stream cover every run. A run that ends refreshes Ready to merge, as the desktop's own runs do.
-  - **The window:** an external run gets the row line (`codex · editing`) and a tab in the dock, marked with where it runs (`in a terminal`). Stop works through the Runner's stop across processes.
-  - **Asks:** an ask from a terminal runner shows in the band, saying where it is waiting. Allow and Deny write `state/runs/<id>.answer.json`, which that runner watches and applies, and the terminal prompt then goes away.
-  - **Chat:** the chat's agents get dispatch from `brainfile mcp` (role chat) instead of the desk. Remove desk.ts, desk-mcp.ts and the DESK_TOOL rule once the chat works through brainfile mcp. The reply's `task-N handed to codex` line comes from the request record and the run files.
-  - **Phone:** the link relays external runs too (bridge.ts `live`).
-  - **Docs:** design.md › Dispatch says all of this.
-
-  Check it by hand: run `brainfile dispatch task-N --agent codex` and `brainfile run --once` in a terminal while the desktop is open, and see the row, the tab, an ask answered from the band, and Review.
 tags:
   - desktop
   - dispatch
@@ -60,7 +49,7 @@ contract:
   metrics:
     readyAt: "2026-10-15T21:40:11.572Z"
 createdAt: "2026-10-14T22:16:44.174Z"
-updatedAt: "2026-10-15T21:40:12.089Z"
+updatedAt: "2026-10-15T22:09:23.875Z"
 ---
 
 ## Description
@@ -74,3 +63,5 @@ With the Runner shared (task-80) and its runs in files, the desktop shows every 
 - **Docs:** design.md › Dispatch says all of this.
 
 Check it by hand: run `brainfile dispatch task-N --agent codex` and `brainfile run --once` in a terminal while the desktop is open, and see the row, the tab, an ask answered from the band, and Review.
+
+From task-80: the desktop's `live()` still lists only its own runs, but `runner.live()` in core already reads other runners' run files: build on it rather than reading state/runs a second time. Run files carry projectId, threadId, from and stop, and beat every 10 s; a stop for another runner's run writes `stop: true` (watched every 1 s), then SIGTERM after 15 s. Known gap: a `stop: true` written between the owner's read and write of its own run file can be lost (the SIGTERM covers it); if the answer files for asks go through the same read-modify-write, avoid that race, e.g. a separate `<id>.answer.json` as above, not a field in the run file.
