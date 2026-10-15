@@ -7,7 +7,9 @@ import {
   parentFit,
   readBoardConfig,
   readTasksDir,
+  targetOf,
   type DecisionLink,
+  type LandsOn,
   type DocGraph,
   type ResolvedDocType,
   type Task,
@@ -105,11 +107,11 @@ function showCommandV2(
 
   // The document's place in the graph (spec-12): parent, children, decisions.
   const types = readBoardConfig(filePath)?.config.types;
-  const graph = buildDocGraph([
-    ...readTasksDir(dirs.boardDir).map((d) => d.task),
-    ...readTasksDir(dirs.logsDir).map((d) => d.task),
-  ], { types });
+  const docs = [...readTasksDir(dirs.boardDir).map((d) => d.task), ...readTasksDir(dirs.logsDir).map((d) => d.task)];
+  const graph = buildDocGraph(docs, { types });
   const place = describePlace(graph, task);
+  // Where a hand-off of it forks from and lands (decision-16): its own landsOn, inherited, or an epic's branch.
+  const target = place.type.role === 'decision' ? null : targetOf(docs, task.id);
 
   const columnTitle = isLog ? 'Completed' : (task.column || (place.type.role === 'decision' ? 'none' : 'unknown'));
   const archived = isLog;
@@ -135,11 +137,12 @@ function showCommandV2(
       } : {}),
       ...(task.completedAt && { completedAt: task.completedAt }),
       ...(logContent && { log: logContent }),
+      ...(target ? { target } : {}),
       graph: docPlace(graph, task.id),
     };
     logger.log(JSON.stringify(jsonOutput, null, 2));
   } else {
-    renderTask({ task, columnTitle, archived, childIds, ref, relatedBoard, dependencies, blockers, place }, logger);
+    renderTask({ task, columnTitle, archived, childIds, ref, relatedBoard, dependencies, blockers, place, target }, logger);
     if (task.completedAt) {
       logger.log(`${chalk.bold('Completed:')} ${chalk.white(task.completedAt)}`);
     }
@@ -165,6 +168,7 @@ function renderTask(
     dependencies?: ResolvedTaskRef[];
     blockers?: ResolvedTaskRef[];
     place: Place;
+    target?: LandsOn | null;
   },
   logger: Logger
 ) {
@@ -219,6 +223,22 @@ function renderTask(
     if (parent.offPattern) {
       logger.log(chalk.yellow(`  ⚠ off-pattern: ${parent.offPattern}`));
     }
+  }
+
+  if (input.target) {
+    const { branch, from, epicBranch } = input.target;
+    const why = epicBranch ? `${from}'s own branch` : from === task.id ? '' : `from ${from}`;
+    logger.log(`${chalk.bold('Lands on:')} ${chalk.white(branch)}${why ? chalk.gray(` · ${why}`) : ''}`);
+  }
+  if (task.epicBranch) {
+    logger.log(`${chalk.bold('Epic branch:')} ${chalk.white(`yes, ${task.id}'s children land on dispatch/${task.id}`)}`);
+  }
+  if (task.source) {
+    logger.log(`${chalk.bold('Source:')} ${chalk.white(task.source)}`);
+  }
+  if (task.pullRequest) {
+    const pr = task.pullRequest;
+    logger.log(`${chalk.bold('Pull request:')} ${chalk.white(`#${pr.number} ${pr.state}, ${pr.head} into ${pr.base}`)} ${chalk.gray(pr.url)}`);
   }
 
   if (task.description && task.description.trim().length > 0) {

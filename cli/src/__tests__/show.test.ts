@@ -82,6 +82,31 @@ describe('show command', () => {
     expect(output).toContain('Archived subtask');
   });
 
+  it('says where a hand-off lands: its own landsOn, one inherited, an epic\'s own branch, and the source and pull request', () => {
+    writeV2Task(workspace, { id: 'epic-1', title: 'Epic', column: 'todo', type: 'epic', landsOn: 'release' } as Task);
+    writeV2Task(workspace, { id: 'task-3', title: 'Child', column: 'todo', parentId: 'epic-1', source: 'https://github.com/o/r/issues/7' } as Task);
+    writeV2Task(workspace, { id: 'epic-2', title: 'Own branch', column: 'todo', type: 'epic', epicBranch: true } as Task);
+    writeV2Task(workspace, {
+      id: 'task-4', title: 'Under it', column: 'todo', parentId: 'epic-2',
+      pullRequest: { number: 12, url: 'https://github.com/o/r/pull/12', state: 'open', base: 'dispatch/epic-2', head: 'dispatch/task-4', at: '2026-10-15T10:00:00.000Z' },
+    } as Task);
+    const said = (id: string) => {
+      const log = new MemoryLogger();
+      showCommand({ file: workspace.brainfilePath, task: id }, log);
+      return log.getOutput();
+    };
+    expect(said('epic-1')).toMatch(/Lands on: release\n/);
+    expect(said('task-3')).toContain('Lands on: release · from epic-1');
+    expect(said('task-3')).toContain('Source: https://github.com/o/r/issues/7');
+    expect(said('epic-2')).toContain("Epic branch: yes, epic-2's children land on dispatch/epic-2");
+    expect(said('task-4')).toContain("Lands on: dispatch/epic-2 · epic-2's own branch");
+    expect(said('task-4')).toContain('Pull request: #12 open, dispatch/task-4 into dispatch/epic-2');
+    expect(said('task-2')).not.toContain('Lands on:');
+    const json = new MemoryLogger();
+    showCommand({ file: workspace.brainfilePath, task: 'task-3', json: true }, json);
+    expect(JSON.parse(json.getOutput()).target).toEqual({ branch: 'release', from: 'epic-1', epicBranch: false });
+  });
+
   it('should throw CLIError for missing task id', () => {
     expect(() => showCommand({ file: workspace.brainfilePath, task: '' }, logger)).toThrow(CLIError);
   });
