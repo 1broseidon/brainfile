@@ -1,8 +1,6 @@
 ---
 id: task-75
 title: "Core: ACP agents, the agent registry, custom agents, settings and sessions move out of the desktop"
-column: in-progress
-position: 4
 description: |-
   Move everything that starts and talks to an ACP agent out of the desktop's agents process (agents.ts, lines 98–905) into a node-only core subpath, `@brainfile/core/dispatch`. It sits beside `./repo`, with `@agentclientprotocol/sdk` as a dependency, and it is not exported from the browser entry. A new workspace package is the other choice. Record the choice with decide before you start: this is the first runtime dependency core takes besides js-yaml (2026-08-11 boundary spec).
 
@@ -61,7 +59,8 @@ contract:
     - No behaviour change in the desktop
     - Record the package choice with decide before writing code
 createdAt: "2026-10-14T22:14:58.639Z"
-updatedAt: "2026-10-15T17:11:59.871Z"
+updatedAt: "2026-10-15T21:18:22.971Z"
+completedAt: "2026-10-15T21:18:22.971Z"
 ---
 
 ## Description
