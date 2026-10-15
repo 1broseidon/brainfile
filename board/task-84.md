@@ -49,7 +49,7 @@ contract:
   metrics:
     readyAt: "2026-10-15T21:40:11.572Z"
 createdAt: "2026-10-14T22:16:44.174Z"
-updatedAt: "2026-10-15T22:31:25.125Z"
+updatedAt: "2026-10-15T22:56:12.645Z"
 ---
 
 ## Description
@@ -66,7 +66,9 @@ Check it by hand: run `brainfile dispatch task-N --agent codex` and `brainfile r
 
 From task-80: the desktop's `live()` still lists only its own runs, but `runner.live()` in core already reads other runners' run files: build on it rather than reading state/runs a second time. Run files carry projectId, threadId, from and stop, and beat every 10 s; a stop for another runner's run writes `stop: true` (watched every 1 s), then SIGTERM after 15 s. Known gap: a `stop: true` written between the owner's read and write of its own run file can be lost (the SIGTERM covers it); if the answer files for asks go through the same read-modify-write, avoid that race, e.g. a separate `<id>.answer.json` as above, not a field in the run file.
 
-From task-81: the desktop does not work the queue yet, but its Runner writes a runner file (state/runners), so an MCP `dispatch` made while the window is open says nothing about starting it, and nothing starts it. The desktop's Runner must work the queue (with sendBack 'start'), or the "Queued. Run `brainfile run` or open Brainfile" message is wrong while it is open. The chat prompt (agents.ts ASK_PREAMBLE) and, if task-83 has not already, the lead prompt still tell agents to use the desk's dispatch: change them to brainfile mcp's dispatch/dispatch_status/dispatch_stop when the desk retires. The desktop already passes role chat / lead+scope / discuss to its sessions.
+From task-81: the desktop does not work the queue yet, but its Runner writes a runner file (state/runners), so an MCP `dispatch` made while the window is open says nothing about starting it, and nothing starts it. The desktop's Runner must work the queue (with sendBack 'start'), or the "Queued. Run `brainfile run` or open Brainfile" message is wrong while it is open. The desktop already passes role chat / lead+scope / discuss to its sessions.
+
+From task-83 (landed): the lead's session is already core's (brainfile mcp as lead of its tree, no desk), and the host reads the lead from core's record, with where it runs when another runner leads it. What is still on the desk is the chat: agents.ts ASK_PREAMBLE, and the chat's desk starting a lead on an epic. Move the chat to brainfile mcp's dispatch / dispatch_status / dispatch_stop / dispatch_lead, then remove desk.ts, desk-mcp.ts and DESK_TOOL. The desktop's Runner should work the queue with `leads: true` and sendBack 'start', so a lead queued by `brainfile dispatch <epic>` or MCP while the window is open runs there, and the Lead block shows a lead held by a terminal runner. task-82 builds `brainfile run` in parallel on the same Runner: keep to the Runner's API and leave cli/src/commands/run.ts and dispatch.ts to it.
 
 ## Log
 - 2026-10-15T22:56:01.234Z: [claude] From task-83 (landed): the lead's session is already core's (brainfile mcp as lead of its tree, no desk), and the host reads the lead from core's record including "where it runs" when another runner leads it. What is still on the desk: the chat (agents.ts ASK_PREAMBLE, and the chat's desk starting a lead on an epic) — move the chat to brainfile mcp's dispatch/dispatch_status/dispatch_stop/dispatch_lead, then remove desk.ts, desk-mcp.ts and DESK_TOOL. The desktop's Runner should work the queue with leads: true and sendBack 'start', so a lead queued by `brainfile dispatch <epic>` or MCP while the window is open gets run there, and its Lead block shows a lead held by a terminal runner.
