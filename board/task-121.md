@@ -44,7 +44,7 @@ createdAt: "2026-10-16T06:09:34.484Z"
 dependsOn:
   - task-120
   - task-123
-updatedAt: "2026-10-16T07:02:19.104Z"
+updatedAt: "2026-10-16T07:06:33.526Z"
 dispatch:
   agent: claude
   model: opus
@@ -84,3 +84,4 @@ Depends on task-120 (target, pull-request, merge-to, the contract) and task-123 
 ## Log
 - 2026-10-16T06:48:45.683Z: [claude] Lead: task-123 landed on dispatch/epic-10 (5056541) before this run started. Its hand-over is now in this task's description under "Left by task-123": count src/link/devQueue.ts as a link:dev answer source, reuse link.test.ts's real-desk queue setup for the end-to-end alias wait, and expect queued[].waitMessage to be in link.md.
 - 2026-10-16T07:02:04.241Z: [claude] Done on branch dispatch/task-121 (c6229eb, c913530). desktop/test/link-parity.test.ts: reads the preload's api, main's `local` handlers, AGENT_METHODS and HOST_METHODS, and fails until each is in bridge.ts's CALLS (exported now as LINK_CALLS) or in EXCLUDED with a reason; checks that FakeAgents in dev.ts has a case for every bridged agents call and every other call is a host method; checks that link.md's Calls table and CALLS name the same calls, and that every LINK_FEATURES entry is in the Hello table with a `### … (`feature`)` section. The "later" exclusions (leads, Discuss, issues, delete/restore/reopen, board fixes) name the new task-124. desktop/test/link-epic.test.ts: the whole of epic-10 end to end, with the real server, bridge, host and agents process (agents.ts loaded in-process as the host is, wired as main wires it). It uses a scratch linked-board repo, origin as GitHub through an ssh shim to a bare repo, a fake GitHub and a related `mobile` board. It covers the six features, Lands on, a pull request #7 on the row, a child merged onto dispatch/epic-1 and the epic merged onto release/1.0 with `to`, and the queue's waitMessage naming the mobile board. Seams fixed: link.md's hello example lacked `queue`; `effort` had no section (now ### Effort with the model); design.md › Phone still called the phone's copy the contract. The rule is in link.md's head and design.md › Phone. Validation green: root build + tests (1223/713/191), desktop typecheck, 175 tests, Electron build. Not wired: nothing on brainfile-mobile; the window's renderer still does not show the queue.
+- 2026-10-16T07:06:33.526Z: Landed on dispatch/epic-10
