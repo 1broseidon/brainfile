@@ -47,7 +47,11 @@ subtasks:
   - id: task-118-7
     title: Lead gives up → not Leading; an ask wakes the lead (verified or fixed)
     completed: false
+  - id: task-118-8
+    title: brainfile --help's "Common workflows" footer (cli/src/program.ts) shows only init/migrate/list/add/move and contract examples; add a hand-off example (dispatch, run, review, land)
+    completed: false
 createdAt: "2026-10-16T04:55:30.792Z"
+updatedAt: "2026-10-16T05:03:56.381Z"
 ---
 
 ## Description
