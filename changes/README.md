@@ -8,7 +8,9 @@ already holds, into the release's dated section, and removes them.
 
 A file is a paragraph of prose for the release's opening, or, with a `kind:`
 (Added, Changed, Deprecated, Removed, Fixed or Security), entries for that
-kind's list. Name it after the change, e.g. `task-64-changelog-fragments.md`:
+kind's list; any other kind is refused, an entry that forgot its dash is given
+one, and this README is never read as a fragment. Name it after the change,
+e.g. `task-64-changelog-fragments.md`:
 
 ```md
 ---

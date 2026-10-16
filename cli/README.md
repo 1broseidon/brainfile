@@ -1,6 +1,6 @@
 # brainfile
 
-Markdown task boards for you and your AI agents. Manage tasks, epics, contracts, and ADRs from your terminal — with a TUI board view and an MCP server so your coding agents work the same board. Everything is plain Markdown in your repo.
+Markdown task boards for you and your AI agents. Manage tasks, epics, specs, plans, decisions and contracts from your terminal, hand tasks to coding agents and land their work — with a TUI board view and an MCP server so your coding agents work the same board. Everything is plain Markdown in your repo.
 
 ## Install
 
@@ -59,7 +59,7 @@ brainfile add -c todo -t "Auth overhaul" \
 
 **Key Flags:**
 - `--title, -t`: Task summary
-- `--type`: `task`, `epic`, or `adr` (default: `task`)
+- `--type`: `task` (default), `epic`, `spec`, `plan`, `decision`, or a type of the board's own; `issue` and `adr` are aliases
 - `--column, -c`: Target column ID
 - `--parent`: Parent task/epic ID
 - `--child`: Create child task(s) under the new parent (repeatable)
@@ -112,7 +112,7 @@ Brainfile supports different document types.
 ```bash
 brainfile types list           # See configured types
 brainfile types list --json    # Output configured types as JSON
-brainfile types add epic       # Add a type (use --id-prefix, --completable, or --schema to customize it)
+brainfile types add bug --like task   # Add a type of your own (--id-prefix, --completable, --schema); epic, spec, plan, task and decision are built in
 ```
 
 ## Contracts: Working with AI Agents
@@ -155,19 +155,36 @@ brainfile contract validate -t task-45
 - **Pass**: Contract status becomes `done`.
 - **Fail**: Contract status becomes `failed` and records feedback for rework.
 
-## ADR Promotion
+## Decisions
 
-Architecture Decision Records (ADRs) are first-class task files. Promote an ADR to mark it accepted and archive it to `logs/`. Accepted ADRs show up in `brainfile brief`.
+A decision is a standing choice, recorded under a dotted claim key; a new one in the same family supersedes the old. `brainfile check` says whether a decision still speaks to an action before an agent acts, and every `brainfile brief` lists the decisions that stand. `adr` is an alias: `--type adr` writes a decision, and `brainfile adr promote` accepts a legacy `type: adr` file and moves it to `logs/`.
 
 ```bash
-# 1. Create an ADR
-brainfile add -t "Use Postgres for all user data" --type adr -c todo
-
-# 2. Promote it
-brainfile adr promote -t adr-1
+brainfile decide -k dependency.http-client "Use undici for HTTP. It ships with Node."
+brainfile check "add axios"          # use | review | use_replacement | no_decision
+brainfile list --type decision
 ```
 
-The ADR file moves to `.brainfile/logs/` with `status: promoted`. Project guidance belongs in `agent.instructions` (or `brainfile lint --fix` will fold a legacy `rules:` block there).
+Project guidance belongs in `agent.instructions` (`brainfile lint --fix` folds a legacy `rules:` block there).
+
+## Hand-offs: a task to a coding agent
+
+A task can be handed to a coding agent (Claude Code, Codex, Cursor, Antigravity, Grok, or any ACP server), which works in its own git worktree on `dispatch/<task-id>`, forked from where the task lands. `dispatch` writes the request on the task; a runner on this machine starts it: `brainfile run` in a terminal, or the Brainfile desktop app. Neither needs the other.
+
+```bash
+brainfile dispatch task-12 --agent codex    # queue it; a runner starts it
+brainfile dispatch epic-3 --agent claude    # an epic gets a lead, which hands its children off in order
+brainfile run                               # work the queue here; asks come to this prompt, Ctrl-C lets go
+brainfile dispatch status                   # runners, live runs, the queue, the claims
+brainfile review task-12                    # its branch, commits, files and conflicts; --ready lists what can land
+brainfile land task-12                      # check with the contract's validation, then land on its target
+brainfile pr task-12                        # or open it as a GitHub pull request; --status follows it
+brainfile discard task-12                   # throw the work away
+brainfile discuss task-12                   # talk a task over with an agent first; it writes no code
+brainfile agents                            # the agents installed here, and their models
+```
+
+The commands that start an agent themselves (`run`, `dispatch --now`, `discuss`) need Node 20.19 or newer. An agent Brainfile starts carries its role in `BRAINFILE_AGENT_ROLE`, and the CLI keeps to it: a hand-off cannot dispatch, land, discard or open a pull request, and a lead reaches only its own tree.
 
 ## TUI (Terminal UI)
 
@@ -213,4 +230,4 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-This registers an MCP tool for everything the CLI does to a board: list, read, search, create, update, move, complete and delete tasks; notes and logs; subtasks and contracts; decisions; columns, the board's settings, types and templates; lint, sync and where; the project's GitHub issues, imported as tasks; and a hand-off opened as a GitHub pull request. The server tells the agent to use them for every board change and never to edit `.brainfile/` by hand.
+This registers an MCP tool for everything the CLI does to a board: list, read, search, create, update, move, complete, restore and delete tasks; notes and logs; subtasks and contracts; decisions; columns, the board's settings, types and templates; lint, sync, and where (with the board's fix and undo); the project's GitHub issues, imported as tasks; hand-offs (`dispatch`, `dispatch_status`, `dispatch_stop`, `dispatch_lead`), their review, landing and discard (`review`), a hand-off opened as a GitHub pull request (`pull_request`), the agents installed here (`agents`), and a task to talk over (`discuss`, also a prompt). Thirty-five in all. The server tells the agent to use them for every board change and never to edit `.brainfile/` by hand, and keeps to the agent's role (`BRAINFILE_AGENT_ROLE`): a worker's or a discussion's server lists no dispatch, and a lead's reaches only its epic.

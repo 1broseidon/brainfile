@@ -10,6 +10,10 @@ Used by the [brainfile CLI](https://www.npmjs.com/package/brainfile); use it dir
 npm install @brainfile/core
 ```
 
+Node 20 or newer. `@brainfile/core/dispatch` needs Node 20.19 or newer at
+runtime: it `require()`s `@agentclientprotocol/sdk`, which is ESM only, when
+the first session opens.
+
 ## v2 Architecture: Files & Folders
 
 Brainfile v2 uses a directory-based structure:
@@ -171,16 +175,15 @@ composeBrief(dirs, "claude", { lastBriefAt: null }).text;   // the session-start
 checkDecision(dirs.brainfilePath, { query: "add axios" });  // { result: { verdict: 'review', … } }
 ```
 
-### Dispatch: ACP agents
+### Dispatch: ACP agents, the Runner, leads and Discuss
 
 Starting the person's own coding agents over the Agent Client Protocol is in
-the Node-only `@brainfile/core/dispatch`, which depends on
+the Node-only `@brainfile/core/dispatch` (decision-18), which depends on
 `@agentclientprotocol/sdk` and loads it when a session opens: the agents
 Brainfile knows and how each starts, custom agents (`agentServers` in Zed's
 shape) and the ACP registry, dispatch.json and models.json in the data folder
 (`BRAINFILE_DATA_DIR`, else the platform's, the same one the desktop uses),
-sessions and their turns, permissions as policy, and a hand-off's brief. What
-runs the sessions keeps the runs and answers the asks.
+sessions and their turns, permissions as policy, and a hand-off's brief.
 
 ```typescript
 import { dataDir, listAgents, open, turn, brief, type SessionContext } from "@brainfile/core/dispatch";
@@ -195,6 +198,93 @@ listAgents(ctx.dataDir);                 // [{ id: 'claude', name: 'Claude Code'
 const session = await open(ctx, "/path/to/repo", "claude", "run-1");
 await turn(ctx, session, run, brief("/path/to/repo", "task-12"));   // run.state, run.reply, run.steps
 ```
+
+What runs the sessions is the `Runner`, the one `brainfile run`, `brainfile
+dispatch --now`, the MCP tools and the desktop all use (decision-17), so a
+hand-off is the same wherever it was asked for. It queues a hand-off
+(`queue`: `dispatch:` on the task), claims the task by compare-and-swap so
+two runners never start one, starts the agent in its worktree (`start`,
+`dispatch`), keeps its run file beating under `.brainfile/state/runs/`,
+answers asks (its own through `ask`, another runner's through `answerAsk` and
+the answer file), stops a run (`stop`, through the stop file when another
+runner has it), works the board's queue up to `dispatch.maxRunning` (`work`,
+`workLed`, `queued`, `settled`), lands (`land`, sending a conflict or a
+failed check back to the agent up to the contract's `maxRetries`, then
+parking the task in Review), and lets go on exit (`letGo`, `quit`). `others`
+lists the runs of every other runner on the machine, lost ones included.
+`Leads` runs an epic's lead beside it (`lead`, `pauseLead`, `resumeLead`,
+`stopLead`), and `guard`, `planReport`, `readTree` and `leadRefusal` hold
+the rules a lead cannot bend. `agentRoleOf(env)` reads an agent's role and
+scope from `BRAINFILE_AGENT_ROLE` and `BRAINFILE_LEAD_SCOPE`, as `brainfile
+mcp` does.
+
+```typescript
+import { Runner, dataDir, fileBoard } from "@brainfile/core/dispatch";
+
+const runner = new Runner({
+  dataDir: dataDir(),
+  runner: "cli",                          // what its claims and run files say: desktop, cli or mcp
+  board: fileBoard(),                     // its board writes, each one commit on a tracked board
+  leads: true,                            // take up epics' leads queued on the board
+  ask: async (ask) => ask.options.find((o) => o.kind === "allow_once")?.optionId ?? null,
+});
+await runner.queue("/path/to/repo", ["task-12"], { agent: "codex", by: "cli", until: "review" });
+await runner.work("/path/to/repo");       // claims what it can and starts it, up to dispatch.maxRunning
+await runner.letGo();                     // stop its agents, give their tasks back to the queue
+```
+
+Discuss's context and rules are here too, so a discussion is the same in the
+desktop's chat, in `brainfile discuss` and in an MCP client given the
+`discuss` prompt (decision-19): `discussContext`, `taskInformation`,
+`discussWork` (the review from git and the live run from a Runner),
+`discussRules` and `discussSession` (the text for a session outside the
+window), `discussPermission`, `chatPermission` and `discussMode`.
+
+### Repositories: worktrees, landing, run files and claims
+
+The Node-only `@brainfile/core/repo` is the board's git: where a board lives
+and how it is stored, sync and the merge driver, related boards, settling two
+boards into one, and, since the desktop's hand-offs moved into core, what a
+hand-off does to the repository, so the CLI, headless runners and the desktop
+land the same way.
+
+- **Worktrees and landing**: `prepareWorktree` checks a task out on
+  `dispatch/<task-id>` under `~/.brainfile-worktrees/`, forked from the
+  branch it lands on; `reviewOf` is its branch, commits, files, uncommitted
+  work and the files that would conflict; `readyToMerge` and `whyNotMerge`
+  say what can land; `landReview` runs the checks with the target brought in
+  and merges by compare-and-swap; `sendBackNote` is the note a conflict or a
+  failed check leaves; `discardReview` removes the worktree and branch.
+  Landings run one at a time per repository across processes under
+  `.brainfile/state/landing.lock` (`takeLandingLock`, `readLandingLock`);
+  one whose holder has ended is taken over.
+- **Where a task lands**: `handOffTarget` and `prepareTarget` read `landsOn`
+  up the tree (`{}` is the trunk) and make an epic's own branch when
+  `epicBranch: true` and it is not there yet; `prepareEpicBranch` is what a
+  lead calls as it starts; `bringIn` and `refreshTarget` bring the target
+  into the epic's branch before a hand-off; `lintLandsOn` is `lint`'s check
+  that the branch exists.
+- **Run and runner files**: `writeRunFile`, `readRunFile`, `listRunFiles`,
+  `beatRun` and `pruneRunFiles` for `state/runs/<run-id>.json`;
+  `writeRunAnswer`, `readRunAnswer` and `removeRunAnswer` for an ask answered
+  from another process; `writeRunStop` and `readRunStop` for a stop asked of
+  another runner; `writeRunnerFile`, `listRunners`, `liveRunners` and
+  `beatRunner` for `state/runners/<host>-<pid>.json`; `isRunLost`,
+  `isRunnerLost` and `isClaimLost` from the heartbeats.
+- **Claims**: `takeClaim` takes the runner's claim on a task's `dispatch:`
+  record by compare-and-swap on the task file, under
+  `state/locks/<file>.lock`; `giveBackClaim` releases it with its outcome;
+  `parkInReview` moves a task that has used its retries; `markLead` writes a
+  lead's claim.
+- **Origin**: `unpushed` says how far a branch is ahead of origin's copy
+  (`main is 3 commits ahead of origin`); `carriedUnpushed` is why a pull
+  request is refused when its base has landings origin lacks; `followOrigin`
+  brings the local base up to origin's once a pull request has merged, when
+  nothing would be lost.
+- **Fix**: `boardProblems` and `planFix` say what is wrong with where the
+  board lives and what would fix it without losing anything; `applyFix` does
+  it, every copy backed up first; `undoFix` and `lastFix` put it back within
+  `FIX_UNDO_MS` from `state/last-fix.json`, whichever process ran the fix.
 
 ### Issues and forges
 
@@ -263,7 +353,7 @@ import type {
 interface Task {
   id: string;
   title: string;
-  type: string;        // e.g., "task", "epic", "adr"
+  type: string;        // e.g., "task", "epic", "decision"
   column: string;      // Column ID
   status?: string;     // Read-only status derived from column
   assignee?: string;

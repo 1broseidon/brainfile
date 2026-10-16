@@ -4,7 +4,7 @@ You are setting up brainfile, a task board for people and coding agents. Every t
 
 ## 1. Install
 
-Run these two commands in the project root (Node 20 or newer):
+Run these two commands in the project root (Node 20 or newer; 20.19 or newer for `brainfile run`, `dispatch --now` and `discuss`, which start a coding agent themselves):
 
 ```
 npm install -g brainfile
@@ -15,7 +15,7 @@ This creates `.brainfile/` with:
 - `brainfile.md` — board config (columns, agent instructions, and only the document types you add: epic, spec, plan, task and decision are built in)
 - `board/` — active documents, one file each
 - `logs/` — completion history (`ledger.jsonl`), archived task files, and decisions that no longer stand
-- `state/` — local only, ignored by git: each agent's brief checkpoint and the search index (`index.db`, built on Node 22.13+)
+- `state/` — local only, ignored by git: each agent's brief checkpoint, the search index (`index.db`, built on Node 22.13+), and the run and runner files of hand-offs (`runs/`, `runners/`), which every runner on the machine reads
 
 ## 2. Connect the MCP server
 
@@ -59,9 +59,22 @@ brainfile supersede decision-3 "New decision"     # replace one by hand
 brainfile retire decision-4 --as rejected         # rejected or stale; moves to logs/
 brainfile check "<action>"                        # use | review | use_replacement | no_decision (exit 0/2/3/0)
 brainfile index --status                          # the local search index
+brainfile issues --import 12                      # a task from the repository's GitHub issue; add --source <url> makes one by hand
+brainfile dispatch task-1 --agent codex           # hand a task to a coding agent: a runner on this machine starts it in its own worktree
+brainfile dispatch epic-1 --agent claude          # an epic gets a lead, which hands its children off in order
+brainfile dispatch status                         # runners, live runs, the queue, the claims; dispatch stop <task|run> stops one
+brainfile run                                     # work the queue here in the foreground (a person's terminal); Ctrl-C lets go
+brainfile review task-1                           # a hand-off's branch, commits, files, conflicts; --ready lists what can land
+brainfile land task-1                             # check with the contract's validation, then land on its target; discard throws it away
+brainfile pr task-1                               # open the hand-off as a GitHub pull request; --status follows it
+brainfile discuss task-1                          # talk a task over with an agent in the terminal; it writes no code
+brainfile agents                                  # the coding agents installed here, and their models
+brainfile fix --dry-run                           # what is wrong with where the board lives, and what fix would do
 ```
 
 Before an action that might cut across a settled choice (a library, a pattern, a rule), run `brainfile check "<action>"`: `review` means ask first, `use_replacement` names the decision that replaced the one you had in mind. When you settle something, record it with `brainfile decide` under a dotted claim key (`dependency.http-client`) so the next session sees it in its brief.
+
+A hand-off (`dispatch`) is a task given to a coding agent, which works in its own git worktree on `dispatch/<task-id>`, forked from where the task lands (`landsOn` on the task or above it, else the trunk). The request is written on the task; a runner on the machine (`brainfile run` in a terminal, or the Brainfile desktop app) claims and starts it. If you are an agent Brainfile started, your shell carries your role in `BRAINFILE_AGENT_ROLE` and the CLI keeps to it: a worker or a discussion cannot dispatch, land, discard or open a pull request, a lead reaches only its own epic, and no agent runs `brainfile run`, `dispatch --now` or `discuss` inside its turn.
 
 ## 4. MCP tools (if connected)
 
@@ -96,9 +109,18 @@ sync            — fetch, merge and push a shared board now (pull? push?)
 where           — where the board lives, how it is stored, how fresh it is; action= fix | undo (expected: fix.plan.words) when nothing would be lost
 issues          — the project's open GitHub issues, marked when on the board; action=import (numbers, column?)
 pull_request    — a task's hand-off as a GitHub pull request: action= open | status (task)
+dispatch        — queue tasks for a coding agent (task | column | parent; agent, model, effort, until); an epic gets a lead
+dispatch_status — the runners up, the live runs, the queue, the claims and the leads on this machine
+dispatch_stop   — stop a run by its run id or task id (run), whichever runner has it; an epic's id stops its lead
+dispatch_lead   — pause or resume an epic's lead (epic, action)
+review          — a hand-off's work: action= show (task) | ready | land (task, into?) | discard (task)
+agents          — the coding agents a task can go to, which are installed here, and their models
+discuss         — one task to talk over (taskId): the task as the board has it and a discussion's rules; also the `discuss` prompt
 ```
 
-The bundled JSON Schemas are resources: `brainfile://schema/board` and `brainfile://schema/base`.
+Thirty-five tools. The bundled JSON Schemas are resources: `brainfile://schema/board` and `brainfile://schema/base`.
+
+Roles: whoever starts `brainfile mcp` for an agent sets `BRAINFILE_AGENT_ROLE` (chat, lead, worker or discuss). A worker's or a discussion's server lists no `dispatch`, `dispatch_stop` or `dispatch_lead`, its `review` only shows and its `pull_request` only asks where one stands; a lead's dispatch, stop, review and status reach only the tasks under its epic (`BRAINFILE_LEAD_SCOPE`). Your own client, with no role set, has every tool. A discussion keeps to its rules itself: change only the task's description, subtasks and contract with the person's yes, `check` before `decide`, `note` what was agreed, write no code.
 
 ## 5. Contracts
 
@@ -161,6 +183,8 @@ contract:
 ## Description
 Detailed requirements go here.
 ```
+
+Other fields a task may carry: `source` (the URL of the issue it was made from), `landsOn` (the branch its hand-off forks from and lands on, inherited by everything under it), `epicBranch: true` (an epic with a branch of its own, `dispatch/<epic-id>`), `pullRequest` (the pull request its hand-off was opened as: number, url, state, base, head), and `dispatch` (the hand-off request and the runner's claim on it: written by `dispatch`, never by hand).
 
 Rules: never regenerate an ID; change the board through the MCP tools (or the CLI), never by editing files under `.brainfile/` by hand; complete tasks with `brainfile complete` so the ledger stays the record; record decisions with `brainfile decide`, never by editing an old one.
 

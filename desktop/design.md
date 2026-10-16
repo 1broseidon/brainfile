@@ -499,10 +499,11 @@ board changes (and in the feed).
   its tip `Waits on task-62` (decision-15): the agents process refuses the
   same hand-off from the chat. Then it checks the task out into its own
   git worktree, on
-  `dispatch/<task-id>` from the trunk's tip (decision-11: the branch
-  `brainfile.trunk` names in the repository's git config, else origin's
-  default branch, else main), not from whatever the person's checkout is
-  on, under
+  `dispatch/<task-id>` from the tip of the branch the task lands on: its
+  `landsOn`, inherited from above it, else the trunk (decision-11,
+  decision-16; the trunk is the branch `brainfile.trunk` names in the
+  repository's git config, else origin's default branch, else main), not
+  from whatever the person's checkout is on, under
   `~/.brainfile-worktrees/<repo>-<hash>/`, so two hand-offs, or an agent and
   the person, never share a checkout, and an agent never edits the running
   app's own files. (`brainfile/<task-id>` cannot exist beside the board
@@ -513,7 +514,8 @@ board changes (and in the feed).
   there the agent works in the folder as before. Handing the task off again
   finds the same worktree. A hand-off that only reads (its contract's
   deliverables are all research, a review or a link) gets a detached
-  checkout of the trunk's tip instead and no branch; its brief says to
+  checkout of the tip of the branch it lands on instead and no branch; its
+  brief says to
   change nothing and put what it finds on the board, and the checkout goes
   when its run ends, unless something was left in it.
 - **The review is a moment in the task pane**, not an IDE: while the task
@@ -756,10 +758,12 @@ board changes (and in the feed).
   gives the lead what it finds: children that touch the same files with
   neither waiting on the other, dependencies missing, circular, or outside
   the epic and open, children with no files or no validation, and the order
-  dependsOn gives. Then it hands off what is ready. The app holds the rules
-  it cannot bend, refusing the dispatch that breaks one: a child only once
-  its dependsOn are done; at most three hand-offs at once in the repository
-  (`projects[<repo>].concurrency` in dispatch.json); a child handed off at
+  dependsOn gives. Then it hands off what is ready. The runner (core's, the
+  same one under `brainfile run`) holds the rules it cannot bend, refusing
+  the dispatch that breaks one: a child only once its dependsOn are done and
+  their branches landed; at most `dispatch.maxRunning` hand-offs at once in
+  the repository (the board's config, else `projects[<repo>].concurrency`
+  in dispatch.json, else three); a child handed off at
   most once plus its contract's maxRetries; only children under the epic
   with none of their own; one lead to a tree, above or below; and inside a
   led tree only the lead dispatches (the chat is refused; the person's
@@ -773,8 +777,10 @@ board changes (and in the feed).
   a bypass repository the app lands each child that ends in Review, checks
   first, and the lead hears how it went; otherwise the person merges. The
   epic is completed with its last child, and the lead ends. The board is
-  its memory: `lead: { agent, model, by, at, until }` on the epic while one
-  is meant to run, the plan in notes on it, and its children told in their
+  its memory: `dispatch: { agent, model, by, at, until, role: lead }` on
+  the epic while one is meant to run (an older `lead:` is read as a lead
+  waiting for a runner, listed paused until Resume), the plan in notes on
+  it, and its children told in their
   brief that a lead reads their notes. The epic's pane has a Lead block
   (who, where it stands, done of all, running of the most, what it last
   said, what waits for you) with Pause (it hands off nothing; what runs
@@ -794,8 +800,9 @@ board changes (and in the feed).
   starts it. A run another runner works shows as the window's own do,
   marked with where it runs, in the faint mono: the row's line `codex ·
   Editing… · in a terminal`, a tab in the dock (`Handed off: … (in a
-  terminal)`), Stop (which asks that runner to stop it through its run
-  file, and ends its process if it has not within 15 seconds), and Ready to
+  terminal)`), Stop (which asks that runner through
+  `state/runs/<run-id>.stop.json`; the runner stops it within a second, and
+  no process is ever signalled from another), and Ready to
   merge asked again when it ends. Every runner writes its runs under
   `.brainfile/state/runs/`; the host's watch lets those and
   `state/runners/` through (the rest of `state/` it ignores), says so to
@@ -821,11 +828,17 @@ board changes (and in the feed).
   claim keys (the first 15; the rest by `brainfile list --type decision`),
   with the rule: work within them, run `check` before going against one, and
   record a new lasting choice with `decide`.
-- **Every agent gets the board tools.** The MCP server is started as the
-  real `node` binary and the CLI's own file, with PATH and HOME passed,
-  because some agents (Codex) start MCP servers in a stripped environment
-  where a version-manager shim never answers. The brief also says to fall
-  back to the `brainfile` command line, never to edit board files by hand.
+- **Every agent gets the board tools, and the app's own `brainfile`.** The
+  MCP server is the CLI shipped with the app (in its Resources when
+  packaged), run by the app's binary as node, never whichever `brainfile`
+  is installed: an older one has no dispatch tools, and the chat could not
+  hand off. PATH and HOME are passed, because some agents (Codex) start MCP
+  servers in a stripped environment where a version-manager shim never
+  answers, and a shim first on the agent's PATH makes `brainfile` in its
+  shell the same CLI, carrying its role (`BRAINFILE_AGENT_ROLE`). When the
+  CLI cannot be found, the chat or the lead says so. The brief also says to
+  fall back to the `brainfile` command line, never to edit board files by
+  hand.
 - **Permissions are the agent's own.** Each agent reports its permission
   modes at runtime (ACP session modes), and Settings offers exactly those,
   in the agent's words. One switch, Work without asking, puts every agent
