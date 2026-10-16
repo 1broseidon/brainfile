@@ -387,11 +387,13 @@ describe('dispatch --now, review, land and discard: with a fake agent', () => {
 describe('roles: what an agent\'s server lists', () => {
   const names = async (client: WireClient) => (await client.listTools()).map((t) => t.name);
 
-  test('the role comes from BRAINFILE_AGENT_ROLE; a lead\'s tree from BRAINFILE_LEAD_SCOPE', () => {
+  test('the role comes from BRAINFILE_AGENT_ROLE; a lead\'s tree from BRAINFILE_LEAD_SCOPE; one unknown is a worker, not a person', () => {
     expect(agentRoleOf({})).toEqual({});
     expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: 'Worker' })).toEqual({ role: 'worker' });
     expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: 'lead', BRAINFILE_LEAD_SCOPE: 'epic-1' })).toEqual({ role: 'lead', scope: 'epic-1' });
-    expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: 'admin' })).toEqual({});
+    const said: string[] = [];
+    expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: 'admin' }, (line) => said.push(line))).toEqual({ role: 'worker' });
+    expect(said).toEqual(['BRAINFILE_AGENT_ROLE=admin is not a role (chat, lead, worker, discuss): treated as worker']);
   });
 
   test('a worker\'s server lists no dispatch, stop, land or discard; its instructions match', async () => {

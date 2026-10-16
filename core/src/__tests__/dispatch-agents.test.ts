@@ -17,6 +17,7 @@ import {
   Startups,
   agentEnv,
   agentOf,
+  agentRoleOf,
   allAgents,
   applyMode,
   brainfileMcp,
@@ -114,6 +115,46 @@ describe("the board's brainfile", () => {
     useBrainfile(() => "Brainfile's own command line is not in the app");
     expect(() => brainfileMcp({ role: 'chat' })).toThrow("Brainfile's own command line is not in the app");
     expect(agentEnv().PATH?.endsWith(process.env.PATH ?? '')).toBe(true);
+  });
+});
+
+describe('the role an environment gives', () => {
+  it('is the role named, a lead with its scope; none when none is named', () => {
+    expect(agentRoleOf({})).toEqual({});
+    expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: '  ' })).toEqual({});
+    expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: 'Lead', BRAINFILE_LEAD_SCOPE: 'epic-1' })).toEqual({ role: 'lead', scope: 'epic-1' });
+    expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: 'worker', BRAINFILE_LEAD_SCOPE: 'epic-1' })).toEqual({ role: 'worker' });
+  });
+
+  it('one it does not know is a worker, the least access, said once on stderr; never a person with everything', () => {
+    const said: string[] = [];
+    const warn = (line: string) => said.push(line);
+    expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: 'bogus', BRAINFILE_LEAD_SCOPE: 'epic-1' }, warn)).toEqual({ role: 'worker' });
+    expect(agentRoleOf({ BRAINFILE_AGENT_ROLE: 'bogus' }, warn)).toEqual({ role: 'worker' });
+    expect(said).toEqual(['BRAINFILE_AGENT_ROLE=bogus is not a role (chat, lead, worker, discuss): treated as worker']);
+  });
+});
+
+describe('the environment an agent gets', () => {
+  const saved = { ...process.env };
+  afterEach(() => {
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved);
+  });
+
+  it("is this process's, less the Claude Code session and the npm run it was started under", () => {
+    Object.assign(process.env, {
+      CLAUDECODE: '1', CLAUDE_CODE_ENTRYPOINT: 'cli', CLAUDE_CODE_SESSION_ID: 'abc', CLAUDE_PID: '123', npm_lifecycle_event: 'dev', npm_config_user_agent: 'npm/10',
+      INIT_CWD: '/x', NODE_ENV: 'development', CLAUDE_CONFIG_DIR: '/cfg', BRAINFILE_KEPT: 'yes',
+    });
+    const env = agentEnv();
+    for (const key of ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID', 'CLAUDE_PID', 'npm_lifecycle_event', 'npm_config_user_agent', 'INIT_CWD', 'NODE_ENV']) {
+      expect([key, env[key]]).toEqual([key, undefined]);
+    }
+    // The person's own settings and keys are passed on; what this process's shell had stays as it was.
+    expect(env).toMatchObject({ CLAUDE_CONFIG_DIR: '/cfg', BRAINFILE_KEPT: 'yes', HOME: process.env.HOME });
+    expect(env.PATH?.endsWith(process.env.PATH ?? '')).toBe(true);
+    expect(process.env.CLAUDECODE).toBe('1');
   });
 });
 
