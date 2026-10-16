@@ -25,35 +25,25 @@ decisions:
   - decision-14
   - decision-19
 contract:
-  status: in_progress
+  status: draft
   deliverables:
     - type: file
       path: core/src/dispatch/discuss.ts
       description: The task's discussion context and rules, from the desktop's discuss.ts
-    - type: file
-      path: cli/src/commands/discuss.ts
-      description: brainfile discuss
     - type: file
       path: cli/src/mcp/prompts.ts
       description: An MCP discuss prompt
     - type: test
       path: core/src/__tests__/dispatch-discuss.test.ts
       description: Context, rules and refusals
-    - type: file
-      path: cli/src/__tests__/mcp-parity.test.ts
-      description: discuss mapped
   validation:
     commands:
       - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
       - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
   constraints:
     - Ask the person and record the decision before going against decision-6
-  metrics:
-    readyAt: "2026-10-15T21:40:10.253Z"
-    pickedUpAt: "2026-10-15T23:28:24.991Z"
-    reworkCount: 0
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-16T01:17:00.638Z"
+updatedAt: "2026-10-16T01:17:04.235Z"
 dispatch:
   agent: claude
   model: opus
