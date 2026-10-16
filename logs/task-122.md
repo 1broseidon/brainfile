@@ -1,8 +1,6 @@
 ---
 id: task-122
 title: "Dependencies across boards: a hand-off, a lead and a brief treat alias:task-id as a real dependency, open until it is complete and landed on the related board"
-column: review
-position: 19
 tags:
   - core
   - dispatch
@@ -55,7 +53,7 @@ contract:
     deliveredAt: "2026-10-16T06:24:25.823Z"
     duration: 613
 createdAt: "2026-10-16T06:09:34.759Z"
-updatedAt: "2026-10-16T06:31:35.603Z"
+updatedAt: "2026-10-16T06:31:40.123Z"
 dispatch:
   agent: codex
   model: gpt-6.1-sol
@@ -72,6 +70,7 @@ dispatch:
     ended: "2026-10-16T06:24:46.631Z"
     outcome: review
 assignee: codex
+completedAt: "2026-10-16T06:31:40.123Z"
 ---
 
 ## Description
