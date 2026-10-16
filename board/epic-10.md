@@ -41,7 +41,7 @@ decisions:
   - decision-8
 createdAt: "2026-10-16T06:08:18.930Z"
 epicBranch: true
-updatedAt: "2026-10-16T06:11:05.893Z"
+updatedAt: "2026-10-16T06:11:07.307Z"
 dispatch:
   agent: claude
   model: opus
@@ -50,6 +50,11 @@ dispatch:
   at: "2026-10-16T06:11:05.769Z"
   until: done
   role: lead
+  claim:
+    host: Georges-Mac-Studio
+    runner: desktop
+    pid: 20499
+    at: "2026-10-16T06:11:07.307Z"
 assignee: claude
 ---
 
