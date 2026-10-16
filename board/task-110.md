@@ -1,8 +1,8 @@
 ---
 id: task-110
 title: "brainfile discuss: talk a task over in the terminal, under decision-19's rules"
-column: todo
-position: 10
+column: in-progress
+position: 2
 tags:
   - cli
   - discuss
@@ -41,7 +41,7 @@ contract:
 createdAt: "2026-10-16T01:16:29.662Z"
 decisions:
   - decision-19
-updatedAt: "2026-10-16T01:43:10.968Z"
+updatedAt: "2026-10-16T01:43:23.487Z"
 dispatch:
   agent: claude
   model: opus
