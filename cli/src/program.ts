@@ -24,6 +24,7 @@ import { prCommand, PR_COMMAND_HELP } from './commands/pr';
 import { agentsCommand, dispatchCommand, dispatchLeadCommand, dispatchStatusCommand, dispatchStopCommand, DISPATCH_COMMAND_HELP } from './commands/dispatch';
 import { discardCommand, landCommand, reviewCommand, REVIEW_COMMAND_HELP } from './commands/review';
 import { runCommand, RUN_COMMAND_HELP } from './commands/run';
+import { discussCommand, DISCUSS_COMMAND_HELP } from './commands/discuss';
 import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
 import { fixCommand } from './commands/fix';
 import { mergeDriverCommand } from './commands/merge-driver';
@@ -455,6 +456,18 @@ Brainfile file resolution (when you don't pass --file):
     .addOption(new Option('--until <until>', 'For a hand-off whose request names none: review stops it in Review (default); done lands it where the repository allows').choices(['review', 'done']))
     .action(async (options) => { await runCommand(options); });
   runCmd.addHelpText('after', `\n${RUN_COMMAND_HELP}`);
+
+  // Discuss (task-110, decision-19): a task talked over with an agent here, under core's rules for a discussion.
+  const discussCmd = program
+    .command('discuss')
+    .description("Talk a task over with an agent in this terminal: it reads, and changes only the task's spec with your yes; Ctrl-C ends it")
+    .argument('<task>', 'The task to talk over, e.g. task-12')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--agent <agent>', 'Who to talk it over with (brainfile agents lists them). Default: the agent it was last handed to, else its assignee, else the first installed')
+    .option('--model <model>', 'A model the agent offers. Default: the agent\'s own')
+    .option('--effort <effort>', 'The effort level for that model')
+    .action(async (task: string, options) => { await discussCommand(task, options); });
+  discussCmd.addHelpText('after', `\n${DISCUSS_COMMAND_HELP}`);
 
   const reviewCmd = program
     .command('review [task]')

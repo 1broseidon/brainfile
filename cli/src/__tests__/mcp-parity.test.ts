@@ -75,6 +75,8 @@ const TOOL_FOR: Record<string, string> = {
   land: 'review', // action land
   discard: 'review', // action discard
   agents: 'agents',
+  // brainfile discuss (task-110) opens the session itself; the discuss tool and prompt give an MCP client the same text.
+  discuss: 'discuss',
 };
 
 /** CLI capability → the MCP resources that serve it. */
@@ -185,9 +187,8 @@ describe('MCP parity with the CLI (spec-13)', () => {
   test('every advertised tool is one a CLI capability maps to, or reads or edits the board config', async () => {
     // board is the one tool with no command of its own: the config's title,
     // instructions and related boards are edited by hand in brainfile.md by a
-    // person, and an agent must never do that. discuss is the discuss prompt
-    // as a tool; brainfile discuss (task-110) maps to it when it lands.
-    const mapped = new Set([...Object.values(TOOL_FOR), 'board', 'discuss']);
+    // person, and an agent must never do that.
+    const mapped = new Set([...Object.values(TOOL_FOR), 'board']);
     const extra = (await client.listTools()).map((t) => t.name).filter((name) => !mapped.has(name));
     expect(extra).toEqual([]);
   });
