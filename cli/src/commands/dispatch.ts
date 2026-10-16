@@ -20,8 +20,11 @@
  * The MCP tools (dispatch_tool.ts, agents_tool.ts) call the same functions.
  * An agent's server is told its role (BRAINFILE_AGENT_ROLE): a worker never
  * dispatches or stops (decision-15), and a lead reaches only its own tree
- * (BRAINFILE_LEAD_SCOPE). That is a rule for agents, not a security
- * boundary: anyone on the machine can run this CLI.
+ * (BRAINFILE_LEAD_SCOPE). The command line keeps to the same role when an
+ * agent runs it in its own shell, whose environment carries it too: and no
+ * agent starts a runner from inside its turn (`run`, `dispatch --now`). That
+ * is a rule for agents, not a security boundary: anyone on the machine can
+ * run this CLI.
  *
  * Each command makes a runner for its own length and lets it go after: its
  * runner file goes, and its board writes, which the runner's board debounces,
@@ -63,6 +66,7 @@ import { flushBoardCommits, isClaimLost, isRunEnded, isRunLost, liveRunners, pro
 import * as path from 'path';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
+import { callerAccess, refuseInAgent } from '../utils/agent-role';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { runLoop } from './run';
@@ -679,7 +683,9 @@ export async function dispatchCommand(ids: string[], options: DispatchOptions, l
   const filePath = resolveCliBrainfilePath(options.file);
   const until = options.until;
   if (until !== undefined && until !== 'review' && until !== 'done') throw new CLIError(`--until is review or done, not ${until}`);
-  const report = await dispatchReport(filePath, { ids, column: options.column, parent: options.parent }, { agent: options.agent, model: options.model, effort: options.effort, until });
+  const access = callerAccess();
+  if (options.now) refuseInAgent(access, 'run a hand-off here with --now');
+  const report = await dispatchReport(filePath, { ids, column: options.column, parent: options.parent }, { agent: options.agent, model: options.model, effort: options.effort, until }, { access });
   if (options.json && !options.now) {
     logger.log(JSON.stringify(report, null, 2));
     return report;
@@ -696,7 +702,7 @@ export async function dispatchCommand(ids: string[], options: DispatchOptions, l
 
 /** `brainfile dispatch status`. */
 export async function dispatchStatusCommand(options: { file?: string; json?: boolean }, logger: Logger = defaultLogger): Promise<StatusReport> {
-  const report = await statusReport(resolveCliBrainfilePath(options.file));
+  const report = await statusReport(resolveCliBrainfilePath(options.file), { access: callerAccess() });
   logger.log(options.json ? JSON.stringify(report, null, 2) : statusText(report));
   return report;
 }
@@ -736,14 +742,14 @@ export function statusText(report: StatusReport): string {
 
 /** `brainfile dispatch stop <run-id|task-id>`. */
 export async function dispatchStopCommand(ref: string, options: { file?: string; json?: boolean }, logger: Logger = defaultLogger): Promise<StopReport> {
-  const report = await stopReport(resolveCliBrainfilePath(options.file), ref, { waitMs: STOP_GRACE_MS + 2_000 });
+  const report = await stopReport(resolveCliBrainfilePath(options.file), ref, { access: callerAccess(), waitMs: STOP_GRACE_MS + 2_000 });
   logger.log(options.json ? JSON.stringify(report, null, 2) : report.stopped ? chalk.green(report.said) : chalk.yellow(report.said));
   return report;
 }
 
 /** `brainfile dispatch pause <epic>` and `dispatch resume <epic>`. */
 export async function dispatchLeadCommand(action: 'pause' | 'resume', epicId: string, options: { file?: string; json?: boolean }, logger: Logger = defaultLogger): Promise<LeadReport> {
-  const report = await leadReport(resolveCliBrainfilePath(options.file), epicId, action);
+  const report = await leadReport(resolveCliBrainfilePath(options.file), epicId, action, { access: callerAccess() });
   logger.log(options.json ? JSON.stringify(report, null, 2) : report.state === 'paused' ? chalk.yellow(report.said) : chalk.green(report.said));
   return report;
 }

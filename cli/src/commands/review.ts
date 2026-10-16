@@ -22,6 +22,7 @@ import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { guard, outOfScope, placeOf, withRunner, type Access } from './dispatch';
+import { callerAccess } from '../utils/agent-role';
 
 export const REVIEW_COMMAND_HELP = `
 Examples:
@@ -154,20 +155,21 @@ export function readyText(report: ReadyReport): string {
 /** `brainfile review <task>` or `brainfile review --ready`. */
 export async function reviewCommand(taskId: string | undefined, options: { file?: string; ready?: boolean; json?: boolean }, logger: Logger = defaultLogger): Promise<ReviewReport | ReadyReport> {
   const filePath = resolveCliBrainfilePath(options.file);
+  const access = callerAccess();
   if (options.ready) {
-    const report = await readyReport(filePath);
+    const report = await readyReport(filePath, { access });
     logger.log(options.json ? JSON.stringify(report, null, 2) : readyText(report));
     return report;
   }
   if (!taskId) throw new CLIError('Name the task to review, or --ready for every hand-off that can land');
-  const report = await reviewReport(filePath, taskId);
+  const report = await reviewReport(filePath, taskId, { access });
   logger.log(options.json ? JSON.stringify(report, null, 2) : reviewText(report, taskTitle(filePath, taskId)));
   return report;
 }
 
 /** `brainfile land <task> [--into <branch>]`. Exits non-zero when it did not land. */
 export async function landCommand(taskId: string, options: { file?: string; into?: string; json?: boolean }, logger: Logger = defaultLogger): Promise<LandReport> {
-  const report = await landReport(resolveCliBrainfilePath(options.file), taskId, { into: options.into });
+  const report = await landReport(resolveCliBrainfilePath(options.file), taskId, { access: callerAccess(), into: options.into });
   if (options.json) logger.log(JSON.stringify(report, null, 2));
   else if (report.landed) logger.log(chalk.green(report.completed ? `${report.message}. ${taskId} is done.` : report.message));
   else logger.log(report.sentBack ? chalk.yellow(report.message) : chalk.red(report.message));
@@ -177,7 +179,7 @@ export async function landCommand(taskId: string, options: { file?: string; into
 
 /** `brainfile discard <task>`. */
 export async function discardCommand(taskId: string, options: { file?: string; json?: boolean }, logger: Logger = defaultLogger): Promise<DiscardReport> {
-  const report = await discardReport(resolveCliBrainfilePath(options.file), taskId);
+  const report = await discardReport(resolveCliBrainfilePath(options.file), taskId, { access: callerAccess() });
   logger.log(options.json ? JSON.stringify(report, null, 2) : report.message);
   return report;
 }

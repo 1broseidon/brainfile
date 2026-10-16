@@ -122,6 +122,19 @@ const packageJson = JSON.parse(
   readFileSync(join(__dirname, '..', 'package.json'), 'utf8')
 );
 
+/**
+ * Every command's name, so the first word of `brainfile <word>` is told from
+ * a board's path (cli.ts): one missing here opens the TUI on a folder of
+ * that name instead (`brainfile agents` beside an agents/ folder). A test
+ * holds it to the commands createProgram registers.
+ */
+export const SUBCOMMANDS: readonly string[] = [
+  'init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search',
+  'decide', 'supersede', 'retire', 'check', 'index', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract',
+  'schema', 'adr', 'plan', 'types', 'columns', 'sync', 'where', 'fix', 'issues', 'pr', 'dispatch', 'run', 'discuss', 'review', 'land',
+  'discard', 'agents', 'adopt', 'merge-boards', 'backups', 'merge-driver', 'help',
+];
+
 /** The CLI's commander program, with every command registered and nothing parsed. */
 export function createProgram(): Command {
   const program = new Command();

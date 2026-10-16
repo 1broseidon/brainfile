@@ -102,7 +102,7 @@ export function createBrainfileMcpServer(defaultFile: string, access: Access = {
   registerSyncTool(server, defaultFile);
   registerWhereTool(server, defaultFile);
   registerIssuesTool(server, defaultFile);
-  registerPullRequestTool(server, defaultFile);
+  registerPullRequestTool(server, defaultFile, undefined, access);
   // Hand-offs (task-81)
   registerDispatchTools(server, defaultFile, access);
   registerReviewTool(server, defaultFile, access);

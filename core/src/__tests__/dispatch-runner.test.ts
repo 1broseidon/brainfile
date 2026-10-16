@@ -14,6 +14,7 @@ import { claimDispatchFile, readDispatchRecord } from '../dispatchRecord';
 import { listRunFiles, readRunFile, readRunStop, runStopPath, writeRunFile, type RunFile } from '../repo/runFiles';
 import { readyToMerge } from '../repo/worktree';
 import { Runner, fileBoard, runOf, type RunnerOptions } from '../dispatch/runner';
+import { useBrainfile } from '../dispatch/agents';
 import { findV2Task, getV2Dirs } from '../workspace';
 import type { AgentRun, PermissionAsk } from '../dispatch/types';
 
@@ -37,7 +38,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const has = (name) => fs.existsSync(path.join(dir, name));
 new AgentSideConnection((conn) => ({
   async initialize() { return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} }; },
-  async newSession() { const sessionId = 's' + sessions.size; sessions.set(sessionId, { cancelled: false }); return { sessionId }; },
+  async newSession({ mcpServers }) {
+    const sessionId = 's' + sessions.size;
+    sessions.set(sessionId, { cancelled: false });
+    fs.writeFileSync(path.join(dir, 'session-' + sessionId), JSON.stringify({ role: process.env.BRAINFILE_AGENT_ROLE ?? null, path: process.env.PATH, mcpServers }));
+    return { sessionId };
+  },
   async authenticate() { return {}; },
   async prompt({ sessionId, prompt }) {
     const text = prompt.map((p) => p.text ?? '').join('');
@@ -181,6 +187,41 @@ afterAll(() => {
   for (const [key, value] of Object.entries(savedEnv)) {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
+  }
+});
+
+test("a hand-off's agent has its role in its own environment, and the brainfile its runner brings: the board's server and first on PATH", async () => {
+  plainBoard({ 'task-1': [] });
+  const shim = path.join(base, 'bin');
+  useBrainfile(() => ({ launch: { command: '/Apps/Brainfile', args: ['/Apps/cli.js'], env: { ELECTRON_RUN_AS_NODE: '1' } }, shim }));
+  try {
+    const a = runner();
+    await a.queue(project, ['task-1'], { agent: AGENT, by: 'cli', until: 'review' });
+    const started = await a.start(project, 'task-1');
+    if (!started.ok) throw new Error(started.error);
+    const seen = await until('the session', () => fs.existsSync(path.join(fakeDir, 'session-s0')) && JSON.parse(fs.readFileSync(path.join(fakeDir, 'session-s0'), 'utf-8')));
+    expect(seen.role).toBe('worker');
+    expect(seen.path.split(':')[0]).toBe(shim);
+    expect(seen.mcpServers).toEqual([expect.objectContaining({ name: 'brainfile', command: '/Apps/Brainfile', args: ['/Apps/cli.js', 'mcp'] })]);
+    expect(seen.mcpServers[0].env).toEqual(expect.arrayContaining([{ name: 'ELECTRON_RUN_AS_NODE', value: '1' }, { name: 'BRAINFILE_AGENT_ROLE', value: 'worker' }]));
+  } finally {
+    useBrainfile(null);
+  }
+});
+
+test("a brainfile its runner brings but cannot find fails the hand-off with why, before its agent starts", async () => {
+  plainBoard({ 'task-1': [] });
+  useBrainfile(() => "Brainfile's own command line is missing");
+  try {
+    const a = runner();
+    await a.queue(project, ['task-1'], { agent: AGENT, by: 'cli', until: 'review' });
+    const started = await a.start(project, 'task-1');
+    if (!started.ok) throw new Error(started.error);
+    const run = await until('the run to fail', () => (a.get(started.value.run.id)?.state === 'failed' ? a.get(started.value.run.id) : undefined));
+    expect(run!.error).toContain("Brainfile's own command line is missing");
+    expect(fs.existsSync(path.join(fakeDir, 'session-s0'))).toBe(false);
+  } finally {
+    useBrainfile(null);
   }
 });
 

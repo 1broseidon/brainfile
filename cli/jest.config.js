@@ -42,6 +42,11 @@ const moduleFileExtensions = ['ts', 'tsx', 'js', 'jsx', 'json', 'node'];
 // Workers and every git/CLI child inherit this. Tests that exercise detection
 // call its functions directly.
 process.env.BRAINFILE_DETECT_AGENT = process.env.BRAINFILE_DETECT_AGENT || 'off';
+// A hand-off's agent runs these suites in a shell that carries its role
+// (BRAINFILE_AGENT_ROLE), which the commands keep to; the suites run as a
+// person does, and the role tests set it themselves.
+delete process.env.BRAINFILE_AGENT_ROLE;
+delete process.env.BRAINFILE_LEAD_SCOPE;
 
 module.exports = {
   collectCoverageFrom: [

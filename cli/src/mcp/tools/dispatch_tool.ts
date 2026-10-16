@@ -80,7 +80,7 @@ export function registerDispatchTools(server: McpServer, defaultFile: string, ac
       'dispatch_stop',
       {
         title: 'Stop A Hand-Off',
-        description: "Stop a run by its run id or its task id, like brainfile dispatch stop, whichever runner on this machine has it: its runner is asked to stop it, and sent SIGTERM if it has not within 15 s. Its worktree and branch stay for review; its claim is given back. An epic's id stops its lead: what it handed off goes on." + lead,
+        description: "Stop a run by its run id or its task id, like brainfile dispatch stop, whichever runner on this machine has it: its runner is asked through a stop file beside the run and stops it within a second while it is up. Its worktree and branch stay for review; its claim is given back. An epic's id stops its lead: what it handed off goes on." + lead,
         inputSchema: z.object({
           file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
           run: z.string().describe("The run id (run-…), the task id, e.g. task-12, or an epic's id for its lead"),

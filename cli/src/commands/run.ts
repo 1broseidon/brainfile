@@ -36,6 +36,7 @@ import { flushBoardCommits, projectOfBoard, unlanded } from '@brainfile/core/rep
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
 import { agentLabel } from '../utils/agent-label';
+import { callerAccess, refuseInAgent } from '../utils/agent-role';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 
@@ -312,6 +313,7 @@ export function terminalAsk(
 
 /** `brainfile run [--once] [--max N] [--until review|done]`. */
 export async function runCommand(options: RunOptions, logger: Logger = defaultLogger): Promise<RunSummary> {
+  refuseInAgent(callerAccess(), 'run a runner');
   const filePath = resolveCliBrainfilePath(options.file);
   const until = options.until;
   if (until !== undefined && until !== 'review' && until !== 'done') throw new CLIError(`--until is review or done, not ${until}`);

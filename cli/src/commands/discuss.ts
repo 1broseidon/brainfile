@@ -43,6 +43,7 @@ import {
 import { flushBoardCommits, projectOfBoard } from '@brainfile/core/repo';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
+import { callerAccess, refuseInAgent } from '../utils/agent-role';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { agentNamed } from './dispatch';
@@ -293,6 +294,7 @@ export function discussAgent(filePath: string, taskId: string, named?: string): 
 
 /** `brainfile discuss <task> [--agent --model --effort]`. */
 export async function discussCommand(taskId: string, options: DiscussOptions, logger: Logger = defaultLogger): Promise<DiscussSummary> {
+  refuseInAgent(callerAccess(), 'start a discussion');
   const filePath = resolveCliBrainfilePath(options.file);
   assertV2Brainfile(filePath);
   const agent = discussAgent(filePath, taskId, options.agent);

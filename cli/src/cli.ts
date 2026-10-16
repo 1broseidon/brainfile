@@ -4,10 +4,7 @@ import { renderCliError } from './utils/cli-error';
 import { existsSync } from 'fs';
 import { sep } from 'path';
 import { installAutosync } from './utils/board-autosync';
-import { createProgram, runTui } from './program';
-
-// Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'decide', 'supersede', 'retire', 'check', 'index', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'columns', 'sync', 'where', 'fix', 'issues', 'merge-driver', 'help'];
+import { SUBCOMMANDS, createProgram, runTui } from './program';
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -68,6 +65,8 @@ if (tuiCheck.launch) {
    * exception and printed a raw stack trace, and the async commands wired
    * directly as `.action(fn)` printed unhandled-rejection noise.
    */
-  program.parseAsync().catch(renderCliError);
+  // Always node's argv (node, script, args…): run by an Electron binary as node (ELECTRON_RUN_AS_NODE,
+  // as the desktop runs its own copy for its agents), commander would otherwise take the script for a command.
+  program.parseAsync(process.argv, { from: 'node' }).catch(renderCliError);
 
 } // end else block for CLI commands

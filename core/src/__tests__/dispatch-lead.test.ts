@@ -13,7 +13,7 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { changeLeadFile, claimDispatchFile, readDispatchRecord, readLeadRecord, requestDispatchFile } from '../dispatchRecord';
 import { Leads, leadAbove, leadRefusal, leadRefusalOnBoard, planReport, readyOf, treeOf, type LeadDeps, type LeadView, type TreeDoc } from '../dispatch/lead';
-import { leadPermission, readOnlyMode } from '../dispatch/readOnly';
+import { leadPermission, readOnlyMode, readsBoard } from '../dispatch/readOnly';
 import { Runner, type RunnerOptions } from '../dispatch/runner';
 import { writeRunFile } from '../repo/runFiles';
 import { findV2Task, getV2Dirs } from '../workspace';
@@ -103,9 +103,29 @@ test('ready: open work whose dependencies are done and landed; a container is no
   expect(readyOf(tree).map((c) => c.id)).toEqual(['task-2', 'task-5']);
 });
 
-test('a lead writes no code: board tools, the brainfile command line and git that only reads; a mode that only reads', () => {
+test('the brainfile command line reads when it only reads: list, show, review, dispatch status, lint without --fix, issues without --import, pr --status, --help', () => {
+  for (const command of [
+    'brainfile list --column todo', 'brainfile show -t task-1', 'brainfile -g brief --peek', 'npx brainfile search "a b"', 'brainfile log --recent', 'brainfile check deploy',
+    'brainfile where', 'brainfile lint', 'brainfile issues --json', 'brainfile dispatch status', 'brainfile review task-1', 'brainfile review --ready', 'brainfile pr task-1 --status',
+    'brainfile agents', 'brainfile types', 'brainfile columns list', 'brainfile land --help', 'brainfile --version',
+  ]) {
+    expect([command, readsBoard(command)]).toEqual([command, true]);
+  }
+  for (const command of [
+    'brainfile', 'brainfile land task-1', 'brainfile discard task-1', 'brainfile dispatch task-1', 'brainfile dispatch task-1 --now', 'brainfile dispatch stop task-1', 'brainfile run',
+    'brainfile discuss task-1', 'brainfile pr task-1', 'brainfile lint --fix', 'brainfile issues --import 12', 'brainfile add -t x', 'brainfile types add bug', 'brainfile list; brainfile land task-1',
+    'BRAINFILE_AGENT_ROLE= brainfile land task-1', 'git status',
+  ]) {
+    expect([command, readsBoard(command)]).toEqual([command, false]);
+  }
+});
+
+test('a lead writes no code: board tools, and the brainfile command line and git where they only read; a mode that only reads', () => {
   expect(leadPermission('mcp__brainfile__dispatch', 'other')).toBe('allow');
   expect(leadPermission('`brainfile list`', 'execute')).toBe('allow');
+  // Its tools keep to its tree; the command line would not, so only what reads is let through (task-81).
+  expect(leadPermission('Bash', 'execute', { command: 'brainfile land task-9' })).toBe('refuse');
+  expect(leadPermission('Bash', 'execute', { command: 'brainfile dispatch task-9 --now' })).toBe('refuse');
   expect(leadPermission('Bash', 'execute', { command: ['git', 'log', '-3'] })).toBe('allow');
   expect(leadPermission('`git status && rm -rf src`', 'execute')).toBe('refuse');
   expect(leadPermission('`npm test`', 'execute')).toBe('refuse');
