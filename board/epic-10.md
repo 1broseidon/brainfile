@@ -41,7 +41,16 @@ decisions:
   - decision-8
 createdAt: "2026-10-16T06:08:18.930Z"
 epicBranch: true
-updatedAt: "2026-10-16T06:10:41.282Z"
+updatedAt: "2026-10-16T06:11:05.893Z"
+dispatch:
+  agent: claude
+  model: opus
+  effort: high
+  by: mcp
+  at: "2026-10-16T06:11:05.769Z"
+  until: done
+  role: lead
+assignee: claude
 ---
 
 ## Description
