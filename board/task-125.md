@@ -49,6 +49,11 @@ contract:
   metrics:
     readyAt: "2026-10-16T06:56:53.503Z"
 createdAt: "2026-10-16T06:56:53.515Z"
+subtasks:
+  - id: task-125-1
+    title: link:dev --features <list> plays an older desk; documented in desktop/link.md
+    completed: false
+updatedAt: "2026-10-16T07:06:55.026Z"
 ---
 
 ## Description
