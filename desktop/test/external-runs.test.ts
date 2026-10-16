@@ -183,3 +183,26 @@ test('a run whose runner went away is said as failed; a stop from the window rea
   assert.equal(external.list().find((r) => r.id === 'run-going')?.state, 'stopped');
   assert.deepEqual(external.going(), []);
 });
+
+test("a terminal discussion's run files (brainfile discuss, kind ask) are left out: no row, no tab, no ask in the band", () => {
+  const window = runner();
+  const events: AgentEvent[] = [];
+  const external = new ExternalRuns({ others: (p) => window.others(p), answer: (r, a, o, p) => window.answerAsk(r, a, o, p), emit: (e) => events.push(e) });
+  const now = Date.now();
+  const options = [{ optionId: 'once', name: 'Allow once', kind: 'allow_once' as const }];
+  // A turn under way that waits on the person at the terminal, and an earlier turn that ended.
+  for (const [id, fields] of [
+    ['run-talk-2', { state: 'waiting', activity: 'running', ask: { id: 'ask-1', title: 'Read README.md', kind: 'read', options } }],
+    ['run-talk-1', { state: 'done', activity: 'done', endedAt: now - 1000 }],
+  ] as const) {
+    repo.writeRunFile(dotDir, { id, kind: 'ask', taskId: 'task-3', agent: 'claude', startedAt: now - 2000, host: window.host, pid: TERMINAL_PID, runner: 'cli', beatAt: now, projectId: project, ...fields });
+  }
+  assert.ok(window.others(project).some((f) => f.id === 'run-talk-2'), 'the runner reads them');
+  external.look(project);
+  const talk = (id: string) => id.startsWith('run-talk');
+  assert.deepEqual(events.filter((e) => (e.kind === 'run' && talk(e.run.id)) || (e.kind === 'permission' && talk(e.ask.runId))), []);
+  assert.deepEqual(external.list().filter((r) => talk(r.id)), []);
+  assert.deepEqual(external.asks(), []);
+  // Not a hand-off: Merge and Hand to… do not wait on it.
+  assert.equal(window.liveDispatch(project, 'task-3'), undefined);
+});
