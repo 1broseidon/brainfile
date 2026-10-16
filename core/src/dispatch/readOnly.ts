@@ -25,7 +25,7 @@ const PLAIN = /^[^;&|<>`$\n]*$/;
 /** The board's own command line, its fallback when the MCP tools are missing. */
 const BOARD_COMMAND = /^(?:npx\s+)?brainfile(?:\s|$)/;
 /** brainfile commands that only read, whatever they are given. */
-const READING_BOARD = new Set(['list', 'show', 'brief', 'search', 'log', 'check', 'where', 'review', 'agents', 'schema', 'help']);
+const READING_BOARD = new Set(['list', 'show', 'brief', 'search', 'log', 'check', 'review', 'agents', 'help']);
 /** brainfile commands that only read as their second word says: `dispatch status`, `columns` or `columns list`. */
 const READING_SECOND: Record<string, ReadonlySet<string | undefined>> = {
   dispatch: new Set(['status']),
@@ -61,6 +61,9 @@ export function readsBoard(command: string): boolean {
   if (!name || name.startsWith('-')) return false;
   if (READING_BOARD.has(name)) return true;
   if (name === 'lint') return !has('--fix');
+  // `schema update` downloads, `where --fetch` moves the board's refs.
+  if (name === 'schema') return second !== 'update';
+  if (name === 'where') return !has('--fetch');
   if (name === 'issues') return !has('--import');
   if (name === 'pr') return has('--status');
   if (name === 'index') return has('--status');

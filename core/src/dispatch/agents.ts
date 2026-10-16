@@ -357,8 +357,26 @@ function withOwnBrainfile(PATH: string): string {
 export function brainfileOnPath(): BrainfileLaunch | null {
   const bin = which('brainfile');
   if (!bin) return null;
-  const node = realNode();
-  return node ? { command: node, args: [fs.realpathSync(bin)] } : { command: bin, args: [] };
+  const file = fs.realpathSync(bin);
+  // Only a node script is run with node: a shell shim (this app's own, first on an agent's PATH) or a
+  // version manager's binary is run as it is.
+  const node = nodeScript(file) ? realNode() : null;
+  return node ? { command: node, args: [file] } : { command: bin, args: [] };
+}
+
+/** Whether a file is a script node runs: a `.js`/`.mjs`/`.cjs` file, or one whose first line names node. */
+function nodeScript(file: string): boolean {
+  if (/\.[mc]?js$/.test(file)) return true;
+  try {
+    const fd = fs.openSync(file, 'r');
+    const head = Buffer.alloc(128);
+    const read = fs.readSync(fd, head, 0, 128, 0);
+    fs.closeSync(fd);
+    const first = head.subarray(0, read).toString('utf-8').split('\n')[0];
+    return first.startsWith('#!') && /\bnode\b/.test(first);
+  } catch {
+    return false;
+  }
 }
 
 /**

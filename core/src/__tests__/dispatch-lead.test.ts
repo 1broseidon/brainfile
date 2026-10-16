@@ -107,14 +107,14 @@ test('the brainfile command line reads when it only reads: list, show, review, d
   for (const command of [
     'brainfile list --column todo', 'brainfile show -t task-1', 'brainfile -g brief --peek', 'npx brainfile search "a b"', 'brainfile log --recent', 'brainfile check deploy',
     'brainfile where', 'brainfile lint', 'brainfile issues --json', 'brainfile dispatch status', 'brainfile review task-1', 'brainfile review --ready', 'brainfile pr task-1 --status',
-    'brainfile agents', 'brainfile types', 'brainfile columns list', 'brainfile land --help', 'brainfile --version',
+    'brainfile agents', 'brainfile types', 'brainfile columns list', 'brainfile land --help', 'brainfile --version', 'brainfile schema', 'brainfile schema task',
   ]) {
     expect([command, readsBoard(command)]).toEqual([command, true]);
   }
   for (const command of [
     'brainfile', 'brainfile land task-1', 'brainfile discard task-1', 'brainfile dispatch task-1', 'brainfile dispatch task-1 --now', 'brainfile dispatch stop task-1', 'brainfile run',
     'brainfile discuss task-1', 'brainfile pr task-1', 'brainfile lint --fix', 'brainfile issues --import 12', 'brainfile add -t x', 'brainfile types add bug', 'brainfile list; brainfile land task-1',
-    'BRAINFILE_AGENT_ROLE= brainfile land task-1', 'git status',
+    'BRAINFILE_AGENT_ROLE= brainfile land task-1', 'git status', 'brainfile schema update', 'brainfile where --fetch',
   ]) {
     expect([command, readsBoard(command)]).toEqual([command, false]);
   }

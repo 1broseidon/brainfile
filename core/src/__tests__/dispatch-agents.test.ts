@@ -64,6 +64,8 @@ import {
   type AgentRun,
   type PermissionAsk,
   type Session,
+  brainfileOnPath,
+  realNode,
 } from '../dispatch';
 import { getV2Dirs } from '../workspace';
 
@@ -778,5 +780,24 @@ describe('the brief', () => {
     expect(text).toContain('task-1 ("Do task-1"):\n- Started.\n- The parser is in; the CLI flag is left for task-2.');
     expect(leftFor(dirs, undefined)).toBe('');
     expect(brief(project, 'task-2')).toContain('the CLI flag is left for task-2');
+  });
+});
+
+describe('the brainfile on PATH', () => {
+  const PATH = process.env.PATH;
+  afterEach(() => {
+    process.env.PATH = PATH;
+  });
+
+  it('runs a node script with node, and a shell shim (this app\'s own, first on an agent\'s PATH) as it is', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-onpath-'));
+    const bin = path.join(dir, 'brainfile');
+    fs.writeFileSync(bin, "#!/bin/sh\nELECTRON_RUN_AS_NODE='1' exec /app/Electron /app/cli.js \"$@\"\n", { mode: 0o755 });
+    process.env.PATH = `${dir}:${PATH}`;
+    expect(brainfileOnPath()).toEqual({ command: bin, args: [] });
+    fs.writeFileSync(bin, '#!/usr/bin/env node\nconsole.log(1)\n', { mode: 0o755 });
+    const launch = brainfileOnPath()!;
+    if (realNode()) expect(launch).toEqual({ command: realNode(), args: [fs.realpathSync(bin)] });
+    else expect(launch).toEqual({ command: bin, args: [] });
   });
 });
