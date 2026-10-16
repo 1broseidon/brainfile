@@ -67,3 +67,13 @@ Not in scope: a daemon or background server, remote runners, scheduling by time 
 - 2026-10-15T21:48:40.124Z: [claude] plan-2 completed (Claude, at the lead's request): it was task-73's research document, not work, and the epic can reach Ready to merge only with every child closed.
 - 2026-10-16T01:43:09.592Z: [claude] Lead: task-79 landed on dispatch/epic-6. Its leftovers for brainfile discuss went into task-110, now dispatched. task-88 now depends on task-110 because its step 4 runs Discuss from the CLI. epic-6 now rests on decision-19 instead of the superseded decision-6. decision-19's source (core/src/dispatch/discuss.ts) can't be set yet: the file exists only on dispatch/epic-6, not on the trunk the hash is taken from. Set it once epic-6 merges.
 - 2026-10-16T01:57:10.324Z: [claude] Lead: task-110 landed on dispatch/epic-6. task-88, the last child, is dispatched (claude/opus). I added task-110's leftovers to its description: run brainfile discuss in step 4, and in step 3 check how the desktop handles a terminal discussion's ask run files. Still to do after the merge: set decision-19's source to core/src/dispatch/discuss.ts.
+- 2026-10-16T02:46:50.910Z: [claude] All 8 children landed on dispatch/epic-6 (5a2b87c: 83 files, +9.5k/-2.2k). Every suite passes there: core 1179, CLI 698 + 191, desktop 142, with typecheck, the bundle and the vite build clean. Claude's review found one blocker and five should-fixes, so it is not merged yet.
+- Blocker: the chat and the lead reach brainfile mcp through whatever brainfile is on PATH, the published 0.22.1, which has no dispatch tools.
+- Old dispatch:/lead: records re-run on upgrade with nobody asking.
+- The lead and the chat can get around their roles through the brainfile CLI.
+- A refused claim still starts the agent.
+- A stop from another process can be lost, and the whole runner is then SIGTERMed.
+- A task being landed can be started meanwhile.
+- A lead taken up when its children are complete but unlanded is refused.
+- Minors: quitting re-runs hand-offs; run files pruned only once; offerIfLast is desktop-only; SUBCOMMANDS is missing the new commands; pull_request ignores roles.
+Fixes are being built on e6fix/cli and e6fix/runner, to be merged into dispatch/epic-6 before the epic lands.
