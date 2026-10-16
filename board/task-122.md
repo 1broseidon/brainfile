@@ -82,3 +82,6 @@ Make them real:
 - A related board that cannot be found (no folder, no board) is a warning in lint already; at run time it counts as open and the message says the board is missing.
 
 Tests with two scratch boards related to each other, in dispatch-runner and dispatch-lead, and in the CLI's dispatch tests for status; MANUAL's related-boards section says dependencies across boards hold for hand-offs and leads.
+
+## Log
+- 2026-10-16T06:19:15.673Z: [codex] Implemented exported core handOffWaits/handOffWaitMessage, shared by runner and CLI/MCP reports; leads read alias waits on their existing tick, briefs read related logs, desktop counts open alias waits. Runner regressions pass for complete-but-unlanded related branches and missing boards; lead and CLI/MCP status validation in progress.
