@@ -86,3 +86,4 @@ The renderer need not show it (the desktop shows the record elsewhere); this is 
 - 2026-10-16T07:20:34.349Z: Landed on dispatch/epic-10
 - 2026-10-16T07:20:35.849Z: Merged; 1 of 1 subtasks left, so it stays open
 - 2026-10-16T07:20:59.351Z: [claude] Lead: the open subtask is delivered on dispatch/epic-10 (717c7c4): `--features` in desktop/src/link/dev.ts and its line in desktop/link.md (Dev fake, ~line 420). Only the checkbox was left; ticking it.
+- 2026-10-16T07:28:31.875Z: [claude] Completed by Claude: its branch landed on dispatch/epic-10 (b342984) and the one subtask the landing left open was ticked by the lead afterwards; nothing completes a task in that state, so the epic could not be offered. Filed on task-118.
