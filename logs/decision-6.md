@@ -2,7 +2,7 @@
 id: decision-6
 title: Discuss is a task-scoped thread in the board's chat that may change its task's spec and record decisions
 type: decision
-status: current
+status: superseded
 claimKey: desktop.dispatch.discuss
 kind: decision
 stance: requires
@@ -16,6 +16,8 @@ tags:
   - chat
   - decisions
 createdAt: "2026-10-13T17:03:25.888Z"
+supersededBy: decision-19
+updatedAt: "2026-10-16T01:13:29.164Z"
 ---
 
 ## Description

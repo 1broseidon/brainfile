@@ -31,6 +31,7 @@ dependsOn:
 decisions:
   - decision-6
   - decision-14
+  - decision-19
 contract:
   status: in_progress
   deliverables:
@@ -60,7 +61,7 @@ contract:
     pickedUpAt: "2026-10-15T23:28:24.991Z"
     reworkCount: 0
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-15T23:28:24.991Z"
+updatedAt: "2026-10-16T01:13:29.165Z"
 dispatch:
   agent: claude
   model: opus
