@@ -1,7 +1,7 @@
 ---
 id: task-120
 title: "Link contract v3: features target, pull-request, merge-to and queue; desktop/link.md is the full contract; link:dev answers every new call"
-column: todo
+column: in-progress
 position: 17
 tags:
   - link
@@ -20,7 +20,7 @@ decisions:
   - decision-16
   - decision-10
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: desktop/src/link/server.ts
@@ -48,8 +48,10 @@ contract:
     - "Do not add queue to LINK_FEATURES or move dispatch status into core: task-123 does"
   metrics:
     readyAt: "2026-10-16T06:13:09.261Z"
+    pickedUpAt: "2026-10-16T06:13:43.411Z"
+    reworkCount: 0
 createdAt: "2026-10-16T06:09:34.204Z"
-updatedAt: "2026-10-16T06:13:29.140Z"
+updatedAt: "2026-10-16T06:13:43.411Z"
 dispatch:
   agent: claude
   model: opus
