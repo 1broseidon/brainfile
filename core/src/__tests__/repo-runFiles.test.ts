@@ -22,8 +22,12 @@ import {
   pruneRunFiles,
   readRunAnswer,
   readRunFile,
+  readRunStop,
   removeRunAnswer,
+  removeRunStop,
   runAnswerPath,
+  runStopPath,
+  writeRunStop,
   removeRunFile,
   removeRunnerFile,
   runFilePath,
@@ -164,6 +168,22 @@ describe('answers', () => {
   });
 });
 
+describe('stops', () => {
+  it('sit beside the run, apart from the file its runner writes, and go', () => {
+    expect(runStopPath(dotDir, 'run-1')).toBe(path.join(dotDir, 'state', 'runs', 'run-1.stop.json'));
+    writeRunFile(dotDir, run('run-1'));
+    expect(readRunStop(dotDir, 'run-1')).toBeNull();
+    writeRunStop(dotDir, 'run-1', NOW);
+    // Its runner writing its run file whole does not lose it.
+    writeRunFile(dotDir, run('run-1', { activity: 'editing' }));
+    expect(readRunStop(dotDir, 'run-1')).toEqual({ at: NOW });
+    expect(listRunFiles(dotDir).map((r) => r.id)).toEqual(['run-1']);
+    removeRunStop(dotDir, 'run-1');
+    expect(readRunStop(dotDir, 'run-1')).toBeNull();
+    expect(() => writeRunStop(dotDir, '../x')).toThrow('Not a run id');
+  });
+});
+
 describe('lost', () => {
   it('a run whose process is gone, or whose beat is older than 30 s, on this machine', () => {
     expect(isRunLost(run('a'), here)).toBe(false);
@@ -233,13 +253,14 @@ describe('pruning', () => {
     expect(listRunners(dotDir).map((r) => r.pid)).toEqual([100]);
   });
 
-  it('removes an answer whose run has ended, is lost or is gone, and keeps one a live run waits on', () => {
+  it('removes an answer or a stop whose run has ended, is lost or is gone, and keeps one a live run waits on', () => {
     writeRunFile(dotDir, run('asking', { ask: { id: 'ask-1', title: 'Run make', options: [] } }));
     writeRunFile(dotDir, run('ended', { state: 'done', endedAt: NOW - 1_000 }));
     writeRunFile(dotDir, run('lost', { pid: 101 }));
     for (const id of ['asking', 'ended', 'lost', 'gone']) writeRunAnswer(dotDir, id, { askId: 'ask-1', optionId: 'yes', at: NOW });
+    for (const id of ['asking', 'ended', 'gone']) writeRunStop(dotDir, id, NOW);
     const removed = pruneRunFiles(dotDir, here).map((file) => path.basename(file)).sort();
-    expect(removed).toEqual(['ended.answer.json', 'gone.answer.json', 'lost.answer.json']);
+    expect(removed).toEqual(['ended.answer.json', 'ended.stop.json', 'gone.answer.json', 'gone.stop.json', 'lost.answer.json']);
     // An answer file is never read as a run.
     expect(listRunFiles(dotDir).map((r) => r.id).sort()).toEqual(['asking', 'ended', 'lost']);
   });

@@ -579,8 +579,8 @@ export interface StopReport {
 
 /**
  * Stops a run by its id or its task's, whichever runner on this machine has
- * it: `stop: true` in its run file, which that runner watches; one that has
- * not ended after the grace is sent SIGTERM. Waits up to `waitMs` to say
+ * it: `<run-id>.stop.json` beside its run file, which that runner honours
+ * within a second; no process is signalled. Waits up to `waitMs` to say
  * whether it stopped.
  */
 export async function stopReport(filePath: string, ref: string, options: { access?: Access; waitMs?: number } = {}): Promise<StopReport> {
@@ -609,14 +609,13 @@ export async function stopReport(filePath: string, ref: string, options: { acces
     const who = `${nameOf(runner.dataDir, run.agentId)}${run.taskId ? ` on ${run.taskId}` : ''}`;
     const deadline = Date.now() + (options.waitMs ?? 0);
     let stopped = ended(place, run.id);
-    // The runner's grace timer is not held open: waiting here keeps this process up for it.
     while (!stopped && Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 200));
       stopped = ended(place, run.id);
     }
     const said = stopped
       ? `Stopped ${who}. Its worktree and branch stay for review.`
-      : `Asked ${who} to stop; its runner is sent SIGTERM if it has not stopped within ${Math.round(STOP_GRACE_MS / 1000)} s.`;
+      : `Asked ${who} to stop; its runner stops it when it next looks, within a second while it is up.`;
     return { run: run.id, ...(run.taskId ? { task: run.taskId } : {}), agent: run.agentId, stopped, said };
   });
 }

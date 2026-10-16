@@ -138,15 +138,23 @@ export function readLeadRecord(task: { dispatch?: unknown; lead?: unknown }): Di
   if (record?.role === 'lead') return record;
   const old = isMapping(task.lead) ? task.lead : null;
   if (!old || !nonEmpty(old.agent)) return null;
+  const at = isoTime(old.at) ?? new Date(0).toISOString();
   return {
     agent: (old.agent as string).trim(),
     ...(nonEmpty(old.model) ? { model: (old.model as string).trim() } : {}),
     ...(nonEmpty(old.effort) ? { effort: (old.effort as string).trim() } : {}),
     by: old.by === 'chat' ? 'chat' : 'person',
-    at: isoTime(old.at) ?? new Date(0).toISOString(),
+    at,
     until: old.until === 'done' ? 'done' : 'review',
     role: 'lead',
+    // The desktop's lead waited for the person to press Resume after a restart, and kept a pause only in memory: it waits for them still.
+    paused: isoTime(old.paused) ?? at,
   };
+}
+
+/** Whether the epic's lead is the `lead:` the desktop wrote before leads moved to core: it waits for the person to resume it. */
+export function isLegacyLead(task: { dispatch?: unknown; lead?: unknown }): boolean {
+  return readDispatchRecord(task)?.role !== 'lead' && !!readLeadRecord(task);
 }
 
 /** Whether a claim still holds the task: it is there and has not ended. */
@@ -191,7 +199,11 @@ function requestFields(request: DispatchRequest): DispatchRequest {
 /**
  * The task with this request as its `dispatch:`. Keys core does not know are
  * kept; a claim that still holds is kept (its run is still going), one that
- * ended goes with the request it answered. Throws on a malformed request.
+ * ended goes with the request it answered, and the try a stop cut short
+ * with it. A worker's request carries `tries`, 0 until a runner starts it:
+ * a record with neither a claim nor `tries` is one the desktop wrote before
+ * runners claimed (`isLegacyRequest`).
+ * Throws on a malformed request.
  */
 export function withDispatchRequest(task: Task, request: DispatchRequest): Task {
   const old = isMapping(task.dispatch) ? (task.dispatch as Record<string, unknown>) : {};
@@ -199,8 +211,23 @@ export function withDispatchRequest(task: Task, request: DispatchRequest): Task 
     Object.entries(old).filter(([key]) => key !== 'claim' && !(REQUEST_KEYS as readonly string[]).includes(key))
   );
   const claim = parseDispatchRecord(old)?.claim;
-  const dispatch: DispatchRecord = { ...requestFields(request), ...unknown, ...(claimHeld(claim) ? { claim } : {}) };
+  const counted = typeof old.tries === 'number' ? old.tries : undefined;
+  // The try a stop cut short (the person's, or the app quitting) goes with its claim: asked for again, it is the same try.
+  const cut = claim?.ended !== undefined && (claim.outcome === 'stopped' || claim.outcome === 'lost') && !!counted;
+  const tries = counted === undefined ? (request.role === 'lead' ? {} : { tries: 0 }) : cut ? { tries: counted - 1 } : {};
+  const dispatch: DispatchRecord = { ...requestFields(request), ...unknown, ...tries, ...(claimHeld(claim) ? { claim } : {}) };
   return { ...task, dispatch };
+}
+
+/**
+ * A request the desktop wrote before runners claimed (task-74's record, from
+ * Hand to…, its chat or its lead, which started the agent at once): no
+ * claim and no `tries`, which every request written since carries. Its
+ * hand-off has run, or was let go with the app; no runner starts it again
+ * on its own.
+ */
+export function isLegacyRequest(record: DispatchRecord): boolean {
+  return record.role !== 'lead' && record.claim === undefined && record.tries === undefined;
 }
 
 /** The runner taking a claim; `at` defaults to now. */
@@ -217,7 +244,11 @@ export interface ClaimOptions {
   isLost?: (claim: DispatchClaim) => boolean;
   /** Write this request in the same swap, for a hand-off asked for and started at once. */
   request?: DispatchRequest;
-  /** Count the claim as one more try (`tries`): a worker's hand-off, not a lead's. */
+  /**
+   * Count the claim as one more try (`tries`): a worker's hand-off, not a
+   * lead's. A start after a stop (a claim that ended `stopped`) or after its
+   * runner went away (a lost claim) carries on the same try.
+   */
   count?: boolean;
 }
 
@@ -266,7 +297,9 @@ export function claimDispatch(task: Task, claim: ClaimInput, options: ClaimOptio
   const { lead: _old, ...rest } = requested as Task & { lead?: unknown };
   const base = parseDispatchRecord(requested.dispatch)?.role === 'lead' ? (rest as Task) : requested;
   const before = parseDispatchRecord(base.dispatch) as DispatchRecord;
-  const record: DispatchRecord = { ...before, ...(options.count ? { tries: (before.tries ?? 0) + 1 } : {}), claim: taking };
+  // Taken from a runner that went away, or after a stop: the same try carried on. One this runner took back from itself (a send-back) is a new one.
+  const again = (!!replaced && (replaced.host !== taking.host || replaced.pid !== taking.pid)) || held?.outcome === 'stopped' || held?.outcome === 'lost';
+  const record: DispatchRecord = { ...before, ...(options.count ? { tries: (before.tries ?? 0) + (again ? 0 : 1) } : {}), claim: taking };
   return { ok: true, task: { ...base, dispatch: record }, record, ...(replaced ? { replaced } : {}) };
 }
 
@@ -284,7 +317,11 @@ export type ReleaseResult =
   | { ok: true; task: Task; /** False when there was nothing to give back. */ changed: boolean }
   | { ok: false; reason: 'not-yours' | 'missing' | 'busy'; error: string; holder?: DispatchClaim };
 
-/** Give a claim back in memory: cleared, or kept with `ended` and `outcome`. Only its holder may. */
+/**
+ * Give a claim back in memory: cleared, or kept with `ended` and `outcome`.
+ * Only its holder may. Cleared, its run was cut short by its runner letting
+ * go and the task waits in the queue again: the try it counted is taken back.
+ */
 export function releaseDispatch(task: Task, holder: ClaimHolder, options: ReleaseOptions = {}): ReleaseResult {
   const current = parseDispatchRecord(task.dispatch);
   const claim = current?.claim;
@@ -298,6 +335,7 @@ export function releaseDispatch(task: Task, holder: ClaimHolder, options: Releas
     record.claim = { ...claim, ended: isoTime(options.at) ?? new Date().toISOString(), outcome: options.outcome };
   } else {
     delete record.claim;
+    if (typeof record.tries === 'number' && record.tries > 0) record.tries -= 1;
   }
   return { ok: true, task: { ...task, dispatch: record }, changed: true };
 }

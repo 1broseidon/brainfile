@@ -4,7 +4,8 @@
  * writes its run file; the host's watch says so, the window's runner reads
  * it, and external.ts shows it as a run marked `in a terminal`, with its ask
  * in the band. Answering it writes `<run-id>.answer.json`, which that runner
- * applies, taking its own prompt down; its end reaches the window too.
+ * applies, taking its own prompt down; its end reaches the window too. And
+ * the app quitting lets go of its own hand-offs through the host.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,6 +20,7 @@ const host = inProcessHost(() => bundled('src/host/host.ts'));
 const { ExternalRuns } = bundled<typeof import('../src/agents/external.ts')>('src/agents/external.ts');
 const dispatch = bundled<typeof import('@brainfile/core/dispatch')>('../core/src/dispatch/index.ts');
 const repo = bundled<typeof import('@brainfile/core/repo')>('../core/src/repo/index.ts');
+const core = bundled<typeof import('@brainfile/core')>('../core/src/index.ts');
 
 const FIXTURE = path.resolve(import.meta.dirname, 'fixtures', 'link', 'brainfile');
 /** Another live process on this machine: the terminal's runner claims as it. */
@@ -158,8 +160,7 @@ test('a run from a terminal shows as a run, its ask is answered from the band th
 });
 
 test('a run whose runner went away is said as failed; a stop from the window reaches a live one through its file', async () => {
-  // The stop's SIGTERM would go to the pid the run file names, this test's parent: its grace outlasts the test.
-  const window = runner({ stopGraceMs: 10 * 60_000 });
+  const window = runner();
   const events: AgentEvent[] = [];
   const external = new ExternalRuns({ others: (p) => window.others(p), answer: (r, a, o, p) => window.answerAsk(r, a, o, p), emit: (e) => events.push(e) });
   const now = Date.now();
@@ -177,8 +178,9 @@ test('a run whose runner went away is said as failed; a stop from the window rea
   assert.deepEqual(external.going(), [project]);
 
   assert.deepEqual(await window.stop('run-going', external.projectOf('run-going')), { ok: true, value: undefined });
-  assert.equal(repo.readRunFile(dotDir, 'run-going')?.stop, true);
-  file('run-going', { state: 'stopped', endedAt: Date.now(), stop: true });
+  // Beside its file, for its runner to honour: no process is signalled.
+  assert.deepEqual(Object.keys(repo.readRunStop(dotDir, 'run-going') ?? {}), ['at']);
+  file('run-going', { state: 'stopped', endedAt: Date.now() });
   external.look(project);
   assert.equal(external.list().find((r) => r.id === 'run-going')?.state, 'stopped');
   assert.deepEqual(external.going(), []);
@@ -205,4 +207,37 @@ test("a terminal discussion's run files (brainfile discuss, kind ask) are left o
   assert.deepEqual(external.asks(), []);
   // Not a hand-off: Merge and Hand to… do not wait on it.
   assert.equal(window.liveDispatch(project, 'task-3'), undefined);
+});
+
+test('quitting the app lets go of its hand-offs through the host: each ends stopped, its claim says so, and the next launch starts none again', async () => {
+  const opened = await host.call<Result<BoardSnapshot>>('openBoard', project);
+  assert.ok(opened.ok);
+  // An agent that never answers: its hand-off stays starting until it is stopped.
+  fs.writeFileSync(path.join(base, 'data', 'dispatch.json'), JSON.stringify({ agentServers: { Mute: { command: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'] } } }));
+  // The board writes as the agents process makes them: through the host, which commits them.
+  const hostBoard: import('@brainfile/core/dispatch').RunnerBoard = {
+    request: (p, t, request) => host.call('recordDispatch', p, t, request),
+    claim: async (p, t, claim, options) => {
+      const taken = await host.call<Result<import('@brainfile/core/repo').ClaimTaken>>('claimDispatch', p, t, claim, options);
+      return taken.ok ? taken.value : { ok: false, held: false, error: taken.error };
+    },
+    release: (p, t, holder, outcome) => host.call('releaseDispatch', p, t, holder, outcome),
+    note: (p, t, text) => host.call('noteTask', p, t, text),
+    settleLanded: (p, t) => host.call('settleLanded', p, t),
+    park: (p, t) => host.call('parkInReview', p, t),
+    lead: (p, e, action) => host.call('markLead', p, e, action),
+    complete: (p, t) => host.call('completeTask', p, t),
+  };
+  const app = runner({ board: hostBoard });
+  const started = await app.dispatch(project, 'task-4', { agent: 'custom:Mute', by: 'person' });
+  assert.ok(started.ok, !started.ok ? started.error : '');
+  const record = () => core.readDispatchRecord(core.readTaskFile(path.join(dotDir, 'board', 'task-4.md'))!.task);
+  assert.equal(record()?.claim?.pid, process.pid);
+
+  // SIGTERM from main, before main stops the host.
+  await app.quit();
+  assert.equal(record()?.claim?.outcome, 'stopped');
+  assert.equal(repo.readRunFile(dotDir, started.value.run.id)?.state, 'stopped');
+  const next = runner({ pid: TERMINAL_PID });
+  assert.deepEqual(next.queued(project), []);
 });

@@ -405,7 +405,7 @@ function openLoop(options: Parameters<typeof runLoop>[1] = {}, logger = new Memo
  * band answers through `answerAsk`, its Merge is `land` and its Stop `stop`.
  */
 function windowRunner(options: Partial<RunnerOptions> = {}): Runner {
-  const runner = new Runner({ dataDir, runner: 'desktop', pid: otherProcess(), ask: async () => null, watchMs: 50, stopGraceMs: 10 * 60_000, ...options });
+  const runner = new Runner({ dataDir, runner: 'desktop', pid: otherProcess(), ask: async () => null, watchMs: 50, ...options });
   runners.push(runner);
   return runner;
 }

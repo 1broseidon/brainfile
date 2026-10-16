@@ -12,7 +12,7 @@ import * as path from 'path';
 import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { pathToFileURL } from 'url';
 import { claimDispatchFile, currentHost, findV2Task, getV2Dirs, readDispatchRecord, readLeadRecord } from '@brainfile/core';
-import { readRunFile, writeRunFile, writeRunnerFile, type RunFile } from '@brainfile/core/repo';
+import { readRunFile, readRunStop, writeRunFile, writeRunnerFile, type RunFile } from '@brainfile/core/repo';
 import { agentRoleOf } from '@brainfile/core/dispatch';
 import { NO_RUNNER, dispatchCommand, dispatchReport, leadReport, statusReport, statusText, stopReport } from '../commands/dispatch';
 import { discardReport, landReport, readyReport, reviewReport } from '../commands/review';
@@ -282,10 +282,10 @@ describe('dispatch status and stop: from the run files', () => {
     gitBoard({ 'task-1': [] });
     const pid = otherRunner();
     const file = runFile(pid, { taskId: 'task-1' });
-    // The other runner honours the stop it finds in its file.
+    // The other runner honours the stop it finds beside its file.
     const honour = setInterval(() => {
       const now = readRunFile(dotDir(), file.id);
-      if (now?.stop && !now.endedAt) writeRunFile(dotDir(), { ...now, state: 'stopped', endedAt: Date.now() });
+      if (now && readRunStop(dotDir(), file.id) && !now.endedAt) writeRunFile(dotDir(), { ...now, state: 'stopped', endedAt: Date.now() });
     }, 50);
     try {
       const report = await stopReport(filePath, 'task-1', { waitMs: 5_000 });
@@ -304,10 +304,9 @@ describe('dispatch status and stop: from the run files', () => {
     const file = runFile(pid, { taskId: 'task-1' });
     const report = await stopReport(filePath, file.id);
     expect(report.stopped).toBe(false);
-    expect(report.said).toBe('Asked Fake on task-1 to stop; its runner is sent SIGTERM if it has not stopped within 15 s.');
-    expect(readRunFile(dotDir(), file.id)!.stop).toBe(true);
-    // Honoured, so the grace timer finds nothing to enforce.
-    writeRunFile(dotDir(), { ...readRunFile(dotDir(), file.id)!, state: 'stopped', endedAt: Date.now() });
+    expect(report.said).toBe('Asked Fake on task-1 to stop; its runner stops it when it next looks, within a second while it is up.');
+    expect(readRunStop(dotDir(), file.id)).toMatchObject({ at: expect.any(Number) });
+    expect(readRunFile(dotDir(), file.id)).not.toHaveProperty('stop');
   });
 });
 

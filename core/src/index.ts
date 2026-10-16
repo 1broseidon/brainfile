@@ -223,6 +223,8 @@ export {
   parseDispatchRecord,
   readDispatchRecord,
   readLeadRecord,
+  isLegacyRequest,
+  isLegacyLead,
   claimHeld,
   lintDispatchRecords,
   withDispatchRequest,

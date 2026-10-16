@@ -13,6 +13,8 @@ import {
   claimDispatch,
   claimDispatchFile,
   dispatchRecordProblems,
+  isLegacyLead,
+  isLegacyRequest,
   lintDispatchRecords,
   parseDispatchRecord,
   pidAlive,
@@ -53,7 +55,8 @@ describe('the record', () => {
     expect(task.assignee).toBe('codex');
     expect(task['x-otto']).toEqual({ keep: true });
     expect(readTaskFile(file)!.body).toContain('Body.');
-    expect(readDispatchRecord(task)).toEqual(REQUEST);
+    // A worker's request carries its tries, none yet: no runner has started it.
+    expect(readDispatchRecord(task)).toEqual({ ...REQUEST, tries: 0 });
 
     const raw = fs.readFileSync(file, 'utf-8').replace('  role: worker\n', '  role: worker\n  x-runner: later\n');
     fs.writeFileSync(file, raw, 'utf-8');
@@ -63,9 +66,14 @@ describe('the record', () => {
     expect(record.claim).toEqual({ host: 'mac', runner: 'desktop', pid: process.pid, at: '2026-10-15T10:00:01.000Z' });
   });
 
-  it('reads the record the desktop wrote before core knew it', () => {
+  it('reads the record the desktop wrote before core knew it, which no claim and no tries mark as from before runners', () => {
     const legacy = { agent: 'claude', model: 'opus', by: 'person', at: '2026-10-12T23:31:00.177Z' };
     expect(parseDispatchRecord(legacy)).toEqual(legacy);
+    expect(isLegacyRequest(parseDispatchRecord(legacy)!)).toBe(true);
+    expect(isLegacyRequest({ ...legacy, by: 'person', tries: 0 })).toBe(false);
+    expect(isLegacyRequest({ ...legacy, by: 'person', claim: { ...HERE, at: legacy.at } })).toBe(false);
+    expect(isLegacyRequest({ ...legacy, by: 'person', role: 'lead' })).toBe(false);
+    expect(requestDispatchFile(file, REQUEST).ok && isLegacyRequest(readDispatchRecord(onDisk())!)).toBe(false);
   });
 
   it('reads an unquoted time as YAML gives it, a Date, as ISO text', () => {
@@ -76,7 +84,7 @@ describe('the record', () => {
   it('a new request keeps a claim that holds and drops one that ended', () => {
     const base: Task = { id: 'task-1', title: 'One', dispatch: { ...REQUEST, claim: { ...HERE, at: REQUEST.at } } };
     const again = withDispatchRequest(base, { agent: 'claude', by: 'lead', at: '2026-10-15T11:00:00.000Z' });
-    expect(again.dispatch).toEqual({ agent: 'claude', by: 'lead', at: '2026-10-15T11:00:00.000Z', claim: { ...HERE, at: REQUEST.at } });
+    expect(again.dispatch).toEqual({ agent: 'claude', by: 'lead', at: '2026-10-15T11:00:00.000Z', tries: 0, claim: { ...HERE, at: REQUEST.at } });
 
     const ended: Task = { ...base, dispatch: { ...REQUEST, claim: { ...HERE, at: REQUEST.at, ended: REQUEST.at, outcome: 'done' } } };
     expect(withDispatchRequest(ended, REQUEST).dispatch?.claim).toBeUndefined();
@@ -165,7 +173,7 @@ describe('claims', () => {
     claimDispatchFile(file, HERE);
     expect(releaseDispatchFile(file, { host: 'mac', pid: GONE })).toMatchObject({ ok: false, reason: 'not-yours' });
     expect(releaseDispatchFile(file, HERE)).toMatchObject({ ok: true, changed: true });
-    expect(readDispatchRecord(onDisk())).toEqual(REQUEST);
+    expect(readDispatchRecord(onDisk())).toEqual({ ...REQUEST, tries: 0 });
     expect(releaseDispatchFile(file, HERE)).toMatchObject({ ok: true, changed: false });
   });
 
@@ -229,12 +237,35 @@ describe('tries and leads (task-83)', () => {
     expect(readDispatchRecord(onDisk())!.tries).toBe(1);
     expect(claimDispatchFile(file, HERE, { count: true }).ok).toBe(true);
     expect(readDispatchRecord(onDisk())!.tries).toBe(2);
+    // Its runner let go of it (Ctrl-C): the try is taken back, and the task waits in the queue.
+    expect(releaseDispatchFile(file, HERE).ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.tries).toBe(1);
+    expect(readDispatchRecord(onDisk())!.claim).toBeUndefined();
+    expect(claimDispatchFile(file, HERE, { count: true }).ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.tries).toBe(2);
+    // Stopped, then handed off again; taken from a runner that went away: the same try carried on.
+    expect(releaseDispatchFile(file, HERE, { outcome: 'stopped' }).ok).toBe(true);
+    expect(claimDispatchFile(file, HERE, { count: true }).ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.tries).toBe(2);
+    expect(releaseDispatchFile(file, HERE, { outcome: 'stopped' }).ok).toBe(true);
+    requestDispatchFile(file, { ...REQUEST, at: '2026-10-15T12:00:00.000Z' });
+    expect(readDispatchRecord(onDisk())!.tries).toBe(1);
+    expect(claimDispatchFile(file, HERE, { count: true }).ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.tries).toBe(2);
+    expect(claimDispatchFile(file, { ...HERE, pid: process.ppid }, { count: true, isLost: () => true }).ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.tries).toBe(2);
+    // Taken back by its own runner as its run ended (a send-back): a new try.
+    expect(claimDispatchFile(file, { ...HERE, pid: process.ppid }, { count: true, isLost: () => true }).ok).toBe(true);
+    expect(readDispatchRecord(onDisk())!.tries).toBe(3);
     expect(dispatchRecordProblems({ ...REQUEST, tries: -1, paused: 'soon' })).toEqual(['tries: must be a whole number', 'paused: must be an ISO 8601 time']);
   });
 
   it("reads a lead from dispatch: with role lead, or from the desktop's lead:, which a lead's claim replaces", () => {
     const old = { id: 'epic-1', title: 'E', lead: { agent: 'codex', model: 'gpt-5', by: 'chat', at: '2026-10-14T10:00:00.000Z', until: 'done' } } as Task;
-    expect(readLeadRecord(old)).toEqual({ agent: 'codex', model: 'gpt-5', by: 'chat', at: '2026-10-14T10:00:00.000Z', until: 'done', role: 'lead' });
+    // It waited for the person to press Resume after a restart, and kept a pause only in memory: it waits for them still.
+    expect(readLeadRecord(old)).toEqual({ agent: 'codex', model: 'gpt-5', by: 'chat', at: '2026-10-14T10:00:00.000Z', until: 'done', role: 'lead', paused: '2026-10-14T10:00:00.000Z' });
+    expect(isLegacyLead(old)).toBe(true);
+    expect(isLegacyLead({ dispatch: LEAD })).toBe(false);
     expect(readLeadRecord({ dispatch: REQUEST })).toBeNull();
     expect(readLeadRecord({ lead: { by: 'person' } })).toBeNull();
     const claimed = claimDispatch(old, HERE, { request: LEAD });

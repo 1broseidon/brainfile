@@ -445,6 +445,8 @@ export interface Lead {
   branch?: string;
   /** Writes of its record under way: until they land, the board is not read back into it. */
   marking: number;
+  /** Every child is complete, and what is left of them is being landed: no second wrap-up starts meanwhile. */
+  wrapping: boolean;
 }
 
 export interface LeadTurn {
@@ -512,6 +514,12 @@ export const GATHER_MS = 1500;
 const FAILURES = 3;
 
 const ended = (run: AgentRun) => run.state === 'done' || run.state === 'failed' || run.state === 'stopped';
+
+/** The epic has children and every one is complete, landed or not: nothing is left to hand off. */
+const allComplete = (tree: Tree) => tree.children.length > 0 && tree.children.every((c) => c.done);
+
+/** The lead is finishing its epic (finish): its record is coming off, by its own hand. */
+const finishing = (lead: Lead) => lead.landing.has(lead.epicId);
 
 /**
  * What a lead is told when its session is new: who it is, the rules, and how
@@ -666,13 +674,17 @@ export class Leads {
   /**
    * Starts a lead on an epic with children: refused when the epic has no open
    * work, or when its tree already has one (above it or under it), here or in
-   * another runner, by its claim on the board.
+   * another runner, by its claim on the board. One taken up from the board
+   * whose children are all complete goes straight to finishing (wrapUp): what
+   * is left of them lands, then the epic is completed or put up to merge.
    */
   async start(projectId: string, epicId: string, agentId: AgentId, options: LeadStart = {}): Promise<Result<{ lead: LeadView; run: AgentRun | null }>> {
     const tree = this.deps.tree(projectId, epicId);
     if (!tree) return { ok: false, error: `${epicId} is not on this board` };
     if (tree.epic.done) return { ok: false, error: `${epicId} is done` };
-    if (!workOf(tree).length) return { ok: false, error: `${epicId} has no open children to lead` };
+    // Refused, a request on the board would hold its tree for good: every pass would take it up again, and the epic would never finish.
+    const toFinish = (!!options.fromBoard || !!options.resumed) && allComplete(tree);
+    if (!workOf(tree).length && !toFinish) return { ok: false, error: `${epicId} has no open children to lead` };
     const here = this.get(projectId, epicId);
     if (this.active(here)) return { ok: false, error: `${epicId} already has a lead: ${here.agentId}, ${here.state}` };
     for (const other of this.leads.values()) {
@@ -730,8 +742,11 @@ export class Leads {
       briefed: false,
       ...(branch.value ? { branch: branch.value } : {}),
       marking: 0,
+      wrapping: false,
     };
     this.leads.set(this.key(projectId, epicId), lead);
+    // Paused on its record too, when the request just written says nothing of it (the desktop's old lead:, which waits for the person).
+    if (options.paused && !options.fromBoard) void this.mark(lead, 'pause');
     const run = this.kick(lead);
     this.emit(lead);
     return { ok: true, value: { lead: this.view(lead), run } };
@@ -826,7 +841,8 @@ export class Leads {
    */
   boardChanged(projectId: string): void {
     for (const lead of this.leads.values()) {
-      if (lead.projectId !== projectId || !this.active(lead)) continue;
+      // Finishing, it took its own record off: the board's change says nothing new to it.
+      if (lead.projectId !== projectId || !this.active(lead) || finishing(lead)) continue;
       const tree = this.deps.tree(projectId, lead.epicId);
       if (!tree) {
         void this.end(lead, 'stopped', `${lead.epicId} is no longer on the board`, false);
@@ -957,7 +973,8 @@ export class Leads {
 
   /**
    * A turn, when the lead is leading, idle, and has something to hear. An
-   * epic whose children are all done is completed instead.
+   * epic whose children are all complete is wrapped up instead: there is
+   * nothing left for the lead to hand off.
    */
   private kick(lead: Lead): AgentRun | null {
     if (lead.state !== 'leading' || lead.busy || !lead.queue.length) return null;
@@ -966,8 +983,9 @@ export class Leads {
       void this.end(lead, 'stopped', `${lead.epicId} is no longer on the board`, false);
       return null;
     }
-    if (tree.children.length && tree.children.every((c) => c.done && !c.unlanded)) {
-      void this.finish(lead);
+    if (allComplete(tree)) {
+      lead.queue = [];
+      void this.wrapUp(lead);
       return null;
     }
     lead.busy = true;
@@ -1004,15 +1022,59 @@ export class Leads {
       }
       this.emit(lead);
       const after = this.deps.tree(lead.projectId, lead.epicId);
-      if (lead.state === 'leading' && after && after.children.length && after.children.every((c) => c.done && !c.unlanded)) void this.finish(lead);
+      if (lead.state === 'leading' && after && allComplete(after)) void this.wrapUp(lead);
       else if (lead.queue.length) this.gather(lead);
     });
     return run;
   }
 
+  /**
+   * Every child is complete. One whose branch has not landed is landed now
+   * when the lead goes until done (a conflict goes back to its agent, as
+   * any landing's); until review it waits for the person to merge it, and
+   * the lead is woken when they do. Once all have landed, the epic is
+   * finished.
+   */
+  private async wrapUp(lead: Lead): Promise<void> {
+    if (lead.wrapping || finishing(lead) || lead.state !== 'leading') return;
+    lead.wrapping = true;
+    try {
+      let tree = this.deps.tree(lead.projectId, lead.epicId);
+      let said: string | undefined;
+      for (const c of tree?.children.filter((c) => c.unlanded) ?? []) {
+        if (lead.until !== 'done' || lead.state !== 'leading') break;
+        const landable = this.deps.landable ? this.deps.landable(lead.projectId, c.id) : this.deps.mergeable(lead.projectId, c.id);
+        if (!landable) continue;
+        const release = this.landing(lead.projectId, c.id);
+        try {
+          const landed = await this.deps.land(lead.projectId, c.id);
+          if (!landed.ok) said = landed.said;
+        } finally {
+          release();
+        }
+      }
+      if (lead.state !== 'leading') return;
+      tree = this.deps.tree(lead.projectId, lead.epicId);
+      if (!tree) return;
+      if (tree.children.every((c) => c.done && !c.unlanded)) {
+        await this.finish(lead);
+        return;
+      }
+      const left = tree.children.filter((c) => c.unlanded).map((c) => c.id);
+      const which = left.length === 1 ? `${left[0]} has` : `${left.join(', ')} have`;
+      lead.note =
+        lead.until === 'done'
+          ? `Every child is complete, but ${which} not landed${said ? `: ${said}` : ''}. ${lead.epicId} finishes once ${left.length === 1 ? 'it lands' : 'they land'}.`
+          : `Every child is complete, but ${which} not landed yet: merge ${left.length === 1 ? 'it' : 'them'}, and ${lead.epicId} finishes.`;
+      this.emit(lead);
+    } finally {
+      lead.wrapping = false;
+    }
+  }
+
   /** The last child is done: the epic is completed, or, with a branch of its own, waits in Ready to merge; and the lead ends. */
   private async finish(lead: Lead): Promise<void> {
-    if (lead.state === 'done' || lead.landing.has(lead.epicId)) return;
+    if (lead.state === 'done' || finishing(lead)) return;
     // Once only, however many wakes find it finished; the record comes off while the epic is still on the board.
     lead.landing.add(lead.epicId);
     await this.mark(lead, 'end');

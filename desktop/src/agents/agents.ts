@@ -72,10 +72,8 @@ import {
 import {
   branchesOf,
   discardReview,
-  handOffTarget,
   keepBranch,
   locateBoard,
-  offerEpicBranch,
   prepareEpicBranch,
   readyToMerge,
   reviewOf,
@@ -200,7 +198,6 @@ const runner: Runner = new Runner({
   cancelAsk: (askId) => answerPermission(askId, null),
   onRun: (run) => emit({ kind: 'run', run }),
   onLead: (lead) => emit({ kind: 'lead', lead }),
-  landed: (projectId, taskId) => offerIfLast(projectId, taskId),
   fromOf: (projectId, _taskId, request) => (request?.by === 'chat' ? chatTurnAt(projectId, Date.parse(request.at)) : undefined),
 });
 
@@ -526,22 +523,6 @@ async function landAndSettle(projectId: string, taskId: string, into?: string): 
   return landed.ok ? { ok: true, value: { message: landed.message } } : { ok: false, error: landed.error };
 }
 
-/**
- * The last child of an epic with a branch of its own landed on it, with no
- * lead over it: the epic is put up to merge (decision-16). A lead does this
- * itself when it finishes.
- */
-function offerIfLast(projectId: string, taskId: string): void {
-  if (leads.leadOver(projectId, taskId)) return;
-  try {
-    const epic = handOffTarget(projectId, taskId).epic;
-    const tree = epic ? readTree(projectId, epic.id) : null;
-    if (epic && tree && !tree.epic.done && tree.children.length && tree.children.every((c) => c.done && !c.unlanded)) offerEpicBranch(projectId, epic.id);
-  } catch {
-    /* git refused: the epic stays as it is, for the person */
-  }
-}
-
 /** An epic's own branch kept as a branch (decision-16): its worktree goes, the branch stays, and the epic is done. */
 async function keepAsBranch(projectId: string, taskId: string): Promise<Result<{ message: string }>> {
   const kept = settle(projectId, taskId, () => keepBranch(projectId, taskId));
@@ -683,6 +664,14 @@ process.on('exit', () => {
   runner.close();
 });
 
+/** How long letting go may take when main lets go of this process, before it goes anyway. */
+const QUIT_MS = 5_000;
+
 // Let go of the agents when main lets go of this process (a reload, a quit),
-// so none of them is left running on its own.
-process.on('SIGTERM', () => process.exit(0));
+// so none of them is left running on its own: each hand-off ends stopped and
+// its claim says so, through the host, which main stops only after this
+// process, so the next launch starts none of them again by itself.
+process.on('SIGTERM', () => {
+  const late = new Promise((resolve) => setTimeout(resolve, QUIT_MS));
+  void Promise.race([runner.quit(), late]).finally(() => process.exit(0));
+});

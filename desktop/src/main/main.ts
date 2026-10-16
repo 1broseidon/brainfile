@@ -60,6 +60,11 @@ let nextRequest = 1;
 const pending = new Map<number, (result: unknown) => void>();
 let link: LinkServer | null = null;
 let updater: Updater;
+/** Set once quitting has begun: the agents process lets go first, then the rest goes. */
+let quitting = false;
+/** How long the agents process has to let go of its hand-offs before the app quits anyway. */
+const AGENTS_QUIT_MS = 6_000;
+
 /** The boards the window and each phone hold open: the host closes one only when nobody does. */
 const holds = new BoardHolds({
   // A board opened is one the agents process works the queue of (task-84), and whose runs from elsewhere it shows.
@@ -175,6 +180,8 @@ function reloadAgentsOnRebuild(): void {
 }
 
 function callAgents<T>(method: AgentRequest['method'], ...args: unknown[]): Promise<T> {
+  // Quitting, the agents process is not started again by what its letting go writes.
+  if (quitting && !agents) return Promise.resolve({ ok: false, error: 'Brainfile is quitting' } as T);
   if (!agents) agents = startAgents();
   const id = nextRequest++;
   return new Promise((resolve) => {
@@ -578,7 +585,19 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (!quitting && agents) {
+    // The agents process goes first: its hand-offs end stopped, their claims given back through the host
+    // (so the next launch starts none of them again by itself); then the host, which flushes its commits.
+    quitting = true;
+    event.preventDefault();
+    const child = agents;
+    const gone = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    child.kill();
+    void Promise.race([gone, new Promise((resolve) => setTimeout(resolve, AGENTS_QUIT_MS))]).then(() => app.quit());
+    return;
+  }
+  quitting = true;
   // The host flushes pending commits on exit.
   host?.kill();
   agents?.kill();

@@ -11,8 +11,9 @@ import * as path from 'path';
 import { spawnSync } from 'child_process';
 import { pathToFileURL } from 'url';
 import { claimDispatchFile, readDispatchRecord } from '../dispatchRecord';
-import { listRunFiles, readRunFile, writeRunFile, type RunFile } from '../repo/runFiles';
-import { Runner, runOf, type RunnerOptions } from '../dispatch/runner';
+import { listRunFiles, readRunFile, readRunStop, runStopPath, writeRunFile, type RunFile } from '../repo/runFiles';
+import { readyToMerge } from '../repo/worktree';
+import { Runner, fileBoard, runOf, type RunnerOptions } from '../dispatch/runner';
 import { findV2Task, getV2Dirs } from '../workspace';
 import type { AgentRun, PermissionAsk } from '../dispatch/types';
 
@@ -270,19 +271,49 @@ test('work takes queued requests in order, at most dispatch.maxRunning at once, 
   expect(lines('started')).toEqual(['task-1', 'task-2', 'task-3']);
 });
 
-test('a request the desktop wrote before runners claimed, on a task in Review, is not queued again; a send-back is', () => {
+test('a request the desktop wrote before runners claimed is not run again on upgrade, whatever its column; a send-back and a new request are', async () => {
   const at = 'at: "2026-10-01T10:00:00.000Z"';
+  // No claim and no tries: Hand to…, the chat or the lead started it at once, before runners claimed.
   plainBoard({
     'task-1': ['dispatch:', '  agent: codex', '  by: lead', `  ${at}`],
-    'task-2': ['dispatch:', '  agent: codex', '  by: lead', `  ${at}`, '  tries: 1'],
-    'task-3': ['dispatch:', '  agent: codex', '  by: person', `  ${at}`],
+    // A send-back queued: it waits on task-4 here, so nothing starts.
+    'task-2': ['dispatch:', '  agent: codex', '  by: lead', `  ${at}`, '  tries: 1', 'dependsOn: [task-4]'],
+    'task-3': ['dispatch:', `  agent: ${AGENT}`, '  by: person', `  ${at}`],
     'task-4': ['dispatch:', '  agent: codex', '  by: cli', `  ${at}`],
   });
-  for (const id of ['task-1', 'task-2', 'task-4']) {
+  for (const [id, column] of [['task-1', 'review'], ['task-3', 'in-progress'], ['task-4', 'todo']]) {
     const file = path.join(dotDir(), 'board', `${id}.md`);
-    fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('column: todo', 'column: review'));
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('column: todo', `column: ${column}`));
   }
-  expect(runner().queued(project)).toEqual(['task-2', 'task-3', 'task-4']);
+  const a = runner();
+  expect(a.queued(project)).toEqual(['task-2']);
+  // The window's board changed: nothing of before is started, or claimed.
+  a.boardChanged(project);
+  expect(await a.work(project)).toEqual([]);
+  a.idle(project);
+  expect(recordOf('task-3')!.claim).toBeUndefined();
+  expect(lines('started')).toEqual([]);
+  // Asked for again, it is queued as any request is.
+  await a.queue(project, ['task-3'], { agent: AGENT, by: 'person' });
+  expect(recordOf('task-3')).toMatchObject({ by: 'person', tries: 0 });
+  expect(a.queued(project)).toEqual(['task-2', 'task-3']);
+});
+
+test('a claim the board refuses starts nothing: no agent without a claim, so its task is never queued and started again', async () => {
+  plainBoard({ 'task-1': [] });
+  const files = fileBoard();
+  // As the desktop's host refuses on a board conflict, or a task file stays busy.
+  const refusing = { ...files, claim: async () => ({ ok: false as const, held: false, error: 'the board has a conflict' }) };
+  const a = runner({ board: refusing });
+  await a.queue(project, ['task-1'], { agent: AGENT, by: 'cli' });
+  expect(await a.start(project, 'task-1')).toEqual({ ok: false, error: 'task-1 could not be claimed, so it was not started: the board has a conflict' });
+  expect(await a.work(project)).toEqual([]);
+  a.idle(project);
+  expect(await a.dispatch(project, 'task-1', { agent: AGENT, by: 'person' })).toMatchObject({ ok: false, error: expect.stringMatching(/could not be claimed/) });
+  await new Promise((r) => setTimeout(r, 200));
+  expect(lines('started')).toEqual([]);
+  expect(a.list()).toEqual([]);
+  expect(listRunFiles(dotDir())).toEqual([]);
 });
 
 test('the board config wins over the app setting, which wins over 3', () => {
@@ -293,10 +324,12 @@ test('the board config wins over the app setting, which wins over 3', () => {
   expect(a.limit(project)).toBe(5);
 });
 
-test('a stop from another process: stop: true in the run file, which its runner honours', async () => {
+test('a stop from another process: a stop file beside the run, which its runner honours, never a signal', async () => {
   plainBoard({ 'task-1': [] });
-  const a = runner();
+  // A runner beaten often, so its writes of the run file come between the stop and its look.
+  const a = runner({ watchMs: 300, beatMs: 10 });
   const b = runner({ pid: OTHER_PID });
+  const kill = jest.spyOn(process, 'kill');
   await a.queue(project, ['task-1'], { agent: AGENT, by: 'cli' });
   const started = await a.start(project, 'task-1');
   if (!started.ok) throw new Error(started.error);
@@ -305,8 +338,13 @@ test('a stop from another process: stop: true in the run file, which its runner 
 
   const stopped = await b.stop(runId, project);
   expect(stopped.ok).toBe(true);
-  expect(readRunFile(dotDir(), runId)!.stop).toBe(true);
+  // Apart from the run file, which only its runner writes: no write of its runner's loses it.
+  expect(readRunStop(dotDir(), runId)).toMatchObject({ at: expect.any(Number) });
+  expect(readRunFile(dotDir(), runId)).not.toHaveProperty('stop');
   await until('the run to stop', () => a.get(runId)?.state === 'stopped');
+  expect(fs.existsSync(runStopPath(dotDir(), runId))).toBe(false);
+  expect(kill.mock.calls.filter(([, signal]) => signal === 'SIGTERM')).toEqual([]);
+  kill.mockRestore();
   await until('its file to say so', () => readRunFile(dotDir(), runId)?.state === 'stopped');
   await until('the claim to say so', () => recordOf('task-1')!.claim?.outcome === 'stopped');
   // Nothing left to stop.
@@ -371,6 +409,68 @@ test('an ask answered from another process: an answer file beside the run, which
   release('task-1');
   await until('the run to end', () => a.get(runId)?.state === 'done');
   expect(b.answerAsk(runId, asks[0].id, 'yes', project)).toEqual({ ok: false, error: `${runId} has ended` });
+});
+
+test('closing lets go of its runs: stopped, their claims kept as stopped, so none starts again on its own; handing one off again is the same try', async () => {
+  plainBoard({ 'task-1': [] });
+  const a = runner();
+  await a.queue(project, ['task-1'], { agent: AGENT, by: 'person' });
+  const started = await a.start(project, 'task-1');
+  if (!started.ok) throw new Error(started.error);
+  const runId = started.value.run.id;
+  await until('the agent to start', () => lines('started').includes('task-1'));
+  expect(recordOf('task-1')!.tries).toBe(1);
+
+  // The desktop quitting: its process exits, and nothing is awaited.
+  a.close();
+  expect(readRunFile(dotDir(), runId)).toMatchObject({ state: 'stopped', endedAt: expect.any(Number) });
+  expect(recordOf('task-1')!.claim).toMatchObject({ pid: process.pid, outcome: 'stopped' });
+  const b = runner({ pid: OTHER_PID });
+  expect(b.queued(project)).toEqual([]);
+  expect(await b.work(project)).toEqual([]);
+  b.idle(project);
+
+  // The person hands it off again: it carries on the try the stop cut short.
+  const again = await b.dispatch(project, 'task-1', { agent: AGENT, by: 'person' });
+  if (!again.ok) throw new Error(again.error);
+  expect(recordOf('task-1')).toMatchObject({ tries: 1, claim: { pid: OTHER_PID } });
+});
+
+test('quit waits for the board: its hand-offs end stopped and their claims say so', async () => {
+  plainBoard({ 'task-1': [] });
+  const a = runner();
+  const started = await a.dispatch(project, 'task-1', { agent: AGENT, by: 'person' });
+  if (!started.ok) throw new Error(started.error);
+  await until('the agent to start', () => lines('started').includes('task-1'));
+  await a.quit();
+  expect(a.get(started.value.run.id)!.state).toBe('stopped');
+  expect(recordOf('task-1')!.claim).toMatchObject({ outcome: 'stopped' });
+  expect(await a.start(project, 'task-1')).toMatchObject({ ok: false });
+});
+
+test('a runner that stays up tidies its run files as it goes, not only when it first looks', async () => {
+  plainBoard({});
+  const a = runner({ pruneMs: 100 });
+  await a.work(project);
+  const old: RunFile = { id: 'run-old', kind: 'dispatch', taskId: 'task-9', agent: AGENT, state: 'done', activity: 'done', startedAt: 1, endedAt: 2, host: a.host, pid: OTHER_PID, runner: 'cli', beatAt: 2 };
+  writeRunFile(dotDir(), old);
+  expect(readRunFile(dotDir(), 'run-old')).toBeTruthy();
+  await until('the old run to be pruned', () => !readRunFile(dotDir(), 'run-old'));
+  a.idle(project);
+});
+
+test('the limit holds when passes come together: each takes its place before it waits', async () => {
+  plainBoard({ 'task-1': [], 'task-2': [], 'task-3': [], 'task-4': [] }, CONFIG('dispatch:\n  maxRunning: 2\n'));
+  const a = runner();
+  for (const id of ['task-1', 'task-2', 'task-3', 'task-4']) {
+    await a.queue(project, [id], { agent: AGENT, by: 'cli' });
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  const passes = await Promise.all([a.work(project), a.work(project), a.workLed(project), a.work(project)]);
+  expect(passes.flat().map((s) => s.run.taskId)).toEqual(['task-1', 'task-2']);
+  expect(a.live(project)).toHaveLength(2);
+  await until('both agents', () => lines('started').length === 2);
+  a.idle(project);
 });
 
 test("a lost runner's claim is taken again", async () => {
@@ -441,4 +541,51 @@ test('land refuses while the agent is still at it', async () => {
   const started = await a.dispatch(project, 'task-1', { agent: AGENT, by: 'person' });
   if (!started.ok) throw new Error(started.error);
   expect(await a.land(project, 'task-1')).toEqual({ ok: false, kind: 'refused', error: 'Fake is still working on task-1', sentBack: false });
+});
+
+test('a task being landed starts nothing until its landing is done: landing in progress', async () => {
+  const gate = path.join(base, 'gate');
+  gitBoard({ 'task-1': ['contract:', '  status: ready', '  validation:', '    commands:', `      - while [ ! -f ${gate} ]; do sleep 0.05; done`] });
+  fs.writeFileSync(path.join(fakeDir, 'commit-task-1'), '');
+  fs.writeFileSync(path.join(fakeDir, 'release-task-1'), '');
+  const a = runner();
+  const started = await a.dispatch(project, 'task-1', { agent: AGENT, by: 'person' });
+  if (!started.ok) throw new Error(started.error);
+  await until('the run to end', () => a.get(started.value.run.id)?.state === 'done');
+  await until('the claim to be given back', () => recordOf('task-1')!.claim?.outcome === 'review');
+
+  // Merge: its checks run for as long as they take.
+  const landing = a.land(project, 'task-1');
+  await new Promise((r) => setTimeout(r, 100));
+  expect(a.busy(project, 'task-1')).toBe('task-1 is being landed: landing in progress');
+  expect(await a.start(project, 'task-1', { agent: AGENT })).toEqual({ ok: false, error: 'task-1 is being landed: landing in progress' });
+  expect(await a.dispatch(project, 'task-1', { agent: AGENT, by: 'person' })).toEqual({ ok: false, error: 'task-1 is being landed: landing in progress' });
+  expect(await a.land(project, 'task-1')).toMatchObject({ ok: false, kind: 'refused', error: 'task-1 is being landed: landing in progress' });
+  expect(lines('started')).toEqual(['task-1']);
+
+  fs.writeFileSync(gate, '');
+  expect(await landing).toMatchObject({ ok: true, completed: true });
+  expect(a.busy(project, 'task-1')).toBeNull();
+});
+
+test("an epic's last child landed through the runner, with no lead, puts the epic's own branch up to merge", async () => {
+  gitBoard({
+    'epic-1': ['type: epic', 'epicBranch: true'],
+    'task-1': ['parentId: epic-1'],
+  });
+  fs.writeFileSync(path.join(fakeDir, 'commit-task-1'), '');
+  fs.writeFileSync(path.join(fakeDir, 'release-task-1'), '');
+  const a = runner();
+  const started = await a.dispatch(project, 'task-1', { agent: AGENT, by: 'person' });
+  if (!started.ok) throw new Error(started.error);
+  expect(started.value.worktree?.branch).toBe('dispatch/task-1');
+  await until('the run to end', () => a.get(started.value.run.id)?.state === 'done');
+  await until('the claim to be given back', () => recordOf('task-1')!.claim?.outcome === 'review');
+  expect(readyToMerge(project).map((r) => r.taskId)).toEqual(['task-1']);
+
+  // `brainfile land`, the MCP's land or Merge: all the Runner's land.
+  expect(await a.land(project, 'task-1')).toMatchObject({ ok: true, completed: true });
+  expect(git(['log', '-1', '--format=%s', 'dispatch/epic-1'], project)).toBe('Merge task-1: Task task-1');
+  expect(readyToMerge(project).map((r) => r.taskId)).toEqual(['epic-1']);
+  expect(findV2Task(dirs(), 'epic-1')).toBeTruthy();
 });

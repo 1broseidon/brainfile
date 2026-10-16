@@ -15,6 +15,7 @@ import { changeLeadFile, claimDispatchFile, readDispatchRecord, readLeadRecord, 
 import { Leads, leadAbove, leadRefusal, leadRefusalOnBoard, planReport, readyOf, treeOf, type LeadDeps, type LeadView, type TreeDoc } from '../dispatch/lead';
 import { leadPermission, readOnlyMode } from '../dispatch/readOnly';
 import { Runner, type RunnerOptions } from '../dispatch/runner';
+import { writeRunFile } from '../repo/runFiles';
 import { findV2Task, getV2Dirs } from '../workspace';
 import type { AgentRun, PermissionPolicy } from '../dispatch/types';
 import type { LeadAction } from '../dispatchRecord';
@@ -535,6 +536,63 @@ test('its last child done, an epic with a branch of its own waits in Ready to me
   expect(f.views.at(-1)).toMatchObject({ state: 'done', note: 'Every child is done: epic-1 is in Ready to merge, dispatch/epic-1 into release.' });
 });
 
+test('taken up with every child complete but some not landed: until done it lands them, then finishes; until review it waits for the merge', async () => {
+  const done = () => [
+    doc('epic-1', { title: 'Build it' }),
+    doc('task-1', { parentId: 'epic-1', done: true, unlanded: true }),
+    doc('task-2', { parentId: 'epic-1', done: true }),
+  ];
+  // A new hand-off of such an epic is still refused: there is nothing to lead.
+  expect(errorOf(await fake(done()).leads.start('/repo', 'epic-1', 'claude'))).toBe('epic-1 has no open children to lead');
+
+  const docs = done();
+  const f = fake(docs, { policy: 'bypass', extra: { mergeable: () => true, land: async (_p, taskId) => (delete docs.find((d) => d.id === taskId)!.unlanded, { ok: true, said: `${taskId} was landed` }) } });
+  expect((await f.leads.start('/repo', 'epic-1', 'claude', { fromBoard: true })).ok).toBe(true);
+  await settles(() => f.completed.length > 0);
+  expect(f.completed).toEqual(['epic-1']);
+  expect(f.prompts).toEqual([]);
+  expect(f.views.at(-1)).toMatchObject({ state: 'done' });
+
+  const later = done();
+  const g = fake(later);
+  expect((await g.leads.start('/repo', 'epic-1', 'claude', { fromBoard: true, resumed: true })).ok).toBe(true);
+  await new Promise((r) => setTimeout(r, 0));
+  expect(g.prompts).toEqual([]);
+  expect(g.completed).toEqual([]);
+  expect(g.views.at(-1)).toMatchObject({ state: 'leading', note: 'Every child is complete, but task-1 has not landed yet: merge it, and epic-1 finishes.' });
+  // The person merges it.
+  delete later.find((d) => d.id === 'task-1')!.unlanded;
+  g.leads.wake('/repo', 'task-1', 'task-1 was merged by the person');
+  await g.flush();
+  await settles(() => g.completed.length > 0);
+  expect(g.views.at(-1)).toMatchObject({ state: 'done', note: 'epic-1 is done: every child is.' });
+});
+
+test('finishing, it is never shown stopped: the record it took off itself is not read as a stop', async () => {
+  const docs = board();
+  let offered: (value: null) => void = () => {};
+  const f = fake(docs, { extra: { offer: () => new Promise((resolve) => (offered = (v) => resolve({ ok: true, value: v }))) } });
+  await f.leads.start('/repo', 'epic-1', 'claude');
+  await f.endTurns();
+  for (const d of docs) if (d.id !== 'epic-1') d.done = true;
+  f.leads.boardChanged('/repo');
+  await f.flush();
+  await new Promise((r) => setTimeout(r, 0));
+  // Its record is off, and the board's change of that arrives while it is still putting the epic up.
+  expect(f.records.at(-1)).toBe('end');
+  f.leads.boardChanged('/repo');
+  offered(null);
+  await settles(() => f.completed.length > 0);
+  expect(f.views.map((v) => v.state)).not.toContain('stopped');
+  expect(f.views.at(-1)).toMatchObject({ state: 'done', note: 'epic-1 is done: every child is.' });
+});
+
+/** Until a check holds, letting what is pending settle between looks. */
+async function settles(check: () => boolean): Promise<void> {
+  for (let i = 0; i < 50 && !check(); i++) await new Promise((r) => setTimeout(r, 0));
+  expect(check()).toBe(true);
+}
+
 // ── Run by the shared runner, on a real board ───────────────────────────────
 
 const SDK = pathToFileURL(nodeRequire.resolve('@agentclientprotocol/sdk')).href;
@@ -743,13 +801,78 @@ describe('run by the shared runner', () => {
 
     const legacy = fs.readFileSync(fileOf('epic-1'), 'utf-8').replace(/dispatch:[\s\S]*?(?=---)/, `lead:\n  agent: ${AGENT}\n  by: person\n  at: 2026-01-02T00:00:00.000Z\n  until: review\n`);
     fs.writeFileSync(fileOf('epic-1'), legacy);
-    const b = runner();
-    expect(b.queuedLeads(project)).toEqual(['epic-1']);
-    expect((await b.lead(project, 'epic-1')).ok).toBe(true);
+    // Taken up by hand, it waits for the person, on its record too.
+    const b = runner({ leads: false });
+    const views: LeadView[] = [];
+    const c = runner({ pid: OTHER_PID, onLead: (v) => views.push(v) });
+    expect((await c.lead(project, 'epic-1')).ok).toBe(true);
     const task = taskOf('epic-1') as Record<string, unknown>;
     expect(task.lead).toBeUndefined();
-    expect(leadOf('epic-1')).toMatchObject({ role: 'lead', at: '2026-01-02T00:00:00.000Z', claim: { pid: process.pid } });
+    await until('its record to say paused', () => leadOf('epic-1')?.paused);
+    expect(leadOf('epic-1')).toMatchObject({ role: 'lead', at: '2026-01-02T00:00:00.000Z', claim: { pid: OTHER_PID } });
+    expect(views.at(-1)?.state).toBe('paused');
     expect((await b.lead(project, 'task-1')).ok).toBe(false);
+  });
+
+  test("the old desktop's lead: is not started on upgrade: it waits for the person to resume it, then carries on from its notes", async () => {
+    epicBoard();
+    const file = fileOf('epic-1');
+    fs.writeFileSync(file, fs.readFileSync(file, 'utf-8').replace('type: epic', `type: epic\nlead:\n  agent: ${AGENT}\n  by: person\n  at: 2026-01-02T00:00:00.000Z\n  until: review`));
+    // A child it had handed off, from before runners claimed.
+    const child = fileOf('task-1');
+    fs.writeFileSync(child, fs.readFileSync(child, 'utf-8').replace('parentId: epic-1', `parentId: epic-1\ncolumn: in-progress\ndispatch:\n  agent: ${AGENT}\n  by: lead\n  at: 2026-01-02T00:00:00.000Z`).replace('column: todo\n', ''));
+    const views: LeadView[] = [];
+    const a = runner({ onLead: (v) => views.push(v) });
+    expect(a.queuedLeads(project)).toEqual([]);
+    expect(a.queued(project)).toEqual([]);
+    expect(await a.work(project)).toEqual([]);
+    a.boardChanged(project);
+    await new Promise((r) => setTimeout(r, 300));
+    a.idle(project);
+    expect(views).toEqual([]);
+    expect(turns()).toEqual([]);
+    expect(lines('started')).toEqual([]);
+    // As `dispatch status` and the window read it: paused, no runner holds it.
+    expect(leadOf('epic-1')).toMatchObject({ agent: AGENT, paused: '2026-01-02T00:00:00.000Z' });
+    expect(leadOf('epic-1')!.claim).toBeUndefined();
+
+    // The window's Resume.
+    expect(await a.resumeLead(project, 'epic-1', { here: true })).toMatchObject({ ok: true, value: "epic-1's lead carries on here" });
+    const [turn] = await until('the lead to take its turn', () => (turns().length ? turns() : null));
+    expect(turn.text).toMatch(/You are carrying on with epic-1/);
+    expect(leadOf('epic-1')).toMatchObject({ role: 'lead', claim: { pid: process.pid } });
+    expect(leadOf('epic-1')!.paused).toBeUndefined();
+  });
+
+  test('taken up from the board with every child complete but not landed, the lead finishes the epic instead of being refused', async () => {
+    epicBoard();
+    requestDispatchFile(fileOf('epic-1'), { agent: AGENT, by: 'person', at: '2026-01-01T00:00:00.000Z', until: 'review', role: 'lead' });
+    for (const id of ['task-1', 'task-2']) fs.renameSync(fileOf(id), path.join(home(), 'logs', `${id}.md`));
+    const views: LeadView[] = [];
+    const a = runner({ onLead: (v) => views.push(v) });
+    expect(a.queuedLeads(project)).toEqual(['epic-1']);
+    await a.work(project);
+    await until('the lead to finish', () => views.at(-1)?.state === 'done');
+    expect(views.at(-1)?.note).toBe('epic-1 is done: every child is.');
+    expect(findV2Task(dirs(), 'epic-1', true)?.isLog).toBe(true);
+    expect(turns()).toEqual([]);
+    expect(a.queuedLeads(project)).toEqual([]);
+    a.idle(project);
+  });
+
+  test('a child another runner ran that failed or was stopped wakes the lead here, once', async () => {
+    epicBoard();
+    const a = runner();
+    const started = await a.lead(project, 'epic-1', { agent: AGENT, by: 'person' });
+    expect(started.ok).toBe(true);
+    await until('the first turn', () => turns().length === 1);
+    // The person's Hand to… in the window, while a terminal leads: it failed there.
+    const now = Date.now();
+    writeRunFile(home(), { id: 'run-elsewhere', kind: 'dispatch', taskId: 'task-1', agent: AGENT, state: 'failed', error: 'it crashed', activity: 'failed', startedAt: now, endedAt: now + 1, host: a.host, pid: OTHER_PID, runner: 'desktop', beatAt: now + 1, projectId: project });
+    await until('the lead to hear it', () => turns().length === 2, 15_000);
+    expect(turns()[1].text).toMatch(/task-1: custom:Fake failed: it crashed\./);
+    await new Promise((r) => setTimeout(r, 2_500));
+    expect(turns().length).toBe(2);
   });
 
   test('the epic completes with its last child, and its lead ends', async () => {

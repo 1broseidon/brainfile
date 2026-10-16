@@ -11,10 +11,11 @@
  * - A run is a file under `.brainfile/state/runs/` (runFiles.ts), written on
  *   every change and beaten every 10 s, beside the runner's own file. Every
  *   runner on the machine reads them: a task another runner works is busy
- *   here too, and `stop` reaches a run another process started by writing
- *   `stop: true` in its file, which that runner watches, then by SIGTERM.
- *   An ask another process answers (the desktop's band for a terminal's
- *   run, task-84) is `<run-id>.answer.json` beside it, watched the same way.
+ *   here too, and `stop` reaches a run another process started through
+ *   `<run-id>.stop.json` beside its file, which that runner watches and
+ *   honours: no process ever signals another. An ask another process
+ *   answers (the desktop's band for a terminal's run, task-84) is
+ *   `<run-id>.answer.json`, watched the same way.
  * - A hand-off forks from and lands on its target (decision-16), waits on
  *   its dependsOn (decision-15: open, or complete with its branch not
  *   landed), and lands serially by compare-and-swap (decision-12). A
@@ -35,7 +36,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { readBoardConfig } from '../boardFile';
-import { claimHeld, currentHost, readDispatchRecord, readLeadRecord, requestDispatchFile, type ClaimInput, type LeadAction } from '../dispatchRecord';
+import { claimHeld, currentHost, isLegacyLead, isLegacyRequest, readDispatchRecord, readLeadRecord, requestDispatchFile, type ClaimInput, type LeadAction } from '../dispatchRecord';
 import { readTasksDir } from '../taskFile';
 import { appendLog, completeTaskFile, moveTaskFileToColumn } from '../taskOperations';
 import { findV2Task, getV2Dirs } from '../workspace';
@@ -53,11 +54,14 @@ import {
   pruneRunFiles,
   readRunAnswer,
   readRunFile,
+  readRunStop,
   removeRunAnswer,
   removeRunnerFile,
+  removeRunStop,
   writeRunAnswer,
   writeRunFile,
   writeRunnerFile,
+  writeRunStop,
   type RunFile,
   type RunFileAsk,
 } from '../repo/runFiles';
@@ -74,10 +78,12 @@ import type { AgentId, AgentRun, PermissionAsk, Result, RunState } from './types
 
 /** How many hand-offs run at once on a repository when the board does not say (spec-16-5). */
 export const DEFAULT_MAX_RUNNING = 3;
-/** How often a runner looks for `stop: true` in its runs' files. */
+/** How often a runner looks for a stop (`<run-id>.stop.json`) or an answer another process left for its runs. */
 export const STOP_WATCH_MS = 1_000;
-/** How long a stop written in another runner's run file has before that runner is sent SIGTERM. */
+/** How long `brainfile dispatch stop` waits to hear that another runner stopped a run it asked it to. */
 export const STOP_GRACE_MS = 15_000;
+/** How often a runner that stays up tidies `state/runs` and `state/runners` (pruneRunFiles). */
+export const PRUNE_MS = 5 * 60_000;
 /** How often a runner with leads looks at its boards for what changed: a pause, a child done or queued. */
 export const LEAD_WATCH_MS = 2_000;
 
@@ -253,11 +259,10 @@ export interface RunnerOptions {
   /** For tests: this machine and process, as the claim and files say. */
   host?: string;
   pid?: number;
-  /** How often its runs are beaten (BEAT_MS) and watched for a stop (STOP_WATCH_MS). */
+  /** How often its runs are beaten (BEAT_MS) and watched for a stop (STOP_WATCH_MS), and its boards' run files tidied (PRUNE_MS). */
   beatMs?: number;
   watchMs?: number;
-  /** How long another runner has to honour a stop before SIGTERM (STOP_GRACE_MS). */
-  stopGraceMs?: number;
+  pruneMs?: number;
 }
 
 /** How a hand-off is asked for: the request's fields. */
@@ -295,6 +300,9 @@ export interface Started {
 export type Landed =
   | { ok: true; message: string; completed: boolean }
   | { ok: false; error: string; kind: Exclude<Landing, { ok: true }>['kind']; sentBack: boolean };
+
+/** A landing that failed in a way its agent settles: a conflict, or a check that failed. */
+type GoesBack = Extract<Landing, { kind: 'conflict' | 'check' }>;
 
 /** What the runner keeps of its own runs beside the run itself. */
 interface RunMeta {
@@ -350,6 +358,10 @@ export class Runner {
   private readonly meta = new Map<string, RunMeta>();
   /** Tasks a hand-off is being started on, held until its run exists (see reserve). */
   private readonly reserved = new Set<string>();
+  /** Tasks being landed here: nothing starts on one until its landing is done (see land). */
+  private readonly landingNow = new Set<string>();
+  /** Other runners' hand-offs in a led tree whose end its lead here has heard (see hearElsewhere). */
+  private readonly heard = new Set<string>();
   /** Boards this runner has written a file in, by project. */
   private readonly dirs = new Map<string, string | null>();
   /** Asks waiting on the host, by run, to cancel when the run stops. */
@@ -364,6 +376,7 @@ export class Runner {
   private ticker: NodeJS.Timeout | null = null;
   private lastBeat = 0;
   private lastLook = 0;
+  private lastPrune = Date.now();
   /** What each board's folders looked like when its leads last looked. */
   private readonly stamps = new Map<string, string>();
   /** Hand-offs ending: their claims given back, a landing, the next taken. */
@@ -463,14 +476,12 @@ export class Runner {
     writeRunnerFile(dotDir, { host: this.host, pid: this.pid, runner: this.kind, startedAt: this.startedAt, beatAt: now });
   }
 
-  /** A run's file as it stands; one another runner asked to stop is stopped. */
+  /** A run's file as it stands, written whole: only this runner writes it (what others say is beside it). */
   private persist(run: AgentRun, now = Date.now()): void {
     const meta = this.meta.get(run.id);
     const dotDir = meta?.dotDir;
     if (!dotDir) return;
     try {
-      const was = readRunFile(dotDir, run.id);
-      const stop = !!was?.stop;
       const file: RunFile = {
         id: run.id,
         kind: run.kind,
@@ -494,10 +505,8 @@ export class Runner {
         projectId: run.projectId,
         ...(run.threadId ? { threadId: run.threadId } : {}),
         ...(run.from ? { from: run.from } : {}),
-        ...(stop ? { stop } : {}),
       };
       writeRunFile(dotDir, file);
-      if (stop && LIVE.has(run.state)) queueMicrotask(() => void this.stop(run.id));
     } catch {
       /* state/ cannot be written: the run goes on */
     }
@@ -512,17 +521,27 @@ export class Runner {
 
   private tick(): void {
     const now = Date.now();
-    const live = [...this.runs.values()].filter((r) => LIVE.has(r.state));
+    const live = [...this.runs.values()].filter((r) => LIVE.has(r.state) || this.startups.starting(r.id));
     for (const run of live) {
       const meta = this.meta.get(run.id);
       const dotDir = meta?.dotDir;
-      const file = dotDir ? readRunFile(dotDir, run.id) : null;
-      if (file?.stop) void this.stop(run.id);
-      else if (dotDir && meta?.ask) this.takeAnswer(dotDir, run.id);
+      if (!dotDir) continue;
+      if (this.takeStop(dotDir, run.id)) continue;
+      if (meta?.ask) this.takeAnswer(dotDir, run.id);
     }
     if (now - this.lastLook >= LEAD_WATCH_MS) {
       this.lastLook = now;
       this.lookForLeads();
+    }
+    if (now - this.lastPrune >= (this.options.pruneMs ?? PRUNE_MS)) {
+      this.lastPrune = now;
+      for (const dotDir of new Set(this.dirs.values())) {
+        try {
+          if (dotDir) pruneRunFiles(dotDir, { now });
+        } catch {
+          /* as persist */
+        }
+      }
     }
     if (now - this.lastBeat < (this.options.beatMs ?? BEAT_MS)) return;
     this.lastBeat = now;
@@ -628,6 +647,7 @@ export class Runner {
     const live = this.liveDispatch(projectId, taskId);
     if (live) return `${nameOf(this.dataDir, live.agentId)} is ${verb} on ${taskId}`;
     if (this.reserved.has(`${projectId}\n${taskId}`)) return `A hand-off is starting on ${taskId}`;
+    if (this.landingNow.has(`${projectId}\n${taskId}`)) return `${taskId} is being landed: landing in progress`;
     return null;
   }
 
@@ -682,6 +702,18 @@ export class Runner {
     return { ok: false, error: `No run ${runId} on this machine` };
   }
 
+  /** A stop another process asked for one of this runner's runs: honoured here, by its own runner, and its file removed. */
+  private takeStop(dotDir: string, runId: string): boolean {
+    if (!readRunStop(dotDir, runId)) return false;
+    try {
+      removeRunStop(dotDir, runId);
+    } catch {
+      /* honoured anyway; pruned once the run has ended */
+    }
+    void this.stop(runId);
+    return true;
+  }
+
   /** An answer another process left for one of this runner's asks: applied, and its file removed. */
   private takeAnswer(dotDir: string, runId: string): void {
     const answer = readRunAnswer(dotDir, runId);
@@ -720,6 +752,8 @@ export class Runner {
     if (busy) return { ok: false, error: `${nameOf(this.dataDir, busy.agentId)} is already working on ${taskId}` };
     const slot = `${projectId}\n${taskId}`;
     if (this.reserved.has(slot)) return { ok: false, error: `A hand-off is already starting on ${taskId}` };
+    // Its worktree is about to be merged and removed (land): no agent starts in it meanwhile.
+    if (this.landingNow.has(slot)) return { ok: false, error: `${taskId} is being landed: landing in progress` };
     this.reserved.add(slot);
     return { ok: true, value: () => this.reserved.delete(slot) };
   }
@@ -742,10 +776,10 @@ export class Runner {
    */
   async dispatch(projectId: string, taskId: string, handOff: HandOff & { from?: string }): Promise<Result<Started>> {
     if (this.goingDown) return { ok: false, error: 'This runner is letting go: it starts nothing more' };
-    const behind = await this.refreshFor(projectId, taskId);
     const held = this.reserve(projectId, taskId);
     if (!held.ok) return held;
     try {
+      const behind = await this.refreshFor(projectId, taskId);
       const request = requestOf(handOff);
       const written = await this.board.request(projectId, taskId, request);
       const started = await this.begin(projectId, taskId, { agent: handOff.agent, model: handOff.model, effort: handOff.effort, from: handOff.from, request }, behind);
@@ -765,10 +799,10 @@ export class Runner {
    */
   async start(projectId: string, taskId: string, options: StartOptions = {}): Promise<Result<Started>> {
     if (this.goingDown) return { ok: false, error: 'This runner is letting go: it starts nothing more' };
-    const behind = options.refresh ? await this.refreshFor(projectId, taskId) : null;
     const held = this.reserve(projectId, taskId);
     if (!held.ok) return held;
     try {
+      const behind = options.refresh ? await this.refreshFor(projectId, taskId) : null;
       return await this.begin(projectId, taskId, options, behind);
     } finally {
       held.value();
@@ -801,7 +835,8 @@ export class Runner {
     const request = record ? undefined : (options.request ?? requestOf({ agent: agentId, model, effort, by: byOf(this.kind) }));
     // Each hand-off started is one more try on the task's record, which its lead counts (task-83).
     const claimed = await this.board.claim(projectId, taskId, claim, { takeOwn: true, count: true, ...(request ? { request } : {}) });
-    if (!claimed.ok && claimed.held) return { ok: false, error: claimed.error };
+    // No claim, no run: one started without it is never given back, so its task would be queued, and started, again and again.
+    if (!claimed.ok) return { ok: false, error: claimed.held ? claimed.error : `${taskId} could not be claimed, so it was not started: ${claimed.error}` };
 
     let prompt: string;
     let worktree: Worktree | null;
@@ -811,11 +846,11 @@ export class Runner {
       const first = worktree?.branch ? await this.settleFirst(projectId, taskId, behind) : '';
       prompt = brief(projectId, taskId, worktree, this.ledBy(projectId, taskId), base, first);
     } catch (err) {
-      if (claimed.ok) await this.board.release(projectId, taskId, claim, 'failed');
+      await this.board.release(projectId, taskId, claim, 'failed');
       return { ok: false, error: message(err) };
     }
     const from = options.from ?? this.options.fromOf?.(projectId, taskId, record);
-    const run = this.newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from }, { worktree, claimed: claimed.ok, until: record?.until ?? options.request?.until ?? this.options.until });
+    const run = this.newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from }, { worktree, claimed: true, until: record?.until ?? options.request?.until ?? this.options.until });
     void (async () => {
       try {
         const session = await this.startups.open(
@@ -832,7 +867,7 @@ export class Runner {
         if (worktree && !worktree.branch) releaseReader(projectId, taskId);
       }
     })();
-    return { ok: true, value: { run: { ...run }, worktree, ...(claimed.ok ? {} : { note: `The claim was not written: ${claimed.error}` }) } };
+    return { ok: true, value: { run: { ...run }, worktree } };
   }
 
   /**
@@ -886,17 +921,16 @@ export class Runner {
    * The tasks asked for and not claimed, oldest request first: a request
    * nobody claimed, or whose claim's runner is lost. One that ended has been
    * answered, and so has one the desktop wrote before runners claimed
-   * (`answeredBefore`).
+   * (`isLegacyRequest`), whatever its column.
    */
   queued(projectId: string): string[] {
     const dotDir = this.dotDirOf(projectId);
     const located = locateBoard(projectId, { materialize: false });
     if (!located.found || !dotDir) return [];
-    const columns = readBoardConfig(located.brainfilePath)?.config?.columns ?? [];
     return readTasksDir(getV2Dirs(located.brainfilePath).boardDir)
-      .map((d) => ({ id: d.task.id, column: d.task.column, record: readDispatchRecord(d.task) }))
-      .filter((t): t is { id: string; column: string | undefined; record: DispatchRecord } => !!t.record && t.record.role !== 'lead')
-      .filter(({ column, record }) => !answeredBefore(record, column, columns))
+      .map((d) => ({ id: d.task.id, record: readDispatchRecord(d.task) }))
+      .filter((t): t is { id: string; record: DispatchRecord } => !!t.record && t.record.role !== 'lead')
+      .filter(({ record }) => !isLegacyRequest(record))
       .filter(({ record }) => !record.claim || (claimHeld(record.claim) && isClaimLost(dotDir, record.claim)))
       .sort((a, b) => a.record.at.localeCompare(b.record.at))
       .map((t) => t.id);
@@ -940,14 +974,22 @@ export class Runner {
     const max = this.options.maxRunning;
     for (const taskId of this.queued(projectId)) {
       if (this.goingDown) break;
+      if (this.busy(projectId, taskId)) continue;
+      // The limit checked and the task held in one step, with no await between: a start beside this pass never takes the same place.
       if (this.live(projectId).length + this.reservedOn(projectId) >= limit) break;
       if (max && this.ownLive(projectId) + this.reservedOn(projectId) >= max) break;
-      if (this.busy(projectId, taskId)) continue;
-      const lead = this.leads.leadOver(projectId, taskId);
-      if (onlyLed && !lead) continue;
-      if (!(await this.mayStart(projectId, taskId, lead))) continue;
-      const begun = await this.start(projectId, taskId, { refresh: true });
-      if (begun.ok) started.push(begun.value);
+      const held = this.reserve(projectId, taskId);
+      if (!held.ok) continue;
+      try {
+        const lead = this.leads.leadOver(projectId, taskId);
+        if (onlyLed && !lead) continue;
+        if (!(await this.mayStart(projectId, taskId, lead))) continue;
+        if (this.goingDown) break;
+        const begun = await this.begin(projectId, taskId, {}, await this.refreshFor(projectId, taskId));
+        if (begun.ok) started.push(begun.value);
+      } finally {
+        held.value();
+      }
     }
     return started;
   }
@@ -1073,14 +1115,37 @@ export class Runner {
   /**
    * Lands the hand-off (decision-12), with its contract's validation as the
    * check, then settles the task: done, unless subtasks are left. Refused
-   * while an agent is at it, or while it is open as a pull request. A
-   * conflict, or a check that fails once its target is in, goes back to the
-   * agent that did it, up to the contract's maxRetries; then it parks in
-   * Review. `into` lands it on another branch than its target.
+   * while an agent is at it, while it is being landed already, or while it
+   * is open as a pull request; while it lands (its checks can take minutes),
+   * a start on it is refused, so no agent starts in the worktree the landing
+   * removes. A conflict, or a check that fails once its target is in, goes
+   * back to the agent that did it, up to the contract's maxRetries; then it
+   * parks in Review. `into` lands it on another branch than its target. The
+   * last child of an epic with a branch of its own landed, with no lead to
+   * finish it, the epic is put up to merge (decision-16).
    */
   async land(projectId: string, taskId: string, options: { into?: string } = {}): Promise<Landed> {
     const busy = this.busy(projectId, taskId);
     if (busy) return { ok: false, kind: 'refused', error: busy, sentBack: false };
+    // Checked and held in one step, with no await between.
+    const slot = `${projectId}\n${taskId}`;
+    this.landingNow.add(slot);
+    let landed: Landed | { goesBack: GoesBack };
+    try {
+      landed = await this.landHeld(projectId, taskId, options);
+    } finally {
+      this.landingNow.delete(slot);
+    }
+    if (!('goesBack' in landed)) return landed;
+    // Sent back once the landing is over: the agent starts in the worktree it left.
+    const failed = landed.goesBack;
+    const back = await this.sendBack(projectId, taskId, failed);
+    if (back.sent) return { ok: false, kind: failed.kind, error: back.said, sentBack: true };
+    return { ok: false, kind: failed.kind, error: `${failed.error} ${back.said}${failed.kind === 'check' ? `\n${failed.output}` : ''}`, sentBack: false };
+  }
+
+  /** land's work while the task is held: what it came to, or a landing that failed in a way that goes back to its agent. */
+  private async landHeld(projectId: string, taskId: string, options: { into?: string }): Promise<Landed | { goesBack: GoesBack }> {
     let title: string | undefined;
     let commands: string[] = [];
     try {
@@ -1101,19 +1166,43 @@ export class Runner {
     if (landing.ok) {
       const located = locateBoard(projectId, { materialize: false });
       const open = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
-      if (!open) return { ok: true, message: landing.message, completed: true };
+      if (!open) {
+        this.offerIfLast(projectId, taskId);
+        return { ok: true, message: landing.message, completed: true };
+      }
       const settled = await this.board.settleLanded(projectId, taskId);
       if (!settled.ok) return { ok: true, message: `${landing.message}. ${taskId} stays open: ${settled.error}`, completed: false };
-      if (settled.value.completed) this.options.landed?.(projectId, taskId);
+      if (settled.value.completed) {
+        this.offerIfLast(projectId, taskId);
+        this.options.landed?.(projectId, taskId);
+      }
       const left = settled.value.left;
       return { ok: true, completed: settled.value.completed, message: settled.value.completed ? landing.message : `${landing.message}. ${taskId} stays open: ${left} subtask${left === 1 ? '' : 's'} left` };
     }
-    if (landing.kind === 'conflict' || landing.kind === 'check') {
-      const back = await this.sendBack(projectId, taskId, landing);
-      if (back.sent) return { ok: false, kind: landing.kind, error: back.said, sentBack: true };
-      return { ok: false, kind: landing.kind, error: `${landing.error} ${back.said}${landing.kind === 'check' ? `\n${landing.output}` : ''}`, sentBack: false };
-    }
+    if (landing.kind === 'conflict' || landing.kind === 'check') return { goesBack: landing };
     return { ok: false, kind: landing.kind, error: landing.error, sentBack: false };
+  }
+
+  /**
+   * The last child of an epic with a branch of its own landed on it, and no
+   * lead finishes the epic (one here, or one another runner holds): the epic
+   * is put up to merge (decision-16), as a lead does when it finishes.
+   * Whatever landed it: Merge, `brainfile land`, the MCP's land, a runner
+   * landing until done.
+   */
+  private offerIfLast(projectId: string, taskId: string): void {
+    if (this.leads.leadOver(projectId, taskId)) return;
+    try {
+      const epic = handOffTarget(projectId, taskId).epic;
+      if (!epic) return;
+      const above = leadAbove(projectId, epic.id, { self: true });
+      const dotDir = this.dotDirOf(projectId);
+      if (above && claimHeld(above.record.claim) && !(dotDir && isClaimLost(dotDir, above.record.claim))) return;
+      const tree = readTree(projectId, epic.id);
+      if (tree && !tree.epic.done && tree.children.length && tree.children.every((c) => c.done && !c.unlanded)) offerEpicBranch(projectId, epic.id);
+    } catch {
+      /* git refused: the epic stays as it is, for the person */
+    }
   }
 
   /**
@@ -1123,7 +1212,7 @@ export class Runner {
    * back again), then the same agent and model on the same branch. Past the
    * contract's maxRetries it parks in Review.
    */
-  private async sendBack(projectId: string, taskId: string, landing: Extract<Landing, { kind: 'conflict' | 'check' }>): Promise<{ sent: boolean; said: string }> {
+  private async sendBack(projectId: string, taskId: string, landing: GoesBack): Promise<{ sent: boolean; said: string }> {
     const located = locateBoard(projectId, { materialize: false });
     const found = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
     if (!found) return { sent: false, said: 'Settle it in its worktree, or send it back with a note.' };
@@ -1188,14 +1277,16 @@ export class Runner {
 
   /**
    * The epics whose lead waits for a runner, oldest request first: a lead
-   * record nobody holds, or whose runner is lost (the `lead:` the desktop
-   * wrote before is one too).
+   * record nobody holds, or whose runner is lost. Not the `lead:` the
+   * desktop wrote before (`isLegacyLead`): that one waited for the person to
+   * press Resume, and waits for them still (resumeLead).
    */
   queuedLeads(projectId: string): string[] {
     const dotDir = this.dotDirOf(projectId);
     const located = locateBoard(projectId, { materialize: false });
     if (!located.found || !dotDir) return [];
     return readTasksDir(getV2Dirs(located.brainfilePath).boardDir)
+      .filter((d) => !isLegacyLead(d.task as Task & { lead?: unknown }))
       .map((d) => ({ id: d.task.id, record: readLeadRecord(d.task as Task & { lead?: unknown }) }))
       .filter((t): t is { id: string; record: DispatchRecord } => !!t.record)
       .filter(({ record }) => !claimHeld(record.claim) || isClaimLost(dotDir, record.claim))
@@ -1214,10 +1305,11 @@ export class Runner {
   /**
    * Starts a lead on an epic here (decision-15): with `handOff`, a new
    * request (Hand to…, the chat); without, the one on the board, taken up
-   * where it was left (resumed when a runner led it before, paused when it
-   * was paused). Refused while another runner holds the tree's lead.
+   * where it was left (resumed when a runner led it before, or when
+   * `resumed`, the person's Resume; paused when it was paused). Refused
+   * while another runner holds the tree's lead.
    */
-  async lead(projectId: string, epicId: string, handOff?: Omit<HandOff, 'role' | 'until'>): Promise<Result<{ lead: LeadView; run: AgentRun | null }>> {
+  async lead(projectId: string, epicId: string, handOff?: Omit<HandOff, 'role' | 'until'>, options: { resumed?: boolean } = {}): Promise<Result<{ lead: LeadView; run: AgentRun | null }>> {
     if (handOff) {
       return this.leads.start(projectId, epicId, handOff.agent, { model: handOff.model, effort: handOff.effort, by: handOff.by });
     }
@@ -1238,8 +1330,8 @@ export class Runner {
       effort: record.effort,
       by: record.by,
       at: record.at,
-      // A runner led it before (its claim is there, lost or ended), or the desktop did (`lead:`): it carries on from its notes.
-      resumed: legacy || !!record.claim,
+      // A runner led it before (its claim is there, lost or ended), or the desktop did (`lead:`), or the person resumed it: it carries on from its notes.
+      resumed: legacy || !!record.claim || !!options.resumed,
       paused: !!record.paused,
       fromBoard: !legacy,
     });
@@ -1268,7 +1360,7 @@ export class Runner {
     const held = this.leadHeldElsewhere(projectId, epicId);
     if (held) return { ok: true, value: `${epicId}'s lead carries on, in ${held}` };
     if (!options.here) return { ok: true, value: `${epicId}'s lead waits for a runner to take it up` };
-    const started = await this.lead(projectId, epicId);
+    const started = await this.lead(projectId, epicId, undefined, { resumed: true });
     return started.ok ? { ok: true, value: `${epicId}'s lead carries on here` } : started;
   }
 
@@ -1298,13 +1390,30 @@ export class Runner {
     void this.workLed(projectId);
   }
 
-  /** Each board with a lead here, looked at when its folders changed. */
+  /** Each board with a lead here, looked at when its folders changed; and what ended elsewhere in its trees. */
   private lookForLeads(): void {
     for (const projectId of new Set(this.leads.running().map((l) => l.projectId))) {
+      this.hearElsewhere(projectId);
       const stamp = this.stampOf(projectId);
       if (stamp === this.stamps.get(projectId)) continue;
       this.stamps.set(projectId, stamp);
       this.boardChanged(projectId);
+    }
+  }
+
+  /**
+   * A hand-off in a tree a lead here runs, started by another runner (the
+   * person's Hand to… in the window while a terminal leads), that failed or
+   * was stopped since the lead started: its lead hears it, once, as it hears
+   * its own. One that ends in Review says so on the board.
+   */
+  private hearElsewhere(projectId: string): void {
+    const ended = this.others(projectId).filter((f) => f.kind === 'dispatch' && f.taskId && (f.state === 'failed' || f.state === 'stopped') && !this.heard.has(f.id));
+    for (const file of ended) {
+      const lead = this.leads.leadOver(projectId, file.taskId!);
+      if (!lead || lead.epicId === file.taskId || (file.endedAt ?? file.beatAt) < lead.startedAt) continue;
+      this.heard.add(file.id);
+      void this.leads.childEnded(runOf(file, projectId)).catch(() => {});
     }
   }
 
@@ -1372,9 +1481,12 @@ export class Runner {
 
   /**
    * Stops a run. One of this runner's: its asks are cancelled and its
-   * session (or its startup) stopped. Another runner's on this machine:
-   * `stop: true` in its run file, which that runner watches; if it has not
-   * ended within the grace, its process is sent SIGTERM.
+   * session (or its startup) stopped, and a hand-off's agent goes with it.
+   * Another runner's on this machine: `<run-id>.stop.json` beside its run
+   * file, which that runner honours within a second. Only a run's own runner
+   * stops it: no process is ever signalled from another, so one runner's
+   * stop never takes down another's other runs (the desktop's chat, its
+   * lead).
    */
   async stop(runId: string, projectId?: string): Promise<Result> {
     const run = this.runs.get(runId);
@@ -1396,24 +1508,16 @@ export class Runner {
     for (const dotDir of this.dirsFor(projectId)) {
       const file = readRunFile(dotDir, runId);
       if (!file) continue;
-      if (isRunEnded(file)) return { ok: true, value: undefined };
-      writeRunFile(dotDir, { ...file, stop: true });
-      const grace = setTimeout(() => this.enforce(dotDir, runId), this.options.stopGraceMs ?? STOP_GRACE_MS);
-      grace.unref?.();
+      // Ended, or its runner is gone with its agents: nothing is left to stop.
+      if (isRunEnded(file) || isRunLost(file)) return { ok: true, value: undefined };
+      try {
+        writeRunStop(dotDir, runId);
+      } catch (err) {
+        return { ok: false, error: message(err) };
+      }
       return { ok: true, value: undefined };
     }
     return { ok: false, error: `No run ${runId} on this machine` };
-  }
-
-  /** A stop another runner did not honour in time: its process is sent SIGTERM, if it is on this machine and not this one. */
-  private enforce(dotDir: string, runId: string): void {
-    const file = readRunFile(dotDir, runId);
-    if (!file || isRunEnded(file) || isRunLost(file) || file.host !== this.host || file.pid === process.pid) return;
-    try {
-      process.kill(file.pid, 'SIGTERM');
-    } catch {
-      /* gone already */
-    }
   }
 
   /**
@@ -1426,11 +1530,25 @@ export class Runner {
    * record and notes. Then it closes. Worktrees stay as they are.
    */
   async letGo(): Promise<void> {
+    await this.goDown(true);
+  }
+
+  /**
+   * The runner goes down with its app (the desktop quitting): as letGo, but
+   * its hand-offs end stopped, their claims kept as `stopped`, so no runner
+   * starts them again on its own when the app comes back; handing one off
+   * again carries on the same try. Its leads wait for a runner, as letGo's.
+   */
+  async quit(): Promise<void> {
+    await this.goDown(false);
+  }
+
+  private async goDown(requeue: boolean): Promise<void> {
     this.goingDown = true;
     this.working.clear();
     await Promise.allSettled([...this.passes.values()]);
     const live = [...this.runs.values()].filter((r) => r.kind === 'dispatch' && this.liveHere(r));
-    for (const run of live) this.lettingGo.add(run.id);
+    if (requeue) for (const run of live) this.lettingGo.add(run.id);
     await Promise.allSettled(live.map((run) => this.stop(run.id)));
     while (this.ending.size) await Promise.allSettled([...this.ending]);
     const leads = this.leads.running();
@@ -1439,8 +1557,26 @@ export class Runner {
     this.close();
   }
 
-  /** The runner goes down: its leads and agents are let go, its timers stop and its runner files go. Its leads' records stay, for another runner to take up. */
+  /**
+   * The runner goes down at once, with nothing awaited (a process exiting):
+   * its runs end stopped, their files say so and its hand-offs' claims are
+   * given back as `stopped` (letGo and quit have done this already, waiting
+   * for the board); its leads and agents are let go, its timers stop and its
+   * runner files go. Its leads' records stay, for another runner to take up.
+   */
   close(): void {
+    this.goingDown = true;
+    this.working.clear();
+    const now = Date.now();
+    for (const run of this.runs.values()) {
+      if (!this.liveHere(run)) continue;
+      this.startups.stop(run.id);
+      Object.assign(run, { state: 'stopped', endedAt: now });
+      this.persist(run, now);
+      if (run.kind === 'dispatch' && run.taskId && this.meta.get(run.id)?.claimed) {
+        void this.board.release(run.projectId, run.taskId, this.holder, 'stopped').catch(() => {});
+      }
+    }
     this.leads.closeAll();
     if (this.ticker) clearInterval(this.ticker);
     this.ticker = null;
@@ -1463,19 +1599,6 @@ export class Runner {
 }
 
 const leadKey = (lead: Lead) => `lead:${lead.projectId}\n${lead.epicId}`;
-
-/**
- * A request the desktop wrote before runners claimed (task-74's record:
- * Hand to…, its chat or its lead started the agent at once): no claim and no
- * `tries`, which every start under a runner counts, on a task already in
- * Review or done. Its hand-off has run; working the queue must not run it
- * again (task-84). One a send-back queued carries its `tries`.
- */
-export function answeredBefore(record: DispatchRecord, column: string | undefined, columns: ColumnConfig[]): boolean {
-  if (record.claim || record.tries !== undefined || !['person', 'chat', 'lead'].includes(record.by)) return false;
-  const at = columns.find((c) => c.id === column);
-  return !!at && (at === reviewColumn(columns) || !!at.completionColumn);
-}
 
 /** Who asks, by what is running: the desktop's person, the CLI, an MCP client. */
 function byOf(runner: DispatchRunner): DispatchBy {

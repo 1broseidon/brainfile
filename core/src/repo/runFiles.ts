@@ -11,9 +11,12 @@
  * - `state/runners/<host>-<pid>.json`: a runner that is up, with its own
  *   `beatAt`.
  * - `state/runs/<run-id>.answer.json`: the answer to the ask a run waits on,
- *   given in another process (the desktop's band, task-84). Only a run's
- *   runner writes its run file; an answer kept apart from it is never lost
- *   in that runner's read-modify-write. The runner applies it and removes it.
+ *   given in another process (the desktop's band, task-84), and
+ *   `state/runs/<run-id>.stop.json`: another process asks the run's runner
+ *   to stop it (`brainfile dispatch stop`, the window's Stop). Only a run's
+ *   runner writes its run file; what another process says is kept apart from
+ *   it, so it is never lost in that runner's writes. The runner applies it
+ *   and removes it.
  *
  * Every write is atomic (a temp file, then a rename), so a reader never sees
  * half a file. All worktrees of a repository reach the same `.brainfile/`, so
@@ -89,8 +92,6 @@ export interface RunFile {
   threadId?: string;
   /** A hand-off the chat made: the chat turn that asked for it. */
   from?: string;
-  /** Another process asks the run's runner to stop it (task-80); the runner watches for it. */
-  stop?: boolean;
 }
 
 /** `state/runs/<run-id>.answer.json`: the person's answer to a run's ask, from another process. */
@@ -99,6 +100,11 @@ export interface RunAnswer {
   askId: string;
   /** The option picked; null refuses it. */
   optionId: string | null;
+  at: number;
+}
+
+/** `state/runs/<run-id>.stop.json`: another process asks the run's runner to stop it. */
+export interface RunStop {
   at: number;
 }
 
@@ -144,6 +150,12 @@ const ANSWER_SUFFIX = '.answer.json';
 
 export function runAnswerPath(dotDir: string, runId: string): string {
   return path.join(runsDir(dotDir), `${safeName(runId, 'run id')}${ANSWER_SUFFIX}`);
+}
+
+const STOP_SUFFIX = '.stop.json';
+
+export function runStopPath(dotDir: string, runId: string): string {
+  return path.join(runsDir(dotDir), `${safeName(runId, 'run id')}${STOP_SUFFIX}`);
 }
 
 export function runnerFilePath(dotDir: string, host: string, pid: number): string {
@@ -234,6 +246,20 @@ export function removeRunAnswer(dotDir: string, runId: string): void {
   fs.rmSync(runAnswerPath(dotDir, runId), { force: true });
 }
 
+/** Ask a run's runner to stop it, from another process: it looks every second. */
+export function writeRunStop(dotDir: string, runId: string, at = Date.now()): void {
+  writeJson(runStopPath(dotDir, runId), { at } satisfies RunStop);
+}
+
+export function readRunStop(dotDir: string, runId: string): RunStop | null {
+  const stop = readJson<RunStop>(runStopPath(dotDir, runId));
+  return stop && typeof stop.at === 'number' ? stop : null;
+}
+
+export function removeRunStop(dotDir: string, runId: string): void {
+  fs.rmSync(runStopPath(dotDir, runId), { force: true });
+}
+
 /** Say a runner is up, or beat it: its file, written whole. */
 export function writeRunnerFile(dotDir: string, runner: RunnerFile): void {
   writeJson(runnerFilePath(dotDir, runner.host, runner.pid), runner);
@@ -312,9 +338,9 @@ export function isClaimLost(dotDir: string, claim: DispatchClaim, options: LostO
 /**
  * Tidy `state/runs` and `state/runners`: a run that ended more than
  * `ENDED_KEEP_MS` ago or is past the latest `ENDED_KEEP_RUNS` that ended, a
- * lost run last beaten that long ago, a lost runner, an answer whose run has
- * ended or gone, and a temp file a write that died left behind. Returns the
- * files removed.
+ * lost run last beaten that long ago, a lost runner, an answer or a stop
+ * whose run has ended or gone, and a temp file a write that died left
+ * behind. Returns the files removed.
  */
 export function pruneRunFiles(dotDir: string, options: LostOptions = {}): string[] {
   const now = options.now ?? Date.now();
@@ -340,13 +366,15 @@ export function pruneRunFiles(dotDir: string, options: LostOptions = {}): string
   }
 
   const going = new Map(runs.map(({ file, value }) => [value.id, fs.existsSync(file) && !isRunEnded(value) && !isRunLost(value, { ...options, now })]));
-  let answers: string[] = [];
+  let names: string[] = [];
   try {
-    answers = fs.readdirSync(runsDir(dotDir)).filter((name) => name.endsWith(ANSWER_SUFFIX) && !name.startsWith('.'));
+    names = fs.readdirSync(runsDir(dotDir)).filter((name) => !name.startsWith('.'));
   } catch {
-    answers = [];
+    names = [];
   }
-  for (const name of answers) if (!going.get(name.slice(0, -ANSWER_SUFFIX.length))) remove(path.join(runsDir(dotDir), name));
+  for (const suffix of [ANSWER_SUFFIX, STOP_SUFFIX]) {
+    for (const name of names.filter((n) => n.endsWith(suffix))) if (!going.get(name.slice(0, -suffix.length))) remove(path.join(runsDir(dotDir), name));
+  }
 
   for (const dir of [runsDir(dotDir), runnersDir(dotDir)]) {
     let names: string[] = [];

@@ -59,7 +59,8 @@ new AgentSideConnection((conn) => ({
         for (const id of fs.readFileSync(path.join(dir, 'lead-queues'), 'utf-8').split('\\n').filter(Boolean)) {
           const file = path.join(board, id + '.md');
           const body = fs.readFileSync(file, 'utf-8');
-          if (!body.includes('dispatch:')) fs.writeFileSync(file, body.replace(/^---\\n/, '---\\ndispatch:\\n  agent: "custom:Fake"\\n  by: lead\\n  at: "' + new Date().toISOString() + '"\\n'));
+          // As its brainfile mcp's dispatch writes it: a request with its tries, none yet.
+          if (!body.includes('dispatch:')) fs.writeFileSync(file, body.replace(/^---\\n/, '---\\ndispatch:\\n  agent: "custom:Fake"\\n  by: lead\\n  at: "' + new Date().toISOString() + '"\\n  tries: 0\\n'));
         }
       }
     } else {
