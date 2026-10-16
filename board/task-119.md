@@ -1,8 +1,8 @@
 ---
 id: task-119
 title: "Live check of the new runner: append one line to qa/runner-live.md on the qa/runner branch"
-column: todo
-position: 17
+column: in-progress
+position: 2
 description: |-
   **For the agent this is handed to:** append one line to `qa/runner-live.md` (make the folder and file if missing; the repo's .gitignore ignores qa/, so add it with `git add -f`): `- live runner check (<task id>): <the time now, ISO>, run by <your agent name>`. Commit it on your branch. Change nothing else. Then leave a short note on this task saying what you did and move it to Review.
 
@@ -13,7 +13,7 @@ tags:
 parentId: task-117
 createdAt: "2026-10-16T05:46:33.299Z"
 landsOn: qa/runner
-updatedAt: "2026-10-16T05:46:44.337Z"
+updatedAt: "2026-10-16T05:46:56.010Z"
 dispatch:
   agent: claude
   model: haiku
