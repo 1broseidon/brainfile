@@ -25,7 +25,7 @@ decisions:
   - decision-14
   - decision-19
 contract:
-  status: draft
+  status: in_progress
   deliverables:
     - type: file
       path: core/src/dispatch/discuss.ts
@@ -42,8 +42,11 @@ contract:
       - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
   constraints:
     - Ask the person and record the decision before going against decision-6
+  metrics:
+    pickedUpAt: "2026-10-16T01:31:37.863Z"
+    reworkCount: 0
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-16T01:31:29.200Z"
+updatedAt: "2026-10-16T01:31:37.863Z"
 dispatch:
   agent: claude
   model: opus
