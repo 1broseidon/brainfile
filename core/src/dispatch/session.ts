@@ -10,13 +10,13 @@ import { spawn, type ChildProcess } from 'child_process';
 import { Readable, Writable } from 'stream';
 import type * as acp from '@agentclientprotocol/sdk';
 import { locateBoard } from '../repo/locate';
-import { agentEnv, agentOf, brainfileMcp, lastLine, launchOf, whyNot } from './agents';
+import { agentEnv, agentOf, brainfileMcp, lastLine, launchOf, roleEnv, whyNot } from './agents';
 import { customName, isCustom } from './agentServers';
 import { effortSelect, effortToSet } from './effort';
 import { MODELS_TTL_MS, effortsKnown, keepingEfforts, learnEfforts, modelOption, modesOf, readModels, remember, type ModelCache, type SessionModes } from './models';
 import { getSettings, policyFor } from './settings';
 import { unlessAborted } from './startup';
-import type { AgentId, AgentModes, AgentRun, ModelOption, PermissionAsk, Result, RunStep } from './types';
+import type { AgentId, AgentModes, AgentRole, AgentRun, ModelOption, PermissionAsk, Result, RunStep } from './types';
 
 /** The ACP SDK, loaded when the first session opens: it is ESM only, and reading settings or the registry never needs it. */
 function sdk(): typeof import('@agentclientprotocol/sdk') {
@@ -63,7 +63,7 @@ export interface Session {
   rule: PermissionRule | null;
   /** The mode the session keeps whatever the settings say (a discussion's, the chat's); null to follow the settings. */
   keepsMode: ((modes: AgentModes) => string) | null;
-  /** Called once the agent has gone: what was set up for the session (the desk's grant) is let go. */
+  /** Called once the agent has gone: what was set up for the session is let go. */
   release: (() => void) | null;
   /** Config options the session last reported. A probe reads each model's effort from them. */
   configOptions: acp.SessionConfigOption[] | null;
@@ -101,7 +101,7 @@ export interface OpenOptions {
   board?: boolean;
   /** Where the agent works when not the repository itself: a hand-off's worktree. */
   at?: string;
-  /** MCP servers besides the board's: the desk's, for the board's chat. */
+  /** MCP servers besides the board's. */
   mcpServers?: acp.McpServer[];
   /** What the session may do, sorted before the repository's policy (Session.rule). */
   rule?: PermissionRule;
@@ -113,10 +113,13 @@ export interface OpenOptions {
   effort?: string;
   /** Stops the startup: the agent is not spawned, or is killed. */
   signal?: AbortSignal;
+  /** What the agent is to the board, as its `brainfile mcp` is told (task-81); a lead's `leadScope` is its epic. */
+  role?: AgentRole;
+  leadScope?: string;
 }
 
 export async function open(ctx: SessionContext, projectId: string, agentId: AgentId, key: string, model?: string, options: OpenOptions = {}): Promise<Session> {
-  const { board = true, at, mcpServers: extra = [], rule = null, keepsMode = null, release = null, effort, signal } = options;
+  const { board = true, at, mcpServers: extra = [], rule = null, keepsMode = null, release = null, effort, signal, role, leadScope } = options;
   const { dataDir, sessions } = ctx;
   const agent = agentOf(dataDir, agentId);
   if (!agent) {
@@ -137,8 +140,19 @@ export async function open(ctx: SessionContext, projectId: string, agentId: Agen
     release?.();
     throw signal.reason;
   }
+  // The board's server, before the agent starts: one this process brings but cannot find says so (useBrainfile).
+  const as = role ? { role, ...(leadScope ? { scope: leadScope } : {}) } : undefined;
+  let mcpServers: acp.McpServer[];
+  try {
+    mcpServers = board ? [...brainfileMcp(as), ...extra] : [];
+  } catch (err) {
+    release?.();
+    throw err;
+  }
   const { ClientSideConnection, PROTOCOL_VERSION, ndJsonStream } = sdk();
-  const child = spawn(launch.command, launch.args, { cwd, env: launch.env ?? agentEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
+  // The agent's own environment carries its role too, so the `brainfile` command line in its shell keeps to it as its server does.
+  const env = { ...(launch.env ?? agentEnv()), ...roleEnv(as) };
+  const child = spawn(launch.command, launch.args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
   // Kept so a failure can say why, not just that the agent stopped.
   let stderr = '';
   child.stderr?.on('data', (d) => (stderr = (stderr + d).slice(-4000)));
@@ -210,7 +224,6 @@ export async function open(ctx: SessionContext, projectId: string, agentId: Agen
     child.kill();
     throw new Error(`${agent.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
   }
-  const mcpServers = board ? [...brainfileMcp(), ...extra] : [];
   const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
   session.sessionId = created.sessionId;
   let configOptions = created.configOptions ?? null;
@@ -271,14 +284,12 @@ export async function applyMode(ctx: Pick<SessionContext, 'dataDir'>, session: S
 
 /** Brainfile's own board tools: `brainfile_list_tasks`, `mcp__brainfile__task_add`, `mcp.brainfile.list_tasks`. */
 export const BOARD_TOOL = /^(mcp(__|\.))?brainfile[_.]/i;
-/** The desk's tools (spec-16): `mcp__desk__dispatch`, `desk.runs`, `mcp.desk.stop`. */
-export const DESK_TOOL = /^(mcp(__|\.))?desk(__|[_./])(dispatch|runs|stop)\b/i;
 
 let nextAsk = 1;
 
 /**
  * Answers an agent that asks before it acts: the session's own rule first,
- * then the board's tools (and the desk's) unasked, then the repository's
+ * then the board's tools unasked, then the repository's
  * policy; under `ask`, the person, through `ctx.ask`.
  */
 export async function requestPermission(
@@ -299,8 +310,7 @@ export async function requestPermission(
   }
   // The dispatcher's own board tools are not asked about: every change they
   // make is a commit on the board, and the board is what it was asked to manage.
-  // The desk's are the app's own too: a hand-off asks in its pane before it acts.
-  const boardTool = BOARD_TOOL.test(params.toolCall.title ?? '') || DESK_TOOL.test(params.toolCall.title ?? '');
+  const boardTool = BOARD_TOOL.test(params.toolCall.title ?? '');
   if ((boardTool || policyFor(ctx.dataDir, session.projectId) !== 'ask') && allowOnce) {
     return { outcome: { outcome: 'selected', optionId: allowOnce.optionId } };
   }

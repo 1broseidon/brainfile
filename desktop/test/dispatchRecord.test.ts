@@ -40,7 +40,8 @@ test('recordDispatch writes the assignee and core’s record', async () => {
   assert.ok(written.ok, !written.ok ? written.error : '');
   const task = core.readTaskFile(file)!.task;
   assert.equal(task.assignee, 'codex');
-  assert.deepEqual(core.readDispatchRecord(task), record());
+  // A request written now carries its tries, none yet: one with neither tries nor a claim is from before runners.
+  assert.deepEqual(core.readDispatchRecord(task), { ...record(), tries: 0 });
   assert.deepEqual(task.decisions, ['decision-1']);
 });
 

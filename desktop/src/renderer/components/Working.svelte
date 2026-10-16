@@ -15,6 +15,8 @@
   const agent = $derived(run?.agentId ?? '');
   const activity = $derived(run?.activity ?? 'working');
   const waiting = $derived(run?.state === 'waiting');
+  /** A run another runner works (task-84): where, `in a terminal`. */
+  const where = $derived(run?.where);
 
   const WORDS: Record<string, string[]> = {
     starting: ['Starting', 'Waking up'],
@@ -45,6 +47,10 @@
   {#key index + words[index]}
     <span class="word">{words[index]}…</span>
   {/key}
+  {#if where}
+    <span class="sep">·</span>
+    <span class="where">{where}</span>
+  {/if}
 </span>
 
 <style>
@@ -58,6 +64,10 @@
   }
 
   .sep {
+    color: var(--ink-4);
+  }
+
+  .where {
     color: var(--ink-4);
   }
 

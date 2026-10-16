@@ -19,7 +19,7 @@ interface CommandLike {
 }
 
 /** Long-running or board-unrelated commands that manage their own commits, or none. */
-const SKIP_COMMANDS = new Set(['mcp', 'tui', 'hooks', 'auth', 'sync', 'merge-driver', 'where', 'adopt', 'merge-boards', 'backups', 'fix']);
+const SKIP_COMMANDS = new Set(['mcp', 'tui', 'hooks', 'auth', 'sync', 'merge-driver', 'where', 'adopt', 'merge-boards', 'backups', 'fix', 'agents']);
 
 export function topLevelCommandName(command: CommandLike): string {
   let cursor: CommandLike = command;
@@ -42,8 +42,9 @@ export function boardDirForCommand(command: CommandLike): string | null {
  * rather than what it says. With SKIP_COMMANDS (which includes the commands
  * that settle which board is the board, spec-15), everything else is a write.
  */
-const READ_COMMANDS = new Set(['list', 'show', 'search', 'check', 'schema', 'log', 'brief', 'index', 'config', 'init', 'migrate']);
-const READ_SUBCOMMANDS = new Set(['plan list', 'plan show', 'contract graph', 'contract validate', 'columns list']);
+const READ_COMMANDS = new Set(['list', 'show', 'search', 'check', 'schema', 'log', 'brief', 'index', 'config', 'init', 'migrate', 'review']);
+// `dispatch stop` writes a run file in state/, never the board.
+const READ_SUBCOMMANDS = new Set(['plan list', 'plan show', 'contract graph', 'contract validate', 'columns list', 'dispatch status', 'dispatch stop']);
 
 /** Will this invocation change the board? */
 export function commandWrites(command: CommandLike): boolean {

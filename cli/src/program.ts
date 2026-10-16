@@ -21,6 +21,10 @@ import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
 import { whereCommand } from './commands/where';
 import { issuesCommand, ISSUES_COMMAND_HELP } from './commands/issues';
 import { prCommand, PR_COMMAND_HELP } from './commands/pr';
+import { agentsCommand, dispatchCommand, dispatchLeadCommand, dispatchStatusCommand, dispatchStopCommand, DISPATCH_COMMAND_HELP } from './commands/dispatch';
+import { discardCommand, landCommand, reviewCommand, REVIEW_COMMAND_HELP } from './commands/review';
+import { runCommand, RUN_COMMAND_HELP } from './commands/run';
+import { discussCommand, DISCUSS_COMMAND_HELP } from './commands/discuss';
 import { adoptCommand, backupsCommand, mergeBoardsCommand } from './commands/boards';
 import { fixCommand } from './commands/fix';
 import { mergeDriverCommand } from './commands/merge-driver';
@@ -117,6 +121,19 @@ export async function runTui(options: { file: string }): Promise<void> {
 const packageJson = JSON.parse(
   readFileSync(join(__dirname, '..', 'package.json'), 'utf8')
 );
+
+/**
+ * Every command's name, so the first word of `brainfile <word>` is told from
+ * a board's path (cli.ts): one missing here opens the TUI on a folder of
+ * that name instead (`brainfile agents` beside an agents/ folder). A test
+ * holds it to the commands createProgram registers.
+ */
+export const SUBCOMMANDS: readonly string[] = [
+  'init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search',
+  'decide', 'supersede', 'retire', 'check', 'index', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract',
+  'schema', 'adr', 'plan', 'types', 'columns', 'sync', 'where', 'fix', 'issues', 'pr', 'dispatch', 'run', 'discuss', 'review', 'land',
+  'discard', 'agents', 'adopt', 'merge-boards', 'backups', 'merge-driver', 'help',
+];
 
 /** The CLI's commander program, with every command registered and nothing parsed. */
 export function createProgram(): Command {
@@ -393,6 +410,107 @@ Brainfile file resolution (when you don't pass --file):
     .argument('<task>', 'The task whose hand-off it is, e.g. task-12')
     .action(async (task, options) => { await prCommand(task, options); });
   prCmd.addHelpText('after', `\n${PR_COMMAND_HELP}`);
+
+  // Hand-offs (task-81, spec-16-7): queued on the board for a runner, as the
+  // desktop's Hand to… and the MCP dispatch tools do.
+  const dispatchCmd = program
+    .command('dispatch')
+    .description('Queue tasks for a coding agent, in its own worktree; a runner on this machine starts them. status and stop below')
+    .argument('[ids...]', 'The tasks to hand off, e.g. task-12 task-13')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--column <column>', 'Every open task in this column')
+    .option('--parent <id>', "The parent's open children")
+    .option('--agent <agent>', 'Who does it (brainfile agents lists them). Default: the agent it was last handed to, else its assignee')
+    .option('--model <model>', 'A model the agent offers. Default: the agent\'s own')
+    .option('--effort <effort>', 'The effort level for that model')
+    .addOption(new Option('--until <until>', 'review: it stops in Review for you (default); done: it lands on its own where the repository allows').choices(['review', 'done']))
+    .option('--now', 'Also run it here in the foreground until it ends; asks come to this terminal')
+    .option('--json', 'Output as JSON')
+    .action(async (ids: string[], options) => { await dispatchCommand(ids, options); });
+  dispatchCmd.addHelpText('after', `\n${DISPATCH_COMMAND_HELP}`);
+
+  // The parent takes its own options wherever they are, so a subcommand reads them all through optsWithGlobals.
+  dispatchCmd
+    .command('status')
+    .description('The queue, the claims and the live runs on this machine, from the board and the run files')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--json', 'Output as JSON')
+    .action(async (_options, cmd: Command) => { await dispatchStatusCommand(cmd.optsWithGlobals()); });
+
+  dispatchCmd
+    .command('stop <ref>')
+    .description("Stop a run by its run id or its task id, whichever runner on this machine has it; its worktree stays. An epic's id stops its lead")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--json', 'Output as JSON')
+    .action(async (ref: string, _options, cmd: Command) => { await dispatchStopCommand(ref, cmd.optsWithGlobals()); });
+
+  // An epic's lead (task-83): through its record on the epic, whichever runner leads it.
+  dispatchCmd
+    .command('pause <epic>')
+    .description("Pause an epic's lead: it hands off nothing until resumed; what is running goes on")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--json', 'Output as JSON')
+    .action(async (epic: string, _options, cmd: Command) => { await dispatchLeadCommand('pause', epic, cmd.optsWithGlobals()); });
+
+  dispatchCmd
+    .command('resume <epic>')
+    .description("Resume an epic's lead: it carries on, or waits for a runner to take it up")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--json', 'Output as JSON')
+    .action(async (epic: string, _options, cmd: Command) => { await dispatchLeadCommand('resume', epic, cmd.optsWithGlobals()); });
+
+  // The foreground runner (task-82, spec-16-8): works the queue in a terminal until Ctrl-C.
+  const runCmd = program
+    .command('run')
+    .description("Work the board's queue here in the foreground: start each hand-off and lead, ask at this prompt; Ctrl-C lets go")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--once', 'Return once nothing it started is still going and nothing queued can start')
+    .option('--max <n>', 'At most this many hand-offs at once from here (the repository\'s limit still holds)')
+    .addOption(new Option('--until <until>', 'For a hand-off whose request names none: review stops it in Review (default); done lands it where the repository allows').choices(['review', 'done']))
+    .action(async (options) => { await runCommand(options); });
+  runCmd.addHelpText('after', `\n${RUN_COMMAND_HELP}`);
+
+  // Discuss (task-110, decision-19): a task talked over with an agent here, under core's rules for a discussion.
+  const discussCmd = program
+    .command('discuss')
+    .description("Talk a task over with an agent in this terminal: it reads, and changes only the task's spec with your yes; Ctrl-C ends it")
+    .argument('<task>', 'The task to talk over, e.g. task-12')
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--agent <agent>', 'Who to talk it over with (brainfile agents lists them). Default: the agent it was last handed to, else its assignee, else the first installed')
+    .option('--model <model>', 'A model the agent offers. Default: the agent\'s own')
+    .option('--effort <effort>', 'The effort level for that model')
+    .action(async (task: string, options) => { await discussCommand(task, options); });
+  discussCmd.addHelpText('after', `\n${DISCUSS_COMMAND_HELP}`);
+
+  const reviewCmd = program
+    .command('review [task]')
+    .description("A hand-off's branch, commits, files and conflicts, and whether it can land; --ready lists every hand-off that can land now")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--ready', 'Every hand-off that can land now')
+    .option('--json', 'Output as JSON')
+    .action(async (task: string | undefined, options) => { await reviewCommand(task, options); });
+  reviewCmd.addHelpText('after', `\n${REVIEW_COMMAND_HELP}`);
+
+  program
+    .command('land <task>')
+    .description("Check a hand-off with its contract's validation, then land it on its target; a conflict or a failed check goes back to its agent")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--into <branch>', 'Land it on this branch instead of its target')
+    .option('--json', 'Output as JSON')
+    .action(async (task: string, options) => { await landCommand(task, options); });
+
+  program
+    .command('discard <task>')
+    .description("Throw a hand-off's work away: its worktree, uncommitted changes and all, and its branch")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)', 'brainfile.md')
+    .option('--json', 'Output as JSON')
+    .action(async (task: string, options) => { await discardCommand(task, options); });
+
+  program
+    .command('agents')
+    .description('The coding agents Brainfile can hand work to, which are installed here, and the models each offers')
+    .option('--json', 'Output as JSON')
+    .action((options) => { agentsCommand(options); });
 
   program
     .command('adopt')

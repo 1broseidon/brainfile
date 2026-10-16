@@ -50,8 +50,11 @@
   /** With open children, Hand to… starts a lead that runs them (decision-15). */
   const leads = $derived(children.some((c) => !c.done));
   const lead = $derived(app.leadFor(taskId, board.projectId));
-  /** A lead runs this epic, or one is on it waiting to be resumed: it is the lead's, not Hand to…'s. */
-  const led = $derived((!!lead && (lead.state === 'leading' || lead.state === 'paused')) || (!!detail?.lead && lead?.state !== 'stopped' && lead?.state !== 'done'));
+  /** A lead runs this epic, here or in another runner, or one is on it waiting to be resumed: it is the lead's, not Hand to…'s. */
+  const led = $derived(
+    (!!lead && (lead.state === 'leading' || lead.state === 'paused')) ||
+      (!!detail?.lead && (!!detail.lead.where || (lead?.state !== 'stopped' && lead?.state !== 'done')))
+  );
   const leadRun = $derived(app.leadRunFor(taskId));
   const decision = $derived(detail?.decision);
   const decisionProps = $derived(

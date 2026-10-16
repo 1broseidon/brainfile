@@ -565,6 +565,8 @@ class AppState {
   #turnStart = new Map<string, BoardSnapshot>();
   /** The hand-offs each chat turn made (spec-16), by the turn's run ID, said under its reply. */
   #handoffs = new Map<string, { id: string; what: string }[]>();
+  /** Turns that have ended and whose reply's line is being settled (SETTLE_MS): a hand-off starting now joins it. */
+  #settling = new Set<string>();
   #undoTimer: ReturnType<typeof setTimeout> | null = null;
 
   async init(): Promise<void> {
@@ -590,6 +592,17 @@ class AppState {
     });
     void api.leads().then((leads) => {
       for (const lead of leads) this.leads[`${lead.projectId}\n${lead.epicId}`] = lead;
+    });
+    // What is running now, whichever runner on this Mac runs it (task-84): a window that reloads, or opens
+    // while a terminal works, has it at once. One going is told as it starts; one that ended is only kept.
+    void api.live().then((live) => {
+      if (!live?.runs) return;
+      for (const run of live.runs) {
+        if (this.runs[run.id]) continue;
+        if (isLive(run)) this.onRun(run);
+        else this.runs[run.id] = run;
+      }
+      this.asks = [...this.asks, ...live.asks.filter((a) => !this.asks.some((b) => b.id === a.id))];
     });
     setInterval(() => (this.now = Date.now()), 15_000);
     void this.refreshAgents();
@@ -1222,8 +1235,12 @@ class AppState {
     // A hand-off, or an epic's lead, is a session in its board's dock from the moment it starts.
     if (!before && (run.kind === 'dispatch' || run.kind === 'lead') && run.taskId) this.keepSession({ projectId: run.projectId, kind: 'handoff', id: run.taskId });
     // One the chat made is said under the turn's reply, like a board change; a lead's are said by its tab.
-    if (!before && run.kind === 'dispatch' && run.taskId && run.from && this.runs[run.from]?.kind === 'ask') {
-      this.#handoffs.set(run.from, [...(this.#handoffs.get(run.from) ?? []), { id: run.taskId, what: `handed to ${run.agentId}` }]);
+    // The chat queues it through its brainfile mcp, so it may start once the turn has ended: then it joins the reply's line.
+    const turn = run.from ? this.runs[run.from] : undefined;
+    if (!before && run.kind === 'dispatch' && run.taskId && turn?.kind === 'ask') {
+      const handed = { id: run.taskId, what: `handed to ${run.agentId}` };
+      if (isLive(turn) || this.#settling.has(turn.id)) this.#handoffs.set(turn.id, [...(this.#handoffs.get(turn.id) ?? []), handed]);
+      else if (turn.threadId) this.addChange(turn.projectId, turn.threadId, turn.id, handed);
     }
     const ended = !isLive(run) && (!before || isLive(before));
     if (!ended) return;
@@ -1243,12 +1260,16 @@ class AppState {
       // A reply that came with the chat closed waits on the key, on its own board.
       if (run.state === 'done' && !(this.chatOpen && this.activeId === run.projectId)) this.unread[run.projectId] = run.threadId;
       const before = this.#turnStart.get(run.id);
-      const handed = this.#handoffs.get(run.id) ?? [];
       this.#turnStart.delete(run.id);
-      this.#handoffs.delete(run.id);
-      if ((before || handed.length) && run.state !== 'failed') {
+      if (run.state === 'failed') this.#handoffs.delete(run.id);
+      else {
         const { projectId, threadId } = run;
+        this.#settling.add(run.id);
         setTimeout(() => {
+          const handed = this.#handoffs.get(run.id) ?? [];
+          this.#handoffs.delete(run.id);
+          this.#settling.delete(run.id);
+          if (!before && !handed.length) return;
           const after = this.boards[projectId];
           const board = before && after ? diffBoards(before, after, Date.now()).map((c) => ({ id: c.taskId, what: c.what })) : [];
           // A task handed off says so once: its record, and what its agent has done since, are the hand-off.
@@ -1259,6 +1280,14 @@ class AppState {
     } else if (run.state === 'failed') {
       this.notify(`${this.agentName(run.agentId)} stopped on ${run.taskId}: ${run.error ?? 'unknown error'}`, 'warn');
     }
+  }
+
+  /** A hand-off a turn asked for that started after its reply settled: said on the reply's line, once. */
+  private addChange(projectId: string, threadId: string, key: string, change: { id: string; what: string }): void {
+    const line = this.threads[projectId]?.find((t) => t.id === threadId)?.lines.find((l) => l.key === key);
+    if (!line) return;
+    const changes = [...(line.changes ?? []).filter((c) => c.what === 'added' || c.id !== change.id), change];
+    this.patchLine(projectId, threadId, key, { changes });
   }
 
   /** The chat's live turn for the board in front. */

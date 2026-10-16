@@ -3,9 +3,10 @@
  * the Agent Client Protocol (decision-18): the agents Brainfile knows and how
  * each starts, custom agents and the ACP registry, the dispatch settings and
  * model cache in the data folder, sessions and their turns, permissions as
- * policy, and a hand-off's brief. Node only; spawns agents and loads
- * `@agentclientprotocol/sdk` when a session opens. Not re-exported from the
- * main or browser entry points.
+ * policy, a hand-off's brief, the shared runner, an epic's lead and a
+ * discussion's context and rules (decision-19). Node only; spawns agents and
+ * loads `@agentclientprotocol/sdk` when a session opens. Not re-exported from
+ * the main or browser entry points.
  *
  * @packageDocumentation
  */
@@ -20,3 +21,7 @@ export * from './startup';
 export * from './agents';
 export * from './session';
 export * from './brief';
+export * from './runner';
+export * from './lead';
+export * from './readOnly';
+export * from './discuss';

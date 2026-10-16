@@ -16,6 +16,7 @@ import {
   HOST_METHODS,
   type AgentMessage,
   type AgentRequest,
+  type BoardSnapshot,
   type HostReply,
   type HostMessage,
   type HostRequest,
@@ -37,6 +38,7 @@ import { LinkServer } from '../link/server';
 import { LinkStore } from '../link/store';
 import { deskAddresses, deskName } from '../link/addresses';
 import { bundleOf, Updater } from './updater';
+import { APP_CLI_ENV, ELECTRON_BIN_ENV, appCliLaunch, appCliPath } from '../agents/ownCli';
 import { UPDATE_PUBLIC_KEY } from './update-key';
 
 // A second copy (a test, a capture) keeps its own data and its own
@@ -59,9 +61,19 @@ let nextRequest = 1;
 const pending = new Map<number, (result: unknown) => void>();
 let link: LinkServer | null = null;
 let updater: Updater;
+/** Set once quitting has begun: the agents process lets go first, then the rest goes. */
+let quitting = false;
+/** How long the agents process has to let go of its hand-offs before the app quits anyway. */
+const AGENTS_QUIT_MS = 6_000;
+
 /** The boards the window and each phone hold open: the host closes one only when nobody does. */
 const holds = new BoardHolds({
-  open: (projectId) => callHost('openBoard', projectId),
+  // A board opened is one the agents process works the queue of (task-84), and whose runs from elsewhere it shows.
+  open: (projectId) =>
+    callHost<Result<BoardSnapshot>>('openBoard', projectId).then((opened) => {
+      if (opened.ok) void callAgents('boardChanged', projectId);
+      return opened;
+    }),
   close: (projectId) => callHost('closeBoard', projectId),
 });
 
@@ -76,8 +88,11 @@ function startHost(): UtilityProcess {
     } else if (message.kind === 'board') {
       win?.webContents.send(CHANNEL.board, message.snapshot);
       link?.board(message.snapshot);
-      // An epic's lead hears a child the person completed, and ends with its last (decision-15).
-      if (agents) void callAgents('boardChanged', message.snapshot.projectId);
+      // The queue is worked again (task-84), and an epic's lead hears a child the person completed, and ends with its last (decision-15).
+      void callAgents('boardChanged', message.snapshot.projectId);
+    } else if (message.kind === 'runs') {
+      // A run or runner file changed: one a terminal or an MCP client runs shows as the window's own do (task-84).
+      void callAgents('runsChanged', message.projectId);
     }
   });
   child.on('exit', () => {
@@ -99,11 +114,14 @@ function callHost<T>(method: HostRequest['method'], ...args: unknown[]): Promise
 
 // ── Agents process ──────────────────────────────────────────────────────────
 
+/** The app's own brainfile CLI: shipped in its Resources, or in development the repository's own build (ownCli.ts). */
+const appCli = () => appCliPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath() });
+
 function startAgents(): UtilityProcess {
   const child = utilityProcess.fork(path.join(__dirname, 'agents.js'), [], {
     serviceName: 'Brainfile Agents',
-    // The app's own binary runs the desk's MCP server as node (desk-mcp.ts).
-    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData'), BRAINFILE_ELECTRON_BIN: process.execPath },
+    // Its agents get the app's own CLI, run by this binary as node, not the brainfile installed on the Mac.
+    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData'), [APP_CLI_ENV]: appCli(), [ELECTRON_BIN_ENV]: process.execPath },
   });
   child.on('message', (message: AgentMessage) => {
     if (message.kind === 'reply') {
@@ -167,6 +185,8 @@ function reloadAgentsOnRebuild(): void {
 }
 
 function callAgents<T>(method: AgentRequest['method'], ...args: unknown[]): Promise<T> {
+  // Quitting, the agents process is not started again by what its letting go writes.
+  if (quitting && !agents) return Promise.resolve({ ok: false, error: 'Brainfile is quitting' } as T);
   if (!agents) agents = startAgents();
   const id = nextRequest++;
   return new Promise((resolve) => {
@@ -210,16 +230,17 @@ async function addProject(): Promise<Project | null> {
   return project;
 }
 
-/** `brainfile init` in the project folder: the CLI owns board creation. */
+/** `brainfile init` in the project folder: the CLI owns board creation, the app's own (ownCli.ts), run by this binary as node. */
 function initBoard(projectId: string): Promise<Result<Project>> {
   return new Promise((resolve) => {
-    const child = spawn('brainfile', ['init'], { cwd: projectId, env: process.env });
+    const cli = appCli();
+    if (!fs.existsSync(cli)) return resolve({ ok: false, error: `Brainfile's own command line is not at ${cli}` });
+    const launch = appCliLaunch(process.execPath, cli);
+    const child = spawn(launch.command, [...launch.args, 'init'], { cwd: projectId, env: { ...process.env, ...launch.env } });
     let output = '';
     child.stdout.on('data', (d) => (output += d));
     child.stderr.on('data', (d) => (output += d));
-    child.on('error', () =>
-      resolve({ ok: false, error: 'The brainfile CLI is not on your PATH. Install it with `npm i -g brainfile`, then try again.' })
-    );
+    child.on('error', (err) => resolve({ ok: false, error: `brainfile init could not start: ${err.message}` }));
     child.on('close', async (code) => {
       if (code !== 0) return resolve({ ok: false, error: output.trim() || `brainfile init exited with ${code}` });
       const project = await resolveProject(projectId);
@@ -325,7 +346,8 @@ function startLink(): LinkServer {
 async function agentsWorking(): Promise<number> {
   if (!agents) return 0;
   const live = await callAgents<LiveAgents>('live');
-  return live.runs.filter((r) => r.state === 'starting' || r.state === 'working' || r.state === 'waiting').length;
+  // A run another runner works (`where`) goes on without this app.
+  return live.runs.filter((r) => !r.where && (r.state === 'starting' || r.state === 'working' || r.state === 'waiting')).length;
 }
 
 function startUpdater(): Updater {
@@ -569,7 +591,19 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (!quitting && agents) {
+    // The agents process goes first: its hand-offs end stopped, their claims given back through the host
+    // (so the next launch starts none of them again by itself); then the host, which flushes its commits.
+    quitting = true;
+    event.preventDefault();
+    const child = agents;
+    const gone = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    child.kill();
+    void Promise.race([gone, new Promise((resolve) => setTimeout(resolve, AGENTS_QUIT_MS))]).then(() => app.quit());
+    return;
+  }
+  quitting = true;
   // The host flushes pending commits on exit.
   host?.kill();
   agents?.kill();

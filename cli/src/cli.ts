@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 
 import { renderCliError } from './utils/cli-error';
-import { existsSync } from 'fs';
+import { existsSync, realpathSync } from 'fs';
+import { useBrainfile } from '@brainfile/core/dispatch';
 import { sep } from 'path';
 import { installAutosync } from './utils/board-autosync';
-import { createProgram, runTui } from './program';
+import { SUBCOMMANDS, createProgram, runTui } from './program';
 
-// Known subcommands to distinguish from file paths
-const SUBCOMMANDS = ['init', 'migrate', 'list', 'show', 'add', 'move', 'patch', 'delete', 'archive', 'restore', 'complete', 'log', 'note', 'brief', 'search', 'decide', 'supersede', 'retire', 'check', 'index', 'subtask', 'template', 'lint', 'tui', 'hooks', 'mcp', 'auth', 'config', 'contract', 'schema', 'adr', 'plan', 'types', 'columns', 'sync', 'where', 'fix', 'issues', 'merge-driver', 'help'];
+/** The file's real path, or null when it is not there. */
+function realpathOr(file: string): string | null {
+  try {
+    return realpathSync(file);
+  } catch {
+    return null;
+  }
+}
 
 // Check if first arg looks like a file path (not a subcommand or flag)
 function shouldLaunchTUI(): { launch: boolean; file: string } {
@@ -68,6 +75,14 @@ if (tuiCheck.launch) {
    * exception and printed a raw stack trace, and the async commands wired
    * directly as `.action(fn)` printed unhandled-rejection noise.
    */
-  program.parseAsync().catch(renderCliError);
+  // Always node's argv (node, script, args…): run by an Electron binary as node (ELECTRON_RUN_AS_NODE,
+  // as the desktop runs its own copy for its agents), commander would otherwise take the script for a command.
+  // Runners this command starts (run, dispatch --now, discuss) give their agents this very CLI as their board
+  // server, not whichever brainfile is first on PATH, which may be an older one without the dispatch tools.
+  const self = process.argv[1] ? realpathOr(process.argv[1]) : null;
+  // Run as node by an Electron binary (the desktop's copy), its children need telling so too.
+  const asNode = process.env.ELECTRON_RUN_AS_NODE ? { env: { ELECTRON_RUN_AS_NODE: '1' } } : {};
+  if (self) useBrainfile(() => ({ launch: { command: process.execPath, args: [self], ...asNode } }));
+  program.parseAsync(process.argv, { from: 'node' }).catch(renderCliError);
 
 } // end else block for CLI commands

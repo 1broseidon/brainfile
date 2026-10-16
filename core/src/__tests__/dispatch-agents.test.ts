@@ -14,11 +14,12 @@ import { execFileSync, spawnSync } from 'child_process';
 import {
   AgentRegistry,
   BOARD_TOOL,
-  DESK_TOOL,
   Startups,
+  agentEnv,
   agentOf,
   allAgents,
   applyMode,
+  brainfileMcp,
   brief,
   close,
   customId,
@@ -55,6 +56,7 @@ import {
   stepsOf,
   turn,
   unlessAborted,
+  useBrainfile,
   whyNot,
   within,
   workplace,
@@ -62,6 +64,8 @@ import {
   type AgentRun,
   type PermissionAsk,
   type Session,
+  brainfileOnPath,
+  realNode,
 } from '../dispatch';
 import { getV2Dirs } from '../workspace';
 
@@ -83,6 +87,35 @@ function server(dir: string, name: string): string {
   fs.chmodSync(file, 0o755);
   return file;
 }
+
+describe("the board's brainfile", () => {
+  afterEach(() => useBrainfile(null));
+  const env = (servers: ReturnType<typeof brainfileMcp>) => Object.fromEntries((servers[0] as { env: { name: string; value: string }[] }).env.map((e) => [e.name, e.value]));
+
+  test('brainfileMcp runs the launch its caller names, with what its env adds and the role', () => {
+    const servers = brainfileMcp({ role: 'lead', scope: 'epic-1' }, { command: '/Apps/Brainfile', args: ['/Apps/cli/dist/cli.js'], env: { ELECTRON_RUN_AS_NODE: '1' } });
+    expect(servers).toHaveLength(1);
+    expect(servers[0]).toMatchObject({ name: 'brainfile', command: '/Apps/Brainfile', args: ['/Apps/cli/dist/cli.js', 'mcp'] });
+    expect(env(servers)).toMatchObject({ ELECTRON_RUN_AS_NODE: '1', BRAINFILE_AGENT_ROLE: 'lead', BRAINFILE_LEAD_SCOPE: 'epic-1', HOME: os.homedir() });
+  });
+
+  test("a process's own brainfile is what its agents get: their server runs it, and its shim is first on their PATH", () => {
+    const shim = path.join(base, 'bin');
+    useBrainfile(() => ({ launch: { command: '/Apps/Brainfile', args: ['/Apps/cli.js'], env: { ELECTRON_RUN_AS_NODE: '1' } }, shim }));
+    const servers = brainfileMcp({ role: 'chat' });
+    expect(servers[0]).toMatchObject({ command: '/Apps/Brainfile', args: ['/Apps/cli.js', 'mcp'] });
+    expect(env(servers).PATH.split(':')[0]).toBe(shim);
+    expect(agentEnv().PATH?.split(':')[0]).toBe(shim);
+    // A launch the caller names still comes first.
+    expect(brainfileMcp(undefined, { command: 'node', args: ['cli.js'] })[0]).toMatchObject({ command: 'node', args: ['cli.js', 'mcp'] });
+  });
+
+  test("one that cannot be had fails the board's server with why, rather than give the agent another; agents keep the PATH they had", () => {
+    useBrainfile(() => "Brainfile's own command line is not in the app");
+    expect(() => brainfileMcp({ role: 'chat' })).toThrow("Brainfile's own command line is not in the app");
+    expect(agentEnv().PATH?.endsWith(process.env.PATH ?? '')).toBe(true);
+  });
+});
 
 describe('the data folder', () => {
   it('is BRAINFILE_DATA_DIR when set, else the platform’s own', () => {
@@ -544,9 +577,9 @@ describe('permissions', () => {
     };
   }
 
-  it('names the board’s and the desk’s tools as an agent does', () => {
+  it('names the board’s tools as an agent does', () => {
     for (const title of ['brainfile_list_tasks', 'mcp__brainfile__task_add', 'mcp.brainfile.list_tasks']) expect(BOARD_TOOL.test(title)).toBe(true);
-    for (const title of ['mcp__desk__dispatch', 'desk.runs', 'mcp.desk.stop']) expect(DESK_TOOL.test(title)).toBe(true);
+    expect(BOARD_TOOL.test('mcp__desk__dispatch')).toBe(false);
     expect(BOARD_TOOL.test('Edit file')).toBe(false);
   });
 
@@ -747,5 +780,24 @@ describe('the brief', () => {
     expect(text).toContain('task-1 ("Do task-1"):\n- Started.\n- The parser is in; the CLI flag is left for task-2.');
     expect(leftFor(dirs, undefined)).toBe('');
     expect(brief(project, 'task-2')).toContain('the CLI flag is left for task-2');
+  });
+});
+
+describe('the brainfile on PATH', () => {
+  const PATH = process.env.PATH;
+  afterEach(() => {
+    process.env.PATH = PATH;
+  });
+
+  it('runs a node script with node, and a shell shim (this app\'s own, first on an agent\'s PATH) as it is', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bf-onpath-'));
+    const bin = path.join(dir, 'brainfile');
+    fs.writeFileSync(bin, "#!/bin/sh\nELECTRON_RUN_AS_NODE='1' exec /app/Electron /app/cli.js \"$@\"\n", { mode: 0o755 });
+    process.env.PATH = `${dir}:${PATH}`;
+    expect(brainfileOnPath()).toEqual({ command: bin, args: [] });
+    fs.writeFileSync(bin, '#!/usr/bin/env node\nconsole.log(1)\n', { mode: 0o755 });
+    const launch = brainfileOnPath()!;
+    if (realNode()) expect(launch).toEqual({ command: realNode(), args: [fs.realpathSync(bin)] });
+    else expect(launch).toEqual({ command: bin, args: [] });
   });
 });

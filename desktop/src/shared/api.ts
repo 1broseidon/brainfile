@@ -354,6 +354,8 @@ export interface AgentRun {
   endedAt?: number;
   /** What the agent did on the way to its reply, in order: tools it ran and what it said between them. */
   steps?: RunStep[];
+  /** A run another runner on this machine works (task-84): where, as the window says it, `in a terminal`. Unset for this window's own. */
+  where?: string;
 }
 
 /**
@@ -365,20 +367,27 @@ export interface AgentRun {
 export type { DispatchRecord } from '@brainfile/core/browser';
 
 /**
- * An epic handed off (decision-15), written on it as `lead:`: who leads it,
- * and how far its children go on their own. `done` (a bypass repository):
- * the app lands each child that ends in Review; `review`: the person merges
- * each. Removed when the lead stops or the epic is done; one still there with
- * no lead running is one to resume.
+ * An epic handed off (decision-15), on it as `dispatch:` with role lead
+ * (core's, task-83): who leads it, and how far its children go on their own.
+ * `done` (a bypass repository): the app lands each child that ends in Review;
+ * `review`: the person merges each. Removed when the lead stops or the epic
+ * is done; one still there with no lead running is one to resume.
  */
 export interface LeadRecord {
   agent: AgentId;
   model?: string;
   effort?: string;
-  by: 'person' | 'chat';
+  /** Who asked: the person, the chat, the CLI or an MCP client. */
+  by: string;
   /** ISO 8601. */
   at: string;
   until: 'review' | 'done';
+  /** Paused from anywhere: it hands off nothing until resumed. */
+  paused?: boolean;
+  /** The runner leading it, when one holds it and is up: `cli on mac (pid 412)`. */
+  where?: string;
+  /** That runner's process, to tell this app's own from another's. */
+  pid?: number;
 }
 
 /** `leading`: at work or waiting for its children; `paused`: dispatches nothing, events wait; `stopped` and `done` end it. */
@@ -417,6 +426,8 @@ export interface PermissionAsk {
   /** The tool's kind as the agent reports it: execute, edit, read, fetch, other. */
   kind?: string;
   options: { optionId: string; name: string; kind: string }[];
+  /** An ask from another runner's run (task-84): where it is waiting, `in a terminal`. */
+  where?: string;
 }
 
 export type AgentEvent =
@@ -857,6 +868,7 @@ export const AGENT_METHODS = [
   'resumeLead',
   'stopLead',
   'boardChanged',
+  'runsChanged',
   'live',
   'review',
   'readyToMerge',
@@ -872,7 +884,17 @@ export type AgentMethod = (typeof AGENT_METHODS)[number];
 export type AgentRequest = { id: number; method: AgentMethod; args: unknown[] };
 export type HostReply = { kind: 'host-reply'; id: number; result: unknown };
 /** The board writes the agents process may ask main to pass to the host. */
-export const AGENT_HOST_METHODS = ['recordDispatch', 'recordLead', 'recordPullRequest', 'noteTask', 'settleLanded', 'completeTask'] as const;
+export const AGENT_HOST_METHODS = [
+  'recordDispatch',
+  'claimDispatch',
+  'releaseDispatch',
+  'parkInReview',
+  'markLead',
+  'recordPullRequest',
+  'noteTask',
+  'settleLanded',
+  'completeTask',
+] as const;
 export type AgentHostMethod = (typeof AGENT_HOST_METHODS)[number];
 /** The forge calls the agents process may ask of main, whose GitHub client holds the person's credentials (decision-16). */
 export const AGENT_FORGE_METHODS = ['openPullRequest', 'pullRequestState'] as const;
@@ -913,4 +935,6 @@ export type HostMethod = (typeof HOST_METHODS)[number];
 export type HostRequest = { id: number; method: HostMethod | AgentHostMethod | 'locate' | 'sharing'; args: unknown[] };
 export type HostMessage =
   | { kind: 'reply'; id: number; result: unknown }
-  | { kind: 'board'; snapshot: BoardSnapshot };
+  | { kind: 'board'; snapshot: BoardSnapshot }
+  /** The board's run or runner files changed (`state/runs`, `state/runners`): the agents process reads them again (task-84). */
+  | { kind: 'runs'; projectId: string };
