@@ -76,3 +76,6 @@ Depends on task-120 (target, pull-request, merge-to, the contract) and task-123 
 - link.md › The queue: queued[] has optional `waitMessage` (board-named reason for a related-board wait); `running` holds hand-offs only (chat and lead turns stay in `live`); `runners` includes the desk's own window. link:dev fixtures: task-2 queued, task-4 waiting on task-2 and mobile:task-12, task-1 run in a terminal, two runners, main 2 ahead.
 - For the end-to-end test: link.test.ts already has a real-desk queue test with a core Runner, a terminal runner and an alias wait; reuse its setup rather than building another.
 - Not wired: the window's renderer does not show the queue (phone only). Out of scope here; leave it as a note on epic-10 if the parity test needs an exclusion reason for it.
+
+## Log
+- 2026-10-16T06:48:45.683Z: [claude] Lead: task-123 landed on dispatch/epic-10 (5056541) before this run started. Its hand-over is now in this task's description under "Left by task-123": count src/link/devQueue.ts as a link:dev answer source, reuse link.test.ts's real-desk queue setup for the end-to-end alias wait, and expect queued[].waitMessage to be in link.md.
