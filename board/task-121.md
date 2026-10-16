@@ -1,17 +1,8 @@
 ---
 id: task-121
-title: "Link parity test: every api method is bridged for the phone or excluded with a reason, and link:dev answers every bridged call"
+title: "Link parity test and the epic's whole: every api method is bridged for the phone or excluded with a reason, link:dev answers every bridged call, and the four features work end to end"
 column: todo
 position: 18
-description: |-
-  What keeps the phone from drifting behind the desktop again. cli/src/__tests__/mcp-parity.test.ts maps every CLI command to an MCP tool or an exclusion with a reason; do the same for the link.
-
-  - New desktop/test/link-parity.test.ts: reads the api surface (`AGENT_METHODS`, the host methods and the main-process methods in desktop/src/shared/api.ts; find the lists the preload uses) and asserts each name is either a key of bridge.ts's CALLS or in an `EXCLUDED` map with a reason string. Reasons today: window-only (openInEditor, openWorktree, revealProject, listEditors, the updater's four, linkCode/setLink/forgetPhone/linkState), settings the person changes at the desk (getSettings, setSettings, setGitHubToken, githubAuth, agentRegistry, prepareRegistryAgent), board plumbing the phone reaches another way (openBoard/closeBoard are bridged; addProject/removeProject/refreshProject are the desk's), and anything the phone should get later (name the task). The test fails when a new api method is added without a decision.
-  - The same test checks link:dev: every bridged call has an answer in dev.ts (or devReviews.ts), so the phone can be tried against the fake with no real desk.
-  - The bridge's `features` and desktop/link.md agree: each feature named in LINK_FEATURES has a section in link.md, and each call link.md documents is bridged.
-  - Document the rule in desktop/design.md (one paragraph under the phone link) and in desktop/link.md's head.
-
-  Depends on the contract child (the lists it adds).
 tags:
   - link
   - desktop
@@ -44,15 +35,17 @@ contract:
 createdAt: "2026-10-16T06:09:34.484Z"
 dependsOn:
   - task-120
-updatedAt: "2026-10-16T06:10:40.040Z"
+  - task-123
+updatedAt: "2026-10-16T06:13:02.842Z"
 ---
 
 ## Description
-What keeps the phone from drifting behind the desktop again. cli/src/__tests__/mcp-parity.test.ts maps every CLI command to an MCP tool or an exclusion with a reason; do the same for the link.
+What keeps the phone from drifting behind the desktop again, and the epic's last child: it wires and tests the whole. cli/src/__tests__/mcp-parity.test.ts maps every CLI command to an MCP tool or an exclusion with a reason; do the same for the link.
 
 - New desktop/test/link-parity.test.ts: reads the api surface (`AGENT_METHODS`, the host methods and the main-process methods in desktop/src/shared/api.ts; find the lists the preload uses) and asserts each name is either a key of bridge.ts's CALLS or in an `EXCLUDED` map with a reason string. Reasons today: window-only (openInEditor, openWorktree, revealProject, listEditors, the updater's four, linkCode/setLink/forgetPhone/linkState), settings the person changes at the desk (getSettings, setSettings, setGitHubToken, githubAuth, agentRegistry, prepareRegistryAgent), board plumbing the phone reaches another way (openBoard/closeBoard are bridged; addProject/removeProject/refreshProject are the desk's), and anything the phone should get later (name the task). The test fails when a new api method is added without a decision.
 - The same test checks link:dev: every bridged call has an answer in dev.ts (or devReviews.ts), so the phone can be tried against the fake with no real desk.
 - The bridge's `features` and desktop/link.md agree: each feature named in LINK_FEATURES has a section in link.md, and each call link.md documents is bridged.
+- **The whole (lead's addition, epic-10 plan):** an end-to-end test through the link server and bridge (the in-process host with a scratch board, as link.test.ts does) against the epic's description of done: hello offers effort, merge, target, pull-request, merge-to and queue; a phone sets a task's Lands on, opens a pull request and sees it on the row, merges an epic-branch child with `to`, and reads the queue, where a hand-off waiting on an `alias:task-id` dependency on a related scratch board shows that wait with the board named (task-122's waits through task-123's queue). Fix any seam you find between the children's work; leave a note on epic-10 for anything you could not.
 - Document the rule in desktop/design.md (one paragraph under the phone link) and in desktop/link.md's head.
 
-Depends on the contract child (the lists it adds).
+Depends on task-120 (target, pull-request, merge-to, the contract) and task-123 (queue, on task-122's alias waits).
