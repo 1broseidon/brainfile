@@ -887,6 +887,39 @@ ran that waits on you (children in Review, or waiting to be handed off) is
 let go as on Ctrl-C. `--until review|done` is how far a hand-off goes when
 its request names neither.
 
+#### discuss — Talk a task over in a terminal
+
+```console
+$ brainfile discuss task-12
+$ brainfile discuss task-12 --agent claude --model opus --effort high
+```
+
+Opens a session with an agent about one task, at any stage of its life, under
+the same rules as the desktop's Discuss (decision-19). The agent first gets
+what the board says about the task (its stage, description, subtasks,
+contract, the decisions it rests on, its latest notes, the board's other
+decisions, and its branch, worktree and the agent on it now, if it was handed
+off), the rules, and says where the task stands. Then each line you type is
+sent to it and its reply is printed.
+
+The session is core's, opened through a runner as `run` opens its agents; its
+`brainfile mcp` runs in role `discuss`. It never runs in bypass, and runs in
+the agent's read-only mode when it has one. The agent may read the code and
+the board, run git that only reads, and with your yes change the task's
+description, subtasks and contract, record decisions and note what was
+agreed. An edit, any other command, a change of mode, or a board tool beyond
+those is refused before you are asked. Anything else it asks before it acts
+(reading a file, say) comes to this prompt as in `run`: Allow once, Always,
+Deny.
+
+With no `--agent` it is the agent the task was last handed to, else its
+assignee when that is an agent, else the first installed here.
+
+Ctrl-C, or the end of input, ends it: once you have said something, the agent
+is told you are done, and notes what was agreed on the task if it has not
+yet. A second Ctrl-C leaves at once. Then the session is let go and what was
+written on the board is committed.
+
 #### dispatch status, dispatch stop — What is running, and stopping it
 
 ```console
@@ -1765,14 +1798,15 @@ in the desktop's chat (decision-19):
 
 The `discuss` tool returns the same text, for clients that do not support
 prompts. The client keeps to the rules itself: a server cannot refuse its
-own client's edits.
+own client's edits. `brainfile discuss` (see [Hand-offs](#hand-offs)) opens
+the session itself and holds the rules for it.
 
 #### Roles
 
 Whoever starts `brainfile mcp` for an agent says what the agent is to the
 board in `BRAINFILE_AGENT_ROLE`: `chat`, `lead`, `worker` or `discuss`. The
-runner does so for every agent it starts, and the desktop for its chat,
-leads and discussions.
+runner does so for every agent it starts, the desktop for its chat,
+leads and discussions, and `brainfile discuss` for its session.
 
 | Role | Its server |
 | --- | --- |

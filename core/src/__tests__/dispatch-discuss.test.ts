@@ -231,6 +231,17 @@ test('a discussion refuses edits, commands and mode changes, and asks about read
   assert.equal(discussPermission('mcp__desk__dispatch', 'other'), 'usual');
 });
 
+test('a discussion in a session (brainfile discuss) may run git that only reads, and nothing else; in the window, no command', () => {
+  assert.equal(discussPermission('git log --oneline -5', 'execute', 'session'), 'allow');
+  assert.equal(discussPermission('Run git', 'execute', 'session', { command: ['git', 'diff', 'main'] }), 'allow');
+  assert.equal(discussPermission('git log --oneline -5', 'execute'), 'refuse');
+  for (const command of ['git commit -am wip', 'git log | sh', 'git diff --output=x', 'brainfile move task-7 done', 'npm test']) {
+    assert.equal(discussPermission(command, 'execute', 'session'), 'refuse', command);
+  }
+  assert.equal(discussPermission('Write src/x.ts', 'edit', 'session'), 'refuse');
+  assert.equal(discussPermission('mcp__brainfile__task_move', 'other', 'session'), 'refuse');
+});
+
 const REVIEW: DiscussWork = {
   review: {
     branch: 'dispatch/task-7',

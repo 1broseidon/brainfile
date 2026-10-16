@@ -27,10 +27,14 @@ const BOARD_COMMAND = /^(?:npx\s+)?brainfile(?:\s|$)/;
 /** git that only reads. */
 const READING_GIT = /^git\s+(?:status|log|diff|show|rev-parse|merge-base|ls-files|blame|shortlog|describe|worktree\s+list|branch\s+(?:--list|-a|-r|-v|-vv|--show-current|--contains|--merged))(?:\s|$)/;
 
+/** Whether a command is git that only reads, alone. */
+export function readsGit(command: string): boolean {
+  return PLAIN.test(command) && READING_GIT.test(command) && !/\s--output\b/.test(command);
+}
+
 /** Whether a command is one a session that writes no code may run: the brainfile command line, or git that only reads. */
 export function readsOnly(command: string): boolean {
-  const reads = READING_GIT.test(command) && !/\s--output\b/.test(command);
-  return PLAIN.test(command) && (BOARD_COMMAND.test(command) || reads);
+  return (PLAIN.test(command) && BOARD_COMMAND.test(command)) || readsGit(command);
 }
 
 /**

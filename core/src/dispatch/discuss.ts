@@ -18,7 +18,7 @@ import { summarizeDecision } from '../decisions';
 import { reviewOf, uncommittedIn, type HandOffReview } from '../repo/worktree';
 import { extractDescription, extractLog, findV2Task, getV2Dirs } from '../workspace';
 import { nameOf } from './agents';
-import { BOARD_TOOL_NAME, REFUSED_KINDS, leadPermission, readOnlyMode } from './readOnly';
+import { BOARD_TOOL_NAME, REFUSED_KINDS, commandOf, leadPermission, readOnlyMode, readsGit } from './readOnly';
 import type { Runner } from './runner';
 import type { AgentModes } from './types';
 
@@ -363,11 +363,15 @@ const DISCUSS_TOOLS = new Set(['brief', 'get_task', 'list_tasks', 'search', 'che
  * How a discussion answers an agent that asks before it acts: a board tool it
  * may use is allowed, any other board tool or anything that changes the code
  * or the session is refused, and the rest (reading, searching) is asked as
- * usual.
+ * usual. In a session (`brainfile discuss`), whose rules say it may read with
+ * git, git that only reads is allowed; any other command is refused, the
+ * brainfile command line too, which would reach past the board tools above.
  */
-export function discussPermission(title: string, kind?: string | null): 'allow' | 'refuse' | 'usual' {
-  const board = BOARD_TOOL_NAME.exec(title.trim());
+export function discussPermission(title: string, kind?: string | null, surface: DiscussSurface = 'window', rawInput?: unknown): 'allow' | 'refuse' | 'usual' {
+  const named = title.trim();
+  const board = BOARD_TOOL_NAME.exec(named);
   if (board) return DISCUSS_TOOLS.has(board[1].toLowerCase()) ? 'allow' : 'refuse';
+  if (surface === 'session' && kind === 'execute' && readsGit(commandOf(named, rawInput))) return 'allow';
   return kind && REFUSED_KINDS.has(kind) ? 'refuse' : 'usual';
 }
 
