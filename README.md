@@ -78,13 +78,17 @@ After that, changes are sent in the background and teammates who clone the repo 
 - **Contracts** — a task can carry a contract: deliverables, validation commands, and constraints. Agents pick up (`brainfile contract pickup`), deliver, and you validate (`brainfile contract validate`) — which actually runs the validation commands. "Please do X" becomes verifiable.
 - **Agent instructions** — project guidance lives in `agent.instructions` in the board config, one place agents are told to read before working.
 - **Decisions and a brief** — `brainfile decide` records a standing choice under a claim key (a new one supersedes the old); `brainfile check "<action>"` says whether a decision still holds before an agent acts; every session starts with `brainfile brief`: the decisions that stand, the agent's tasks, what changed, and the docs that bear on them, from a local index of the board and the repo's Markdown.
+- **Hand-offs** — `brainfile dispatch task-12 --agent codex` hands a task to a coding agent (Claude Code, Codex, Cursor, Antigravity, Grok, or any ACP server), which works in its own git worktree on `dispatch/task-12`, forked from where the task lands. The request is written on the task; a runner on the machine starts it: `brainfile run` in a terminal, or the desktop app. `brainfile review`, `land`, `discard` and `pr` take the work from there; `brainfile dispatch epic-3` gives an epic a lead that hands its children off in order; `brainfile discuss task-12` talks a task over with an agent first. The same over MCP: `dispatch`, `dispatch_status`, `dispatch_stop`, `dispatch_lead`, `review`, `pull_request`, `agents` and `discuss`.
+- **Roles** — an agent Brainfile starts carries its role in `BRAINFILE_AGENT_ROLE` (`chat`, `lead`, `worker` or `discuss`), and `brainfile mcp` and the CLI in its shell keep to it: a hand-off never hands off, a lead reaches only its own tree.
+- **The desktop is optional** (decision-17) — everything the Mac app runs is in `@brainfile/core`, with a CLI command and an MCP tool for each. The app adds the window: the board's chat, Hand to… and Merge as one click, the review pane, and live runs, including those a terminal started.
 
 ## This repository
 
 | Path | Package | What |
 |------|---------|------|
 | [`cli/`](cli) | [`brainfile`](https://www.npmjs.com/package/brainfile) | the CLI, TUI, and MCP server |
-| [`core/`](core) | [`@brainfile/core`](https://www.npmjs.com/package/@brainfile/core) | parser, schema, and operations library |
+| [`core/`](core) | [`@brainfile/core`](https://www.npmjs.com/package/@brainfile/core) | parser, schema, and operations library; hand-offs, the runner, worktrees and landing under `@brainfile/core/dispatch` and `/repo` |
+| [`desktop/`](desktop) | — | the Mac app, a client of the same core; not published to npm, and optional |
 | [`site/`](site) | — | the manual at [brainfile.md](https://brainfile.md), rendered from [`MANUAL.md`](MANUAL.md) |
 
 The board schema ships inside the CLI (`cli/src/schemas/`); the copies served at [brainfile.md/v2/board.json](https://brainfile.md/v2/board.json) exist so board frontmatter can reference a stable URL.

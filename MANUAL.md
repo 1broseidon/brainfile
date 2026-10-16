@@ -44,7 +44,8 @@ whole data model.
 The CLI edits those files for you, and so does the MCP server — an agent with
 `brainfile mcp` attached can do everything the CLI does to a board: list it,
 add and move tasks, leave notes, change the columns, pick up a contract and
-mark it delivered, with the same rules a person gets. Because a
+mark it delivered, hand a task to a coding agent and land its work, with the
+same rules a person gets. Because a
 task is a file, `git blame`, pull requests and code review already work on it.
 
 > Contracts are the part built for agents: a task can carry deliverables,
@@ -54,7 +55,9 @@ task is a file, `git blame`, pull requests and code review already work on it.
 
 ## Install
 
-brainfile is an npm package; it needs Node 20 or newer. `npm install -g
+brainfile is an npm package; it needs Node 20 or newer, and 20.19 or newer
+for the commands that start a coding agent themselves (`run`, `dispatch
+--now`, `discuss`): the ACP SDK they load is ESM only. `npm install -g
 brainfile` puts the command on your PATH, and `brainfile init` creates the
 board. The other routes are below.
 
@@ -268,11 +271,11 @@ updatedAt: "2026-09-20T19:03:57.257Z"
 | `relatedFiles` | Paths an agent should read first. |
 | `source` | The page of the issue the task was made from, e.g. `https://github.com/o/r/issues/12`. Written by `add --source` and `issues --import`; one task per issue. |
 | `landsOn` | The branch a hand-off of this work forks from and merges back into, e.g. `release/0.38.0`. Inherited by everything under it unless something nearer sets its own; absent all the way up means the trunk. `lint` warns when the branch is neither in the repository nor on origin. |
-| `epicBranch` | `true` on an epic: its lead makes the epic a branch of its own, `dispatch/<epic-id>`, from the epic's target. Its children fork from and land on that branch, and the epic is merged as one when the last is done. Off by default. |
+| `epicBranch` | `true` on an epic: the epic gets a branch of its own, `dispatch/<epic-id>`, made from the epic's target by the first hand-off under it, a lead's or one you make yourself. Its children fork from and land on that branch, and the epic is merged as one when the last is done. Off by default. |
 | `pullRequest` | The pull request the task's hand-off was opened as instead of merged: `{ number, url, state, base, head, at }`, `state` being `open`, `merged` or `closed`. Written by `pr` and the desktop's Open pull request. While `open` the hand-off is not ready to merge; `merged` completes the task, `closed` puts it back. |
 | `subtasks` | `{ id, title, completed }` rows, managed with `subtask`. |
 | `contract` | Deliverables, validation and constraints. See [Contracts](#contracts). |
-| `dispatch` | A hand-off: the `agent`, `model` and `effort` asked for, who asked (`by`: `chat`, `cli`, `mcp`, `lead`, `phone` or `person`), `at`, `until` (`review` or `done`) and `role` (`worker` or `lead`), and the `claim` of the runner that started it (`host`, `runner`, `pid`, `at`), so two runners never start the same task. The run's heartbeat stays in `state/`, never here. |
+| `dispatch` | A hand-off: the `agent`, `model` and `effort` asked for, who asked (`by`: `chat`, `cli`, `mcp`, `lead`, `phone` or `person`), `at`, `until` (`review` or `done`) and `role` (`worker` or `lead`), and the `claim` of the runner that started it (`host`, `runner`, `pid`, `at`), so two runners never start the same task. `tries` counts the hand-offs runners have started for the task, kept across requests, so a lead counts retries from the board; `paused` sits on a lead's record while you have paused it. The run's heartbeat stays in `state/`, never here. |
 
 ### logs/ — what got done
 
@@ -293,10 +296,23 @@ its status and links, but it writes no ledger line: it was never completed.
 
 ### state/ — local to this machine
 
-`.brainfile/state/` is ignored by git and never synced. It holds each agent's
-brief checkpoint (`<agent>.json`) and the local search index (`index.db`):
-SQLite with full-text search over the board, the ledger, `plans/` and the
-project's own Markdown. Delete it at any time; it is rebuilt from the files.
+`.brainfile/state/` is ignored by git and never synced: this machine's
+bookkeeping, nothing the board could not do without.
+
+| File | What it holds |
+| --- | --- |
+| `<agent>.json` | Each agent's brief checkpoint: what it had seen when it last read its brief. |
+| `index.db` | The local search index: SQLite with full-text search over the board, the ledger, `plans/` and the project's own Markdown. |
+| `sync.json`, `autosync.lock` | When the board last synced, and the lock the background push holds. |
+| `tui.json` | What the TUI last showed, so it opens where it was left. |
+| `runs/<run-id>.json` | A hand-off's run as its runner writes it: the task, the agent, what it is doing or asking, and a heartbeat, which every runner on the machine reads. Beside it, `<run-id>.answer.json` is an answer to its ask from another process, and `<run-id>.stop.json` asks its runner to stop it. Ended runs are pruned after half an hour. |
+| `runners/<host>-<pid>.json` | Each runner up on this machine (`brainfile run`, the Brainfile window), with a heartbeat, so `dispatch` knows whether one is up. |
+| `locks/<file>.lock` | The lock a claim on a task file is taken under, so two runners never start one task. |
+| `landing.lock` | Held while a landing runs, so landings go one at a time across processes. |
+| `last-fix.json` | The last `fix`, for `--undo`'s twenty seconds. |
+
+Delete it when no runner is up; the index, the checkpoints and the rest are
+rebuilt from the files, and only a fix's undo window is lost.
 
 ### Document types
 
@@ -397,6 +413,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | Land a hand-off by GitHub pull request instead of a merge | `pr` |
 | Hand tasks to a coding agent, see what is running, stop one | `dispatch`, `dispatch status`, `dispatch stop` |
 | Work the queue here, in a terminal, asking you as it goes | `run` |
+| Talk a task over with an agent before, during or after its hand-off | `discuss` |
 | Have an epic run by a lead; pause, resume or stop it | `dispatch <epic>`, `dispatch pause`, `dispatch resume`, `dispatch stop` |
 | See a hand-off's work, land it or throw it away | `review`, `land`, `discard` |
 | See which coding agents are installed, and their models | `agents` |
@@ -424,6 +441,7 @@ false }` stops a plan completing when it reaches a completion column). With
 | Share the board with another machine or person | `sync` |
 | See where the board lives and who has it | `where` |
 | Fix where it lives when nothing would be lost, or undo that | `fix` |
+| Settle two boards into one, or put a replaced one back | `adopt`, `merge-boards`, `backups` |
 | Upgrade a v1 board, or move a board onto its own branch | `migrate` |
 
 > Every command that touches a task takes `-t <id>`. Every command finds the
@@ -438,7 +456,9 @@ false }` stops a plan completing when it reaches a completion column). With
 
 ## Commands
 
-Forty-seven commands, in five groups. `-t <id>` names the task and
+Forty-nine commands, in five groups: every one `brainfile --help` lists, and a
+fiftieth it hides, `merge-driver`, which git runs during a merge (see
+[Conflicts](#conflicts)). `-t <id>` names the task and
 `-f <path>` the board; everything else is per-command, and every flag is as
 printed by `brainfile <command> --help`. Expand a row for its flags. Commands
 that accept `--json` say so; `list` does not have one yet, so scripts and
@@ -458,8 +478,8 @@ $ brainfile init -g         # the home board at ~/.brainfile
 
 Writes a short `brainfile.md` with two columns and the default agent
 instructions (no `types:`: the five built-in types need none), creates `board/`
-and `logs/`, and adds a `.gitignore` that excludes `state/`, where per-agent
-brief state lives.
+and `logs/`, and adds a `.gitignore` that excludes `state/`, this machine's
+own bookkeeping (see [state/](#state--local-to-this-machine)).
 
 Inside a git repository the board is created at the repository root as a
 worktree on its own `brainfile` branch, hidden from the code branch through
@@ -519,6 +539,14 @@ each dependency and whether it is done, and the decisions it rests on with
 where each stands; if one is superseded it says "Rests on a superseded
 decision". A decision shows its status and the work resting on it. `--json`
 adds the same as `graph`.
+
+A hand-off's whereabouts are on the same page. A task that lands somewhere
+other than the trunk says where and why (`Lands on: release/0.38.0 · from
+epic-3`, or `· epic-3's own branch`); an epic with a branch of its own says
+so (`Epic branch: yes, epic-3's children land on dispatch/epic-3`); a task
+made from an issue shows its `Source:`; one opened as a pull request shows
+it (`Pull request: #12 open, dispatch/task-12 into main`, with the URL).
+`--json` carries the target as `target`.
 
 #### add — Create a document
 
@@ -1897,9 +1925,10 @@ can run the CLI.
 Some commands have no tool, on purpose: `tui`, `run` and `mcp` (they are the
 interfaces; `run` works what the dispatch tools queue), `merge-driver` (git runs it), `hooks` (events the agent host
 fires, and your agent's settings), `auth` and `config` (your credentials and
-user config), `init` and `migrate` (one-off, and your call), `dispatch
-policy` (what agents may do on their own is never theirs to change) and
-`index` (a
+user config), `init` and `migrate` (one-off, and your call), `adopt`,
+`merge-boards` and `backups` (which of two boards is the board is your call:
+until it is made, every write refuses and names them), `dispatch policy`
+(what agents may do on their own is never theirs to change) and `index` (a
 cache that `search`, `brief` and `check` refresh). Choosing the remote a
 board is shared through, and its autosync mode, also stays with you
 (`brainfile sync --set-remote`, `--autosync`). A test holds the CLI and the
@@ -1950,20 +1979,24 @@ outlives a conversation:
 - **Isolation.** Each hand-off gets its own worktree and branch, and a
   moment for review; subagents and shell-outs share one checkout.
 - **Done means done.** A task lands when its contract's validation passes
-  with the trunk brought in, goes back to its agent on a conflict or a
-  failed check up to `maxRetries`, then waits for a person; not "the
-  subagent said so".
+  with the branch it lands on brought in, goes back to its agent on a
+  conflict or a failed check up to `maxRetries`, then waits for a person;
+  not "the subagent said so".
 - **The orchestrator's context stays clean.** Workers report to the board
   (notes, the ledger); the orchestrator reads status, not transcripts.
 - **A record.** Who did what, which files, how long: in the ledger and the
   board's history.
 
-In the desktop app, handing off an epic starts its lead: an agent that
-writes no code, checks the plan (the children, the files each touches, the
+Handing off an epic starts its lead, from the desktop app, `brainfile
+dispatch <epic>` or the MCP `dispatch` tool alike: an agent that writes no
+code, checks the plan (the children, the files each touches, the
 dependencies between them), then hands the children off in order and is
-woken as each ends or lands, inside rules the app holds (dependencies done
-first, at most three at once per repository, retries to `maxRetries`). The
-same from the command line and any MCP client is the work of epic-6.
+woken as each ends or lands, inside rules the runner holds (dependencies
+done first, at most `dispatch.maxRunning` at once per repository, retries to
+`maxRetries`; see [Leads](#leads)). None of it needs the desktop
+(decision-17): a runner is `brainfile run` in a terminal or the Brainfile
+window, both over the same core, and the window shows and answers runs it
+did not start.
 
 ### Bootstrap files
 

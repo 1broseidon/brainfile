@@ -20,16 +20,22 @@ npm start          # run the build
 npm run package    # Brainfile.app in release/mac-arm64/ (see Install)
 ```
 
-`brainfile init` from the app needs the CLI on your PATH (`npm i -g brainfile`);
-so does the merge driver that sync registers, and the MCP server agents get.
-The app asks your login shell for PATH, so opened from Finder or the Dock it
-finds git, `brainfile`, `node`, `npx` and the agents' CLIs where your terminal
-does.
+The app carries its own `brainfile`. `brainfile init` from the app, and the
+board server every agent it starts gets (the chat, a lead, a hand-off), run
+the CLI shipped with the app, with the app's binary as node, so they never
+depend on, or disagree with, whichever `brainfile` is installed on your PATH;
+an agent's shell gets it first on its PATH too. The packaged app ships it in
+its Resources; when it cannot be found, the chat or the lead says so. The
+merge driver that sync registers is still the `brainfile` on your PATH
+(`npm i -g brainfile`), since git runs it. The app asks your login shell for
+PATH, so opened from Finder or the Dock it finds git, `node`, `npx` and the
+agents' CLIs where your terminal does.
 
 ## Hand-offs
 
 Hand to… runs the agent in its own git worktree on the branch
-`dispatch/<task-id>`, forked from the trunk: the branch named by
+`dispatch/<task-id>`, forked from where the task lands: the trunk, unless
+`landsOn` says otherwise (below). The trunk is the branch named by
 `git config brainfile.trunk`, else origin's default branch, else `main`.
 The agent commits there. A task whose contract only asks for research, a
 review or a link gets a read-only checkout and no branch. When the task reaches Review
@@ -41,9 +47,10 @@ it, or on anything above it, and its hand-off forks from that branch (yours,
 else origin's) and merges back into it. Hand to… says where under the
 agents, `Lands on main`, and its picker (the trunk, your branches, the ones
 used lately) writes the choice to the task, so it holds for the next
-hand-off too. Set `epicBranch: true` on an epic and its lead first makes
+hand-off too. Set `epicBranch: true` on an epic and the first hand-off
+under it (its lead's, or your own Hand to… on a child) makes
 `dispatch/<epic-id>` from the epic's target; every child forks from and
-merges into that branch, which the app brings the target into before each
+merges into that branch, which the runner brings the target into before each
 hand-off. When the last child is done the epic is one item in Ready to
 merge, and its Merge asks where the branch goes: its target, another
 branch, a pull request, or kept as a branch.
@@ -62,10 +69,11 @@ Hand an epic off, or any task with open children, and the agent leads it
 instead: it reads the children and the code they touch, fixes the
 dependencies where two would collide or one needs another's work, writes the
 plan on the epic, and hands the children off in order, each in its own
-worktree. The app keeps it to the rules: nothing before what it depends on is
-done, at most three at once per repository, retries to the contract's
-maxRetries. It is woken when a child ends or is merged, and the epic is done
-with its last child. Pause, Resume and Stop are in the epic's pane.
+worktree. The runner keeps it to the rules: nothing before what it depends
+on is done and landed, at most `dispatch.maxRunning` at once per repository
+(else three), retries to the contract's maxRetries. It is woken when a child
+ends or is merged, and the epic is done with its last child. Pause, Resume
+and Stop are in the epic's pane.
 
 Discuss, beside it, talks the task over first. The chat opens on the task
 with the project's agent, which reads the task, its parent, its decisions and
@@ -73,6 +81,18 @@ the code, asks and pushes back, and with your agreement changes the task's
 description, subtasks or contract, noting what was agreed in its log. It
 writes no code and hands nothing off: when you hand the task off, the agent
 gets the spec as the discussion left it.
+
+None of this needs the window (decision-17). Hand to…, Merge, the lead and
+Discuss call `@brainfile/core`, and the CLI and the MCP server call the same:
+`brainfile dispatch`, `run`, `review`, `land`, `discard`, `pr` and `discuss`,
+and the `dispatch*`, `review`, `pull_request` and `discuss` tools. The window
+is one runner among them: while it is open it works the board's queue, so a
+task `brainfile dispatch` or an agent queued starts here unless a terminal's
+`brainfile run` claims it first; a run started elsewhere shows on its row and
+in the dock, marked `in a terminal`, its ask can be answered in the band, and
+Stop reaches it. Every agent the app starts carries its role
+(`BRAINFILE_AGENT_ROLE`: chat, lead, worker or discuss), which its board
+server and the `brainfile` in its shell keep to.
 
 ## Add agents
 
