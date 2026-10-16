@@ -13,7 +13,7 @@ tags:
 parentId: task-117
 createdAt: "2026-10-16T05:46:33.299Z"
 landsOn: qa/runner
-updatedAt: "2026-10-16T05:46:58.835Z"
+updatedAt: "2026-10-16T05:47:00.205Z"
 dispatch:
   agent: claude
   model: haiku
@@ -26,6 +26,8 @@ dispatch:
     runner: desktop
     pid: 20499
     at: "2026-10-16T05:46:44.337Z"
+    ended: "2026-10-16T05:47:00.205Z"
+    outcome: review
 assignee: claude
 ---
 
