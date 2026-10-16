@@ -51,7 +51,7 @@ contract:
   metrics:
     readyAt: "2026-10-16T06:09:34.752Z"
 createdAt: "2026-10-16T06:09:34.759Z"
-updatedAt: "2026-10-16T06:13:28.740Z"
+updatedAt: "2026-10-16T06:13:32.611Z"
 dispatch:
   agent: codex
   model: gpt-6.1-sol
@@ -59,7 +59,12 @@ dispatch:
   by: lead
   at: "2026-10-16T06:13:28.607Z"
   until: done
-  tries: 0
+  tries: 1
+  claim:
+    host: Georges-Mac-Studio
+    runner: desktop
+    pid: 20499
+    at: "2026-10-16T06:13:32.611Z"
 assignee: codex
 ---
 
