@@ -43,13 +43,13 @@ contract:
   constraints:
     - Ask the person and record the decision before going against decision-6
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-16T01:31:26.707Z"
+updatedAt: "2026-10-16T01:31:29.200Z"
 dispatch:
   agent: claude
   model: opus
   effort: high
-  by: lead
-  at: "2026-10-15T23:28:08.087Z"
+  by: person
+  at: "2026-10-16T01:31:29.065Z"
 assignee: claude
 ---
 
