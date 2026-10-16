@@ -9,7 +9,7 @@
  * person's checkout is on: the branch `brainfile.trunk` names in the
  * repository's git config, else origin's default branch, else main. A
  * hand-off that only reads (its contract's deliverables are all research, a
- * review or a link) gets a detached checkout of the trunk's tip instead, and
+ * review or a link) gets a detached checkout of the tip of where it lands (its target, else the trunk) instead, and
  * leaves no branch behind.
  *
  * The branch is `dispatch/<task-id>`, not `brainfile/<task-id>`: git cannot
@@ -112,7 +112,7 @@ export const branchFor = (taskId: string): string => `${BRANCH_PREFIX}${taskId}`
 
 export interface Worktree {
   path: string;
-  /** Null for a hand-off that only reads: a detached checkout of the trunk's tip. */
+  /** Null for a hand-off that only reads: a detached checkout of its target's tip (else the trunk's). */
   branch: string | null;
   /** The branch it was started from, or the commit when that was detached. */
   base: string | null;
@@ -791,7 +791,7 @@ async function serially<T extends Landing | Refresh>(repoRoot: string, options: 
  * Lands the hand-off on the branch it goes into (decision-12), without
  * merging in the person's checkout: the trunk is brought into the branch
  * inside the task's own worktree, `check` runs there on the result, and the
- * landing commit (`Merge task-N: title`, the trunk's tip and the branch) is
+ * landing commit (`Merge task-N: title`, the tip of where it lands and the branch) is
  * made with commit-tree. The trunk moves to it only from the tip that was
  * checked: by fast-forward when the person's checkout is on it (which keeps
  * their uncommitted changes, and waits, naming the file, when the landing

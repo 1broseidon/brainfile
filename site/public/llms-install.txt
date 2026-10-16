@@ -64,6 +64,7 @@ brainfile dispatch task-1 --agent codex           # hand a task to a coding agen
 brainfile dispatch epic-1 --agent claude          # an epic gets a lead, which hands its children off in order
 brainfile dispatch status                         # runners, live runs, the queue, the claims; dispatch stop <task|run> stops one
 brainfile run                                     # work the queue here in the foreground (a person's terminal); Ctrl-C lets go
+brainfile dispatch policy bypass                  # let hand-offs here land on their own (until done); ask puts each in Review; a person's setting
 brainfile review task-1                           # a hand-off's branch, commits, files, conflicts; --ready lists what can land
 brainfile land task-1                             # check with the contract's validation, then land on its target; discard throws it away
 brainfile pr task-1                               # open the hand-off as a GitHub pull request; --status follows it
