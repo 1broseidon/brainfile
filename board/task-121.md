@@ -23,6 +23,9 @@ contract:
     - type: test
       path: desktop/test/link-parity.test.ts
       description: Every api method bridged or excluded with a reason; link:dev answers every bridged call; features and link.md agree
+    - type: test
+      path: desktop/test/link-epic.test.ts
+      description: "End to end through the link: the six features, Lands on, a pull request, Merge with to, and the queue showing an alias wait with its board named"
     - type: docs
       path: desktop/design.md
       description: The parity rule under the phone link
@@ -30,13 +33,14 @@ contract:
     commands:
       - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
       - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
+      - cd desktop && npx vitest run test/link-parity.test.ts test/link-epic.test.ts
   metrics:
-    readyAt: "2026-10-16T06:09:34.477Z"
+    readyAt: "2026-10-16T06:13:18.095Z"
 createdAt: "2026-10-16T06:09:34.484Z"
 dependsOn:
   - task-120
   - task-123
-updatedAt: "2026-10-16T06:13:02.842Z"
+updatedAt: "2026-10-16T06:13:18.095Z"
 ---
 
 ## Description
