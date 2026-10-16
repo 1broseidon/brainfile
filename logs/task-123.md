@@ -1,8 +1,6 @@
 ---
 id: task-123
 title: "Link queue: the real desk answers queue(projectId) from core's dispatch status, alias waits included; the feature queue is offered in hello"
-column: review
-position: 20
 priority: high
 tags:
   - link
@@ -62,7 +60,7 @@ contract:
     deliveredAt: "2026-10-16T06:43:34.465Z"
     duration: 697
 createdAt: "2026-10-16T06:12:36.693Z"
-updatedAt: "2026-10-16T06:47:53.579Z"
+updatedAt: "2026-10-16T06:47:58.948Z"
 dispatch:
   agent: claude
   model: opus
@@ -79,6 +77,7 @@ dispatch:
     ended: "2026-10-16T06:43:42.768Z"
     outcome: review
 assignee: claude
+completedAt: "2026-10-16T06:47:58.948Z"
 ---
 
 ## Description
