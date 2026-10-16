@@ -53,7 +53,7 @@ contract:
     deliveredAt: "2026-10-16T06:23:14.247Z"
     duration: 571
 createdAt: "2026-10-16T06:09:34.204Z"
-updatedAt: "2026-10-16T06:23:19.515Z"
+updatedAt: "2026-10-16T06:27:21.380Z"
 dispatch:
   agent: claude
   model: opus
@@ -91,3 +91,4 @@ Tests in desktop/test/link.test.ts for each feature added here (hello lists them
 ## Log
 - 2026-10-16T06:20:28.543Z: [claude] For task-123 and the phone: desktop/link.md is now the full, canonical link contract (protocol stays 1; features carry versions). LINK_FEATURES = effort, merge, target, pull-request, merge-to; `queue` is NOT in it. The queue call is written in link.md › Version 3 › The queue: queue(projectId) → Result<QueueView> {limit, runners[{runner,host,pid,startedAt}], queued[{taskId,title,agentId,model?,effort?,until,by,at,waitsOn[] (alias:task-id for a related board)}], running: AgentRun[] (brainfile run's with `where`), unpushed: UnpushedView|null}; modelled on cli's dispatchStatusOutputSchema. task-123: add 'queue' to LINK_FEATURES (server.ts), a `queue: { args: [id], project: true }` entry in bridge.ts CALLS, a case in link:dev's FakeAgents (dev.ts), and adjust the doc if the shape moves. Bridge notes: review() is enriched in linkDesk with epicBranch + target (LinkReviewView in shared/api.ts); mergeReview passes `to` only when given (older phones unchanged) and never completes the task for to:pull-request. link:dev fixtures: task-3 landsOn release/0.24, epic-2 epicBranch with child task-9, task-8 PR #31, main 2 ahead (grows with landings on main), new PRs numbered from #32.
 - 2026-10-16T06:23:16.621Z: [claude] Done on branch dispatch/task-120 (commit 8456f21): hello features gain target, pull-request, merge-to; bridge carries branches, unpushed, openPullRequest, mergeReview's `to`, patchTask's landsOn/epicBranch, and review adds epicBranch + target; link:dev answers each with fixtures (task-3 landsOn, epic-2 own branch, #31, main 2 ahead); desktop/link.md is the full canonical contract with queue described for task-123. Tests: 6 new in link.test.ts, older-phone calls unchanged; full validation green (root npm test, desktop typecheck + test, electron build). brainfile-mobile untouched.
+- 2026-10-16T06:27:21.380Z: Landed on dispatch/epic-10
