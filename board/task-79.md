@@ -1,7 +1,7 @@
 ---
 id: task-79
 title: "Discuss without the desktop: the task's context and rules in core, brainfile discuss, and an MCP discuss prompt"
-column: in-progress
+column: review
 position: 7
 tags:
   - core
@@ -25,7 +25,7 @@ decisions:
   - decision-14
   - decision-19
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: core/src/dispatch/discuss.ts
@@ -45,8 +45,10 @@ contract:
   metrics:
     pickedUpAt: "2026-10-16T01:31:37.863Z"
     reworkCount: 0
+    deliveredAt: "2026-10-16T01:39:36.886Z"
+    duration: 479
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-16T01:31:37.863Z"
+updatedAt: "2026-10-16T01:39:36.886Z"
 dispatch:
   agent: claude
   model: opus
