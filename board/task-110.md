@@ -3,17 +3,6 @@ id: task-110
 title: "brainfile discuss: talk a task over in the terminal, under decision-19's rules"
 column: todo
 position: 10
-description: |-
-  Split from task-79 (agreed with the person, 2026-10-15). Discuss rests on decision-19, which task-79 records, superseding decision-6.
-
-  `brainfile discuss <task-id> [--agent --model --effort]` opens a session through core's Runner and its sessions, as `brainfile run` does. brainfile mcp runs in role discuss (task-81). Do not build a second ACP chat.
-
-  - **From `@brainfile/core/dispatch` (task-79):** the context, the rules, the mode and the refusals. Never bypass; read-only when the agent offers it; refusals happen before anyone is asked.
-  - **Every other ask** goes through task-82's `terminalAsk` (cli/src/commands/run.ts): Allow once · Always · Deny.
-  - **The only new code is the turn loop:** read a line, send it, print the reply. Ctrl-C ends the session and releases it.
-  - **What was agreed** goes in the task's log as a note.
-
-  Document it in MANUAL.md beside `brainfile run`.
 tags:
   - cli
   - discuss
@@ -50,6 +39,9 @@ contract:
   metrics:
     readyAt: "2026-10-16T01:16:29.656Z"
 createdAt: "2026-10-16T01:16:29.662Z"
+decisions:
+  - decision-19
+updatedAt: "2026-10-16T01:43:08.727Z"
 ---
 
 ## Description
@@ -63,3 +55,5 @@ Split from task-79 (agreed with the person, 2026-10-15). Discuss rests on decisi
 - **What was agreed** goes in the task's log as a note.
 
 Document it in MANUAL.md beside `brainfile run`.
+
+From task-79 (landed on dispatch/epic-6): build the first message with `discussSession({...discussContext(file, id), work: discussWork(projectId, id, runner)})` (surface 'session'); keep the session at role discuss with `discussPermission` and `discussMode`. In cli/src/__tests__/mcp-parity.test.ts add `discuss: 'discuss'` to TOOL_FOR, and remove that test's 'discuss' exception in 'every advertised tool'.
