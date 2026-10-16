@@ -1,7 +1,7 @@
 ---
 id: task-123
 title: "Link queue: the real desk answers queue(projectId) from core's dispatch status, alias waits included; the feature queue is offered in hello"
-column: todo
+column: in-progress
 position: 20
 priority: high
 tags:
@@ -27,7 +27,7 @@ decisions:
   - decision-16
   - decision-10
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: desktop/src/shared/api.ts
@@ -57,8 +57,10 @@ contract:
     - Plain copy in any string the phone shows (decision-10)
   metrics:
     readyAt: "2026-10-16T06:12:36.686Z"
+    pickedUpAt: "2026-10-16T06:31:57.871Z"
+    reworkCount: 0
 createdAt: "2026-10-16T06:12:36.693Z"
-updatedAt: "2026-10-16T06:31:41.564Z"
+updatedAt: "2026-10-16T06:31:57.871Z"
 dispatch:
   agent: claude
   model: opus
