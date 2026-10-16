@@ -49,7 +49,7 @@ subtasks:
   - id: task-125-1
     title: link:dev --features <list> plays an older desk; documented in desktop/link.md
     completed: false
-updatedAt: "2026-10-16T07:16:13.750Z"
+updatedAt: "2026-10-16T07:16:21.331Z"
 dispatch:
   agent: claude
   model: opus
@@ -62,6 +62,8 @@ dispatch:
     runner: desktop
     pid: 20499
     at: "2026-10-16T07:07:01.099Z"
+    ended: "2026-10-16T07:16:21.331Z"
+    outcome: review
 assignee: claude
 ---
 
