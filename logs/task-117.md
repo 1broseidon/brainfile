@@ -1,8 +1,6 @@
 ---
 id: task-117
 title: "Final pass on today's work: the confirmed bugs, fixed before 0.23.0 ships"
-column: in-progress
-position: 1
 description: |-
   The 2026-10-16 final pass over epic-6, spec-18 and tasks 74–78 (three reviews, each bug reproduced). Being fixed on three branches, final/core, final/runner and final/docs, then merged to main and run live once. Each subtask is one finding; tick it when its fix is on main with a test. Anything a builder leaves undone stays unticked here, with a note saying why.
 
@@ -121,7 +119,8 @@ subtasks:
     title: Merged to main, every suite green, one real hand-off through the new runner on this Mac
     completed: true
 createdAt: "2026-10-16T04:55:30.520Z"
-updatedAt: "2026-10-16T05:47:54.995Z"
+updatedAt: "2026-10-16T05:47:55.809Z"
+completedAt: "2026-10-16T05:47:55.809Z"
 ---
 
 ## Description
@@ -164,3 +163,7 @@ Context for each (file references are to main at 816fea7):
   - the claim ended with outcome review, and the run file says done;
   - `brainfile land` from the CLI merged into qa/runner, removed the worktree and branch, completed the task, and wrote "Landed on qa/runner".
 - qa/runner was deleted afterwards. main is not pushed.
+
+## Child Tasks
+Summary: 1/1 children completed.
+- task-119: Live check of the new runner: append one line to qa/runner-live.md on the qa/runner branch (completed)
