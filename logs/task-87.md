@@ -1,8 +1,6 @@
 ---
 id: task-87
 title: "Mobile: sessions — the chat's history as the dock: chats, discussions and hand-offs, one signal each"
-column: review
-position: 5
 priority: high
 tags:
   - mobile
@@ -12,7 +10,8 @@ tags:
 assignee: claude
 parentId: epic-7
 createdAt: "2026-10-15T01:34:59.741Z"
-updatedAt: "2026-10-15T01:50:28.493Z"
+updatedAt: "2026-10-16T06:08:18.652Z"
+completedAt: "2026-10-16T06:08:18.652Z"
 ---
 
 ## Description
