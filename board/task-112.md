@@ -1,6 +1,6 @@
 ---
 id: task-112
-title: Release 0.23.0 of core and the CLI, so agents outside the desktop get today's tools; CI runs the desktop's checks too
+title: CI runs the desktop's checks (0.23.0 released 2026-10-16)
 column: todo
 position: 11
 description: |-
@@ -25,6 +25,7 @@ relatedFiles:
   - .github/scripts/changelog.mjs
   - changes/
 createdAt: "2026-10-16T04:50:09.393Z"
+updatedAt: "2026-10-16T05:57:37.134Z"
 ---
 
 ## Description
