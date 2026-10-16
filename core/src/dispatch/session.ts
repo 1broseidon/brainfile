@@ -157,10 +157,17 @@ export async function open(ctx: SessionContext, projectId: string, agentId: Agen
   let stderr = '';
   child.stderr?.on('data', (d) => (stderr = (stderr + d).slice(-4000)));
   const why = () => (lastLine(stderr) ? `: ${lastLine(stderr)}` : '');
+  // What was set up for the session is let go once, however many ways the agent's going is heard of.
+  let released = false;
+  const letGo = () => {
+    if (released) return;
+    released = true;
+    release?.();
+  };
   signal?.addEventListener('abort', () => child.kill(), { once: true });
   child.on('error', (err) => {
     sessions.delete(key);
-    release?.();
+    letGo();
     if (session.run) ctx.update(session.run, { state: 'failed', error: `${agent.name} could not start: ${err.message}`, endedAt: Date.now() });
   });
 
@@ -212,47 +219,67 @@ export async function open(ctx: SessionContext, projectId: string, agentId: Agen
   );
   child.on('exit', () => {
     sessions.delete(key);
-    release?.();
+    letGo();
     if (session.run && (session.run.state === 'working' || session.run.state === 'starting' || session.run.state === 'waiting')) {
       ctx.update(session.run, { state: 'failed', error: `${agent.name} stopped${why()}`, endedAt: Date.now() });
     }
   });
 
+  // From here to the session's being kept, a failure (the agent not answering, refusing a session: not logged
+  // in, say) leaves an agent running with no session to answer for it: it is killed, what was set up for it let go.
   try {
     await unlessAborted(signal, session.connection.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} }));
+    const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
+    session.sessionId = created.sessionId;
+    let configOptions = created.configOptions ?? null;
+    const models = modelOption(configOptions);
+    session.modes = modesOf(created);
+    session.mode = session.modes?.initial ?? null;
+    session.modelConfigId = models?.id ?? null;
+    session.modelCurrent = models?.current ?? null;
+    remember(dataDir, agentId, keepingEfforts(dataDir, agentId, models?.options ?? []), session.modes && { initial: session.modes.initial, options: session.modes.options, bypass: session.modes.bypass });
+    if (models && model && model !== models.current && models.options.some((o) => o.value === model)) {
+      const updated = await unlessAborted(
+        signal,
+        session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => null)
+      );
+      if (updated) configOptions = updated.configOptions;
+    }
+    session.configOptions = configOptions;
+    // A chosen model starts at medium unless the person picked another level this model still offers.
+    const thought = model ? effortSelect(configOptions) : null;
+    const want = thought ? effortToSet(thought.options, effort) : undefined;
+    if (board && thought && want && want !== thought.current) {
+      await unlessAborted(
+        signal,
+        session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: thought.id, value: want }).catch(() => {})
+      );
+    }
+    if (board) await unlessAborted(signal, applyMode(ctx, session));
+    sessions.set(key, session);
+    return session;
   } catch (err) {
     child.kill();
-    throw new Error(`${agent.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
+    letGo();
+    // A stop is a stop, not the agent failing: its reason goes through as it is.
+    if (signal?.aborted) throw err;
+    const reason = reasonOf(err);
+    throw new Error(`${agent.name} did not start: ${reason}${lastLine(stderr) && lastLine(stderr) !== reason ? ` (${lastLine(stderr)})` : ''}`);
   }
-  const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
-  session.sessionId = created.sessionId;
-  let configOptions = created.configOptions ?? null;
-  const models = modelOption(configOptions);
-  session.modes = modesOf(created);
-  session.mode = session.modes?.initial ?? null;
-  session.modelConfigId = models?.id ?? null;
-  session.modelCurrent = models?.current ?? null;
-  remember(dataDir, agentId, keepingEfforts(dataDir, agentId, models?.options ?? []), session.modes && { initial: session.modes.initial, options: session.modes.options, bypass: session.modes.bypass });
-  if (models && model && model !== models.current && models.options.some((o) => o.value === model)) {
-    const updated = await unlessAborted(
-      signal,
-      session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: models.id, value: model }).catch(() => null)
-    );
-    if (updated) configOptions = updated.configOptions;
-  }
-  session.configOptions = configOptions;
-  // A chosen model starts at medium unless the person picked another level this model still offers.
-  const thought = model ? effortSelect(configOptions) : null;
-  const want = thought ? effortToSet(thought.options, effort) : undefined;
-  if (board && thought && want && want !== thought.current) {
-    await unlessAborted(
-      signal,
-      session.connection.setSessionConfigOption({ sessionId: created.sessionId, configId: thought.id, value: want }).catch(() => {})
-    );
-  }
-  if (board) await unlessAborted(signal, applyMode(ctx, session));
-  sessions.set(key, session);
-  return session;
+}
+
+/**
+ * Why a request failed, in the agent's words where it has them: the SDK
+ * answers an agent's own error as `Internal error` with what it said under
+ * the error's `data.details` (a string, or a JSON object it threw).
+ */
+function reasonOf(err: unknown): string {
+  // By shape, not instanceof: the SDK's errors can come from another realm than this module's Error.
+  const { message, data } = (err && typeof err === 'object' ? err : {}) as { message?: unknown; data?: unknown };
+  if (typeof message !== 'string') return String(err);
+  const said = data && typeof data === 'object' ? ((data as { details?: unknown }).details ?? (data as { message?: unknown }).message) : data;
+  const line = typeof said === 'string' ? said.split('\n')[0].trim() : '';
+  return line && line !== message ? `${message}: ${line}` : message;
 }
 
 /**
