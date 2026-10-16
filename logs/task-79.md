@@ -1,8 +1,6 @@
 ---
 id: task-79
 title: "Discuss without the desktop: the task's context and rules in core, brainfile discuss, and an MCP discuss prompt"
-column: review
-position: 7
 tags:
   - core
   - cli
@@ -48,7 +46,7 @@ contract:
     deliveredAt: "2026-10-16T01:39:36.886Z"
     duration: 479
 createdAt: "2026-10-14T22:15:40.890Z"
-updatedAt: "2026-10-16T01:39:36.886Z"
+updatedAt: "2026-10-16T01:42:37.899Z"
 dispatch:
   agent: claude
   model: opus
@@ -56,6 +54,7 @@ dispatch:
   by: person
   at: "2026-10-16T01:31:29.065Z"
 assignee: claude
+completedAt: "2026-10-16T01:42:37.899Z"
 ---
 
 ## Description
