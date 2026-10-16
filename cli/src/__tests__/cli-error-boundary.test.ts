@@ -33,7 +33,7 @@ describe('cli entry point error wiring', () => {
    * `program.parse()` could catch neither.
    */
   test('parses asynchronously so thrown and rejected failures both surface', () => {
-    expect(cliSource).toContain('program.parseAsync().catch(renderCliError)');
+    expect(cliSource).toContain("program.parseAsync(process.argv, { from: 'node' }).catch(renderCliError)");
     expect(cliSource).not.toMatch(/^\s*program\.parse\(\);/m);
   });
 });
