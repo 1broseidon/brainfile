@@ -1,7 +1,7 @@
 ---
 id: task-121
 title: "Link parity test and the epic's whole: every api method is bridged for the phone or excluded with a reason, link:dev answers every bridged call, and the four features work end to end"
-column: todo
+column: in-progress
 position: 18
 tags:
   - link
@@ -18,7 +18,7 @@ parentId: epic-10
 decisions:
   - decision-17
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: test
       path: desktop/test/link-parity.test.ts
@@ -36,11 +36,13 @@ contract:
       - cd desktop && test -f test/link-parity.test.ts && test -f test/link-epic.test.ts
   metrics:
     readyAt: "2026-10-16T06:13:26.616Z"
+    pickedUpAt: "2026-10-16T06:48:17.586Z"
+    reworkCount: 0
 createdAt: "2026-10-16T06:09:34.484Z"
 dependsOn:
   - task-120
   - task-123
-updatedAt: "2026-10-16T06:48:02.419Z"
+updatedAt: "2026-10-16T06:48:17.586Z"
 dispatch:
   agent: claude
   model: opus
