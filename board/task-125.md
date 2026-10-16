@@ -59,3 +59,6 @@ Found by the phone epic's lead (mobile epic-1, 2026-10-16 06:55): the phone's ta
 - link:dev: task-3's fixture carries a request from the chat with a claim ended `review`; the queued fixture carries a claim held by the `brainfile run` runner.
 - A test in desktop/test/link.test.ts: the record reaches a phone through openBoard's snapshot and getTask.
 The renderer need not show it (the desktop shows the record elsewhere); this is for the link.
+
+## Log
+- 2026-10-16T07:06:54.752Z: [claude] Also in scope (asked by the phone epic's integration child, mobile task-4): link:dev takes a `--features` option (e.g. `--features effort,merge`) so it plays an older desk for QA, instead of the person editing LINK_FEATURES by hand; say how to start it that way in desktop/link.md's link:dev paragraph (and find the npm script name the phone's docs/qa-one-system.md should quote). Keep it to the dev fake; the real desk's features stay LINK_FEATURES.
