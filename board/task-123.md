@@ -62,7 +62,7 @@ contract:
     deliveredAt: "2026-10-16T06:43:34.465Z"
     duration: 697
 createdAt: "2026-10-16T06:12:36.693Z"
-updatedAt: "2026-10-16T06:43:42.768Z"
+updatedAt: "2026-10-16T06:47:53.579Z"
 dispatch:
   agent: claude
   model: opus
@@ -105,3 +105,4 @@ Tests in desktop/test/link.test.ts (hello lists queue; queue through the bridge,
 
 ## Log
 - 2026-10-16T06:43:34.125Z: [claude] Done on branch dispatch/task-123 (b68ddf9). Core: @brainfile/core/dispatch status.ts exports dispatchStatus(runner, brainfilePath, projectId, {visible, ownEpic, withSelf}), queuedWaits (waitsOn + waitMessage, via handOffWaits) and statusLeads; CLI statusReport/dispatchReport and MCP dispatch_status call them (StatusReport/RunLine/LeadLine are aliases of core's types; output unchanged). Desktop: Api.queue(projectId) → QueueView (shared/api.ts, with QueuedHandOff), answered in the agents process by src/agents/queue.ts deskQueue (core status with withSelf, runs from the window's runner + ExternalRuns so a terminal's run carries where, titles from the board, unpushed); preload, AGENT_METHODS, bridge CALLS and LINK_FEATURES gain queue; link:dev answers through the same queueView (src/link/devQueue.ts). link.md: optional waitMessage, running = hand-offs only, noted on epic-10. Tests: 3 new in link.test.ts (bridge + checkCall; the real desk with a core Runner, a terminal runner, alias wait, main 2 ahead, live unchanged; link:dev). Validation green: root build + tests (1223 core, 713 CLI, 191 TUI), desktop typecheck, 161 tests, Electron build. Not wired: the window's renderer does not show the queue (phone only); nothing on brainfile-mobile.
+- 2026-10-16T06:47:53.579Z: Landed on dispatch/epic-10
