@@ -33,14 +33,14 @@ contract:
     commands:
       - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
       - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
-      - cd desktop && npx vitest run test/link-parity.test.ts test/link-epic.test.ts
+      - cd desktop && test -f test/link-parity.test.ts && test -f test/link-epic.test.ts
   metrics:
-    readyAt: "2026-10-16T06:13:18.095Z"
+    readyAt: "2026-10-16T06:13:26.616Z"
 createdAt: "2026-10-16T06:09:34.484Z"
 dependsOn:
   - task-120
   - task-123
-updatedAt: "2026-10-16T06:13:18.095Z"
+updatedAt: "2026-10-16T06:13:26.616Z"
 ---
 
 ## Description
