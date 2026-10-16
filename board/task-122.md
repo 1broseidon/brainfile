@@ -1,7 +1,7 @@
 ---
 id: task-122
 title: "Dependencies across boards: a hand-off, a lead and a brief treat alias:task-id as a real dependency, open until it is complete and landed on the related board"
-column: in-progress
+column: review
 position: 19
 tags:
   - core
@@ -22,7 +22,7 @@ decisions:
   - decision-15
   - decision-12
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: core/src/dispatch/runner.ts
@@ -52,8 +52,10 @@ contract:
     readyAt: "2026-10-16T06:09:34.752Z"
     pickedUpAt: "2026-10-16T06:14:12.422Z"
     reworkCount: 0
+    deliveredAt: "2026-10-16T06:24:25.823Z"
+    duration: 613
 createdAt: "2026-10-16T06:09:34.759Z"
-updatedAt: "2026-10-16T06:14:12.422Z"
+updatedAt: "2026-10-16T06:24:25.823Z"
 dispatch:
   agent: codex
   model: gpt-6.1-sol
