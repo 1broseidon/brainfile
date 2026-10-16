@@ -28,7 +28,7 @@ import { readTaskFile } from '../taskFile';
 
 jest.setTimeout(30_000);
 
-const ENV_KEYS = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'];
+const ENV_KEYS = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'BRAINFILE_WORKTREES'];
 const saved: Record<string, string | undefined> = {};
 
 beforeAll(() => {
@@ -70,6 +70,8 @@ beforeEach(() => {
   base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'bf-pr-')));
   repo = path.join(base, 'repo');
   root = path.join(base, 'worktrees');
+  // Whatever reaches prepareWorktree with no root of its own (offerEpicBranch's default) goes here too, never under the person's home.
+  process.env.BRAINFILE_WORKTREES = root;
   fs.mkdirSync(repo);
   git(['init', '-q', '-b', 'main'], repo);
   identity(repo);
@@ -226,7 +228,7 @@ test("an epic's own branch, its last child landed, is opened as a pull request i
   work(child.path, 'b.txt', 'b\n');
   const landed = await landReview(repo, 'task-2', { title: 'Two' });
   assert.ok(landed.ok);
-  assert.deepEqual(offerEpicBranch(repo, 'epic-1'), { branch: 'dispatch/epic-1', into: 'main' });
+  assert.deepEqual(offerEpicBranch(repo, 'epic-1', root), { branch: 'dispatch/epic-1', into: 'main' });
 
   const { forge, opened } = fakeForge();
   const result = await openHandOffPullRequest(repo, 'epic-1', { github: forge, repo: REPO });

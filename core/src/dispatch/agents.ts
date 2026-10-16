@@ -258,11 +258,27 @@ export const AGENT_ROLE_ENV = 'BRAINFILE_AGENT_ROLE';
 /** The env a lead's `brainfile mcp` reads its tree from: the epic it leads. */
 export const LEAD_SCOPE_ENV = 'BRAINFILE_LEAD_SCOPE';
 
-/** The role and lead scope an environment gives; no role when it names none or one that is not a role. */
-export function agentRoleOf(env: NodeJS.ProcessEnv = process.env): { role?: AgentRole; scope?: string } {
-  const role = (env[AGENT_ROLE_ENV] ?? '').trim().toLowerCase() as AgentRole;
+/** The roles this process was given that it does not know, said once each. */
+const unknownRoles = new Set<string>();
+
+/**
+ * The role and lead scope an environment gives; no role when it names none.
+ * One it names that is not a role (another version's, a typo) is still an
+ * agent's: it is a worker, the least access, and stderr says so once, rather
+ * than a person's full access by mistake.
+ */
+export function agentRoleOf(env: NodeJS.ProcessEnv = process.env, warn: (line: string) => void = (line) => process.stderr.write(`${line}\n`)): { role?: AgentRole; scope?: string } {
+  const given = (env[AGENT_ROLE_ENV] ?? '').trim();
+  if (!given) return {};
+  let role = given.toLowerCase() as AgentRole;
+  if (!AGENT_ROLES.includes(role)) {
+    if (!unknownRoles.has(given)) {
+      unknownRoles.add(given);
+      warn(`${AGENT_ROLE_ENV}=${given} is not a role (${AGENT_ROLES.join(', ')}): treated as worker`);
+    }
+    role = 'worker';
+  }
   const scope = (env[LEAD_SCOPE_ENV] ?? '').trim();
-  if (!AGENT_ROLES.includes(role)) return {};
   return { role, ...(role === 'lead' && scope ? { scope } : {}) };
 }
 
@@ -272,7 +288,16 @@ export function roleEnv(role?: { role: AgentRole; scope?: string }): Record<stri
 }
 
 /**
- * The environment every agent starts in: the real node first on PATH, so
+ * What this process was started under and no agent is to inherit: a Claude
+ * Code session's own marks (an agent given them runs as nested in it) and
+ * npm's, when the process came up through `npm run`. Everything else, the
+ * person's keys and tools, is passed on.
+ */
+const NOT_INHERITED = /^(?:CLAUDECODE|CLAUDE_CODE_.*|CLAUDE_PID|npm_.*|INIT_CWD|NODE_ENV)$/;
+
+/**
+ * The environment every agent starts in: this process's, less what it was
+ * started under (NOT_INHERITED), with the real node first on PATH, so
  * nothing an agent starts finds a shim instead; ahead of it, the folder with
  * this process's own `brainfile` (useBrainfile), so `brainfile …` in an
  * agent's shell is the same command line its board server is.
@@ -280,7 +305,9 @@ export function roleEnv(role?: { role: AgentRole; scope?: string }): Record<stri
 export function agentEnv(): NodeJS.ProcessEnv {
   const node = realNode();
   const PATH = withOwnBrainfile(node ? `${path.dirname(node)}:${process.env.PATH ?? ''}` : process.env.PATH ?? '');
-  return PATH === (process.env.PATH ?? '') ? process.env : { ...process.env, PATH };
+  const env: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) if (!NOT_INHERITED.test(key)) env[key] = value;
+  return { ...env, PATH };
 }
 
 /** The first `node` on PATH that is a real binary, not a version-manager shim script. */

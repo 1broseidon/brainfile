@@ -148,7 +148,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/__tests__"
   ],
   "scripts": {
     "build": "tsc",
@@ -192,6 +193,6 @@
     "js-yaml": "^4.1.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.19"
   }
 }

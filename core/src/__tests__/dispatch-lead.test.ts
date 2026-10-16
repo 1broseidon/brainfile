@@ -13,7 +13,7 @@ import * as path from 'path';
 import { pathToFileURL } from 'url';
 import { changeLeadFile, claimDispatchFile, readDispatchRecord, readLeadRecord, requestDispatchFile } from '../dispatchRecord';
 import { Leads, leadAbove, leadRefusal, leadRefusalOnBoard, planReport, readyOf, treeOf, type LeadDeps, type LeadView, type TreeDoc } from '../dispatch/lead';
-import { leadPermission, readOnlyMode, readsBoard } from '../dispatch/readOnly';
+import { leadPermission, readOnlyMode, readsBoard, readsGit } from '../dispatch/readOnly';
 import { Runner, type RunnerOptions } from '../dispatch/runner';
 import { writeRunFile } from '../repo/runFiles';
 import { findV2Task, getV2Dirs } from '../workspace';
@@ -103,20 +103,38 @@ test('ready: open work whose dependencies are done and landed; a container is no
   expect(readyOf(tree).map((c) => c.id)).toEqual(['task-2', 'task-5']);
 });
 
-test('the brainfile command line reads when it only reads: list, show, review, dispatch status, lint without --fix, issues without --import, pr --status, --help', () => {
+test('the brainfile command line reads when it only reads: list, show, review, dispatch status, lint without --fix, issues without --import, --help; never pr, whose --status lands', () => {
   for (const command of [
     'brainfile list --column todo', 'brainfile show -t task-1', 'brainfile -g brief --peek', 'npx brainfile search "a b"', 'brainfile log --recent', 'brainfile check deploy',
-    'brainfile where', 'brainfile lint', 'brainfile issues --json', 'brainfile dispatch status', 'brainfile review task-1', 'brainfile review --ready', 'brainfile pr task-1 --status',
+    'brainfile where', 'brainfile lint', 'brainfile issues --json', 'brainfile dispatch status', 'brainfile review task-1', 'brainfile review --ready', 'brainfile pr --help',
     'brainfile agents', 'brainfile types', 'brainfile columns list', 'brainfile land --help', 'brainfile --version', 'brainfile schema', 'brainfile schema task',
   ]) {
     expect([command, readsBoard(command)]).toEqual([command, true]);
   }
   for (const command of [
     'brainfile', 'brainfile land task-1', 'brainfile discard task-1', 'brainfile dispatch task-1', 'brainfile dispatch task-1 --now', 'brainfile dispatch stop task-1', 'brainfile run',
-    'brainfile discuss task-1', 'brainfile pr task-1', 'brainfile lint --fix', 'brainfile issues --import 12', 'brainfile add -t x', 'brainfile types add bug', 'brainfile list; brainfile land task-1',
-    'BRAINFILE_AGENT_ROLE= brainfile land task-1', 'git status', 'brainfile schema update', 'brainfile where --fetch',
+    'brainfile discuss task-1', 'brainfile pr task-1', 'brainfile pr task-1 --status', 'brainfile lint --fix', 'brainfile issues --import 12', 'brainfile add -t x', 'brainfile types add bug',
+    'brainfile list; brainfile land task-1', 'BRAINFILE_AGENT_ROLE= brainfile land task-1', 'git status', 'brainfile schema update', 'brainfile where --fetch',
   ]) {
     expect([command, readsBoard(command)]).toEqual([command, false]);
+  }
+});
+
+test('git reads when it only reads: status, log, diff, worktree list, and branch where it only lists; a rename, delete, copy, force or upstream change is not, wherever it comes', () => {
+  for (const command of [
+    'git status', 'git log --oneline -5', 'git diff main..dispatch/task-1', 'git show HEAD:a.ts', 'git rev-parse HEAD', 'git worktree list', 'git branch', 'git branch -a', 'git branch -avv',
+    'git branch -r', 'git branch -vv', 'git branch -l', 'git branch --list "feat/*"', 'git branch --show-current', 'git branch --contains abc123', 'git branch --merged main',
+    'git branch --no-merged', 'git branch -a --points-at HEAD', 'git branch --format=%(refname:short) --sort=-committerdate', 'git branch -i --list FEAT*', 'git branch -r --list origin/rel*',
+  ]) {
+    expect([command, readsGit(command)]).toEqual([command, true]);
+  }
+  for (const command of [
+    'git branch -v -m a b', 'git branch -r -d origin/x', 'git branch --list -D x', 'git branch -a -M x', 'git branch -avd x', 'git branch --sort=-committerdate -D x', 'git branch -v foo',
+    'git branch foo', 'git branch --contains abc -c a b', 'git branch -f main HEAD~1', 'git branch --force main', 'git branch -u origin/main', 'git branch --set-upstream-to=origin/main x',
+    'git branch --unset-upstream', 'git branch --edit-description', 'git branch -t foo origin/foo', 'git branch --delete x', 'git branch --move a b', 'git log --output=/tmp/x',
+    'git worktree add ../x', 'git checkout main', 'git status; rm -rf src', 'git status | tee out', 'npm test',
+  ]) {
+    expect([command, readsGit(command)]).toEqual([command, false]);
   }
 });
 
