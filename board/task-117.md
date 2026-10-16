@@ -53,74 +53,75 @@ relatedFiles:
 subtasks:
   - id: task-117-1
     title: 1 runChecks kills the check's process group on timeout; the landing never hangs
-    completed: false
+    completed: true
   - id: task-117-2
     title: 2 Landing and bring-in merges pass --no-verify
-    completed: false
+    completed: true
   - id: task-117-3
     title: 3 A failed newSession kills the agent and releases
-    completed: false
+    completed: true
   - id: task-117-4
     title: 4 A hand-off that fails after its claim shows a failed run and a note
-    completed: false
+    completed: true
   - id: task-117-5
     title: 5 A lead until review finishes when its last child lands from anywhere
-    completed: false
+    completed: true
   - id: task-117-6
     title: "6 Quit during a landing: released as review, check killed, no re-run on launch"
-    completed: false
+    completed: true
   - id: task-117-7
     title: 7 readsGit allows only read-only git branch forms
-    completed: false
+    completed: true
   - id: task-117-8
     title: 8 pr --status off the read-only allowlist
-    completed: false
+    completed: true
   - id: task-117-9
     title: 9 An unknown role is treated as worker, with a warning
-    completed: false
+    completed: true
   - id: task-117-10
     title: 10 agentEnv drops the host's Claude Code and npm variables
-    completed: false
+    completed: true
   - id: task-117-11
     title: 11 brainfile dispatch policy, documented, so headless until done works
-    completed: false
+    completed: true
   - id: task-117-12
     title: 12 A failed fast-forward for another reason is refused once, with git's words
-    completed: false
+    completed: true
   - id: task-117-13
     title: 13 target.ts takes a worktrees root; tests set BRAINFILE_WORKTREES
-    completed: false
+    completed: true
   - id: task-117-14
     title: 14 dist/__tests__ excluded from the packages; engines >=20.19
-    completed: false
+    completed: true
   - id: task-117-15
     title: 15 Release failures retried on busy, else noted
-    completed: false
+    completed: true
   - id: task-117-16
     title: 16 The host flushes commits on SIGTERM; main waits for it
-    completed: false
+    completed: true
   - id: task-117-17
     title: 17 dispatch --now, re-dispatch and stop wording
-    completed: false
+    completed: true
   - id: task-117-18
     title: 18 MCP worker refusals match the CLI
-    completed: false
+    completed: true
   - id: task-117-19
     title: 19 Run ids carry the pid
-    completed: false
+    completed: true
   - id: task-117-20
     title: 20 build-bundle writes to a temp dir then renames; appBrainfile checks cli.mjs; dev builds the CLI
-    completed: false
+    completed: true
   - id: task-117-21
     title: 21 Docs in step with the headless surface
-    completed: false
+    completed: true
   - id: task-117-22
     title: 22 Runner maps pruned with the run files
-    completed: false
+    completed: true
   - id: task-117-23
     title: Merged to main, every suite green, one real hand-off through the new runner on this Mac
-    completed: false
+    completed: true
 createdAt: "2026-10-16T04:55:30.520Z"
+updatedAt: "2026-10-16T05:47:54.995Z"
 ---
 
 ## Description
