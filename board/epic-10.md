@@ -40,6 +40,8 @@ decisions:
   - decision-10
   - decision-8
 createdAt: "2026-10-16T06:08:18.930Z"
+epicBranch: true
+updatedAt: "2026-10-16T06:10:41.282Z"
 ---
 
 ## Description
