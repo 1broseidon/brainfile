@@ -1,8 +1,6 @@
 ---
 id: task-88
 title: "Without the desktop, end to end: an epic run from a terminal and an MCP client, from hand-off to landed, and the desktop watching it live"
-column: in-progress
-position: 22
 tags:
   - parity
   - integration
@@ -36,7 +34,7 @@ contract:
     pickedUpAt: "2026-10-16T01:57:14.886Z"
     reworkCount: 0
 createdAt: "2026-10-15T15:49:57.479Z"
-updatedAt: "2026-10-16T01:57:14.886Z"
+updatedAt: "2026-10-16T02:37:02.667Z"
 dispatch:
   agent: claude
   model: opus
@@ -44,6 +42,7 @@ dispatch:
   by: lead
   at: "2026-10-16T01:57:04.908Z"
 assignee: claude
+completedAt: "2026-10-16T02:37:02.667Z"
 ---
 
 ## Description
