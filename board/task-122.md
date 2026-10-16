@@ -55,7 +55,7 @@ contract:
     deliveredAt: "2026-10-16T06:24:25.823Z"
     duration: 613
 createdAt: "2026-10-16T06:09:34.759Z"
-updatedAt: "2026-10-16T06:24:25.823Z"
+updatedAt: "2026-10-16T06:24:46.631Z"
 dispatch:
   agent: codex
   model: gpt-6.1-sol
@@ -69,6 +69,8 @@ dispatch:
     runner: desktop
     pid: 20499
     at: "2026-10-16T06:13:32.611Z"
+    ended: "2026-10-16T06:24:46.631Z"
+    outcome: review
 assignee: codex
 ---
 
