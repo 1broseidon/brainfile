@@ -82,6 +82,9 @@ export interface RunLoopOptions {
   sigint?: boolean;
   /** For tests: the runner's own options (another pid, quicker beats). */
   runner?: Partial<RunnerOptions>;
+  /** Where its asks are put and answered; the process's own stdin and stdout by default. */
+  input?: NodeJS.ReadableStream & { isTTY?: boolean };
+  output?: NodeJS.WritableStream;
 }
 
 export interface RunSummary {
@@ -114,7 +117,7 @@ export async function runLoop(filePath: string, options: RunLoopOptions = {}, lo
     said.set(key, line);
     logger.log(line);
   };
-  const asker = terminalAsk(logger, (runId) => runner.get(runId));
+  const asker = terminalAsk(logger, (runId) => runner.get(runId), { input: options.input, output: options.output });
   const runner: Runner = new Runner({
     dataDir: dispatchDataDir(),
     runner: 'cli',

@@ -414,6 +414,13 @@ export class Runner {
           return false;
         }
       },
+      landable(projectId, taskId) {
+        try {
+          return readyToMerge(projectId).some((r) => r.taskId === taskId);
+        } catch {
+          return false;
+        }
+      },
       land: async (projectId, taskId) => {
         const landed = await this.land(projectId, taskId);
         return { ok: landed.ok, said: landed.ok ? `${taskId} was landed: ${landed.message}` : `${taskId} could not land: ${landed.error}` };

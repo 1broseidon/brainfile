@@ -481,6 +481,12 @@ export interface LeadDeps {
   complete(projectId: string, epicId: string): Promise<Result>;
   /** The child's branch can merge now, with no conflict. */
   mergeable(projectId: string, taskId: string): boolean;
+  /**
+   * The child's branch has work to land, conflicting or not: until done, the
+   * app lands it, and a landing that conflicts goes back to its agent
+   * (decision-12). Absent: only what is mergeable is landed.
+   */
+  landable?(projectId: string, taskId: string): boolean;
   /** Lands a child as Merge does, checks first; what happened, in a line. */
   land(projectId: string, taskId: string): Promise<{ ok: boolean; said: string }>;
   /**
@@ -783,7 +789,11 @@ export class Leads {
     this.emit(lead);
   }
 
-  /** A child's hand-off ended. Until done, one in Review that can merge is landed first, and the lead hears both. */
+  /**
+   * A child's hand-off ended. Until done, one with work to land is landed
+   * first (a conflict or a failed check goes back to its agent), and the
+   * lead hears both.
+   */
   async childEnded(run: AgentRun): Promise<void> {
     if (run.kind !== 'dispatch' || !run.taskId) return;
     const lead = this.leadOver(run.projectId, run.taskId);
@@ -795,7 +805,8 @@ export class Leads {
           ? `${run.taskId}: ${run.agentId} failed: ${run.error ?? 'no reason given'}.`
           : `${run.taskId}: ${run.agentId} was stopped.`;
     lead.queue.push(said);
-    if (lead.until === 'done' && run.state === 'done' && lead.state === 'leading' && this.deps.mergeable(run.projectId, run.taskId)) {
+    const landable = this.deps.landable ? this.deps.landable(run.projectId, run.taskId) : this.deps.mergeable(run.projectId, run.taskId);
+    if (lead.until === 'done' && run.state === 'done' && lead.state === 'leading' && landable) {
       const release = this.landing(run.projectId, run.taskId);
       try {
         const landed = await this.deps.land(run.projectId, run.taskId);

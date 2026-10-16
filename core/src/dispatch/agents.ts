@@ -14,8 +14,9 @@ import { customLaunch } from './custom';
 import { getSettings } from './settings';
 import type { AgentId, AgentInfo, AgentRole, AgentServer, CustomAgentId } from './types';
 
+/** Where `command` is on PATH: the PATH this process reads and hands its agents, not the one it was started with. */
 export function which(command: string): string | null {
-  const r = spawnSync('/usr/bin/which', [command], { encoding: 'utf-8' });
+  const r = spawnSync('/usr/bin/which', [command], { encoding: 'utf-8', env: process.env });
   return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : null;
 }
 
@@ -273,7 +274,7 @@ export function agentEnv(): NodeJS.ProcessEnv {
 
 /** The first `node` on PATH that is a real binary, not a version-manager shim script. */
 export function realNode(): string | null {
-  const r = spawnSync('/usr/bin/which', ['-a', 'node'], { encoding: 'utf-8' });
+  const r = spawnSync('/usr/bin/which', ['-a', 'node'], { encoding: 'utf-8', env: process.env });
   for (const candidate of (r.stdout ?? '').split('\n').map((l) => l.trim()).filter(Boolean)) {
     try {
       const fd = fs.openSync(candidate, 'r');
