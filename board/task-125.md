@@ -1,7 +1,7 @@
 ---
 id: task-125
 title: "The task view carries the hand-off record: dispatch (agent, model, by, at, until, tries, the claim held or ended with its outcome) in the snapshot and getTask, in link.md under target, and in link:dev's fixtures"
-column: in-progress
+column: review
 position: 17
 tags:
   - link
@@ -17,7 +17,7 @@ parentId: epic-10
 dependsOn:
   - task-120
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: desktop/src/shared/api.ts
@@ -42,12 +42,14 @@ contract:
     readyAt: "2026-10-16T06:56:53.503Z"
     pickedUpAt: "2026-10-16T07:07:15.459Z"
     reworkCount: 0
+    deliveredAt: "2026-10-16T07:16:13.750Z"
+    duration: 538
 createdAt: "2026-10-16T06:56:53.515Z"
 subtasks:
   - id: task-125-1
     title: link:dev --features <list> plays an older desk; documented in desktop/link.md
     completed: false
-updatedAt: "2026-10-16T07:07:15.459Z"
+updatedAt: "2026-10-16T07:16:13.750Z"
 dispatch:
   agent: claude
   model: opus
