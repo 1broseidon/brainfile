@@ -826,8 +826,11 @@ and when) and makes the agent its assignee; one commit on a tracked board.
 With no `--agent`, a task goes to the agent it was last handed to, else its
 assignee when that is an agent. `--until review` (the default) stops the
 work in Review for you; `--until done` lands it on its own where the
-repository's permission policy is bypass. A task an agent is still at, or a
-runner holds, is skipped and said so; so are decisions. A task named that
+repository's permission policy is bypass (`dispatch policy`, below). A task
+an agent is still at, or a
+runner holds, is skipped and said so; so are decisions. A task already
+queued with the same request is said so, and nothing is written again. A
+task named that
 has open children (an epic) gets a lead instead: see [Leads](#leads). A task
 whose `dependsOn` are open, or
 complete with their branch not landed, is queued and waits until they have
@@ -839,7 +842,38 @@ Brainfile to start it.` `--now` runs the tasks here in the foreground
 instead, through `brainfile run`'s loop given only these tasks, until each
 has ended (and, with `--until done`, landed or been sent back); the agent's
 questions come to this terminal, and Ctrl-C lets go of them as `run` does.
-`--json` prints what was queued and skipped.
+A task that waits on its dependencies is said so once (`task-2 waits on
+task-1: it runs here once that has landed`) and starts here once they have
+landed, while anything of this run is still going: `dispatch task-1 task-2
+--now --until done` lands task-1, then runs task-2 from the result. One
+still waiting when nothing more is going stays queued for a runner, and is
+said so; when nothing asked for could run here at all, the command exits
+with status 1. `--json` prints what was queued and skipped.
+
+#### dispatch policy — The repository's permission policy
+
+```console
+$ brainfile dispatch policy                 # what it is now, and where it is kept
+$ brainfile dispatch policy bypass          # this repository: --until done lands on its own
+$ brainfile dispatch policy ask             # this repository: everything stops in Review
+$ brainfile dispatch policy clear           # take the repository's own off; the app-wide setting decides
+$ brainfile dispatch policy bypass --all    # the app-wide setting, for repositories without one of their own
+```
+
+How asks are answered on a repository, and so how far a hand-off goes on
+its own: in a `bypass` repository a hand-off asked for `--until done` is
+checked and landed by its runner when its agent finishes, and an epic's lead
+lands each child; with `ask` (the default) every hand-off stops in Review
+for you, and an agent that asks before it acts is answered by whoever runs
+it (the window's band, the terminal's prompt). The setting lives in
+`dispatch.json` in the data folder, shared with the Brainfile window, whose
+Settings write the same file: `~/Library/Application Support/Brainfile` on a
+Mac, `%APPDATA%\Brainfile` on Windows, `$XDG_DATA_HOME/brainfile`
+(`~/.local/share/brainfile`) elsewhere, or `BRAINFILE_DATA_DIR` when set.
+With no argument it prints the policy in force, where it comes from (the
+repository's own setting, the app-wide one, or the default) and the file.
+It is yours: an agent's role, whatever it is, is refused, even to read it,
+and there is no MCP tool for it.
 
 #### run — Work the queue in a terminal
 
@@ -1836,6 +1870,15 @@ No agent runs `brainfile run`, `dispatch --now` or `discuss`, which would
 start agents inside its own turn; the runner that started it works the
 queue.
 
+What agents may do on their own in a repository is yours alone: the
+permission policy (`ask`, or `bypass`, where a hand-off asked for until
+done lands on its own and a lead lands each child) is read and written by
+`brainfile dispatch policy` and the window's Settings, and lives in
+`dispatch.json` in the data folder: `~/Library/Application Support/Brainfile`
+on a Mac, `%APPDATA%\Brainfile` on Windows, `$XDG_DATA_HOME/brainfile`
+elsewhere, or `BRAINFILE_DATA_DIR` when set. Any agent's role is refused it,
+even to read.
+
 ```console title=".mcp.json"
 {
   "mcpServers": {
@@ -1854,7 +1897,9 @@ can run the CLI.
 Some commands have no tool, on purpose: `tui`, `run` and `mcp` (they are the
 interfaces; `run` works what the dispatch tools queue), `merge-driver` (git runs it), `hooks` (events the agent host
 fires, and your agent's settings), `auth` and `config` (your credentials and
-user config), `init` and `migrate` (one-off, and your call) and `index` (a
+user config), `init` and `migrate` (one-off, and your call), `dispatch
+policy` (what agents may do on their own is never theirs to change) and
+`index` (a
 cache that `search`, `brief` and `check` refresh). Choosing the remote a
 board is shared through, and its autosync mode, also stays with you
 (`brainfile sync --set-remote`, `--autosync`). A test holds the CLI and the

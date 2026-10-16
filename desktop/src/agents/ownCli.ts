@@ -75,10 +75,11 @@ export function appBrainfile(env: NodeJS.ProcessEnv, dataDir: string): OwnBrainf
   const cli = env[APP_CLI_ENV];
   const electron = env[ELECTRON_BIN_ENV];
   if (!cli || !electron) return "Brainfile's own command line was not handed to its agents process: quit Brainfile and open it again";
-  if (!fs.existsSync(cli)) {
-    const fix = cli.includes(`.app${path.sep}Contents${path.sep}Resources${path.sep}`) ? 'install Brainfile again' : 'build it with `npm run build` at the repository’s root';
-    return `Brainfile's own command line is not at ${cli}: ${fix}`;
-  }
+  const fix = cli.includes(`.app${path.sep}Contents${path.sep}Resources${path.sep}`) ? 'install Brainfile again' : 'build it with `npm run build` at the repository’s root';
+  if (!fs.existsSync(cli)) return `Brainfile's own command line is not at ${cli}: ${fix}`;
+  // cli.js is a launcher that only imports the bundle beside it: a build cut short leaves the one without the other, and every agent's server would fail at once.
+  const bundle = path.join(path.dirname(cli), 'cli.mjs');
+  if (!fs.existsSync(bundle)) return `Brainfile's own command line at ${cli} is missing its bundle, ${path.basename(bundle)}: ${fix}`;
   const launch = appCliLaunch(electron, cli);
   try {
     return { launch, shim: writeShim(path.join(dataDir, 'bin'), launch) };

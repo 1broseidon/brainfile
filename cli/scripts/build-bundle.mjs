@@ -31,23 +31,27 @@
  *    change.
  */
 import { build } from 'esbuild';
-import { chmodSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const pkgRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const outdir = join(pkgRoot, 'dist');
 
-// Split chunks are content-hashed, so a rebuild after any source change emits a
-// new filename and orphans the old one. Left alone they accumulate in `dist`
-// and ship in the tarball. Clear the bundle's own output first — `.mjs` is
+// The bundle is built into a folder of its own under dist, then each file is
+// moved into place (a rename, atomic), and only then are the chunks of the
+// build before removed. A `brainfile mcp` an agent starts meanwhile (the
+// desktop's dev loop rebuilds while agents run) finds either the old bundle
+// whole or the new one, never cli.js without the cli.mjs it imports
+// (ERR_MODULE_NOT_FOUND). Split chunks are content-hashed, so a rebuild after
+// any source change emits a new filename and orphans the old one; left alone
+// they would accumulate in `dist` and ship in the tarball. `.mjs` is
 // exclusively ours; the tsc library build emits `.js`.
 mkdirSync(outdir, { recursive: true });
-for (const entry of readdirSync(outdir)) {
-  if (entry.endsWith('.mjs') || entry.endsWith('.mjs.map')) {
-    rmSync(join(outdir, entry), { force: true });
-  }
-}
+for (const entry of readdirSync(outdir)) if (entry.startsWith('.bundle-')) rmSync(join(outdir, entry), { recursive: true, force: true });
+const staging = mkdtempSync(join(outdir, '.bundle-'));
+const before = readdirSync(outdir).filter((entry) => entry.endsWith('.mjs') || entry.endsWith('.mjs.map'));
+const isBundle = (entry) => entry.endsWith('.mjs') || entry.endsWith('.mjs.map');
 
 // ESM has no __dirname/__filename/require. `src/program.ts` reads package.json via
 // __dirname and `src/commands/schema.ts` resolves the schemas dir the same way;
@@ -71,7 +75,7 @@ const result = await build({
   target: 'node22',
   format: 'esm',
   splitting: true,
-  outdir,
+  outdir: staging,
   outExtension: { '.js': '.mjs' },
   // Reachable only through ink's DEV-guarded devtools chunk. Marking them
   // external keeps the multi-MB devtools payload out of the shipped bundle;
@@ -99,9 +103,14 @@ const result = await build({
   logLevel: 'info',
 });
 
-const entry = join(outdir, 'cli.mjs');
-chmodSync(entry, 0o755);
-chmodSync(join(outdir, 'hook.mjs'), 0o755);
+chmodSync(join(staging, 'cli.mjs'), 0o755);
+chmodSync(join(staging, 'hook.mjs'), 0o755);
+
+// Into place, each whole; then what the build before left that this one did not write.
+const built = readdirSync(staging);
+for (const entry of built) renameSync(join(staging, entry), join(outdir, entry));
+rmSync(staging, { recursive: true, force: true });
+for (const entry of before) if (!built.includes(entry)) rmSync(join(outdir, entry), { force: true });
 
 // CJS launcher so `bin` (and every existing `node dist/cli.js ...` call site,
 // including the MCP stdio server) keeps working against a package that is not
@@ -122,14 +131,14 @@ import(entry).catch((error) => {
   process.exit(1);
 });
 `;
-mkdirSync(outdir, { recursive: true });
 const launcherPath = join(outdir, 'cli.js');
-writeFileSync(launcherPath, launcher, 'utf8');
-chmodSync(launcherPath, 0o755);
+writeFileSync(`${launcherPath}.tmp`, launcher, { encoding: 'utf8', mode: 0o755 });
+chmodSync(`${launcherPath}.tmp`, 0o755);
+renameSync(`${launcherPath}.tmp`, launcherPath);
 
 const outputs = Object.entries(result.metafile.outputs)
-  .filter(([file]) => file.endsWith('.mjs'))
-  .map(([file, meta]) => `  ${file} (${(meta.bytes / 1024).toFixed(1)} kB)`)
+  .filter(([file]) => isBundle(file))
+  .map(([file, meta]) => `  dist/${basename(file)} (${(meta.bytes / 1024).toFixed(1)} kB)`)
   .sort();
 console.log(`bundle: ${outputs.length} chunk(s)\n${outputs.join('\n')}`);
 console.log('  dist/cli.js (CJS launcher)');

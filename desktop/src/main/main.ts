@@ -63,8 +63,12 @@ let link: LinkServer | null = null;
 let updater: Updater;
 /** Set once quitting has begun: the agents process lets go first, then the rest goes. */
 let quitting = false;
+/** Set once the board host has been asked to go: it commits what is left first (its SIGTERM), and is not started again. */
+let hostStopping = false;
 /** How long the agents process has to let go of its hand-offs before the app quits anyway. */
 const AGENTS_QUIT_MS = 6_000;
+/** How long the board host has to commit what the agents process's letting go wrote, before the app quits anyway. */
+const HOST_QUIT_MS = 2_000;
 
 /** The boards the window and each phone hold open: the host closes one only when nobody does. */
 const holds = new BoardHolds({
@@ -104,6 +108,8 @@ function startHost(): UtilityProcess {
 }
 
 function callHost<T>(method: HostRequest['method'], ...args: unknown[]): Promise<T> {
+  // Quitting, the host is not started again by a late write once it has gone.
+  if (hostStopping && !host) return Promise.resolve({ ok: false, error: 'Brainfile is quitting' } as T);
   if (!host) host = startHost();
   const id = nextRequest++;
   return new Promise((resolve) => {
@@ -604,8 +610,18 @@ app.on('before-quit', (event) => {
     return;
   }
   quitting = true;
-  // The host flushes pending commits on exit.
-  host?.kill();
+  if (host && !hostStopping) {
+    // Then the host: on SIGTERM it commits what the agents process's letting go wrote (releases, notes), which its
+    // debounce had not yet; given a moment to, as the agents process was, before the app goes.
+    hostStopping = true;
+    event.preventDefault();
+    const child = host;
+    const gone = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+    child.kill();
+    void Promise.race([gone, new Promise((resolve) => setTimeout(resolve, HOST_QUIT_MS))]).then(() => app.quit());
+    return;
+  }
+  hostStopping = true;
   agents?.kill();
   void link?.close();
 });

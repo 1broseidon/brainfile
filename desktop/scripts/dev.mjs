@@ -8,15 +8,41 @@
  * Neither happens while an agent is at work: the agents process writes how
  * many are in BRAINFILE_DEV_BUSY, and a restart waits for none, so merging
  * one hand-off into this app's own code never ends another.
+ *
+ * The app's agents get the repository's own CLI (ownCli.ts, cli/dist), so it
+ * is built once first: the bundle, which is quick, and core before it when
+ * core has no dist to bundle from. A stale or missing cli/dist would fail
+ * every agent's board server, or hand it last week's commands.
  */
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { createServer } from 'vite';
 import { context } from 'esbuild';
 import electronPath from 'electron';
+
+const ROOT = resolve(import.meta.dirname, '..', '..');
+
+/** cli/dist as the app's agents need it: core built when it has no dist, then the CLI bundle and its schemas. */
+function buildOwnCli() {
+  const run = (what, command, args, cwd) => {
+    console.log(`build: ${what}`);
+    const r = spawnSync(command, args, { cwd, stdio: 'inherit' });
+    if (r.status !== 0) {
+      console.error(`build: ${what} failed, and the app's agents would get no brainfile of their own`);
+      process.exit(r.status ?? 1);
+    }
+  };
+  if (!existsSync(join(ROOT, 'core', 'dist'))) run('core (it has no dist yet)', 'npm', ['run', 'build'], join(ROOT, 'core'));
+  run('the CLI bundle', process.execPath, [join(ROOT, 'cli', 'scripts', 'build-bundle.mjs')], join(ROOT, 'cli'));
+  // As the CLI's copy-schemas step does.
+  const schemas = join(ROOT, 'cli', 'dist', 'schemas');
+  mkdirSync(schemas, { recursive: true });
+  for (const name of readdirSync(join(ROOT, 'cli', 'src', 'schemas')).filter((n) => n.endsWith('.json'))) copyFileSync(join(ROOT, 'cli', 'src', 'schemas', name), join(schemas, name));
+}
+buildOwnCli();
 
 const server = await createServer({ configFile: 'vite.config.mts' });
 await server.listen();

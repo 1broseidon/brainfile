@@ -175,9 +175,16 @@ describe('pull requests by role (decision-15)', () => {
       const server = new FakeMcpServer();
       registerPullRequestTool(server as never, brainfilePath, () => deps, { role });
       const tool = server.handler('pull_request');
-      // Asked to open, it only asks where it stands: there is none to follow.
-      expect(mcpText(await tool({ task: 'task-1', action: 'open' }))).toContain('task-1 has no pull request');
+      // Asked to open, by name or by default, it is refused as the command line refuses, not quietly turned into status.
+      for (const input of [{ task: 'task-1', action: 'open' }, { task: 'task-1' }]) {
+        expect(mcpText(await tool(input))).toContain(`A ${role} cannot open a pull request: only a person, the board's chat or an epic's lead does (decision-15)`);
+      }
       expect(parsePullRequest(readTaskFile(taskFile())!.task.pullRequest)).toBeNull();
+      // Where one stands it may ask; with none, it is not sent to a command it may not run.
+      const status = mcpText(await tool({ task: 'task-1', action: 'status' }));
+      expect(status).toContain('task-1 has no pull request');
+      expect(status).toContain("A person, the board's chat or an epic's lead opens one");
+      expect(status).not.toContain('brainfile pr');
     }
   });
 });

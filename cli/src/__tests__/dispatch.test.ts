@@ -13,8 +13,8 @@ import { spawn, spawnSync, type ChildProcess } from 'child_process';
 import { pathToFileURL } from 'url';
 import { claimDispatchFile, currentHost, findV2Task, getV2Dirs, readDispatchRecord, readLeadRecord } from '@brainfile/core';
 import { readRunFile, readRunStop, writeRunFile, writeRunnerFile, type RunFile } from '@brainfile/core/repo';
-import { agentRoleOf } from '@brainfile/core/dispatch';
-import { NO_RUNNER, dispatchCommand, dispatchReport, dispatchStatusCommand, dispatchStopCommand, leadReport, statusReport, statusText, stopReport } from '../commands/dispatch';
+import { agentRoleOf, policyFor } from '@brainfile/core/dispatch';
+import { NO_RUNNER, dispatchCommand, dispatchPolicyCommand, dispatchReport, dispatchStatusCommand, dispatchStopCommand, leadReport, policyReport, statusReport, statusText, stopReport } from '../commands/dispatch';
 import { discardCommand, discardReport, landCommand, landReport, readyReport, reviewCommand, reviewReport } from '../commands/review';
 import { runCommand } from '../commands/run';
 import { discussCommand } from '../commands/discuss';
@@ -245,7 +245,8 @@ describe('dispatch: the queue', () => {
     gitBoard({ 'task-1': [], 'task-2': [`assignee: ${AGENT}`], 'task-3': ['assignee: someone'] });
     await dispatchReport(filePath, { ids: ['task-1'] }, { agent: AGENT, model: 'm1' });
     const again = await dispatchReport(filePath, { ids: ['task-1', 'task-2', 'task-3'] }, {});
-    expect(again.queued).toEqual([{ task: 'task-1', agent: AGENT, model: 'm1' }, { task: 'task-2', agent: AGENT }]);
+    // task-1 was queued the same just before: said so, and not written again.
+    expect(again.queued).toEqual([{ task: 'task-1', agent: AGENT, model: 'm1', already: true }, { task: 'task-2', agent: AGENT }]);
     expect(again.skipped).toEqual([{ task: 'task-3', why: 'no agent: name one with --agent' }]);
     await expect(dispatchReport(filePath, { ids: ['task-1'] }, { agent: 'nobody' })).rejects.toThrow('Unknown agent nobody');
   });
@@ -403,9 +404,14 @@ describe('roles: what an agent\'s server lists', () => {
     expect(listed).not.toContain('dispatch');
     expect(listed).not.toContain('dispatch_stop');
     const review = (await client.listTools()).find((t) => t.name === 'review')!;
-    expect((review.inputSchema as { properties: { action: { enum: string[] } } }).properties.action.enum).toEqual(['show', 'ready']);
-    const refused = await client.callTool('review', { action: 'land', task: 'task-1' });
-    expect(refused.isError).toBe(true);
+    // land and discard stay in the schema, so a worker that tries hears the command line's sentence rather than a schema error.
+    expect((review.inputSchema as { properties: { action: { enum: string[]; description: string } } }).properties.action).toMatchObject({ enum: ['show', 'ready', 'land', 'discard'], description: expect.stringContaining('land and discard are refused here') });
+    for (const action of ['land', 'discard']) {
+      const refused = await client.callTool('review', { action, task: 'task-1' });
+      expect(refused.isError).toBe(true);
+      expect(refused.content![0].text).toContain(`A worker cannot ${action}: only a person, the board's chat or an epic's lead does (decision-15)`);
+    }
+    expect((await client.callTool('review', { task: 'task-1' })).isError).toBeFalsy();
     const instructions = String(client.opening.instructions ?? '');
     expect(instructions).not.toMatch(/^- dispatch: /m);
     expect(instructions).not.toContain('Hand-offs:');
@@ -532,7 +538,8 @@ describe('leads (task-83): an epic handed off from the CLI and MCP', () => {
     await expect(leadReport(filePath, 'task-1', 'pause')).rejects.toThrow('task-1 has no lead');
 
     const stopped = await stopReport(filePath, 'epic-1');
-    expect(stopped).toMatchObject({ run: 'epic-1', stopped: true, said: "Stopped epic-1's lead. What it handed off goes on, and is yours now." });
+    // No runner had taken it up: nothing was running to stop, and it says so.
+    expect(stopped).toMatchObject({ run: 'epic-1', stopped: true, said: "epic-1's lead was waiting for a runner: its request is taken off the board. What it handed off goes on, and is yours now." });
     expect(leadOf('epic-1')).toBeNull();
     expect(found('epic-1')!.doc.task.dispatch).toBeUndefined();
   });
@@ -578,5 +585,102 @@ describe('leads (task-83): an epic handed off from the CLI and MCP', () => {
     const worker = await WireClient.open(filePath, 'modern', { role: 'worker' });
     clients.push(worker);
     expect((await worker.listTools()).map((t) => t.name)).not.toContain('dispatch_lead');
+  });
+});
+
+describe('dispatch --now and dispatch again', () => {
+  test('--now on a task that waits on another says so once, leaves it queued, and exits non-zero when nothing could run here', async () => {
+    gitBoard({ 'task-1': [], 'task-2': ['dependsOn:\n  - task-1'] });
+    const logger = new MemoryLogger();
+    await expect(dispatchCommand(['task-2'], { file: filePath, agent: AGENT, now: true }, logger)).rejects.toThrow('Nothing asked for could run here now');
+    const said = logger.logs.map((l) => String(l[0]));
+    expect(said.filter((l) => l.includes('Queued task-2 for Fake.'))).toHaveLength(1);
+    expect(said.filter((l) => l.includes('task-2 waits on task-1: it runs here once that has landed.'))).toHaveLength(1);
+    expect(said.filter((l) => l.includes('task-2 still waits on task-1: it stays queued for a runner.'))).toHaveLength(1);
+    expect(said.join('\n')).not.toContain('hand it off once it has landed');
+    expect(said.join('\n')).not.toContain(NO_RUNNER);
+    // Queued, with no claim: a runner starts it once task-1 has landed.
+    expect(recordOf('task-2')).toMatchObject({ agent: AGENT, by: 'cli' });
+    expect(recordOf('task-2')!.claim).toBeUndefined();
+    expect(recordOf('task-1')).toBeNull();
+  });
+
+  test('--now --until done with the policy set to bypass from the terminal: each lands here, and the one that waits runs once the other has landed', async () => {
+    gitBoard({ 'task-1': [], 'task-2': ['dependsOn:\n  - task-1'] });
+    for (const id of ['task-1', 'task-2']) {
+      mark(`commit-${id}`);
+      mark(`release-${id}`);
+    }
+    // Headless: no window ever wrote dispatch.json, so the terminal sets this repository's policy itself.
+    expect(policyReport(filePath, 'bypass')).toMatchObject({ policy: 'bypass', from: 'repository' });
+    const logger = new MemoryLogger();
+    const report = await dispatchCommand(['task-1', 'task-2'], { file: filePath, agent: AGENT, now: true, until: 'done' }, logger);
+    expect(report.queued).toEqual([{ task: 'task-1', agent: AGENT, until: 'done' }, { task: 'task-2', agent: AGENT, until: 'done', waitsOn: ['task-1'] }]);
+    const said = logger.logs.map((l) => String(l[0])).join('\n');
+    expect(said).toContain('task-2 waits on task-1: it runs here once that has landed.');
+    expect(said).not.toContain('still waits');
+    expect(said).toMatch(/task-1 landed[\s\S]*task-2 landed/);
+    expect(found('task-1')!.isLog && found('task-2')!.isLog).toBe(true);
+    expect(git(['log', '--first-parent', '--format=%s', 'main'], project).split('\n')).toEqual(['Merge task-2: Task task-2', 'Merge task-1: Task task-1', 'init']);
+    // task-2 forked once task-1 had landed: its branch carried task-1's work.
+    expect(git(['show', 'main:work-task-1.txt'], project)).toBe('from the agent');
+    expect(recordOf('task-2')).toMatchObject({ claim: { outcome: 'done' } });
+  });
+
+  test('dispatching a task that is already queued with the same request says so and writes nothing; a changed request is written', async () => {
+    gitBoard({ 'task-1': [] });
+    await dispatchReport(filePath, { ids: ['task-1'] }, { agent: AGENT, model: 'm1' });
+    const commits = () => git(['rev-list', '--count', 'HEAD'], dotDir());
+    const before = commits();
+    const again = await dispatchReport(filePath, { ids: ['task-1'] }, {});
+    expect(again.queued).toEqual([{ task: 'task-1', agent: AGENT, model: 'm1', already: true }]);
+    expect(again.said).toBe(`task-1 is already queued for Fake (m1).\n${NO_RUNNER}`);
+    expect(commits()).toBe(before);
+    const changed = await dispatchReport(filePath, { ids: ['task-1'] }, { model: 'm2' });
+    expect(changed.queued).toEqual([{ task: 'task-1', agent: AGENT, model: 'm2' }]);
+    expect(changed.said).toBe(`Queued task-1 for Fake (m2).\n${NO_RUNNER}`);
+    expect(Number(commits())).toBe(Number(before) + 1);
+  });
+});
+
+describe("dispatch policy: the repository's permission policy, in dispatch.json", () => {
+  test('says what it is and where; sets it for the repository or app-wide; clear takes it off; the runner reads the same', () => {
+    gitBoard({});
+    const file = path.join(process.env.BRAINFILE_DATA_DIR!, 'dispatch.json');
+    const logger = new MemoryLogger();
+    expect(dispatchPolicyCommand(undefined, { file: filePath }, logger)).toMatchObject({ project, policy: 'ask', from: 'default', bypass: false, file });
+    expect(String(logger.logs.at(-1)![0])).toBe(
+      `Asks on repo are asked: every hand-off stops in Review for you, and an agent that asks before it acts is answered by whoever runs it. From the default: nothing is set, in ${file}.`,
+    );
+    const set = policyReport(filePath, 'bypass');
+    expect(set).toMatchObject({ policy: 'bypass', from: 'repository', bypass: false });
+    expect(set.said.split('\n')).toEqual([
+      'Set the policy for repo: bypass.',
+      `Asks on repo are bypassed: a hand-off asked for until done lands on its own, and a lead lands each child. From repo's own setting, in ${file}.`,
+    ]);
+    expect(policyFor(path.dirname(file), project)).toBe('bypass');
+    // What else the file held (the agents) is kept.
+    expect(JSON.parse(fs.readFileSync(file, 'utf-8'))).toMatchObject({ agentServers: { Fake: expect.anything() }, projects: { [project]: { permissions: 'bypass' } } });
+    expect(policyReport(filePath, 'clear')).toMatchObject({ policy: 'ask', from: 'default' });
+    expect(JSON.parse(fs.readFileSync(file, 'utf-8')).projects).toEqual({});
+    expect(policyReport(filePath, 'bypass', { all: true })).toMatchObject({ policy: 'bypass', from: 'app', bypass: true });
+    expect(policyReport(filePath, 'ask')).toMatchObject({ policy: 'ask', from: 'repository', bypass: true });
+    expect(policyReport(filePath, 'clear', { all: true })).toMatchObject({ policy: 'ask', from: 'repository', bypass: false });
+    expect(policyReport(filePath, 'clear', { all: true }).said).toMatch(/^Cleared the app-wide policy\./);
+    expect(() => dispatchPolicyCommand('maybe', { file: filePath }, logger)).toThrow("The policy is ask or bypass, or clear to take the repository's own off, not maybe");
+  });
+
+  test("the person's own: refused for any agent's role, even to read", () => {
+    gitBoard({});
+    for (const role of ['worker', 'chat', 'lead', 'discuss']) {
+      process.env.BRAINFILE_AGENT_ROLE = role;
+      try {
+        expect(() => dispatchPolicyCommand(undefined, { file: filePath }, new MemoryLogger())).toThrow(`A ${role} cannot read or change the permission policy: it is the person's setting (dispatch.json)`);
+        expect(() => policyReport(filePath, 'bypass', { access: { role: role as never } })).toThrow(/cannot read or change the permission policy/);
+      } finally {
+        delete process.env.BRAINFILE_AGENT_ROLE;
+      }
+    }
+    expect(fs.existsSync(path.join(process.env.BRAINFILE_DATA_DIR!, 'dispatch.json')) && JSON.parse(fs.readFileSync(path.join(process.env.BRAINFILE_DATA_DIR!, 'dispatch.json'), 'utf-8')).projects).toBeFalsy();
   });
 });

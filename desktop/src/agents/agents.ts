@@ -680,7 +680,10 @@ const QUIT_MS = 5_000;
 // Let go of the agents when main lets go of this process (a reload, a quit),
 // so none of them is left running on its own: each hand-off ends stopped and
 // its claim says so, through the host, which main stops only after this
-// process, so the next launch starts none of them again by itself.
+// process, so the next launch starts none of them again by itself. A landing
+// under way (until done, its checks running) is cut short by the runner: the
+// checks' process group is ended, the task waits in Review for the person,
+// and its claim says so too, all well within QUIT_MS.
 process.on('SIGTERM', () => {
   const late = new Promise((resolve) => setTimeout(resolve, QUIT_MS));
   void Promise.race([runner.quit(), late]).finally(() => process.exit(0));

@@ -21,7 +21,7 @@ import { syncCommand, SYNC_COMMAND_HELP } from './commands/sync';
 import { whereCommand } from './commands/where';
 import { issuesCommand, ISSUES_COMMAND_HELP } from './commands/issues';
 import { prCommand, PR_COMMAND_HELP } from './commands/pr';
-import { agentsCommand, dispatchCommand, dispatchLeadCommand, dispatchStatusCommand, dispatchStopCommand, DISPATCH_COMMAND_HELP } from './commands/dispatch';
+import { agentsCommand, dispatchCommand, dispatchLeadCommand, dispatchPolicyCommand, dispatchStatusCommand, dispatchStopCommand, DISPATCH_COMMAND_HELP } from './commands/dispatch';
 import { discardCommand, landCommand, reviewCommand, REVIEW_COMMAND_HELP } from './commands/review';
 import { runCommand, RUN_COMMAND_HELP } from './commands/run';
 import { discussCommand, DISCUSS_COMMAND_HELP } from './commands/discuss';
@@ -458,6 +458,15 @@ Brainfile file resolution (when you don't pass --file):
     .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
     .option('--json', 'Output as JSON')
     .action(async (epic: string, _options, cmd: Command) => { await dispatchLeadCommand('resume', epic, cmd.optsWithGlobals()); });
+
+  // The repository's permission policy, in dispatch.json: how far --until done and a lead go. The person's own setting.
+  dispatchCmd
+    .command('policy [policy]')
+    .description("This repository's permission policy: ask (hand-offs stop in Review for you) or bypass (--until done lands on its own, a lead lands each child); clear takes the repository's own off. Alone, what it is now and where it is kept")
+    .option('-f, --file <path>', 'Path to brainfile file (auto-detect by default)')
+    .option('--all', "The app-wide setting, which repositories without one of their own follow, instead of this repository's")
+    .option('--json', 'Output as JSON')
+    .action(async (policy: string | undefined, _options, cmd: Command) => { await dispatchPolicyCommand(policy, cmd.optsWithGlobals()); });
 
   // The foreground runner (task-82, spec-16-8): works the queue in a terminal until Ctrl-C.
   const runCmd = program

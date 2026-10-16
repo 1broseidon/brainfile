@@ -29,7 +29,7 @@ import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { gitHubClient } from '../utils/github-auth';
 import { callerAccess } from '../utils/agent-role';
-import { guard, outOfScope, type Access } from './dispatch';
+import { guard, mayDispatch, outOfScope, type Access } from './dispatch';
 
 export const PR_COMMAND_HELP = `
 Examples:
@@ -106,7 +106,8 @@ export async function pullRequestReport(filePath: string, taskId: string, option
   if (!followed) {
     const ended = parsePullRequest(found.doc.task.pullRequest);
     if (ended) return { task: taskId, action: 'followed', pullRequest: ended };
-    throw new CLIError(`${taskId} has no pull request`, undefined, `Open one with: brainfile pr ${taskId}`);
+    // A worker cannot open one (decision-15): it is not sent to a command it may not run.
+    throw new CLIError(`${taskId} has no pull request`, undefined, mayDispatch(access) ? `Open one with: brainfile pr ${taskId}` : "A person, the board's chat or an epic's lead opens one");
   }
   if (!followed.ok) throw new CLIError(followed.error);
   const { value } = followed;

@@ -36,6 +36,7 @@ test('the agents’ board server is the app’s CLI run by the app’s binary as
   const cli = path.join(dir, 'cli', 'dist', 'cli.js');
   fs.mkdirSync(path.dirname(cli), { recursive: true });
   fs.writeFileSync(cli, '');
+  fs.writeFileSync(path.join(path.dirname(cli), 'cli.mjs'), '');
   const env = { [APP_CLI_ENV]: cli, [ELECTRON_BIN_ENV]: '/Applications/Brainfile.app/Contents/MacOS/Brainfile' };
   // As the agents process does at its start.
   useBrainfile(() => appBrainfile(env, dir));
@@ -107,4 +108,15 @@ test('a CLI that is not there is said, and fails the session that would have the
   useBrainfile(() => appBrainfile({ [APP_CLI_ENV]: missing, [ELECTRON_BIN_ENV]: process.execPath }, dir));
   assert.throws(() => brainfileMcp({ role: 'chat' }), { message: why as string });
   assert.ok(!fs.existsSync(path.join(dir, 'bin')));
+});
+
+test('a launcher without its bundle (a build cut short) is said too, rather than fail every server with ERR_MODULE_NOT_FOUND', () => {
+  const dir = scratch();
+  const cli = path.join(dir, 'cli', 'dist', 'cli.js');
+  fs.mkdirSync(path.dirname(cli), { recursive: true });
+  fs.writeFileSync(cli, '');
+  const why = appBrainfile({ [APP_CLI_ENV]: cli, [ELECTRON_BIN_ENV]: process.execPath }, dir);
+  assert.equal(why, `Brainfile's own command line at ${cli} is missing its bundle, cli.mjs: build it with \`npm run build\` at the repository’s root`);
+  fs.writeFileSync(path.join(path.dirname(cli), 'cli.mjs'), '');
+  assert.ok(typeof appBrainfile({ [APP_CLI_ENV]: cli, [ELECTRON_BIN_ENV]: process.execPath }, dir) !== 'string');
 });

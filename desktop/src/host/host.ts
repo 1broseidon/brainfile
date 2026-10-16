@@ -715,12 +715,15 @@ function recordPullRequest(projectId: string, taskId: string, record: PullReques
   );
 }
 
+/** A line in the task's log; a completed task takes one too (a landing's, after its worker completed it), in logs/. */
 function noteTask(projectId: string, taskId: string, text: string): Result {
   return mutate(
     projectId,
     () => `note ${taskId}`,
     (board) => {
-      unwrap(appendLog(taskPath(board, taskId), text.replace(/\s+/g, ' ').trim()));
+      const found = findV2Task(getV2Dirs(board.brainfilePath), taskId, true);
+      if (!found) throw new Error(`Task ${taskId} not found`);
+      unwrap(appendLog(found.filePath, text.replace(/\s+/g, ' ').trim()));
     }
   );
 }
@@ -1009,3 +1012,11 @@ parentPort.on('message', async (event: { data: HostRequest }) => {
 });
 
 process.on('exit', flushBoardCommits);
+
+// Main stops this process with SIGTERM when the app quits, once the agents process has let go: what its last writes
+// left to commit (the releases and notes of hand-offs that were stopped) is committed now, not left for the next
+// launch to fold into some other change's commit. Without a handler the signal ends the process with no `exit`.
+process.on('SIGTERM', () => {
+  flushBoardCommits();
+  process.exit(0);
+});

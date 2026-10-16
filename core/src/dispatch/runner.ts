@@ -33,6 +33,7 @@
  * writes keep going through its host and commit there; `fileBoard()` writes
  * the files and commits as the CLI does. Asks go to the host's `ask`.
  */
+import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { readBoardConfig } from '../boardFile';
@@ -47,6 +48,8 @@ import { giveBackClaim, markLead, parkInReview, reviewColumn, takeClaim, type Cl
 import { locateBoard } from '../repo/locate';
 import {
   BEAT_MS,
+  ENDED_KEEP_MS,
+  ENDED_KEEP_RUNS,
   isClaimLost,
   isRunEnded,
   isRunLost,
@@ -66,7 +69,7 @@ import {
   type RunFileAsk,
 } from '../repo/runFiles';
 import { handOffTarget, offerEpicBranch, prepareEpicBranch, prepareTarget, refreshTarget } from '../repo/target';
-import { landReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, runChecks, sendBackNote, unlanded, type Landing, type Refresh, type Worktree } from '../repo/worktree';
+import { landReview, onlyReads, prepareWorktree, readyToMerge, releaseReader, reviewOf, sendBackNote, unlanded, type Landing, type Refresh, type Worktree } from '../repo/worktree';
 import { agentEnv, allAgents, nameOf, whyNot } from './agents';
 import { brief } from './brief';
 import { leadAbove, Leads, readTree, type Lead, type LeadTurn, type LeadView } from './lead';
@@ -86,8 +89,18 @@ export const STOP_GRACE_MS = 15_000;
 export const PRUNE_MS = 5 * 60_000;
 /** How often a runner with leads looks at its boards for what changed: a pause, a child done or queued. */
 export const LEAD_WATCH_MS = 2_000;
+/** How long one of a landing's checks may run (runChecks' own). */
+export const CHECK_MS = 15 * 60_000;
+/** A claim given back while another runner writes the same task file is tried again, after each of these waits. */
+export const RELEASE_RETRY_MS = [200, 600, 1_800];
 
 const LIVE: ReadonlySet<RunState> = new Set(['starting', 'working', 'waiting']);
+
+/** What a landing's checks came to, as landReview takes it. */
+type Checked = { ok: true } | { ok: false; command: string; output: string };
+
+/** The task file is being written by another runner (dispatchRecord's lock), so the write is worth trying again. */
+const isBusy = (error: string) => /is being written by another runner|kept changing while it was written/.test(error);
 
 // ── The board's writes ──────────────────────────────────────────────────────
 
@@ -372,7 +385,8 @@ export class Runner {
   private readonly passes = new Map<string, Promise<Started[]>>();
   private nextId = 1;
   private readonly startedAt = Date.now();
-  private readonly idBase = this.startedAt.toString(36);
+  /** What this runner's run ids start with: when it started and its process, so two runners started in one millisecond never share a run file. */
+  private readonly idBase: string;
   private ticker: NodeJS.Timeout | null = null;
   private lastBeat = 0;
   private lastLook = 0;
@@ -381,6 +395,8 @@ export class Runner {
   private readonly stamps = new Map<string, string>();
   /** Hand-offs ending: their claims given back, a landing, the next taken. */
   private readonly ending = new Set<Promise<void>>();
+  /** A landing's checks under way here, each as what ends it: going down ends them (see check). */
+  private readonly checking = new Set<() => void>();
   /** Runs stopped because the runner is letting go: their tasks go back to the queue. */
   private readonly lettingGo = new Set<string>();
   /** Passes over the queue under way, by project. */
@@ -399,6 +415,7 @@ export class Runner {
     this.kind = options.runner;
     this.host = options.host ?? currentHost();
     this.pid = options.pid ?? process.pid;
+    this.idBase = `${this.startedAt.toString(36)}-${this.pid.toString(36)}`;
     this.board = options.board ?? fileBoard();
     this.ctx = {
       dataDir: this.dataDir,
@@ -438,7 +455,12 @@ export class Runner {
         const landed = await this.land(projectId, taskId);
         return { ok: landed.ok, said: landed.ok ? `${taskId} was landed: ${landed.message}` : `${taskId} could not land: ${landed.error}` };
       },
-      branch: (projectId, epicId) => attempt(() => prepareEpicBranch(projectId, epicId)),
+      branch: (projectId, epicId) =>
+        attempt(() => {
+          // An epic under another epic's branch forks from that one: made first (decision-16).
+          prepareOuterBranches(projectId, epicId);
+          return prepareEpicBranch(projectId, epicId);
+        }),
       offer: async (projectId, epicId) => attempt(() => offerEpicBranch(projectId, epicId)),
       emit: (view) => {
         this.options.onLead?.(view);
@@ -542,6 +564,7 @@ export class Runner {
           /* as persist */
         }
       }
+      this.prune(now);
     }
     if (now - this.lastBeat < (this.options.beatMs ?? BEAT_MS)) return;
     this.lastBeat = now;
@@ -553,6 +576,27 @@ export class Runner {
       } catch {
         /* as persist */
       }
+    }
+  }
+
+  /**
+   * What a runner that stays up for days keeps of its runs, tidied as their
+   * files are (pruneRunFiles): a run that ended more than ENDED_KEEP_MS ago,
+   * or is past the latest ENDED_KEEP_RUNS that ended, is let go of here too,
+   * and the ends heard from other runners' files are kept only while the
+   * files are.
+   */
+  private prune(now: number): void {
+    const ended = [...this.runs.values()].filter((r) => !this.liveHere(r) && r.endedAt !== undefined).sort((a, b) => b.endedAt! - a.endedAt!);
+    ended.forEach((run, index) => {
+      if (index < ENDED_KEEP_RUNS && now - run.endedAt! <= ENDED_KEEP_MS) return;
+      this.runs.delete(run.id);
+      this.meta.delete(run.id);
+    });
+    if (this.heard.size) {
+      const onDisk = new Set<string>();
+      for (const dotDir of new Set(this.dirs.values())) if (dotDir) for (const file of listRunFiles(dotDir)) onDisk.add(file.id);
+      for (const id of this.heard) if (!onDisk.has(id)) this.heard.delete(id);
     }
   }
 
@@ -838,19 +882,24 @@ export class Runner {
     // No claim, no run: one started without it is never given back, so its task would be queued, and started, again and again.
     if (!claimed.ok) return { ok: false, error: claimed.held ? claimed.error : `${taskId} could not be claimed, so it was not started: ${claimed.error}` };
 
+    // The run exists before its worktree: one whose branch or worktree cannot be made fails in the open, as a run that
+    // ended (its file, onRun, its lead told), with the task's log saying why, rather than vanish with its claim.
+    const from = options.from ?? this.options.fromOf?.(projectId, taskId, record);
+    const run = this.newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from }, { worktree: null, claimed: true, until: record?.until ?? options.request?.until ?? this.options.until });
     let prompt: string;
     let worktree: Worktree | null;
     try {
+      // An epic's branch under another epic's forks from that one: the outer is made first (decision-16).
+      prepareOuterBranches(projectId, taskId);
       const base = prepareTarget(projectId, taskId);
       worktree = prepareWorktree(projectId, taskId, undefined, onlyReads(task.contract), base);
       const first = worktree?.branch ? await this.settleFirst(projectId, taskId, behind) : '';
       prompt = brief(projectId, taskId, worktree, this.ledBy(projectId, taskId), base, first);
     } catch (err) {
-      await this.board.release(projectId, taskId, claim, 'failed');
-      return { ok: false, error: message(err) };
+      return this.notStarted(run, message(err));
     }
-    const from = options.from ?? this.options.fromOf?.(projectId, taskId, record);
-    const run = this.newRun(projectId, agentId, 'dispatch', taskId, { model, effort, from }, { worktree, claimed: true, until: record?.until ?? options.request?.until ?? this.options.until });
+    this.meta.get(run.id)!.worktree = worktree;
+    this.persist(run);
     void (async () => {
       try {
         const session = await this.startups.open(
@@ -868,6 +917,19 @@ export class Runner {
       }
     })();
     return { ok: true, value: { run: { ...run }, worktree } };
+  }
+
+  /**
+   * A hand-off whose worktree or brief could not be made (a `landsOn` branch
+   * that is nowhere, no trunk): its run fails saying why, so the window and
+   * `brainfile run` show it and its lead hears it, its claim goes back as
+   * failed with the run (ended), and the task's log says it was not started.
+   */
+  private async notStarted(run: AgentRun, why: string): Promise<Result<Started>> {
+    const noted = this.board.note(run.projectId, run.taskId!, `Not started: ${why}`).catch(() => {});
+    this.update(run, { state: 'failed', error: why, endedAt: Date.now() });
+    await noted;
+    return { ok: false, error: why };
   }
 
   /**
@@ -921,17 +983,25 @@ export class Runner {
    * The tasks asked for and not claimed, oldest request first: a request
    * nobody claimed, or whose claim's runner is lost. One that ended has been
    * answered, and so has one the desktop wrote before runners claimed
-   * (`isLegacyRequest`), whatever its column.
+   * (`isLegacyRequest`), whatever its column; so has a lost claim whose run
+   * file says its agent finished (the runner went down landing it): that
+   * work waits for the person, not for another try.
    */
   queued(projectId: string): string[] {
     const dotDir = this.dotDirOf(projectId);
     const located = locateBoard(projectId, { materialize: false });
     if (!located.found || !dotDir) return [];
+    let files: RunFile[] | null = null;
+    const finished = (taskId: string, claim: DispatchClaim) => {
+      files ??= listRunFiles(dotDir);
+      const since = Date.parse(claim.at) - BEAT_MS;
+      return files.some((f) => f.kind === 'dispatch' && f.taskId === taskId && f.host === claim.host && f.pid === claim.pid && f.state === 'done' && f.startedAt >= since);
+    };
     return readTasksDir(getV2Dirs(located.brainfilePath).boardDir)
       .map((d) => ({ id: d.task.id, record: readDispatchRecord(d.task) }))
       .filter((t): t is { id: string; record: DispatchRecord } => !!t.record && t.record.role !== 'lead')
       .filter(({ record }) => !isLegacyRequest(record))
-      .filter(({ record }) => !record.claim || (claimHeld(record.claim) && isClaimLost(dotDir, record.claim)))
+      .filter(({ id, record }) => !record.claim || (claimHeld(record.claim) && isClaimLost(dotDir, record.claim) && !finished(id, record.claim)))
       .sort((a, b) => a.record.at.localeCompare(b.record.at))
       .map((t) => t.id);
   }
@@ -1024,7 +1094,7 @@ export class Runner {
   private async answer(projectId: string, taskId: string, why: string, review: boolean): Promise<void> {
     const claim: ClaimInput = { host: this.host, runner: this.kind, pid: this.pid };
     const taken = await this.board.claim(projectId, taskId, claim, { takeOwn: true });
-    if (taken.ok) await this.board.release(projectId, taskId, claim, review ? 'review' : 'failed');
+    if (taken.ok) await this.giveBack(projectId, taskId, review ? 'review' : 'failed');
     if (review) await this.board.park(projectId, taskId);
     await this.board.note(projectId, taskId, `Not handed off: ${why}`);
     this.leads.wake(projectId, taskId, `${taskId} was not handed off: ${why}`);
@@ -1079,23 +1149,24 @@ export class Runner {
     const outcome: DispatchOutcome = run.state === 'done' ? 'review' : run.state === 'stopped' ? 'stopped' : 'failed';
     if (this.lettingGo.has(run.id)) {
       // Stopped as the runner lets go: the task goes back to the queue for the next runner, and its lead hears nothing.
-      if (meta?.claimed) await this.board.release(projectId, taskId, this.holder).catch(() => {});
+      if (meta?.claimed) await this.giveBack(projectId, taskId);
       return;
     }
-    // A child of a lead this runner runs is landed by its lead, which hears how it went.
+    // A child of a lead this runner runs is landed by its lead, which hears how it went. Going down, nothing starts a
+    // landing whose checks it would have to end at once: the work waits in Review, as any hand-off's does.
     const led = this.leads.leadOver(projectId, taskId);
-    const through = !led && run.state === 'done' && meta?.until === 'done' && !!meta.worktree?.branch && policyFor(this.dataDir, projectId) === 'bypass';
+    const through = !led && !this.goingDown && run.state === 'done' && meta?.until === 'done' && !!meta.worktree?.branch && policyFor(this.dataDir, projectId) === 'bypass';
     try {
       if (!through) {
-        if (meta?.claimed) await this.board.release(projectId, taskId, this.holder, outcome);
+        if (meta?.claimed) await this.giveBack(projectId, taskId, outcome);
         return;
       }
       const landed = await this.land(projectId, taskId);
       if (landed.ok) {
-        if (meta?.claimed) await this.board.release(projectId, taskId, this.holder, 'done');
+        if (meta?.claimed) await this.giveBack(projectId, taskId, 'done');
       } else if (!landed.sentBack) {
         // Not landed and not going back: it stops in Review for the person.
-        if (meta?.claimed) await this.board.release(projectId, taskId, this.holder, 'review');
+        if (meta?.claimed) await this.giveBack(projectId, taskId, 'review');
         await this.board.park(projectId, taskId);
         await this.board.note(projectId, taskId, `Not landed: ${landed.error.split('\n')[0]}`);
       }
@@ -1108,6 +1179,28 @@ export class Runner {
       } else if (this.working.has(projectId)) void this.work(projectId);
       else void this.workLed(projectId);
     }
+  }
+
+  /**
+   * The claim given back (the board's release), tried again after a wait when
+   * the task file was being written by another runner (a lock under
+   * contention is the one failure that passes): otherwise the task would stay
+   * held by a live process for the runner's life, out of the queue, with no
+   * word. One that still fails is said in the task's log.
+   */
+  private async giveBack(projectId: string, taskId: string, outcome?: DispatchOutcome): Promise<Result> {
+    let released: Result = { ok: false, error: 'not tried' };
+    for (let attempt = 0; attempt <= RELEASE_RETRY_MS.length; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, RELEASE_RETRY_MS[attempt - 1]));
+      try {
+        released = await this.board.release(projectId, taskId, this.holder, outcome);
+      } catch (err) {
+        released = { ok: false, error: message(err) };
+      }
+      if (released.ok || !isBusy(released.error)) break;
+    }
+    if (!released.ok) await this.board.note(projectId, taskId, `The claim on ${taskId} (${this.kind} on ${this.host}, pid ${this.pid}) was not given back as ${outcome ?? 'queued again'}: ${released.error}`).catch(() => {});
+    return released;
   }
 
   // ── Landing ───────────────────────────────────────────────────────────────
@@ -1136,12 +1229,31 @@ export class Runner {
     } finally {
       this.landingNow.delete(slot);
     }
-    if (!('goesBack' in landed)) return landed;
-    // Sent back once the landing is over: the agent starts in the worktree it left.
+    if (!('goesBack' in landed)) {
+      if (landed.ok) this.heardLanded(projectId, taskId, `${taskId} was landed: ${landed.message}`);
+      return landed;
+    }
     const failed = landed.goesBack;
+    // Its checks were ended by the runner going down (goDown): not the agent's to settle, so it waits in Review for the person.
+    if (this.goingDown) return { ok: false, kind: failed.kind, error: `the runner went down while ${taskId}'s checks ran, so it was not landed: merge it when you are back`, sentBack: false };
+    // Sent back once the landing is over: the agent starts in the worktree it left.
     const back = await this.sendBack(projectId, taskId, failed);
+    this.heardLanded(projectId, taskId, `${taskId} did not land: ${failed.error.split('\n')[0]} ${back.said}`);
     if (back.sent) return { ok: false, kind: failed.kind, error: back.said, sentBack: true };
     return { ok: false, kind: failed.kind, error: `${failed.error} ${back.said}${failed.kind === 'check' ? `\n${failed.output}` : ''}`, sentBack: false };
+  }
+
+  /**
+   * A landing made here, by whoever asked for it (Merge, `brainfile land`,
+   * the MCP's land, a runner landing until done): the lead over the task
+   * hears how it went, unless it is the lead's own landing, which says so
+   * itself (Leads.landing). Without this, a lead until review whose last
+   * child the person merged from a terminal would wait for ever.
+   */
+  private heardLanded(projectId: string, taskId: string, said: string): void {
+    const lead = this.leads.leadOver(projectId, taskId);
+    if (!lead || lead.epicId === taskId || lead.landing.has(taskId)) return;
+    this.leads.wake(projectId, taskId, said);
   }
 
   /** land's work while the task is held: what it came to, or a landing that failed in a way that goes back to its agent. */
@@ -1158,12 +1270,17 @@ export class Runner {
     } catch (err) {
       return { ok: false, kind: 'refused', error: message(err), sentBack: false };
     }
+    const review = attempt(() => reviewOf(projectId, taskId)?.into);
+    const into = options.into ?? (review.ok ? review.value : undefined) ?? null;
     const landing = await landReview(projectId, taskId, {
       title,
-      check: commands.length ? (at) => runChecks(at, commands, agentEnv()) : undefined,
+      check: commands.length ? (at) => this.check(at, commands) : undefined,
       ...(options.into ? { into: options.into } : {}),
     });
     if (landing.ok) {
+      // Said in the task's log, before it may move to logs/: a board change a lead in another runner sees, where
+      // landing a child its worker had already completed changes no file otherwise (lookForLeads).
+      await this.board.note(projectId, taskId, `Landed on ${into ?? 'its target'}`).catch(() => {});
       const located = locateBoard(projectId, { materialize: false });
       const open = located.found ? findV2Task(getV2Dirs(located.brainfilePath), taskId) : null;
       if (!open) {
@@ -1181,6 +1298,56 @@ export class Runner {
     }
     if (landing.kind === 'conflict' || landing.kind === 'check') return { goesBack: landing };
     return { ok: false, kind: landing.kind, error: landing.error, sentBack: false };
+  }
+
+  /**
+   * The contract's checks for a landing, as runChecks runs them: in the
+   * hand-off's worktree, one after another, the first that fails ends them,
+   * each with CHECK_MS. Each runs in a process group of its own, so what the
+   * shell started goes with it, and the runner going down (goDown) ends the
+   * checks under way at once rather than leave them orphaned when its
+   * process exits: the landing comes back as a check that was stopped, and
+   * land() parks the task for the person.
+   */
+  private check(at: string, commands: string[]): Promise<Checked> {
+    const env = agentEnv();
+    return (async () => {
+      for (const command of commands) {
+        if (this.goingDown) return { ok: false as const, command, output: 'stopped: the runner is going down' };
+        const failed = await new Promise<string | null>((resolve) => {
+          const child = spawn(command, { cwd: at, env, shell: true, stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+          let output = '';
+          let ended: string | null = null;
+          const keep = (chunk: Buffer) => {
+            output = (output + chunk.toString()).slice(-16_000);
+          };
+          // The whole group, not the shell alone: a test runner the shell started goes with it.
+          const end = (why: string) => {
+            ended ??= why;
+            try {
+              if (child.pid && process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL');
+              else child.kill('SIGKILL');
+            } catch {
+              /* gone already */
+            }
+          };
+          const quit = () => end('stopped: the runner is going down');
+          this.checking.add(quit);
+          const timer = setTimeout(() => end(`stopped after ${Math.round(CHECK_MS / 60_000)} minutes`), CHECK_MS);
+          const settle = (said: string | null) => {
+            clearTimeout(timer);
+            this.checking.delete(quit);
+            resolve(said);
+          };
+          child.stdout?.on('data', keep);
+          child.stderr?.on('data', keep);
+          child.on('error', (err) => settle(err.message));
+          child.on('close', (code, signal) => settle(code === 0 ? null : (ended ?? (tail(output) || (signal ? `stopped (${signal})` : `exit ${code}`)))));
+        });
+        if (failed !== null) return { ok: false as const, command, output: failed };
+      }
+      return { ok: true as const };
+    })();
   }
 
   /**
@@ -1550,10 +1717,12 @@ export class Runner {
     const live = [...this.runs.values()].filter((r) => r.kind === 'dispatch' && this.liveHere(r));
     if (requeue) for (const run of live) this.lettingGo.add(run.id);
     await Promise.allSettled(live.map((run) => this.stop(run.id)));
+    // A landing's checks under way would take minutes: ended now, each landing comes back at once and its task waits in Review (land).
+    for (const quit of [...this.checking]) quit();
     while (this.ending.size) await Promise.allSettled([...this.ending]);
     const leads = this.leads.running();
     this.leads.closeAll();
-    for (const lead of leads) await this.board.release(lead.projectId, lead.epicId, this.holder, 'stopped').catch(() => {});
+    for (const lead of leads) await this.giveBack(lead.projectId, lead.epicId, 'stopped');
     this.close();
   }
 
@@ -1599,6 +1768,28 @@ export class Runner {
 }
 
 const leadKey = (lead: Lead) => `lead:${lead.projectId}\n${lead.epicId}`;
+
+/** The last lines of a check's output, as runChecks keeps them. */
+function tail(text: string, lines = 8): string {
+  return text.trim().split('\n').slice(-lines).join('\n').trim();
+}
+
+/**
+ * The branches of the epics with a branch of their own above `taskId`, made
+ * from the outermost in (decision-16): an epic under another such epic forks
+ * from that one's branch, which prepareTarget and prepareEpicBranch, which
+ * make only the one they are asked for, would find nowhere until a hand-off
+ * from the outer had made it.
+ */
+function prepareOuterBranches(projectId: string, taskId: string): void {
+  const above: string[] = [];
+  const seen = new Set<string>([taskId]);
+  for (let epic = handOffTarget(projectId, taskId).epic; epic && !seen.has(epic.id); epic = handOffTarget(projectId, epic.id).epic) {
+    seen.add(epic.id);
+    above.unshift(epic.id);
+  }
+  for (const epicId of above) prepareEpicBranch(projectId, epicId);
+}
 
 /** Who asks, by what is running: the desktop's person, the CLI, an MCP client. */
 function byOf(runner: DispatchRunner): DispatchBy {

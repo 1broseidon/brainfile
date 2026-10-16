@@ -434,6 +434,8 @@ export interface Lead {
   busy: boolean;
   /** Children seen done, so one completed by the person wakes it once. */
   doneSeen: Set<string>;
+  /** Children seen complete with their branch not landed, so one landed from outside this runner (another's land, a terminal) wakes it once. */
+  unlandedSeen: Set<string>;
   /** Children the app is landing: their completion is said by the landing, not by the board's change. */
   landing: Set<string>;
   /** Turns that failed in a row. */
@@ -736,6 +738,7 @@ export class Leads {
       queue: [options.resumed ? 'The person resumed you.' : `The person handed you ${epicId}.`],
       busy: false,
       doneSeen: new Set(tree.children.filter((c) => c.done).map((c) => c.id)),
+      unlandedSeen: new Set(tree.children.filter((c) => c.done && c.unlanded).map((c) => c.id)),
       landing: new Set(),
       failures: 0,
       timer: null,
@@ -781,8 +784,9 @@ export class Leads {
     lead.landing.add(taskId);
     return () => {
       lead.landing.delete(taskId);
-      const tree = this.deps.tree(projectId, lead.epicId);
-      if (tree?.children.find((c) => c.id === taskId)?.done) lead.doneSeen.add(taskId);
+      const child = this.deps.tree(projectId, lead.epicId)?.children.find((c) => c.id === taskId);
+      if (child?.done) lead.doneSeen.add(taskId);
+      if (child?.done && !child.unlanded) lead.unlandedSeen.delete(taskId);
     };
   }
 
@@ -836,8 +840,10 @@ export class Leads {
 
   /**
    * The board changed: the lead's record is read back (paused, resumed or
-   * stopped from anywhere), a child the person completed wakes the lead, and
-   * an epic whose children are all done is completed and its lead ends.
+   * stopped from anywhere), a child the person completed wakes the lead, so
+   * does one whose branch has landed since (merged from a terminal, or by
+   * another runner: the tree asks git), and an epic whose children are all
+   * done is completed and its lead ends.
    */
   boardChanged(projectId: string): void {
     for (const lead of this.leads.values()) {
@@ -856,7 +862,15 @@ export class Leads {
         lead.doneSeen.add(c.id);
         lead.queue.push(c.unlanded ? `${c.id} is complete, but its branch has not landed: what waits on it still waits.` : `${c.id} is done.`);
       }
-      if (fresh.length) this.gather(lead);
+      let landed = 0;
+      for (const c of tree.children) {
+        if (c.done && c.unlanded) lead.unlandedSeen.add(c.id);
+        else if (lead.unlandedSeen.delete(c.id) && c.done && !lead.landing.has(c.id) && !fresh.includes(c)) {
+          lead.queue.push(`${c.id} has landed.`);
+          landed += 1;
+        }
+      }
+      if (fresh.length || landed) this.gather(lead);
     }
   }
 

@@ -110,6 +110,7 @@ const EXCLUDED: Record<string, string> = {
   'merge-boards': 'Decides how two boards become one: the person\'s call. Writes refuse with this command named.',
   backups: 'Local safety copies of replaced boards, and putting one back: the person\'s call.',
   run: 'A foreground runner is an interface for a person at a terminal, like tui and mcp; the dispatch tools queue for it.',
+  'dispatch policy': 'The person\'s own setting (dispatch.json): what agents may do on their own in a repository is never an agent\'s to change.',
 };
 
 /**

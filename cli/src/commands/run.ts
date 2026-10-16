@@ -164,6 +164,7 @@ export async function runLoop(filePath: string, options: RunLoopOptions = {}, lo
   options.signal?.addEventListener('abort', interrupt, { once: true });
 
   const pending = [...(options.only?.tasks ?? [])];
+  const waits = (taskId: string) => waitsOf(getV2Dirs(filePath), projectId, taskId);
   try {
     if (!options.only) {
       const max = options.max ? `, ${options.max} of them from here` : '';
@@ -176,8 +177,12 @@ export async function runLoop(filePath: string, options: RunLoopOptions = {}, lo
     while (!stopping) {
       let began = 0;
       if (options.only) {
-        while (pending.length && !stopping && runner.live(projectId).length < runner.limit(projectId)) {
-          const id = pending.shift()!;
+        for (const id of [...pending]) {
+          if (stopping || runner.live(projectId).length >= runner.limit(projectId)) break;
+          // One that waits on a dependency (decision-15) stays pending, said once by dispatch: it starts here once
+          // that has landed, by another of these or elsewhere, while anything of this run is still going.
+          if (waits(id).length) continue;
+          pending.splice(pending.indexOf(id), 1);
           const started = await runner.start(projectId, id, { refresh: true });
           if (started.ok) began += 1;
           else logger.log(chalk.yellow(`${id}: ${started.error}`));
@@ -185,7 +190,8 @@ export async function runLoop(filePath: string, options: RunLoopOptions = {}, lo
       } else {
         began = (await runner.work(projectId)).length;
       }
-      const done = options.only ? !pending.length && runner.settled(projectId) : options.once && !began && runner.settled(projectId);
+      // Given only these: done once nothing of them is going and what is left can only wait.
+      const done = options.only ? runner.settled(projectId) && pending.every((id) => waits(id).length > 0) : options.once && !began && runner.settled(projectId);
       if (done) break;
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, RUN_LOOK_MS);
@@ -221,10 +227,19 @@ export async function runLoop(filePath: string, options: RunLoopOptions = {}, lo
 function leftQueued(runner: Runner, filePath: string, projectId: string): RunSummary['queued'] {
   const dirs = getV2Dirs(filePath);
   return runner.queued(projectId).map((task) => {
-    const doc = findV2Task(dirs, task)?.doc.task;
-    const waits = (doc?.dependsOn ?? []).filter((ref) => !ref.includes(':') && (!!findV2Task(dirs, ref) || unlanded(projectId, ref)));
+    const waits = waitsOf(dirs, projectId, task);
     return { task, ...(waits.length ? { waitsOn: waits } : {}) };
   });
+}
+
+/** The dependsOn a task still waits on (decision-15): open on this board, or complete with its branch not landed; none for a task that is gone. */
+function waitsOf(dirs: ReturnType<typeof getV2Dirs>, projectId: string, taskId: string): string[] {
+  try {
+    const doc = findV2Task(dirs, taskId)?.doc.task;
+    return (doc?.dependsOn ?? []).filter((ref) => !ref.includes(':') && (!!findV2Task(dirs, ref) || unlanded(projectId, ref)));
+  } catch {
+    return [];
+  }
 }
 
 /** How far the run's hand-off goes: its lead's rule, its request's, else the runner's. */

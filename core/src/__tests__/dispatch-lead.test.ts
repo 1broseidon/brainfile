@@ -588,6 +588,35 @@ test('taken up with every child complete but some not landed: until done it land
   expect(g.views.at(-1)).toMatchObject({ state: 'done', note: 'epic-1 is done: every child is.' });
 });
 
+test('until review, the last child landed from outside with no wake (a terminal, another runner): the next look at the board finishes the epic', async () => {
+  const docs = [doc('epic-1'), doc('task-1', { parentId: 'epic-1', done: true, unlanded: true }), doc('task-2', { parentId: 'epic-1', done: true })];
+  const f = fake(docs, {
+    extra: {
+      mergeable: () => true,
+      land: async () => {
+        throw new Error('until review: the lead does not land');
+      },
+    },
+  });
+  expect((await f.leads.start('/repo', 'epic-1', 'claude', { fromBoard: true, resumed: true })).ok).toBe(true);
+  await f.flush();
+  expect(f.views.at(-1)).toMatchObject({ state: 'leading', note: 'Every child is complete, but task-1 has not landed yet: merge it, and epic-1 finishes.' });
+  // Nothing else on the board moved: the look finds the same tree.
+  f.leads.boardChanged('/repo');
+  await f.flush();
+  expect(f.completed).toEqual([]);
+  // The person merges task-1 in a terminal: git changes, and the landing's note on the task is what the lead's runner next sees.
+  delete docs.find((d) => d.id === 'task-1')!.unlanded;
+  f.leads.boardChanged('/repo');
+  await f.flush();
+  await settles(() => f.completed.length > 0);
+  expect(f.completed).toEqual(['epic-1']);
+  expect(f.views.at(-1)).toMatchObject({ state: 'done', note: 'epic-1 is done: every child is.' });
+  // Said once, and with every child complete there was no turn to take.
+  expect(f.prompts).toEqual([]);
+  expect(f.records.at(-1)).toBe('end');
+});
+
 test('finishing, it is never shown stopped: the record it took off itself is not read as a stop', async () => {
   const docs = board();
   let offered: (value: null) => void = () => {};

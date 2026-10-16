@@ -9,12 +9,13 @@ import { reviewOutputSchema } from '../schemas';
 /**
  * `review` (task-81): a hand-off's work and what to do with it, like
  * `brainfile review`, `land` and `discard`. A worker's or a discussion's
- * server offers only show and ready (decision-15); a lead's lands and
- * discards only in its own tree.
+ * server only shows (decision-15): land and discard are refused with the
+ * sentence the command line gives, rather than left out of the schema, so an
+ * agent that tries hears why; a lead's lands and discards only in its own
+ * tree.
  */
 export function registerReviewTool(server: McpServer, defaultFile: string, access: Access = {}): void {
   const acts = mayDispatch(access);
-  const actions = acts ? (['show', 'ready', 'land', 'discard'] as const) : (['show', 'ready'] as const);
   server.registerTool(
     'review',
     {
@@ -23,10 +24,10 @@ export function registerReviewTool(server: McpServer, defaultFile: string, acces
         "A task's hand-off on its own branch. show (default): the branch, where it lands, its commits and files, the files that would conflict, and whether it can land now. ready: every hand-off that can land now." +
         (acts
           ? " land: runs the task's contract validation in its worktree with its target brought in, then lands it (decision-12); the task completes unless subtasks are left. A conflict or a failed check goes back to the agent that did it, queued for a runner, up to the contract's maxRetries, then it parks in Review. into lands it on another branch. discard: throws its worktree and branch away. land and discard are refused while an agent is at it."
-          : ''),
+          : ` land and discard are not yours: a ${access.role} never lands or discards (decision-15); a person, the board's chat or an epic's lead does.`),
       inputSchema: z.object({
         file: z.string().optional().describe('Path to brainfile.md (default: brainfile.md)'),
-        action: z.enum(actions).optional().describe(`${actions.join(' | ')} (default show)`),
+        action: z.enum(['show', 'ready', 'land', 'discard']).optional().describe(acts ? 'show | ready | land | discard (default show)' : 'show | ready (default show); land and discard are refused here'),
         task: z.string().optional().describe('The task whose hand-off it is, e.g. task-12 (not for ready)'),
         into: z.string().optional().describe('land only: land on this branch instead of its target'),
       }),
@@ -43,6 +44,7 @@ export function registerReviewTool(server: McpServer, defaultFile: string, acces
           return mcpResult(readyText(report), { action: 'ready' as const, ...report });
         }
         if (!task) return mcpError(`review ${action} needs a task`);
+        // The reports refuse a role that may not (the command line's guard), with its sentence.
         if (action === 'land') {
           const report = await landReport(resolved, task, { access, into });
           return mcpResult(report.landed && report.completed ? `${report.message}. ${task} is done.` : report.message, { action: 'land' as const, ...report });

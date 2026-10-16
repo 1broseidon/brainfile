@@ -15,6 +15,9 @@
  *   that takes up leads (`brainfile run`, the desktop) runs it; `--now` runs
  *   it here. `dispatch pause|resume <epic>` pause and resume it, whichever
  *   runner leads it, through its record on the epic.
+ * - `dispatch policy [ask|bypass|clear] [--all]` is the repository's
+ *   permission policy in dispatch.json, which decides how far `--until done`
+ *   and a lead go; the person's own, so no agent's role may touch it.
  * - `agents` lists the agents, which are installed here, and their models.
  *
  * The MCP tools (dispatch_tool.ts, agents_tool.ts) call the same functions.
@@ -55,14 +58,20 @@ import {
   leadRefusalOnBoard,
   listAgents,
   nameOf,
+  policyFor,
   readModels,
+  readSettings,
+  settingsFile,
   whyNot,
   type AgentId,
   type AgentRole,
   type AgentRun,
+  type PermissionPolicy,
   type RunnerOptions,
+  type SettingsFile,
 } from '@brainfile/core/dispatch';
 import { flushBoardCommits, isClaimLost, isRunEnded, isRunLost, liveRunners, projectOfBoard, readRunFile, unlanded } from '@brainfile/core/repo';
+import * as fs from 'fs';
 import * as path from 'path';
 import { type Logger, defaultLogger } from '../utils/logger';
 import { CLIError } from '../utils/cli-error';
@@ -82,11 +91,14 @@ Examples:
   brainfile dispatch stop task-12                     Stop the run on task-12 (or name its run id)
   brainfile dispatch epic-3 --agent claude            Queue a lead for epic-3: it hands off its children in order
   brainfile dispatch pause epic-3                     Pause epic-3's lead; resume carries on, stop ends it
+  brainfile dispatch policy bypass                    Let --until done land on its own in this repository
 
 Queued work waits on the board for a runner: \`brainfile run\`, or Brainfile's
 window. A task whose dependsOn are open, or complete with their branch not
 landed, stays queued until they have landed. At most dispatch.maxRunning in
-the board's config (else 3) run at once on a repository.
+the board's config (else 3) run at once on a repository. \`--until done\`
+lands a hand-off on its own only where the repository's permission policy is
+bypass (\`dispatch policy\`); elsewhere it stops in Review for you.
 
 With no --agent, a task goes to the agent it was last handed to, else its
 assignee when that is an agent. \`brainfile agents\` lists them.
@@ -242,8 +254,8 @@ export interface HandOffOptions {
 }
 
 export interface DispatchReport {
-  /** `lead`: a lead for an epic, which hands off its children (decision-15). */
-  queued: { task: string; agent: string; model?: string; effort?: string; until?: DispatchUntil; waitsOn?: string[]; lead?: boolean }[];
+  /** `lead`: a lead for an epic, which hands off its children (decision-15). `already`: the same request was on the board, so nothing was written. */
+  queued: { task: string; agent: string; model?: string; effort?: string; until?: DispatchUntil; waitsOn?: string[]; lead?: boolean; already?: boolean }[];
   skipped: { task: string; why: string }[];
   /** Another runner is up on this machine to start it. */
   runnerUp: boolean;
@@ -300,13 +312,16 @@ export function waitsOn(place: Place, task: Task): string[] {
 /**
  * Queues each task for its agent: `dispatch:` written on it, the agent its
  * assignee. One still running, or held by a runner, is skipped and said so;
- * one waiting on its dependencies is queued and said so.
+ * one waiting on its dependencies is queued and said so; one already queued
+ * with the same request is said so, and nothing is written again. `now`:
+ * the caller runs what was queued here (`dispatch --now`), so what is said
+ * does not send the person to a runner.
  */
 export async function dispatchReport(
   filePath: string,
   sel: DispatchSelect,
   handOff: HandOffOptions,
-  options: { kind?: DispatchRunner; access?: Access } = {},
+  options: { kind?: DispatchRunner; access?: Access; now?: boolean } = {},
 ): Promise<DispatchReport> {
   const place = placeOf(filePath);
   const access = options.access ?? {};
@@ -322,6 +337,7 @@ export async function dispatchReport(
   const dirs = getV2Dirs(filePath);
   return withRunner(kind, async (runner) => {
     const queued: DispatchReport['queued'] = [];
+    const inQueue = new Set(runner.queued(place.projectId));
     for (const id of leads) {
       const why = leadWhyNot(place, id, access);
       if (why) {
@@ -371,16 +387,22 @@ export async function dispatchReport(
       const model = handOff.model ?? (same ? record?.model : undefined);
       const effort = handOff.effort ?? (same && !handOff.model ? record?.effort : undefined);
       const until = handOff.until ?? record?.until;
+      const waits = waitsOn(place, task);
+      const line = { task: id, agent, ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(until ? { until } : {}), ...(waits.length ? { waitsOn: waits } : {}) };
+      // The same request is already on the board, waiting for a runner: said so, and no commit for nothing.
+      if (inQueue.has(id) && record?.agent === agent && record.model === model && record.effort === effort && record.until === until) {
+        queued.push({ ...line, already: true });
+        continue;
+      }
       const written = await runner.queue(place.projectId, [id], { agent, model, effort, until, by: byOf(kind, access) });
       if (!written.ok) {
         skipped.push({ task: id, why: written.error.replace(`${id}: `, '') });
         continue;
       }
-      const waits = waitsOn(place, task);
-      queued.push({ task: id, agent, ...(model ? { model } : {}), ...(effort ? { effort } : {}), ...(until ? { until } : {}), ...(waits.length ? { waitsOn: waits } : {}) });
+      queued.push(line);
     }
     const up = runnerUp(place, runner);
-    return { queued, skipped, runnerUp: up, said: sayQueued(dir, queued, skipped, up) };
+    return { queued, skipped, runnerUp: up, said: sayQueued(dir, queued, skipped, up, !!options.now) };
   });
 }
 
@@ -415,29 +437,32 @@ function ledWhyNot(place: Place, taskId: string, access: Access): string | null 
   return above ? `${above.epicId}'s lead runs that tree: only the lead hands off its children. Pause or stop it first` : null;
 }
 
-function sayQueued(dir: string, queued: DispatchReport['queued'], skipped: DispatchReport['skipped'], up: boolean): string {
+function sayQueued(dir: string, queued: DispatchReport['queued'], skipped: DispatchReport['skipped'], up: boolean, now = false): string {
   const lines: string[] = [];
   for (const q of queued.filter((q) => q.lead)) {
     lines.push(`Queued a lead for ${q.task}: ${nameOf(dir, q.agent as AgentId)}${q.model ? ` (${q.model}${q.effort ? `, ${q.effort}` : ''})` : ''} checks the plan, then hands off its children in order${q.until === 'done' ? ', landing each' : ''}.`);
   }
   const work = queued.filter((q) => !q.lead);
-  if (work.length) {
+  const who = (q: DispatchReport['queued'][number]) => `${nameOf(dir, q.agent as AgentId)}${q.model ? ` (${q.model}${q.effort ? `, ${q.effort}` : ''})` : ''}${q.until === 'done' ? ', until done' : ''}`;
+  const fresh = work.filter((q) => !q.already);
+  if (fresh.length) {
     const byAgent = new Map<string, string[]>();
-    for (const q of work) {
-      const who = `${nameOf(dir, q.agent as AgentId)}${q.model ? ` (${q.model}${q.effort ? `, ${q.effort}` : ''})` : ''}${q.until === 'done' ? ', until done' : ''}`;
-      byAgent.set(who, [...(byAgent.get(who) ?? []), q.task]);
-    }
-    lines.push(`Queued ${[...byAgent].map(([who, tasks]) => `${tasks.join(', ')} for ${who}`).join('; ')}.`);
+    for (const q of fresh) byAgent.set(who(q), [...(byAgent.get(who(q)) ?? []), q.task]);
+    lines.push(`Queued ${[...byAgent].map(([agent, tasks]) => `${tasks.join(', ')} for ${agent}`).join('; ')}.`);
   }
+  for (const q of work.filter((q) => q.already)) lines.push(`${q.task} is already queued for ${who(q)}.`);
   if (queued.length) {
     const notHere = [...new Set(queued.map((q) => q.agent))].map((id) => allAgents(dir).find((a) => a.id === id)).filter((a) => a && whyNot(a));
     for (const a of notHere) lines.push(`${whyNot(a!)}: a runner on another machine can start it.`);
-    for (const q of work.filter((q) => q.waitsOn)) lines.push(`${q.task} waits on ${q.waitsOn!.join(', ')}: it starts once ${q.waitsOn!.length === 1 ? 'that has' : 'they have'} landed.`);
+    // Said once here: with --now the loop starts it once they have landed, while something of this run is still going.
+    for (const q of work.filter((q) => q.waitsOn)) {
+      lines.push(`${q.task} waits on ${q.waitsOn!.join(', ')}: it ${now ? 'runs here' : 'starts'} once ${q.waitsOn!.length === 1 ? 'that has' : 'they have'} landed.`);
+    }
   } else {
     lines.push('Nothing was queued.');
   }
   for (const s of skipped) lines.push(`Skipped ${s.task}: ${s.why}.`);
-  if (queued.length && !up) lines.push(NO_RUNNER);
+  if (queued.length && !up && !now) lines.push(NO_RUNNER);
   return lines.join('\n');
 }
 
@@ -595,12 +620,16 @@ export async function stopReport(filePath: string, ref: string, options: { acces
     const run = runner.live(place.projectId).find((r) => r.id === ref || r.taskId === ref);
     const epic = run ? undefined : findV2Task(getV2Dirs(filePath), ref)?.doc.task;
     if (epic && readLeadRecord(epic as Task & { lead?: unknown })) {
-      // An epic's lead: taken off the epic, which the runner leading it follows.
+      // An epic's lead: taken off the epic, which the runner leading it follows; one no runner had taken up only leaves the board.
       guard(filePath, ref, access, 'stop a lead');
       const record = readLeadRecord(epic as Task & { lead?: unknown })!;
+      const claim = record.claim;
+      const where = claimHeld(claim) && !isClaimLost(place.dotDir, claim) ? `${claim.runner} on ${claim.host} (pid ${claim.pid})` : null;
       const stopped = await runner.stopLead(place.projectId, ref);
       if (!stopped.ok) throw new CLIError(stopped.error);
-      return { run: ref, task: ref, agent: record.agent, stopped: true, said: `Stopped ${ref}'s lead. What it handed off goes on, and is yours now.` };
+      const goesOn = 'What it handed off goes on, and is yours now.';
+      const said = where ? `Asked ${ref}'s lead, in ${where}, to stop: it ends when that runner next looks. ${goesOn}` : `${ref}'s lead was waiting for a runner: its request is taken off the board. ${goesOn}`;
+      return { run: ref, task: ref, agent: record.agent, stopped: !where, said };
     }
     if (!run) {
       const file = /^run-/.test(ref) ? readRunFile(place.dotDir, ref) : null;
@@ -668,6 +697,72 @@ function ended(place: Place, runId: string): boolean {
   return !file || isRunEnded(file) || isRunLost(file);
 }
 
+// ── The permission policy ───────────────────────────────────────────────────
+
+export type PolicyChange = 'ask' | 'bypass' | 'clear';
+
+export interface PolicyReport {
+  /** The repository, as runners name it. */
+  project: string;
+  /** How asks are answered on it now, and so how far `--until done` and a lead go. */
+  policy: PermissionPolicy;
+  /** Where that comes from: the repository's own setting, the app-wide switch, or neither (the default, ask). */
+  from: 'repository' | 'app' | 'default';
+  /** The app-wide switch. */
+  bypass: boolean;
+  /** dispatch.json, in the data folder. */
+  file: string;
+  said: string;
+}
+
+/**
+ * The repository's permission policy (core's policyFor): in a bypass
+ * repository a hand-off asked for until done lands on its own, and a lead
+ * lands each child; otherwise everything stops in Review for the person.
+ * It lives in dispatch.json in the data folder, shared with the desktop,
+ * which only the desktop's Settings wrote until now, so without the window
+ * `--until done` could never land. `ask` and `bypass` set the repository's
+ * own; `clear` takes it off, so the app-wide switch decides; `all` sets the
+ * switch itself. The person's own setting: refused for any agent's role.
+ */
+export function policyReport(filePath: string, change?: PolicyChange, options: { all?: boolean; access?: Access } = {}): PolicyReport {
+  const access = options.access ?? {};
+  if (access.role) throw new CLIError(`A ${access.role} cannot read or change the permission policy: it is the person's setting (dispatch.json), which decides what agents may do on their own`);
+  const place = placeOf(filePath);
+  const dir = dispatchDataDir();
+  const file = settingsFile(dir);
+  if (change) {
+    const current = readSettings(dir);
+    let next: SettingsFile;
+    if (options.all) {
+      const { bypass: _was, ...rest } = current;
+      next = change === 'clear' ? rest : { ...rest, bypass: change === 'bypass' };
+    } else {
+      const projects = { ...(current.projects ?? {}) };
+      const own = { ...(projects[place.projectId] ?? {}) };
+      if (change === 'clear') delete own.permissions;
+      else own.permissions = change;
+      if (Object.keys(own).length) projects[place.projectId] = own;
+      else delete projects[place.projectId];
+      next = { ...current, projects };
+    }
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(next, null, 2));
+  }
+  const settings = readSettings(dir);
+  const own = settings.projects?.[place.projectId]?.permissions;
+  const policy = policyFor(dir, place.projectId);
+  const from = own ? 'repository' : settings.bypass ? 'app' : 'default';
+  const name = path.basename(place.projectId);
+  const means = policy === 'bypass' ? 'a hand-off asked for until done lands on its own, and a lead lands each child' : policy === 'ask' ? 'every hand-off stops in Review for you, and an agent that asks before it acts is answered by whoever runs it' : 'an agent that asks before it acts is allowed';
+  const source = from === 'repository' ? `${name}'s own setting` : from === 'app' ? 'the app-wide setting, which this repository does not override' : 'the default: nothing is set';
+  const lines = [
+    ...(change ? [`${change === 'clear' ? 'Cleared' : 'Set'} ${options.all ? 'the app-wide policy' : `the policy for ${name}`}${change === 'clear' ? '' : `: ${change}`}.`] : []),
+    `Asks on ${name} are ${policy === 'bypass' ? 'bypassed' : policy === 'ask' ? 'asked' : 'allowed'}: ${means}. From ${source}, in ${file}.`,
+  ];
+  return { project: place.projectId, policy, from, bypass: settings.bypass === true, file, said: lines.join('\n') };
+}
+
 // ── The commands ────────────────────────────────────────────────────────────
 
 export interface DispatchOptions extends HandOffOptions {
@@ -685,18 +780,31 @@ export async function dispatchCommand(ids: string[], options: DispatchOptions, l
   if (until !== undefined && until !== 'review' && until !== 'done') throw new CLIError(`--until is review or done, not ${until}`);
   const access = callerAccess();
   if (options.now) refuseInAgent(access, 'run a hand-off here with --now');
-  const report = await dispatchReport(filePath, { ids, column: options.column, parent: options.parent }, { agent: options.agent, model: options.model, effort: options.effort, until }, { access });
+  const report = await dispatchReport(filePath, { ids, column: options.column, parent: options.parent }, { agent: options.agent, model: options.model, effort: options.effort, until }, { access, now: options.now });
   if (options.json && !options.now) {
     logger.log(JSON.stringify(report, null, 2));
     return report;
   }
-  // Run here: the "no runner" line does not apply.
-  const said = options.now ? report.said.split('\n').filter((l) => l !== NO_RUNNER).join('\n') : report.said;
-  logger.log(report.queued.length ? said : chalk.yellow(said));
+  logger.log(report.queued.length ? report.said : chalk.yellow(report.said));
   if (options.now && report.queued.length) {
-    // `brainfile run`'s loop, given what was just queued: it returns once they have ended and been settled.
-    await runLoop(filePath, { only: { tasks: report.queued.filter((q) => !q.lead).map((q) => q.task), leads: report.queued.filter((q) => q.lead).map((q) => q.task) } }, logger);
+    // `brainfile run`'s loop, given what was just queued: it returns once they have ended and been settled, and
+    // what still waits on a dependency when nothing more of them is going stays queued for a runner.
+    const tasks = report.queued.filter((q) => !q.lead).map((q) => q.task);
+    const summary = await runLoop(filePath, { only: { tasks, leads: report.queued.filter((q) => q.lead).map((q) => q.task) } }, logger);
+    const left = summary.queued.filter((q) => tasks.includes(q.task));
+    for (const q of left) logger.log(chalk.yellow(`${q.task} still waits on ${q.waitsOn?.join(', ') ?? 'its dependencies'}: it stays queued for a runner.`));
+    if (left.length && !summary.started.length && !summary.led.length && !summary.interrupted) {
+      throw new CLIError('Nothing asked for could run here now', undefined, report.runnerUp ? 'A runner on this machine starts it once it can.' : NO_RUNNER);
+    }
   }
+  return report;
+}
+
+/** `brainfile dispatch policy [ask|bypass|clear] [--all]`. */
+export function dispatchPolicyCommand(change: string | undefined, options: { file?: string; all?: boolean; json?: boolean }, logger: Logger = defaultLogger): PolicyReport {
+  if (change !== undefined && change !== 'ask' && change !== 'bypass' && change !== 'clear') throw new CLIError(`The policy is ask or bypass, or clear to take the repository's own off, not ${change}`);
+  const report = policyReport(resolveCliBrainfilePath(options.file), change, { all: options.all, access: callerAccess() });
+  logger.log(options.json ? JSON.stringify(report, null, 2) : report.said);
   return report;
 }
 

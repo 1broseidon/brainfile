@@ -5,13 +5,17 @@
  * it, and external.ts shows it as a run marked `in a terminal`, with its ask
  * in the band. Answering it writes `<run-id>.answer.json`, which that runner
  * applies, taking its own prompt down; its end reaches the window too. And
- * the app quitting lets go of its own hand-offs through the host.
+ * the app quitting lets go of its own hand-offs through the host, a landing
+ * under way included.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import { createRequire } from 'node:module';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { bundled } from './bundle.ts';
 import type { AgentEvent, AgentRun, BoardSnapshot, PermissionAsk, Result } from '../src/shared/api.ts';
 
@@ -214,8 +218,23 @@ test('quitting the app lets go of its hand-offs through the host: each ends stop
   assert.ok(opened.ok);
   // An agent that never answers: its hand-off stays starting until it is stopped.
   fs.writeFileSync(path.join(base, 'data', 'dispatch.json'), JSON.stringify({ agentServers: { Mute: { command: process.execPath, args: ['-e', 'setInterval(() => {}, 1000)'] } } }));
-  // The board writes as the agents process makes them: through the host, which commits them.
-  const hostBoard: import('@brainfile/core/dispatch').RunnerBoard = {
+  const app = runner({ board: hostBoard() });
+  const started = await app.dispatch(project, 'task-4', { agent: 'custom:Mute', by: 'person' });
+  assert.ok(started.ok, !started.ok ? started.error : '');
+  const record = () => core.readDispatchRecord(core.readTaskFile(path.join(dotDir, 'board', 'task-4.md'))!.task);
+  assert.equal(record()?.claim?.pid, process.pid);
+
+  // SIGTERM from main, before main stops the host.
+  await app.quit();
+  assert.equal(record()?.claim?.outcome, 'stopped');
+  assert.equal(repo.readRunFile(dotDir, started.value.run.id)?.state, 'stopped');
+  const next = runner({ pid: TERMINAL_PID });
+  assert.deepEqual(next.queued(project), []);
+});
+
+/** The board writes as the agents process makes them: through the host, which commits them. */
+function hostBoard(): import('@brainfile/core/dispatch').RunnerBoard {
+  return {
     request: (p, t, request) => host.call('recordDispatch', p, t, request),
     claim: async (p, t, claim, options) => {
       const taken = await host.call<Result<import('@brainfile/core/repo').ClaimTaken>>('claimDispatch', p, t, claim, options);
@@ -228,16 +247,99 @@ test('quitting the app lets go of its hand-offs through the host: each ends stop
     lead: (p, e, action) => host.call('markLead', p, e, action),
     complete: (p, t) => host.call('completeTask', p, t),
   };
-  const app = runner({ board: hostBoard });
-  const started = await app.dispatch(project, 'task-4', { agent: 'custom:Mute', by: 'person' });
-  assert.ok(started.ok, !started.ok ? started.error : '');
-  const record = () => core.readDispatchRecord(core.readTaskFile(path.join(dotDir, 'board', 'task-4.md'))!.task);
-  assert.equal(record()?.claim?.pid, process.pid);
+}
 
-  // SIGTERM from main, before main stops the host.
-  await app.quit();
-  assert.equal(record()?.claim?.outcome, 'stopped');
-  assert.equal(repo.readRunFile(dotDir, started.value.run.id)?.state, 'stopped');
-  const next = runner({ pid: TERMINAL_PID });
-  assert.deepEqual(next.queued(project), []);
+/** Whether a process is running (one we may not signal is). */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+test('quitting during a landing: its checks end with the app, the task waits in Review through the host, and the host commits that', async () => {
+  const GIT_ENV = { GIT_CONFIG_GLOBAL: os.devNull, GIT_CONFIG_NOSYSTEM: '1', GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' };
+  const saved = Object.fromEntries([...Object.keys(GIT_ENV), 'BRAINFILE_WORKTREES'].map((k) => [k, process.env[k]]));
+  Object.assign(process.env, GIT_ENV, { BRAINFILE_WORKTREES: path.join(base, 'worktrees') });
+  const git = (args: string[], cwd: string) => {
+    const r = spawnSync('git', args, { cwd, encoding: 'utf-8' });
+    assert.equal(r.status, 0, `git ${args.join(' ')}: ${r.stderr}`);
+    return r.stdout.trim();
+  };
+  // A repository whose board lives on its own branch, so the hand-off has a worktree and a landing.
+  const repo = path.join(base, 'landing');
+  const pidFile = path.join(base, 'check-pid');
+  fs.mkdirSync(repo);
+  git(['init', '-q', '-b', 'main'], repo);
+  fs.writeFileSync(path.join(repo, 'README.md'), 'code\n');
+  git(['add', '-A'], repo);
+  git(['commit', '-q', '-m', 'init'], repo);
+  const board = path.join(repo, '.brainfile');
+  git(['worktree', 'add', '-q', '--orphan', '-b', 'brainfile', board], repo);
+  fs.mkdirSync(path.join(board, 'board'));
+  fs.mkdirSync(path.join(board, 'logs'));
+  fs.writeFileSync(path.join(board, 'brainfile.md'), '---\ntitle: Landing\ncolumns:\n  - id: todo\n    title: To Do\n  - id: review\n    title: Review\n---\n');
+  // A check that would take minutes, with a grandchild the shell started.
+  fs.writeFileSync(path.join(board, 'board', 'task-1.md'), `---\nid: task-1\ntitle: Task 1\ncolumn: todo\ncontract:\n  status: ready\n  validation:\n    commands:\n      - sleep 300 & echo $! > ${pidFile}; wait\n---\n\nDo it.\n`);
+  git(['add', '-A'], board);
+  git(['commit', '-q', '-m', 'board'], board);
+  fs.appendFileSync(path.join(repo, '.git', 'info', 'exclude'), '.brainfile/\n');
+  // An agent that commits in its worktree and ends its turn; the repository in bypass, so until done lands.
+  const SDK = pathToFileURL(createRequire(import.meta.url).resolve('@agentclientprotocol/sdk')).href;
+  const agent = path.join(base, 'agent.mjs');
+  fs.writeFileSync(
+    agent,
+    `import { AgentSideConnection, ndJsonStream, PROTOCOL_VERSION } from ${JSON.stringify(SDK)};
+import { Readable, Writable } from 'node:stream';
+import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+new AgentSideConnection(() => ({
+  async initialize() { return { protocolVersion: PROTOCOL_VERSION, agentCapabilities: {} }; },
+  async newSession() { return { sessionId: 's1' }; },
+  async authenticate() { return {}; },
+  async prompt() {
+    fs.writeFileSync('work.txt', 'done\\n');
+    execFileSync('git', ['add', '-A']);
+    execFileSync('git', ['commit', '-q', '-m', 'work']);
+    return { stopReason: 'end_turn' };
+  },
+  async cancel() {},
+}), ndJsonStream(Writable.toWeb(process.stdout), Readable.toWeb(process.stdin)));
+`
+  );
+  fs.writeFileSync(path.join(base, 'data', 'dispatch.json'), JSON.stringify({ bypass: true, agentServers: { Fake: { command: process.execPath, args: [agent] } } }));
+  try {
+    const opened = await host.call<Result<BoardSnapshot>>('openBoard', repo);
+    assert.ok(opened.ok, !opened.ok ? opened.error : '');
+    const app = runner({ board: hostBoard() });
+    const started = await app.dispatch(repo, 'task-1', { agent: 'custom:Fake', by: 'person', until: 'done' });
+    assert.ok(started.ok, !started.ok ? started.error : '');
+    await until('the run to end', () => app.get(started.value.run.id)?.state === 'done');
+    const checkPid = Number(await until('the check to start', () => fs.existsSync(pidFile) && fs.readFileSync(pidFile, 'utf-8').trim()));
+    assert.ok(alive(checkPid));
+
+    // SIGTERM from main: the runner must be done well within the moment main gives it.
+    const t0 = Date.now();
+    await app.quit();
+    assert.ok(Date.now() - t0 < 4_000, 'quit waited for the check');
+    await until('the check to be gone', () => !alive(checkPid));
+    const task = core.readTaskFile(path.join(board, 'board', 'task-1.md'))!;
+    assert.equal(core.readDispatchRecord(task.task)?.claim?.outcome, 'review');
+    assert.equal(task.task.column, 'review');
+    assert.match(task.body, /Not landed: the runner went down while task-1's checks ran/);
+    assert.equal(git(['rev-list', '--count', 'main'], repo), '1');
+    // The host commits what the quitting wrote, with the rest of the burst (its debounce here; main's SIGTERM to it otherwise).
+    await until('the host to commit', () => git(['status', '--porcelain'], board) === '' && git(['rev-list', '--count', 'HEAD'], board) !== '1', 5_000);
+    assert.match(git(['log', '--format=%s'], board), /task-1/);
+    // The next launch: answered, so not queued.
+    assert.deepEqual(runner({ pid: TERMINAL_PID }).queued(repo), []);
+  } finally {
+    await host.call('closeBoard', repo);
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
 });
