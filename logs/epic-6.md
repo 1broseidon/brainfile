@@ -76,20 +76,8 @@ Not in scope: a daemon or background server, remote runners, scheduling by time 
 - A lead taken up when its children are complete but unlanded is refused.
 - Minors: quitting re-runs hand-offs; run files pruned only once; offerIfLast is desktop-only; SUBCOMMANDS is missing the new commands; pull_request ignores roles.
 Fixes are being built on e6fix/cli and e6fix/runner, to be merged into dispatch/epic-6 before the epic lands.
-
-## Child Tasks
-Summary: 14/14 children completed.
-- plan-2: Desktop headless parity: what runs only in the desktop, where its state lives, and how the desktop sees headless runs (completed)
-- task-110: brainfile discuss: talk a task over in the terminal, under decision-19's rules (completed)
-- task-74: Board record: a dispatch request and a runner's claim on the task, and run files under state/ (completed)
-- task-75: Core: ACP agents, the agent registry, custom agents, settings and sessions move out of the desktop (completed)
-- task-76: Core: hand-off worktrees, review, compare-and-swap landing and send-back move out of the desktop (completed)
-- task-77: Issues from the CLI and MCP: source on a task, list a repository's issues, make a task from one (completed)
-- task-78: Board fixes from the CLI and MCP: the desktop's Fix and Undo move to core (completed)
-- task-79: Discuss without the desktop: the task's context and rules in core, brainfile discuss, and an MCP discuss prompt (completed)
-- task-80: Core: one shared runner that claims, starts, stops and lands hand-offs, used by the desktop first (completed)
-- task-81: MCP tools and CLI commands for dispatch, status, stop, review, land and discard, with roles so a worker cannot dispatch (completed)
-- task-82: brainfile run: a foreground runner that works the queue in a terminal, and live runs on the TUI's rows (completed)
-- task-83: Move the desktop's epic lead into core's shared runner, so it runs the same from brainfile run and MCP (completed)
-- task-84: Desktop: show runs started outside it, live, from the board and state/runs; the chat dispatches through brainfile mcp and the desk retires (completed)
-- task-88: Without the desktop, end to end: an epic run from a terminal and an MCP client, from hand-off to landed, and the desktop watching it live (completed)
+- 2026-10-16T03:42:38.840Z: [claude] Landed on main (Claude, driving at the person's request): 816fea7 "Merge epic-6", via core's landReview. It includes the review fixes from e6fix/cli and e6fix/runner and a last pass (2cca41f).
+- Main's tree is the one tested: core 1200, CLI 704 + 191, desktop 148, with typecheck and the bundle clean.
+- A second review of the fixes found no blockers; its leftovers are task-111.
+- Not pushed: main is ahead of origin until the person says.
+- The dev app runs main from the checkout with no errors. After the rebuild, desktop/dist-electron was found empty (the dev watcher during core's rebuild, it seems) and was rebuilt by hand.
