@@ -1,8 +1,6 @@
 ---
 id: task-125
 title: "The task view carries the hand-off record: dispatch (agent, model, by, at, until, tries, the claim held or ended with its outcome) in the snapshot and getTask, in link.md under target, and in link:dev's fixtures"
-column: in-progress
-position: 1
 tags:
   - link
   - desktop
@@ -49,7 +47,7 @@ subtasks:
   - id: task-125-1
     title: link:dev --features <list> plays an older desk; documented in desktop/link.md
     completed: true
-updatedAt: "2026-10-16T07:20:59.656Z"
+updatedAt: "2026-10-16T07:28:32.147Z"
 dispatch:
   agent: claude
   model: opus
@@ -65,6 +63,7 @@ dispatch:
     ended: "2026-10-16T07:16:21.331Z"
     outcome: review
 assignee: claude
+completedAt: "2026-10-16T07:28:32.147Z"
 ---
 
 ## Description
