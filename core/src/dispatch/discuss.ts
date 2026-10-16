@@ -1,16 +1,26 @@
 /**
- * Discuss (task-35): talking a task over with an agent, wherever it is in its
- * life. The agent gets the task as a block of context it need not look up
- * again, can read the code and the board, asks and pushes back, and with the
- * person's agreement changes the task's description, subtasks or contract and
- * records the decisions they settle (task-44). It writes no code and starts
- * no work: its session never runs in a bypass mode, its board lists no dispatch, and what
- * it asks to do is sorted here before anyone is asked.
+ * Discuss (task-35, decision-19): talking a task over with an agent, wherever
+ * it is in its life, under one set of rules wherever it runs: a thread in the
+ * desktop's chat, `brainfile discuss` in a terminal, or any MCP client through
+ * `brainfile mcp`'s discuss prompt and tool (task-79). The agent gets the task
+ * as a block of context it need not look up again, can read the code and the
+ * board, asks and pushes back, and with the person's agreement changes the
+ * task's description, subtasks or contract and records the decisions they
+ * settle (task-44). It writes no code and starts no work: a session Brainfile
+ * opens never runs in a bypass mode, its board lists no dispatch, and what it
+ * asks to do is sorted here before anyone is asked. An MCP client's own edits
+ * cannot be refused by a server: it keeps to the rules itself.
  */
-import { extractDescription, extractLog, findV2Task, getV2Dirs, parseNotes, readBoardConfig, readDecisionDocs, summarizeDecision } from '@brainfile/core';
-import { BOARD_TOOL_NAME, REFUSED_KINDS, leadPermission, readOnlyMode } from '@brainfile/core/dispatch';
-import type { AgentModes, ReviewView } from '../shared/api';
-export { commandOf } from '@brainfile/core/dispatch';
+import { readBoardConfig } from '../boardFile';
+import { parseNotes } from '../brief';
+import { readDecisionDocs } from '../decisionOperations';
+import { summarizeDecision } from '../decisions';
+import { reviewOf, uncommittedIn, type HandOffReview } from '../repo/worktree';
+import { extractDescription, extractLog, findV2Task, getV2Dirs } from '../workspace';
+import { nameOf } from './agents';
+import { BOARD_TOOL_NAME, REFUSED_KINDS, leadPermission, readOnlyMode } from './readOnly';
+import type { Runner } from './runner';
+import type { AgentModes } from './types';
 
 /** A decision the task rests on, in full: the agent works within it. */
 export interface DiscussDecision {
@@ -35,6 +45,9 @@ export interface DiscussNote {
   text: string;
 }
 
+/** What a discussion is told of a hand-off's review: core's HandOffReview, or the desktop's view of it. */
+export type DiscussReview = Omit<HandOffReview, 'checkout' | 'conflicts'> & Partial<Pick<HandOffReview, 'checkout' | 'conflicts'>>;
+
 /**
  * The task's code, when it was handed off (phase 2): its branch and worktree,
  * what is on them, and whether an agent is on it now. In Review the code that
@@ -42,7 +55,7 @@ export interface DiscussNote {
  */
 export interface DiscussWork {
   /** The hand-off's branch and worktree; null when it has none. */
-  review: ReviewView | null;
+  review: DiscussReview | null;
   /** Files changed in the worktree and not committed, the first few; `review.uncommitted` counts them all. */
   uncommittedFiles: string[];
   /** The hand-off running on it now, if any. */
@@ -214,6 +227,26 @@ export function workInformation(work: DiscussWork): string {
   return lines.join('\n');
 }
 
+/**
+ * The task's branch, worktree and live hand-off, for a discussion: the review
+ * from git (none when git cannot be read) and the live run from the runner,
+ * which counts every runner's run files on this machine.
+ */
+export function discussWork(projectId: string, taskId: string, runner: Pick<Runner, 'dataDir' | 'liveDispatch'>): DiscussWork {
+  let review: HandOffReview | null = null;
+  try {
+    review = reviewOf(projectId, taskId);
+  } catch {
+    /* not a repository, or git refused: said as no branch */
+  }
+  const live = runner.liveDispatch(projectId, taskId);
+  return {
+    review,
+    uncommittedFiles: review?.uncommitted ? uncommittedIn(review.path).files : [],
+    working: live ? { agent: nameOf(runner.dataDir, live.agentId), state: live.state, model: live.model, effort: live.effort } : undefined,
+  };
+}
+
 /** The task as data, in a block the person does not see: everything the board says about it, so the agent need not look it up. */
 export function taskInformation(ctx: DiscussContext): string {
   const facts = [
@@ -269,8 +302,17 @@ export function taskInformation(ctx: DiscussContext): string {
   return lines.join('\n');
 }
 
+/**
+ * Where a discussion runs: `window`, a thread in the desktop's chat, whose
+ * session runs no commands and shows the board changes under each reply; or
+ * `session`, an agent the person talks to directly (`brainfile discuss`, an
+ * MCP client), which may read with git and says what it changed.
+ */
+export type DiscussSurface = 'window' | 'session';
+
 /** What the agent may and may not do in a discussion, at any stage of the task's life. */
-export function discussRules(ctx: DiscussContext): string {
+export function discussRules(ctx: DiscussContext, surface: DiscussSurface = 'window'): string {
+  const review = ctx.work?.review;
   return [
     '<discussion-rules>',
     `The person wants to talk ${ctx.id} over with you, wherever it is in its life: shaping it before it is handed off, steering it while it is worked on, reviewing what was done, or looking back. ` +
@@ -280,10 +322,12 @@ export function discussRules(ctx: DiscussContext): string {
     'When the person settles something that should outlive this task, you may record it as a decision on the same terms. ' +
       'Run check on it first; then say its claim key, title and text, and which decision it replaces or retires, and wait for a yes. ' +
       `Then record it with decide (its claim family's current decision is replaced) or supersede (to replace a given one), with ${ctx.id} in forWork so the task rests on it, or retire one as rejected or stale.`,
-    ...(ctx.work?.review
+    ...(review
       ? [
-          `Its code is on the branch ${ctx.work.review.branch}, in the worktree at ${ctx.work.review.path}, not in the main checkout: read its files there. ` +
-            'You run no commands, so the commits and files in <work> are its history; compare a file with the main checkout\'s to see what changed. ' +
+          `Its code is ${review.branch ? `on the branch ${review.branch}, in the worktree` : 'in the read-only checkout'} at ${review.path}, not in the main checkout: read its files there. ` +
+            (surface === 'window'
+              ? 'You run no commands, so the commits and files in <work> are its history; compare a file with the main checkout\'s to see what changed. '
+              : 'The commits and files in <work> are its history; git commands that only read (log, diff, show, status) in the worktree tell you more. ') +
             'A merge takes only what is committed: say so when something that matters is uncommitted.',
         ]
       : []),
@@ -291,19 +335,29 @@ export function discussRules(ctx: DiscussContext): string {
     'Each time you change the task or record a decision, add one short note to it with the brainfile note tool saying what was agreed and why, so whoever works on it next sees it. ' +
       'If the person says the discussion is done and nothing was noted yet, note what was agreed then.',
     'Do not change other tasks, or move, complete or delete this one; suggest those instead. Do not write or edit code, run commands that change anything, start the work or hand the task off: the person does that.',
-    `The block was read at the time it gives. If the task may have changed since, read it again with get_task${ctx.work?.review ? ', and the worktree\'s files again' : ''}.`,
-    'Keep replies short: a question or two at a time, or the change you propose. Do not list the board changes you made: the window shows them under your reply.',
+    `The block was read at the time it gives. If the task may have changed since, read it again with get_task${review ? ', and the worktree\'s files again' : ''}.`,
+    'Keep replies short: a question or two at a time, or the change you propose. ' +
+      (surface === 'window' ? 'Do not list the board changes you made: the window shows them under your reply.' : 'When you change the board, say in a line what you changed.'),
     '</discussion-rules>',
   ].join('\n');
 }
 
 /** The first turn's preamble, ahead of what the person sees they said: the task as data, then the rules. */
-export function discussPreamble(ctx: DiscussContext): string {
-  return `${taskInformation(ctx)}\n\n${discussRules(ctx)}\n\n`;
+export function discussPreamble(ctx: DiscussContext, surface: DiscussSurface = 'window'): string {
+  return `${taskInformation(ctx)}\n\n${discussRules(ctx, surface)}\n\n`;
+}
+
+/**
+ * A discussion outside the window, as one message: the task as data, the
+ * rules, and how to begin. What `brainfile mcp`'s discuss prompt and tool
+ * return, and `brainfile discuss` starts its session with.
+ */
+export function discussSession(ctx: DiscussContext): string {
+  return `${discussPreamble(ctx, 'session')}Begin with where ${ctx.id} stands, in a line or two, and ask the person what they want to talk over.`;
 }
 
 /** The board tools a discussion may use: reading anything (its server offers review's show and ready only); changing this task's description, subtasks and contract, and its log; and recording, replacing or retiring decisions. */
-const DISCUSS_TOOLS = new Set(['brief', 'get_task', 'list_tasks', 'search', 'check', 'log', 'where', 'types', 'columns', 'template', 'lint', 'task_patch', 'subtask', 'contract', 'note', 'decide', 'supersede', 'retire', 'dispatch_status', 'review', 'agents']);
+const DISCUSS_TOOLS = new Set(['brief', 'get_task', 'list_tasks', 'search', 'check', 'log', 'where', 'types', 'columns', 'template', 'lint', 'task_patch', 'subtask', 'contract', 'note', 'decide', 'supersede', 'retire', 'dispatch_status', 'review', 'agents', 'discuss']);
 
 /**
  * How a discussion answers an agent that asks before it acts: a board tool it

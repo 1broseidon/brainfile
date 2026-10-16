@@ -1,16 +1,19 @@
 /**
- * Discuss (task-35): the task as the agent first sees it, read from a scratch
- * board and written as a block it need not look up; the rules that keep it to
- * the spec and the board's decisions; what a discussion allows, refuses or
- * asks about; and the mode it runs in, never the bypass one.
+ * Discuss (task-35, decision-19), in core since task-79: the task as the agent
+ * first sees it, read from a scratch board and written as a block it need not
+ * look up; the rules that keep it to the spec and the board's decisions, in
+ * the window and in a session outside it; its branch and worktree read from
+ * git; what a discussion allows, refuses or asks about; and the mode it runs
+ * in, never the bypass one.
  */
-import { test, beforeEach, afterEach } from 'node:test';
-import assert from 'node:assert/strict';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { discussContext, discussMode, discussPermission, discussPreamble, discussRules, taskInformation, workInformation, type DiscussWork, chatPermission, commandOf } from '../src/agents/discuss.ts';
-import type { AgentModes } from '../src/shared/api.ts';
+import assert from 'assert/strict';
+import { execFileSync } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { chatPermission, discussContext, discussMode, discussPermission, discussPreamble, discussRules, discussSession, discussWork, taskInformation, workInformation, type DiscussWork } from '../dispatch/discuss';
+import { commandOf } from '../dispatch/readOnly';
+import type { AgentModes, AgentRun } from '../dispatch/types';
 
 const CONFIG = '---\ntitle: Test\ncolumns:\n  - id: todo\n    title: To Do\n  - id: review\n    title: Review\n---\n';
 const AT = new Date('2026-10-13T17:40:12Z');
@@ -270,6 +273,81 @@ test('the block says when an agent is on the task now, and when there is no bran
   const none = { ...discussContext(brainfilePath, 'task-7', AT), work: { review: null, uncommittedFiles: [] } };
   assert.match(taskInformation(none), /<work>\nNo branch or worktree: it has not been handed off to one\. Its code, if any, is in the main checkout\.\nNo agent is working on it now\.\n<\/work>/);
   assert.doesNotMatch(discussRules(none), /not in the main checkout/);
+});
+
+test('outside the window, the rules let it read with git and say what it changed, and the session says how to begin', () => {
+  const ctx = { ...discussContext(brainfilePath, 'task-7', AT), work: REVIEW };
+  const rules = discussRules(ctx, 'session');
+  assert.doesNotMatch(rules, /You run no commands/);
+  assert.match(rules, /git commands that only read \(log, diff, show, status\) in the worktree/);
+  assert.doesNotMatch(rules, /the window shows them/);
+  assert.match(rules, /When you change the board, say in a line what you changed\./);
+  // The same rules otherwise (decision-19).
+  assert.match(rules, /With the person's yes, you may change this task's description/);
+  assert.match(rules, /Do not write or edit code/);
+  const text = discussSession(ctx);
+  assert.ok(text.startsWith('<task-information id="task-7"'));
+  assert.ok(text.indexOf('</task-information>') < text.indexOf('<discussion-rules>'));
+  assert.match(text, /<\/discussion-rules>\n\nBegin with where task-7 stands, in a line or two, and ask the person what they want to talk over\.$/);
+});
+
+test('a read-only checkout is said as one, not as a branch', () => {
+  const ctx = { ...discussContext(brainfilePath, 'task-7', AT), work: { review: { ...REVIEW.review!, branch: null }, uncommittedFiles: [] } };
+  assert.match(discussRules(ctx), /Its code is in the read-only checkout at \/tmp\/wt\/task-7, not in the main checkout/);
+});
+
+test('the discuss tool is a board tool a discussion may use', () => {
+  assert.equal(discussPermission('mcp__brainfile__discuss', 'other'), 'allow');
+});
+
+describe('the work, read from git and the runner', () => {
+  const env: Record<string, string | undefined> = {};
+  beforeAll(() => {
+    for (const key of ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM']) env[key] = process.env[key];
+    Object.assign(process.env, { GIT_CONFIG_GLOBAL: os.devNull, GIT_CONFIG_NOSYSTEM: '1' });
+  });
+  afterAll(() => {
+    for (const [key, value] of Object.entries(env)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  const git = (args: string[], cwd: string) => execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, encoding: 'utf-8' });
+  const idle = { dataDir: '', liveDispatch: (): AgentRun | undefined => undefined };
+
+  test('a task with no hand-off has no branch, and a project that is not a repository is the same', () => {
+    assert.deepEqual(discussWork(base, 'task-7', idle), { review: null, uncommittedFiles: [], working: undefined });
+  });
+
+  test('a hand-off\'s branch, commits and uncommitted files, and the agent on it now by name', () => {
+    const repo = path.join(base, 'repo');
+    fs.mkdirSync(repo);
+    git(['init', '-q', '-b', 'main'], repo);
+    fs.writeFileSync(path.join(repo, 'README.md'), 'code\n');
+    git(['add', '-A'], repo);
+    git(['commit', '-q', '-m', 'init'], repo);
+    // The hand-off's worktree on dispatch/task-7, as the runner leaves it.
+    const wt = path.join(base, 'worktrees', 'task-7');
+    git(['worktree', 'add', '-q', '-b', 'dispatch/task-7', wt], repo);
+    fs.writeFileSync(path.join(wt, 'a.txt'), 'one\n');
+    git(['add', '-A'], wt);
+    git(['commit', '-q', '-m', 'Add a'], wt);
+    fs.writeFileSync(path.join(wt, 'loose.txt'), 'loose\n');
+    const run = { id: 'run-1', projectId: repo, agentId: 'codex', kind: 'dispatch', taskId: 'task-7', state: 'working', model: 'gpt-5', activity: '', startedAt: 0 } as unknown as AgentRun;
+    const asked: string[] = [];
+    const work = discussWork(repo, 'task-7', {
+      dataDir: path.join(base, 'data'),
+      liveDispatch: (projectId, taskId) => (asked.push(`${projectId} ${taskId}`), run),
+    });
+    assert.deepEqual(asked, [`${repo} task-7`]);
+    assert.equal(work.review?.branch, 'dispatch/task-7');
+    assert.equal(work.review?.ahead, 1);
+    assert.deepEqual(work.review?.commits.map((c) => c.subject), ['Add a']);
+    assert.deepEqual(work.uncommittedFiles, ['loose.txt']);
+    assert.deepEqual(work.working, { agent: 'Codex', state: 'working', model: 'gpt-5', effort: undefined });
+    assert.match(workInformation(work), /Codex \(gpt-5\) is working on it now \(working\)/);
+  });
 });
 
 const claude: AgentModes = {

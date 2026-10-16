@@ -28,7 +28,7 @@
  * children off in order inside rules the Runner holds, and is woken when one
  * ends or lands; this process shows it (the Lead block, its dock tab) and
  * passes on the board's changes and the person's pause, resume and stop. Discuss
- * (discuss.ts, task-35) is a chat about one task that may change its spec and
+ * (core's dispatch/discuss.ts, task-35, decision-19) is a chat about one task that may change its spec and
  * record decisions, and nothing else. Beside Merge, a hand-off may be opened
  * as a pull request (decision-16): its branch is pushed here, GitHub is asked
  * through main (which holds the person's credentials), and the pull request
@@ -44,8 +44,14 @@ import {
   agentOf as agentOfIn,
   allAgents as allAgentsIn,
   applyMode,
+  chatPermission,
   close as closeSession,
   dataDir,
+  discussContext,
+  discussMode,
+  discussPermission,
+  discussPreamble,
+  discussWork,
   getSettings,
   listAgents,
   listModels,
@@ -73,14 +79,12 @@ import {
   prepareEpicBranch,
   readyToMerge,
   reviewOf,
-  uncommittedIn,
   unpushed,
   withOpenPullRequest,
   type ClaimTaken,
 } from '@brainfile/core/repo';
 import { followHandOffPullRequest, openHandOffPullRequest, type PullRequestForge } from '@brainfile/core/forge';
 import { ExternalRuns } from './external';
-import { chatPermission, discussContext, discussMode, discussPermission, discussPreamble, type DiscussWork } from './discuss';
 import { liveRuns } from './live';
 import { PullRequestWatch } from './pullRequests';
 import type {
@@ -441,22 +445,6 @@ async function ask(
   return { ok: true, value: { ...run } };
 }
 
-/** The task's branch, worktree and live hand-off, for a discussion: git that cannot be read leaves just the hand-off. */
-function workOf(projectId: string, taskId: string): DiscussWork {
-  let review: ReviewView | null = null;
-  try {
-    review = reviewOf(projectId, taskId);
-  } catch {
-    /* not a repository, or git refused: said as no branch */
-  }
-  const live = liveDispatch(projectId, taskId);
-  return {
-    review,
-    uncommittedFiles: review?.uncommitted ? uncommittedIn(review.path).files : [],
-    working: live ? { agent: nameOf(live.agentId), state: live.state, model: live.model, effort: live.effort } : undefined,
-  };
-}
-
 /**
  * One turn in a discussion of a task (task-35): a chat thread about that one
  * task, at any stage of its life, whose agent reads freely and changes only
@@ -484,7 +472,7 @@ async function discuss(
         const located = locateBoard(projectId, { materialize: false });
         if (!located.found) throw new Error(`No board in ${projectId}`);
         // Read before the agent starts, so a task that has gone says so at once.
-        preamble = discussPreamble({ ...discussContext(located.brainfilePath, taskId), work: workOf(projectId, taskId) });
+        preamble = discussPreamble({ ...discussContext(located.brainfilePath, taskId), work: discussWork(projectId, taskId, runner) });
         if (earlier.length) preamble += `Earlier in this discussion:\n${earlier.map((t) => `${t.who === 'you' ? 'Person' : 'You'}: ${t.text}`).join('\n')}\n\n`;
       }
       const session = existing ?? (await open(projectId, agentId, key, model, { discuss: taskId, effort }));

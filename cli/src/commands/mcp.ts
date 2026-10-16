@@ -43,6 +43,8 @@ import { registerPullRequestTool } from '../mcp/tools/pull_request_tool';
 import { registerDispatchTools } from '../mcp/tools/dispatch_tool';
 import { registerReviewTool } from '../mcp/tools/review_tool';
 import { registerAgentsTool } from '../mcp/tools/agents_tool';
+import { registerDiscussTool } from '../mcp/tools/discuss_tool';
+import { registerPrompts } from '../mcp/prompts';
 import { agentRoleOf } from '@brainfile/core/dispatch';
 import type { Access } from './dispatch';
 import { registerSchemaResources } from '../mcp/resources';
@@ -105,8 +107,11 @@ export function createBrainfileMcpServer(defaultFile: string, access: Access = {
   registerDispatchTools(server, defaultFile, access);
   registerReviewTool(server, defaultFile, access);
   registerAgentsTool(server);
+  // Discussing a task (decision-19): also the discuss prompt
+  registerDiscussTool(server, defaultFile);
 
   registerSchemaResources(server);
+  registerPrompts(server, defaultFile);
 
   return server;
 }
