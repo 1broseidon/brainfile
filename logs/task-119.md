@@ -1,8 +1,6 @@
 ---
 id: task-119
 title: "Live check of the new runner: append one line to qa/runner-live.md on the qa/runner branch"
-column: review
-position: 4
 description: |-
   **For the agent this is handed to:** append one line to `qa/runner-live.md` (make the folder and file if missing; the repo's .gitignore ignores qa/, so add it with `git add -f`): `- live runner check (<task id>): <the time now, ISO>, run by <your agent name>`. Commit it on your branch. Change nothing else. Then leave a short note on this task saying what you did and move it to Review.
 
@@ -13,7 +11,7 @@ tags:
 parentId: task-117
 createdAt: "2026-10-16T05:46:33.299Z"
 landsOn: qa/runner
-updatedAt: "2026-10-16T05:47:00.205Z"
+updatedAt: "2026-10-16T05:47:33.587Z"
 dispatch:
   agent: claude
   model: haiku
@@ -29,6 +27,7 @@ dispatch:
     ended: "2026-10-16T05:47:00.205Z"
     outcome: review
 assignee: claude
+completedAt: "2026-10-16T05:47:33.587Z"
 ---
 
 ## Description
@@ -38,3 +37,4 @@ assignee: claude
 
 ## Log
 - 2026-10-16T05:46:58.526Z: [Claude (claude-haiku-5-5)] Appended one line to qa/runner-live.md (created the file; added with git add -f) on branch dispatch/task-119, committed as 2377063. Nothing else changed. Ready for review; the branch is not merged or pushed.
+- 2026-10-16T05:47:33.205Z: Landed on qa/runner
