@@ -345,6 +345,26 @@ test('until done, a child that ends ready to merge is landed by the app, and the
   expect(f.prompts.length).toBe(2);
 });
 
+test('until done, a child whose branch conflicts is landed too, so the landing sends it back to its agent; one with nothing to land is not', async () => {
+  const sentBack = 'task-2 could not land: task-2 conflicts with main in shared.txt: sent back to Codex to settle (1 of 1)';
+  const tried: string[] = [];
+  const f = fake(board(), {
+    policy: 'bypass',
+    extra: {
+      mergeable: () => false,
+      landable: (_p, taskId) => taskId === 'task-2',
+      land: async (_p, taskId) => (tried.push(taskId), { ok: false, said: sentBack }),
+    },
+  });
+  await f.leads.start('/repo', 'epic-1', 'claude');
+  await f.endTurns();
+  await f.leads.childEnded({ kind: 'dispatch', projectId: '/repo', taskId: 'task-2', agentId: 'codex', state: 'done', reply: 'Did it.' } as AgentRun);
+  await f.leads.childEnded({ kind: 'dispatch', projectId: '/repo', taskId: 'task-1', agentId: 'codex', state: 'done', reply: 'Read it.' } as AgentRun);
+  await f.flush();
+  expect(tried).toEqual(['task-2']);
+  expect(f.prompts[1]).toContain(`- ${sentBack}`);
+});
+
 test('a child the person completes wakes it once; the last one done completes the epic and ends the lead', async () => {
   const docs = board();
   const f = fake(docs);
