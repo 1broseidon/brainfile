@@ -150,3 +150,17 @@ Context for each (file references are to main at 816fea7):
 20. Dev: build-bundle deletes dist/*.mjs before writing (a `brainfile mcp` started then fails ERR_MODULE_NOT_FOUND); `appBrainfile` checks only cli.js; `npm run dev` never builds the CLI.
 21. Docs: MANUAL counts and stale sections, llms-install.txt tool list, READMEs, design.md, decision-6 → decision-19.
 22. Runner.runs/meta/heard never pruned in a long-lived desktop.
+
+## Log
+- 2026-10-16T05:47:55.259Z: [claude] All 22 fixes are on main (79f82fd, then 6019aff for the lockfiles), from final/core, final/runner and final/docs, each with a test.
+- Every suite passes in the checkout's tree: core 1217, CLI 709 + 191, desktop 151, typecheck and bundle clean; the e2e test passes 4/4.
+- Item 1: the runner runs its own checks (Runner.check, detached and killed by group on goDown); core's runChecks got the same fix. Two implementations now. Folding them into one (runChecks taking a cancel hook) is filed on task-118.
+- Item 9 gave only offerEpicBranch a root; prepareTarget, prepareEpicBranch and refreshTarget make no worktrees, so they need none.
+- Live check (task-119), the first live run of the new runner on this Mac:
+  - queued from the CLI; the desktop's runner claimed it in about 1 s (tries 1, run id with the pid);
+  - the worktree forked from the landsOn branch qa/runner;
+  - the agent ran as worker, with the shim first on its PATH and no Claude Code variables;
+  - Claude Haiku did the work through the board's MCP tools in about 16 s;
+  - the claim ended with outcome review, and the run file says done;
+  - `brainfile land` from the CLI merged into qa/runner, removed the worktree and branch, completed the task, and wrote "Landed on qa/runner".
+- qa/runner was deleted afterwards. main is not pushed.
