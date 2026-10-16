@@ -24,19 +24,19 @@ contract:
   deliverables:
     - type: file
       path: desktop/src/link/server.ts
-      description: LINK_FEATURES gains target, pull-request, merge-to, queue
+      description: LINK_FEATURES gains target, pull-request, merge-to (queue is task-123's)
     - type: file
       path: desktop/src/link/bridge.ts
-      description: branches, openPullRequest, queue, unpushed bridged; mergeReview takes to; patchTask allows landsOn and epicBranch
+      description: branches, openPullRequest, unpushed bridged; mergeReview takes to; patchTask allows landsOn and epicBranch
     - type: file
       path: desktop/src/link/dev.ts
-      description: link:dev answers every new call with fixtures
+      description: link:dev answers every call bridged here with fixtures
     - type: docs
       path: desktop/link.md
-      description: The full link contract, version 3, canonical
+      description: The full link contract, version 3, canonical, with the queue call's shape for task-123
     - type: test
       path: desktop/test/link.test.ts
-      description: Each feature through the bridge and the fake; an older desk unchanged
+      description: Each feature added through the bridge and the fake; an older desk unchanged
   validation:
     commands:
       - npm install --prefer-offline --no-audit --no-fund && npm run build && npm test
@@ -44,10 +44,12 @@ contract:
   constraints:
     - "A feature missing from hello means the phone's older behaviour: nothing new is required of an old phone or desk"
     - Plain copy in any string the phone shows (decision-10)
+    - Change nothing in ../brainfile-mobile
+    - "Do not add queue to LINK_FEATURES or move dispatch status into core: task-123 does"
   metrics:
-    readyAt: "2026-10-16T06:09:34.197Z"
+    readyAt: "2026-10-16T06:13:09.261Z"
 createdAt: "2026-10-16T06:09:34.204Z"
-updatedAt: "2026-10-16T06:13:02.296Z"
+updatedAt: "2026-10-16T06:13:09.261Z"
 ---
 
 ## Description
