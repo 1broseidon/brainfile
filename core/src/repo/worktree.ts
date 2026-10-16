@@ -31,7 +31,7 @@
  * Moved from the desktop (task-76), so the CLI and headless runners hand off
  * and land the same way. `projectId` is the project's folder throughout.
  */
-import { spawn } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -437,7 +437,8 @@ function mergeAside(repoRoot: string, ours: string, theirs: string, message: str
   try {
     const added = git(['worktree', 'add', '--detach', at, ours], repoRoot);
     if (!added.ok) return { ok: false, files: [], error: said(added) };
-    const merged = git(['merge', '--no-ff', '--no-edit', '-m', message, theirs], at);
+    // No hooks: the repository's commit-msg hook (commitlint, say) has no say over a merge commit made for it.
+    const merged = git(['merge', '--no-ff', '--no-edit', '--no-verify', '-m', message, theirs], at);
     if (merged.ok) return { ok: true, commit: git(['rev-parse', 'HEAD'], at).stdout };
     const files = git(['diff', '--name-only', '--diff-filter=U'], at).stdout.split('\n').filter(Boolean);
     git(['merge', '--abort'], at);
@@ -639,33 +640,76 @@ function tail(text: string, lines = 8): string {
   return text.trim().split('\n').slice(-lines).join('\n');
 }
 
+/** What a check came to: passed, or the command that failed and the end of what it said; `timedOut` when it was stopped for running too long. */
+export type Checked = { ok: true } | { ok: false; command: string; output: string; timedOut?: true };
+
+/** The checks running now, each the leader of its own process group, so a runner going down can take them with it (stopChecks). */
+const checking = new Set<ChildProcess>();
+
+/** Stops a check's whole process group: the shell and everything it started, which a signal to the shell alone would leave running. */
+function stopCheck(child: ChildProcess): void {
+  try {
+    if (child.pid && process.platform !== 'win32') process.kill(-child.pid, 'SIGKILL');
+    else child.kill('SIGKILL');
+  } catch {
+    /* gone already */
+  }
+}
+
+/** Stops every check still running, shells and their children alike: what a runner does as it quits, so a landing it started leaves no test suite behind. */
+export function stopChecks(): void {
+  for (const child of checking) stopCheck(child);
+}
+
+/** How long a check was given, in words. */
+function given(ms: number): string {
+  return ms >= 60_000 ? `${Math.round(ms / 60_000)} minutes` : ms >= 1000 ? `${Math.round(ms / 1000)}s` : `${ms}ms`;
+}
+
 /**
  * Runs the contract's checks in the hand-off's worktree, one after another,
  * as a shell would, and stops at the first that fails. Asynchronous: a test
  * suite takes a while, and the agents process keeps answering meanwhile.
+ * Each runs as the leader of its own process group, so one that runs past
+ * `timeoutMs` is stopped whole, the shell and what it started: killing the
+ * shell alone leaves its children running, holding the pipes, and the
+ * landing never hears the end.
  */
-export function runChecks(at: string, commands: string[], env: NodeJS.ProcessEnv = process.env, timeoutMs = 15 * 60_000): Promise<{ ok: true } | { ok: false; command: string; output: string }> {
+export function runChecks(at: string, commands: string[], env: NodeJS.ProcessEnv = process.env, timeoutMs = 15 * 60_000): Promise<Checked> {
   return (async () => {
     for (const command of commands) {
-      const failed = await new Promise<string | null>((resolve) => {
-        const child = spawn(command, { cwd: at, env, shell: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      const failed = await new Promise<{ output: string; timedOut?: true } | null>((resolve) => {
+        const child = spawn(command, { cwd: at, env, shell: true, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+        checking.add(child);
         let output = '';
+        let timedOut = false;
+        let settled = false;
         const keep = (chunk: Buffer) => {
           output = (output + chunk.toString()).slice(-16_000);
         };
         child.stdout.on('data', keep);
         child.stderr.on('data', keep);
-        const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
-        child.on('error', (err) => {
+        const timer = setTimeout(() => {
+          timedOut = true;
+          stopCheck(child);
+        }, timeoutMs);
+        const finish = (result: { output: string; timedOut?: true } | null) => {
+          if (settled) return;
+          settled = true;
           clearTimeout(timer);
-          resolve(err.message);
-        });
-        child.on('close', (code, signal) => {
-          clearTimeout(timer);
-          resolve(code === 0 ? null : tail(output) || (signal ? `stopped (${signal})` : `exit ${code}`));
-        });
+          checking.delete(child);
+          resolve(result);
+        };
+        const settle = (code: number | null, signal: NodeJS.Signals | null) => {
+          if (timedOut) finish({ output: [tail(output), `Timed out after ${given(timeoutMs)}: stopped, with what it started.`].filter(Boolean).join('\n'), timedOut: true });
+          else finish(code === 0 ? null : { output: tail(output) || (signal ? `stopped (${signal})` : `exit ${code}`) });
+        };
+        child.on('error', (err) => finish({ output: err.message }));
+        // `close` comes once the pipes close too, which a child the shell left behind can hold open: `exit` is waited for, with a moment for the last of the output.
+        child.on('close', settle);
+        child.on('exit', (code, signal) => setTimeout(() => settle(code, signal), 500));
       });
-      if (failed !== null) return { ok: false as const, command, output: failed };
+      if (failed !== null) return { ok: false as const, command, ...failed };
     }
     return { ok: true as const };
   })();
@@ -764,7 +808,7 @@ export function landReview(
   taskId: string,
   options: {
     title?: string;
-    check?: (at: string) => Promise<{ ok: true } | { ok: false; command: string; output: string }>;
+    check?: (at: string) => Promise<Checked>;
     attempts?: number;
     lock?: LandingLockOptions;
     into?: string;
@@ -795,9 +839,10 @@ export function landReview(
     for (let attempt = 0; attempt < (options.attempts ?? 5); attempt++) {
       const old = git(['rev-parse', '--verify', `refs/heads/${into}`], repoRoot).stdout;
       if (!old) return { ok: false, kind: 'refused', error: `${into} is gone: nothing was merged` };
-      // The trunk into the branch, in the task's own worktree, unless it is there already.
+      // The trunk into the branch, in the task's own worktree, unless it is there already. No hooks: a
+      // commit-msg hook of the repository's (commitlint, say) has no say over this commit, as it has none over commit-tree's.
       if (!git(['merge-base', '--is-ancestor', old, 'HEAD'], at).ok) {
-        const brought = git(['merge', '--no-ff', '--no-edit', '-m', `Merge ${into} into ${branch}`, old], at);
+        const brought = git(['merge', '--no-ff', '--no-edit', '--no-verify', '-m', `Merge ${into} into ${branch}`, old], at);
         if (!brought.ok) {
           const files = git(['diff', '--name-only', '--diff-filter=U'], at).stdout.split('\n').filter(Boolean);
           git(['merge', '--abort'], at);
@@ -816,6 +861,7 @@ export function landReview(
       const made = git(['commit-tree', `${head}^{tree}`, '-p', old, '-p', head, '-m', message], repoRoot);
       if (!made.ok || !made.stdout) return { ok: false, kind: 'refused', error: `Nothing was merged: ${said(made)}` };
       const landed = made.stdout;
+      let refusal: string;
       if (currentBranch(repoRoot) === into) {
         // The person's checkout follows by fast-forward, around their uncommitted changes in other files.
         const ff = git(['merge', '--ff-only', '--quiet', landed], repoRoot);
@@ -824,9 +870,15 @@ export function landReview(
           const files = `${ff.stderr}\n${ff.stdout}`.split('\n').filter((l) => /^\s+\S/.test(l)).map((l) => l.trim());
           return { ok: false, kind: 'refused', error: `The merge changes ${named(files)}, which you have changed in your folder: commit or set ${files.length === 1 ? 'it' : 'them'} aside, then Merge again` };
         }
-      } else if (git(['update-ref', '-m', message, `refs/heads/${into}`, landed, old], repoRoot).ok) {
-        break;
+        refusal = `your checkout on ${into} would not take it: ${said(ff)}`;
+      } else {
+        const moved = git(['update-ref', '-m', message, `refs/heads/${into}`, landed, old], repoRoot);
+        if (moved.ok) break;
+        refusal = `${into} would not move: ${said(moved)}`;
       }
+      // Refused while the trunk still stands where it was read: not a race to run again, but git saying no
+      // (a merge of the person's own left in progress in their checkout, say). Said in its words, the checks run once.
+      if (git(['rev-parse', '--verify', `refs/heads/${into}`], repoRoot).stdout === old) return { ok: false, kind: 'refused', error: `Nothing was merged: ${refusal}` };
       // The trunk moved since it was read: again, from its new tip.
       if (attempt === (options.attempts ?? 5) - 1) return { ok: false, kind: 'refused', error: `${into} kept moving: nothing was merged, try again` };
     }

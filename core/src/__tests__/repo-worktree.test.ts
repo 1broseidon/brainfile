@@ -46,7 +46,7 @@ import {
 
 jest.setTimeout(30_000);
 
-const ENV_KEYS = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM'];
+const ENV_KEYS = ['GIT_CONFIG_GLOBAL', 'GIT_CONFIG_NOSYSTEM', 'BRAINFILE_WORKTREES'];
 const saved: Record<string, string | undefined> = {};
 
 beforeAll(() => {
@@ -83,6 +83,8 @@ beforeEach(() => {
   base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'bf-worktree-')));
   repo = path.join(base, 'repo');
   root = path.join(base, 'worktrees');
+  // Whatever reaches prepareWorktree with no root of its own (offerEpicBranch's default) goes here too, never under the person's home.
+  process.env.BRAINFILE_WORKTREES = root;
   fs.mkdirSync(repo);
   git(['init', '-q', '-b', 'main'], repo);
   identity(repo);
@@ -496,6 +498,41 @@ test('the checks run in the worktree, in order, and stop at the first that fails
   assert.ok(!fs.existsSync(path.join(wt, 'never.txt')));
 });
 
+/** Whether a process is still there (a zombie counts until it is reaped). */
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+async function until(what: string, check: () => boolean, ms = 5_000): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > deadline) throw new Error(`Timed out waiting for ${what}`);
+    await new Promise((r) => setTimeout(r, 25));
+  }
+}
+
+test('a check that runs too long is stopped whole, the shell and what it started, and the result says it timed out', async () => {
+  const wt = handOff('task-1');
+  const began = Date.now();
+  // The shell starts a sleep and waits on it: a signal to the shell alone would leave the sleep running, holding the pipes.
+  const result = await runChecks(wt, ['echo starting; sleep 60 & echo $! > sleep.pid; wait; echo done > done.txt'], process.env, 300);
+  assert.ok(Date.now() - began < 5_000, 'the landing waited for the sleep');
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert.equal(result.timedOut, true);
+    assert.match(result.output, /starting\nTimed out after 300ms: stopped, with what it started\./);
+  }
+  const pid = Number(fs.readFileSync(path.join(wt, 'sleep.pid'), 'utf-8').trim());
+  assert.ok(pid > 0);
+  await until('the sleep to be gone', () => !alive(pid));
+  assert.ok(!fs.existsSync(path.join(wt, 'done.txt')));
+});
+
 test('Merge says why it would refuse before anything runs', () => {
   assert.match(whyNotMerge('task-1', null)!, /no worktree/);
   const wt = handOff('task-1');
@@ -578,6 +615,53 @@ test('the person\'s uncommitted work on the trunk is kept, and a landing that wo
   assert.match(result.error, /changes README\.md, which you have changed/);
   assert.equal(git(['rev-parse', 'main'], repo), before);
   assert.equal(fs.readFileSync(path.join(repo, 'README.md'), 'utf-8'), 'code, mine in progress\n');
+});
+
+test("a checkout on the trunk that will not take the fast-forward (a merge of the person's own in progress) is refused once, in git's words", async () => {
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  // The person's own merge, left in conflict in their checkout on main.
+  git(['checkout', '-q', '-b', 'other'], repo);
+  work(repo, 'README.md', 'other\n');
+  git(['checkout', '-q', 'main'], repo);
+  work(repo, 'README.md', 'main side\n');
+  assert.notEqual(spawnSync('git', ['merge', 'other'], { cwd: repo }).status, 0);
+  assert.ok(fs.existsSync(path.join(repo, '.git', 'MERGE_HEAD')));
+  const before = git(['rev-parse', 'main'], repo);
+  let checks = 0;
+  const result = await refused('task-1', { check: async () => (checks++, { ok: true }) });
+  assert.equal(result.kind, 'refused');
+  // git's own words for the unfinished merge, whichever it chooses to say first.
+  assert.match(result.error, /Nothing was merged: your checkout on main would not take it: (?:Merging is not possible because you have unmerged files|You have not concluded your merge)/);
+  // Not a moving trunk: the checks ran once, not once an attempt.
+  assert.equal(checks, 1);
+  assert.equal(git(['rev-parse', 'main'], repo), before);
+  assert.ok(fs.existsSync(path.join(repo, '.git', 'MERGE_HEAD')));
+  assert.ok(fs.existsSync(wt));
+});
+
+test("landing and bringing in make their merge commits past the repository's hooks: a commit-msg hook that refuses everything stops neither", async () => {
+  prepareBranch(repo, 'epic-1');
+  const child = prepareWorktree(repo, 'task-2', root, false, 'dispatch/epic-1')!;
+  work(child.path, 'c.txt', 'c\n');
+  await landed('task-2');
+  const wt = handOff('task-1');
+  work(wt, 'a.txt', 'a\n');
+  // The trunk moves on, in another file: the hand-off and the epic's branch each need a merge to bring it in.
+  work(repo, 'b.txt', 'b\n');
+  // Then the hook, as husky and commitlint leave one: it refuses every message.
+  const hooks = path.join(repo, '.git', 'hooks');
+  fs.mkdirSync(hooks, { recursive: true });
+  fs.writeFileSync(path.join(hooks, 'commit-msg'), '#!/bin/sh\necho "commit-msg: refused" >&2\nexit 1\n', { mode: 0o755 });
+  assert.notEqual(spawnSync('git', ['commit', '-q', '--allow-empty', '-m', 'by hand'], { cwd: repo }).status, 0, 'the hook does not bite');
+
+  assert.match(await landed('task-1', { title: 'One' }), /into main/);
+  assert.equal(git(['log', '-1', '--format=%s', 'main'], repo), 'Merge task-1: One');
+  assert.equal(git(['log', '-1', '--format=%s', 'main^2'], repo), 'Merge main into dispatch/task-1');
+  assert.equal(git(['show', 'main:a.txt'], repo), 'a');
+  assert.deepEqual(await bringIn(repo, 'epic-1'), { ok: true, moved: true, message: 'Brought main into dispatch/epic-1' });
+  assert.equal(git(['log', '-1', '--format=%s', 'dispatch/epic-1'], repo), 'Merge main into dispatch/epic-1');
+  assert.equal(git(['show', 'dispatch/epic-1:b.txt'], repo), 'b');
 });
 
 test('landings run one at a time per repository', async () => {
@@ -969,10 +1053,10 @@ test('before a hand-off from an epic\'s branch its target is brought in; its las
   onBoard('epic-1', ['epicBranch: true']);
   onBoard('task-2', ['parentId: epic-1']);
   assert.equal(await refreshTarget(repo, 'task-1'), null);
-  assert.equal(offerEpicBranch(repo, 'epic-1'), null);
+  assert.equal(offerEpicBranch(repo, 'epic-1', root), null);
   assert.equal(prepareEpicBranch(repo, 'epic-1'), 'dispatch/epic-1');
   // Nothing on it yet: nothing to merge, and the branch goes.
-  assert.equal(offerEpicBranch(repo, 'epic-1'), null);
+  assert.equal(offerEpicBranch(repo, 'epic-1', root), null);
   assert.ok(!branches().includes('dispatch/epic-1'));
 
   prepareEpicBranch(repo, 'epic-1');
@@ -983,11 +1067,13 @@ test('before a hand-off from an epic\'s branch its target is brought in; its las
   assert.ok(fs.existsSync(path.join(child.path, 'main.txt')));
   work(child.path, 'b.txt', 'b\n');
   await landed('task-2');
-  assert.deepEqual(offerEpicBranch(repo, 'epic-1'), { branch: 'dispatch/epic-1', into: 'main' });
+  assert.deepEqual(offerEpicBranch(repo, 'epic-1', root), { branch: 'dispatch/epic-1', into: 'main' });
+  // Its worktree is under the root it was given, with the hand-offs', not under the person's home.
+  assert.ok(reviewOf(repo, 'epic-1')!.path.startsWith(root));
   assert.deepEqual(readyToMerge(repo).map((r) => [r.taskId, r.into]), [['epic-1', 'main']]);
   // Offered again, it is the same item.
-  assert.deepEqual(offerEpicBranch(repo, 'epic-1'), { branch: 'dispatch/epic-1', into: 'main' });
-  assert.equal(offerEpicBranch(repo, 'task-2'), null);
+  assert.deepEqual(offerEpicBranch(repo, 'epic-1', root), { branch: 'dispatch/epic-1', into: 'main' });
+  assert.equal(offerEpicBranch(repo, 'task-2', root), null);
 });
 
 test('a child does not land on an epic\'s branch while it is checked out to be merged; the epic is offered by its branch, not the flag', async () => {
@@ -1003,7 +1089,7 @@ test('a child does not land on an epic\'s branch while it is checked out to be m
 
   // The flag turned off after a child landed on the branch: its work is still offered, not left behind.
   onBoard('epic-1', []);
-  assert.deepEqual(offerEpicBranch(repo, 'epic-1'), { branch: 'dispatch/epic-1', into: 'main' });
+  assert.deepEqual(offerEpicBranch(repo, 'epic-1', root), { branch: 'dispatch/epic-1', into: 'main' });
   const tip = git(['rev-parse', 'dispatch/epic-1'], repo);
   const why = (await refused('task-3')).error;
   assert.match(why, /dispatch\/epic-1 is checked out at .*: merge or discard that first/);
