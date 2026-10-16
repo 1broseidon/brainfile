@@ -2,8 +2,6 @@
 id: epic-7
 title: "Mobile parity 2: what the desktop gained since epic-3 — merge from the phone, waiting on you, sessions"
 type: epic
-column: todo
-position: 3
 priority: high
 tags:
   - mobile
@@ -11,6 +9,8 @@ tags:
   - parity
   - link
 createdAt: "2026-10-15T01:34:14.107Z"
+completedAt: "2026-10-16T06:09:33.920Z"
+updatedAt: "2026-10-16T06:09:33.920Z"
 ---
 
 ## Description
@@ -22,3 +22,9 @@ Children run in parallel, three at most: the desk's side (task A), Merge and Wai
 
 ## Log
 - 2026-10-15T01:55:50.902Z: [claude] Phone side merged on brainfile-mobile main (task-86 c8f6acd, task-87 728e750, merge f1a3004, polish after simulator QA against link:dev). task-85 waits in Review on dispatch/task-85 (509a1ae): merging it lets the real desktop offer merge to the phone.
+
+## Child Tasks
+Summary: 3/3 children completed.
+- task-85: Link: the merge feature on the desk — readyToMerge, mergeReview, discardReview (completed)
+- task-86: Mobile: Merge from the phone — Ready to merge on the board, Merge and Send back on the task, Waiting on you in Projects (completed)
+- task-87: Mobile: sessions — the chat's history as the dock: chats, discussions and hand-offs, one signal each (completed)
