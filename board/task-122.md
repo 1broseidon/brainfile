@@ -1,7 +1,7 @@
 ---
 id: task-122
 title: "Dependencies across boards: a hand-off, a lead and a brief treat alias:task-id as a real dependency, open until it is complete and landed on the related board"
-column: todo
+column: in-progress
 position: 19
 tags:
   - core
@@ -22,7 +22,7 @@ decisions:
   - decision-15
   - decision-12
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: core/src/dispatch/runner.ts
@@ -50,8 +50,10 @@ contract:
     - A missing related board counts as an open dependency, said plainly, never as satisfied
   metrics:
     readyAt: "2026-10-16T06:09:34.752Z"
+    pickedUpAt: "2026-10-16T06:14:12.422Z"
+    reworkCount: 0
 createdAt: "2026-10-16T06:09:34.759Z"
-updatedAt: "2026-10-16T06:13:32.611Z"
+updatedAt: "2026-10-16T06:14:12.422Z"
 dispatch:
   agent: codex
   model: gpt-6.1-sol
