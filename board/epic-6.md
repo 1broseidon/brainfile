@@ -31,12 +31,12 @@ decisions:
   - decision-12
   - decision-14
   - decision-15
-  - decision-6
+  - decision-19
   - decision-4
   - decision-17
   - decision-18
 createdAt: "2026-10-14T22:14:19.304Z"
-updatedAt: "2026-10-15T21:45:52.105Z"
+updatedAt: "2026-10-16T01:43:09.320Z"
 epicBranch: true
 assignee: claude
 lead:
