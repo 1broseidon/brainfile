@@ -35,19 +35,49 @@ const READING_SECOND: Record<string, ReadonlySet<string | undefined>> = {
   config: new Set(['list', 'get', 'path']),
   hooks: new Set(['list']),
 };
-/** git that only reads. */
-const READING_GIT = /^git\s+(?:status|log|diff|show|rev-parse|merge-base|ls-files|blame|shortlog|describe|worktree\s+list|branch\s+(?:--list|-a|-r|-v|-vv|--show-current|--contains|--merged))(?:\s|$)/;
+/** git subcommands that only read, whatever follows them (short of `--output`, below). */
+const READING_GIT = new Set(['status', 'log', 'diff', 'show', 'rev-parse', 'merge-base', 'ls-files', 'blame', 'shortlog', 'describe']);
+/** `git branch` options that only list: anything else (-m, -d, -D, -c, -f, -u, --set-upstream-to, --edit-description…) changes a branch. */
+const LISTING_BRANCH = new Set([
+  '--list', '-l', '-a', '--all', '-r', '--remotes', '-v', '-vv', '--verbose', '--show-current', '--contains', '--no-contains', '--merged', '--no-merged',
+  '--points-at', '--sort', '--format', '-i', '--ignore-case', '--abbrev', '--no-abbrev', '--color', '--no-color', '--column', '--no-column',
+]);
+/** The `git branch` options that put it in list mode, where a plain word is a pattern or a commit; without one, a plain word is a branch to make. */
+const LIST_MODE = new Set(['--list', '-l', '-a', '--all', '-r', '--remotes', '--contains', '--no-contains', '--merged', '--no-merged', '--points-at']);
+/** Short options that may be run together (`-avv`), each one listing; `-l`, `-a` and `-r` among them put it in list mode. */
+const LISTING_SHORT = /^-[larvi]+$/;
+const LIST_MODE_SHORT = /^-[larvi]*[lar][larvi]*$/;
+
+/**
+ * Whether `git branch …` only lists: every option is a listing one (a rename,
+ * a delete, a copy, a force or an upstream change is not, wherever it comes),
+ * and a plain word appears only in list mode, where it is a pattern or a
+ * commit; elsewhere `git branch name` makes a branch.
+ */
+function listsBranches(words: string[]): boolean {
+  const options = words.filter((w) => w.startsWith('-'));
+  const listing = options.every((w) => LISTING_BRANCH.has(w.split('=')[0]) || LISTING_SHORT.test(w));
+  const listMode = options.some((w) => LIST_MODE.has(w.split('=')[0]) || LIST_MODE_SHORT.test(w));
+  return listing && (listMode || options.length === words.length);
+}
 
 /** Whether a command is git that only reads, alone. */
 export function readsGit(command: string): boolean {
-  return PLAIN.test(command) && READING_GIT.test(command) && !/\s--output\b/.test(command);
+  if (!PLAIN.test(command) || /\s--output\b/.test(command)) return false;
+  const [git, sub, ...rest] = command.trim().split(/\s+/);
+  if (git !== 'git') return false;
+  if (READING_GIT.has(sub)) return true;
+  if (sub === 'worktree') return rest[0] === 'list';
+  if (sub === 'branch') return listsBranches(rest);
+  return false;
 }
 
 /**
  * Whether a command is the brainfile command line reading, alone: `list`,
  * `show`, `review`, `dispatch status`, `lint` without --fix, `issues`
- * without --import, `pr --status`, any command's --help. Never what changes
- * the board's work or starts one (dispatch, land, discard, run, discuss):
+ * without --import, any command's --help. Never what changes the board's
+ * work or starts one (dispatch, land, discard, run, discuss, and `pr`, whose
+ * --status can complete the task, move its base and remove its worktree):
  * those are for the board's tools, which keep to the session's role.
  */
 export function readsBoard(command: string): boolean {
@@ -65,7 +95,6 @@ export function readsBoard(command: string): boolean {
   if (name === 'schema') return second !== 'update';
   if (name === 'where') return !has('--fetch');
   if (name === 'issues') return !has('--import');
-  if (name === 'pr') return has('--status');
   if (name === 'index') return has('--status');
   if (name === 'template') return has('--list') || has('-l');
   return READING_SECOND[name]?.has(second?.startsWith('-') ? undefined : second) ?? false;
