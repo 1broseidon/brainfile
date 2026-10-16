@@ -1,7 +1,7 @@
 ---
 id: task-110
 title: "brainfile discuss: talk a task over in the terminal, under decision-19's rules"
-column: in-progress
+column: review
 position: 2
 tags:
   - cli
@@ -14,7 +14,7 @@ parentId: epic-6
 dependsOn:
   - task-79
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: cli/src/commands/discuss.ts
@@ -40,10 +40,12 @@ contract:
     readyAt: "2026-10-16T01:16:29.656Z"
     pickedUpAt: "2026-10-16T01:43:23.800Z"
     reworkCount: 0
+    deliveredAt: "2026-10-16T01:53:46.561Z"
+    duration: 623
 createdAt: "2026-10-16T01:16:29.662Z"
 decisions:
   - decision-19
-updatedAt: "2026-10-16T01:43:23.800Z"
+updatedAt: "2026-10-16T01:53:46.561Z"
 dispatch:
   agent: claude
   model: opus
