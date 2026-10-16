@@ -50,8 +50,11 @@ subtasks:
   - id: task-118-8
     title: brainfile --help's "Common workflows" footer (cli/src/program.ts) shows only init/migrate/list/add/move and contract examples; add a hand-off example (dispatch, run, review, land)
     completed: false
+  - id: task-118-9
+    title: "One implementation of a landing's checks: core's runChecks takes a cancel hook (signal or onChild(kill)) and the Runner's check() uses it, instead of two copies of the detached-group logic"
+    completed: false
 createdAt: "2026-10-16T04:55:30.792Z"
-updatedAt: "2026-10-16T05:03:56.381Z"
+updatedAt: "2026-10-16T05:47:55.529Z"
 ---
 
 ## Description
