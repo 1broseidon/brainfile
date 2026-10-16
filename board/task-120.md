@@ -3,19 +3,6 @@ id: task-120
 title: "Link contract v3: features target, pull-request, merge-to and queue; desktop/link.md is the full contract; link:dev answers every new call"
 column: todo
 position: 17
-description: |-
-  The phone reaches the desktop through the link (desktop/src/link: server.ts offers `features` in hello, bridge.ts whitelists the api calls a phone may make with their argument shapes, dev.ts and devReviews.ts are the fake desk `link:dev` the phone is tried against). Today `LINK_FEATURES = ['effort', 'merge']` and the bridge carries 25 calls. Add, each gated on a feature the phone checks in hello:
-
-  - **`target`**: the task view carries `landsOn`, `epicBranch` and the resolved `target` (TaskView already has them on the desktop); `branches(projectId)` (BranchesView: trunk, local, remote, recent) is bridged; `patchTask` with `landsOn`/`epicBranch` is allowed (check bridge's patch argument shape).
-  - **`pull-request`**: `openPullRequest(projectId, taskId)` bridged; the task view's `pullRequest` record; `readyToMerge` already leaves an open PR out (keep); the board snapshot's tasks carry `pullRequest` so the row can show `#12`.
-  - **`merge-to`**: `mergeReview(projectId, taskId, to?)` takes `to` (`MergeTo`: target | branch | pull-request | keep) through the bridge, so an epic's Merge menu works from the phone; `review(projectId, taskId)` returns the epic-branch facts the menu needs (is it an epic branch, its target).
-  - **`queue`**: one read call, `queue(projectId)` (or extend `live`), returning what `brainfile dispatch status` returns for that project: queued hand-offs with the dependency each waits on, runs started by any runner on this machine (the desktop already merges state/runs into `live()`: confirm the phone gets them), the runners up, and `unpushed(projectId)` for the `main is N commits ahead of origin` line.
-
-  **The contract.** desktop/link.md is 16 lines pointing at the phone's docs/link.md (208 lines). Make desktop/link.md the full contract: copy the phone's text in, then add version 3 (the four features, each call's name, arguments, result shape and the degrade when a desk lacks it). The phone's child updates docs/link.md to match; say at the top of each that brainfile's is canonical. The server's `protocol` stays 1; features carry the versioning, as today.
-
-  **The fake desk.** link:dev (dev.ts, devReviews.ts, the fixtures in desktop/test/fixtures/link) answers every new call with believable data: a task with landsOn, one with an open PR (#31 exists already), a queued hand-off waiting on another, a run from `brainfile run`, two runners, main 2 ahead. The phone is QA'd against it in the morning.
-
-  Tests in desktop/test/link.test.ts for each feature (hello lists them; each call through the bridge; the dev fake's answers), and the older-desk path untouched.
 tags:
   - link
   - desktop
@@ -60,6 +47,7 @@ contract:
   metrics:
     readyAt: "2026-10-16T06:09:34.197Z"
 createdAt: "2026-10-16T06:09:34.204Z"
+updatedAt: "2026-10-16T06:13:02.296Z"
 ---
 
 ## Description
@@ -68,10 +56,12 @@ The phone reaches the desktop through the link (desktop/src/link: server.ts offe
 - **`target`**: the task view carries `landsOn`, `epicBranch` and the resolved `target` (TaskView already has them on the desktop); `branches(projectId)` (BranchesView: trunk, local, remote, recent) is bridged; `patchTask` with `landsOn`/`epicBranch` is allowed (check bridge's patch argument shape).
 - **`pull-request`**: `openPullRequest(projectId, taskId)` bridged; the task view's `pullRequest` record; `readyToMerge` already leaves an open PR out (keep); the board snapshot's tasks carry `pullRequest` so the row can show `#12`.
 - **`merge-to`**: `mergeReview(projectId, taskId, to?)` takes `to` (`MergeTo`: target | branch | pull-request | keep) through the bridge, so an epic's Merge menu works from the phone; `review(projectId, taskId)` returns the epic-branch facts the menu needs (is it an epic branch, its target).
-- **`queue`**: one read call, `queue(projectId)` (or extend `live`), returning what `brainfile dispatch status` returns for that project: queued hand-offs with the dependency each waits on, runs started by any runner on this machine (the desktop already merges state/runs into `live()`: confirm the phone gets them), the runners up, and `unpushed(projectId)` for the `main is N commits ahead of origin` line.
+- **`unpushed`**: bridge `unpushed(projectId)` (UnpushedView) under `target` so the phone can show "main is N commits ahead of origin".
 
-**The contract.** desktop/link.md is 16 lines pointing at the phone's docs/link.md (208 lines). Make desktop/link.md the full contract: copy the phone's text in, then add version 3 (the four features, each call's name, arguments, result shape and the degrade when a desk lacks it). The phone's child updates docs/link.md to match; say at the top of each that brainfile's is canonical. The server's `protocol` stays 1; features carry the versioning, as today.
+**Lead's split (epic-10 plan): the `queue` feature's real-desk implementation is task-123**, which waits on task-122 (alias-aware waits in core). Here, do NOT add `queue` to LINK_FEATURES and do not move dispatch status into core. DO write the queue call's contract in desktop/link.md (name `queue(projectId)`, its result: queued hand-offs with agent, model, until and `waitsOn` refs (an `alias:task-id` wait names its board), live runs including those from `brainfile run`, runners up, and unpushed; the degrade when a desk lacks the feature), so the phone can build against it now. task-123 implements it and may adjust the doc.
 
-**The fake desk.** link:dev (dev.ts, devReviews.ts, the fixtures in desktop/test/fixtures/link) answers every new call with believable data: a task with landsOn, one with an open PR (#31 exists already), a queued hand-off waiting on another, a run from `brainfile run`, two runners, main 2 ahead. The phone is QA'd against it in the morning.
+**The contract.** desktop/link.md is 16 lines pointing at the phone's docs/link.md (208 lines, in ../brainfile-mobile: read it, change nothing there). Make desktop/link.md the full contract: copy the phone's text in, then add version 3 (the four features, each call's name, arguments, result shape and the degrade when a desk lacks it). Say at the top that brainfile's copy is canonical. The server's `protocol` stays 1; features carry the versioning, as today.
 
-Tests in desktop/test/link.test.ts for each feature (hello lists them; each call through the bridge; the dev fake's answers), and the older-desk path untouched.
+**The fake desk.** link:dev (dev.ts, devReviews.ts, the fixtures in desktop/test/fixtures/link) answers every new call bridged here with believable data: a task with landsOn, an epic with its own branch, one with an open PR (#31 exists already), main 2 ahead. The phone is QA'd against it in the morning.
+
+Tests in desktop/test/link.test.ts for each feature added here (hello lists them; each call through the bridge; the dev fake's answers), and the older-desk path untouched.
