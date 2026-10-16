@@ -1,7 +1,7 @@
 ---
 id: task-88
 title: "Without the desktop, end to end: an epic run from a terminal and an MCP client, from hand-off to landed, and the desktop watching it live"
-column: backlog
+column: in-progress
 position: 22
 tags:
   - parity
@@ -22,7 +22,7 @@ decisions:
   - decision-12
   - decision-15
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: test
       path: cli/src/__tests__/headless-epic.e2e.test.ts
@@ -33,8 +33,10 @@ contract:
       - cd desktop && npm install --prefer-offline --no-audit --no-fund && npm run typecheck && npm test && node scripts/build-electron.mjs
   metrics:
     readyAt: "2026-10-15T21:40:11.828Z"
+    pickedUpAt: "2026-10-16T01:57:14.886Z"
+    reworkCount: 0
 createdAt: "2026-10-15T15:49:57.479Z"
-updatedAt: "2026-10-16T01:57:05.031Z"
+updatedAt: "2026-10-16T01:57:14.886Z"
 dispatch:
   agent: claude
   model: opus
