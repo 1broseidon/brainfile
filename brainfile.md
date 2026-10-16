@@ -35,6 +35,8 @@ columns:
     title: In Progress
   - id: review
     title: Review
+related:
+  mobile: ../brainfile-mobile
 ---
 
 # brainfile
