@@ -14,7 +14,7 @@ parentId: epic-6
 dependsOn:
   - task-79
 contract:
-  status: ready
+  status: in_progress
   deliverables:
     - type: file
       path: cli/src/commands/discuss.ts
@@ -38,10 +38,12 @@ contract:
     - "No second ACP client: core's sessions and task-82's terminalAsk"
   metrics:
     readyAt: "2026-10-16T01:16:29.656Z"
+    pickedUpAt: "2026-10-16T01:43:23.800Z"
+    reworkCount: 0
 createdAt: "2026-10-16T01:16:29.662Z"
 decisions:
   - decision-19
-updatedAt: "2026-10-16T01:43:23.487Z"
+updatedAt: "2026-10-16T01:43:23.800Z"
 dispatch:
   agent: claude
   model: opus
