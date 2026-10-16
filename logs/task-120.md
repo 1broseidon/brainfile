@@ -1,8 +1,6 @@
 ---
 id: task-120
 title: "Link contract v3: features target, pull-request, merge-to and queue; desktop/link.md is the full contract; link:dev answers every new call"
-column: review
-position: 17
 tags:
   - link
   - desktop
@@ -53,7 +51,7 @@ contract:
     deliveredAt: "2026-10-16T06:23:14.247Z"
     duration: 571
 createdAt: "2026-10-16T06:09:34.204Z"
-updatedAt: "2026-10-16T06:27:21.380Z"
+updatedAt: "2026-10-16T06:27:23.143Z"
 dispatch:
   agent: claude
   model: opus
@@ -70,6 +68,7 @@ dispatch:
     ended: "2026-10-16T06:23:19.515Z"
     outcome: review
 assignee: claude
+completedAt: "2026-10-16T06:27:23.143Z"
 ---
 
 ## Description
