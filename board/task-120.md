@@ -1,7 +1,7 @@
 ---
 id: task-120
 title: "Link contract v3: features target, pull-request, merge-to and queue; desktop/link.md is the full contract; link:dev answers every new call"
-column: in-progress
+column: review
 position: 17
 tags:
   - link
@@ -20,7 +20,7 @@ decisions:
   - decision-16
   - decision-10
 contract:
-  status: in_progress
+  status: delivered
   deliverables:
     - type: file
       path: desktop/src/link/server.ts
@@ -50,8 +50,10 @@ contract:
     readyAt: "2026-10-16T06:13:09.261Z"
     pickedUpAt: "2026-10-16T06:13:43.411Z"
     reworkCount: 0
+    deliveredAt: "2026-10-16T06:23:14.247Z"
+    duration: 571
 createdAt: "2026-10-16T06:09:34.204Z"
-updatedAt: "2026-10-16T06:13:43.411Z"
+updatedAt: "2026-10-16T06:23:14.247Z"
 dispatch:
   agent: claude
   model: opus
