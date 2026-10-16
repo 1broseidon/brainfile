@@ -42,7 +42,7 @@ createdAt: "2026-10-16T06:09:34.484Z"
 dependsOn:
   - task-120
   - task-123
-updatedAt: "2026-10-16T06:48:17.586Z"
+updatedAt: "2026-10-16T06:48:45.363Z"
 dispatch:
   agent: claude
   model: opus
@@ -63,9 +63,16 @@ assignee: claude
 What keeps the phone from drifting behind the desktop again, and the epic's last child: it wires and tests the whole. cli/src/__tests__/mcp-parity.test.ts maps every CLI command to an MCP tool or an exclusion with a reason; do the same for the link.
 
 - New desktop/test/link-parity.test.ts: reads the api surface (`AGENT_METHODS`, the host methods and the main-process methods in desktop/src/shared/api.ts; find the lists the preload uses) and asserts each name is either a key of bridge.ts's CALLS or in an `EXCLUDED` map with a reason string. Reasons today: window-only (openInEditor, openWorktree, revealProject, listEditors, the updater's four, linkCode/setLink/forgetPhone/linkState), settings the person changes at the desk (getSettings, setSettings, setGitHubToken, githubAuth, agentRegistry, prepareRegistryAgent), board plumbing the phone reaches another way (openBoard/closeBoard are bridged; addProject/removeProject/refreshProject are the desk's), and anything the phone should get later (name the task). The test fails when a new api method is added without a decision.
-- The same test checks link:dev: every bridged call has an answer in dev.ts (or devReviews.ts), so the phone can be tried against the fake with no real desk.
+- The same test checks link:dev: every bridged call has an answer in dev.ts (or devReviews.ts, or devQueue.ts), so the phone can be tried against the fake with no real desk.
 - The bridge's `features` and desktop/link.md agree: each feature named in LINK_FEATURES has a section in link.md, and each call link.md documents is bridged.
 - **The whole (lead's addition, epic-10 plan):** an end-to-end test through the link server and bridge (the in-process host with a scratch board, as link.test.ts does) against the epic's description of done: hello offers effort, merge, target, pull-request, merge-to and queue; a phone sets a task's Lands on, opens a pull request and sees it on the row, merges an epic-branch child with `to`, and reads the queue, where a hand-off waiting on an `alias:task-id` dependency on a related scratch board shows that wait with the board named (task-122's waits through task-123's queue). Fix any seam you find between the children's work; leave a note on epic-10 for anything you could not.
 - Document the rule in desktop/design.md (one paragraph under the phone link) and in desktop/link.md's head.
 
 Depends on task-120 (target, pull-request, merge-to, the contract) and task-123 (queue, on task-122's alias waits).
+
+**Left by task-123 (b68ddf9, landed on dispatch/epic-10 as 5056541):**
+- Core: `@brainfile/core/dispatch` status.ts exports dispatchStatus(runner, brainfilePath, projectId, {visible, ownEpic, withSelf}), queuedWaits (waitsOn + waitMessage via handOffWaits) and statusLeads; CLI and MCP dispatch status call them.
+- Desktop: Api.queue(projectId) → QueueView (shared/api.ts, with QueuedHandOff), answered in the agents process by src/agents/queue.ts deskQueue; preload, AGENT_METHODS, bridge CALLS and LINK_FEATURES include queue. link:dev answers through the same queueView in src/link/devQueue.ts (count it as a dev answer source in the parity test).
+- link.md › The queue: queued[] has optional `waitMessage` (board-named reason for a related-board wait); `running` holds hand-offs only (chat and lead turns stay in `live`); `runners` includes the desk's own window. link:dev fixtures: task-2 queued, task-4 waiting on task-2 and mobile:task-12, task-1 run in a terminal, two runners, main 2 ahead.
+- For the end-to-end test: link.test.ts already has a real-desk queue test with a core Runner, a terminal runner and an alias wait; reuse its setup rather than building another.
+- Not wired: the window's renderer does not show the queue (phone only). Out of scope here; leave it as a note on epic-10 if the parity test needs an exclusion reason for it.
