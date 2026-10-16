@@ -390,15 +390,21 @@ test('a discussion runs read-only when the agent can, else in its own default, n
 
 // ── The board's chat (decision-14) ──────────────────────────────────────────
 
-test('the chat manages the board: its tools, its dispatch among them, and the brainfile command line are allowed', () => {
+test('the chat manages the board: its tools, its dispatch among them, and the brainfile command line where it reads are allowed', () => {
   assert.equal(chatPermission('mcp__brainfile__task_add', 'other'), 'allow');
   assert.equal(chatPermission('brainfile_task_delete'), 'allow');
   assert.equal(chatPermission('mcp__brainfile__dispatch', 'other'), 'allow');
   // The desk is gone (task-84): a tool by its old name is nothing the chat has.
   assert.notEqual(chatPermission('mcp__desk__dispatch', 'execute'), 'allow');
   assert.equal(chatPermission('`brainfile list`', 'execute'), 'allow');
-  assert.equal(chatPermission('Run brainfile add -t "x"', 'execute'), 'allow');
   assert.equal(chatPermission('Bash', 'execute', { command: 'npx brainfile show task-1' }), 'allow');
+  assert.equal(chatPermission('Bash', 'execute', { command: 'brainfile dispatch status --json' }), 'allow');
+});
+
+test('the chat never gets round its tools through the brainfile command line: what changes the work, or starts a runner, is refused', () => {
+  for (const command of ['brainfile land task-1', 'brainfile discard task-1', 'brainfile dispatch task-1', 'brainfile dispatch task-1 --now', 'brainfile run', 'brainfile run --once', 'brainfile discuss task-1', 'brainfile pr task-1', 'brainfile add -t "x"', 'brainfile']) {
+    assert.equal(chatPermission('Bash', 'execute', { command }), 'refuse', command);
+  }
 });
 
 test('the chat reads git, and changes nothing: edits, other commands and chains are refused', () => {

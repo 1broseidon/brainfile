@@ -378,14 +378,14 @@ export function discussPermission(title: string, kind?: string | null, surface: 
 /**
  * How the board's chat answers an agent that asks before it acts
  * (decision-14): it manages the board and hands code to hand-offs, through
- * its brainfile mcp's dispatch tools. Board tools, the brainfile command
- * line and git that only reads are
- * allowed; an edit, a delete, a move, a change of mode or any other command
- * is refused before anyone is asked; reading and searching are asked as
- * usual.
+ * its brainfile mcp's dispatch tools. Board tools, and the brainfile
+ * command line and git where they only read, are allowed; an edit, a
+ * delete, a move, a change of mode or any other command (`brainfile land`
+ * and `brainfile dispatch` too: the chat hands off through its tools) is
+ * refused before anyone is asked; reading and searching are asked as usual.
  */
 export function chatPermission(title: string, kind?: string | null, rawInput?: unknown): 'allow' | 'refuse' | 'usual' {
-  // A lead's rule (core's): the board, the brainfile command line and git that only reads.
+  // A lead's rule (core's): the board, and the brainfile command line and git where they only read.
   return leadPermission(title.trim(), kind, rawInput);
 }
 

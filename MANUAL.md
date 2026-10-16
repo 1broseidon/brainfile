@@ -1813,8 +1813,15 @@ leads and discussions, and `brainfile discuss` for its session.
 | none (your own client) | Every tool. |
 | `chat` | Every tool. |
 | `lead` | Every tool, but `dispatch`, `dispatch_stop`, `dispatch_lead`, `review` and `dispatch_status` reach only the tasks under its epic, named in `BRAINFILE_LEAD_SCOPE`; its `dispatch` refuses what the lead's rules refuse ([Leads](#leads)). |
-| `worker` | No `dispatch`, `dispatch_stop` or `dispatch_lead`, and `review` only shows: a hand-off never hands off (decision-15). |
+| `worker` | No `dispatch`, `dispatch_stop` or `dispatch_lead`, `review` only shows, and `pull_request` only asks where one stands: a hand-off never hands off (decision-15). |
 | `discuss` | As a worker. |
+
+The agent's own environment carries the role too, so the command line in
+its shell keeps to it: as a worker, `brainfile dispatch`, `land`, `discard`
+and `pr` (without `--status`) are refused, and a lead's reach only its tree.
+No agent runs `brainfile run`, `dispatch --now` or `discuss`, which would
+start agents inside its own turn; the runner that started it works the
+queue.
 
 ```console title=".mcp.json"
 {

@@ -153,6 +153,35 @@ describe('brainfile pr', () => {
   });
 });
 
+describe('pull requests by role (decision-15)', () => {
+  test("a worker's or a discussion's command line and server ask where one stands, and open none; a lead opens one only in its tree", async () => {
+    handOff();
+    const { forge } = fakeForge();
+    const deps = { github: forge, repo: REPO };
+    process.env.BRAINFILE_AGENT_ROLE = 'worker';
+    try {
+      await expect(prCommand('task-1', { file: brainfilePath }, new MemoryLogger(), deps)).rejects.toThrow("A worker cannot open a pull request: only a person, the board's chat or an epic's lead does");
+      await expect(prCommand('task-1', { file: brainfilePath, status: true }, new MemoryLogger(), deps)).rejects.toThrow('task-1 has no pull request');
+      process.env.BRAINFILE_AGENT_ROLE = 'lead';
+      process.env.BRAINFILE_LEAD_SCOPE = 'epic-9';
+      await expect(prCommand('task-1', { file: brainfilePath }, new MemoryLogger(), deps)).rejects.toThrow('task-1 is not under epic-9: a lead reaches only its own tree');
+      await expect(prCommand('task-1', { file: brainfilePath, status: true }, new MemoryLogger(), deps)).rejects.toThrow('task-1 is not under epic-9');
+    } finally {
+      delete process.env.BRAINFILE_AGENT_ROLE;
+      delete process.env.BRAINFILE_LEAD_SCOPE;
+    }
+
+    for (const role of ['worker', 'discuss'] as const) {
+      const server = new FakeMcpServer();
+      registerPullRequestTool(server as never, brainfilePath, () => deps, { role });
+      const tool = server.handler('pull_request');
+      // Asked to open, it only asks where it stands: there is none to follow.
+      expect(mcpText(await tool({ task: 'task-1', action: 'open' }))).toContain('task-1 has no pull request');
+      expect(parsePullRequest(readTaskFile(taskFile())!.task.pullRequest)).toBeNull();
+    }
+  });
+});
+
 describe('MCP pull_request', () => {
   test('opens, then says where it stands', async () => {
     handOff();

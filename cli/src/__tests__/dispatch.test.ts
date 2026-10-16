@@ -14,8 +14,10 @@ import { pathToFileURL } from 'url';
 import { claimDispatchFile, currentHost, findV2Task, getV2Dirs, readDispatchRecord, readLeadRecord } from '@brainfile/core';
 import { readRunFile, writeRunFile, writeRunnerFile, type RunFile } from '@brainfile/core/repo';
 import { agentRoleOf } from '@brainfile/core/dispatch';
-import { NO_RUNNER, dispatchCommand, dispatchReport, leadReport, statusReport, statusText, stopReport } from '../commands/dispatch';
-import { discardReport, landReport, readyReport, reviewReport } from '../commands/review';
+import { NO_RUNNER, dispatchCommand, dispatchReport, dispatchStatusCommand, dispatchStopCommand, leadReport, statusReport, statusText, stopReport } from '../commands/dispatch';
+import { discardCommand, discardReport, landCommand, landReport, readyReport, reviewCommand, reviewReport } from '../commands/review';
+import { runCommand } from '../commands/run';
+import { discussCommand } from '../commands/discuss';
 import { MemoryLogger } from '../utils/logger';
 import { WireClient } from './helpers/mcp-wire';
 
@@ -447,6 +449,62 @@ describe('roles: what an agent\'s server lists', () => {
     const status = await client.callTool('dispatch_status', {});
     expect((status.structuredContent as { queued: { task: string }[] }).queued.map((q) => q.task)).toEqual(['task-2']);
     expect(String(client.opening.instructions)).toContain('You lead epic-1: dispatch, stop and land reach only the tasks under it.');
+  });
+});
+
+describe("roles: the command line in an agent's own shell", () => {
+  /** Runs `work` as a command run in a shell whose session was started with this role. */
+  async function as<T>(role: string, scope: string | undefined, work: () => Promise<T>): Promise<T> {
+    process.env.BRAINFILE_AGENT_ROLE = role;
+    if (scope) process.env.BRAINFILE_LEAD_SCOPE = scope;
+    try {
+      return await work();
+    } finally {
+      delete process.env.BRAINFILE_AGENT_ROLE;
+      delete process.env.BRAINFILE_LEAD_SCOPE;
+    }
+  }
+  const quiet = () => new MemoryLogger();
+
+  test('a worker or a discussion hands off, stops, lands and discards nothing; it reads the status and the review', async () => {
+    gitBoard({ 'task-1': [] });
+    for (const role of ['worker', 'discuss']) {
+      await as(role, undefined, async () => {
+        await expect(dispatchCommand(['task-1'], { file: filePath, agent: AGENT }, quiet())).rejects.toThrow(`A ${role} cannot dispatch`);
+        await expect(dispatchStopCommand('task-1', { file: filePath }, quiet())).rejects.toThrow(`A ${role} cannot stop a run`);
+        await expect(landCommand('task-1', { file: filePath }, quiet())).rejects.toThrow(`A ${role} cannot land`);
+        await expect(discardCommand('task-1', { file: filePath }, quiet())).rejects.toThrow(`A ${role} cannot discard`);
+        await expect(dispatchStatusCommand({ file: filePath }, quiet())).resolves.toMatchObject({ queued: [] });
+        await expect(reviewCommand(undefined, { file: filePath, ready: true }, quiet())).resolves.toMatchObject({ ready: [] });
+      });
+    }
+    expect(recordOf('task-1')).toBeNull();
+  });
+
+  test('no agent starts a runner or another agent inside its turn: run, dispatch --now and discuss are refused, whatever its role', async () => {
+    gitBoard({ 'epic-1': ['type: epic'], 'task-1': ['parentId: epic-1'] });
+    for (const [role, scope] of [['worker'], ['chat'], ['lead', 'epic-1'], ['discuss']] as const) {
+      await as(role, scope, async () => {
+        await expect(runCommand({ file: filePath, once: true }, quiet())).rejects.toThrow(`A ${role} cannot run a runner: an agent never starts agents inside its own turn`);
+        await expect(dispatchCommand(['task-1'], { file: filePath, agent: AGENT, now: true }, quiet())).rejects.toThrow(`A ${role} cannot run a hand-off here with --now`);
+        await expect(discussCommand('task-1', { file: filePath, agent: AGENT }, quiet())).rejects.toThrow(`A ${role} cannot start a discussion`);
+      });
+    }
+    expect(recordOf('task-1')).toBeNull();
+  });
+
+  test("a lead's command line reaches only its own tree, as its server does", async () => {
+    gitBoard({ 'epic-1': ['type: epic'], 'task-1': ['parentId: epic-1'], 'task-3': [] });
+    await as('lead', 'epic-1', async () => {
+      const report = await dispatchCommand(['task-1', 'task-3'], { file: filePath, agent: AGENT }, quiet());
+      expect(report.queued.map((q) => q.task)).toEqual(['task-1']);
+      expect(report.skipped).toEqual([{ task: 'task-3', why: 'task-3 is not under epic-1: a lead reaches only its own tree' }]);
+      await expect(landCommand('task-3', { file: filePath }, quiet())).rejects.toThrow('task-3 is not under epic-1');
+      await expect(discardCommand('task-3', { file: filePath }, quiet())).rejects.toThrow('task-3 is not under epic-1');
+      await expect(reviewCommand('task-3', { file: filePath }, quiet())).rejects.toThrow('task-3 is not under epic-1');
+    });
+    expect(recordOf('task-1')).toMatchObject({ by: 'lead' });
+    expect(recordOf('task-3')).toBeNull();
   });
 });
 

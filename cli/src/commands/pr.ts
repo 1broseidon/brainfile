@@ -28,6 +28,8 @@ import { CLIError, operationFailed, taskNotFound } from '../utils/cli-error';
 import { resolveCliBrainfilePath } from '../utils/brainfile-path';
 import { assertV2Brainfile } from '../utils/v2-only';
 import { gitHubClient } from '../utils/github-auth';
+import { callerAccess } from '../utils/agent-role';
+import { guard, outOfScope, type Access } from './dispatch';
 
 export const PR_COMMAND_HELP = `
 Examples:
@@ -79,8 +81,14 @@ function taskOn(filePath: string, taskId: string) {
  * Opens the task's pull request, or with `status` follows it. The CLI and
  * the MCP `pull_request` tool share it; throws CLIError with what was wrong.
  */
-export async function pullRequestReport(filePath: string, taskId: string, options: { status?: boolean }, deps: PrDeps = {}): Promise<PrReport> {
+export async function pullRequestReport(filePath: string, taskId: string, options: { status?: boolean; access?: Access }, deps: PrDeps = {}): Promise<PrReport> {
   assertV2Brainfile(filePath);
+  // As land is (decision-15): a worker or a discussion asks where one stands, and opens none; a lead, only in its tree.
+  const access = options.access ?? {};
+  if (options.status) {
+    const out = outOfScope(filePath, taskId, access);
+    if (out) throw new CLIError(out);
+  } else guard(filePath, taskId, access, 'open a pull request');
   const projectDir = path.dirname(path.dirname(filePath));
   const github = deps.github ?? gitHubClient();
   const forge = { github, ...(deps.repo !== undefined ? { repo: deps.repo } : {}) };
@@ -125,7 +133,7 @@ function settleMerged(filePath: string, taskId: string): boolean {
 /** `brainfile pr <task> [--status]`. */
 export async function prCommand(taskId: string, options: PrOptions, logger: Logger = defaultLogger, deps: PrDeps = {}): Promise<PrReport> {
   const filePath = resolveCliBrainfilePath(options.file);
-  const report = await pullRequestReport(filePath, taskId, { status: options.status }, deps);
+  const report = await pullRequestReport(filePath, taskId, { status: options.status, access: callerAccess() }, deps);
   if (options.json) {
     logger.log(JSON.stringify(report, null, 2));
     return report;
