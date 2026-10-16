@@ -803,8 +803,11 @@ runs' progress in `.brainfile/state/runs/`, which every runner on the
 machine reads. The Brainfile window shows every run there, whoever started
 it, and an ask from a run in a terminal can be answered in the window too:
 the answer goes in `.brainfile/state/runs/<run-id>.answer.json`, which that
-runner applies within a second, taking its prompt down. These commands are
-also MCP tools (see [For agents](#for-agents)).
+runner applies within a second, taking its prompt down. Quitting the
+Brainfile window stops the hand-offs it runs, their claims kept as stopped,
+so none starts again by itself when it opens; nor does a request an earlier
+Brainfile wrote (no claim and no `tries` on it). These commands are also MCP
+tools (see [For agents](#for-agents)).
 
 #### dispatch — Queue tasks for a coding agent
 
@@ -934,10 +937,12 @@ in order with what each task waits on, and the tasks a runner holds, marked
 `lost` when its runner has gone so another may take it. It reads the board
 and every runner's run files, whichever process started them.
 
-`stop` stops a run by its id or its task's: it is marked `stop` in its run
-file, which its runner watches, and if it has not ended within 15 seconds
-its runner is sent SIGTERM. The command waits for that. The worktree and
-branch stay for review, and the claim is given back.
+`stop` stops a run by its id or its task's: it leaves
+`.brainfile/state/runs/<run-id>.stop.json` beside the run's file, and the
+run's own runner stops it within a second; no process is ever signalled
+from another. The command waits up to 15 seconds to say it has stopped. The
+worktree and branch stay for review, and the claim is given back as
+stopped. Handed off again, a task that was stopped carries on the same try.
 
 #### Leads
 
@@ -969,8 +974,9 @@ lead asks for:
 - a child goes only once its `dependsOn` are done and their branches landed;
 - at most `dispatch.maxRunning` hand-offs at once on the repository;
 - a child is tried at most its contract's `maxRetries` again (once by
-  default), counted in `tries` on its record; then it waits in Review for you,
-  with a note saying so;
+  default), counted in `tries` on its record (a start after a stop, or after
+  its runner went away, carries on the same try); then it waits in Review for
+  you, with a note saying so;
 - only children under the epic with none of their own;
 - in its tree only the lead and you hand off: the board's chat is refused;
 - children it adds after it started, and children whose contract is still a
@@ -979,7 +985,11 @@ lead asks for:
 
 When the last child is done the epic is completed, or, with a branch of its
 own (`epicBranch: true`), waits in Ready to merge. The lead's record comes
-off and the lead ends.
+off and the lead ends. A lead taken up when every child is complete but some
+have not landed finishes the epic: in a bypass repository it lands them
+first; otherwise it waits for you to merge them. An epic with a branch of its
+own whose last child lands with no lead (`land`, Merge) waits in Ready to
+merge the same way.
 
 `pause` marks the record `paused`: the lead hands off nothing and what
 happens waits for its next turn; what is running goes on. `resume` takes that
@@ -988,6 +998,9 @@ waits for one, and takes up from its notes on the epic. `stop` takes the
 record off: the lead ends, and what it handed off goes on and is yours. Each
 works whichever runner leads it, which follows the epic's record. `dispatch
 status` lists the leads: waiting for a runner, leading or paused, and where.
+A lead the Brainfile window ran before leads moved to core (`lead:` on the
+epic) is not taken up on its own: it is listed paused, and `resume` (or the
+window's Resume) carries it on from its notes.
 
 #### review, land, discard — A hand-off's work, and what to do with it
 
