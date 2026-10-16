@@ -36,3 +36,6 @@ Left over from the second review of epic-6's fixes (2026-10-15). None blocked th
 - **No offer after a merge on the forge:** an epic's last child landed by its pull request merging doesn't offer the epic's branch (PullRequestWatch).
 - **`dispatch stop` on a lost run** waits 17 s and then says "Asked … to stop".
 - **`npm run dev` builds neither core nor the CLI,** so the dev app's own CLI can be stale. Build them, or warn when cli/dist is older than its sources.
+
+## Log
+- 2026-10-16T03:42:39.091Z: [claude] Also seen on landing epic-6: while the dev app ran, rebuilding core and the CLI at the root (`npm run build`) left desktop/dist-electron empty. The agents process then failed with ERR_MODULE_NOT_FOUND until `node scripts/build-electron.mjs` was run by hand. Find out whether dev.mjs's esbuild watch clears its output when a rebuild fails mid-way (core's dist missing while tsc runs), and keep the last good bundle instead.
