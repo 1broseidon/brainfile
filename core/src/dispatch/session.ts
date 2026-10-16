@@ -10,7 +10,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { Readable, Writable } from 'stream';
 import type * as acp from '@agentclientprotocol/sdk';
 import { locateBoard } from '../repo/locate';
-import { agentEnv, agentOf, brainfileMcp, lastLine, launchOf, whyNot } from './agents';
+import { agentEnv, agentOf, brainfileMcp, lastLine, launchOf, roleEnv, whyNot } from './agents';
 import { customName, isCustom } from './agentServers';
 import { effortSelect, effortToSet } from './effort';
 import { MODELS_TTL_MS, effortsKnown, keepingEfforts, learnEfforts, modelOption, modesOf, readModels, remember, type ModelCache, type SessionModes } from './models';
@@ -140,8 +140,19 @@ export async function open(ctx: SessionContext, projectId: string, agentId: Agen
     release?.();
     throw signal.reason;
   }
+  // The board's server, before the agent starts: one this process brings but cannot find says so (useBrainfile).
+  const as = role ? { role, ...(leadScope ? { scope: leadScope } : {}) } : undefined;
+  let mcpServers: acp.McpServer[];
+  try {
+    mcpServers = board ? [...brainfileMcp(as), ...extra] : [];
+  } catch (err) {
+    release?.();
+    throw err;
+  }
   const { ClientSideConnection, PROTOCOL_VERSION, ndJsonStream } = sdk();
-  const child = spawn(launch.command, launch.args, { cwd, env: launch.env ?? agentEnv(), stdio: ['pipe', 'pipe', 'pipe'] });
+  // The agent's own environment carries its role too, so the `brainfile` command line in its shell keeps to it as its server does.
+  const env = { ...(launch.env ?? agentEnv()), ...roleEnv(as) };
+  const child = spawn(launch.command, launch.args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
   // Kept so a failure can say why, not just that the agent stopped.
   let stderr = '';
   child.stderr?.on('data', (d) => (stderr = (stderr + d).slice(-4000)));
@@ -213,7 +224,6 @@ export async function open(ctx: SessionContext, projectId: string, agentId: Agen
     child.kill();
     throw new Error(`${agent.name} did not start${why() || `: ${err instanceof Error ? err.message : String(err)}`}`);
   }
-  const mcpServers = board ? [...brainfileMcp(role ? { role, ...(leadScope ? { scope: leadScope } : {}) } : undefined), ...extra] : [];
   const created = await unlessAborted(signal, session.connection.newSession({ cwd, mcpServers }));
   session.sessionId = created.sessionId;
   let configOptions = created.configOptions ?? null;

@@ -7,8 +7,9 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "npm run build:core && npm run typecheck && vite build && node scripts/build-electron.mjs",
+    "build": "npm run build:core && npm run build:cli && npm run typecheck && vite build && node scripts/build-electron.mjs",
     "build:core": "npm run build --prefix ../core",
+    "build:cli": "npm run build --prefix ../cli",
     "start": "electron .",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && svelte-check --tsconfig tsconfig.json --threshold error",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test test/",
@@ -53,6 +54,21 @@
       "dist/**/*",
       "dist-electron/*.js",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../cli/dist",
+        "to": "cli/dist",
+        "filter": [
+          "cli.js",
+          "*.mjs",
+          "schemas/*.json"
+        ]
+      },
+      {
+        "from": "../cli/package.json",
+        "to": "cli/package.json"
+      }
     ],
     "npmRebuild": false,
     "electronLanguages": [

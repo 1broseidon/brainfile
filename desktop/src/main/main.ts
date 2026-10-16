@@ -38,6 +38,7 @@ import { LinkServer } from '../link/server';
 import { LinkStore } from '../link/store';
 import { deskAddresses, deskName } from '../link/addresses';
 import { bundleOf, Updater } from './updater';
+import { APP_CLI_ENV, ELECTRON_BIN_ENV, appCliLaunch, appCliPath } from '../agents/ownCli';
 import { UPDATE_PUBLIC_KEY } from './update-key';
 
 // A second copy (a test, a capture) keeps its own data and its own
@@ -108,10 +109,14 @@ function callHost<T>(method: HostRequest['method'], ...args: unknown[]): Promise
 
 // ── Agents process ──────────────────────────────────────────────────────────
 
+/** The app's own brainfile CLI: shipped in its Resources, or in development the repository's own build (ownCli.ts). */
+const appCli = () => appCliPath({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath() });
+
 function startAgents(): UtilityProcess {
   const child = utilityProcess.fork(path.join(__dirname, 'agents.js'), [], {
     serviceName: 'Brainfile Agents',
-    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData') },
+    // Its agents get the app's own CLI, run by this binary as node, not the brainfile installed on the Mac.
+    env: { ...process.env, BRAINFILE_DATA_DIR: app.getPath('userData'), [APP_CLI_ENV]: appCli(), [ELECTRON_BIN_ENV]: process.execPath },
   });
   child.on('message', (message: AgentMessage) => {
     if (message.kind === 'reply') {
@@ -218,16 +223,17 @@ async function addProject(): Promise<Project | null> {
   return project;
 }
 
-/** `brainfile init` in the project folder: the CLI owns board creation. */
+/** `brainfile init` in the project folder: the CLI owns board creation, the app's own (ownCli.ts), run by this binary as node. */
 function initBoard(projectId: string): Promise<Result<Project>> {
   return new Promise((resolve) => {
-    const child = spawn('brainfile', ['init'], { cwd: projectId, env: process.env });
+    const cli = appCli();
+    if (!fs.existsSync(cli)) return resolve({ ok: false, error: `Brainfile's own command line is not at ${cli}` });
+    const launch = appCliLaunch(process.execPath, cli);
+    const child = spawn(launch.command, [...launch.args, 'init'], { cwd: projectId, env: { ...process.env, ...launch.env } });
     let output = '';
     child.stdout.on('data', (d) => (output += d));
     child.stderr.on('data', (d) => (output += d));
-    child.on('error', () =>
-      resolve({ ok: false, error: 'The brainfile CLI is not on your PATH. Install it with `npm i -g brainfile`, then try again.' })
-    );
+    child.on('error', (err) => resolve({ ok: false, error: `brainfile init could not start: ${err.message}` }));
     child.on('close', async (code) => {
       if (code !== 0) return resolve({ ok: false, error: output.trim() || `brainfile init exited with ${code}` });
       const project = await resolveProject(projectId);

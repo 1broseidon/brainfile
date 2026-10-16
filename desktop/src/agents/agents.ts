@@ -5,8 +5,9 @@
  *
  * Brainfile is a dispatcher, not a chat app (design.md, Dispatch). An agent
  * gets the repository as its working directory and Brainfile's own MCP server
- * (`brainfile mcp`), so it reads and changes the board through the same tools
- * as the CLI; what it changes reaches the window as ordinary board changes.
+ * (`brainfile mcp`, from the app's own CLI: ownCli.ts), so it reads and
+ * changes the board through the same tools as the CLI; what it changes
+ * reaches the window as ordinary board changes.
  * Starting an agent and talking to it is core's (@brainfile/core/dispatch,
  * decision-18): the agents it knows, custom agents and the registry, the
  * settings, sessions, permissions and the brief. A hand-off's life is core's
@@ -62,6 +63,7 @@ import {
   setSettings,
   standingDecisions,
   turn as takeTurn,
+  useBrainfile,
   whyNot,
   workOf as openWork,
   type OpenOptions as SessionOptions,
@@ -85,6 +87,7 @@ import {
 } from '@brainfile/core/repo';
 import { followHandOffPullRequest, openHandOffPullRequest, type PullRequestForge } from '@brainfile/core/forge';
 import { ExternalRuns } from './external';
+import { appBrainfile } from './ownCli';
 import { liveRuns } from './live';
 import { PullRequestWatch } from './pullRequests';
 import type {
@@ -114,6 +117,13 @@ const parentPort = process.parentPort;
 /** dispatch.json, models.json and agents/: Electron's userData, which main passes as BRAINFILE_DATA_DIR. */
 const DATA_DIR = dataDir();
 const registry = new AgentRegistry(DATA_DIR);
+/**
+ * Every agent this process starts, the chat's, a lead's and a hand-off's,
+ * gets the app's own brainfile (ownCli.ts): its board server, and the
+ * `brainfile` first on its shell's PATH. One that cannot be found fails the
+ * session with why, which the window shows on the chat or the lead.
+ */
+useBrainfile(() => appBrainfile(process.env, DATA_DIR));
 
 function send(message: AgentMessage): void {
   parentPort.postMessage(message);
@@ -377,9 +387,9 @@ const forge: PullRequestForge = {
 
 const ASK_PREAMBLE =
   'You are the dispatcher for this repository’s Brainfile board. Use the brainfile MCP tools to answer and to manage the board: add, sort, move, split and close tasks. ' +
-  'If those tools are not available, use the `brainfile` command line in this directory instead (`brainfile list`, `brainfile add`, `brainfile move`, `brainfile --help`); do not edit the board’s files by hand. ' +
+  'If those tools are not available, say so: the `brainfile` command line in this directory reads the board (`brainfile list`, `brainfile show`, `brainfile dispatch status`, `brainfile --help`) and changes nothing from here; do not edit the board’s files by hand. ' +
   'To have work done, hand it to a coding agent with the brainfile tools: `dispatch` hands a task off, and this app starts it at once in its own worktree, as Hand to… does (name the agent, model and effort as the line ahead of the person\u2019s message says); `dispatch_status` says what is running and queued, `dispatch_stop` stops a run, and `dispatch_lead` pauses or resumes an epic\u2019s lead. ' +
-  'You manage the board; you never change code or run commands, other than the `brainfile` command line and git commands that only read: edits and other commands are refused. Read the code freely to write good tasks. ' +
+  'You manage the board; you never change code or run commands, other than `brainfile` and git commands that only read: edits and other commands are refused. Read the code freely to write good tasks. ' +
   'Asked for code work, write the task, or update the one in context: what to do, the files it touches, and a contract whose validation commands prove it is done. Hand it off with dispatch when the person asked for it done; otherwise say it is ready to hand off. ' +
   'Asked to plan an epic, add the epic, then its children under it (parentId), each with dependsOn naming the children that must land first and a draft contract with deliverables and validation commands; add them in that order, so each dependency exists when it is named. Leave priority unset unless the person said how urgent it is. ' +
   'To take an epic, or any task with children, through to the end, dispatch the epic itself: a lead checks the plan and hands its children off in order, and inside a led epic only its lead hands off. ' +

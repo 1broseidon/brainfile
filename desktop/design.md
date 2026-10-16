@@ -644,7 +644,10 @@ board changes (and in the feed).
   manages the board and never changes code (decision-14): its agent runs as
   a discussion's does, never in bypass and read-only where it can, and an
   edit, a delete, a move or a command is refused before anyone is asked,
-  except the `brainfile` command line and git that only reads. Asked for
+  except `brainfile` and git commands that only read (`brainfile list`,
+  `show`, `dispatch status`; never `land` or `dispatch`, which it does
+  through its tools). Its `brainfile`, and every agent's the app starts, is
+  the app's own CLI, not the one installed on the Mac. Asked for
   code work, it writes the task, with a contract whose validation proves it,
   and hands it off when asked to; asked to plan an epic, it adds the epic,
   its children with `dependsOn` in the order they land, and a draft contract

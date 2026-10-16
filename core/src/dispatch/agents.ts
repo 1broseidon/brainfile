@@ -266,10 +266,21 @@ export function agentRoleOf(env: NodeJS.ProcessEnv = process.env): { role?: Agen
   return { role, ...(role === 'lead' && scope ? { scope } : {}) };
 }
 
-/** The environment every agent starts in: the real node first on PATH, so nothing an agent starts finds a shim instead. */
+/** The role and lead scope as environment variables, for an agent and the `brainfile mcp` it is given. */
+export function roleEnv(role?: { role: AgentRole; scope?: string }): Record<string, string> {
+  return { ...(role ? { [AGENT_ROLE_ENV]: role.role } : {}), ...(role?.scope ? { [LEAD_SCOPE_ENV]: role.scope } : {}) };
+}
+
+/**
+ * The environment every agent starts in: the real node first on PATH, so
+ * nothing an agent starts finds a shim instead; ahead of it, the folder with
+ * this process's own `brainfile` (useBrainfile), so `brainfile …` in an
+ * agent's shell is the same command line its board server is.
+ */
 export function agentEnv(): NodeJS.ProcessEnv {
   const node = realNode();
-  return node ? { ...process.env, PATH: `${path.dirname(node)}:${process.env.PATH ?? ''}` } : process.env;
+  const PATH = withOwnBrainfile(node ? `${path.dirname(node)}:${process.env.PATH ?? ''}` : process.env.PATH ?? '');
+  return PATH === (process.env.PATH ?? '') ? process.env : { ...process.env, PATH };
 }
 
 /** The first `node` on PATH that is a real binary, not a version-manager shim script. */
@@ -289,25 +300,83 @@ export function realNode(): string | null {
   return null;
 }
 
+// ── Which brainfile agents get ───────────────────────────────────────────────
+
+/** How to start brainfile: the command, the arguments ahead of its own (`mcp`, `list`), and what its environment adds. */
+export interface BrainfileLaunch {
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
+}
+
 /**
- * Brainfile's MCP server, spelled out in full. Some agents (Codex) start MCP
+ * This process's own brainfile, when it brings one (the desktop's, run by
+ * its own binary): the launch, and `shim`, a folder holding a `brainfile`
+ * that runs the same. A string says why it cannot be had.
+ */
+export type OwnBrainfile = { launch: BrainfileLaunch; shim?: string } | string;
+
+let ownBrainfile: (() => OwnBrainfile) | null = null;
+
+/**
+ * Agents this process starts get its own brainfile, not the one on PATH: the
+ * desktop's board server and shell command are the CLI it was built with,
+ * whatever version is installed (or none). Asked for each time an agent
+ * starts, so one that was missing is found once it is there. A string from
+ * it fails every session that would have the board, with it as the reason.
+ * null goes back to the `brainfile` on PATH.
+ */
+export function useBrainfile(own: (() => OwnBrainfile) | null): void {
+  ownBrainfile = own;
+}
+
+/** This process's own brainfile, null when it brings none; throws why when it brings one that cannot be had. */
+function ownLaunch(): { launch: BrainfileLaunch; shim?: string } | null {
+  const own = ownBrainfile?.() ?? null;
+  if (typeof own === 'string') throw new Error(own);
+  return own;
+}
+
+/** PATH with the folder holding this process's own `brainfile` first, when it has one that can be had. */
+function withOwnBrainfile(PATH: string): string {
+  let shim: string | undefined;
+  try {
+    shim = ownLaunch()?.shim;
+  } catch {
+    /* none to be had: the session that needs it says why */
+  }
+  return shim ? `${shim}:${PATH}` : PATH;
+}
+
+/**
+ * The `brainfile` on PATH, spelled out in full. Some agents (Codex) start MCP
  * servers with a stripped environment, where a `#!/usr/bin/env node` script
  * finds a version-manager shim that never answers; so the command is the
- * real node binary and the CLI's own file, with PATH and HOME passed for the
- * git calls the board makes. `role` is what the agent is to the board
- * (BRAINFILE_AGENT_ROLE), and a lead's `scope` the epic it leads
- * (BRAINFILE_LEAD_SCOPE): a worker's server lists no dispatch, stop or land.
+ * real node binary and the CLI's own file.
  */
-export function brainfileMcp(role?: { role: AgentRole; scope?: string }): acp.McpServer[] {
+export function brainfileOnPath(): BrainfileLaunch | null {
   const bin = which('brainfile');
-  if (!bin) return [];
-  const cli = fs.realpathSync(bin);
+  if (!bin) return null;
   const node = realNode();
+  return node ? { command: node, args: [fs.realpathSync(bin)] } : { command: bin, args: [] };
+}
+
+/**
+ * Brainfile's MCP server: `launch` when the caller names one, else this
+ * process's own (useBrainfile), else the `brainfile` on PATH; none when
+ * there is none. PATH and HOME are passed for the git calls the board makes.
+ * `role` is what the agent is to the board (BRAINFILE_AGENT_ROLE), and a
+ * lead's `scope` the epic it leads (BRAINFILE_LEAD_SCOPE): a worker's server
+ * lists no dispatch, stop or land. Throws when this process's own brainfile
+ * cannot be had, rather than give the agent an older one or none unsaid.
+ */
+export function brainfileMcp(role?: { role: AgentRole; scope?: string }, launch?: BrainfileLaunch): acp.McpServer[] {
+  const found = launch ?? ownLaunch()?.launch ?? brainfileOnPath();
+  if (!found) return [];
   const env = [
-    { name: 'PATH', value: process.env.PATH ?? '' },
+    { name: 'PATH', value: withOwnBrainfile(process.env.PATH ?? '') },
     { name: 'HOME', value: os.homedir() },
-    ...(role ? [{ name: AGENT_ROLE_ENV, value: role.role }] : []),
-    ...(role?.scope ? [{ name: LEAD_SCOPE_ENV, value: role.scope }] : []),
+    ...Object.entries({ ...found.env, ...roleEnv(role) }).map(([name, value]) => ({ name, value })),
   ];
-  return node ? [{ name: 'brainfile', command: node, args: [cli, 'mcp'], env }] : [{ name: 'brainfile', command: bin, args: ['mcp'], env }];
+  return [{ name: 'brainfile', command: found.command, args: [...found.args, 'mcp'], env }];
 }
