@@ -26,6 +26,7 @@ const EXPECTED_TOOLS = [
   'columns',
   'contract',
   'decide',
+  'discuss',
   'dispatch',
   'dispatch_lead',
   'dispatch_status',
@@ -113,7 +114,7 @@ describe.each(ERAS)('mcp structured output (%s era)', (era) => {
 
   // ── advertisement ────────────────────────────────────────────────────────
 
-  test('advertises exactly the 34 consolidated tools', async () => {
+  test('advertises exactly the 35 consolidated tools', async () => {
     const names = (await client.listTools()).map((t) => t.name).sort();
     expect(names).toEqual(EXPECTED_TOOLS);
   });

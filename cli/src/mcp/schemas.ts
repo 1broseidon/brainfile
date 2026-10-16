@@ -929,3 +929,9 @@ export const agentsOutputSchema = z.object({
     models: z.array(z.object({ value: z.string(), name: z.string(), efforts: z.array(z.string()).optional() })),
   })),
 });
+
+/** `discuss`: the task as data and the rules of a discussion, as one text (decision-19). */
+export const discussOutputSchema = z.object({
+  task: z.string(),
+  text: z.string(),
+});

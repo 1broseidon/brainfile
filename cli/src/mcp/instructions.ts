@@ -44,6 +44,7 @@ export const TOOL_PURPOSES: ReadonlyArray<readonly [string, string]> = [
   ['dispatch_lead', 'pause or resume an epic\'s lead, whichever runner leads it'],
   ['review', 'a hand-off\'s branch, commits, files and conflicts; what can land now; land or discard it'],
   ['agents', 'the coding agents a task can go to, which are installed here, and their models'],
+  ['discuss', 'talk one task over: the task as the board has it and the rules of a discussion (also the discuss prompt)'],
 ];
 
 /** Tools a worker's or a discussion's server leaves out: a hand-off never hands off (decision-15). */

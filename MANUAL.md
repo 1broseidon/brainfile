@@ -1682,8 +1682,8 @@ server, the per-agent brief, and hooks.
 ### The MCP server
 
 Add this to `.mcp.json` at the repo root (or the equivalent for your agent) and
-restart the agent. Thirty-three tools appear, one for everything the CLI does
-to a board.
+restart the agent. Thirty-five tools appear, one for everything the CLI does
+to a board, and a `discuss` prompt.
 
 ```console title=".mcp.json"
 {
@@ -1732,6 +1732,7 @@ to a board.
 | `dispatch_lead` | Pause or resume an epic's lead (`epic`, `action`), as `brainfile dispatch pause` and `resume`, whichever runner leads it. |
 | `review` | A hand-off's work: `action=show` (default, `task`), `ready`, `land` (`task`, `into`) or `discard` (`task`), as `brainfile review`, `land` and `discard`. |
 | `agents` | The coding agents, which are installed here, and their models, as `brainfile agents`. |
+| `discuss` | One task to talk over (`taskId`): the `discuss` prompt's text, for a client without prompts. Read-only. |
 
 Every tool takes `file` to point at another board, and every one that writes
 is one board commit on a tracked board. The bundled JSON Schemas are
@@ -1745,6 +1746,26 @@ something a decision covers; then a line on what each tool is for. Where it
 offers `dispatch`, it also says to ask the person before dispatching more
 than three tasks at once, and never to dispatch a task whose `dependsOn` are
 open.
+
+#### Discussing a task
+
+Any MCP client can talk a task over with you. The server's `discuss` prompt
+takes `taskId` and gives the agent what the board says about the task: its
+stage, description, subtasks, contract, the decisions it rests on, its latest
+notes, the board's other decisions, and its branch, worktree and the agent on
+it now, if it was handed off. Then the rules a discussion keeps, the same as
+in the desktop's chat (decision-19):
+
+- It changes only this task's description, subtasks and contract, and only
+  after you say yes.
+- It runs `check` before recording a decision, and records one only after you
+  agree to it.
+- It adds a `note` saying what was agreed.
+- It writes no code and hands nothing off.
+
+The `discuss` tool returns the same text, for clients that do not support
+prompts. The client keeps to the rules itself: a server cannot refuse its
+own client's edits.
 
 #### Roles
 
