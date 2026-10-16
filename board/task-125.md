@@ -45,7 +45,15 @@ subtasks:
   - id: task-125-1
     title: link:dev --features <list> plays an older desk; documented in desktop/link.md
     completed: false
-updatedAt: "2026-10-16T07:06:58.435Z"
+updatedAt: "2026-10-16T07:06:59.517Z"
+dispatch:
+  agent: claude
+  model: opus
+  by: lead
+  at: "2026-10-16T07:06:59.393Z"
+  until: done
+  tries: 0
+assignee: claude
 ---
 
 ## Description
