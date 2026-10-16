@@ -2,8 +2,6 @@
 id: epic-10
 title: "One system, desk side: the link carries everything the desktop gained since epic-7 (targets, pull requests, the queue), a parity test keeps it that way, and dependencies across boards are honoured"
 type: epic
-column: todo
-position: 17
 description: |-
   The desk half of bringing the phone level with the desktop, so the two feel like one system: the same words, the same signals, the same actions in the same places, and nothing on the desktop that the phone cannot at least see. The phone half is the epic on the related board `mobile` (../brainfile-mobile), whose children wait on this epic's first child.
 
@@ -41,8 +39,9 @@ decisions:
   - decision-8
 createdAt: "2026-10-16T06:08:18.930Z"
 epicBranch: true
-updatedAt: "2026-10-16T07:28:35.492Z"
+updatedAt: "2026-10-16T12:33:12.394Z"
 assignee: claude
+completedAt: "2026-10-16T12:33:12.394Z"
 ---
 
 ## Description
@@ -63,3 +62,12 @@ Not in scope: chat history sync (task-59), the feed redesign (task-103), the mod
 - 2026-10-16T06:13:18.371Z: [claude] Lead's plan (claude/opus), 2026-10-16. Order: wave 1 task-120 ∥ task-122; wave 2 task-123; wave 3 task-121. Why: task-120 as written also built the queue, but "what each hand-off waits on" lives in the CLI's statusReport/waitsOn (cli/src/commands/dispatch.ts ≈307, a copy of runner.ts ≈866) where the desktop cannot reach it, and task-122 rewrites exactly that filter for alias deps. So the queue's real-desk side is split into task-123 (depends on 120 and 122): it moves dispatch status into core (decision-17) on 122's alias-aware waits, adds api queue(), bridges it and only then offers `queue` in hello. task-120 keeps target, pull-request, merge-to, bridges unpushed, and still writes the queue call's shape in desktop/link.md so the phone can build against the contract after task-120 lands. task-122 widened: one exported core waits function used by runner and the CLI (dispatch/status), and TaskDetail's Hand to… counts alias waits. task-121 is last and is the epic's integration child: parity test plus an end-to-end link test (all six features, a queue alias wait with its board named); depends on 120 and 123. Agents: 120 claude/opus, 122 codex/gpt-6.1-sol, 123 claude/opus, 121 claude/opus.
 - 2026-10-16T06:43:29.027Z: [claude] task-123 (b68ddf9 on dispatch/task-123) changed desktop/link.md › The queue, for the phone: QueueView.queued[] gains optional `waitMessage` (the board-named reason, set when a wait is on a related board, e.g. "the mobile board is missing"); `running` holds hand-offs only (kind dispatch; chat and lead turns stay in `live`); `runners` includes the desk's own window. `queue` is now in the hello's features and link:dev answers it (task-2 queued, task-4 waiting on task-2 and mobile:task-12, task-1 run in a terminal, two runners, main 2 ahead).
 - 2026-10-16T07:02:07.161Z: [claude] task-121 (on dispatch/task-121): the parity test and an end-to-end test of the epic pass against the real desk, and nothing between the children failed. Seams fixed there were all in the docs: link.md's hello example lacked `queue`, `effort` had no section, and design.md still named the phone's copy as the contract. Left for later: task-124 (backlog, under spec-17) covers the api methods the phone does not reach yet (leads, Discuss, issues, delete/restore/reopen, board fixes), and the parity test names it. A hand-off from the phone is recorded `by: person`, because the link's dispatch is the window's call; core's DispatchBy has `phone` but no desk writes it. This is older than this epic and was left as is. The window's renderer does not show the queue (phone only).
+- 2026-10-16T12:33:12.003Z: Landed on main
+
+## Child Tasks
+Summary: 5/5 children completed.
+- task-120: Link contract v3: features target, pull-request, merge-to and queue; desktop/link.md is the full contract; link:dev answers every new call (completed)
+- task-121: Link parity test and the epic's whole: every api method is bridged for the phone or excluded with a reason, link:dev answers every bridged call, and the four features work end to end (completed)
+- task-122: Dependencies across boards: a hand-off, a lead and a brief treat alias:task-id as a real dependency, open until it is complete and landed on the related board (completed)
+- task-123: Link queue: the real desk answers queue(projectId) from core's dispatch status, alias waits included; the feature queue is offered in hello (completed)
+- task-125: The task view carries the hand-off record: dispatch (agent, model, by, at, until, tries, the claim held or ended with its outcome) in the snapshot and getTask, in link.md under target, and in link:dev's fixtures (completed)
