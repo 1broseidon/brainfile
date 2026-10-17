@@ -24,6 +24,8 @@ relatedFiles:
   - core/src/dispatch/runner.ts
   - core/src/dispatch/lead.ts
 createdAt: "2026-10-16T04:50:10.468Z"
+parentId: epic-11
+updatedAt: "2026-10-17T05:09:31.674Z"
 ---
 
 ## Description
