@@ -28,3 +28,4 @@ Verifier flagged: core/src/schemaHints.ts contains a pre-existing fetch() call â
 
 ## Log
 - 2026-10-12T01:32:47.356Z: [claude] Verified 2026-10-11: still open. core/src/schemaHints.ts:70 still calls fetch(schemaUrl).
+- 2026-10-17T05:35:30.393Z: [claude] Gated rather than deleted: loadSchemaHints(schemaUrl, fetchFn) now takes the fetch to use (the forge/github.ts pattern), so schemaHints.ts makes no network call; nothing in the repo called it. Tests for the injected fetch and a Changed fragment added. On branch dispatch/task-9 (9b6b9bc). Still in core: dispatch/agents.ts:56 calls the global fetch, but it is in the node-only dispatch subpath (decision-18).
