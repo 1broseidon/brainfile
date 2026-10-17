@@ -59,3 +59,6 @@ Today `landReview` (core/src/repo/worktree.ts ~830) refuses when the branch it l
 Fix: say what holds it and how to free it. For a hand-off's worktree, name its task (merge or discard task-N). For anything else, name the folder and say to switch it to another branch (`git -C <path> switch <other>`) or remove it (`git worktree remove <path>`). Then the lead, `brainfile land` and the window's Merge all pass the reason through. Also check the same case where an epic's branch or a `landsOn` branch is first made or refreshed (repo/target.ts), so a checkout there fails with the same words rather than a raw git error. First reproduce hotline's exact case: which branch was it, and which checkout held it?
 
 Tests: the refusal for a hand-off worktree names the task; for a plain checkout it gives the switch/remove advice.
+
+## Log
+- 2026-10-17T05:48:22.546Z: [claude] Finished by hand (2026-10-17): the worker ended its turn while its test suite ran in the background, so the run closed with the work uncommitted. Reviewed, core typecheck clean, core tests 1228/1228, committed. Not covered: the same wording in repo/target.ts when an epic's or landsOn branch is first made or refreshed, and reproducing hotline's exact case.
