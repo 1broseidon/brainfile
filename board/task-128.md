@@ -31,6 +31,8 @@ contract:
       - npm run build
       - npm test
 createdAt: "2026-10-16T15:12:39.024Z"
+parentId: epic-11
+updatedAt: "2026-10-17T05:09:30.586Z"
 ---
 
 ## Description
