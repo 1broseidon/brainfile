@@ -1,15 +1,13 @@
 ---
 id: task-9
 title: Remove or gate the fetch() call in core schemaHints
-column: review
-position: 0
 tags:
   - core
   - boundary
 relatedFiles:
   - core/src/schemaHints.ts
 createdAt: "2026-08-12T02:39:48.219Z"
-updatedAt: "2026-10-17T05:35:34.729Z"
+updatedAt: "2026-10-17T05:36:03.908Z"
 dispatch:
   agent: claude
   by: cli
@@ -23,6 +21,7 @@ dispatch:
     ended: "2026-10-17T05:35:34.729Z"
     outcome: review
 assignee: claude
+completedAt: "2026-10-17T05:36:03.908Z"
 ---
 
 ## Description
@@ -31,3 +30,4 @@ Verifier flagged: core/src/schemaHints.ts contains a pre-existing fetch() call â
 ## Log
 - 2026-10-12T01:32:47.356Z: [claude] Verified 2026-10-11: still open. core/src/schemaHints.ts:70 still calls fetch(schemaUrl).
 - 2026-10-17T05:35:30.393Z: [claude] Gated rather than deleted: loadSchemaHints(schemaUrl, fetchFn) now takes the fetch to use (the forge/github.ts pattern), so schemaHints.ts makes no network call; nothing in the repo called it. Tests for the injected fetch and a Changed fragment added. On branch dispatch/task-9 (9b6b9bc). Still in core: dispatch/agents.ts:56 calls the global fetch, but it is in the node-only dispatch subpath (decision-18).
+- 2026-10-17T05:36:03.512Z: Landed on main
