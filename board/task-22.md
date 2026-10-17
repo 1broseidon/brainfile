@@ -1,7 +1,7 @@
 ---
 id: task-22
 title: "Decision groups: one order everywhere"
-column: backlog
+column: in-progress
 position: 3
 tags:
   - desktop
@@ -19,7 +19,7 @@ dispatch:
     pid: 12851
     at: "2026-10-17T05:35:35.997Z"
 assignee: claude
-updatedAt: "2026-10-17T05:35:35.997Z"
+updatedAt: "2026-10-17T05:35:48.424Z"
 ---
 
 ## Description
