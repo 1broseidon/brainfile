@@ -57,7 +57,8 @@ subtasks:
     title: "A task landed with subtasks left stays open; once its last subtask is ticked (by the lead or the person) it should complete on its own, since its work is in. Seen twice: QA's task-90 and epic-10's task-125, where the lead ticked the subtask and then waited for a completion nobody would make, holding the epic back."
     completed: false
 createdAt: "2026-10-16T04:55:30.792Z"
-updatedAt: "2026-10-16T07:28:32.409Z"
+updatedAt: "2026-10-17T05:09:32.186Z"
+parentId: epic-11
 ---
 
 ## Description
