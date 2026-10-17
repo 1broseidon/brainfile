@@ -18,3 +18,4 @@ Found 2026-10-16 on hotline: `brainfile dispatch epic-7 --until review` queued a
 
 ## Log
 - 2026-10-16T14:18:21.920Z: [claude] Fixed on branch fix/lead-until (~/.brainfile-worktrees/fix/lead-until, uncommitted). The CLI fix alone was not enough: core overwrote a lead's until with the policy in Runner.queue and Leads.start, and a lead resumed from the board ignored its record's until. Now core/src/dispatch/lead.ts leadUntil(asked, policy) decides all three: review always holds, done or unset lands only under bypass. Tests: core 1226, CLI 714+191, desktop 178; fragment changes/task-126-lead-until.md.
+- 2026-10-17T05:09:32.679Z: [claude] 2026-10-17 audit: work has started but is uncommitted, in the worktree ~/.brainfile-worktrees/fix/lead-until (branch fix/lead-until, no commits past main): lead.ts, runner.ts, cli dispatch.ts, their tests and changes/task-126-lead-until.md. Don't clean that worktree up before it's committed.
