@@ -12,9 +12,14 @@ dispatch:
   agent: claude
   by: cli
   at: "2026-10-17T05:34:13.398Z"
-  tries: 0
+  tries: 1
+  claim:
+    host: Georges-Mac-Studio
+    runner: desktop
+    pid: 12851
+    at: "2026-10-17T05:35:35.997Z"
 assignee: claude
-updatedAt: "2026-10-17T05:34:13.522Z"
+updatedAt: "2026-10-17T05:35:35.997Z"
 ---
 
 ## Description
