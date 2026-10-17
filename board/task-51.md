@@ -12,3 +12,4 @@ Related to task-50 (effort level in the model selector). Design is undecided and
 
 ## Log
 - 2026-10-14T03:00:09.096Z: [claude] When this is decided, the phone follows it too (epic-3, task-54): today brainfile-mobile's ChatStore.modelFor/effortFor and handOff mirror the desktop's per-agent, per-board memory, and a per-task choice would need the link to carry it (a dispatch argument or the task's own record).
+- 2026-10-17T05:09:11.564Z: [claude] Folded into task-107 (2026-10-17 audit): task-107 is the design for choosing model and effort per hand-off. Completed as a duplicate, not built.
