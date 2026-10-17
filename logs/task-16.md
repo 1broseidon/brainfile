@@ -1,8 +1,6 @@
 ---
 id: task-16
 title: "complete: let callers supply filesChanged for the ledger"
-column: review
-position: 1
 priority: medium
 tags:
   - ledger
@@ -15,7 +13,7 @@ relatedFiles:
   - core/src/taskOperations.ts
   - core/src/ledger.ts
 createdAt: "2026-09-23T03:04:32.175Z"
-updatedAt: "2026-10-17T05:40:29.914Z"
+updatedAt: "2026-10-17T05:40:47.872Z"
 dispatch:
   agent: claude
   by: cli
@@ -29,6 +27,7 @@ dispatch:
     ended: "2026-10-17T05:40:29.914Z"
     outcome: review
 assignee: claude
+completedAt: "2026-10-17T05:40:47.872Z"
 ---
 
 ## Description
@@ -39,3 +38,4 @@ Add `brainfile complete --files <a,b>` and `--files -` (newline-separated paths 
 ## Log
 - 2026-10-12T01:32:46.807Z: [claude] Verified 2026-10-11: still open. complete.ts and the MCP task_complete tool still never pass filesChanged.
 - 2026-10-17T05:40:25.777Z: [claude] Added `brainfile complete --files <a,b>` / `--files -` (one path per line on stdin) and a filesChanged argument on MCP task_complete (default and local-archive paths), passed through to core's ledger record; empty lists fall back to the old default. Tests, MANUAL and a changes/ fragment included; CLI suite green (719 + 191). Skipped the optional git-diff default: pickup records no base commit (only pickedUpAt), so that needs a base recorded first. On branch dispatch/task-16 (cb03127).
+- 2026-10-17T05:40:47.430Z: Landed on main
