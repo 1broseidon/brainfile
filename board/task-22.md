@@ -1,8 +1,8 @@
 ---
 id: task-22
 title: "Decision groups: one order everywhere"
-column: in-progress
-position: 3
+column: review
+position: 0
 tags:
   - desktop
   - tui
@@ -19,7 +19,7 @@ dispatch:
     pid: 12851
     at: "2026-10-17T05:35:35.997Z"
 assignee: claude
-updatedAt: "2026-10-17T05:35:48.424Z"
+updatedAt: "2026-10-17T05:38:22.884Z"
 ---
 
 ## Description
