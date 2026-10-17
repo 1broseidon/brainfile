@@ -1,8 +1,8 @@
 ---
 id: task-128
 title: Landing says what a checked-out branch is and how to free it
-column: in-progress
-position: 18
+column: review
+position: 0
 description: |-
   Feedback from hotline, 2026-10-16: a checked-out branch blocked a merge, and the reason wasn't clear.
 
@@ -35,7 +35,7 @@ contract:
     reworkCount: 0
 createdAt: "2026-10-16T15:12:39.024Z"
 parentId: epic-11
-updatedAt: "2026-10-17T05:45:08.657Z"
+updatedAt: "2026-10-17T05:48:23.002Z"
 dispatch:
   agent: claude
   by: cli
