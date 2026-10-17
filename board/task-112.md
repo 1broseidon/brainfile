@@ -1,8 +1,8 @@
 ---
 id: task-112
 title: CI runs the desktop's checks
-column: in-progress
-position: 1
+column: review
+position: 0
 priority: high
 tags:
   - release
@@ -16,7 +16,7 @@ relatedFiles:
   - .github/scripts/changelog.mjs
   - changes/
 createdAt: "2026-10-16T04:50:09.393Z"
-updatedAt: "2026-10-17T05:34:25.290Z"
+updatedAt: "2026-10-17T05:36:22.140Z"
 dispatch:
   agent: claude
   by: cli
