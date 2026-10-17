@@ -24,6 +24,8 @@ relatedFiles:
   - desktop/src/agents/agents.ts
   - desktop/scripts/dev.mjs
 createdAt: "2026-10-16T03:41:06.624Z"
+parentId: epic-11
+updatedAt: "2026-10-17T05:09:31.132Z"
 ---
 
 ## Description
