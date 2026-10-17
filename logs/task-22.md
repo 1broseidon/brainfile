@@ -1,8 +1,6 @@
 ---
 id: task-22
 title: "Decision groups: one order everywhere"
-column: review
-position: 0
 tags:
   - desktop
   - tui
@@ -21,7 +19,8 @@ dispatch:
     ended: "2026-10-17T05:38:28.090Z"
     outcome: review
 assignee: claude
-updatedAt: "2026-10-17T05:38:28.090Z"
+updatedAt: "2026-10-17T05:38:48.737Z"
+completedAt: "2026-10-17T05:38:48.737Z"
 ---
 
 ## Description
@@ -29,3 +28,4 @@ The TUI orders decision families alphabetically (core's groupDecisionsByPrefix, 
 
 ## Log
 - 2026-10-17T05:38:22.502Z: [claude] Desktop host now orders snapshot decisions with core's groupDecisionsByPrefix (standing by family, alphabetical, unfiled last; history newest first) and the window's decisionGroups keeps that order instead of largest-first; test in desktop/test/decide.test.ts, changelog fragment added. On branch dispatch/task-22 (5a0497a); desktop typecheck and tests pass.
+- 2026-10-17T05:38:48.106Z: Landed on main

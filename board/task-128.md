@@ -1,7 +1,7 @@
 ---
 id: task-128
 title: Landing says what a checked-out branch is and how to free it
-column: todo
+column: in-progress
 position: 18
 description: |-
   Feedback from hotline, 2026-10-16: a checked-out branch blocked a merge, and the reason wasn't clear.
@@ -18,7 +18,7 @@ tags:
 relatedFiles:
   - core/src/repo/worktree.ts
 contract:
-  status: draft
+  status: in_progress
   deliverables:
     - type: file
       path: core/src/repo/worktree.ts
@@ -30,9 +30,12 @@ contract:
     commands:
       - npm run build
       - npm test
+  metrics:
+    pickedUpAt: "2026-10-17T05:38:48.860Z"
+    reworkCount: 0
 createdAt: "2026-10-16T15:12:39.024Z"
 parentId: epic-11
-updatedAt: "2026-10-17T05:38:29.729Z"
+updatedAt: "2026-10-17T05:38:48.860Z"
 dispatch:
   agent: claude
   by: cli
