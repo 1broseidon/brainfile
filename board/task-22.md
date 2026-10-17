@@ -8,6 +8,13 @@ tags:
   - tui
   - decisions
 createdAt: "2026-10-12T18:48:00.001Z"
+dispatch:
+  agent: claude
+  by: cli
+  at: "2026-10-17T05:34:13.398Z"
+  tries: 0
+assignee: claude
+updatedAt: "2026-10-17T05:34:13.522Z"
 ---
 
 ## Description

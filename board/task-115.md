@@ -16,6 +16,13 @@ relatedFiles:
   - core/src/dispatch/session.ts
   - core/src/dispatch/agents.ts
 createdAt: "2026-10-16T04:50:10.203Z"
+dispatch:
+  agent: claude
+  by: cli
+  at: "2026-10-17T05:34:12.893Z"
+  tries: 0
+assignee: claude
+updatedAt: "2026-10-17T05:34:13.019Z"
 ---
 
 ## Description

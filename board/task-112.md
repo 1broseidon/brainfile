@@ -16,7 +16,18 @@ relatedFiles:
   - .github/scripts/changelog.mjs
   - changes/
 createdAt: "2026-10-16T04:50:09.393Z"
-updatedAt: "2026-10-17T05:09:33.142Z"
+updatedAt: "2026-10-17T05:34:14.033Z"
+dispatch:
+  agent: claude
+  by: cli
+  at: "2026-10-17T05:34:12.642Z"
+  tries: 1
+  claim:
+    host: Georges-Mac-Studio
+    runner: desktop
+    pid: 12851
+    at: "2026-10-17T05:34:14.033Z"
+assignee: claude
 ---
 
 ## Description

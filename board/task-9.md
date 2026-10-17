@@ -9,7 +9,13 @@ tags:
 relatedFiles:
   - core/src/schemaHints.ts
 createdAt: "2026-08-12T02:39:48.219Z"
-updatedAt: "2026-10-12T21:58:20.175Z"
+updatedAt: "2026-10-17T05:34:13.272Z"
+dispatch:
+  agent: claude
+  by: cli
+  at: "2026-10-17T05:34:13.146Z"
+  tries: 0
+assignee: claude
 ---
 
 ## Description
