@@ -1,15 +1,15 @@
 ---
 id: task-9
 title: Remove or gate the fetch() call in core schemaHints
-column: backlog
-position: 4
+column: in-progress
+position: 3
 tags:
   - core
   - boundary
 relatedFiles:
   - core/src/schemaHints.ts
 createdAt: "2026-08-12T02:39:48.219Z"
-updatedAt: "2026-10-17T05:34:17.325Z"
+updatedAt: "2026-10-17T05:34:33.119Z"
 dispatch:
   agent: claude
   by: cli
