@@ -24,3 +24,6 @@ updatedAt: "2026-10-17T05:35:48.424Z"
 
 ## Description
 The TUI orders decision families alphabetically (core's groupDecisionsByPrefix, unfiled last); the desktop puts the largest family first. Use core's order in the desktop too, from the same function.
+
+## Log
+- 2026-10-17T05:38:22.502Z: [claude] Desktop host now orders snapshot decisions with core's groupDecisionsByPrefix (standing by family, alphabetical, unfiled last; history newest first) and the window's decisionGroups keeps that order instead of largest-first; test in desktop/test/decide.test.ts, changelog fragment added. On branch dispatch/task-22 (5a0497a); desktop typecheck and tests pass.
