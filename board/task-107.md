@@ -60,3 +60,6 @@ From the person, 2026-10-15, starting epic-6's lead. Hand to… (and "Lead with"
 - **The same submenu in "Lead with" on an epic**, and in Send back… where it picks an agent.
 - **Keyboard:** ↑/↓ move, →/← open and close the submenu, Enter hands off, Esc closes, all with no mouse.
 - **Related:** task-51 asked whether model and effort should be choosable per task; this answers it at hand-off time. Close task-51 with this one, or fold it in.
+
+## Log
+- 2026-10-17T05:09:11.106Z: [claude] Folded in task-51 (2026-10-17 audit): same question, per-hand-off model and effort; this task is its design. From task-51: when decided, the phone follows too (brainfile-mobile's ChatStore.modelFor/effortFor and handOff mirror the desktop's per-agent, per-board memory; a per-task choice would need the link to carry it, as a dispatch argument or the task's own record).
