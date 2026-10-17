@@ -36,3 +36,4 @@ Add `brainfile complete --files <a,b>` and `--files -` (newline-separated paths 
 
 ## Log
 - 2026-10-12T01:32:46.807Z: [claude] Verified 2026-10-11: still open. complete.ts and the MCP task_complete tool still never pass filesChanged.
+- 2026-10-17T05:40:25.777Z: [claude] Added `brainfile complete --files <a,b>` / `--files -` (one path per line on stdin) and a filesChanged argument on MCP task_complete (default and local-archive paths), passed through to core's ledger record; empty lists fall back to the old default. Tests, MANUAL and a changes/ fragment included; CLI suite green (719 + 191). Skipped the optional git-diff default: pickup records no base commit (only pickedUpAt), so that needs a base recorded first. On branch dispatch/task-16 (cb03127).
