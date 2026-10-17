@@ -32,12 +32,17 @@ contract:
       - npm test
 createdAt: "2026-10-16T15:12:39.024Z"
 parentId: epic-11
-updatedAt: "2026-10-17T05:34:14.022Z"
+updatedAt: "2026-10-17T05:38:29.729Z"
 dispatch:
   agent: claude
   by: cli
   at: "2026-10-17T05:34:13.900Z"
-  tries: 0
+  tries: 1
+  claim:
+    host: Georges-Mac-Studio
+    runner: desktop
+    pid: 12851
+    at: "2026-10-17T05:38:29.729Z"
 assignee: claude
 ---
 
