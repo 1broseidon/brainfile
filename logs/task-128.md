@@ -1,8 +1,6 @@
 ---
 id: task-128
 title: Landing says what a checked-out branch is and how to free it
-column: review
-position: 0
 description: |-
   Feedback from hotline, 2026-10-16: a checked-out branch blocked a merge, and the reason wasn't clear.
 
@@ -35,7 +33,7 @@ contract:
     reworkCount: 0
 createdAt: "2026-10-16T15:12:39.024Z"
 parentId: epic-11
-updatedAt: "2026-10-17T05:48:23.002Z"
+updatedAt: "2026-10-17T05:52:54.829Z"
 dispatch:
   agent: claude
   by: cli
@@ -49,6 +47,7 @@ dispatch:
     ended: "2026-10-17T05:45:08.657Z"
     outcome: review
 assignee: claude
+completedAt: "2026-10-17T05:52:54.829Z"
 ---
 
 ## Description
@@ -62,3 +61,4 @@ Tests: the refusal for a hand-off worktree names the task; for a plain checkout 
 
 ## Log
 - 2026-10-17T05:48:22.546Z: [claude] Finished by hand (2026-10-17): the worker ended its turn while its test suite ran in the background, so the run closed with the work uncommitted. Reviewed, core typecheck clean, core tests 1228/1228, committed. Not covered: the same wording in repo/target.ts when an epic's or landsOn branch is first made or refreshed, and reproducing hotline's exact case.
+- 2026-10-17T05:52:54.343Z: Landed on main
