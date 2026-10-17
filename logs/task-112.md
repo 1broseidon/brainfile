@@ -1,8 +1,6 @@
 ---
 id: task-112
 title: CI runs the desktop's checks
-column: review
-position: 0
 priority: high
 tags:
   - release
@@ -16,7 +14,7 @@ relatedFiles:
   - .github/scripts/changelog.mjs
   - changes/
 createdAt: "2026-10-16T04:50:09.393Z"
-updatedAt: "2026-10-17T05:36:27.440Z"
+updatedAt: "2026-10-17T05:36:53.265Z"
 dispatch:
   agent: claude
   by: cli
@@ -30,6 +28,7 @@ dispatch:
     ended: "2026-10-17T05:36:27.440Z"
     outcome: review
 assignee: claude
+completedAt: "2026-10-17T05:36:53.265Z"
 ---
 
 ## Description
@@ -47,3 +46,4 @@ Node floor: core's dispatch requires an ESM-only SDK at runtime, so engines is `
 - The global CLI on this Mac is now 0.23.0 (mise node 26), so new Claude Code sessions and hand-off workers get today's tools. Sessions already open keep the old server until restarted.
 Still open: step 4, a desktop job in ci.yml.
 - 2026-10-17T05:36:21.814Z: [claude] Added a `desktop` job to ci.yml, commit 00d6cb4 on dispatch/task-112. It builds core and the CLI, then runs the desktop's typecheck, its tests, `vite build` and `scripts/build-electron.mjs`, on Node 24 (meets >=20.19). It runs on macos-15, not ubuntu: updater.test.ts runs ditto, plutil and codesign, which ubuntu lacks, and the app ships only for the Mac. Locally (Node 26, macOS) all steps pass, 178/178 tests. Not yet run on GitHub: the first PR or push to main will show it.
+- 2026-10-17T05:36:52.867Z: Landed on main
