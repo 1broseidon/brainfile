@@ -35,7 +35,7 @@ contract:
     reworkCount: 0
 createdAt: "2026-10-16T15:12:39.024Z"
 parentId: epic-11
-updatedAt: "2026-10-17T05:38:48.860Z"
+updatedAt: "2026-10-17T05:45:08.657Z"
 dispatch:
   agent: claude
   by: cli
@@ -46,6 +46,8 @@ dispatch:
     runner: desktop
     pid: 12851
     at: "2026-10-17T05:38:29.729Z"
+    ended: "2026-10-17T05:45:08.657Z"
+    outcome: review
 assignee: claude
 ---
 
