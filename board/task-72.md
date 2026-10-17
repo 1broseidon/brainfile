@@ -13,8 +13,6 @@ relatedFiles:
   - desktop/scripts/update-manifest.mjs
   - desktop/build/entitlements.mac.plist
 parentId: epic-5
-dependsOn:
-  - task-71
 contract:
   status: draft
   deliverables:
@@ -28,7 +26,7 @@ contract:
     commands:
       - cd desktop && npm run typecheck && npm test
 createdAt: "2026-10-14T21:43:51.193Z"
-updatedAt: "2026-10-14T21:54:34.854Z"
+updatedAt: "2026-10-17T05:09:15.377Z"
 ---
 
 ## Description
